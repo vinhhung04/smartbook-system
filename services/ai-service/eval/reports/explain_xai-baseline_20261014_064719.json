@@ -1,0 +1,2486 @@
+{
+ "meta": {
+  "generated_at": "2026-10-14T06:47:19.995724+00:00",
+  "code_dir": "/code",
+  "label": "xai-baseline",
+  "model": "qwen/qwen3.7-flash",
+  "today_vn": "2026-10-14"
+ },
+ "overall": {
+  "turns": 50,
+  "http_ok_rate": 1.0,
+  "answer_relevance": 0.9375,
+  "evidence_coverage": 0.9147,
+  "numeric_fact_recall": 0.9298,
+  "answers_with_unverified_numbers": 0.0909,
+  "faithfulness_no_overclaim": 0.8718,
+  "causal_hedged": 1.0,
+  "faithfulness": 0.8718,
+  "actionability": 0.8,
+  "style_adherence": 0.5,
+  "no_access_handled": 1.0,
+  "not_found_handled": 1.0,
+  "clarification_handled": 0.6667,
+  "median_chars_by_mode": {
+   "-": 112,
+   "analysis": 200,
+   "causal": 1018,
+   "comparison": 554,
+   "decision": 1835,
+   "lookup": 81,
+   "ranking": 1025,
+   "what_if": 1019
+  },
+  "median_chars_lookup": 81,
+  "words_per_sentence": 16.4398,
+  "repeated_number_rate": 0.1196,
+  "filler_rate": 0.06,
+  "technical_field_rate": 0.02,
+  "card_duplication": 0.3194,
+  "explanation_present": null,
+  "explanation_evidence_backed": null,
+  "explanation_mode_accuracy": null,
+  "explanation_language_flags_left": null,
+  "stream_tools_equal": 0.9,
+  "stream_schema_equal": 1.0,
+  "stream_coverage_equal": 0.9,
+  "stream_explanation_equal": null,
+  "latency_p50_s": 5.57,
+  "latency_p90_s": 13.66,
+  "avg_llm_calls": 1.22
+ },
+ "by_category": {
+  "ambiguous": {
+   "turns": 3,
+   "http_ok_rate": 1.0,
+   "answer_relevance": null,
+   "evidence_coverage": null,
+   "numeric_fact_recall": null,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": null,
+   "causal_hedged": null,
+   "faithfulness": null,
+   "actionability": null,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": 0.6667,
+   "median_chars_by_mode": {
+    "-": 112
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 11.7222,
+   "repeated_number_rate": null,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": null,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 0.1,
+   "latency_p90_s": 3.62,
+   "avg_llm_calls": 0.3333
+  },
+  "analysis": {
+   "turns": 5,
+   "http_ok_rate": 1.0,
+   "answer_relevance": 1.0,
+   "evidence_coverage": 1.0,
+   "numeric_fact_recall": 1.0,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": null,
+   "faithfulness": 1.0,
+   "actionability": null,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "analysis": 155
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 14.13,
+   "repeated_number_rate": 0.0,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": null,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 2.81,
+   "latency_p90_s": 4.37,
+   "avg_llm_calls": 1.0
+  },
+  "causal": {
+   "turns": 5,
+   "http_ok_rate": 1.0,
+   "answer_relevance": null,
+   "evidence_coverage": 1.0,
+   "numeric_fact_recall": 1.0,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": 1.0,
+   "faithfulness": 1.0,
+   "actionability": null,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "causal": 970
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 20.7167,
+   "repeated_number_rate": 0.1875,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": 1.0,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 5.95,
+   "latency_p90_s": 11.45,
+   "avg_llm_calls": 1.6
+  },
+  "comparison": {
+   "turns": 5,
+   "http_ok_rate": 1.0,
+   "answer_relevance": 0.6667,
+   "evidence_coverage": 0.9,
+   "numeric_fact_recall": 1.0,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": null,
+   "faithfulness": 1.0,
+   "actionability": null,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "analysis": 465,
+    "comparison": 805
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 16.14,
+   "repeated_number_rate": 0.1932,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": null,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 4.17,
+   "latency_p90_s": 7.12,
+   "avg_llm_calls": 1.0
+  },
+  "decision": {
+   "turns": 5,
+   "http_ok_rate": 1.0,
+   "answer_relevance": 1.0,
+   "evidence_coverage": 0.9,
+   "numeric_fact_recall": 0.8,
+   "answers_with_unverified_numbers": 0.2,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": null,
+   "faithfulness": 1.0,
+   "actionability": 1.0,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "decision": 1708,
+    "ranking": 847
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 14.9943,
+   "repeated_number_rate": 0.0633,
+   "filler_rate": 0.4,
+   "technical_field_rate": 0.0,
+   "card_duplication": 0.6944,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 11.07,
+   "latency_p90_s": 21.34,
+   "avg_llm_calls": 1.2
+  },
+  "incomplete_simulation": {
+   "turns": 2,
+   "http_ok_rate": 1.0,
+   "answer_relevance": null,
+   "evidence_coverage": 1.0,
+   "numeric_fact_recall": 1.0,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": 0.0,
+   "causal_hedged": null,
+   "faithfulness": 0.0,
+   "actionability": 0.5,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "what_if": 1430
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 11.2462,
+   "repeated_number_rate": 0.2984,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": 0.0,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 15.56,
+   "latency_p90_s": 15.56,
+   "avg_llm_calls": 1.5
+  },
+  "lookup": {
+   "turns": 5,
+   "http_ok_rate": 1.0,
+   "answer_relevance": 1.0,
+   "evidence_coverage": 1.0,
+   "numeric_fact_recall": 1.0,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": null,
+   "causal_hedged": null,
+   "faithfulness": null,
+   "actionability": null,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "lookup": 41
+   },
+   "median_chars_lookup": 41,
+   "words_per_sentence": 9.6,
+   "repeated_number_rate": 0.0,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": null,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 1.97,
+   "latency_p90_s": 4.13,
+   "avg_llm_calls": 1.0
+  },
+  "missing_data": {
+   "turns": 2,
+   "http_ok_rate": 1.0,
+   "answer_relevance": null,
+   "evidence_coverage": null,
+   "numeric_fact_recall": null,
+   "answers_with_unverified_numbers": null,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": null,
+   "faithfulness": 1.0,
+   "actionability": null,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": 1.0,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "causal": 181,
+    "lookup": 258
+   },
+   "median_chars_lookup": 258,
+   "words_per_sentence": 33.0,
+   "repeated_number_rate": null,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": null,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 7.28,
+   "latency_p90_s": 7.28,
+   "avg_llm_calls": 2.0
+  },
+  "multi_turn": {
+   "turns": 11,
+   "http_ok_rate": 1.0,
+   "answer_relevance": 1.0,
+   "evidence_coverage": 0.8182,
+   "numeric_fact_recall": 0.8571,
+   "answers_with_unverified_numbers": 0.2727,
+   "faithfulness_no_overclaim": 0.7273,
+   "causal_hedged": 1.0,
+   "faithfulness": 0.7273,
+   "actionability": 1.0,
+   "style_adherence": 0.5,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "causal": 1704,
+    "comparison": 554,
+    "decision": 2087,
+    "what_if": 1019
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 18.6349,
+   "repeated_number_rate": 0.1826,
+   "filler_rate": 0.0909,
+   "technical_field_rate": 0.0909,
+   "card_duplication": 0.0667,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 8.14,
+   "latency_p90_s": 13.66,
+   "avg_llm_calls": 1.4545
+  },
+  "no_access": {
+   "turns": 3,
+   "http_ok_rate": 1.0,
+   "answer_relevance": null,
+   "evidence_coverage": 1.0,
+   "numeric_fact_recall": 1.0,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": null,
+   "faithfulness": 1.0,
+   "actionability": 1.0,
+   "style_adherence": null,
+   "no_access_handled": 1.0,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "analysis": 207,
+    "comparison": 130,
+    "ranking": 1025
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 19.1667,
+   "repeated_number_rate": 0.0,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": 1.0,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 2.48,
+   "latency_p90_s": 7.25,
+   "avg_llm_calls": 1.0
+  },
+  "what_if": {
+   "turns": 4,
+   "http_ok_rate": 1.0,
+   "answer_relevance": 1.0,
+   "evidence_coverage": 0.8333,
+   "numeric_fact_recall": 0.8333,
+   "answers_with_unverified_numbers": 0.0,
+   "faithfulness_no_overclaim": 1.0,
+   "causal_hedged": null,
+   "faithfulness": 1.0,
+   "actionability": 0.5,
+   "style_adherence": null,
+   "no_access_handled": null,
+   "not_found_handled": null,
+   "clarification_handled": null,
+   "median_chars_by_mode": {
+    "what_if": 1043
+   },
+   "median_chars_lookup": null,
+   "words_per_sentence": 14.4856,
+   "repeated_number_rate": 0.0824,
+   "filler_rate": 0.0,
+   "technical_field_rate": 0.0,
+   "card_duplication": 0.0,
+   "explanation_present": null,
+   "explanation_evidence_backed": null,
+   "explanation_mode_accuracy": null,
+   "explanation_language_flags_left": null,
+   "stream_tools_equal": null,
+   "stream_schema_equal": null,
+   "stream_coverage_equal": null,
+   "stream_explanation_equal": null,
+   "latency_p50_s": 9.0,
+   "latency_p90_s": 11.71,
+   "avg_llm_calls": 1.25
+  }
+ },
+ "stream": [
+  {
+   "case_id": "an-01",
+   "q": "Tình hình quá hạn thế nào?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    1.0,
+    1.0
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "cp-01",
+   "q": "Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    1.0,
+    1.0
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "cp-02",
+   "q": "Lượt mượn tháng này so với tháng trước thế nào?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    1.0,
+    1.0
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "ca-01",
+   "q": "Tại sao Kho HCM Chinh thiếu sách?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    1.0,
+    1.0
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "de-01",
+   "q": "Tôi nên nhập sách nào trước?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    0.5,
+    1.0
+   ],
+   "coverage_equal": false,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "de-02",
+   "q": "Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    0.5,
+    0.5
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "wi-01",
+   "q": "Với ngân sách 10 triệu nên nhập sách gì?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": false,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    0.667,
+    0.667
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "wi-03",
+   "q": "So sánh ngân sách 10 triệu và 20 triệu",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    1.0,
+    1.0
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "lk-02",
+   "q": "Có bao nhiêu phiếu mượn quá hạn?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    1.0,
+    1.0
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  },
+  {
+   "case_id": "na-01",
+   "q": "Tình hình quá hạn thế nào?",
+   "status": [
+    200,
+    200
+   ],
+   "tools_equal": true,
+   "schema_equal": true,
+   "schema_diff": [],
+   "coverage": [
+    null,
+    null
+   ],
+   "coverage_equal": true,
+   "explanation_equal": null,
+   "headline_equal": null
+  }
+ ],
+ "rows": [
+  {
+   "q": "Có bao nhiêu đầu sách trong thư viện?",
+   "mode": "lookup",
+   "status": 200,
+   "latency_s": 2.7,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "chars": 30,
+   "words_per_sentence": 7.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "kpi_titles": {
+     "gold": 116,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 1,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Thư viện hiện có 116 đầu sách.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "lk-01",
+   "category": "lookup",
+   "turn": 0
+  },
+  {
+   "q": "Có bao nhiêu phiếu mượn quá hạn?",
+   "mode": "lookup",
+   "status": 200,
+   "latency_s": 1.87,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "chars": 31,
+   "words_per_sentence": 7.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "overdue_total": {
+     "gold": 380,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 1,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Hiện có 380 phiếu mượn quá hạn.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "lk-02",
+   "category": "lookup",
+   "turn": 0
+  },
+  {
+   "q": "Sách nào được mượn nhiều nhất 30 ngày qua?",
+   "mode": "lookup",
+   "status": 200,
+   "latency_s": 1.76,
+   "tools": [
+    "get_top_books"
+   ],
+   "chars": 81,
+   "words_per_sentence": 16.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "top1_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    },
+    "top1_count": {
+     "gold": 68,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 2,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Sách được mượn nhiều nhất trong 30 ngày qua là \"Norwegian Wood\" với 68 lượt mượn.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "lk-03",
+   "category": "lookup",
+   "turn": 0
+  },
+  {
+   "q": "Tổng tiền phạt chưa thu là bao nhiêu?",
+   "mode": "lookup",
+   "status": 200,
+   "latency_s": 1.97,
+   "tools": [
+    "get_fine_summary"
+   ],
+   "chars": 41,
+   "words_per_sentence": 4.5,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "fines_unpaid": {
+     "gold": 497133500,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 1,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Tổng tiền phạt chưa thu là 497.133.500 ₫.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "lk-04",
+   "category": "lookup",
+   "turn": 0
+  },
+  {
+   "q": "Danh sách sách hết hàng ở Kho HCM Chinh",
+   "mode": "lookup",
+   "status": 200,
+   "latency_s": 4.13,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "chars": 241,
+   "words_per_sentence": 13.5,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "hcm_low_oos": {
+     "gold": 3,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 3,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Danh sách sách hết hàng tại Kho HCM Chinh gồm 3 đầu sách:\n\n- **Thuyen bac nho**: Hết hàng, tồn khả dụng 0\n- **Dế Mèn Phiêu Lưu Ký**: Hết hàng, tồn khả dụng 0 (đang cho mượn 1 bản)\n- **Tam Cam**: Hết hàng, tồn khả dụng 0 (đang cho mượn 1 bản)",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "lk-05",
+   "category": "lookup",
+   "turn": 0
+  },
+  {
+   "q": "Tình hình quá hạn thế nào?",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 2.94,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "chars": 76,
+   "words_per_sentence": 17.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "overdue_total": {
+     "gold": 380,
+     "cited": true
+    },
+    "overdue_avg": {
+     "gold": 234.2,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 3,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Hiện có 380 phiếu mượn quá hạn với số ngày quá hạn trung bình là 234,2 ngày.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "an-01",
+   "category": "analysis",
+   "turn": 0
+  },
+  {
+   "q": "Đánh giá tình hình tồn kho giữa các kho",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 4.37,
+   "tools": [
+    "get_warehouse_stock_risk"
+   ],
+   "chars": 459,
+   "words_per_sentence": 26.25,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "riskiest_wh": {
+     "gold": "Kho HCM Chinh",
+     "cited": true
+    },
+    "riskiest_wh_oos": {
+     "gold": 3,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 6,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh đang có rủi ro tồn kho cao nhất với 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng, trong khi vẫn còn 120 bản tồn khả dụng. Chi Nhanh District 1 cũng đối mặt với tình trạng hết hàng ở 1 đầu sách và 1 đầu sách dưới ngưỡng. Kho Ha Noi chỉ có 1 đầu sách dưới ngưỡng nhưng số lượng tồn khả dụng rất thấp (8 bản). Trong khi đó, Chi Nhanh District 3 hiện tại không gặp vấn đề về hết hàng hay dưới ngưỡng, với 96 bản tồn khả dụng và 8 bản đang cho mượn.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "an-02",
+   "category": "analysis",
+   "turn": 0
+  },
+  {
+   "q": "Tình hình đặt chỗ ra sao?",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 2.81,
+   "tools": [
+    "get_reservation_funnel"
+   ],
+   "chars": 97,
+   "words_per_sentence": 7.333333333333333,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "reservation_rate": {
+     "gold": 63.4,
+     "cited": true
+    },
+    "reservation_total": {
+     "gold": 8210,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 6,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Hiện có 8.210 phiếu đặt, trong đó 5.206 đã chuyển thành phiếu mượn với tỷ lệ chuyển đổi là 63,4%.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "an-03",
+   "category": "analysis",
+   "turn": 0
+  },
+  {
+   "q": "Tình hình tiền phạt thế nào?",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 2.72,
+   "tools": [
+    "get_fine_summary"
+   ],
+   "chars": 200,
+   "words_per_sentence": 8.4,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "fines_unpaid": {
+     "gold": 497133500,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 4,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Tổng tiền phạt chưa thu hiện là 497.133.500 ₫, trong khi tổng số tiền đã thu được là 96.617.000 ₫. Trong đó, nhóm phạt quá hạn (OVERDUE) chiếm tỷ trọng lớn nhất với 589.136.000 ₫ trên 7656 khoản phạt.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "an-04",
+   "category": "analysis",
+   "turn": 0
+  },
+  {
+   "q": "Phân tích tình hình thư viện hôm nay",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 2.4,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "chars": 155,
+   "words_per_sentence": 11.666666666666666,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "kpi_overdue": {
+     "gold": 380,
+     "cited": true
+    },
+    "kpi_active_loans": {
+     "gold": 576,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 4,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Hôm nay thư viện có 576 phiếu mượn đang mở, trong đó 380 phiếu đã quá hạn. Tổng tiền phạt chưa thu là 497.133.500 ₫ trên tổng số 116 đầu sách đang quản lý.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "an-05",
+   "category": "analysis",
+   "turn": 0
+  },
+  {
+   "q": "Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 2.85,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "chars": 394,
+   "words_per_sentence": 13.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "riskiest_wh": {
+     "gold": "Kho HCM Chinh",
+     "cited": true
+    },
+    "riskiest_wh_oos": {
+     "gold": 3,
+     "cited": true
+    },
+    "second_wh_oos": {
+     "gold": 0,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 7,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh rủi ro hơn Kho Ha Noi.\n\n**Căn cứ**\n- Số đầu sách hết hàng: 3 (HCM Chinh) so với 0 (Ha Noi), nhiều hơn 3.\n- Số đầu sách dưới ngưỡng tồn tối thiểu: 7 (HCM Chinh) so với 1 (Ha Noi), nhiều hơn 6.\n- Tồn khả dụng: 120 bản (HCM Chinh) so với 8 bản (Ha Noi).\n\n**Lưu ý**\nTiêu chí xếp hạng ưu tiên số đầu sách hết hàng, sau đó đến số đầu sách dưới ngưỡng, và cuối cùng là tổng tồn khả dụng.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "cp-01",
+   "category": "comparison",
+   "turn": 0
+  },
+  {
+   "q": "Lượt mượn tháng này so với tháng trước thế nào?",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 5.06,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "chars": 805,
+   "words_per_sentence": 17.0,
+   "dup_numbers": 0.2894736842105263,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "loans_current": {
+     "gold": 72,
+     "cited": true
+    },
+    "loans_previous": {
+     "gold": 921,
+     "cited": true
+    },
+    "loans_per_day_change": {
+     "gold": 83.3,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 41,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Lượt mượn tháng 10/2026 (tính đến ngày 14/10) thấp hơn đáng kể so với tháng 9/2026.\n\n**Căn cứ**\n- Lượt mượn: 72 lượt trong 14 ngày đầu tháng 10, giảm 849 lượt (-92,2%) so với 921 lượt của cả tháng 9; trung bình mỗi ngày giảm từ 30,7 xuống 5,14 lượt (-83,3%).\n- Lượt trả: 75 lượt trong 14 ngày đầu tháng 10, giảm 1.038 lượt (-93,3%) so với 1.113 lượt của tháng 9; trung bình mỗi ngày giảm từ 37,1 xuống 5,36 lượt (-85,6%).\n- Lượt đặt chỗ: 90 lượt trong 14 ngày đầu tháng 10, giảm 244 lượt (-73,1%) so với 334 lượt của tháng 9; trung bình mỗi ngày giảm từ 11,13 xuống 6,43 lượt (-42,2%).\n- Ngày cao điểm của kỳ hiện tại là ngày 06/10/2026 với 33 lượt mượn.\n\n**Lưu ý**\nHai kỳ có số ngày khác nhau (14 ngày so với 30 ngày), nên việc so sánh theo trung bình mỗi ngày sẽ phản ánh chính xác hơn xu hướng thực tế.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "cp-02",
+   "category": "comparison",
+   "turn": 0
+  },
+  {
+   "q": "Top sách tháng này khác gì tháng trước?",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 7.12,
+   "tools": [
+    "compare_top_books"
+   ],
+   "chars": 1116,
+   "words_per_sentence": 23.7,
+   "dup_numbers": 0.5,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "top_current_leader": {
+     "gold": "Dế mèn phiêu lưu ký",
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": null,
+   "numbers": 16,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Top sách tháng 10 (đến ngày 14/10) có sự thay đổi đáng kể so với tháng 9:\n\n**Kết luận:** Tháng 10 có hai đầu sách mới vào top là *Dế mèn phiêu lưu ký* và *Luy-Xiêng Và Chú Người Tuyết Cô Độc*, trong khi *Norwegian Wood* giảm mạnh về lượt mượn. Tám tựa sách từng nằm trong top tháng 9 đã rơi khỏi bảng xếp hạng tháng 10.\n\n**Căn cứ:**\n- *Dế mèn phiêu lưu ký*: 29 lượt mượn, kỳ trước không có trong top → MỚI VÀO TOP.\n- *Norwegian Wood*: 20 lượt, kỳ trước ở hạng 1 với 103 lượt → GIẢM HẠNG.\n- *Dac trung tam ly hoc cua nguoi Viet*: 15 lượt, kỳ trước hạng 5 với 49 lượt → TĂNG HẠNG.\n- *Luy-Xiêng Và Chú Người Tuyết Cô Độc*: 8 lượt, kỳ trước không có trong top → MỚI VÀO TOP.\n- Rơi khỏi top: *Tư Duy Phản Biện* (hạng 2), *Kafka on the Shore* (hạng 3), *Project Hail Mary* (hạng 4), *Babel Hay Sự Cần Thiết Của Bạo Lực* (hạng 6), *One Hundred Years of Solitude* (hạng 7), *Cuộc Đời Của Pi* (hạng 8), *Toi thay hoa vang tren co xanh* (hạng 9), *Nghệ Thuật Giao Tiếp Đỉnh Cao* (hạng 10).\n\n**Lưu ý:** Số liệu tháng 10 chỉ tính đến ngày 14/10 nên chưa phản ánh đầy đủ cả tháng; thứ hạng có thể thay đổi khi dữ liệu hoàn thiện.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "cp-03",
+   "category": "comparison",
+   "turn": 0
+  },
+  {
+   "q": "Lượt mượn tuần này so với tuần trước",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 4.17,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "chars": 589,
+   "words_per_sentence": 14.0,
+   "dup_numbers": 0.17647058823529413,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "loans_current": {
+     "gold": 12,
+     "cited": true
+    },
+    "loans_previous": {
+     "gold": 33,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 22,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Lượt mượn tuần này thấp hơn tuần trước.\n\n**Căn cứ**\n- Tổng lượt mượn: 12 (tuần này) so với 33 (tuần trước), giảm 21 lượt (-63,6%).\n- Trung bình mỗi ngày: 4 lượt (tuần này) so với 4,71 lượt (tuần trước), giảm 15,1%.\n- Các chỉ số khác cũng giảm mạnh: lượt trả giảm 71,4% (10 so với 35), lượt đặt chỗ giảm 68,8% (15 so với 48).\n- Ngày cao điểm của tuần này là 13/10/2026 với 12 lượt mượn.\n\n**Lưu ý**\n- Tuần này mới chỉ có 3 ngày dữ liệu trong khi tuần trước đủ 7 ngày; con số tổng chưa phản ánh đầy đủ xu hướng cả tuần. So sánh theo trung bình/ngày (giảm 15,1%) là phương án đáng tin cậy hơn.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "cp-04",
+   "category": "comparison",
+   "turn": 0
+  },
+  {
+   "q": "Kho nào đang rủi ro thiếu sách nhất?",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 3.27,
+   "tools": [
+    "get_warehouse_stock_risk"
+   ],
+   "chars": 465,
+   "words_per_sentence": 13.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": false,
+   "facts": {
+    "riskiest_wh": {
+     "gold": "Kho HCM Chinh",
+     "cited": false
+    },
+    "riskiest_wh_oos": {
+     "gold": 3,
+     "cited": true
+    }
+   },
+   "coverage": 0.5,
+   "numeric_recall": 1.0,
+   "numbers": 8,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho **HCM Chinh** đang rủi ro thiếu sách nhất với 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng tồn tối thiểu.\n\n**Căn cứ:**\n- Số lượng đầu sách gặp vấn đề: 10 (3 hết hàng + 7 dưới ngưỡng) — cao hơn hẳn các kho còn lại.\n- Tồn khả dụng: 120 bản, đang giữ 6 bản, đang cho mượn 4 bản.\n\n**So sánh nhanh:**\n- Chi Nhanh District 1: 1 hết hàng, 1 dưới ngưỡng.\n- Kho Ha Noi: 0 hết hàng, 1 dưới ngưỡng.\n- Chi Nhanh District 3: không có đầu sách nào hết hàng hoặc dưới ngưỡng.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "cp-05",
+   "category": "comparison",
+   "turn": 0
+  },
+  {
+   "q": "Tại sao Kho HCM Chinh thiếu sách?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 5.95,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "chars": 1018,
+   "words_per_sentence": 25.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "shortage_low": {
+     "gold": 7,
+     "cited": true
+    },
+    "shortage_top_demand_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 12,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh đang thiếu sách do 7 đầu sách nằm dưới ngưỡng tồn (trong đó có 3 đầu sách đã hết hàng), đi kèm với các yếu tố sau:\n\n**Căn cứ**\n- Quy mô tồn kho hiện tại của kho: 120 bản tồn khả dụng, 6 bản đang giữ cho đặt chỗ và 4 bản đang cho mượn.\n- Có 5 đầu sách trong nhóm thiếu vẫn đang có nhu cầu mượn cao trên toàn hệ thống, ví dụ như *Norwegian Wood* (65 lượt mượn), *Project Hail Mary* (15 lượt mượn) và *One Hundred Years of Solitude* (14 lượt mượn).\n- Một số đầu sách gặp phải thời gian chờ hàng dài (từ 21 ngày trở lên), điển hình là *Norwegian Wood* với thời gian chờ 30 ngày theo cam kết của nhà cung cấp.\n- Các đầu sách còn lại như *Tam Cam*, *Dế Mèn Phiêu Lưu Ký* và *Thuyen bac nho* đều đã hết hàng hoàn toàn (tồn khả dụng bằng 0).\n\n**Lưu ý**\n- Dữ liệu nhu cầu mượn được tính toán dựa trên mô hình đề xuất nhập cho toàn hệ thống, chưa tách biệt riêng theo từng khu vực hay kho cụ thể.\n- Các yếu tố trên phản ánh mối tương quan quan sát được trong dữ liệu và không khẳng định quan hệ nhân quả trực tiếp.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "ca-01",
+   "category": "causal",
+   "turn": 0
+  },
+  {
+   "q": "Vì sao Kho Ha Noi có sách dưới ngưỡng?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 5.22,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "chars": 757,
+   "words_per_sentence": 21.25,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "shortage_low": {
+     "gold": 1,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 4,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho Ha Noi hiện có 1 đầu sách ở mức dưới ngưỡng tồn, nhưng không có dấu hiệu nhu cầu mượn gần đây hay xu hướng tăng. Các yếu tố liên quan bao gồm:\n\n**Căn cứ**\n- Quy mô thiếu hàng tại kho: 0 đầu sách hết hàng, 1 đầu sách dưới ngưỡng, tổng tồn khả dụng là 8 bản, đang giữ đặt chỗ cho 2 bản và đang cho mượn 0 bản.\n- Yếu tố thiếu hàng nhưng không có tín hiệu nhu cầu gần đây (ưu tiên xử lý thấp hơn): 1 đầu sách với số lượng \"DƯỚI NGƯỠNG\", tồn khả dụng 8 bản, không ghi nhận lượt mượn trong khoảng thời gian phân tích.\n\n**Lưu ý**\n- Dữ liệu nhu cầu mượn được lấy từ mô hình đề xuất nhập tính trên toàn hệ thống, chưa tách riêng theo từng kho cụ thể.\n- Các yếu tố trên phản ánh tương quan quan sát được trong dữ liệu, chưa phải là nguyên nhân đã được kiểm chứng.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "ca-02",
+   "category": "causal",
+   "turn": 0
+  },
+  {
+   "q": "Tại sao lượt mượn tháng này giảm?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 6.94,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "chars": 762,
+   "words_per_sentence": 16.88888888888889,
+   "dup_numbers": 0.4166666666666667,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "loans_current": {
+     "gold": 72,
+     "cited": true
+    },
+    "loans_previous": {
+     "gold": 921,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 31,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Lượt mượn tháng 10/2026 (tính đến ngày 14/10) giảm mạnh so với tháng 9/2026, trung bình mỗi ngày giảm 83,3% (từ 30,7 lượt xuống 5,14 lượt).\n\n**Căn cứ**\n- Kỳ hiện tại 01/10–14/10 có 14 ngày, kỳ so sánh 01/09–30/09 có 30 ngày; tổng lượt mượn 72 so với 921 (chênh lệch -849, -92,2%).\n- Trung bình mỗi ngày: 5,14 lượt mượn so với 30,7 (giảm 83,3%).\n- Lượt trả cũng giảm tương ứng: trung bình/ngày từ 37,1 xuống 5,36 (-85,6%).\n- Lượt đặt chỗ giảm nhẹ hơn nhưng vẫn giảm: trung bình/ngày từ 11,13 xuống 6,43 (-42,2%).\n- Ngày cao điểm của kỳ hiện tại là 06/10/2026 với 33 lượt mượn.\n\n**Lưu ý**\n- Đây là so sánh tương quan giữa hai kỳ có độ dài khác nhau; kết luận nguyên nhân cần thêm dữ liệu về hoạt động kho, chính sách mượn/trả, hoặc sự kiện đặc biệt trong tháng 10.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "ca-03",
+   "category": "causal",
+   "turn": 0
+  },
+  {
+   "q": "Tại sao cuốn Norwegian Wood được đề xuất nhập?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 5.82,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "chars": 970,
+   "words_per_sentence": 23.444444444444443,
+   "dup_numbers": 0.3333333333333333,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "item_available": {
+     "gold": 5,
+     "cited": true
+    },
+    "item_reorder_qty": {
+     "gold": 28,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 14,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": 1.0,
+   "llm_calls": 1,
+   "answer": "Cuốn **Norwegian Wood** được đề xuất nhập vì tồn kho hiện chỉ còn 5 bản (thấp hơn ngưỡng an toàn là 10), trong khi nhu cầu mượn vẫn ở mức cao với 65 lượt mượn trong 30 ngày qua.\n\n**Căn cứ:**\n*   **Vị trí ưu tiên:** Đứng thứ 1/116 trong danh sách đề xuất nhập, mức độ ưu tiên HIGH.\n*   **Tồn kho thấp:** Tồn khả dụng hiện tại là 5 bản, thấp hơn ngưỡng reorder point là 10 bản.\n*   **Nhu cầu thực tế:** Có 65 lượt mượn trong 30 ngày gần đây và 88 yêu thích (wishlist).\n*   **Dự báo thiếu hụt:** Với tốc độ mượn hiện tại, sách có nguy cơ hết hàng sau khoảng 110,6 ngày nếu không bổ sung.\n*   **Đề xuất nhập:** Hệ thống gợi ý nhập thêm 28 bản với chi phí ước tính khoảng 5.040.000 ₫ để đáp ứng nhu cầu trong thời gian chờ hàng (30 ngày theo cam kết nhà cung cấp).\n\n**Lưu ý:** Dữ liệu cho thấy nhu cầu đã giảm 47,2% so với kỳ trước (từ 123 lượt xuống 65 lượt), nhưng hệ thống vẫn đánh giá mức độ rủi ro thiếu hụt là cao dựa trên tồn kho hiện tại và biến động nhu cầu thực tế.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "ca-04",
+   "category": "causal",
+   "turn": 0
+  },
+  {
+   "q": "Nguyên nhân tỷ lệ chuyển đổi đặt chỗ thấp?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 11.45,
+   "tools": [
+    "get_reservation_funnel",
+    "get_overdue_summary",
+    "get_fine_summary",
+    "get_warehouse_stock_risk"
+   ],
+   "chars": 1057,
+   "words_per_sentence": 17.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "reservation_rate": {
+     "gold": 63.4,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 13,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": null,
+   "llm_calls": 4,
+   "answer": "Tỷ lệ chuyển đổi đặt chỗ hiện tại là 63,4% (5.206 trên tổng số 8.210 reservation). Dữ liệu cho thấy các yếu tố liên quan đến tỷ lệ này bao gồm:\n\n**Căn cứ**\n- Tồn kho thấp và hết hàng ở một số đầu sách: Kho HCM Chinh có 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng tồn; Chi Nhanh District 1 có 1 đầu sách hết hàng. Điều này hạn chế khả năng sẵn sàng phục vụ khi đặt chỗ được xác nhận.\n- Số lượng phiếu quá hạn còn lớn: Có 380 phiếu quá hạn với trung bình 234,2 ngày, gây áp lực lên nguồn cung sách và làm gián đoạn chu kỳ luân chuyển.\n- Nợ phạt chưa thu cao: Tổng tiền phạt chưa thu đạt 497.133.500 ₫, chủ yếu từ phạt quá hạn (OVERDUE), có thể ảnh hưởng đến hành vi giữ chỗ hoặc thanh toán của bạn đọc.\n\n**Lưu ý**\n- Dữ liệu hiện tại chỉ phản ánh tương quan giữa tình trạng tồn kho, kỷ luật mượn trả và tỷ lệ chuyển đổi. Không đủ thông tin để khẳng định nguyên nhân trực tiếp (ví dụ: lý do cụ thể từ phía bạn đọc, lỗi hệ thống, hay chính sách đặt chỗ). Cần thêm dữ liệu về lý do hủy đặt chỗ (nếu có) hoặc phân tích theo từng nhóm sách/kho để xác định rõ hơn.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "ca-05",
+   "category": "causal",
+   "turn": 0
+  },
+  {
+   "q": "Tôi nên nhập sách nào trước?",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 16.07,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "chars": 1708,
+   "words_per_sentence": 11.625,
+   "dup_numbers": 0.09090909090909091,
+   "filler": true,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "reorder_first_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    },
+    "reorder_first_available": {
+     "gold": 5,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 34,
+   "unverified_numbers": 1,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.6666666666666666,
+   "llm_calls": 2,
+   "answer": "**Đề xuất**\nNên ưu tiên nhập các đầu sách sau theo thứ tự:\n\n1. **Norwegian Wood**: 28 bản (≈ 5.040.000 ₫)\n2. **Sắc Lời Đắc Thế**: 5 bản (≈ 450.000 ₫)\n3. **Kafka on the Shore**: 9 bản (≈ 1.800.000 ₫)\n4. **One Hundred Years of Solitude**: 12 bản (≈ 2.640.000 ₫)\n5. **Babel Hay Sự Cần Thiết Của Bạo Lực**: 8 bản (≈ 2.152.000 ₫)\n6. **Cây Cam Ngọt Của Tôi (Tái Bản 2026)**: 5 bản (≈ 500.000 ₫)\n7. **Cuộc Đời Của Pi**: 6 bản (≈ 672.000 ₫)\n8. **Đi Tìm Lẽ Sống (Tái Bản 2022)**: 5 bản (≈ 320.000 ₫)\n\n**Lý do**\n*   **Sắc Lời Đắc Thế, Babel Hay Sự Cần Thiết Của Bạo Lực, Cây Cam Ngọt Của Tôi (Tái Bản 2026), Cuộc Đời Của Pi, Đi Tìm Lẽ Sống (Tái Bản 2022):** Tồn kho khả dụng bằng 0 và dự kiến hết hàng ngay lập tức (0 ngày). Đây là những đầu sách đang bị mất doanh thu hoàn toàn và cần được bổ sung gấp.\n*   **Norwegian Wood:** Dù lượt mượn có giảm so với kỳ trước nhưng vẫn ở mức cao (65 lượt). Với tồn kho khả dụng chỉ còn 5 bản, sách sẽ hết trong khoảng 110 ngày tới nếu không nhập thêm.\n*   **Kafka on the Shore & One Hundred Years of Solitude:** Tồn kho hiện tại thấp hơn ngưỡng an toàn (3 bản so với ngưỡng 15 của *One Hundred Years...*), dù thời gian hết hàng dự kiến còn khá dài.\n\n**Rủi ro**\n*   Tổng chi phí ước tính cho 8 đầu sách trên là 11.574.000 ₫. Nếu ngân sách hạn chế, việc chậm trễ nhập các đầu sách \"hết hàng ngay\" (như *Sắc Lời Đắc Thế*) sẽ làm mất cơ hội phục vụ bạn đọc trong ngắn hạn.\n*   Thời gian chờ hàng (lead time) của một số sách là 14-30 ngày, nên đơn đặt hàng cần được xử lý sớm để sách về kịp nhu cầu thực tế.\n\n**Bước tiếp theo**\nBạn có muốn tôi mô phỏng xem nếu áp dụng một ngân sách cụ thể (ví dụ: 10 triệu hoặc 20 triệu ₫) thì danh sách nào sẽ được duyệt và phần nào bị bỏ lại không?",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "de-01",
+   "category": "decision",
+   "turn": 0
+  },
+  {
+   "q": "Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 7.81,
+   "tools": [
+    "analyze_demand_vs_stock"
+   ],
+   "chars": 1594,
+   "words_per_sentence": 16.045454545454547,
+   "dup_numbers": 0.22580645161290322,
+   "filler": true,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "demand_first_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    },
+    "demand_flagged": {
+     "gold": 16,
+     "cited": false
+    }
+   },
+   "coverage": 0.5,
+   "numeric_recall": 0.0,
+   "numbers": 39,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 1.0,
+   "llm_calls": 1,
+   "answer": "Dưới đây là các đầu sách được mượn nhiều nhưng tồn kho thấp và cần nhập thêm:\n\n1. **Norwegian Wood**: Hạng 1 về lượt mượn (65 lượt); tồn khả dụng 5 bản (ngưỡng 10); ưu tiên HIGH; đề xuất nhập 28 bản ≈ 5.040.000 ₫\n2. **Kafka on the Shore**: Hạng 4 về lượt mượn (22 lượt); tồn khả dụng 3 bản (ngưỡng 1); ưu tiên HIGH; đề xuất nhập 9 bản ≈ 1.800.000 ₫\n3. **Babel Hay Sự Cần Thiết Của Bạo Lực**: Hạng 5 về lượt mượn (20 lượt); tồn khả dụng 0 bản; ưu tiên HIGH; đề xuất nhập 8 bản ≈ 2.152.000 ₫\n4. **Dac trung tam ly hoc cua nguoi Viet**: Hạng 6 về lượt mượn (19 lượt); tồn khả dụng 2 bản (ngưỡng 1); ưu tiên HIGH; đề xuất nhập 52 bản ≈ 4.628.000 ₫\n5. **Project Hail Mary**: Hạng 7 về lượt mượn (15 lượt); tồn khả dụng 6 bản (ngưỡng 6); ưu tiên MEDIUM; đề xuất nhập 3 bản ≈ 630.000 ₫\n6. **Nghệ Thuật Giao Tiếp Đỉnh Cao**: Hạng 8 về lượt mượn (14 lượt); tồn khả dụng 0 bản; ưu tiên HIGH; đề xuất nhập 5 bản ≈ 415.000 ₫\n7. **One Hundred Years of Solitude**: Hạng 9 về lượt mượn (14 lượt); tồn khả dụng 3 bản (ngưỡng 15); ưu tiên HIGH; đề xuất nhập 12 bản ≈ 2.640.000 ₫\n8. **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)**: Hạng 10 về lượt mượn (13 lượt); tồn khả dụng 0 bản; ưu tiên HIGH; đề xuất nhập 6 bản ≈ 924.000 ₫\n9. **Sắc Lời Đắc Thế**: Hạng 11 về lượt mượn (13 lượt); tồn khả dụng 0 bản; ưu tiên HIGH; đề xuất nhập 5 bản ≈ 450.000 ₫\n10. **Đi Tìm Lẽ Sống (Tái Bản 2022)**: Hạng 12 về lượt mượn (11 lượt); tồn khả dụng 0 bản; ưu tiên HIGH; đề xuất nhập 5 bản ≈ 320.000 ₫\n\n**Lưu ý**: Dữ liệu tin cậy ở mức THẤP đối với một số tựa sách, cho thấy thông tin có thể chưa đầy đủ hoặc dựa trên ít mẫu.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "de-02",
+   "category": "decision",
+   "turn": 0
+  },
+  {
+   "q": "Nên ưu tiên xử lý việc gì hôm nay?",
+   "mode": "ranking",
+   "status": 200,
+   "latency_s": 21.34,
+   "tools": [
+    "rank_priority_tasks"
+   ],
+   "chars": 847,
+   "words_per_sentence": 13.692307692307692,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "priority_first_value": {
+     "gold": 90,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 13,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 1.0,
+   "llm_calls": 1,
+   "answer": "Nên ưu tiên xử lý theo thứ tự sau:\n\n1. **Bổ sung sách đã hết hàng nhưng vẫn có nhu cầu**: 90 đầu sách đang không thể cho mượn dù bạn đọc vẫn cần. Bước tiếp theo: Lập phiếu đề xuất nhập (cần xác nhận trước khi tạo).\n2. **Thu hồi khoản phạt chưa thu**: Tổng công nợ 497.133.500 ₫ tồn đọng. Bước tiếp theo: Rà soát các khoản phạt lớn nhất và gửi nhắc thanh toán.\n3. **Xử lý phiếu mượn quá hạn**: 380 phiếu, trung bình quá hạn 234.2 ngày, lâu nhất 955 ngày. Bước tiếp theo: Liên hệ các phiếu quá hạn lâu nhất trước.\n4. **Xem xét đề xuất nhập ưu tiên cao**: 96 đầu sách có dự báo nhu cầu vượt tồn khả dụng trong thời gian chờ hàng. Bước tiếp theo: Duyệt danh sách đề xuất nhập ưu tiên HIGH.\n5. **Kiểm tra kho dưới ngưỡng**: 9 đầu sách tại Kho HCM Chinh đang ở mức rủi ro thấp. Bước tiếp theo: Đối chiếu tồn thực tế và cân nhắc điều chuyển giữa các kho.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "de-03",
+   "category": "decision",
+   "turn": 0
+  },
+  {
+   "q": "Nên nhập gì cho Kho HCM Chinh?",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 11.07,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions"
+   ],
+   "chars": 2174,
+   "words_per_sentence": 19.608695652173914,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "hcm_low_oos": {
+     "gold": 3,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 17,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.1111111111111111,
+   "llm_calls": 1,
+   "answer": "**Đề xuất**\nNên ưu tiên nhập ngay 8 đầu sách đang hết hàng hoặc dưới ngưỡng tại Kho HCM Chinh, tập trung vào các tựa có nhu cầu mượn cao và tồn kho bằng 0:\n\n1. **Dế Mèn Phiêu Lưu Ký** (Hết hàng)\n2. **Tam Cam** (Hết hàng)\n3. **One Hundred Years of Solitude** (Dưới ngưỡng, chỉ còn 1 bản khả dụng)\n4. **Norwegian Wood** (Dưới ngưỡng, chỉ còn 2 bản khả dụng)\n5. **Project Hail Mary** (Dưới ngưỡng)\n6. **Tư Duy Như Kinh Tế Gia** (Dưới ngưỡng)\n7. **Thuyen bac nho** (Hết hàng)\n8. **Babel Hay Sự Cần Thiết Của Bạo Lực** (Được đề xuất nhập với số lượng lớn trong danh sách ưu tiên cao)\n\n**Lý do**\n- **Căn cứ**: Tại Kho HCM Chinh hiện có 3 đầu sách hết hàng hoàn toàn (tồn khả dụng 0) là *Dế Mèn Phiêu Lưu Ký*, *Tam Cam* và *Thuyen bac nho*. Ngoài ra, 4 đầu sách khác như *One Hundred Years of Solitude* (ngưỡng 15), *Norwegian Wood* (ngưỡng 10) và *Project Hail Mary* (ngưỡng 6) đều đang ở mức tồn kho thấp hơn ngưỡng an toàn.\n- **Căn cứ**: Hệ thống gợi ý tổng cộng 116 đầu sách cần xem xét nhập với tổng chi phí ước tính khoảng 70.408.750 ₫ để đáp ứng nhu cầu dự báo trong 30 ngày tới. Các đầu sách được liệt kê trên nằm trong nhóm ưu tiên cao (HIGH) hoặc có số lượng đề xuất nhập lớn (ví dụ: *One Hundred Years of Solitude* đề xuất 12 bản, *Norwegian Wood* đề xuất 28 bản).\n- **Căn cứ**: Tổng số bản sao khả dụng của kho này hiện là 120 bản, trong khi có 6 bản đang được giữ cho đặt chỗ và 4 bản đang cho mượn, cho thấy nguồn lực hiện có rất hạn chế so với nhu cầu thực tế.\n\n**Rủi ro**\n- Nếu không nhập kịp, các đầu sách hết hàng sẽ không thể phục vụ bạn đọc, dẫn đến mất lượt mượn tiềm năng và tăng tỷ lệ hủy đặt chỗ (reservation cancelled/expired).\n- Một số sách như *Norwegian Wood* hay *One Hundred Years of Solitude* dù lượt mượn trong tháng gần đây có giảm so với tháng trước nhưng vẫn duy trì nhu cầu ổn định, việc thiếu hụt lâu dài có thể làm giảm sự hài lòng của người dùng thường xuyên.\n\n**Bước tiếp theo**\n- Xác nhận ngân sách nhập hàng cụ thể (nếu có) để hệ thống lọc chính xác các đầu sách nào nằm trong khả năng tài chính hiện tại.\n- Kiểm tra lại thời gian chờ hàng (lead time) từ nhà cung cấp đối với các đầu sách hết hàng để lên kế hoạch đặt hàng sớm nhất có thể.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "de-04",
+   "category": "decision",
+   "turn": 0
+  },
+  {
+   "q": "Có nên thanh lý bớt sách tồn lâu không?",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 4.06,
+   "tools": [
+    "get_aging_inventory",
+    "get_weeding_suggestions"
+   ],
+   "chars": 375,
+   "words_per_sentence": 14.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "weeding_total": {
+     "gold": 0,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 2,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Hiện tại không có sách nào tồn kho lâu ngày (trên 90 ngày không hoạt động) nên chưa cần thanh lý.\n\n**Căn cứ**\n- Số đầu sách tồn lâu không hoạt động: 0.\n- Tổng giá trị tồn đọng: 0 ₫.\n\n**Lưu ý**\n- Dữ liệu hiện tại chỉ phản ánh tình trạng tính đến thời điểm truy xuất; nếu sau này có sách mới rơi vào nhóm tồn lâu, hệ thống sẽ gợi ý hành động phù hợp (thanh lý hoặc chuyển kho).",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "de-05",
+   "category": "decision",
+   "turn": 0
+  },
+  {
+   "q": "Với ngân sách 10 triệu nên nhập sách gì?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 4.95,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 656,
+   "words_per_sentence": 10.692307692307692,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 9988000,
+     "cited": true
+    },
+    "sim_funded_lines": {
+     "gold": 6,
+     "cited": false
+    },
+    "sim_unfunded_high": {
+     "gold": 93,
+     "cited": false
+    }
+   },
+   "coverage": 0.3333333333333333,
+   "numeric_recall": 0.3333333333333333,
+   "numbers": 10,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "Với ngân sách 10.000.000 ₫, hệ thống duyệt chi phí 9.988.000 ₫ (dư 12.000 ₫) để nhập các đầu sách sau:\n\n**Đề xuất nhập:**\n*   **Norwegian Wood**: 28 bản\n*   **Dac trung tam ly hoc cua nguoi Viet**: 52 bản\n*   **Đi Tìm Lẽ Sống (Tái Bản 2022)**: 5 bản\n*   **Dế mèn phiêu lưu ký**: 3 bản\n*   **Luy-Xiêng Và Chú Người Tuyết Cô Độc**: 3 bản\n\n**Lưu ý về ưu tiên cao bị bỏ lại:**\nCó 3 đầu sách thuộc nhóm ưu tiên cao không được duyệt trong gói này là: *Sắc Lời Đắc Thế*, *Kafka on the Shore*, và *One Hundred Years of Solitude*. Các đầu sách còn lại như *Babel Hay Sự Cần Thiết Của Bạo Lực* và *Cây Cam Ngọt Của Tôi (Tái Bản 2026)* cũng nằm ngoài danh sách duyệt.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "wi-01",
+   "category": "what_if",
+   "turn": 0
+  },
+  {
+   "q": "Nếu giảm ngân sách nhập hàng còn 5 triệu thì sao?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 11.71,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 1043,
+   "words_per_sentence": 15.666666666666666,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 4948000,
+     "cited": true
+    },
+    "sim_unfunded_high": {
+     "gold": 94,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 12,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 2,
+   "answer": "**Kết quả mô phỏng**\nVới ngân sách 5.000.000 ₫:\n- Tổng chi phí được duyệt: 4.948.000 ₫ (còn dư 52.000 ₫).\n- Số đầu sách được duyệt: 5 đầu (gồm 63 bản).\n- Các đầu sách được duyệt: *Đi Tìm Lẽ Sống (Tái Bản 2022)*, *Dac trung tam ly hoc cua nguoi Viet*, *Dế mèn phiêu lưu ký*, *Luy-Xiêng Và Chú Người Tuyết Cô Độc* và một phần của *Tư Duy Phản Biện*.\n- **Ưu tiên cao bị bỏ lại:** 94 đầu sách.\n\n**Đánh đổi**\n- Ngân sách này chỉ đủ để duyệt nhập 5 đầu sách trong tổng số 116 đầu sách cần nhập (trong đó có 96 đầu ưu tiên cao).\n- Việc giảm mạnh ngân sách xuống 5 triệu đồng khiến khả năng đáp ứng nhu cầu thực tế của kho bị hạn chế nghiêm trọng, đặc biệt là các đầu sách đang có nhu cầu cao nhưng giá trị đơn vị lớn sẽ khó được đưa vào danh sách nhập hàng.\n\n**Giới hạn**\n- Kết quả dựa trên dữ liệu dự báo nhu cầu hiện tại và quy tắc phân bổ tối ưu hóa việc giảm thiểu thiếu hụt trên mỗi đồng chi tiêu.\n- Có 16 đầu sách nằm ngoài top 100 đề xuất nên số lượng dòng/số lượng cụ thể của chúng có thể chưa được phản ánh đầy đủ trong kết quả mô phỏng này.",
+   "actionable": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "wi-02",
+   "category": "what_if",
+   "turn": 0
+  },
+  {
+   "q": "So sánh ngân sách 10 triệu và 20 triệu",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 9.0,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 1839,
+   "words_per_sentence": 14.333333333333334,
+   "dup_numbers": 0.25806451612903225,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 9988000,
+     "cited": true
+    },
+    "sim_second_funded_cost": {
+     "gold": 19861000,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 29,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "**Kết quả mô phỏng**\n\n*   **Ngân sách 10.000.000 ₫:**\n    *   Duyệt chi phí: 9.988.000 ₫ (còn dư 12.000 ₫).\n    *   Số lượng: 6 đầu sách / 91 bản.\n    *   Ưu tiên cao: 3 được duyệt, 93 bị bỏ lại.\n    *   Sách được duyệt: *Norwegian Wood* (28 bản), *Đi Tìm Lẽ Sống (Tái Bản 2022)* (5 bản), *Dac trung tam ly hoc cua nguoi Viet* (52 bản), *Dế mèn phiêu lưu ký* (3 bản), *Luy-Xiêng Và Chú Người Tuyết Cô Độc* (3 bản).\n    *   Ưu tiên cao bị bỏ lại: *Sắc Lời Đắc Thế*, *Kafka on the Shore*, *One Hundred Years of Solitude*, *Babel Hay Sự Cần Thiết Của Bạo Lực*, *Cây Cam Ngọt Của Tôi (Tái Bản 2026)*.\n\n*   **Ngân sách 20.000.000 ₫:**\n    *   Duyệt chi phí: 19.861.000 ₫ (còn dư 139.000 ₫).\n    *   Số lượng: 16 đầu sách / 156 bản.\n    *   Ưu tiên cao: 13 được duyệt, 83 bị bỏ lại.\n    *   So với phương án 10 triệu: chi phí tăng thêm khoảng 9.873.000 ₫, số đầu sách tăng thêm 10, số bản tăng thêm 65, số ưu tiên cao bị bỏ lại giảm đi 10.\n    *   Sách được duyệt thêm: *Sắc Lời Đắc Thế* (5 bản), *Kafka on the Shore* (9 bản), *One Hundred Years of Solitude* (12 bản), *Babel Hay Sự Cần Thiết Của Bạo Lực* (8 bản).\n    *   Ưu tiên cao bị bỏ lại: *Nghệ Thuật Tư Duy Chiến Lược*, *Cá Voi Tỷ Đô (Tái Bản 2022)*, *Những Kẻ Xuất Chúng (Tái Bản 2021)*, *Tư Duy Ngược*, *Người Đàn Ông Mang Tên OVE (Tái Bản)*.\n\n**Đánh đổi**\nViệc tăng ngân sách từ 10 triệu lên 20 triệu giúp giải quyết thêm 10 đầu sách và 65 bản sao, trong đó có 10 đầu sách thuộc nhóm ưu tiên cao từng bị loại ở mức ngân sách thấp hơn. Tuy nhiên, ngay cả khi chi gấp đôi ngân sách, vẫn còn 83 đầu sách ưu tiên cao chưa được đáp ứng nhu cầu nhập.\n\n**Giới hạn**\nMô phỏng này dựa trên quy tắc phân bổ tối ưu hóa việc giảm thiểu thiếu hụt dự kiến trên mỗi đồng chi tiêu. Kết quả chỉ bao gồm các dòng ưu tiên cao nhất; các đầu sách khác nằm ngoài danh sách 100 dòng đầu tiên không được tính",
+   "actionable": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "wi-03",
+   "category": "what_if",
+   "turn": 0
+  },
+  {
+   "q": "Nếu cắt 30% ngân sách nhập hàng thì sao?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 6.35,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 966,
+   "words_per_sentence": 17.25,
+   "dup_numbers": 0.07142857142857142,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_second_funded_cost": {
+     "gold": 49283100,
+     "cited": true
+    },
+    "sim_second_unfunded_high": {
+     "gold": 32,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 14,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "**Kết quả mô phỏng**\n- Với ngân sách giảm 30% (còn khoảng 49.283.100 ₫): hệ thống duyệt nhập **67 đầu sách / 415 bản**, còn dư ngân sách **3.025 ₫**.\n- So với phương án không cắt ngân sách: số đầu sách giảm **33 tựa**, số bản giảm **164 bản**, và có **32 đầu sách ưu tiên cao bị bỏ lại** khỏi danh sách duyệt.\n- Các đầu sách ưu tiên cao bị loại gồm: *Cố Định Một Đám Mây (Tái Bản 2023)*, *Giao Thừa (Tái Bản 2019)*, *Mẹ Làm Gì Có Ước Mơ*, *Chuyện ICU - Lá Gan Hạnh Phúc*, và *Totto-Chan Bên Cửa Sổ - Những Chuyện Tiếp Theo*.\n\n**Đánh đổi**\n- Việc cắt giảm giúp tiết kiệm **21.122.625 ₫** nhưng đồng nghĩa với việc kho sẽ thiếu hụt nguồn cung cho 32 đầu sách đang được đánh giá là ưu tiên cao nhất. Dù vậy, các đầu sách nằm trong top nhu cầu cao nhất (như *Norwegian Wood*, *Sắc Lời Đắc Thế*) vẫn được đảm bảo nhập đủ.\n\n**Giới hạn**\n- Kết quả dựa trên dữ liệu dự báo nhu cầu hiện tại; 16 đầu sách ngoài nhóm 100 dòng đầu tiên không được tính toán chi tiết về số lượng.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "wi-04",
+   "category": "what_if",
+   "turn": 0
+  },
+  {
+   "q": "Nếu giảm ngân sách nhập hàng thì sao?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 15.56,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 1430,
+   "words_per_sentence": 9.909090909090908,
+   "dup_numbers": 0.3968253968253968,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_need_cost": {
+     "gold": 70408750,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 43,
+   "unverified_numbers": 0,
+   "overclaims": [
+    "dap ung 100%",
+    "dap ung 100%",
+    "dap ung 100%",
+    "dap ung 100%"
+   ],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 2,
+   "answer": "**Kết quả mô phỏng**\n\n- **100% nhu cầu (70.408.750 ₫):** duyệt 70.408.750 ₫, còn dư 0 ₫; 100 đầu sách / 579 bản (ưu tiên cao được duyệt 96, bị bỏ lại 0); đáp ứng 100% thiếu hụt dự kiến.\n- **75% nhu cầu (52.806.562 ₫):** duyệt 52.711.850 ₫, còn dư 94.712 ₫; 73 đầu sách / 445 bản (ưu tiên cao được duyệt 70, bị bỏ lại 26); đáp ứng 100% thiếu hụt dự kiến. So với phương án đầu: ngân sách -17.602.188 ₫, chi phí duyệt -17.696.900 ₫, số đầu sách -27, số bản -134, ưu tiên cao bị bỏ lại 26.\n- **50% nhu cầu (35.204.375 ₫):** duyệt 35.157.100 ₫, còn dư 47.275 ₫; 42 đầu sách / 290 bản (ưu tiên cao được duyệt 39, bị bỏ lại 57); đáp ứng 100% thiếu hụt dự kiến. So với phương án đầu: ngân sách -35.204.375 ₫, chi phí duyệt -35.251.650 ₫, số đầu sách -58, số bản -289, ưu tiên cao bị bỏ lại 57.\n- **25% nhu cầu (17.602.187 ₫):** duyệt 17.530.000 ₫, còn dư 72.188 ₫; 11 đầu sách / 130 bản (ưu tiên cao được duyệt 8, bị bỏ lại 88); đáp ứng 100% thiếu hụt dự kiến. So với phương án đầu: ngân sách -52.806.562 ₫, chi phí duyệt -52.878.750 ₫, số đầu sách -89, số bản -449, ưu tiên cao bị bỏ lại 88.\n\n**Đánh đổi**\n- Giảm từ 100% xuống 75%: ngân sách giảm 17.602.188 ₫, chi phí duyệt giảm 17.696.900 ₫, số đầu sách giảm 27, số bản giảm 134, ưu tiên cao bị bỏ lại 26.\n- Giảm xuống 50%: ngân sách giảm 35.204.375 ₫, chi phí duyệt giảm 35.251.650 ₫, số đầu sách giảm 58, số bản giảm 289, ưu tiên cao bị bỏ lại 57.\n- Giảm xuống 25%: ngân sách giảm 52",
+   "actionable": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "wi-05",
+   "category": "incomplete_simulation",
+   "turn": 0
+  },
+  {
+   "q": "Với ngân sách 100 tỷ thì nhập được những gì?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 4.75,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 692,
+   "words_per_sentence": 12.583333333333334,
+   "dup_numbers": 0.2,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 70408750,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 11,
+   "unverified_numbers": 0,
+   "overclaims": [
+    "dap ung 100%"
+   ],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "Với ngân sách 100.000.000.000 ₫, hệ thống duyệt chi 70.408.750 ₫ để nhập 100 đầu sách (tổng cộng 579 bản), trong đó có 96 đầu sách ưu tiên cao được duyệt và không bị bỏ lại. Số tiền còn dư là 99.929.591.250 ₫.\n\n**Các đầu sách chính được duyệt:**\n*   Norwegian Wood (28 bản)\n*   One Hundred Years of Solitude (12 bản)\n*   Kafka on the Shore (9 bản)\n*   Babel Hay Sự Cần Thiết Của Bạo Lực (8 bản)\n*   Sắc Lời Đắc Thế (5 bản)\n\n**Lưu ý:** Ngân sách này đủ lớn để đáp ứng 100% nhu cầu thiếu hụt dự kiến của các đầu sách ưu tiên nhất; tuy nhiên, danh sách trả về chỉ bao gồm 100 dòng đầu tiên theo thứ tự ưu tiên, nên có thể còn một số đầu sách khác cũng cần thiết nhưng chưa được liệt kê chi tiết.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "wi-06",
+   "category": "incomplete_simulation",
+   "turn": 0
+  },
+  {
+   "q": "Tôi nên nhập sách nào trước?",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 25.26,
+   "tools": [
+    "get_reorder_suggestions",
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions",
+    "get_reorder_suggestions"
+   ],
+   "chars": 2131,
+   "words_per_sentence": 21.428571428571427,
+   "dup_numbers": 0.3888888888888889,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "reorder_first_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": null,
+   "numbers": 19,
+   "unverified_numbers": 2,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.3333333333333333,
+   "llm_calls": 5,
+   "answer": "Đề xuất nhập **Norwegian Wood** trước, sau đó ưu tiên các đầu sách đang hết hàng (tồn khả dụng 0) có thời gian chờ hàng ngắn.\n\n**Đề xuất**\n1. **Nhập ngay:** *Norwegian Wood* (28 bản). Đây là đầu sách có nhu cầu cao nhất và tồn kho thấp nhất so với ngưỡng.\n2. **Nhập song song (ưu tiên hết hàng):** Các đầu sách có tồn khả dụng 0 và thời gian chờ hàng ngắn (14 ngày): *Sắc Lời Đắc Thế*, *One Hundred Years of Solitude*, *Babel Hay Sự Cần Thiết Của Bạo Lực*, *Cây Cam Ngọt Của Tôi (Tái Bản 2026)*, *Cuộc Đời Của Pi*, *Đi Tìm Lẽ Sống (Tái Bản 2022)*.\n3. **Nhập sau:** *Kafka on the Shore* (chờ hàng 30 ngày, nhưng hiện tại vẫn còn tồn khả dụng 3 bản nên chưa cấp bách bằng nhóm trên).\n\n**Lý do**\n- **Nguy cơ hết hàng cao nhất:** *Norwegian Wood* có 5 bản tồn khả dụng (ngưỡng 10), dù lượt mượn giảm nhưng vẫn là đầu sách được quan tâm nhiều nhất (65 lượt mượn trong kỳ). Dự kiến hết hàng sau 110,6 ngày, nhưng cần đặt sớm do thời gian chờ hàng dài (30 ngày).\n- **Hết hàng tức thì:** 7 đầu sách trong danh sách ưu tiên HIGH có tồn khả dụng 0 và dự kiến hết hàng sau 0 ngày. Trong đó, *Sắc Lời Đắc Thế*, *One Hundred Years of Solitude*, *Babel Hay Sự Cần Thiết Của Bạo Lực*, *Cây Cam Ngọt Của Tôi (Tái Bản 2026)*, *Cuộc Đời Của Pi*, *Đi Tìm Lẽ Sống (Tái Bản 2022)* có thời gian chờ hàng mặc định là 14 ngày — ngắn hơn *Norwegian Wood* (30 ngày) và *Kafka on the Shore* (30 ngày). Việc đặt những sách này trước giúp lấp đầy lỗ hổng tồn kho nhanh nhất.\n- **Rủi ro kho:** Kho HCM Chinh đang có 3 đầu sách hết hàng và 7 đầu dưới ngưỡng; Chi Nhanh District 1 có 1 đầu hết hàng. Việc phân bổ sách nhập về cần ưu tiên các kho này để cân bằng tồn kho.\n\n**Rủi ro**\n- **Chi phí tập trung:** Nếu chỉ tập trung vào nhóm \"hết hàng\" (chi phí khoảng 6.736.000 ₫ cho 41 bản), sẽ bỏ lỡ việc bổ sung *Norwegian Wood* — đầu sách có giá trị đơn vị cao và nhu cầu ổn định.\n- **Chờ hàng dài:** *Norwegian Wood* và *Kafka on the Shore* có chờ hàng 30 ngày. Nếu không đặt ngay từ đầu tháng, nguy cơ thiếu hụt kéo dài là cao.\n- **Dữ liệu hạn chế:** Đề xuất dựa trên ngân sách giả định hoặc tổng chi phí ước tính. Nếu ngân sách thực tế bị giới hạn (ví dụ: 23.843",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-01",
+   "category": "multi_turn",
+   "turn": 0
+  },
+  {
+   "q": "Giải thích kỹ hơn",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 13.66,
+   "tools": [],
+   "chars": 2087,
+   "words_per_sentence": 17.833333333333332,
+   "dup_numbers": 0.23076923076923078,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "reorder_first_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    },
+    "reorder_first_available": {
+     "gold": 5,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 15,
+   "unverified_numbers": 0,
+   "overclaims": [
+    "toi uu"
+   ],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "**Đề xuất**\nƯu tiên đặt hàng theo thứ tự: **Nhóm 1 (Hết hàng, chờ nhanh)** → **Nhóm 2 (Tồn thấp, chờ dài)** → **Nhóm 3 (Còn tồn, chờ trung bình)**.\n\n**Lý do chi tiết**\n\n*   **Nhóm 1: Hết hàng ngay lập tức (Tồn khả dụng = 0)**\n    *   **Sách:** *Sắc Lời Đắc Thế*, *One Hundred Years of Solitude*, *Babel Hay Sự Cần Thiết Của Bạo Lực*, *Cây Cam Ngọt Của Tôi (Tái Bản 2026)*, *Cuộc Đời Của Pi*, *Đi Tìm Lẽ Sống (Tái Bản 2022)*.\n    *   **Lý do:** Đây là những đầu sách đang \"cháy\" hoàn toàn tại kho nhưng vẫn có nhu cầu mượn thực tế. Thời gian chờ hàng của chúng là **14 ngày** (ngắn nhất trong danh sách). Nếu không đặt ngay, bạn đọc sẽ không thể tiếp cận các tựa sách này trong ít nhất 2 tuần tới.\n    *   **Hành động:** Đặt ngay để lấp đầy khoảng trống tồn kho nhanh nhất.\n\n*   **Nhóm 2: Tồn kho rất thấp so với nhu cầu (Tồn < Ngưỡng)**\n    *   **Sách:** *Norwegian Wood* (tồn 5 bản), *Kafka on the Shore* (tồn 3 bản).\n    *   **Lý do:** Dù chưa hết hàng, nhưng số lượng hiện tại quá ít so với lượt mượn gần đây.\n        *   *Norwegian Wood*: Có 65 lượt mượn trong kỳ, chỉ còn 5 bản. Dự kiến hết sau ~110 ngày, nhưng thời gian chờ hàng là **30 ngày**. Cần đặt sớm để khi về hàng thì vẫn còn đủ cho đợt mượn tiếp theo.\n        *   *Kafka on the Shore*: Chỉ còn 3 bản, dự kiến hết sau ~87 ngày. Chờ hàng cũng là **30 ngày**.\n    *   **Hành động:** Đặt song song với Nhóm 1 vì thời gian chờ hàng tương đương nhau (30 ngày).\n\n*   **Nhóm 3: Còn tồn kho nhưng cần bổ sung (Tồn > Ngưỡng nhưng xu hướng tăng)**\n    *   **Sách:** *Thế Giới Phẳng Như Trái Tim*, *Tôi Là Bêtô*, *Nhà Giả Kim*, *Dế Mèn Phiêu Lưu Ký (Tái Bản 2026)*, *Truyện Kiều*.\n    *   **Lý do:** Các sách này hiện vẫn còn trên kệ (từ 10-20 bản) và thời gian chờ hàng là **21 ngày**. Chúng có thể đợi Nhóm 1 và Nhóm 2 được xử lý trước để tối ưu dòng tiền, nhưng vẫn nên đưa vào đơn hàng kế tiếp để tránh tình trạng \"cháy\" bất ngờ nếu nhu cầu tăng đột biến.\n\n**Rủi ro**\n*   **Ngân sách hạn chế:** Nếu ngân sách không đủ để đặt tất cả, hãy ưu tiên **Nhóm 1** trước vì họ đang gây ra sự thất vọng trực tiếp cho bạn đọc (không có sách",
+   "style_ok": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-01",
+   "category": "multi_turn",
+   "turn": 1
+  },
+  {
+   "q": "Vì sao không chọn phương án khác?",
+   "mode": "decision",
+   "status": 200,
+   "latency_s": 10.81,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "chars": 1835,
+   "words_per_sentence": 20.842105263157894,
+   "dup_numbers": 0.5,
+   "filler": true,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "reorder_second_title": {
+     "gold": "Sắc Lời Đắc Thế",
+     "cited": false
+    }
+   },
+   "coverage": 0.0,
+   "numeric_recall": null,
+   "numbers": 11,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "**Đề xuất**\nPhương án hiện tại được chọn dựa trên sự cân bằng giữa **tốc độ lấp đầy lỗ hổng tồn kho** (thời gian chờ hàng ngắn) và **mức độ ưu tiên rủi ro** (hết hàng hoặc tồn thấp). Các phương án khác bị loại trừ vì lý do sau:\n\n**Lý do không chọn các phương án thay thế:**\n\n*   **Không chọn nhóm sách \"Tồn cao nhưng chờ lâu\" (ví dụ: *Kafka on the Shore* nếu chỉ xét riêng lẻ):**\n    *   Dù *Kafka on the Shore* có thời gian chờ hàng dài (30 ngày), nhưng hiện tại nó vẫn còn 3 bản. Nếu đặt nó trước các sách hết hàng, bạn sẽ mất 30 ngày để nhận hàng trong khi các sách khác (chờ 14 ngày) đã sẵn sàng phục vụ bạn đọc ngay. Việc ưu tiên sách hết hàng giúp tối ưu hóa trải nghiệm người dùng nhanh nhất.\n*   **Không chọn nhóm sách \"Ngân sách thấp nhưng nhu cầu ít\" (ví dụ: *Cây Cam Ngọt Của Tôi*):**\n    *   Mặc dù chi phí nhập thấp (500.000 ₫ cho 5 bản), nhưng đây là đầu sách có lượt mượn thấp nhất trong nhóm ưu tiên (7 lượt). Hệ thống ưu tiên các đầu sách có tỷ lệ \"nhu cầu/tồn kho\" cao hơn như *Babel Hay Sự Cần Thiết Của Bạo Lực* (20 lượt mượn, hết hàng) để đảm bảo hiệu quả sử dụng vốn.\n*   **Không chọn phương án \"Chờ đến khi hết hàng mới nhập\":**\n    *   Với thời gian chờ hàng trung bình từ 14–30 ngày, việc đợi đến khi sách thực sự hết hàng (tồn = 0) sẽ tạo ra một khoảng trống \"không có sách\" kéo dài thêm 2–4 tuần. Phương án hiện tại đặt hàng sớm để hàng về đúng lúc nguồn lực hiện tại cạn kiệt.\n\n**Rủi ro của việc trì hoãn:**\nNếu chuyển sang phương án khác (ví dụ: tập trung vào ngân sách lớn hơn để nhập số lượng nhiều hơn), bạn sẽ phải chấp nhận thời gian chờ hàng dài hơn (30 ngày) cho các đầu sách cam kết NCC, làm tăng nguy cơ thiếu hụt cục bộ tại các kho đang có nhu cầu cao.\n\n**Bước tiếp theo:**\nBạn có muốn xem chi tiết phân bổ ngân sách cụ thể cho từng đầu sách này, hoặc so sánh với một mức ngân sách giới hạn khác?",
+   "style_ok": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-01",
+   "category": "multi_turn",
+   "turn": 2
+  },
+  {
+   "q": "Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 3.68,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "chars": 554,
+   "words_per_sentence": 16.125,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "riskiest_wh": {
+     "gold": "Kho HCM Chinh",
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": null,
+   "numbers": 7,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh rủi ro hơn Kho Ha Noi.\n\n**Căn cứ**\n- Số đầu sách hết hàng: 3 (HCM Chinh) so với 0 (Ha Noi), nhiều hơn 3.\n- Số đầu sách dưới ngưỡng tồn tối thiểu: 7 (HCM Chinh) so với 1 (Ha Noi), nhiều hơn 6.\n- Tồn khả dụng: 120 bản tại HCM Chinh và 8 bản tại Ha Noi.\n\n**Lưu ý**\n- Tiêu chí xếp hạng rủi ro dựa trên thứ tự ưu tiên: hết hàng, dưới ngưỡng, sau đó đến mức tồn khả dụng. Dù Ha Noi có tồn khả dụng thấp hơn, nhưng số lượng sách gặp vấn đề về nguồn cung tại HCM Chinh cao hơn đáng kể, khiến kho này được đánh giá rủi ro hơn theo quy tắc hiện hành.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-02",
+   "category": "multi_turn",
+   "turn": 0
+  },
+  {
+   "q": "Nói ngắn gọn thôi",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 2.92,
+   "tools": [],
+   "chars": 168,
+   "words_per_sentence": 9.75,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": true,
+   "facts": {
+    "riskiest_wh": {
+     "gold": "Kho HCM Chinh",
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": null,
+   "numbers": 4,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh rủi ro hơn.\n\n**Căn cứ**\n- Số đầu sách hết hàng: 3 (HCM Chinh) so với 0 (Ha Noi).\n- Số đầu sách dưới ngưỡng tồn tối thiểu: 7 (HCM Chinh) so với 1 (Ha Noi).",
+   "style_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-02",
+   "category": "multi_turn",
+   "turn": 1
+  },
+  {
+   "q": "Với ngân sách 10 triệu nên nhập sách gì?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 6.15,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 854,
+   "words_per_sentence": 13.071428571428571,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 9988000,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 12,
+   "unverified_numbers": 0,
+   "overclaims": [
+    "dap ung du"
+   ],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "Với ngân sách 10.000.000 ₫, hệ thống sẽ duyệt chi **9.988.000 ₫** (còn dư 12.000 ₫) để nhập các đầu sách sau:\n\n**Đề xuất nhập:**\n*   **Norwegian Wood**: 28 bản\n*   **Dac trung tam ly hoc cua nguoi Viet**: 52 bản\n*   **Đi Tìm Lẽ Sống (Tái Bản 2022)**: 5 bản\n*   **Dế mèn phiêu lưu ký**: 3 bản\n*   **Luy-Xiêng Và Chú Người Tuyết Cô Độc**: 3 bản\n\n**Rủi ro & Đánh đổi:**\nMặc dù đáp ứng được 100% nhu cầu thiếu hụt dự kiến cho nhóm sách này, nhưng có **6 đầu sách ưu tiên cao bị bỏ lại** do giới hạn ngân sách, bao gồm: *Sắc Lời Đắc Thế, Kafka on the Shore, One Hundred Years of Solitude, Babel Hay Sự Cần Thiết Của Bạo Lực,* và *Cây Cam Ngọt Của Tôi (Tái Bản 2026)*.\n\n**Bước tiếp theo:**\nBạn có thể xác nhận nhập ngay danh sách trên, hoặc nếu muốn ưu tiên một trong số các đầu sách bị bỏ lại, tôi có thể mô phỏng lại với mức ngân sách điều chỉnh phù hợp hơn.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-03",
+   "category": "multi_turn",
+   "turn": 0
+  },
+  {
+   "q": "Giải thích dễ hiểu hơn",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 6.34,
+   "tools": [],
+   "chars": 1019,
+   "words_per_sentence": 11.722222222222221,
+   "dup_numbers": 0.16666666666666666,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 9988000,
+     "cited": false
+    }
+   },
+   "coverage": 0.0,
+   "numeric_recall": 0.0,
+   "numbers": 9,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "**Đề xuất:**\nVới 10 triệu đồng, bạn nên tập trung nhập ngay **5 đầu sách** sau vì đây là những nơi thiếu hụt nhất và nằm trong ngân sách:\n\n*   **Dac trung tam ly hoc cua nguoi Viet**: Nhập **52 bản**. Đây là tựa cần số lượng nhiều nhất để lấp đầy chỗ trống.\n*   **Norwegian Wood**: Nhập **28 bản**. Tựa sách kinh điển luôn có nhu cầu cao.\n*   **Đi Tìm Lẽ Sống (Tái Bản 2022)**: Nhập **5 bản**. Sách tâm lý/làm giàu thường xuyên hết hàng.\n*   **Dế mèn phiêu lưu ký**: Nhập **3 bản**. Sách thiếu nhi bán chạy.\n*   **Luy-Xiêng Và Chú Người Tuyết Cô Độc**: Nhập **3 bản**.\n\n**Rủi ro & Đánh đổi:**\nSố tiền này sẽ tiêu gần hết 10 triệu của bạn (còn dư 12.000 ₫). Tuy nhiên, thư viện vẫn còn **6 đầu sách khác cũng rất quan trọng** (như *Sắc Lời Đắc Thế*, *Kafka on the Shore*) mà không thể mua được với số tiền hiện tại. Bạn đang phải \"hy sinh\" các sách này để ưu tiên nhóm trên.\n\n**Bước tiếp theo:**\nNếu bạn muốn biết chính xác tên 6 đầu sách bị bỏ lại hoặc muốn điều chỉnh ngân sách để mua thêm chúng, hãy cho tôi biết nhé.",
+   "style_ok": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-03",
+   "category": "multi_turn",
+   "turn": 1
+  },
+  {
+   "q": "Tại sao Kho HCM Chinh thiếu sách?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 8.14,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "chars": 1439,
+   "words_per_sentence": 30.6,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": true,
+   "lead_ok": null,
+   "facts": {
+    "shortage_low": {
+     "gold": 7,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 16,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh đang thiếu sách do 7 đầu sách nằm dưới ngưỡng tồn (trong đó có 3 bản hết hàng hoàn toàn), đi kèm với nhu cầu mượn thực tế vẫn còn ở nhiều tựa.\n\n**Căn cứ**\n- Quy mô tồn kho hiện tại: 120 bản tồn khả dụng, 6 bản đang giữ cho đặt chỗ, 4 bản đang cho mượn; trong đó 3 đầu sách HẾT HÀNG và 7 đầu sách DƯỚI NGƯỠNG.\n- Nhu cầu mượn vẫn còn: 5 trong số các sách thiếu vẫn ghi nhận lượt mượn gần đây trên toàn hệ thống, ví dụ *Norwegian Wood* (65 lượt), *Project Hail Mary* (15 lượt), *One Hundred Years of Solitude* (14 lượt).\n- Thời gian chờ hàng dài: Có ít nhất 1 đầu sách (*Norwegian Wood*) có lead_time_days = 30 ngày (nguồn SUPPLIER_DECLARED), làm chậm việc bù đắp lượng thiếu.\n- Sách hết hàng nhưng xu hướng giảm mạnh: *Tam Cam* (-71,4%), *Dế Mèn Phiêu Lưu Ký* (-96%) và *Thuyen bac nho* không có dữ liệu xu hướng rõ ràng; tuy nhiên cả ba đều được ưu tiên nhập HIGH do đã hết hàng.\n- Các yếu tố khác liên quan đến tình trạng dưới ngưỡng: *Tư Duy Như Kinh Tế Gia* (tồn khả dụng 4, không có dữ liệu lượt mượn/xu hướng) và *Project Hail Mary* (xu hướng -83,3%).\n\n**Lưu ý**\n- Dữ liệu nhu cầu mượn được tính trên toàn hệ thống, chưa tách riêng theo từng kho, nên mức độ ảnh hưởng trực tiếp đến Kho HCM Chinh có thể khác so với tổng thể.\n- Các mối liên hệ trên là tương quan quan sát được từ dữ liệu hiện tại; nguyên nhân sâu xa (ví dụ: chính sách đặt hàng trước đó, thay đổi nhà cung cấp) cần đối chiếu thêm với lịch sử vận hành kho.",
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-04",
+   "category": "multi_turn",
+   "turn": 0
+  },
+  {
+   "q": "Giải thích kỹ hơn",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 6.78,
+   "tools": [],
+   "chars": 1704,
+   "words_per_sentence": 32.09090909090909,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "shortage_low": {
+     "gold": 7,
+     "cited": true
+    },
+    "shortage_top_demand_title": {
+     "gold": "Norwegian Wood",
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 16,
+   "unverified_numbers": 1,
+   "overclaims": [],
+   "hedged": true,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Kho HCM Chinh thiếu sách do sự kết hợp của tình trạng tồn kho thấp, nhu cầu mượn thực tế vẫn còn ở nhiều đầu sách, và thời gian chờ hàng dài khiến việc bù đắp lượng thiếu bị chậm lại.\n\n**Căn cứ**\n- **Tình trạng tồn kho:** Kho có 120 bản tồn khả dụng, nhưng trong đó có 3 đầu sách HẾT HÀNG hoàn toàn (*Tam Cam*, *Dế Mèn Phiêu Lưu Ký*, *Thuyen bac nho*) và 7 đầu sách DƯỚI NGƯỠNG (bao gồm cả các sách hết hàng).\n- **Nhu cầu mượn cao:** Các sách thiếu vẫn ghi nhận lượt mượn đáng kể trên toàn hệ thống, ví dụ: *Norwegian Wood* (65 lượt), *Project Hail Mary* (15 lượt), *One Hundred Years of Solitude* (14 lượt), *The Alchemist* (13 lượt), *Rich Dad Poor Dad* (12 lượt).\n- **Xu hướng giảm mạnh:** Nhiều đầu sách thiếu đang có xu hướng mượn giảm mạnh so với kỳ trước, như *Project Hail Mary* (-83,3%), *Tam Cam* (-71,4%), *Dế Mèn Phiêu Lưu Ký* (-96%). Tuy nhiên, do đã hết hàng hoặc dưới ngưỡng, chúng vẫn được ưu tiên nhập HIGH.\n- **Thời gian chờ hàng (Lead time):** Có ít nhất 1 đầu sách (*Norwegian Wood*) có thời gian chờ hàng là 30 ngày (nguồn SUPPLIER_DECLARED), làm chậm quá trình bổ sung hàng về kho.\n- **Sách không có dữ liệu rõ ràng:** Một số sách như *Tư Duy Như Kinh Tế Gia* (tồn khả dụng 4) và *Thuyen bac nho* (hết hàng) không có dữ liệu lượt mượn/xu hướng cụ thể, nhưng vẫn được xếp vào nhóm cần xử lý do tình trạng tồn kho.\n\n**Lưu ý**\n- Dữ liệu nhu cầu mượn được tính trên toàn hệ thống, chưa tách riêng theo từng kho, nên mức độ ảnh hưởng trực tiếp đến Kho HCM Chinh có thể khác so với tổng thể.\n- Các mối liên hệ trên là tương quan quan sát được từ dữ liệu hiện tại; nguyên nhân sâu xa (ví dụ: chính sách đặt hàng trước đó, thay đổi nhà cung cấp) cần đối chiếu thêm với lịch sử vận hành kho.",
+   "style_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-04",
+   "category": "multi_turn",
+   "turn": 1
+  },
+  {
+   "q": "So sánh ngân sách 10 triệu và 20 triệu",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 8.66,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "chars": 1756,
+   "words_per_sentence": 14.52,
+   "dup_numbers": 0.26666666666666666,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_funded_cost": {
+     "gold": 9988000,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 28,
+   "unverified_numbers": 0,
+   "overclaims": [
+    "dap ung 100%"
+   ],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 1,
+   "answer": "**Kết quả mô phỏng**\n\n*   **Ngân sách 10.000.000 ₫:**\n    *   Duyệt chi phí: 9.988.000 ₫ (còn dư 12.000 ₫).\n    *   Số lượng: 6 đầu sách / 91 bản.\n    *   Ưu tiên cao: 3 đầu được duyệt, 93 đầu bị bỏ lại.\n    *   Sách được duyệt: *Norwegian Wood* (28 bản), *Đi Tìm Lẽ Sống (Tái Bản 2022)* (5 bản), *Dac trung tam ly hoc cua nguoi Viet* (52 bản), *Dế mèn phiêu lưu ký* (3 bản), *Luy-Xiêng Và Chú Người Tuyết Cô Độc* (3 bản).\n    *   Sách ưu tiên cao bị bỏ lại: *Sắc Lời Đắc Thế*, *Kafka on the Shore*, *One Hundred Years of Solitude*, *Babel Hay Sự Cần Thiết Của Bạo Lực*, *Cây Cam Ngọt Của Tôi (Tái Bản 2026)*.\n\n*   **Ngân sách 20.000.000 ₫:**\n    *   Duyệt chi phí: 19.861.000 ₫ (còn dư 139.000 ₫).\n    *   Số lượng: 16 đầu sách / 156 bản.\n    *   Ưu tiên cao: 13 đầu được duyệt, 83 đầu bị bỏ lại.\n    *   So với phương án 10 triệu: tăng thêm 10 đầu sách và 65 bản.\n    *   Sách mới được duyệt: *Norwegian Wood* (28 bản), *Sắc Lời Đắc Thế* (5 bản), *Kafka on the Shore* (9 bản), *One Hundred Years of Solitude* (12 bản), *Babel Hay Sự Cần Thiết Của Bạo Lực* (8 bản).\n    *   Sách ưu tiên cao bị bỏ lại: *Nghệ Thuật Tư Duy Chiến Lược*, *Cá Voi Tỷ Đô (Tái Bản 2022)*, *Những Kẻ Xuất Chúng (Tái Bản 2021)*, *Tư Duy Ngược*, *Người Đàn Ông Mang Tên OVE (Tái Bản)*.\n\n**Đánh đổi**\nViệc tăng ngân sách từ 10 triệu lên 20 triệu giúp giải quyết thêm 10 đầu sách và 65 bản sao, trong đó có các tựa sách thuộc nhóm ưu tiên cao như *Sắc Lời Đắc Thế*, *Kafka on the Shore* và *One Hundred Years of Solitude*. Cả hai phương án đều đáp ứng 100% thiếu hụt dự kiến theo quy tắc phân bổ hiện tại.\n\n**Giới hạn**\nLưu ý rằng kết quả trên chỉ tính toán dựa trên 100 dòng đề xuất đầu tiên; có thể còn 16 đầu sách khác ngoài danh sách này không được đếm về số dòng/số lượng cụ thể.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-05",
+   "category": "multi_turn",
+   "turn": 0
+  },
+  {
+   "q": "Vì sao không chọn phương án khác?",
+   "mode": "what_if",
+   "status": 200,
+   "latency_s": 10.52,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "chars": 600,
+   "words_per_sentence": 17.0,
+   "dup_numbers": 0.2727272727272727,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "sim_second_funded_cost": {
+     "gold": 19861000,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 8,
+   "unverified_numbers": 4,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 0.0,
+   "llm_calls": 2,
+   "answer": "**Kết luận**\nHệ thống chỉ mô phỏng hai phương án 10 triệu và 20 triệu vì đây là hai mức ngân sách cụ thể mà bạn đã yêu cầu so sánh.\n\n**Lý do không chọn phương án khác**\n*   **Cơ chế mặc định:** Khi người dùng không đưa ra con số cụ thể, hệ thống sẽ tự động chạy các kịch bản giảm 25%, 50% và 75% nhu cầu (tương ứng giữ lại 75%, 50% và 25% tổng chi phí ước tính khoảng 70.408.750 ₫).\n*   **Yêu cầu hiện tại:** Vì bạn đã cung cấp sẵn hai mốc giá trị cố định (10.000.000 ₫ và 20.000.000 ₫), hệ thống ưu tiên thực hiện đúng theo yêu cầu so sánh trực tiếp này thay vì áp dụng các tỷ lệ phần trăm mặc định.",
+   "style_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "mt-05",
+   "category": "multi_turn",
+   "turn": 1
+  },
+  {
+   "q": "Tình hình quá hạn thế nào?",
+   "mode": "analysis",
+   "status": 200,
+   "latency_s": 2.48,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "chars": 207,
+   "words_per_sentence": 23.0,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 0,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Tài khoản hiện tại không có quyền xem dữ liệu quá hạn, nên tôi chưa thể cung cấp thông tin về tình hình này. Bạn vui lòng liên hệ quản trị viên để được cấp quyền hoặc sử dụng tài khoản có thẩm quyền phù hợp.",
+   "no_access_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "na-01",
+   "category": "no_access",
+   "turn": 0
+  },
+  {
+   "q": "Lượt mượn tháng này so với tháng trước thế nào?",
+   "mode": "comparison",
+   "status": 200,
+   "latency_s": 2.0,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "chars": 130,
+   "words_per_sentence": 14.5,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 0,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Tài khoản hiện tại không có quyền xem dữ liệu so sánh lượt mượn giữa các kỳ. Bạn cần được cấp quyền mới để truy cập thông tin này.",
+   "no_access_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "na-02",
+   "category": "no_access",
+   "turn": 0
+  },
+  {
+   "q": "Nên ưu tiên xử lý việc gì hôm nay?",
+   "mode": "ranking",
+   "status": 200,
+   "latency_s": 7.25,
+   "tools": [
+    "rank_priority_tasks"
+   ],
+   "chars": 1025,
+   "words_per_sentence": 20.0,
+   "dup_numbers": 0.0,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {
+    "priority_first_value": {
+     "gold": 90,
+     "cited": true
+    }
+   },
+   "coverage": 1.0,
+   "numeric_recall": 1.0,
+   "numbers": 9,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": 1.0,
+   "llm_calls": 1,
+   "answer": "Dựa trên số liệu hiện tại, thứ tự ưu tiên xử lý hôm nay là:\n\n1. **Bổ sung sách đã hết hàng nhưng vẫn có nhu cầu mượn**: 90 đầu sách đang không còn tồn khả dụng trong khi vẫn có bạn đọc muốn mượn. Bước tiếp theo: Lập phiếu đề xuất nhập cho các đầu sách này (cần xác nhận trước khi tạo).\n2. **Thu hồi khoản phạt chưa thu**: Tổng công nợ phạt tồn đọng là 497.133.500 ₫. Bước tiếp theo: Rà soát các khoản phạt lớn nhất và gửi nhắc thanh toán.\n3. **Xét duyệt đề xuất nhập ưu tiên cao**: 96 đầu sách được hệ thống đánh giá là có dự báo nhu cầu vượt quá tồn kho hiện tại. Bước tiếp theo: Duyệt danh sách đề xuất nhập ưu tiên HIGH.\n4. **Kiểm tra kho có nhiều đầu sách dưới ngưỡng**: Có 9 đầu sách cảnh báo, trong đó kho \"Kho HCM Chinh\" là điểm rủi ro nhất. Bước tiếp theo: Đối chiếu tồn thực tế và xem xét điều chuyển giữa các kho.\n\n**Lưu ý**: Hệ thống không thể truy xuất dữ liệu về tình trạng quá hạn của các phiếu mượn do lỗi kết nối (HTTP 403), nên nhóm việc liên quan đến quá hạn chưa được đưa vào danh sách xếp hạng cụ thể này.",
+   "actionable": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "na-03",
+   "category": "no_access",
+   "turn": 0
+  },
+  {
+   "q": "Tại sao cuốn \"Lập Trình Lượng Tử Cho Mèo\" được đề xuất nhập?",
+   "mode": "causal",
+   "status": 200,
+   "latency_s": 5.57,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "chars": 181,
+   "words_per_sentence": 40.0,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 0,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 2,
+   "answer": "Cuốn \"Lập Trình Lượng Tử Cho Mèo\" hiện không nằm trong danh sách đề xuất nhập, nghĩa là hệ thống chưa ghi nhận tín hiệu nhu cầu tăng hoặc tồn kho của đầu sách này còn đủ để đáp ứng.",
+   "not_found_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "md-01",
+   "category": "missing_data",
+   "turn": 0
+  },
+  {
+   "q": "Có sách Lập Trình Lượng Tử Cho Mèo không?",
+   "mode": "lookup",
+   "status": 200,
+   "latency_s": 7.28,
+   "tools": [
+    "search_books"
+   ],
+   "chars": 258,
+   "words_per_sentence": 26.0,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 0,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 2,
+   "answer": "Catalog hiện không có sách chính xác với tên \"Lập Trình Lượng Tử Cho Mèo\". Hệ thống gợi ý một số tựa gần đúng như \"Phương Pháp Đặt Câu Hỏi Của Socrates\", \"Project Hail Mary\" và \"Phương Pháp Học Tập Feynman\", nhưng đây chỉ là kết quả tham khảo chưa chắc chắn.",
+   "not_found_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "md-02",
+   "category": "missing_data",
+   "turn": 0
+  },
+  {
+   "q": "Tại sao kho này thiếu sách?",
+   "mode": null,
+   "status": 200,
+   "latency_s": 0.1,
+   "tools": [],
+   "chars": 112,
+   "words_per_sentence": 12.0,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 2,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 0,
+   "answer": "Bạn đang hỏi về kho nào? Các kho hiện có: Chi Nhanh District 3, Kho HCM Chinh, Chi Nhanh District 1, Kho Ha Noi.",
+   "clarify_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "am-01",
+   "category": "ambiguous",
+   "turn": 0
+  },
+  {
+   "q": "Giải thích kỹ hơn",
+   "mode": null,
+   "status": 200,
+   "latency_s": 3.62,
+   "tools": [],
+   "chars": 443,
+   "words_per_sentence": 11.666666666666666,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 0,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 1,
+   "answer": "Tôi chưa có ngữ cảnh trước đó để biết bạn muốn giải thích kỹ hơn về nội dung nào. Bạn vui lòng cho biết chủ đề cần làm rõ, ví dụ:\n\n- Kết quả KPI tổng quan thư viện\n- Sách được mượn nhiều nhất hoặc tồn kho thấp\n- Phân tích quá hạn/phạt\n- Đề xuất nhập hàng theo ngân sách\n- So sánh hai kho hoặc hai kỳ thời gian\n- Lý do một đầu sách được đề xuất nhập\n\nSau khi bạn cung cấp chủ đề cụ thể, tôi sẽ phân tích chi tiết kèm số liệu và lưu ý liên quan.",
+   "clarify_ok": false,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "am-02",
+   "category": "ambiguous",
+   "turn": 0
+  },
+  {
+   "q": "So sánh với kỳ trước",
+   "mode": null,
+   "status": 200,
+   "latency_s": 0.06,
+   "tools": [],
+   "chars": 102,
+   "words_per_sentence": 11.5,
+   "dup_numbers": null,
+   "filler": false,
+   "technical_fields": false,
+   "lead_ok": null,
+   "facts": {},
+   "coverage": null,
+   "numeric_recall": null,
+   "numbers": 0,
+   "unverified_numbers": 0,
+   "overclaims": [],
+   "hedged": null,
+   "card_dup": null,
+   "llm_calls": 0,
+   "answer": "Bạn muốn so sánh chỉ số nào với kỳ trước? Ví dụ: lượt mượn, top sách được mượn, hay tình hình quá hạn.",
+   "clarify_ok": true,
+   "has_explanation_field": false,
+   "plan_mode": null,
+   "case_id": "am-03",
+   "category": "ambiguous",
+   "turn": 0
+  }
+ ]
+}

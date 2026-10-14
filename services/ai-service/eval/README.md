@@ -302,3 +302,39 @@ turn; plus live access-control checks (customer blocked, another user's
 non-streaming comparison (same tools, same response schema). Clarification
 and refusal detection are text heuristics, identical for both runs.
 Writes `eval/reports/copilot_<label>_<timestamp>.md/.json`.
+
+## 5. Explainable AI 2.0 answer quality — `eval_explain.py`
+
+Grades what the copilot SAYS (section 4 grades which tools it picks).
+`explain_dataset.json`: 44 cases / 50 turns — lookup, analysis, comparison,
+causal, decision, what-if, incomplete simulations (no budget; a budget larger
+than the need with rows outside the 100-line listing), multi-turn
+re-explanation ("giải thích kỹ hơn", "nói ngắn gọn", "dễ hiểu hơn", "vì sao
+không chọn phương án khác"), no permission (WAREHOUSE_MANAGER on borrow data),
+missing data (a book that does not exist) and ambiguous questions.
+
+Reference answers are not hard-coded numbers: each turn names `GOLD`
+derivations (`riskiest_wh`, `sim_funded_cost`, `reorder_second_title`...) that
+read the tool data of that turn (plus earlier turns of the same conversation),
+so the reference matches the live data the answer was written from. Same
+in-process harness as section 4 (imports `eval_copilot`):
+
+```bash
+docker run --rm --network smartbook-system_default --env-file .env \
+  -v <code tree>/services/ai-service:/code -v services/ai-service/eval:/evalh smartbook-system-ai-service \
+  sh -c 'export DATABASE_URL="postgresql+asyncpg://$DB_USER:$DB_PASSWORD@db:5432/ai_db"; \
+         python /evalh/eval_explain.py --code-dir /code --label after'
+```
+
+Metrics (text heuristics; one scorer for every tree): answer relevance (lead
+fact in the opening 250 characters), evidence coverage, numeric gold recall,
+answers with numbers absent from the data, faithfulness (no overclaiming
+wording from the scorer's own negation-aware lists + causal answers hedged),
+actionability, style adherence vs the previous turn, no-access / not-found /
+clarification handling, readability (length per mode, words per sentence,
+repeated numbers, filler), duplication of recommendation-card figures in the
+text, streaming vs non-streaming consistency (tools, schema, gold coverage,
+explanation claims), latency and LLM calls. `explanation_*` metrics read the
+`explanation` field and are empty for trees without it. Wait ~15 minutes
+between runs (gateway limit, see section 4). Writes
+`eval/reports/explain_<label>_<timestamp>.md/.json`.

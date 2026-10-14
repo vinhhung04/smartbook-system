@@ -139,9 +139,6 @@ class CopilotEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(done["answer"], body.answer)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class GroundingAndOutputGuardTests(unittest.TestCase):
     def test_backend_computed_totals_and_system_dates_are_grounded(self):
@@ -154,3 +151,133 @@ class GroundingAndOutputGuardTests(unittest.TestCase):
         self.assertTrue(main._RAW_JSON_REPLY.match('{"error": {"code": "X"}}'))
         self.assertTrue(main._RAW_JSON_REPLY.match('```json\n{"a": 1}\n```'))
         self.assertFalse(main._RAW_JSON_REPLY.match("Kho HCM Chinh rủi ro hơn [1]."))
+
+
+TWO_WAREHOUSES = [{"id": "w-hcm", "code": "WH-HCM-01", "name": "Kho HCM Chinh"},
+                  {"id": "w-hn", "code": "WH-HN-01", "name": "Kho Ha Noi"}]
+COMPARE = {"ranking": [{"rank": 1, "warehouse_name": "Kho HCM Chinh", "out_of_stock_variants": 3, "low_stock_variants": 7,
+                        "total_available_qty": 120},
+                       {"rank": 2, "warehouse_name": "Kho Ha Noi", "out_of_stock_variants": 0, "low_stock_variants": 1,
+                        "total_available_qty": 8}],
+           "comparison": {"riskier": "Kho HCM Chinh", "less_risky": "Kho Ha Noi", "tie": False}, "unresolved": []}
+SHORTAGE = {"warehouse_name": "Kho HCM Chinh",
+            "summary": {"low_stock_items": 7, "out_of_stock_items": 3, "items_with_recent_demand": 6,
+                        "items_with_rising_demand": 0},
+            "items": [{"title": "Norwegian Wood", "status": "HẾT HÀNG", "borrow_count": 72}], "limitations": []}
+
+
+class SequenceProvider(FakeProvider):
+    """Answers with the given texts in order (the last one repeats)."""
+
+    def __init__(self, texts):
+        super().__init__(texts[0])
+        self.texts = list(texts)
+
+    def _result(self):
+        self.text = self.texts[min(len(self.calls), len(self.texts)) - 1]
+        return super()._result()
+
+
+class ExplainableCopilotEndpointTests(unittest.IsolatedAsyncioTestCase):
+    """Explainable AI 2.0 through the real endpoint functions."""
+
+    def setUp(self):
+        self.store = FakeStore()
+        self.provider = FakeProvider("Kho HCM Chinh rủi ro thiếu sách cao hơn Kho Ha Noi.")
+        self.calls = []
+        self.compare_result = COMPARE
+
+        async def compare_warehouses(auth_header=None, warehouses=None):
+            self.calls.append(("compare_warehouses", tuple(warehouses or [])))
+            return self.compare_result
+
+        async def explain_warehouse_shortage(auth_header=None, warehouse=""):
+            self.calls.append(("explain_warehouse_shortage", warehouse))
+            return SHORTAGE
+
+        main.assistant_response_cache.clear()
+        self._patches = [
+            patch("main.rate_limiter.acquire", new=AsyncMock(return_value=(True, None))),
+            patch("main.get_user_context", new=AsyncMock(return_value=ADMIN)),
+            patch("main.conversation_store.get_or_create_conversation", new=self.store.get_or_create_conversation),
+            patch("main.conversation_store.append_message", new=self.store.append_message),
+            patch("main.conversation_store.get_recent_messages", new=self.store.get_recent_messages),
+            patch("main.copilot_tools._warehouses", new=AsyncMock(return_value=TWO_WAREHOUSES)),
+            patch("main._get_assistant_provider", side_effect=lambda: self.provider),
+            patch.dict(main.TOOL_FUNCTIONS, {"compare_warehouses": compare_warehouses,
+                                             "explain_warehouse_shortage": explain_warehouse_shortage}),
+        ]
+        for p in self._patches:
+            p.start()
+
+    def tearDown(self):
+        for p in self._patches:
+            p.stop()
+
+    async def _stream_done(self, message, cid):
+        response = await main.assistant_stream(_request(), AssistantRequest(message=message, conversation_id=cid))
+        events = [chunk async for chunk in response.body_iterator]
+        done = [e for e in events if e.startswith("event: done")][0]
+        return json.loads(done.split("data: ", 1)[1])
+
+    async def test_both_endpoints_return_the_same_explanation_and_the_prompt_carries_the_brief(self):
+        question = "Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?"
+        body = (await main.assistant(_request(), AssistantRequest(message=question, conversation_id="e1"))).model_dump()
+        done = await self._stream_done(question, "e2")
+        self.assertEqual(body["explanation"], done["explanation"])
+        self.assertEqual(body["explanation"]["claims"][0]["kind"], "INFERENCE")
+        system = self.provider.calls[0][0]["content"]
+        self.assertIn("Bản giải thích có cấu trúc", system)
+        self.assertIn("[SUY LUẬN, mức chắc chắn CAO] Kho HCM Chinh rủi ro thiếu sách cao hơn Kho Ha Noi.", system)
+        self.assertIn("Ví dụ minh họa cách diễn đạt", system)
+        self.assertEqual(body["plan"]["answer_mode"], "comparison")
+
+    async def test_overclaiming_wording_gets_one_corrective_retry(self):
+        self.provider = SequenceProvider([
+            "Kho HCM Chinh thiếu sách chủ yếu do nhu cầu mượn cao.",
+            "Thiếu sách ở Kho HCM Chinh đi kèm nhu cầu mượn còn cao; dữ liệu chỉ cho thấy tương quan.",
+        ])
+        body = await main.assistant(_request(), AssistantRequest(message="Tại sao Kho HCM Chinh thiếu sách?",
+                                                                 conversation_id="e3"))
+        self.assertEqual(len(self.provider.calls), 2)
+        retry_prompt = next(m["content"] for m in reversed(self.provider.calls[1]) if m["role"] == "user")
+        self.assertIn("\"chủ yếu do\"", retry_prompt)
+        self.assertTrue(body.answer.startswith("Thiếu sách ở Kho HCM Chinh đi kèm"))
+        self.assertEqual(body.explanation["language_flags"], [])
+        self.assertIsNone(body.grounding_warning)
+
+    async def test_a_clean_answer_costs_no_extra_call(self):
+        await main.assistant(_request(), AssistantRequest(message="Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?",
+                                                          conversation_id="e4"))
+        self.assertEqual(len(self.provider.calls), 1)
+
+    async def test_restyle_follow_up_reruns_the_same_planned_call(self):
+        question = "Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?"
+        await main.assistant(_request(), AssistantRequest(message=question, conversation_id="e5"))
+        body = await main.assistant(_request(), AssistantRequest(message="Nói ngắn gọn thôi", conversation_id="e5"))
+        self.assertEqual(self.calls[0], self.calls[1])
+        self.assertEqual(body.plan["style"], {"brief": True})
+        self.assertIn("tối đa 3 câu", self.provider.calls[-1][0]["content"])
+        user_turn = next(m["content"] for m in reversed(self.provider.calls[-1]) if m["role"] == "user")
+        self.assertTrue(user_turn.startswith("Nói ngắn gọn thôi\n\n(Yêu cầu trình bày:"))
+        self.assertEqual(self.store.messages[-2].content, "Nói ngắn gọn thôi")  # stored as typed
+        self.assertEqual(body.explanation["mode"], "comparison")
+
+    async def test_permission_denied_data_is_an_unknown_not_a_number(self):
+        self.compare_result = {"error": "/analytics/warehouse-stock-risk tra ve HTTP 403"}
+        self.provider = FakeProvider("Bạn không có quyền xem dữ liệu so sánh kho.")
+        body = await main.assistant(_request(), AssistantRequest(message="Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?",
+                                                                 conversation_id="e6"))
+        kinds = {c["kind"] for c in body.explanation["claims"]}
+        self.assertEqual(kinds, {"UNKNOWN"})
+        self.assertTrue(any("không có quyền" in c for c in body.caveats))
+        self.assertEqual(body.recommendations, [])
+
+    async def test_a_data_question_with_nothing_fetched_is_told_not_to_guess(self):
+        await main.assistant(_request(), AssistantRequest(message="Tạo phiếu nhập cho Kho HCM Chinh", conversation_id="e7"))
+        system = self.provider.calls[0][0]["content"]
+        self.assertIn("Chưa có dữ liệu cho câu hỏi này", system)
+
+
+if __name__ == "__main__":
+    unittest.main()

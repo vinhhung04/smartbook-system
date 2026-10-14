@@ -96,6 +96,7 @@ from assistant_loop import (
 from llm_provider import get_openrouter_provider, VisionResponseError, TEXT_MODEL, ASSISTANT_MODEL, VISION_MODEL
 from metadata_intelligence.capture import capture as capture_metadata_source
 from tool_context import render_tool_result as _compact_tool_result
+import copilot_explain
 import copilot_response
 import copilot_tools
 from copilot_plan import QueryPlan as CopilotPlan, build_plan as build_copilot_plan, next_state as copilot_next_state
@@ -3528,6 +3529,10 @@ class AssistantResponse(BaseModel):
     caveats: list[str] = []
     recommendations: list[dict] = []
     data_as_of: str | None = None
+    # Explainable AI 2.0 (optional, additive): structured claims built from
+    # tool data - FACT / INFERENCE / ASSUMPTION / UNKNOWN with evidence,
+    # meaning, certainty - plus alternatives and next steps (copilot_explain).
+    explanation: dict | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -4054,6 +4059,7 @@ def _assistant_cache_key(conversation_id: str, message: str) -> str:
 
 def _grounding_check(
     answer: str, collected_data: dict, question: str | None = None, system_context: str = "",
+    extra_values: list | None = None,
 ) -> str | None:
     """Adapt /assistant's flat collected_data (tool-name -> raw result) into the
     {summary, raw, sources} envelope rag.verify_numeric_grounding() expects. A single
@@ -4069,7 +4075,7 @@ def _grounding_check(
     answer."""
     if not collected_data:
         return None
-    computed = [item.get("value") for item in _collect_evidence(collected_data)]
+    computed = [item.get("value") for item in _collect_evidence(collected_data)] + list(extra_values or [])
     return verify_numeric_grounding(
         answer,
         {"summary": system_context, "raw": {"tools": collected_data, "computed": computed}, "sources": [{"status": "ok"}]},
@@ -4216,7 +4222,9 @@ async def _load_conversation_context(conversation) -> tuple[list[dict], dict | N
     return history, state
 
 
-def _assistant_prompt_messages(history: list[dict], message_text: str, plan_note: str | None = None) -> list[dict]:
+def _assistant_prompt_messages(
+    history: list[dict], message_text: str, plan_note: str | None = None, examples: str | None = None,
+) -> list[dict]:
     """System prompt + prior turns + the current question, exactly once.
 
     Callers should load `history` before persisting the current turn (see
@@ -4229,10 +4237,12 @@ def _assistant_prompt_messages(history: list[dict], message_text: str, plan_note
     the accidental-duplicate one.
 
     `plan_note` (copilot_response.plan_note) is appended to the single system
-    message: today's date, resolved periods/warehouses, answer structure."""
+    message: today's date, resolved periods/warehouses, answer structure.
+    `examples` (copilot_response.few_shot) follows it; it is kept separate
+    because plan_note doubles as grounding context and the examples must not."""
     if history and history[-1].get("role") == "user" and history[-1].get("content") == message_text:
         history = history[:-1]
-    system = ASSISTANT_SYSTEM_PROMPT + (f"\n\n{plan_note}" if plan_note else "")
+    system = ASSISTANT_SYSTEM_PROMPT + (f"\n\n{plan_note}" if plan_note else "") + (f"\n\n{examples}" if examples else "")
     return [
         {"role": "system", "content": system},
         *history,
@@ -4316,6 +4326,7 @@ def _assistant_payload(
         "caveats": extras.get("caveats", []),
         "recommendations": extras.get("recommendations", []),
         "data_as_of": extras.get("data_as_of"),
+        "explanation": extras.get("explanation"),
     }
     if debug is not None:
         payload["debug"] = debug
@@ -4371,17 +4382,32 @@ async def _finalize_assistant_turn(
     if _RAW_JSON_REPLY.match(answer):
         answer = RAW_JSON_REFUSAL
 
-    grounding_warning = _grounding_check(answer, collected_data, message_text, plan_note_text)
-    if grounding_warning and answered_normally:
+    explanation = copilot_explain.build_explanation(plan, collected_data)
+    # The brief's derived values (differences, per-day averages) were shown to
+    # the model, so quoting them is grounded.
+    grounded_context = f"{plan_note_text}\n{copilot_explain.explanation_brief(explanation)}"
+    grounded_values = copilot_explain.numbers_in(explanation)
+
+    def check(text: str) -> tuple[str | None, list[dict]]:
+        return (_grounding_check(text, collected_data, message_text, grounded_context, grounded_values),
+                copilot_explain.overclaims(text, explanation))
+
+    grounding_warning, language_flags = check(answer)
+    if (grounding_warning or language_flags) and answered_normally:
+        # One corrective turn covers both: numbers with no basis, and wording
+        # stronger than the evidence (certainty, causation, optimality).
+        problems = " ".join(p for p in (grounding_warning, copilot_explain.overclaim_warning(language_flags)) if p)
         answer, retry_usage = await retry_once_if_ungrounded(
-            messages, answer, grounding_warning, functools.partial(provider.chat, feature="assistant"),
+            messages, answer, problems, functools.partial(provider.chat, feature="assistant"),
             ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
         )
         if retry_usage:
             call_usage.append(retry_usage)
-        grounding_warning = _grounding_check(answer, collected_data, message_text, plan_note_text)
+        grounding_warning, language_flags = check(answer)
         if _RAW_JSON_REPLY.match(answer):
             answer = RAW_JSON_REFUSAL
+    if explanation is not None:
+        explanation["language_flags"] = language_flags
 
     pending_action_data = None
     if answered_normally:
@@ -4389,7 +4415,8 @@ async def _finalize_assistant_turn(
             message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
         )
 
-    extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, question=message_text)
+    extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, question=message_text,
+                                           answer=answer, explanation=explanation)
     new_state = copilot_next_state(plan, collected_data, state)
     metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras}
     tool_calls = _tool_call_dicts(tools_used)
@@ -4455,8 +4482,28 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
         return turn
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
     turn["plan_note"] = copilot_response.plan_note(plan)
-    turn["messages"] = _assistant_prompt_messages(history, message_text, turn["plan_note"])
+    turn["messages"] = _assistant_prompt_messages(history, message_text, turn["plan_note"],
+                                                  copilot_response.few_shot(plan))
+    style_request = copilot_response.style_request(plan)
+    if style_request:
+        turn["messages"][-1] = {"role": "user", "content": f"{message_text}\n\n{style_request}"}
     return turn
+
+
+def _attach_explanation_brief(messages: list[dict], plan, collected_data: dict) -> None:
+    """After the planned tools ran: put the structured explanation of their
+    results into the system message, so the model reasons from claims whose
+    kind and certainty the backend already decided (both endpoints)."""
+    brief = copilot_explain.explanation_brief(
+        copilot_explain.build_explanation(plan, collected_data), copilot_response.card_titles(collected_data))
+    if not collected_data and plan.capabilities and not plan.clarification_needed \
+            and plan.requested_analysis != "out_of_scope":
+        # A data question with nothing fetched yet (e.g. a write request, whose
+        # tools the model picks): an answer now could only be invented.
+        brief = ("## Chưa có dữ liệu cho câu hỏi này\nChưa có kết quả tool nào. Gọi tool phù hợp trước khi trả lời; "
+                 "không trả lời bằng kiến thức chung hay suy đoán (tên sách, số liệu, mức ưu tiên, lý do).")
+    if brief and messages and messages[0].get("role") == "system":
+        messages[0] = {**messages[0], "content": f"{messages[0]['content']}\n\n{brief}"}
 
 
 @app.post("/assistant", response_model=AssistantResponse)
@@ -4478,6 +4525,7 @@ async def assistant(request: Request, req: AssistantRequest):
     tools_used, collected_data, start_round = await seed_fast_path(
         message_text, auth_header, messages, _plan_fast_path(plan), _render_tool_result,
     )
+    _attach_explanation_brief(messages, plan, collected_data)
 
     try:
         provider = _get_assistant_provider()
@@ -4566,6 +4614,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         tools_used, collected_data, start_round = await seed_fast_path(
             message_text, auth_header, messages, _plan_fast_path(plan), _render_tool_result,
         )
+        _attach_explanation_brief(messages, plan, collected_data)
 
         try:
             provider = _get_assistant_provider()

@@ -249,11 +249,41 @@ export interface AssistantPlanSummary {
   comparison_period?: { label: string; start: string; end: string } | null;
 }
 
+export type AiClaimKind = 'FACT' | 'INFERENCE' | 'ASSUMPTION' | 'UNKNOWN';
+
+/** One explained statement, built by the backend from tool data (copilot_explain.py). */
+export interface AiExplanationClaim {
+  kind: AiClaimKind;
+  statement: string;
+  evidence: Array<{ label: string; value: unknown; unit?: string; source?: string }>;
+  meaning: string;
+  /** CAO / TRUNG BÌNH / THẤP for FACT and INFERENCE; null for ASSUMPTION and UNKNOWN. */
+  certainty: string | null;
+  basis: string;
+}
+
+export interface AiExplanation {
+  mode: string;
+  style: string[];
+  headline: string;
+  certainty: string | null;
+  claims: AiExplanationClaim[];
+  alternatives: Array<{ option: string; outcome: string; tradeoff: string }>;
+  limits: string[];
+  next_actions: string[];
+  counts: Record<AiClaimKind, number>;
+  flags: string[];
+  /** False for a plain lookup with nothing assumed or unknown - no "why" panel. */
+  display: boolean;
+  language_flags?: Array<{ phrase: string; reason: string }>;
+}
+
 export interface AssistantExtras {
   suggested_followups?: string[];
   caveats?: string[];
   recommendations?: AiRecommendation[];
   data_as_of?: string | null;
+  explanation?: AiExplanation | null;
 }
 
 export interface AssistantResponse extends AssistantExtras {

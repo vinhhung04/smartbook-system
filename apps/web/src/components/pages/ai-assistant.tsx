@@ -36,6 +36,7 @@ import {
   aiService,
   type AiConversationSummary,
   type AiEvidenceItem,
+  type AiExplanation,
   type AiRecommendation,
   type AssistantExtras,
   type PendingAction,
@@ -46,6 +47,7 @@ import {
   CopilotAnswerText,
   CopilotCaveats,
   CopilotDataAsOf,
+  CopilotExplanation,
   CopilotFollowups,
   CopilotRecommendations,
 } from '@/components/ai-copilot-insights';
@@ -66,6 +68,7 @@ interface AssistantMessage {
   caveats?: string[];
   recommendations?: AiRecommendation[];
   dataAsOf?: string | null;
+  explanation?: AiExplanation | null;
   isError?: boolean;
 }
 
@@ -75,6 +78,7 @@ function extrasToMessageFields(extras?: AssistantExtras | null): Partial<Assista
     caveats: extras?.caveats ?? [],
     recommendations: extras?.recommendations ?? [],
     dataAsOf: extras?.data_as_of ?? null,
+    explanation: extras?.explanation ?? null,
   };
 }
 
@@ -682,7 +686,12 @@ export function AIAssistantPage() {
                           ) : (
                             <>
                               {message.isError && <AlertTriangle className="mr-1.5 inline-block h-3.5 w-3.5 -translate-y-px" />}
-                              {isUser ? message.content : <CopilotAnswerText text={message.content} />}
+                              {isUser ? message.content : (
+                                <CopilotAnswerText
+                                  text={message.content}
+                                  emphasizeLead={!isStreamingMessage && Boolean(message.explanation?.display)}
+                                />
+                              )}
                               {isStreamingMessage && (
                                 <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-current" />
                               )}
@@ -720,13 +729,16 @@ export function AIAssistantPage() {
                           </Alert>
                         )}
 
+                        {!isStreamingMessage && <CopilotExplanation explanation={message.explanation} />}
                         {!isStreamingMessage && message.recommendations && message.recommendations.length > 0 && (
                           <CopilotRecommendations items={message.recommendations} />
                         )}
                         {!isStreamingMessage && message.caveats && message.caveats.length > 0 && (
                           <CopilotCaveats items={message.caveats} />
                         )}
-                        {message.evidence && message.evidence.length > 0 && (
+                        {/* The "why" panel carries the figures behind each claim; the flat
+                            citation list is kept for answers without one. */}
+                        {message.evidence && message.evidence.length > 0 && !message.explanation?.display && (
                           <EvidenceCitations evidence={message.evidence} />
                         )}
                         {!isStreamingMessage && <CopilotDataAsOf iso={message.dataAsOf} />}

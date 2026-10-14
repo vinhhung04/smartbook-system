@@ -1,10 +1,13 @@
 """Answer shaping for the management copilot.
 
 - COPILOT_SYSTEM_PROMPT: the standing rules (data discipline, scope/safety,
-  answer structure per question type).
+  how to write: conclusion first, few numbers each said once, wording no
+  stronger than the evidence).
 - plan_note(): the per-turn context block appended to the system prompt -
   today's date in VN time (the model otherwise guesses the year), the resolved
-  periods/warehouses/budget, the requested answer structure, assumptions.
+  periods/warehouses/budget, the answer mode and style modifiers, assumptions.
+- few_shot(): one illustrative answer for the turn's answer mode (system
+  prompt only, never grounding context).
 - render(): compact, Vietnamese, number-formatted tool text for the prompt.
 - build_extras(): the structured parts of a response that must NOT come from
   the model - recommendations with their evidence/risks/data-confidence,
@@ -12,11 +15,14 @@
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
+from copilot_explain import TOOL_LABELS as _TOOL_LABEL, item_risks as _item_risks
 from copilot_plan import (
-    AGING, BORROW_TREND, CAUSAL, COMPARISON, DECISION, FINES, KPI, LOOKUP, OVERDUE, PRIORITY, RANKING, REORDER,
-    RESERVATION, TOP_BORROWED, VN_TZ, WAREHOUSE_RISK, WEEDING, WHAT_IF, QueryPlan, normalize_query,
+    AGING, ANALYSIS, BORROW_TREND, CAUSAL, COMPARISON, DECISION, FINES, KPI, LOOKUP, LOW_STOCK_ITEMS, OVERDUE,
+    PRIORITY, RANKING, REORDER, RESERVATION, TOP_BORROWED, VN_TZ, WAREHOUSE_RISK, WEEDING, WHAT_IF, QueryPlan,
+    normalize_query,
 )
 from copilot_tools import data_confidence
 
@@ -49,13 +55,25 @@ COPILOT_SYSTEM_PROMPT = (
     "- Không cung cấp số điện thoại, địa chỉ, email hay thông tin cá nhân của bạn đọc.\n\n"
 
     "## Cách trả lời\n"
-    "- Tiếng Việt tự nhiên, chuyên nghiệp; câu đầu tiên trả lời thẳng câu hỏi.\n"
-    "- Tra cứu đơn giản: 1–3 câu, không chia mục.\n"
-    "- Phân tích, so sánh, nguyên nhân: câu kết luận → \"**Căn cứ**\" (gạch đầu dòng, mỗi dòng một số liệu) → "
-    "\"**Lưu ý**\" nếu dữ liệu có giới hạn.\n"
-    "- Ra quyết định: \"**Đề xuất**\" → \"**Lý do**\" → \"**Rủi ro**\" → \"**Bước tiếp theo**\".\n"
-    "- Giả định (nếu... thì sao): \"**Kết quả mô phỏng**\" theo từng phương án → \"**Đánh đổi**\" → \"**Giới hạn**\".\n"
-    "- Không lặp lại câu hỏi, không câu đệm, không kết bằng lời mời chung chung (giao diện đã có gợi ý câu hỏi tiếp).\n"
+    "- Viết như một chuyên viên phân tích nghiệp vụ báo cáo cho người quản lý: tiếng Việt tự nhiên, mạch lạc, chuyên "
+    "nghiệp. Câu đầu tiên là kết luận quan trọng nhất và trả lời thẳng câu hỏi.\n"
+    "- Độ dài và bố cục theo \"Cách trình bày lượt này\" trong ngữ cảnh lượt; đó là hướng dẫn, không phải khuôn cứng. "
+    "Câu hỏi đơn giản thì trả lời đơn giản, không chia mục.\n"
+    "- Chọn 2–4 số liệu quan trọng nhất làm căn cứ, mỗi số liệu chỉ nêu một lần; không liệt kê lại toàn bộ dữ liệu. "
+    "Sau mỗi căn cứ, nói ngắn gọn nó có nghĩa gì với người quản lý.\n"
+    "- Khi dùng thuật ngữ người đọc có thể chưa quen (ngưỡng tồn tối thiểu, thời gian chờ hàng, thiếu hụt dự kiến, "
+    "tỷ lệ chuyển đổi đặt chỗ), giải thích ngắn trong ngoặc ở lần đầu.\n"
+    "- Khi có \"Bản giải thích có cấu trúc\": dựa vào nó để lập luận. Dữ kiện nói thẳng; suy luận dùng từ ngữ đúng mức "
+    "chắc chắn được ghi; giả định phải nói là giả định; điều chưa biết nói rõ là chưa có dữ liệu.\n"
+    "- Không dùng \"chắc chắn\", \"rõ ràng là\", \"chủ yếu do\", \"nguyên nhân chính là\", \"tối ưu\", \"đáp ứng toàn bộ "
+    "nhu cầu\" khi dữ liệu không chứng minh điều đó.\n"
+    "- Phần giao diện hiển thị riêng (thẻ đề xuất kèm số liệu từng đầu sách, danh sách giới hạn dữ liệu, bảng \"Vì sao\", "
+    "câu hỏi gợi ý) thì không chép lại: với đầu sách đã có thẻ đề xuất, không nêu lại số lượng đề xuất nhập và chi phí "
+    "của nó; nêu tối đa một giới hạn quan trọng nhất trong một câu.\n"
+    "- Không lặp lại câu hỏi, không câu đệm (\"Dưới đây là...\", \"Hy vọng...\"), không kết bằng lời mời chung chung, "
+    "không thêm đoạn \"Kết luận\" ở cuối nhắc lại câu đầu.\n"
+    "- Markdown nhẹ: in đậm tiêu đề mục ngắn khi câu trả lời có từ hai phần trở lên, gạch đầu dòng cho căn cứ; không "
+    "dùng bảng, không dùng tiêu đề #.\n"
     "- Không in JSON, không dùng tên trường kỹ thuật (variant_id, available_qty...) hay mã ID; gọi chỉ số bằng tên "
     "tiếng Việt.\n"
     "- Tiền tệ viết dạng \"1.234.567 ₫\"; chép số nguyên vẹn từ dữ liệu, không làm tròn lại.\n"
@@ -69,15 +87,116 @@ COPILOT_SYSTEM_PROMPT = (
     "- Tồn khả dụng = có thể cho mượn/đặt; đang giữ = giữ cho đặt chỗ; đang cho mượn = bạn đọc đang giữ.\n"
 )
 
-_ANALYSIS_GUIDE = {
-    LOOKUP: "tra cứu — trả lời ngắn 1–3 câu.",
-    COMPARISON: "so sánh — kết luận bên nào cao/thấp hơn, bao nhiêu (dùng chênh lệch có sẵn), rồi Căn cứ.",
-    CAUSAL: "nguyên nhân — kết luận ngắn, liệt kê các yếu tố góp phần kèm số liệu, Lưu ý rằng đây là tương quan.",
-    DECISION: "ra quyết định — Đề xuất, Lý do (số liệu), Rủi ro, Bước tiếp theo.",
-    WHAT_IF: "giả định — Kết quả mô phỏng từng phương án, Đánh đổi, Giới hạn.",
-    RANKING: "xếp hạng — danh sách đánh số theo thứ tự có sẵn trong dữ liệu, mỗi dòng kèm số liệu và lý do; nêu tiêu chí xếp hạng.",
+_MODE_GUIDE = {
+    LOOKUP: "tra cứu đơn giản — trả lời trực tiếp trong 1–2 câu có số liệu được hỏi; không chia mục, không thêm phân "
+            "tích khi không được hỏi.",
+    ANALYSIS: "phân tích — câu đầu là nhận định chính; sau đó 2–4 căn cứ quan trọng nhất, mỗi căn cứ kèm ý nghĩa; kết "
+              "bằng một câu về điều cần chú ý nếu có.",
+    COMPARISON: "so sánh — nêu bên nào cao/thấp hơn và khác biệt quan trọng nhất (dùng chênh lệch có sẵn), khác biệt đó "
+                "có ý nghĩa gì, rồi kết luận ngắn; không liệt kê mọi chỉ số.",
+    CAUSAL: "giải thích nguyên nhân — câu đầu nêu các yếu tố liên quan quan sát được (không khẳng định nguyên nhân); mỗi "
+            "yếu tố kèm bằng chứng; một câu nêu giới hạn của suy luận (tương quan, dữ liệu chưa có).",
+    DECISION: "hỗ trợ quyết định — câu đầu là phương án đề xuất; vì sao chọn (2–3 căn cứ); rủi ro chính; phương án thay "
+              "thế nếu bản giải thích có; bước tiếp theo (thao tác ghi luôn cần người dùng xác nhận).",
+    WHAT_IF: "mô phỏng giả định — kết quả chính của từng kịch bản; đánh đổi giữa các kịch bản; điều kiện và giới hạn của "
+             "mô phỏng; kết bằng một câu bước tiếp theo nếu có (chọn mức nào thì lập phiếu đề xuất nhập — cần bạn xác "
+             "nhận). Không gọi kịch bản nào là tối ưu.",
+    RANKING: "xếp hạng — danh sách đánh số theo thứ tự có sẵn trong dữ liệu, mỗi dòng kèm số liệu và lý do; nêu tiêu chí "
+             "xếp hạng.",
     "out_of_scope": "ngoài phạm vi hoặc yêu cầu dữ liệu cá nhân — từ chối ngắn gọn, không gọi tool.",
 }
+_STYLE_GUIDE = {
+    "brief": "Người dùng muốn ngắn gọn: tối đa 3 câu (khoảng 60 từ), chỉ kết luận và một căn cứ quan trọng nhất; không "
+             "chia mục.",
+    "deep": "Người dùng muốn giải thích kỹ hơn: đi sâu vào lập luận — từng căn cứ và ý nghĩa, mức chắc chắn, giả định, "
+            "điều chưa biết; không chỉ lặp lại câu trả lời trước với nhiều số hơn.",
+    "plain": "Người dùng muốn dễ hiểu: câu ngắn, từ thông dụng, giải thích mọi thuật ngữ bằng lời thường; tránh viết tắt "
+             "và thuật ngữ kỹ thuật.",
+    "why_not": "Người dùng hỏi vì sao không chọn phương án khác: so sánh phương án đã đề xuất với từng phương án thay "
+               "thế trong bản giải thích bằng căn cứ cụ thể; nếu không có dữ liệu phương án thay thế thì nói rõ.",
+}
+
+# One illustrative answer per answer mode, matched to the question's data when
+# possible. Data is invented and says so; these go into the system prompt only,
+# never into the grounding context, so a number copied from them is flagged.
+_FEW_SHOTS: list[tuple[str, set, str]] = [
+    (LOOKUP, {BORROW_TREND, OVERDUE, KPI},
+     "Hỏi: Có bao nhiêu phiếu mượn quá hạn?\n"
+     "Đáp: Hiện có 42 phiếu mượn quá hạn; trung bình mỗi phiếu đã trễ 12 ngày."),
+    (ANALYSIS, {OVERDUE, FINES, KPI},
+     "Hỏi: Tình hình quá hạn thế nào?\n"
+     "Đáp: Quá hạn đang là điểm cần chú ý: có 42 phiếu quá hạn trên 300 phiếu đang mở.\n"
+     "- Trung bình mỗi phiếu đã trễ 12 ngày, phiếu lâu nhất trễ 95 ngày — tức là có một nhóm phiếu tồn đọng lâu, không "
+     "chỉ trễ vài ngày.\n"
+     "- Tiền phạt chưa thu là 3.150.000 ₫, lớn nhất là loại phạt quá hạn (2.800.000 ₫).\n"
+     "Nên liên hệ các phiếu trễ lâu nhất trước, vì càng để lâu càng khó thu hồi sách."),
+    (COMPARISON, {WAREHOUSE_RISK, LOW_STOCK_ITEMS},
+     "Hỏi: Kho A và Kho B kho nào rủi ro hơn?\n"
+     "Đáp: Kho B rủi ro thiếu sách cao hơn Kho A: Kho B có 4 đầu sách đã hết hàng, Kho A không có đầu sách nào.\n"
+     "- Dưới ngưỡng tồn tối thiểu (mức tồn mà dưới đó cần nhập thêm): Kho B 9 đầu sách, Kho A 2.\n"
+     "- Kho B có tổng tồn khả dụng lớn hơn (150 so với 40 bản), nhưng tổng tồn nhiều không có nghĩa từng đầu sách đều "
+     "đủ hàng, nên chỉ được xét khi hai tiêu chí trên bằng nhau.\n"
+     "Chưa có nhu cầu mượn theo từng kho, nên chưa so sánh được mức ảnh hưởng tới bạn đọc."),
+    (COMPARISON, {BORROW_TREND, TOP_BORROWED},
+     "Hỏi: Lượt mượn tháng này so với tháng trước thế nào?\n"
+     "Đáp: Tính theo trung bình mỗi ngày, lượt mượn tháng này giảm 18% so với tháng trước (24 so với 29 lượt/ngày).\n"
+     "- Tổng lượt mượn tháng này mới là 312 so với 900, nhưng tháng này mới qua 13 ngày nên so sánh tổng chưa công bằng.\n"
+     "- Ngày cao điểm tháng này là 06/10 với 41 lượt.\n"
+     "Dữ liệu chưa cho biết lý do giảm; có thể xem top sách để biết nhóm sách nào giảm."),
+    (CAUSAL, {WAREHOUSE_RISK, LOW_STOCK_ITEMS},
+     "Hỏi: Tại sao Kho B thiếu sách?\n"
+     "Đáp: Dữ liệu cho thấy tình trạng thiếu sách ở Kho B đi kèm ba yếu tố, nhưng chưa đủ để khẳng định đâu là nguyên "
+     "nhân.\n"
+     "- **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 5/9 đầu sách dưới ngưỡng vẫn có lượt mượn, ví dụ Sách A 40 lượt.\n"
+     "- **Thời gian chờ hàng dài**: 3 đầu sách cần 30 ngày để hàng về, nên thiếu hụt kéo dài nếu không đặt sớm.\n"
+     "- **Hàng đang giữ cho đặt chỗ**: 6 bản đang giữ, nên số bản cho mượn ngay ít hơn tồn thực tế.\n"
+     "Giới hạn: lượt mượn đang tính trên toàn hệ thống, chưa tách riêng cho Kho B."),
+    (DECISION, {REORDER, TOP_BORROWED},
+     "Hỏi: Nên nhập sách nào trước?\n"
+     "Đáp: Nên xem xét nhập **Sách A** trước: đầu sách này đã hết hàng trong khi vẫn có 40 lượt mượn trong kỳ.\n"
+     "**Vì sao**: tồn khả dụng 0 bản, dưới ngưỡng tồn tối thiểu 10 bản — bạn đọc hiện không mượn được; mức ưu tiên "
+     "của hệ thống là cao.\n"
+     "**Rủi ro**: thời gian chờ hàng đang là giá trị mặc định, chưa kiểm chứng bằng lịch sử giao thực tế.\n"
+     "**Phương án khác**: Sách B (ưu tiên cao, còn 2 bản) xếp sau vì điểm nhu cầu thấp hơn; có thể nhập cùng đợt nếu "
+     "ngân sách cho phép.\n"
+     "Bước tiếp theo: lập phiếu đề xuất nhập cho Sách A — hệ thống sẽ hỏi bạn xác nhận trước khi tạo."),
+    (WHAT_IF, {REORDER},
+     "Hỏi: Nếu ngân sách chỉ 10 triệu thì sao?\n"
+     "Đáp: Với 10 triệu, hệ thống duyệt được 9.800.000 ₫ cho 7 đầu sách (85 bản), nhưng còn 12 đầu sách ưu tiên cao "
+     "chưa được nhập.\n"
+     "- **Đánh đổi**: tiết kiệm chi phí nhưng rủi ro hết hàng ở 12 đầu sách ưu tiên cao vẫn còn nguyên.\n"
+     "- **Điều kiện**: tiền được phân bổ cho dòng giảm được nhiều thiếu hụt dự kiến nhất trên mỗi đồng; chưa tính số "
+     "lượng đặt tối thiểu của nhà cung cấp.\n"
+     "Mô phỏng cho biết ngân sách mua được gì, không khẳng định đây là mức ngân sách hợp lý nhất."),
+]
+
+
+def few_shot(plan: QueryPlan) -> str:
+    """The illustrative example for this turn's answer mode (system prompt
+    only - deliberately kept out of plan_note, which is grounding context)."""
+    mode = plan.answer_mode or LOOKUP
+    candidates = [(m, caps, text) for m, caps, text in _FEW_SHOTS if m == mode]
+    if not candidates:
+        return ""
+    caps = set(plan.capabilities)
+    _m, example_caps, text = max(candidates, key=lambda c: len(c[1] & caps))
+    if not example_caps & caps:
+        # An example about other data invites borrowing its claims (a warehouse
+        # example once supplied "thời gian chờ hàng dài" to a borrow question).
+        return ""
+    return ("## Ví dụ minh họa cách diễn đạt (dữ liệu trong ví dụ là giả — không dùng lại tên, số liệu hay lập luận "
+            "của ví dụ)\n" + text)
+
+
+def style_request(plan: QueryPlan) -> str:
+    """The style instructions repeated next to the user's message: placed only
+    in the system prompt, "giải thích kỹ hơn" was sometimes answered with the
+    previous text unchanged."""
+    lines = [_STYLE_GUIDE[s] for s in ("brief", "deep", "plain", "why_not") if (plan.style or {}).get(s)]
+    if not lines:
+        return ""
+    return ("(Yêu cầu trình bày: " + " ".join(lines)
+            + " Câu trả lời phải khác câu trả lời trước theo đúng yêu cầu này, không lặp lại nguyên văn.)")
 _WEEKDAYS = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"]
 
 
@@ -93,9 +212,12 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
         f"- Hôm nay: {_WEEKDAYS[now.weekday()]}, {now:%d/%m/%Y}, {now:%H:%M} giờ Việt Nam. Dữ liệu tool được truy xuất "
         f"ngay lúc này ({now:%H:%M %d/%m/%Y}). Mọi mốc thời gian tương đối (tháng này, tuần trước...) tính theo ngày này.",
     ]
-    guide = _ANALYSIS_GUIDE.get(plan.requested_analysis)
+    guide = _MODE_GUIDE.get(plan.requested_analysis if plan.requested_analysis == "out_of_scope" else plan.answer_mode)
     if guide:
-        lines.append(f"- Loại câu hỏi: {guide}")
+        lines.append(f"- Cách trình bày lượt này: {guide}")
+    for style in ("brief", "deep", "plain", "why_not"):
+        if (plan.style or {}).get(style):
+            lines.append(f"- {_STYLE_GUIDE[style]}")
     if plan.time_range:
         tr = plan.time_range
         lines.append(f"- Kỳ phân tích: {tr['label']} ({_vn_date(tr['start'])}–{_vn_date(tr['end'])}).")
@@ -371,29 +493,6 @@ def render(tool_name: str, result) -> str | None:
 
 # ── structured extras ────────────────────────────────────────────────────────
 
-_TOOL_LABEL = {
-    "get_overdue_summary": "phiếu quá hạn", "get_fine_summary": "tiền phạt", "get_borrow_trends": "xu hướng mượn",
-    "get_reservation_funnel": "đặt chỗ", "compare_borrow_periods": "so sánh lượt mượn", "get_top_books": "top sách",
-    "compare_top_books": "so sánh top sách", "get_reorder_suggestions": "đề xuất nhập",
-    "get_warehouse_stock_risk": "rủi ro tồn kho", "get_dashboard_kpis": "KPI tổng quan",
-}
-
-
-def _item_risks(x: dict) -> list[str]:
-    risks = []
-    if x.get("lead_time_source") in ("DEFAULT", "SUPPLIER_DECLARED"):
-        risks.append("Thời gian chờ hàng chưa được kiểm chứng bằng lịch sử giao thực tế.")
-    trend = x.get("demand_trend_pct")
-    if trend is not None and trend <= -20:
-        risks.append(f"Nhu cầu đang giảm {abs(trend):g}% so với kỳ trước — cân nhắc nhập ít hơn đề xuất.")
-    stockout, lead = x.get("estimated_days_until_stockout"), x.get("lead_time_days")
-    if stockout is not None and lead is not None and stockout <= lead:
-        risks.append(f"Có thể hết hàng sau {stockout:g} ngày, trước khi hàng về ({lead} ngày).")
-    if not x.get("unit_cost"):
-        risks.append("Thiếu đơn giá nên chi phí ước tính chưa phản ánh thực tế.")
-    return risks
-
-
 def _reorder_recommendation(x: dict, source: str, retrieved_at: str) -> dict:
     metrics = [
         {"label": "Tồn khả dụng", "value": x.get("available_qty"), "unit": "bản"},
@@ -589,19 +688,68 @@ def _followups(plan: QueryPlan, collected: dict, user_ctx, warehouses: list[dict
     return unique[:4]
 
 
+def card_titles(collected: dict) -> list[str]:
+    """Titles the UI will show as recommendation cards for this data - named
+    in the prompt so the answer does not repeat the cards' figures."""
+    return [r["title"] for r in _recommendations(collected, "") if r.get("title")]
+
+
+def _bigrams(text: str) -> set[tuple[str, str]]:
+    words = re.findall(r"\w+", normalize_query(text))
+    return set(zip(words, words[1:]))
+
+
+def _covered(text: str, by: str) -> bool:
+    grams = _bigrams(text)
+    return bool(grams) and len(grams & _bigrams(by)) / len(grams) >= 0.6
+
+
+def _limits_list(plan: QueryPlan, collected: dict, explanation: dict | None, answer: str | None) -> list[str]:
+    """One visible "risks and limits" list: plan/tool caveats, then the
+    explanation's assumptions and unknowns (labelled as such) and limits -
+    each said once, and nothing the answer text already says."""
+    items = list(_caveats(plan, collected))
+    if explanation:
+        prefix = {"ASSUMPTION": "Giả định: ", "UNKNOWN": "Chưa biết: "}
+        items += [prefix[c["kind"]] + c["statement"] for c in explanation["claims"] if c["kind"] in prefix]
+        items += explanation.get("limits") or []
+    out: list[str] = []
+    for item in items:
+        if any(_covered(item, kept) or _covered(kept, item) for kept in out):
+            continue
+        if answer and _covered(item, answer):
+            continue
+        out.append(item)
+    return out[:8]
+
+
+def _style_followups(plan: QueryPlan, explanation: dict | None) -> list[str]:
+    style = plan.style or {}
+    out = []
+    if explanation and explanation.get("alternatives") and not style.get("why_not"):
+        out.append("Vì sao không chọn phương án khác?")
+    if plan.answer_mode in (ANALYSIS, CAUSAL, COMPARISON, DECISION, WHAT_IF) and not style.get("deep"):
+        out.append("Giải thích kỹ hơn")
+    return out
+
+
 def build_extras(plan: QueryPlan, collected: dict, user_ctx=None, warehouses: list[dict] | None = None,
-                 now: datetime | None = None, question: str | None = None) -> dict:
+                 now: datetime | None = None, question: str | None = None, answer: str | None = None,
+                 explanation: dict | None = None) -> dict:
     now = (now or datetime.now(VN_TZ)).astimezone(VN_TZ)
     now_iso = now.isoformat(timespec="seconds")
     if plan.clarification_needed:
         return {"suggested_followups": plan.clarification_options[:4], "caveats": [], "recommendations": [],
-                "data_as_of": None}
+                "data_as_of": None, "explanation": None}
     asked = normalize_query(question or "").strip(" ?.")
     followups = [q for q in _followups(plan, collected, user_ctx, warehouses or [])
                  if normalize_query(q).strip(" ?.") != asked]
+    styled = [q for q in _style_followups(plan, explanation) if normalize_query(q).strip(" ?.") != asked]
+    followups = (followups[:2] + styled[:1]) if styled else followups[:3]
     return {
-        "suggested_followups": followups[:3],
-        "caveats": _caveats(plan, collected),
+        "suggested_followups": followups,
+        "caveats": _limits_list(plan, collected, explanation, answer),
         "recommendations": _recommendations(collected, now_iso),
         "data_as_of": now_iso if collected else None,
+        "explanation": explanation,
     }

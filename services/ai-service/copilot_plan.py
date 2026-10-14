@@ -103,6 +103,36 @@ CAP_KEYWORDS: dict[str, list] = {
                "viec can lam", "cong viec tuan nay", "cong viec hom nay"],
 }
 
+# Answer modes (QueryPlan.answer_mode): how the answer is shaped. Mostly the
+# requested analysis, plus ANALYSIS for "tình hình / đánh giá" questions and
+# multi-metric lookups that need interpretation, not just a number.
+ANALYSIS = "analysis"
+_ANALYSIS_WORDS = re.compile(r"\b(phan tich|danh gia|nhan xet|tinh hinh|ra sao|the nao|nhu the nao|bao cao|tong quan)\b")
+
+# How the user wants it said - modifiers on top of the answer mode.
+_STYLE_PATTERNS: dict[str, re.Pattern] = {
+    "brief": re.compile(r"\b(ngan gon|tom tat|tom lai|noi ngan|gon thoi|gon lai|ngan thoi|ngan hon|mot cau|1 cau)\b"),
+    "deep": re.compile(r"\b(ky hon|chi tiet hon|cu the hon|sau hon|giai thich ky|giai thich them|giai thich chi tiet|"
+                       r"phan tich sau|noi them|(noi|giai thich|trinh bay) ro hon)\b"),
+    "plain": re.compile(r"\b(de hieu|don gian hon|noi don gian|khong chuyen|nghia la gi|thuat ngu|binh dan)\b"),
+    "why_not": re.compile(r"\b(sao|tai sao|vi sao) (lai )?khong (chon|nhap|uu tien|lay|dung|de xuat)\b|"
+                          r"\b(phuong an|lua chon) (khac|thay the)\b|\bthay vi\b"),
+}
+
+
+def detect_style(text: str) -> dict:
+    """{"brief"|"deep"|"plain"|"why_not": True} for every modifier asked for."""
+    return {name: True for name, pattern in _STYLE_PATTERNS.items() if pattern.search(text)}
+
+
+def answer_mode(analysis: str, caps: list[str], text: str) -> str:
+    if analysis != LOOKUP:
+        return analysis
+    if _ANALYSIS_WORDS.search(text) or len(set(caps) - {BOOK_SEARCH}) >= 2:
+        return ANALYSIS
+    return LOOKUP
+
+
 _ANALYSIS_PATTERNS: list[tuple[str, re.Pattern]] = [
     (CAUSAL, _R(r"\b(tai sao|vi sao|nguyen nhan|ly do|do dau|vi dau)\b")),
     (WHAT_IF, _R(r"\b(neu|gia su|gia dinh|what if)\b|\b(cat|giam|tang|bot)\s*(ngan sach\s*)?\d{1,3}\s*%|so sanh ngan sach")),
@@ -504,6 +534,8 @@ class QueryPlan:
     carried_over: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     capabilities: list[str] = field(default_factory=list)
+    answer_mode: str = LOOKUP
+    style: dict = field(default_factory=dict)
     normalized: str = ""
 
     def to_dict(self) -> dict:
@@ -591,6 +623,11 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     sensitive = bool(_SENSITIVE.search(text))
     ordinal_book = _ORDINAL_BOOK.search(text)
     book_title = _book_title_in(text, message)
+    style = detect_style(text)
+    # "Giải thích kỹ hơn", "nói ngắn gọn", "vì sao không chọn phương án khác":
+    # a request about HOW to say the previous answer, not a new data question.
+    style_only = bool(style) and not caps and not periods and not named_warehouses and not budgets \
+        and budget_pct is None and limit is None and not book_title and not ordinal_book
 
     if lead_time is not None:
         periods = [p for p in periods if not p.token.startswith("last_") or str(lead_time) not in p.token]
@@ -616,9 +653,22 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     entity_only = not caps and bool(periods or named_warehouses or budgets or limit or budget_pct is not None)
     referential = deictic_warehouse or deictic_book or deictic_generic or bool(ordinal_book) or "trong so do" in text
     bare_why = text.strip(" ?") in ("tai sao", "vi sao", "ly do", "tai sao vay", "vi sao vay", "sao vay")
-    is_followup = has_state and (looks_followup or entity_only or referential or bare_why
+    is_followup = has_state and (looks_followup or entity_only or referential or bare_why or style_only
                                  or (not caps and analysis in (CAUSAL, COMPARISON, WHAT_IF, DECISION)))
     plan.is_followup = is_followup
+    restyle = style_only and is_followup
+    if restyle:
+        # Same question, same data, different presentation: inherit the whole
+        # previous turn so the re-explanation is about exactly what was shown.
+        caps = list(state.get("capabilities") or [])
+        if state.get("analysis") not in (None, CLARIFICATION, "out_of_scope"):
+            analysis = state["analysis"]
+        named_warehouses = list(state.get("warehouses") or [])
+        periods = [Period(**p) for p in (state.get("time_range"), state.get("comparison_period")) if p]
+        budgets = list(state.get("budgets") or [])
+        priority = state.get("priority")
+        limit = state.get("limit")
+        carried.append("previous_turn")
 
     if is_followup and not caps:
         caps = list(state.get("capabilities") or [])
@@ -694,6 +744,10 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     elif (deictic_book or ordinal_book) and not focus_item and not state.get("last_items") and not book_title \
             and REORDER not in (state.get("capabilities") or []):
         question = "Bạn đang hỏi về cuốn sách nào? Hãy cho tôi biết tên sách hoặc ISBN."
+    elif style_only and not has_state:
+        question = ("Bạn muốn tôi giải thích nội dung nào? Hãy hỏi một câu cụ thể trước, ví dụ: kho nào đang rủi ro "
+                    "thiếu sách nhất, hoặc nên nhập sách nào trước.")
+        options = ["Kho nào đang rủi ro thiếu sách nhất?", "Tôi nên nhập sách nào trước?"]
     elif text.strip(" ?.") in ("kho nao", "sach nao", "cuon nao", "cai nao", "nao") and not has_state:
         question = ("Bạn muốn hỏi kho/sách nào, và về nội dung gì? Ví dụ: kho nào đang rủi ro thiếu sách nhất, "
                     "hoặc sách nào cần nhập thêm.")
@@ -742,7 +796,10 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         if call not in tools:
             tools.append(call)
 
-    action_surface = bool(_ACTION_SURFACE.search(text))
+    # A book title is data, not a verb: "Lập Trình Lượng Tử" must not read as
+    # "lập (phiếu)" and turn a lookup into a write request with no tools.
+    action_text = text.replace(normalize_query(book_title), " ") if book_title else text
+    action_surface = bool(_ACTION_SURFACE.search(action_text))
     capset = set(caps)
     if PRIORITY in capset:
         add("rank_priority_tasks")
@@ -835,6 +892,14 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         if cap in capset:
             add(_SIMPLE_CAP_TOOL[cap])
 
+    if restyle:
+        # Replay the previous turn's planner-built calls (never model-chosen
+        # ones): the re-explanation must rest on the same evidence.
+        replay = [{"name": c["name"], "args": dict(c.get("args") or {})} for c in state.get("tool_calls") or []
+                  if isinstance(c, dict) and c.get("name") in PLANNABLE_TOOLS]
+        if replay:
+            tools = replay
+
     if sensitive:
         # Phone numbers, home addresses, credentials: no tool returns them and
         # none should be called to "look" - the answer is a refusal.
@@ -851,6 +916,9 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     plan.capabilities = caps
     plan.intent, plan.secondary_intents = _intent_of(caps)
     plan.requested_analysis = analysis
+    plan.answer_mode = (state.get("answer_mode") if restyle and state.get("answer_mode")
+                        else answer_mode(analysis, caps, text))
+    plan.style = style
     plan.entities = {
         "warehouses": named_warehouses,
         "book_title": book_title,
@@ -918,4 +986,6 @@ def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = No
         "limit": plan.filters.get("limit"),
         "last_items": last_items or (previous.get("last_items") or []),
         "tools": [t["name"] for t in plan.required_tools],
+        "tool_calls": plan.required_tools,
+        "answer_mode": plan.answer_mode,
     }
