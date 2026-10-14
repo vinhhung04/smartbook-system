@@ -247,3 +247,62 @@ class OutOfScopePlaceNameTests(unittest.TestCase):
         p = plan("Thời tiết Hà Nội hôm nay thế nào?")
         self.assertEqual(p.required_tools, [])
         self.assertEqual(p.entities["warehouses"], [])
+
+
+class AnswerModeAndStyleTests(unittest.TestCase):
+    def test_answer_mode_follows_the_question(self):
+        self.assertEqual(plan("Có bao nhiêu phiếu quá hạn?").answer_mode, cp.LOOKUP)
+        self.assertEqual(plan("Tình hình quá hạn thế nào?").answer_mode, cp.ANALYSIS)
+        self.assertEqual(plan("Tại sao Kho HCM Chinh thiếu sách?").answer_mode, cp.CAUSAL)
+        self.assertEqual(plan("Tôi nên nhập sách nào trước?").answer_mode, cp.DECISION)
+        self.assertEqual(plan("Nếu ngân sách chỉ 10 triệu thì sao?").answer_mode, cp.WHAT_IF)
+        self.assertEqual(plan("Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?").answer_mode, cp.COMPARISON)
+
+    def test_style_requests_are_detected_without_eating_comparisons(self):
+        self.assertEqual(cp.detect_style(cp.normalize_query("Giải thích kỹ hơn")), {"deep": True})
+        self.assertEqual(cp.detect_style(cp.normalize_query("Nói ngắn gọn thôi")), {"brief": True})
+        self.assertEqual(cp.detect_style(cp.normalize_query("Giải thích dễ hiểu hơn")), {"plain": True})
+        self.assertEqual(cp.detect_style(cp.normalize_query("Vì sao không chọn phương án khác?")), {"why_not": True})
+        # "rủi ro hơn" is a comparison, not "rõ hơn".
+        self.assertEqual(cp.detect_style(cp.normalize_query("Kho nào rủi ro hơn?")), {})
+
+    def test_restyle_follow_up_replays_the_previous_planned_calls(self):
+        first = plan("Nếu ngân sách chỉ 10 triệu thì sao?")
+        state = cp.next_state(first, {}, None)
+        self.assertEqual(state["tool_calls"], first.required_tools)
+        for message, style in (("Giải thích kỹ hơn", "deep"), ("Nói ngắn gọn thôi", "brief"),
+                               ("Vì sao không chọn phương án khác?", "why_not"), ("Giải thích dễ hiểu hơn", "plain")):
+            p = plan(message, state)
+            self.assertTrue(p.is_followup, message)
+            self.assertEqual(p.required_tools, first.required_tools, message)
+            self.assertEqual(p.answer_mode, cp.WHAT_IF, message)
+            self.assertEqual(p.style, {style: True})
+            self.assertIn("previous_turn", p.carried_over)
+
+    def test_restyle_never_replays_a_tool_outside_the_whitelist(self):
+        state = {"capabilities": ["kpi"], "analysis": "lookup",
+                 "tool_calls": [{"name": "drop_everything", "args": {}}, {"name": "get_dashboard_kpis", "args": {}}]}
+        self.assertEqual(tools(plan("Giải thích kỹ hơn", state)), ["get_dashboard_kpis"])
+
+    def test_a_style_request_with_no_context_asks_back(self):
+        p = plan("Giải thích kỹ hơn")
+        self.assertTrue(p.clarification_needed)
+        self.assertEqual(p.required_tools, [])
+
+    def test_style_on_a_new_question_keeps_the_new_question(self):
+        p = plan("Tóm tắt ngắn gọn tình hình quá hạn")
+        self.assertEqual(tools(p), ["get_overdue_summary"])
+        self.assertEqual(p.style, {"brief": True})
+        self.assertFalse(p.is_followup)
+
+
+class BookTitleIsNotAVerbTests(unittest.TestCase):
+    def test_a_title_starting_with_lap_keeps_its_read_tools(self):
+        # "Lập Trình..." used to match the write-request pattern ("lập phiếu"),
+        # which cleared the planned tools and let the model answer with no data.
+        self.assertEqual(tools(plan('Tại sao cuốn "Lập Trình Lượng Tử Cho Mèo" được đề xuất nhập?')),
+                         ["explain_reorder_item"])
+        self.assertEqual(tools(plan("Có sách Lập Trình Lượng Tử Cho Mèo không?")), ["search_books"])
+
+    def test_a_real_write_request_still_leaves_tool_choice_to_the_action_flow(self):
+        self.assertEqual(plan("Lập phiếu đề xuất nhập cho sách ưu tiên cao").required_tools, [])

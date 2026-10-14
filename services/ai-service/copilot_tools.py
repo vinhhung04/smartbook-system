@@ -453,6 +453,7 @@ async def simulate_reorder_budget(
                         for p in (100, 75, 50, 25)]
     results = await asyncio.gather(*(_reorder(auth_header, budgetVnd=value, **base_params) for _l, value in scenarios_in))
     total_shortfall = sum(_shortfall(i) for i in base.get("items") or [])
+    lines_with_shortfall = sum(1 for i in base.get("items") or [] if _shortfall(i) > 0)
     scenarios = []
     for (label, value), res in zip(scenarios_in, results):
         if _error(res):
@@ -470,6 +471,10 @@ async def simulate_reorder_budget(
             "funded_high_priority": sum(1 for i in funded if i.get("priority") == "HIGH"),
             "unfunded_high_priority": len(unfunded_high),
             "shortfall_covered_pct": round(covered / total_shortfall * 100, 1) if total_shortfall else None,
+            # The allocation funds shortfall lines first and skips any that no
+            # longer fit, so 0 here with funded lines > 0 means every shortfall
+            # line cost more than the budget left when it was considered.
+            "funded_shortfall_lines": sum(1 for i in funded if _shortfall(i) > 0),
             "funded_items": [{"variant_id": i.get("variant_id"), "title": i.get("title"), "priority": i.get("priority"),
                               "suggested_reorder_qty": i.get("suggested_reorder_qty"), "estimated_cost": i.get("estimated_cost")}
                              for i in funded[:8]],
@@ -498,6 +503,7 @@ async def simulate_reorder_budget(
         "funding_rule": "Phân bổ của dịch vụ analytics: ưu tiên dòng giảm được nhiều thiếu hụt dự kiến nhất trên mỗi đồng.",
         "shortfall_definition": "Thiếu hụt dự kiến = nhu cầu trong thời gian chờ hàng − tồn khả dụng (tính trên các dòng được liệt kê).",
         "items_counted": shown,
+        "lines_with_shortfall": lines_with_shortfall,
         "items_not_listed": max(0, (summary.get("total_candidates") or 0) - shown),
         "limitations": ["Không tối ưu theo ràng buộc nhà cung cấp/số lượng tối thiểu; đơn giá là unit_cost hiện có trong danh mục."],
         "retrieved_at": _now_iso(),

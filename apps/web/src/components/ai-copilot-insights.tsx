@@ -1,10 +1,11 @@
-import { Fragment, useState, type ReactNode } from 'react';
-import { ChevronDown, Clock3, Info, Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
-import type { AiRecommendation } from '@/services/ai';
+import { Fragment, useId, useState, type ReactNode } from 'react';
+import { ArrowRight, ChevronDown, Clock3, HelpCircle, Info, Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
+import type { AiExplanation, AiExplanationClaim, AiRecommendation } from '@/services/ai';
 
 // Renders the structured parts of a copilot answer that the backend computes
 // from tool data (never from the model): recommendations with their evidence,
-// risks and data confidence; caveats; follow-up questions; data timestamp.
+// risks and data confidence; the "why" explanation; risks and limits;
+// follow-up questions; data timestamp.
 
 /** Inline **bold** and *italic* - the only inline markup the copilot prompt uses. */
 function renderInline(text: string): ReactNode[] {
@@ -50,11 +51,22 @@ function toBlocks(text: string): Block[] {
   return blocks;
 }
 
-/** Light markdown for answers: section headings, bullet and numbered lists. */
-export function CopilotAnswerText({ text }: { text: string }) {
+/** Light markdown for answers: section headings, bullet and numbered lists.
+ * `emphasizeLead` marks the opening paragraph as the key conclusion (the
+ * prompt makes the first sentence the conclusion) - used for analytical
+ * answers, so the conclusion is not repeated in a separate box. */
+export function CopilotAnswerText({ text, emphasizeLead = false }: { text: string; emphasizeLead?: boolean }) {
   return (
     <div className="space-y-2">
       {toBlocks(text).map((block, i) => {
+        if (i === 0 && emphasizeLead && block.kind === 'paragraph') {
+          return (
+            <div key={i} className="border-l-2 border-violet-400 pl-2.5 dark:border-violet-500">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-400">Kết luận chính</p>
+              <p className="font-medium text-foreground">{renderInline(block.text)}</p>
+            </div>
+          );
+        }
         if (block.kind === 'heading') {
           return (
             <p key={i} className="pt-1 text-[13px] font-semibold text-foreground">
@@ -183,17 +195,144 @@ export function CopilotRecommendations({ items }: { items: AiRecommendation[] })
   );
 }
 
+// The backend prefixes assumptions and unknowns it moved into this list.
+const CAVEAT_TAGS: Array<{ prefix: string; label: string; tone: string }> = [
+  { prefix: 'Giả định: ', label: 'Giả định', tone: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300' },
+  { prefix: 'Chưa biết: ', label: 'Chưa biết', tone: 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-500/40 dark:bg-slate-500/15 dark:text-slate-300' },
+];
+
 export function CopilotCaveats({ items }: { items: string[] }) {
   if (!items.length) return null;
   return (
-    <section aria-label="Lưu ý" className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 dark:border-sky-500/20 dark:bg-sky-500/5">
+    <section aria-label="Rủi ro và giới hạn" className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 dark:border-sky-500/20 dark:bg-sky-500/5">
       <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-sky-800 dark:text-sky-300">
         <Info className="h-3.5 w-3.5" aria-hidden="true" />
-        Lưu ý về dữ liệu
+        Rủi ro và giới hạn
       </p>
       <ul className="list-disc space-y-0.5 pl-5 text-[12px] text-sky-900 marker:text-sky-400 dark:text-sky-200">
-        {items.map((item) => <li key={item}>{item}</li>)}
+        {items.map((item) => {
+          const tag = CAVEAT_TAGS.find((t) => item.startsWith(t.prefix));
+          return (
+            <li key={item}>
+              {tag && (
+                <span className={`mr-1.5 inline-block rounded border px-1 py-px text-[10px] font-medium ${tag.tone}`}>{tag.label}</span>
+              )}
+              {tag ? item.slice(tag.prefix.length) : item}
+            </li>
+          );
+        })}
       </ul>
+    </section>
+  );
+}
+
+const CLAIM_KIND: Record<'FACT' | 'INFERENCE', { label: string; tone: string }> = {
+  INFERENCE: { label: 'Suy luận', tone: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300' },
+  FACT: { label: 'Dữ kiện', tone: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300' },
+};
+
+function ClaimItem({ claim }: { claim: AiExplanationClaim }) {
+  const kind = CLAIM_KIND[claim.kind as 'FACT' | 'INFERENCE'];
+  return (
+    <li className="space-y-1">
+      <p className="text-[12px] leading-relaxed text-foreground">
+        <span className={`mr-1.5 inline-block rounded border px-1 py-px align-[1px] text-[10px] font-medium ${kind.tone}`}>{kind.label}</span>
+        {claim.statement}
+      </p>
+      {claim.meaning && <p className="text-[12px] leading-relaxed text-muted-foreground">{claim.meaning}</p>}
+      {claim.evidence.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 rounded-md bg-muted/40 px-2 py-1.5 sm:grid-cols-3" aria-label="Số liệu minh chứng">
+          {claim.evidence.map((item) => (
+            <div key={`${item.label}-${String(item.value)}`} className="min-w-0">
+              <dt className="truncate text-[10px] text-muted-foreground" title={item.source ? `${item.label} · ${item.source}` : item.label}>
+                {item.label}
+              </dt>
+              <dd className="text-[12px] font-medium tabular-nums text-foreground">{formatMetric(item.value, item.unit)}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {claim.kind === 'INFERENCE' && claim.basis && (
+        <p className="text-[11px] text-muted-foreground">
+          Mức chắc chắn {claim.certainty ?? '—'} · Cơ sở: {claim.basis}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/** "Vì sao AI đưa ra nhận định này?" - the backend's reasoning chain (suy luận
+ * and the dữ kiện behind them, each with its figures), alternatives and next
+ * steps. Assumptions and unknowns are shown in "Rủi ro và giới hạn" instead,
+ * so nothing appears twice. Collapsed by default. */
+export function CopilotExplanation({ explanation }: { explanation?: AiExplanation | null }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  if (!explanation?.display) return null;
+  const reasoning = explanation.claims.filter((c) => c.kind === 'INFERENCE' || c.kind === 'FACT');
+  if (!reasoning.length && !explanation.alternatives.length && !explanation.next_actions.length) return null;
+  const inferences = explanation.counts?.INFERENCE ?? 0;
+  const facts = explanation.counts?.FACT ?? 0;
+  const tone = explanation.certainty ? CONFIDENCE_TONE[explanation.certainty] : undefined;
+  return (
+    <section className="rounded-xl border border-border bg-card/60">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex w-full cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
+      >
+        <span className="flex items-center gap-1.5 text-[12px] font-semibold text-foreground">
+          <HelpCircle className="h-3.5 w-3.5 text-violet-500" aria-hidden="true" />
+          Vì sao AI đưa ra nhận định này?
+        </span>
+        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {inferences > 0 && <span>{inferences} suy luận</span>}
+          {inferences > 0 && facts > 0 && <span aria-hidden="true">·</span>}
+          {facts > 0 && <span>{facts} dữ kiện</span>}
+          {tone && (
+            <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>
+              Mức chắc chắn: {explanation.certainty}
+            </span>
+          )}
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </span>
+      </button>
+      {open && (
+        <div id={panelId} className="space-y-3 border-t border-border px-3 py-2.5">
+          {reasoning.length > 0 && (
+            <ol className="space-y-2.5">
+              {reasoning.map((claim) => <ClaimItem key={`${claim.kind}-${claim.statement}`} claim={claim} />)}
+            </ol>
+          )}
+          {explanation.alternatives.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Phương án thay thế</p>
+              <ul className="space-y-1.5">
+                {explanation.alternatives.map((alt) => (
+                  <li key={alt.option} className="text-[12px] leading-relaxed">
+                    <span className="font-medium text-foreground">{alt.option}</span>
+                    <span className="text-foreground"> — {alt.outcome}</span>
+                    <span className="block text-muted-foreground">{alt.tradeoff}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {explanation.next_actions.length > 0 && (
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                Bước tiếp theo hợp lý
+              </p>
+              <ul className="list-disc space-y-0.5 pl-5 text-[12px] text-foreground marker:text-muted-foreground">
+                {explanation.next_actions.map((step) => <li key={step}>{step}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 
+import copilot_explain as ce
 import copilot_plan as cp
 import copilot_response as cr
 from agent_schemas import UserContext
@@ -102,5 +103,71 @@ class ExtrasTests(unittest.TestCase):
         self.assertEqual(extras["recommendations"], [])
 
 
+
+class AdaptiveAnswerTests(unittest.TestCase):
+    def test_plan_note_carries_the_mode_and_style_guidance(self):
+        note = cr.plan_note(plan("Tại sao Kho HCM Chinh thiếu sách?"), NOW)
+        self.assertIn("giải thích nguyên nhân", note)
+        state = cp.next_state(plan("Tôi nên nhập sách nào trước?"), {}, None)
+        note = cr.plan_note(plan("Nói ngắn gọn thôi", state), NOW)
+        self.assertIn("hỗ trợ quyết định", note)
+        self.assertIn("tối đa 3 câu", note)
+
+    def test_few_shot_matches_mode_and_data_and_stays_out_of_the_note(self):
+        p = plan("Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?")
+        example = cr.few_shot(p)
+        self.assertIn("Kho A và Kho B", example)
+        self.assertIn("dữ liệu trong ví dụ là giả", example)
+        self.assertNotIn("Kho A và Kho B", cr.plan_note(p, NOW))  # plan_note is grounding context
+        self.assertIn("Lượt mượn tháng này", cr.few_shot(plan("Lượt mượn tháng này so với tháng trước thế nào?")))
+        # No example about unrelated data: a warehouse example once lent its
+        # claims to a borrow-trend "why" question.
+        self.assertEqual(cr.few_shot(plan("Tại sao lượt mượn tháng này giảm?")), "")
+
+    def test_style_request_is_repeated_next_to_the_question(self):
+        state = cp.next_state(plan("Tôi nên nhập sách nào trước?"), {}, None)
+        self.assertIn("giải thích kỹ hơn", cr.style_request(plan("Giải thích kỹ hơn", state)))
+        self.assertEqual(cr.style_request(plan("Tôi nên nhập sách nào trước?")), "")
+
+    def test_system_prompt_states_the_new_writing_rules(self):
+        self.assertIn("mỗi số liệu chỉ nêu một lần", cr.COPILOT_SYSTEM_PROMPT)
+        self.assertIn("Bản giải thích có cấu trúc", cr.COPILOT_SYSTEM_PROMPT)
+
+
+class ExplainableExtrasTests(unittest.TestCase):
+    REORDER = ExtrasTests.REORDER
+
+    def _extras(self, answer=None):
+        p = plan("Tôi nên nhập sách nào trước?")
+        data = {"get_reorder_suggestions": self.REORDER}
+        expl = ce.build_explanation(p, data)
+        return cr.build_extras(p, data, user(superuser=True), WAREHOUSES, NOW, question="Tôi nên nhập sách nào trước?",
+                               answer=answer, explanation=expl), expl
+
+    def test_assumptions_and_unknowns_join_the_limits_list_once(self):
+        extras, expl = self._extras()
+        self.assertIs(extras["explanation"], expl)
+        tagged = [c for c in extras["caveats"] if c.startswith(("Giả định: ", "Chưa biết: "))]
+        lead_time = [c for c in extras["caveats"] if "thời gian chờ hàng" in c.lower()]
+        self.assertEqual(len(lead_time), 1)  # caveat and ASSUMPTION claim say the same thing
+        self.assertLessEqual(len(extras["caveats"]), 8)
+        self.assertIsInstance(tagged, list)
+
+    def test_a_limit_the_answer_already_states_is_not_repeated(self):
+        caveats, _ = self._extras()
+        sentence = caveats["caveats"][0]
+        extras, _ = self._extras(answer=f"Nên nhập Norwegian Wood trước. {sentence}")
+        self.assertNotIn(sentence, extras["caveats"])
+
+    def test_style_follow_up_is_offered(self):
+        extras, _ = self._extras()
+        self.assertIn("Giải thích kỹ hơn", extras["suggested_followups"])
+        self.assertLessEqual(len(extras["suggested_followups"]), 3)
+
+    def test_card_titles_name_what_the_ui_will_show(self):
+        self.assertEqual(cr.card_titles({"get_reorder_suggestions": self.REORDER}), ["Norwegian Wood"])
+
+    def test_clarification_has_no_explanation(self):
+        self.assertIsNone(cr.build_extras(plan("Tại sao kho này thiếu sách?"), {})["explanation"])
 if __name__ == "__main__":
     unittest.main()
