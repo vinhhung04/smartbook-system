@@ -717,7 +717,7 @@ pnpm demo:status
 docker compose ps
 ```
 
-Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Khi cập nhật code mà database đã có dữ liệu cũ, seed mới (ví dụ kệ và tồn kho của các chi nhánh, nếu thiếu thì web công khai báo 0 sách khả dụng) **không tự áp dụng** — chạy `pnpm demo:upgrade` (build lại và chạy lại seed inventory + catalog-enrichment; idempotent, không xóa dữ liệu hiện có). Để reset hoàn toàn dữ liệu demo:
+Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Khi cập nhật code mà database đã có dữ liệu cũ, seed mới (ví dụ kệ và tồn kho của các chi nhánh, nếu thiếu thì web công khai báo 0 sách khả dụng) **không tự áp dụng** — chạy `pnpm demo:upgrade` (build lại và chạy lại seed inventory + catalog-enrichment, rồi căn phân quyền kho của user demo theo ID kho thật; idempotent, không xóa dữ liệu hiện có). Để reset hoàn toàn dữ liệu demo:
 
 ```powershell
 docker compose down -v

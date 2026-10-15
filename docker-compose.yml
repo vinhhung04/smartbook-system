@@ -349,6 +349,10 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
+      # catalog_sync reads inventory-service at startup; without this wait the first
+      # sync can fail with ConnectError and the AI index stays stale until the next run.
+      inventory-service:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AI_DB_NAME:-ai_db}
       - OTEL_SERVICE_NAME=ai-service

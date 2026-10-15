@@ -1,5 +1,5 @@
 // Warehouse-scope integration checks against a running stack (pnpm demo:seed,
-// then scripts/reconcile-warehouse-scopes.sh on a database seeded before the
+// then `pnpm demo:upgrade` (scripts/reconcile-warehouse-scopes.mjs) on a database seeded before the
 // fixed warehouse ids). Calls the gateway like a client would, including
 // requests a user tampers with to reach another warehouse.
 //
