@@ -10,6 +10,7 @@ const {
   authorizeManagerRead,
   authorizeTaskRead,
 } = require('./middlewares/auth.middleware');
+const { enforceRequestedWarehouseScope } = require('./middlewares/warehouse-scope.middleware');
 const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
 
 const prisma = new PrismaClient();
@@ -95,6 +96,8 @@ app.use('/public/catalog', publicCatalogRoutes);
 
 // Only API routes require JWT.
 app.use('/api', authenticateToken);
+// Any warehouse a request names must be inside the caller's warehouse scope.
+app.use('/api', enforceRequestedWarehouseScope());
 
 app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), async (req, res) => {
   const userId = req.user?.id || req.user?.sub;

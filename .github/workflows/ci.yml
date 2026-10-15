@@ -175,6 +175,7 @@ jobs:
             supplier-portal-integration.mjs \
             admin-user-management-integration.mjs \
             analytics-integration.mjs \
+            warehouse-scope-integration.mjs \
           ; do
             echo "::group::$f"
             node "scripts/$f"

@@ -1,5 +1,10 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
 const { UUID_RE } = require('../middlewares/uuid-params.middleware');
+const {
+  readableWarehouseFilter,
+  requireWarehouseReadAccess,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 
@@ -25,13 +30,19 @@ async function getLowStockByWarehouse(req, res) {
   }
 
   try {
+    // A named warehouse must be in the caller's scope; without one, only the
+    // warehouses in scope are listed (all of them for a superuser).
+    if (warehouseId && !(await requireWarehouseReadAccess(req, res, String(warehouseId).trim()))) return undefined;
+    const readable = warehouseId ? null : await readableWarehouseFilter(req.user);
     // Aggregate available_qty and on_hand_qty across all locations for the same
     // (warehouse_id, variant_id) pair, then filter by the aggregated total.
     const warehouseFilter = warehouseId
       // The bound parameter arrives as text; without the cast Postgres has no
       // uuid = text operator and every warehouse-filtered call answered 500.
       ? Prisma.sql`AND sb.warehouse_id = ${warehouseId}::uuid`
-      : Prisma.empty;
+      : readable
+        ? Prisma.sql`AND sb.warehouse_id = ANY(${readable}::uuid[])`
+        : Prisma.empty;
 
     const rows = await prisma.$queryRaw`
       SELECT
@@ -149,7 +160,7 @@ async function getLowStockByWarehouse(req, res) {
     return res.json({ data, total: data.length, threshold });
   } catch (error) {
     console.error('[stock-balance] getLowStockByWarehouse error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(scopeErrorStatus(error)).json({ message: error.expose ? error.message : 'Internal server error' });
   }
 }
 

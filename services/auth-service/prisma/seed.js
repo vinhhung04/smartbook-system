@@ -607,7 +607,10 @@ async function main() {
   await assignUserRoles('supplier-phuongnam', [supplierRole]);
   await assignUserRoles('supplier-ibd', [supplierRole]);
 
-  // Placeholder warehouse IDs - these should match actual warehouse IDs from inventory service
+  // Fixed warehouse IDs, created with these same ids by inventory-service's seed
+  // (an existing database is aligned once by scripts/reconcile-warehouse-scopes.sh).
+  // Warehouse scope is fail-closed: a scope row pointing at a missing warehouse
+  // grants nothing.
   const warehouseIds = {
     'WH-HCM-01': '00000000-0000-0000-0000-000000000002',
     'WH-HN-01': '00000000-0000-0000-0000-000000000003',
@@ -618,21 +621,25 @@ async function main() {
     { user_id: userByUsername.hung.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'FULL' },
     { user_id: userByUsername.hung.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'FULL' },
     { user_id: userByUsername.hung.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'FULL' },
-    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
-    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'READ' },
-    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'READ' },
+    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'FULL' },
+    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'FULL' },
+    { user_id: userByUsername.manager01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'FULL' },
     { user_id: userByUsername.staff01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.staff02.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.staff03.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.warehouse01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.cs01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
+    // Read-only manager of one warehouse: the account the warehouse-scope checks
+    // are exercised with (can read WH-HCM-01, cannot write it, cannot see others).
     { user_id: userByUsername.curator01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
   ];
 
   for (const scope of warehouseScopes) {
     await prisma.userWarehouseScope.upsert({
       where: { user_id_warehouse_id: { user_id: scope.user_id, warehouse_id: scope.warehouse_id } },
-      update: {},
+      // WAREHOUSE_MANAGER approves POs and receipts in its warehouses (a write):
+      // re-seeding brings an older READ row in line.
+      update: { access_level: scope.access_level },
       create: scope,
     });
   }

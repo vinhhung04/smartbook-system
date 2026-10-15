@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import conversation_store
+import warehouse_scope
 from agent_permissions import get_user_context
 from db_models import ConversationRow, MessageRow
 
@@ -40,6 +41,42 @@ def _message_summary(row: MessageRow) -> dict:
     }
 
 
+def _stored_warehouse_ids(row: MessageRow) -> set[str]:
+    meta = row.msg_metadata if isinstance(row.msg_metadata, dict) else {}
+    if isinstance(meta.get("warehouse_ids"), list):
+        return {str(x) for x in meta["warehouse_ids"]}
+    # Turns stored before warehouse_ids was recorded: read them off the data.
+    return warehouse_scope.warehouse_ids_in(row.data) | warehouse_scope.warehouse_ids_in(row.tool_results)
+
+
+def _masked_summary(row: MessageRow, notice: str) -> dict:
+    """The stored turn as shown when its warehouses are outside the reader's
+    current scope: text, charts, data and cards withheld; the row is kept."""
+    summary = _message_summary(row)
+    extras = dict(summary.get("extras") or {})
+    for key in ("visualizations", "recommendations", "caveats", "suggested_followups"):
+        extras[key] = []
+    extras.update(explanation=None, visualization_notes=[notice], withheld=True)
+    summary.update(content=notice, data=None, tool_results=None, tool_calls=None, sources=None, extras=extras)
+    return summary
+
+
+async def _scoped_summaries(messages: list[MessageRow], user_ctx) -> list[dict]:
+    """History is shown under the reader's CURRENT warehouse scope: a turn
+    whose data names a warehouse they can no longer read is masked (fail-closed
+    when the scope cannot be read). Snapshots are never refreshed here."""
+    try:
+        readable = await warehouse_scope.readable_warehouses(user_ctx)
+        notice = warehouse_scope.MASKED_NOTICE
+    except warehouse_scope.ScopeUnavailable:
+        readable, notice = frozenset(), warehouse_scope.UNVERIFIED_NOTICE
+    out = []
+    for row in messages:
+        ids = _stored_warehouse_ids(row) if row.role == "assistant" else set()
+        out.append(_message_summary(row) if warehouse_scope.covered(ids, readable) else _masked_summary(row, notice))
+    return out
+
+
 class RenameConversationRequest(BaseModel):
     title: str
 
@@ -54,7 +91,7 @@ async def _require_owner(auth_header: str | None, conversation_id: str):
     conv, messages = detail
     if conv.user_id != user_ctx.user_id and not user_ctx.is_superuser:
         raise HTTPException(status_code=403, detail="Forbidden.")
-    return conv, messages
+    return conv, messages, user_ctx
 
 
 @router.get("/conversations")
@@ -70,10 +107,10 @@ async def list_conversations(request: Request):
 @router.get("/conversations/{conversation_id}")
 async def get_conversation(request: Request, conversation_id: str):
     auth_header = request.headers.get("authorization")
-    conv, messages = await _require_owner(auth_header, conversation_id)
+    conv, messages, user_ctx = await _require_owner(auth_header, conversation_id)
     return {
         "conversation": _conversation_summary(conv),
-        "messages": [_message_summary(m) for m in messages],
+        "messages": await _scoped_summaries(messages, user_ctx),
     }
 
 

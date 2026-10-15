@@ -1,0 +1,959 @@
+{
+ "sizes": {
+  "dev": 19,
+  "real": 63,
+  "mutated": 154,
+  "heldout": 217
+ },
+ "dev": {
+  "items": 19,
+  "per_type": {
+   "CONTRADICTION": {
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   },
+   "UNSUPPORTED_CAUSAL": {
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   },
+   "SCOPE_CONFUSION": {
+    "tp": 2,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   },
+   "RANKING_INCONSISTENCY": {
+    "tp": 3,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   },
+   "UNSUPPORTED_RECOMMENDATION": {
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   },
+   "REASONING_OVERCLAIM": {
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   },
+   "EXPLANATION_CHART_MISMATCH": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "precision": null,
+    "recall": null
+   },
+   "INTERNAL_LABEL": {
+    "tp": 1,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+   }
+  },
+  "contradiction_class": {
+   "types": [
+    "CONTRADICTION",
+    "EXPLANATION_CHART_MISMATCH",
+    "RANKING_INCONSISTENCY",
+    "SCOPE_CONFUSION"
+   ],
+   "precision": 1.0,
+   "recall": 1.0,
+   "tp": 7,
+   "fp": 0,
+   "fn": 0
+  },
+  "overall": {
+   "precision": 1.0,
+   "recall": 1.0,
+   "tp": 12,
+   "fp": 0,
+   "fn": 0
+  },
+  "false_positive_rate_on_clean": 0.0,
+  "clean_items": 7,
+  "latency_ms": {
+   "p50": 0.089,
+   "max": 1.114
+  }
+ },
+ "real": {
+  "v3_1": {
+   "items": 63,
+   "per_type": {
+    "CONTRADICTION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 7,
+     "precision": null,
+     "recall": 0.0
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 0,
+     "fp": 1,
+     "fn": 1,
+     "precision": 0.0,
+     "recall": 0.0
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 1,
+     "fp": 0,
+     "fn": 9,
+     "precision": 1.0,
+     "recall": 0.1
+    },
+    "EXPLANATION_CHART_MISMATCH": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "INTERNAL_LABEL": {
+     "tp": 7,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    }
+   },
+   "contradiction_class": {
+    "types": [
+     "CONTRADICTION",
+     "EXPLANATION_CHART_MISMATCH",
+     "RANKING_INCONSISTENCY",
+     "SCOPE_CONFUSION"
+    ],
+    "precision": null,
+    "recall": 0.0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 7
+   },
+   "overall": {
+    "precision": 0.9,
+    "recall": 0.346,
+    "tp": 9,
+    "fp": 1,
+    "fn": 17
+   },
+   "false_positive_rate_on_clean": 0.0,
+   "clean_items": 41,
+   "latency_ms": {
+    "p50": 0.55,
+    "max": 1.298
+   }
+  },
+  "xai2": {
+   "items": 63,
+   "per_type": {
+    "CONTRADICTION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 7,
+     "precision": null,
+     "recall": 0.0
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 1,
+     "precision": null,
+     "recall": 0.0
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 0,
+     "fp": 1,
+     "fn": 1,
+     "precision": 0.0,
+     "recall": 0.0
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 1,
+     "fp": 0,
+     "fn": 9,
+     "precision": 1.0,
+     "recall": 0.1
+    },
+    "EXPLANATION_CHART_MISMATCH": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "INTERNAL_LABEL": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 7,
+     "precision": null,
+     "recall": 0.0
+    }
+   },
+   "contradiction_class": {
+    "types": [
+     "CONTRADICTION",
+     "EXPLANATION_CHART_MISMATCH",
+     "RANKING_INCONSISTENCY",
+     "SCOPE_CONFUSION"
+    ],
+    "precision": null,
+    "recall": 0.0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 7
+   },
+   "overall": {
+    "precision": 0.5,
+    "recall": 0.038,
+    "tp": 1,
+    "fp": 1,
+    "fn": 25
+   },
+   "false_positive_rate_on_clean": 0.0,
+   "clean_items": 41,
+   "latency_ms": {
+    "p50": 0.034,
+    "max": 0.169
+   }
+  }
+ },
+ "mutated": {
+  "v3_1": {
+   "items": 154,
+   "per_type": {
+    "CONTRADICTION": {
+     "tp": 2,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 31,
+     "fp": 0,
+     "fn": 10,
+     "precision": 1.0,
+     "recall": 0.756
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 3,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 6,
+     "fp": 0,
+     "fn": 5,
+     "precision": 1.0,
+     "recall": 0.545
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 31,
+     "fp": 0,
+     "fn": 10,
+     "precision": 1.0,
+     "recall": 0.756
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 12,
+     "fp": 0,
+     "fn": 3,
+     "precision": 1.0,
+     "recall": 0.8
+    },
+    "EXPLANATION_CHART_MISMATCH": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "INTERNAL_LABEL": {
+     "tp": 41,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    }
+   },
+   "contradiction_class": {
+    "types": [
+     "CONTRADICTION",
+     "EXPLANATION_CHART_MISMATCH",
+     "RANKING_INCONSISTENCY",
+     "SCOPE_CONFUSION"
+    ],
+    "precision": 1.0,
+    "recall": 0.688,
+    "tp": 11,
+    "fp": 0,
+    "fn": 5
+   },
+   "overall": {
+    "precision": 1.0,
+    "recall": 0.818,
+    "tp": 126,
+    "fp": 0,
+    "fn": 28
+   },
+   "false_positive_rate_on_clean": null,
+   "clean_items": 0,
+   "latency_ms": {
+    "p50": 0.545,
+    "max": 1.275
+   }
+  },
+  "xai2": {
+   "items": 154,
+   "per_type": {
+    "CONTRADICTION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 2,
+     "precision": null,
+     "recall": 0.0
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 3,
+     "fp": 0,
+     "fn": 38,
+     "precision": 1.0,
+     "recall": 0.073
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 3,
+     "precision": null,
+     "recall": 0.0
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 11,
+     "precision": null,
+     "recall": 0.0
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 7,
+     "fp": 0,
+     "fn": 34,
+     "precision": 1.0,
+     "recall": 0.171
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 12,
+     "fp": 0,
+     "fn": 3,
+     "precision": 1.0,
+     "recall": 0.8
+    },
+    "EXPLANATION_CHART_MISMATCH": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "INTERNAL_LABEL": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 41,
+     "precision": null,
+     "recall": 0.0
+    }
+   },
+   "contradiction_class": {
+    "types": [
+     "CONTRADICTION",
+     "EXPLANATION_CHART_MISMATCH",
+     "RANKING_INCONSISTENCY",
+     "SCOPE_CONFUSION"
+    ],
+    "precision": null,
+    "recall": 0.0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 16
+   },
+   "overall": {
+    "precision": 1.0,
+    "recall": 0.143,
+    "tp": 22,
+    "fp": 0,
+    "fn": 132
+   },
+   "false_positive_rate_on_clean": null,
+   "clean_items": 0,
+   "latency_ms": {
+    "p50": 0.027,
+    "max": 0.286
+   }
+  }
+ },
+ "heldout": {
+  "v3_1": {
+   "items": 217,
+   "per_type": {
+    "CONTRADICTION": {
+     "tp": 2,
+     "fp": 0,
+     "fn": 7,
+     "precision": 1.0,
+     "recall": 0.222
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 32,
+     "fp": 0,
+     "fn": 10,
+     "precision": 1.0,
+     "recall": 0.762
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 3,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 6,
+     "fp": 0,
+     "fn": 5,
+     "precision": 1.0,
+     "recall": 0.545
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 31,
+     "fp": 1,
+     "fn": 11,
+     "precision": 0.969,
+     "recall": 0.738
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 13,
+     "fp": 0,
+     "fn": 12,
+     "precision": 1.0,
+     "recall": 0.52
+    },
+    "EXPLANATION_CHART_MISMATCH": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "INTERNAL_LABEL": {
+     "tp": 48,
+     "fp": 0,
+     "fn": 0,
+     "precision": 1.0,
+     "recall": 1.0
+    }
+   },
+   "contradiction_class": {
+    "types": [
+     "CONTRADICTION",
+     "EXPLANATION_CHART_MISMATCH",
+     "RANKING_INCONSISTENCY",
+     "SCOPE_CONFUSION"
+    ],
+    "precision": 1.0,
+    "recall": 0.478,
+    "tp": 11,
+    "fp": 0,
+    "fn": 12
+   },
+   "overall": {
+    "precision": 0.993,
+    "recall": 0.75,
+    "tp": 135,
+    "fp": 1,
+    "fn": 45
+   },
+   "false_positive_rate_on_clean": 0.0,
+   "clean_items": 41,
+   "latency_ms": {
+    "p50": 0.515,
+    "max": 1.607
+   }
+  },
+  "xai2": {
+   "items": 217,
+   "per_type": {
+    "CONTRADICTION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 9,
+     "precision": null,
+     "recall": 0.0
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 3,
+     "fp": 0,
+     "fn": 39,
+     "precision": 1.0,
+     "recall": 0.071
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 3,
+     "precision": null,
+     "recall": 0.0
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 11,
+     "precision": null,
+     "recall": 0.0
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 7,
+     "fp": 1,
+     "fn": 35,
+     "precision": 0.875,
+     "recall": 0.167
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 13,
+     "fp": 0,
+     "fn": 12,
+     "precision": 1.0,
+     "recall": 0.52
+    },
+    "EXPLANATION_CHART_MISMATCH": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 0,
+     "precision": null,
+     "recall": null
+    },
+    "INTERNAL_LABEL": {
+     "tp": 0,
+     "fp": 0,
+     "fn": 48,
+     "precision": null,
+     "recall": 0.0
+    }
+   },
+   "contradiction_class": {
+    "types": [
+     "CONTRADICTION",
+     "EXPLANATION_CHART_MISMATCH",
+     "RANKING_INCONSISTENCY",
+     "SCOPE_CONFUSION"
+    ],
+    "precision": null,
+    "recall": 0.0,
+    "tp": 0,
+    "fp": 0,
+    "fn": 23
+   },
+   "overall": {
+    "precision": 0.958,
+    "recall": 0.128,
+    "tp": 23,
+    "fp": 1,
+    "fn": 157
+   },
+   "false_positive_rate_on_clean": 0.0,
+   "clean_items": 41,
+   "latency_ms": {
+    "p50": 0.033,
+    "max": 0.189
+   }
+  }
+ },
+ "live": {
+  "answers": 60,
+  "status": {
+   "passed": 45,
+   "repaired": 6,
+   "retried_passed": 7,
+   "warning": 2
+  },
+  "retry_rate": 0.15,
+  "final_answers_without_findings": "60/60",
+  "llm_calls_mean": 1.2,
+  "validator_latency_ms_p50": 1.73,
+  "turn_seconds_p50": 4.45
+ },
+ "real_findings": [
+  {
+   "key": "xai-an-01#0",
+   "expected": [
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-an-03#0",
+   "expected": [
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-ca-01#0",
+   "expected": [
+    "INTERNAL_LABEL"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "xai-ca-05#0",
+   "expected": [
+    "UNSUPPORTED_CAUSAL"
+   ],
+   "found": [
+    "UNSUPPORTED_CAUSAL"
+   ]
+  },
+  {
+   "key": "xai-de-02#0",
+   "expected": [
+    "UNSUPPORTED_RECOMMENDATION"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-de-04#0",
+   "expected": [
+    "CONTRADICTION"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-wi-03#0",
+   "expected": [
+    "INTERNAL_LABEL"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "xai-wi-04#0",
+   "expected": [
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-wi-05#0",
+   "expected": [
+    "INTERNAL_LABEL"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "xai-mt-01#1",
+   "expected": [
+    "CONTRADICTION",
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-mt-01#2",
+   "expected": [
+    "CONTRADICTION"
+   ],
+   "found": [
+    "UNSUPPORTED_RECOMMENDATION"
+   ]
+  },
+  {
+   "key": "xai-mt-03#0",
+   "expected": [
+    "CONTRADICTION",
+    "REASONING_OVERCLAIM"
+   ],
+   "found": [
+    "REASONING_OVERCLAIM"
+   ]
+  },
+  {
+   "key": "xai-mt-03#1",
+   "expected": [
+    "CONTRADICTION",
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "xai-mt-04#0",
+   "expected": [
+    "INTERNAL_LABEL"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "xai-mt-05#0",
+   "expected": [
+    "INTERNAL_LABEL"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "xai-md-01#0",
+   "expected": [
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "viz-tr-01#0",
+   "expected": [
+    "INTERNAL_LABEL",
+    "REASONING_OVERCLAIM"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "viz-tr-02#0",
+   "expected": [
+    "CONTRADICTION"
+   ],
+   "found": []
+  },
+  {
+   "key": "viz-cp-04#0",
+   "expected": [
+    "CONTRADICTION"
+   ],
+   "found": []
+  },
+  {
+   "key": "viz-cp-05#0",
+   "expected": [
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  },
+  {
+   "key": "viz-bd-02#0",
+   "expected": [
+    "INTERNAL_LABEL"
+   ],
+   "found": [
+    "INTERNAL_LABEL"
+   ]
+  },
+  {
+   "key": "viz-kp-02#0",
+   "expected": [
+    "REASONING_OVERCLAIM"
+   ],
+   "found": []
+  }
+ ],
+ "missed_mutations": [
+  {
+   "key": "xai-lk-04#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": ".370.000 ₫, trong đó loại phạt quá hạn (OVERDUE) chiếm phần lớn với 590.174.000 ₫ trên 7656 khoản phạt.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-lk-04#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "370.000 ₫, trong đó loại phạt quá hạn (OVERDUE) chiếm phần lớn với 590.174.000 ₫ trên 7656 khoản phạt.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-an-05#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": "ạn đọc trước, vì thời gian trễ càng dài thì khả năng thu hồi sách và thanh toán phạt càng khó khăn hơn.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-an-05#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "n đọc trước, vì thời gian trễ càng dài thì khả năng thu hồi sách và thanh toán phạt càng khó khăn hơn.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-cp-01#0+RANKING_INCONSISTENCY",
+   "variant": 2,
+   "answer_tail": " chênh lệch lớn về số lượng đầu sách bị hết hoặc thấp khiến kho này đối mặt với nguy cơ gián đoạn dịch vụ cao hơn.\nKho Ha Noi là kho đáng lo ngại nhất hiện nay."
+  },
+  {
+   "key": "xai-cp-04#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": " biết lý do cụ thể của sự thay đổi; có thể xem top sách hoặc tồn kho để hiểu nhóm nào đang dịch chuyển.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-cp-04#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "biết lý do cụ thể của sự thay đổi; có thể xem top sách hoặc tồn kho để hiểu nhóm nào đang dịch chuyển.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-cp-05#0+RANKING_INCONSISTENCY",
+   "variant": 3,
+   "answer_tail": "t hàng và 1 đầu sách dưới ngưỡng, cùng tổng tồn khả dụng thấp hơn nhiều so với HCM Chinh (chỉ 19 bản).\nSo với Chi Nhanh District 1, Kho HCM Chinh ít rủi ro hơn."
+  },
+  {
+   "key": "xai-ca-02#0+REASONING_OVERCLAIM",
+   "variant": 3,
+   "answer_tail": "các yếu tố trên chỉ phản ánh tương quan trong dữ liệu tồn kho và mượn trả, chưa phải là nguyên nhân đã được kiểm chứng.\nDữ liệu đã chứng minh hoàn toàn điều đó."
+  },
+  {
+   "key": "xai-ca-04#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": "ệu về thời gian chờ hàng chỉ mang tính tương quan và chưa được xác nhận bằng lịch sử giao hàng thực tế.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-ca-04#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "u về thời gian chờ hàng chỉ mang tính tương quan và chưa được xác nhận bằng lịch sử giao hàng thực tế.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-de-03#0+REASONING_OVERCLAIM",
+   "variant": 3,
+   "answer_tail": " kho dưới ngưỡng**: 9 đầu sách tại Kho HCM Chinh — đối chiếu tồn thực tế và cân nhắc điều chuyển giữa các kho nếu được.\nDữ liệu đã chứng minh hoàn toàn điều đó."
+  },
+  {
+   "key": "xai-wi-01#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": "*Bước tiếp theo:** Bạn có thể xác nhận lập phiếu đề xuất nhập hàng cho 5 đầu sách đã được duyệt ở trên.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-wi-01#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "Bước tiếp theo:** Bạn có thể xác nhận lập phiếu đề xuất nhập hàng cho 5 đầu sách đã được duyệt ở trên.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-mt-02#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": " lý các tình trạng thiếu hụt (nhập bổ sung hoặc điều chuyển) để giảm nguy cơ mất lượt mượn cho bạn đọc.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-mt-02#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "lý các tình trạng thiếu hụt (nhập bổ sung hoặc điều chuyển) để giảm nguy cơ mất lượt mượn cho bạn đọc.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-mt-05#1+REASONING_OVERCLAIM",
+   "variant": 3,
+   "answer_tail": "a chọn giữa 10 triệu và 20 triệu phụ thuộc vào khả năng chấp nhận để lại bao nhiêu đầu sách ưu tiên cao chưa được nhập.\nDữ liệu đã chứng minh hoàn toàn điều đó."
+  },
+  {
+   "key": "xai-na-01#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": "Tài khoản của bạn không có quyền xem dữ liệu phiếu quá hạn, nên phần này chưa được phân tích.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-na-01#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "Tài khoản của bạn không có quyền xem dữ liệu phiếu quá hạn, nên phần này chưa được phân tích.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "xai-am-01#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": "hỏi về kho nào? Các kho hiện có: Chi Nhanh District 3, Kho HCM Chinh, Chi Nhanh District 1, Kho Ha Noi.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "xai-am-01#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "ỏi về kho nào? Các kho hiện có: Chi Nhanh District 3, Kho HCM Chinh, Chi Nhanh District 1, Kho Ha Noi.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "viz-cp-01#0+RANKING_INCONSISTENCY",
+   "variant": 2,
+   "answer_tail": "Chưa có nhu cầu mượn tách theo từng kho, nên chưa thể đánh giá chính xác mức độ ảnh hưởng tới bạn đọc của mỗi kho.\nKho Ha Noi là kho đáng lo ngại nhất hiện nay."
+  },
+  {
+   "key": "viz-cp-03#0+RANKING_INCONSISTENCY",
+   "variant": 3,
+   "answer_tail": "ống, chưa tách riêng theo từng kho, nên chưa đánh giá chính xác mức độ ảnh hưởng cụ thể tới bạn đọc của mỗi kho.\nSo với Kho Ha Noi, Kho HCM Chinh ít rủi ro hơn."
+  },
+  {
+   "key": "viz-cp-03#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": " tách riêng theo từng kho, nên chưa đánh giá chính xác mức độ ảnh hưởng cụ thể tới bạn đọc của mỗi kho.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "viz-cp-03#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "tách riêng theo từng kho, nên chưa đánh giá chính xác mức độ ảnh hưởng cụ thể tới bạn đọc của mỗi kho.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "viz-fu-04#0+UNSUPPORTED_CAUSAL",
+   "variant": 3,
+   "answer_tail": "ng khi Kho HCM Chinh cần ưu tiên xử lý ngay các trường hợp hết hàng để tránh gián đoạn phục vụ bạn đọc.\nTình trạng này xuất phát từ việc nhà cung cấp giao chậm."
+  },
+  {
+   "key": "viz-fu-04#0+UNSUPPORTED_RECOMMENDATION",
+   "variant": 3,
+   "answer_tail": "g khi Kho HCM Chinh cần ưu tiên xử lý ngay các trường hợp hết hàng để tránh gián đoạn phục vụ bạn đọc.\nKhông cần cân nhắc thêm, đây là quyết định đúng đắn nhất."
+  },
+  {
+   "key": "viz-fu-04#1+RANKING_INCONSISTENCY",
+   "variant": 2,
+   "answer_tail": "ước, đặc biệt là các đầu sách đang trong tình trạng \"hết hàng\" để khôi phục khả năng phục vụ bạn đọc ngay lập tức.\nKho Ha Noi là kho đáng lo ngại nhất hiện nay."
+  }
+ ]
+}

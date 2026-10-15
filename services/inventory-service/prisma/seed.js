@@ -28,6 +28,8 @@ async function main() {
     where: { code: 'WH-HCM-01' },
     update: {},
     create: {
+      // Fixed id: auth-service's seed scopes users to this warehouse by id.
+      id: '00000000-0000-0000-0000-000000000002',
       code: 'WH-HCM-01',
       name: 'Kho HCM Chinh',
       warehouse_type: 'WAREHOUSE',
@@ -43,6 +45,8 @@ async function main() {
     where: { code: 'WH-HN-01' },
     update: {},
     create: {
+      // Fixed id: auth-service's seed scopes users to this warehouse by id.
+      id: '00000000-0000-0000-0000-000000000003',
       code: 'WH-HN-01',
       name: 'Kho Ha Noi',
       warehouse_type: 'WAREHOUSE',
@@ -58,6 +62,8 @@ async function main() {
     where: { code: 'BR-HCM-01' },
     update: {},
     create: {
+      // Fixed id: auth-service's seed scopes users to this warehouse by id.
+      id: '00000000-0000-0000-0000-000000000004',
       code: 'BR-HCM-01',
       name: 'Chi Nhanh District 1',
       warehouse_type: 'BRANCH',
@@ -73,6 +79,8 @@ async function main() {
     where: { code: 'BR-HCM-02' },
     update: {},
     create: {
+      // Fixed id: auth-service's seed scopes users to this warehouse by id.
+      id: '00000000-0000-0000-0000-000000000005',
       code: 'BR-HCM-02',
       name: 'Chi Nhanh District 3',
       warehouse_type: 'BRANCH',

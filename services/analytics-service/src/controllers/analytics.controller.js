@@ -1,7 +1,8 @@
 const { inventoryPool, borrowPool, query, queryOne } = require('../lib/db');
+const { BORROW_TRENDS_SQL, borrowTrendsParams } = require('../lib/borrow-trends-query');
+const { inScope } = require('../middlewares/warehouse-scope.middleware');
 const {
   createHttpError,
-  formatBucketDate,
   parseDateRange,
   parseGranularity,
   parseLimit,
@@ -248,56 +249,12 @@ const getDashboardKpis = asyncHandler(async (_req, res) => {
 const getBorrowTrends = asyncHandler(async (req, res) => {
   const { from, to } = parseDateRange(req.query);
   const granularity = parseGranularity(req.query.granularity);
-  const interval = granularity === 'month' ? '1 month' : '1 day';
 
-  const rows = await query(
-    borrowPool,
-    `
-    WITH buckets AS (
-      SELECT generate_series(
-        date_trunc($3, $1::timestamptz),
-        date_trunc($3, $2::timestamptz),
-        $4::interval
-      ) AS bucket
-    ),
-    loans AS (
-      SELECT date_trunc($3, borrow_date) AS bucket, COUNT(*) AS count
-      FROM loan_transactions
-      WHERE borrow_date >= $1::timestamptz AND borrow_date <= $2::timestamptz
-      GROUP BY 1
-    ),
-    returns AS (
-      SELECT date_trunc($3, COALESCE(li.return_date, lt.closed_at)) AS bucket, COUNT(DISTINCT lt.id) AS count
-      FROM loan_transactions lt
-      JOIN loan_items li ON li.loan_id = lt.id
-      WHERE COALESCE(li.return_date, lt.closed_at) >= $1::timestamptz
-        AND COALESCE(li.return_date, lt.closed_at) <= $2::timestamptz
-        AND COALESCE(li.return_date, lt.closed_at) IS NOT NULL
-      GROUP BY 1
-    ),
-    reservations AS (
-      SELECT date_trunc($3, reserved_at) AS bucket, COUNT(*) AS count
-      FROM loan_reservations
-      WHERE reserved_at >= $1::timestamptz AND reserved_at <= $2::timestamptz
-      GROUP BY 1
-    )
-    SELECT
-      buckets.bucket,
-      COALESCE(loans.count, 0) AS loans,
-      COALESCE(returns.count, 0) AS returns,
-      COALESCE(reservations.count, 0) AS reservations
-    FROM buckets
-    LEFT JOIN loans ON loans.bucket = buckets.bucket
-    LEFT JOIN returns ON returns.bucket = buckets.bucket
-    LEFT JOIN reservations ON reservations.bucket = buckets.bucket
-    ORDER BY buckets.bucket ASC
-    `,
-    [from, to, granularity, interval],
-  );
+  const rows = await query(borrowPool, BORROW_TRENDS_SQL, borrowTrendsParams({ from, to, granularity }));
 
   res.json({
     data: rows.map((row) => ({
-      date: formatBucketDate(row.bucket, granularity),
+      date: row.label,
       loans: number(row.loans),
       returns: number(row.returns),
       reservations: number(row.reservations),
@@ -508,8 +465,8 @@ async function getWarehouseVariantStock(warehouseId = null) {
   );
 }
 
-const getWarehouseStockRisk = asyncHandler(async (_req, res) => {
-  const rows = await getWarehouseVariantStock();
+const getWarehouseStockRisk = asyncHandler(async (req, res) => {
+  const rows = (await getWarehouseVariantStock()).filter((row) => inScope(req.warehouseScope, row.warehouse_id));
   res.json({
     data: summarizeWarehouses(rows, LOW_STOCK_THRESHOLD)
       .map((row) => ({ ...row, reasoning: buildWarehouseRiskReasoning(row) })),
@@ -526,6 +483,9 @@ const getWarehouseStockItems = asyncHandler(async (req, res) => {
   const warehouseId = String(req.query.warehouseId || '').trim();
   if (!UUID_RE.test(warehouseId)) {
     throw createHttpError(400, 'warehouseId must be a UUID');
+  }
+  if (!inScope(req.warehouseScope, warehouseId)) {
+    throw createHttpError(403, 'You do not have read access to this warehouse');
   }
   const status = String(req.query.status || 'ATTENTION').toUpperCase();
   if (!STOCK_ITEM_STATUSES.has(status)) {
@@ -1428,6 +1388,7 @@ const getAgingInventory = asyncHandler(async (req, res) => {
   );
 
   const items = stockRows
+    .filter((row) => inScope(req.warehouseScope, row.warehouse_id))
     .map((row) => {
       const lastBorrowedAt = lastBorrowByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
       const lastMovementAt = lastMovementByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
@@ -1540,6 +1501,7 @@ const getWeedingSuggestions = asyncHandler(async (req, res) => {
   );
 
   const items = stockRows
+    .filter((row) => inScope(req.warehouseScope, row.warehouse_id))
     .map((row) => {
       const lastBorrowedAt = lastBorrowByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;
       const lastMovementAt = lastMovementByVariantWarehouse.get(`${row.variant_id}:${row.warehouse_id}`) || null;

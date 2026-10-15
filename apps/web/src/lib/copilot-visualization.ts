@@ -260,11 +260,19 @@ export function formatAxisTick(value: number, kind: VizValueKind = 'count'): str
   return Math.abs(value) >= 10_000 ? COMPACT.format(value) : NUMBER.format(value);
 }
 
+/** SmartBook's business time zone. Snapshot times are shown in it whatever
+ * the browser's own zone is (a CI runner in UTC showed 02:31 for 09:31). */
+export const BUSINESS_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+/** "HH:mm dd/MM/yyyy" in Vietnam time, from any ISO instant ("+07:00", "Z"...).
+ * Only formats - the stored timestamp is never rewritten. */
 export function formatDataAsOf(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return date.toLocaleString('vi-VN', {
+    hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: BUSINESS_TIME_ZONE,
+  });
 }
 
 export function truncateLabel(label: string, max = 18): string {

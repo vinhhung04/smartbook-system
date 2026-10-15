@@ -4,6 +4,7 @@ const cors = require('cors');
 const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const authRoutes = require('./routes/auth.routes');
 const iamRoutes = require('./routes/iam.routes');
+const { createInternalRouter } = require('./routes/internal.routes');
 const redis = require('./lib/redis');
 const prisma = require('./lib/prisma');
 
@@ -26,6 +27,7 @@ redis.connect().catch(err => {
 // Public auth endpoints under /auth
 app.use('/auth', authRoutes);
 app.use('/iam', iamRoutes);
+app.use('/internal', createInternalRouter({ prisma }));
 
 app.get('/health', (_req, res) => {
   res.json({ service: 'auth-service', status: 'ok', version: '1.0.0' });

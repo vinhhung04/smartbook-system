@@ -100,7 +100,9 @@ from tool_context import render_tool_result as _compact_tool_result
 import copilot_explain
 import copilot_response
 import copilot_tools
+import copilot_faithfulness
 import copilot_visualization
+import warehouse_scope
 from copilot_plan import QueryPlan as CopilotPlan, build_plan as build_copilot_plan, next_state as copilot_next_state
 from copilot_plan import VN_TZ as COPILOT_TZ
 from copilot_visualization import Visualization
@@ -3547,6 +3549,10 @@ class AssistantResponse(BaseModel):
     # data, incompatible chart type).
     visualizations: list[Visualization] = []
     visualization_notes: list[str] = []
+    # AI Copilot 3.1 (optional, additive): semantic faithfulness of the final
+    # answer - status (passed / repaired / retried_passed / warning /
+    # fallback), findings, whether the one retry was used, check latency.
+    faithfulness: dict | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -4362,6 +4368,7 @@ def _assistant_payload(
         "explanation": extras.get("explanation"),
         "visualizations": extras.get("visualizations") or [],
         "visualization_notes": extras.get("visualization_notes") or [],
+        "faithfulness": extras.get("faithfulness"),
     }
     if debug is not None:
         payload["debug"] = debug
@@ -4403,7 +4410,7 @@ async def _cached_turn(cached: dict, conversation, conversation_id_str: str, mes
     return payload
 
 
-async def _load_viz_snapshot(conversation) -> dict | None:
+async def _load_viz_snapshot(conversation, user_ctx=None) -> dict | None:
     """The last answered turn's data snapshot in THIS conversation (already
     ownership-checked): its tool results, tool calls, visualizations and read
     time. Clarification turns are skipped - they hold no data."""
@@ -4418,6 +4425,12 @@ async def _load_viz_snapshot(conversation) -> dict | None:
         data = getattr(m, "data", None)
         data = data if isinstance(data, dict) else {}
         if not data and not extras.get("visualizations"):
+            return None
+        ids = set(meta.get("warehouse_ids") or []) or warehouse_scope.warehouse_ids_in(data)
+        if not await warehouse_scope.can_view(user_ctx, ids):
+            # Access to a warehouse in this snapshot was revoked (or cannot be
+            # verified): no reuse - the follow-up re-reads through the tools,
+            # which apply the user's current scope.
             return None
         return {"data": data, "tool_calls": getattr(m, "tool_calls", None) or [],
                 "visualizations": extras.get("visualizations") or [], "data_as_of": extras.get("data_as_of")}
@@ -4517,7 +4530,8 @@ async def _visualization_turn(turn: dict) -> dict:
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
     await conversation_store.append_message(
         conversation.id, role="assistant", content=answer, tool_calls=tool_calls, data=collected,
-        metadata={"copilot_state": new_state, "plan": plan.public(), "extras": extras},
+        metadata={"copilot_state": new_state, "plan": plan.public(), "extras": extras,
+                  "warehouse_ids": sorted(warehouse_scope.warehouse_ids_in(collected))},
     )
     return _assistant_payload(
         answer=answer, tools_used=tool_calls, collected_data=collected, conversation_id=turn["conversation_id_str"],
@@ -4539,6 +4553,7 @@ async def _finalize_assistant_turn(
         answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
     if _RAW_JSON_REPLY.match(answer):
         answer = RAW_JSON_REFUSAL
+    draft_answer = answer  # the model's first answer, before any check (debug / evaluation only)
 
     explanation = copilot_explain.build_explanation(plan, collected_data)
     visualizations = copilot_visualization.build_visualizations(plan, _viz_data(plan, collected_data), viz_now)
@@ -4551,24 +4566,53 @@ async def _finalize_assistant_turn(
     grounded_values = copilot_explain.numbers_in(explanation) \
         + copilot_visualization.numbers_in_visualizations(visualizations[0])
 
-    def check(text: str) -> tuple[str | None, list[dict]]:
-        return (_grounding_check(text, collected_data, message_text, grounded_context, grounded_values),
-                copilot_explain.overclaims(text, explanation))
+    # Semantic faithfulness (copilot_faithfulness): what the answer MEANS
+    # against what the system computed - trend, ranking, scope, causation,
+    # optimality, certainty, chart vs explanation. Internal labels are repaired
+    # deterministically; the rest joins the one corrective retry below.
+    faith_started = time.perf_counter()
+    faith_ctx = copilot_faithfulness.build_context(collected_data, explanation, visualizations[0])
+    answer, label_issues = copilot_faithfulness.strip_internal_labels(answer)
 
-    grounding_warning, language_flags = check(answer)
-    if (grounding_warning or language_flags) and answered_normally:
-        # One corrective turn covers both: numbers with no basis, and wording
-        # stronger than the evidence (certainty, causation, optimality).
-        problems = " ".join(p for p in (grounding_warning, copilot_explain.overclaim_warning(language_flags)) if p)
+    def check(text: str) -> tuple[str | None, list[dict], list]:
+        return (_grounding_check(text, collected_data, message_text, grounded_context, grounded_values),
+                copilot_explain.overclaims(text, explanation),
+                copilot_faithfulness.validate(text, faith_ctx))
+
+    grounding_warning, language_flags, semantic = check(answer)
+    retried = False
+    if (grounding_warning or language_flags or semantic) and answered_normally:
+        # One corrective turn covers all of it: numbers with no basis, wording
+        # stronger than the evidence, and claims the data contradicts. An answer
+        # that passes costs no extra LLM call.
+        problems = " ".join(p for p in (
+            grounding_warning,
+            copilot_faithfulness.retry_instruction(semantic) or copilot_explain.overclaim_warning(language_flags),
+        ) if p)
         answer, retry_usage = await retry_once_if_ungrounded(
             messages, answer, problems, functools.partial(provider.chat, feature="assistant"),
             ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
         )
+        retried = True
         if retry_usage:
             call_usage.append(retry_usage)
-        grounding_warning, language_flags = check(answer)
         if _RAW_JSON_REPLY.match(answer):
             answer = RAW_JSON_REFUSAL
+        answer, more_labels = copilot_faithfulness.strip_internal_labels(answer)
+        label_issues += more_labels
+        grounding_warning, language_flags, semantic = check(answer)
+    faith_status = "retried_passed" if retried else ("repaired" if label_issues else "passed")
+    if copilot_faithfulness.blocking(semantic):
+        # Still saying what the data contradicts after the retry: the answer is
+        # replaced by the explanation's own conclusion, never left standing.
+        fallback = copilot_faithfulness.fallback_answer(explanation)
+        if fallback:
+            answer, faith_status = fallback, "fallback"
+        else:
+            faith_status = "warning"
+    elif semantic:
+        faith_status = "warning"
+    faithfulness = copilot_faithfulness.summarize(label_issues + semantic, faith_status, retried, faith_started)
     if explanation is not None:
         explanation["language_flags"] = language_flags
 
@@ -4580,13 +4624,15 @@ async def _finalize_assistant_turn(
 
     extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, now=viz_now, question=message_text,
                                            answer=answer, explanation=explanation, visualizations=visualizations)
+    extras["faithfulness"] = faithfulness
     new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
-    metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras}
+    metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras,
+                "warehouse_ids": sorted(warehouse_scope.warehouse_ids_in(collected_data))}
     tool_calls = _tool_call_dicts(tools_used)
     payload = _assistant_payload(
         answer=answer, tools_used=tool_calls, collected_data=collected_data, conversation_id=conversation_id_str,
         grounding_warning=grounding_warning, pending_action=pending_action_data, plan=plan, extras=extras,
-        debug={"llm_calls": call_usage},
+        debug={"llm_calls": call_usage, "draft_answer": draft_answer},
     )
 
     # A chart follow-up depends on the previous turn's snapshot, not only on
@@ -4637,6 +4683,10 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
         "conversation": conversation, "conversation_id_str": conversation_id_str, "cache_key": cache_key,
         "cached": assistant_response_cache.get(cache_key),
     }
+    cached = turn["cached"]
+    if cached is not None and not await warehouse_scope.can_view(
+            user_ctx, (cached.get("metadata") or {}).get("warehouse_ids") or warehouse_scope.warehouse_ids_in(cached.get("data"))):
+        turn["cached"] = None  # scope changed since it was cached: answer afresh under today's scope
     if turn["cached"] is not None:
         return turn
 
@@ -4647,7 +4697,7 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
         return turn
     viz_mode = (plan.visualization or {}).get("mode")
     if viz_mode:
-        turn["snapshot"] = await _load_viz_snapshot(conversation)
+        turn["snapshot"] = await _load_viz_snapshot(conversation, user_ctx)
     if viz_mode in ("retype", "render"):
         return turn  # _visualization_turn persists both sides, no LLM
     await conversation_store.append_message(conversation.id, role="user", content=message_text)

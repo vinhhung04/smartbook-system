@@ -160,7 +160,13 @@ async function run() {
   // Exception Report: STAFF can create + read own, cannot list all or resolve
   // With random task_id the create must fail validation (404/400), not succeed (201) and not be an auth error (401/403)
   await expectStatus('WAREHOUSE_STAFF create exception report reaches validation', 'POST', '/api/exception-reports', staffToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_STAFF exception report random task_id rejected', 'POST', '/api/exception-reports', staffToken, { warehouse_id: '00000000-0000-4000-8000-000000000000', task_type: 'RECEIVING', task_id: '00000000-0000-4000-8000-000000000000', exception_type: 'SHORT', note: 'test' }, (status) => status !== 201 && status !== 401 && status !== 403);
+  // Warehouse scope is fail-closed: the warehouse a request names must be one the
+  // staff member may write (staff01 operates WH-HCM-01), otherwise 403 before any
+  // validation. The random task_id is checked inside the staff member's own warehouse.
+  const warehouses = await request('GET', '/api/warehouses', adminToken);
+  const ownWarehouseId = (warehouses.data || []).find((w) => w.code === 'WH-HCM-01')?.id;
+  await expectStatus('WAREHOUSE_STAFF exception report random task_id rejected', 'POST', '/api/exception-reports', staffToken, { warehouse_id: ownWarehouseId, task_type: 'RECEIVING', task_id: '00000000-0000-4000-8000-000000000000', exception_type: 'SHORT', note: 'test' }, (status) => status !== 201 && status !== 401 && status !== 403);
+  await expectStatus('WAREHOUSE_STAFF exception report for a warehouse outside the scope forbidden', 'POST', '/api/exception-reports', staffToken, { warehouse_id: '00000000-0000-4000-8000-000000000000', task_type: 'RECEIVING', task_id: '00000000-0000-4000-8000-000000000000', exception_type: 'SHORT', note: 'test' }, (status) => status === 403);
   await expectStatus('WAREHOUSE_STAFF my exception reports allowed', 'GET', '/api/exception-reports/my', staffToken, undefined, (status) => status === 200);
   await expectStatus('WAREHOUSE_STAFF all exception reports forbidden', 'GET', '/api/exception-reports', staffToken, undefined, (status) => status === 403);
   await expectStatus('WAREHOUSE_STAFF resolve exception report forbidden', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', staffToken, {}, (status) => status === 403);

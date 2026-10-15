@@ -404,9 +404,29 @@ def parse_periods(text: str, today: date) -> list[Period]:
     for m in re.finditer(r"\b(\d{1,2}) tuan (qua|gan day|gan nhat)\b", text):
         weeks = int(m.group(1))
         add(m, _period(f"last_{weeks}_weeks", today - timedelta(days=7 * weeks), today, f"{weeks} tuần qua"))
+    # "N tháng qua / gần đây" keeps its original meaning (the last N x 30 days,
+    # first and last month partial) so earlier questions answer the same way.
+    # Two explicit forms ask for whole months instead (Vietnam calendar):
+    #  - "N tháng trọn / đã kết thúc": the N months before the current one;
+    #  - "N tháng theo lịch": from the 1st of the month N-1 months ago to today.
     for m in re.finditer(r"\b(\d{1,2}) thang (qua|gan day|gan nhat)\b", text):
         months = int(m.group(1))
         add(m, _period(f"last_{months}_months", today - timedelta(days=30 * months), today, f"{months} tháng qua"))
+    for m in re.finditer(r"\b(\d{1,2}) thang (tron( ven)?|da (ket thuc|tron)|day du)\b", text):
+        months = max(1, min(int(m.group(1)), 24))
+        last_end = today.replace(day=1) - timedelta(days=1)
+        first = last_end.replace(day=1)
+        for _ in range(months - 1):
+            first = (first - timedelta(days=1)).replace(day=1)
+        add(m, _period(f"complete_{months}_months", first, last_end,
+                       f"{months} tháng trọn ({first.month:02d}/{first.year}–{last_end.month:02d}/{last_end.year})"))
+    for m in re.finditer(r"\b(\d{1,2}) thang (theo lich|duong lich)\b", text):
+        months = max(1, min(int(m.group(1)), 24))
+        first = today.replace(day=1)
+        for _ in range(months - 1):
+            first = (first - timedelta(days=1)).replace(day=1)
+        add(m, _period(f"calendar_{months}_months", first, today,
+                       f"{months} tháng theo lịch (từ 01/{first.month:02d}/{first.year}, tháng hiện tại tính đến hôm nay)"))
     found.sort(key=lambda item: item[0])
     seen, periods = set(), []
     for _pos, p in found:

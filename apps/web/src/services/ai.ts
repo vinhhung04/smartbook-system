@@ -289,6 +289,15 @@ export interface AssistantExtras {
    * before rendering (live answers and reopened history alike). */
   visualizations?: unknown[];
   visualization_notes?: string[];
+  /** AI Copilot 3.1: semantic faithfulness of the final answer (copilot_faithfulness.py). */
+  faithfulness?: AiFaithfulness | null;
+}
+
+export interface AiFaithfulness {
+  status: 'passed' | 'repaired' | 'retried_passed' | 'warning' | 'fallback' | string;
+  retried: boolean;
+  issues: Array<{ type: string; phrase: string; detail: string; blocking: boolean; label: string }>;
+  latency_ms?: number;
 }
 
 export interface AssistantResponse extends AssistantExtras {
