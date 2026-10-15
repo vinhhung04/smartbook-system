@@ -9,7 +9,8 @@
     "lint": "node node_modules/eslint/bin/eslint.js .",
     "doctor:react": "npx -y react-doctor@latest .",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:unit": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",

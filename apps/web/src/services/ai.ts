@@ -284,6 +284,11 @@ export interface AssistantExtras {
   recommendations?: AiRecommendation[];
   data_as_of?: string | null;
   explanation?: AiExplanation | null;
+  /** AI Copilot 3.0: validated chart/table specs built by the backend from tool
+   * data. Typed loosely on purpose - always pass through sanitizeVisualizations()
+   * before rendering (live answers and reopened history alike). */
+  visualizations?: unknown[];
+  visualization_notes?: string[];
 }
 
 export interface AssistantResponse extends AssistantExtras {

@@ -30,6 +30,7 @@ from collections import Counter
 
 from copilot_plan import ANALYSIS, CAUSAL, COMPARISON, DECISION, LOOKUP, RANKING, WHAT_IF, QueryPlan
 from copilot_tools import _RISK_CRITERIA, _risk_key, data_confidence
+from copilot_visualization import borrow_trend_points, trend_summary
 from evidence import extract_evidence
 from tool_context import _format_value
 
@@ -284,6 +285,50 @@ def _x_compare_periods(r: dict, plan: QueryPlan) -> dict:
         y, m, d = str(a["peak_day"])[:10].split("-")
         p["claims"].append(_claim(FACT, f"Ngày cao điểm kỳ hiện tại: {d}/{m}/{y} với {_f(a.get('peak_loans'))} lượt mượn.",
                                   [_ev("Lượt mượn ngày cao điểm", a.get("peak_loans"), "lượt", src)]))
+    if plan.answer_mode in (CAUSAL, ANALYSIS, COMPARISON):
+        p["claims"].append(_claim(UNKNOWN, "Dữ liệu không cho biết lý do thay đổi (mùa vụ, sự kiện, tình trạng tồn kho...)."))
+    return p
+
+
+def _x_borrow_trends(r: list, plan: QueryPlan) -> dict:
+    """Trend of a borrow-trends series. Uses the same buckets and arithmetic
+    as the chart (copilot_visualization.trend_summary), so the chart and this
+    explanation can never disagree on totals or direction."""
+    trend = borrow_trend_points(r, plan)
+    s = trend_summary(trend)
+    if not s:
+        return _x_generic("get_borrow_trends", r)
+    src, unit = "analytics/borrow-trends", trend["unit_label"]
+    partial = [p for p in trend["points"] if p["partial"]]
+    p = _part(claims=[
+        _claim(FACT, f"Tổng lượt mượn trong kỳ: {_f(s['total'])} lượt qua {s['buckets']} {unit}"
+                     + (f" (gồm {len(partial)} {unit} chưa trọn kỳ)" if partial else "") + ".",
+               [_ev("Tổng lượt mượn", s["total"], "lượt", src)]),
+        _claim(FACT, f"Cao nhất là {s['peak_label']} với {_f(s['peak_value'])} lượt mượn.",
+               [_ev(f"Lượt mượn {s['peak_label']}", s["peak_value"], "lượt", src)]),
+    ])
+    if s["low_label"] and s["low_label"] != s["peak_label"]:
+        p["claims"].append(_claim(FACT, f"Thấp nhất trong các {unit} trọn kỳ là {s['low_label']} với "
+                                        f"{_f(s['low_value'])} lượt mượn.",
+                                  [_ev(f"Lượt mượn {s['low_label']}", s["low_value"], "lượt", src)]))
+    if s["direction"]:
+        change = s["change_pct"]
+        span = f"từ {_f(s['first_value'])} lượt ({s['first_label']}) đến {_f(s['last_value'])} lượt ({s['last_label']})"
+        statement = (f"Lượt mượn tương đối ổn định: {span}." if s["direction"] == "đi ngang" else
+                     f"Lượt mượn có xu hướng {s['direction']}: {span}"
+                     + (f", {_signed(change)}%." if change is not None else "."))
+        p["claims"].insert(0, _claim(
+            INFERENCE, statement,
+            [_ev(f"Lượt mượn {s['first_label']}", s["first_value"], "lượt", src),
+             _ev(f"Lượt mượn {s['last_label']}", s["last_value"], "lượt", src), _ev("Thay đổi", change, "%", src)],
+            f"So sánh {unit} trọn kỳ đầu tiên và cuối cùng; {unit} chưa trọn kỳ không dùng để kết luận xu hướng.",
+            MEDIUM if s["complete_buckets"] >= 4 else LOW,
+            f"Điểm đầu và cuối của {s['complete_buckets']} {unit} trọn kỳ; chưa xét mùa vụ, chưa kiểm định thống kê."))
+    else:
+        p["claims"].append(_claim(UNKNOWN, f"Chưa đủ {unit} trọn kỳ để xác định xu hướng."))
+    if partial:
+        p["limits"].append(f"{len(partial)} {unit} chưa trọn kỳ ({', '.join(x['label'] for x in partial)}) chỉ được "
+                           "tính vào tổng, không dùng để xác định xu hướng.")
     if plan.answer_mode in (CAUSAL, ANALYSIS, COMPARISON):
         p["claims"].append(_claim(UNKNOWN, "Dữ liệu không cho biết lý do thay đổi (mùa vụ, sự kiện, tình trạng tồn kho...)."))
     return p
@@ -609,6 +654,7 @@ _EXPLAINERS = {
     "get_warehouse_low_stock_items": (_x_low_items, dict),
     "explain_warehouse_shortage": (_x_shortage, dict),
     "compare_borrow_periods": (_x_compare_periods, dict),
+    "get_borrow_trends": (_x_borrow_trends, list),
     "compare_top_books": (_x_compare_top, dict),
     "get_reorder_suggestions": (_x_reorder, dict),
     "explain_reorder_item": (_x_reorder_item, dict),

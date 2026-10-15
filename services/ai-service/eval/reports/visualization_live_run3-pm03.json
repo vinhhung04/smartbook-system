@@ -1,0 +1,104 @@
+{
+ "summary": {
+  "mode": "live",
+  "turns": 1,
+  "cases": 1,
+  "metrics": {
+   "selection": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "clarification": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "tools": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "schema": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "null_fidelity": {
+    "passed": 0,
+    "total": 0,
+    "rate": null
+   },
+   "source": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "followup": {
+    "passed": 0,
+    "total": 0,
+    "rate": null
+   },
+   "faithfulness": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "usefulness": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "data_fidelity_cells": {
+    "passed": 20,
+    "total": 20,
+    "rate": 100.0
+   }
+  },
+  "by_category": {
+   "permission": {
+    "passed": 1,
+    "total": 1
+   }
+  },
+  "all_checks_passed_turns": 1,
+  "latency_turn_s_llm": {
+   "n": 1,
+   "p50": 3.16,
+   "p95": 3.16,
+   "max": 3.16
+  },
+  "latency_turn_s_no_llm": {},
+  "failures": []
+ },
+ "turns": [
+  {
+   "case": "pm-03",
+   "category": "permission",
+   "turn": 1,
+   "q": "Cho tôi xem biểu đồ tồn kho.",
+   "seconds": 3.160464200000206,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ tồn kho theo trạng thái và mức độ rủi ro của từng kho đã được hiển thị ở trên.\n\nKho HCM Chinh đang có 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng tồn tối thiểu, với tổng cộng 120 bản tồn khả dụng. Trong khi đó, Chi Nhanh District 1 có 1 đầu sách hết hàng cùng 1 đầu sách dưới ngưỡng, chỉ còn 19 bản tồn khả dụng. Kho Ha Noi hiện có 1 đầu sách dưới ngưỡng với 8 bản tồn khả dụng, và Chi Nhan",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    20,
+    20
+   ]
+  }
+ ]
+}

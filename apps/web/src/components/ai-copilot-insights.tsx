@@ -55,10 +55,21 @@ function toBlocks(text: string): Block[] {
  * `emphasizeLead` marks the opening paragraph as the key conclusion (the
  * prompt makes the first sentence the conclusion) - used for analytical
  * answers, so the conclusion is not repeated in a separate box. */
-export function CopilotAnswerText({ text, emphasizeLead = false }: { text: string; emphasizeLead?: boolean }) {
+export function CopilotAnswerText({ text, emphasizeLead = false, part = 'all' }: {
+  text: string;
+  emphasizeLead?: boolean;
+  /** 'lead' = the opening block only, 'rest' = everything after it - so charts
+   * can sit between the conclusion and the analysis that reads them. */
+  part?: 'all' | 'lead' | 'rest';
+}) {
+  const blocks = toBlocks(text);
+  const shown = part === 'lead' ? blocks.slice(0, 1) : part === 'rest' ? blocks.slice(1) : blocks;
+  if (!shown.length) return null;
+  const offset = part === 'rest' ? 1 : 0;
   return (
     <div className="space-y-2">
-      {toBlocks(text).map((block, i) => {
+      {shown.map((block, j) => {
+        const i = j + offset;
         if (i === 0 && emphasizeLead && block.kind === 'paragraph') {
           return (
             <div key={i} className="border-l-2 border-violet-400 pl-2.5 dark:border-violet-500">

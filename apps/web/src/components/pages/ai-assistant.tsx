@@ -51,6 +51,8 @@ import {
   CopilotFollowups,
   CopilotRecommendations,
 } from '@/components/ai-copilot-insights';
+import { CopilotVisualizationNotes, CopilotVisualizations } from '@/components/ai-copilot-visualization';
+import { sanitizeVisualizations, type CopilotVisualizationSpec } from '@/lib/copilot-visualization';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { ActionCard } from '@/components/ai-action-card';
@@ -69,6 +71,10 @@ interface AssistantMessage {
   recommendations?: AiRecommendation[];
   dataAsOf?: string | null;
   explanation?: AiExplanation | null;
+  visualizations?: CopilotVisualizationSpec[];
+  visualizationNotes?: string[];
+  /** Reopened from history: charts show the stored snapshot, never refreshed. */
+  fromHistory?: boolean;
   isError?: boolean;
 }
 
@@ -79,6 +85,8 @@ function extrasToMessageFields(extras?: AssistantExtras | null): Partial<Assista
     recommendations: extras?.recommendations ?? [],
     dataAsOf: extras?.data_as_of ?? null,
     explanation: extras?.explanation ?? null,
+    visualizations: sanitizeVisualizations(extras?.visualizations),
+    visualizationNotes: extras?.visualization_notes ?? [],
   };
 }
 
@@ -312,7 +320,7 @@ export function AIAssistantPage() {
         role: record.role === 'user' ? 'user' : 'assistant',
         content: record.content ?? '',
         groundingWarning: record.grounding_warning ?? undefined,
-        ...(record.role === 'user' ? {} : extrasToMessageFields(record.extras)),
+        ...(record.role === 'user' ? {} : { ...extrasToMessageFields(record.extras), fromHistory: true }),
       }));
       setMessages(base);
       setConversationId(id);
@@ -629,6 +637,12 @@ export function AIAssistantPage() {
 
                   const isUser = message.role === 'user';
                   const isLastAssistant = !isUser && idx === messages.length - 1;
+                  // Text and charts interleave only once the answer is final: the
+                  // conclusion, then KPIs/charts, then the analysis, then tables.
+                  const visuals = !isUser && !isStreamingMessage ? message.visualizations ?? [] : [];
+                  const leadVisuals = visuals.filter((v) => v.type !== 'table');
+                  const tableVisuals = visuals.filter((v) => v.type === 'table');
+                  const splitAnswer = visuals.length > 0 && !message.isError;
 
                   return (
                     <motion.div
@@ -689,6 +703,7 @@ export function AIAssistantPage() {
                               {isUser ? message.content : (
                                 <CopilotAnswerText
                                   text={message.content}
+                                  part={splitAnswer ? 'lead' : 'all'}
                                   emphasizeLead={!isStreamingMessage && Boolean(message.explanation?.display)}
                                 />
                               )}
@@ -698,6 +713,23 @@ export function AIAssistantPage() {
                             </>
                           )}
                         </div>
+                        {splitAnswer && (
+                          <>
+                            <CopilotVisualizations items={leadVisuals} onAsk={sendMessage} disabled={loading} />
+                            <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
+                              <CopilotAnswerText text={message.content} part="rest" />
+                            </div>
+                            <CopilotVisualizations items={tableVisuals} onAsk={sendMessage} disabled={loading} />
+                            {message.fromHistory && (
+                              <p className="text-[11px] italic text-muted-foreground">
+                                Biểu đồ hiển thị dữ liệu tại thời điểm trả lời (xem mốc thời gian ở từng biểu đồ), không tự cập nhật.
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {!isStreamingMessage && message.visualizationNotes && message.visualizationNotes.length > 0 && (
+                          <CopilotVisualizationNotes notes={message.visualizationNotes} />
+                        )}
                         {message.pendingAction && (
                           <motion.div
                             initial={{ opacity: 0, y: 6 }}

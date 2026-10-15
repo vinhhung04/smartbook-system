@@ -62,16 +62,24 @@ async def seed_fast_path(
     if not fast_results:
         return [], {}, 0
 
-    tools_used = [{"name": r["tool_name"], "arguments": r["tool_args"]} for r in fast_results]
-    collected_data = {r["tool_name"]: r["tool_result"] for r in fast_results}
+    tools_used = [{"name": r["tool_name"].split("#")[0], "arguments": r["tool_args"]} for r in fast_results]
+    # Two planned calls of one tool (explain_warehouse_shortage for each of two
+    # warehouses) are both kept: the second under f"{name}#2", as
+    # execute_tool_round does - a dict comprehension silently kept only the last.
+    collected_data: dict = {}
+    for r in fast_results:
+        key = r["tool_name"] if r["tool_name"] not in collected_data else f"{r['tool_name']}#2"
+        collected_data[key] = r["tool_result"]
     messages.append({
         "role": "assistant", "content": "",
-        "tool_calls": [{"function": {"name": r["tool_name"], "arguments": r["tool_args"]}} for r in fast_results],
+        "tool_calls": [{"function": {"name": r["tool_name"].split("#")[0], "arguments": r["tool_args"]}}
+                       for r in fast_results],
     })
     for r in fast_results:
+        name = r["tool_name"].split("#")[0]
         messages.append({
-            "role": "tool", "tool_name": r["tool_name"],
-            "content": render_tool_result(r["tool_name"], r["tool_result"]),
+            "role": "tool", "tool_name": name,
+            "content": render_tool_result(name, r["tool_result"]),
         })
     return tools_used, collected_data, 1
 

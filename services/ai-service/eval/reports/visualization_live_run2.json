@@ -1,0 +1,1751 @@
+{
+ "summary": {
+  "mode": "live",
+  "turns": 61,
+  "cases": 50,
+  "metrics": {
+   "selection": {
+    "passed": 60,
+    "total": 61,
+    "rate": 98.4
+   },
+   "clarification": {
+    "passed": 60,
+    "total": 61,
+    "rate": 98.4
+   },
+   "tools": {
+    "passed": 33,
+    "total": 34,
+    "rate": 97.1
+   },
+   "schema": {
+    "passed": 47,
+    "total": 47,
+    "rate": 100.0
+   },
+   "null_fidelity": {
+    "passed": 1,
+    "total": 1,
+    "rate": 100.0
+   },
+   "source": {
+    "passed": 47,
+    "total": 47,
+    "rate": 100.0
+   },
+   "followup": {
+    "passed": 11,
+    "total": 11,
+    "rate": 100.0
+   },
+   "faithfulness": {
+    "passed": 42,
+    "total": 42,
+    "rate": 100.0
+   },
+   "usefulness": {
+    "passed": 61,
+    "total": 61,
+    "rate": 100.0
+   },
+   "data_fidelity_cells": {
+    "passed": 1002,
+    "total": 1002,
+    "rate": 100.0
+   }
+  },
+  "by_category": {
+   "ambiguous": {
+    "passed": 5,
+    "total": 5
+   },
+   "budget": {
+    "passed": 5,
+    "total": 5
+   },
+   "comparison": {
+    "passed": 6,
+    "total": 7
+   },
+   "followup": {
+    "passed": 21,
+    "total": 21
+   },
+   "invalid": {
+    "passed": 1,
+    "total": 1
+   },
+   "kpi": {
+    "passed": 6,
+    "total": 6
+   },
+   "missing": {
+    "passed": 2,
+    "total": 2
+   },
+   "permission": {
+    "passed": 4,
+    "total": 4
+   },
+   "ranking": {
+    "passed": 4,
+    "total": 4
+   },
+   "trend": {
+    "passed": 6,
+    "total": 6
+   }
+  },
+  "all_checks_passed_turns": 60,
+  "latency_turn_s_llm": {
+   "n": 45,
+   "p50": 3.65,
+   "p95": 7.48,
+   "max": 8.08
+  },
+  "latency_turn_s_no_llm": {
+   "n": 16,
+   "p50": 0.32,
+   "p95": 0.47,
+   "max": 0.48
+  },
+  "failures": [
+   {
+    "case": "cp-02",
+    "turn": 1,
+    "q": "So sánh hai kho Hà Nội và Đà Nẵng bằng biểu đồ cột",
+    "failed": [
+     "selection",
+     "clarification",
+     "tools"
+    ],
+    "types": [],
+    "notes": []
+   }
+  ]
+ },
+ "turns": [
+  {
+   "case": "tr-01",
+   "category": "trend",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn sách trong 6 tháng gần đây và phân tích xu hướng.",
+   "seconds": 7.132852600000206,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Lượt mượn sách trong 6 tháng qua có xu hướng giảm, từ khoảng 1.095 lượt (tháng 05/2026) xuống còn 914 lượt (tháng 09/2026), tương ứng mức giảm 16,5%.\n\nCác căn cứ chính:\n- Tổng lượt mượn trong kỳ là 5.445 lượt, với cao điểm vào tháng 08/2026 đạt 1.097 lượt và thấp nhất trong các tháng trọn kỳ là tháng 06/2026 với 902 lượt. Ý nghĩa: hoạt động mượn không ổn định, đỉnh chỉ xuất hiện ở giữa kỳ và sau đ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-02",
+   "category": "trend",
+   "turn": 1,
+   "q": "Thống kê lượt mượn 6 tháng gần đây.",
+   "seconds": 2.51060120000011,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Trong 6 tháng gần đây (từ 18/04/2026 đến 15/10/2026), tổng số lượt mượn là **5.445 lượt**, trong khi tổng số lượt trả là **5.804 lượt**. Ngày cao điểm nhất trong khoảng thời gian này là tháng 08/2026 với **1.097 lượt** mượn.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-03",
+   "category": "trend",
+   "turn": 1,
+   "q": "ve bieu do luot muon 6 thang gan day",
+   "seconds": 2.682479500000227,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ lượt mượn 6 tháng gần đây cho thấy tổng cộng 5.445 lượt mượn, trong đó cao điểm là tháng 08/2026 với 1.097 lượt.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-04",
+   "category": "trend",
+   "turn": 1,
+   "q": "Xu hướng mượn sách năm nay thế nào?",
+   "seconds": 5.374033900000086,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Xu hướng mượn sách năm 2026 có dấu hiệu tăng mạnh so với đầu năm, đặc biệt là trong các tháng trọn kỳ.\n\nCụ thể:\n*   **Tổng lượng lưu chuyển:** Trong khoảng thời gian từ 01/01 đến 15/10/2026, hệ thống ghi nhận tổng cộng **9.348 lượt mượn** và **9.770 lượt trả**.\n*   **Điểm cao nhất:** Tháng 03/2026 là thời điểm sôi động nhất với **1.267 lượt mượn**, cho thấy nhu cầu đọc của bạn đọc đang tăng lên đá",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    37,
+    37
+   ]
+  },
+  {
+   "case": "tr-05",
+   "category": "trend",
+   "turn": 1,
+   "q": "Biểu đồ lượt mượn từng ngày trong tháng này",
+   "seconds": 2.994197600000007,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ lượt mượn từng ngày trong tháng 10/2026 đã được hiển thị ở phần trên. Dữ liệu cho thấy tổng cộng có 72 lượt mượn qua 15 ngày (tính đến 09:53 hôm nay), với cao điểm là 33 lượt vào ngày 06/10.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    51,
+    51
+   ]
+  },
+  {
+   "case": "tr-06",
+   "category": "trend",
+   "turn": 1,
+   "q": "Vẽ biểu đồ miền lượt mượn 6 tháng qua",
+   "seconds": 2.7381448000001,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "area"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ miền lượt mượn 6 tháng qua (18/04/2026–15/10/2026) đã được hệ thống tự vẽ. Tổng lượt mượn trong kỳ là 5.445 lượt, cao nhất vào tháng 08/2026 với 1.097 lượt và xu hướng chung của các tháng trọn kỳ đang giảm.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "cp-01",
+   "category": "comparison",
+   "turn": 1,
+   "q": "So sánh tình hình tồn kho Hà Nội và HCM bằng biểu đồ.",
+   "seconds": 4.992642199999864,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Kho HCM Chinh có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n- **Số đầu sách hết hàng**: Kho HCM Chinh có 3, trong khi Kho Ha Noi không có đầu sách nào hết hàng. Đây là tiêu chí quan trọng nhất vì bạn đọc không thể mượn ngay những tựa này.\n- **Số đầu sách dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần phải nhập thêm): Kho HCM Chinh có 7 đầu sách, cao hơn hẳn so với chỉ 1 đầu sách tại Hà Nội.\n- **T",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "cp-02",
+   "category": "comparison",
+   "turn": 1,
+   "q": "So sánh hai kho Hà Nội và Đà Nẵng bằng biểu đồ cột",
+   "seconds": 0.2908689000000777,
+   "llm": false,
+   "stream": true,
+   "types": [],
+   "notes": [],
+   "answer": "Bạn muốn so sánh Kho Ha Noi với kho nào?",
+   "checks": {
+    "selection": false,
+    "clarification": false,
+    "tools": false,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "cp-03",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Vì sao kho HCM rủi ro thiếu hàng hơn kho Hà Nội?",
+   "seconds": 5.923495399999865,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm các yếu tố quan sát được, nhưng chưa đủ để khẳng định nguyên nhân.\n\n- **Số đầu sách hết hàng cao hơn**: Kho HCM Chinh có 3 đầu sách đã hết hàng (tồn khả dụng bằng 0), trong khi Kho Ha Noi không có đầu sách nào hết hàng. Hết hàng là rủi ro cấp bách nhất vì bạn đọc không thể mượn ngay.\n- **Số đầu sách dưới ngưỡng tồn tối thiểu lớn hơn**: ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "cp-04",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Lượt mượn tháng này so với tháng trước thế nào? Vẽ biểu đồ",
+   "seconds": 6.6650392999999895,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn tháng này giảm 84,4% so với tháng trước (4,8 so với 30,7 lượt/ngày).\n\n- Tổng lượt mượn tháng này là 72 so với 921 của tháng trước.\n- Ngày cao điểm tháng này là 06/10 với 33 lượt.\n\nDữ liệu chưa cho biết lý do giảm; có thể xem top sách để biết nhóm sách nào giảm.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    9,
+    9
+   ]
+  },
+  {
+   "case": "cp-05",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Top sách tháng này khác gì tháng trước? Hiển thị biểu đồ",
+   "seconds": 5.068136200000026,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Top sách tháng này khác biệt lớn so với tháng trước: **4/4 đầu sách trong top hiện tại đều đổi hạng hoặc mới xuất hiện**, cho thấy nhu cầu đọc đang dịch chuyển nhanh.\n\n- **Dế mèn phiêu lưu ký** dẫn đầu kỳ hiện tại với 29 lượt (kỳ trước chưa có trong top).\n- **Norwegian Wood** giảm mạnh từ 103 lượt xuống còn 20 lượt, tụt khỏi vị trí số 1.\n- **Luy-Xiêng Và Chú Người Tuyết Cô Độc** cũng là đầu sách m",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "null_fidelity": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    12,
+    12
+   ]
+  },
+  {
+   "case": "cp-06",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Cho tôi xem biểu đồ tồn kho.",
+   "seconds": 3.0450525999999627,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ tồn kho đã được hiển thị ở trên.\n\nTheo đó, **Kho HCM Chinh** đang có mức rủi ro cao nhất với 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng tồn tối thiểu, trong khi chỉ còn 120 bản tồn khả dụng.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    20,
+    20
+   ]
+  },
+  {
+   "case": "cp-07",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Kho nào đang rủi ro thiếu sách nhất? Vẽ biểu đồ",
+   "seconds": 6.819736200000079,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Kho **HCM Chinh** đang có rủi ro thiếu sách cao nhất, xếp sau là **Chi Nhanh District 1**.\n\nDựa trên dữ liệu tồn kho hiện tại, các căn cứ chính bao gồm:\n*   **Số đầu sách hết hàng:** Kho HCM Chinh có tới **3** đầu sách không còn bản nào để mượn (so với 1 của Chi Nhanh District 1 và bằng 0 ở hai kho còn lại). Đây là yếu tố rủi ro quan trọng nhất vì bạn đọc sẽ không thể tiếp cận ngay.\n*   **Số đầu s",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    20,
+    20
+   ]
+  },
+  {
+   "case": "rk-01",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Thống kê top 10 sách bằng biểu đồ.",
+   "seconds": 5.292059599999902,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ cột \"Top 10 sách được mượn nhiều nhất\" đã được hiển thị, phản ánh số lượt mượn trong 30 ngày gần nhất. Top 3 đầu sách dẫn đầu là Norwegian Wood (61 lượt), Dế mèn phiêu lưu ký (29 lượt) và Tư Duy Phản Biện (27 lượt).",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "rk-02",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Top 5 sách được mượn nhiều nhất tháng này",
+   "seconds": 2.6097833000003448,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Top 5 sách được mượn nhiều nhất tháng này (01/10–15/10) gồm: **Dế mèn phiêu lưu ký** (29 lượt), **Norwegian Wood** (20 lượt), **Dac trung tam ly hoc cua nguoi Viet** (15 lượt), và **Luy-Xiêng Và Chú Người Tuyết Cô Độc** (8 lượt). Dữ liệu chỉ trả về 4 đầu sách có lượt mượn trong kỳ.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    4,
+    4
+   ]
+  },
+  {
+   "case": "rk-03",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Top 10 sách mượn nhiều hiển thị dưới dạng bảng",
+   "seconds": 3.300216299999647,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "table",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Dưới đây là bảng Top 10 sách được mượn nhiều nhất trong 30 ngày gần nhất:",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    20,
+    20
+   ]
+  },
+  {
+   "case": "rk-05",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Nên ưu tiên xử lý việc gì hôm nay? Hiển thị dạng bảng",
+   "seconds": 4.567033199999969,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "table"
+   ],
+   "notes": [
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "answer": "Nên ưu tiên xử lý trước: **Bổ sung sách đã hết hàng nhưng vẫn có người mượn** (89 đầu sách), vì bạn đọc đang không thể tiếp cận những tựa này.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "kp-01",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Có bao nhiêu phiếu quá hạn?",
+   "seconds": 2.0628765999999814,
+   "llm": true,
+   "stream": false,
+   "types": [],
+   "notes": [],
+   "answer": "Hiện có 395 phiếu mượn quá hạn; trung bình mỗi phiếu đã trễ 228,9 ngày.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "kp-02",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tình hình quá hạn thế nào?",
+   "seconds": 3.662898900000073,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi"
+   ],
+   "notes": [],
+   "answer": "Quá hạn đang tồn đọng lâu, không chỉ là trễ vài ngày.\n\n- Có 395 phiếu mượn quá hạn; trung bình mỗi phiếu đã trễ 228,9 ngày — tức là có một nhóm phiếu tồn đọng lâu, không phải chỉ chậm trễ ngắn hạn.\n- Số ngày quá hạn trung bình cao cho thấy nhiều phiếu đã kéo dài thời gian trễ, làm tăng nguy cơ khó thu hồi sách và tích lũy phạt lớn hơn.\n\nCần ưu tiên xử lý các phiếu trễ lâu nhất trước để giảm tồn đọ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    4,
+    4
+   ]
+  },
+  {
+   "case": "kp-03",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tổng quan thư viện hiện nay ra sao?",
+   "seconds": 6.6846215999999,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi"
+   ],
+   "notes": [],
+   "answer": "Tổng quan thư viện hiện có 116 đầu sách với 576 phiếu mượn đang mở, trong đó có 395 phiếu quá hạn và tổng tiền phạt chưa thu là 498.171.500 ₫.\n\n- Số lượng phiếu quá hạn (395) chiếm khoảng 68,6% tổng số phiếu đang mở (576) — cho thấy tỷ lệ quá hạn khá cao.\n- Khoản phạt chưa thu ở mức lớn (498.171.500 ₫), chủ yếu đến từ các khoản phạt quá hạn; việc này cần được ưu tiên xử lý để thu hồi hoặc có biện ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    6,
+    6
+   ]
+  },
+  {
+   "case": "kp-04",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tổng tiền phạt chưa thu là bao nhiêu?",
+   "seconds": 2.378664800000024,
+   "llm": true,
+   "stream": true,
+   "types": [],
+   "notes": [],
+   "answer": "Tổng tiền phạt chưa thu là 498.171.500 ₫, trong đó loại phạt quá hạn (OVERDUE) chiếm phần lớn với 590.174.000 ₫ trên 7656 khoản phạt.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "kp-05",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tỷ trọng tiền phạt theo loại bằng biểu đồ tròn",
+   "seconds": 2.0284167999998317,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "pie"
+   ],
+   "notes": [],
+   "answer": "Tỷ trọng tiền phạt theo loại: OVERDUE (quá hạn) chiếm 7656 khoản phạt với tổng giá trị 590.174.000 ₫, là nhóm lớn nhất trong toàn hệ thống.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "kp-06",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+   "seconds": 3.6504345999996985,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Phễu đặt chỗ hiện có tổng cộng 8.210 reservation, trong đó đã chuyển thành phiếu mượn là 5.206 reservation, tương đương tỷ lệ chuyển đổi 63,4%. Điều này cho thấy hơn ba phần năm số yêu cầu đặt sách cuối cùng được xử lý thành lượt mượn thực tế, phản ánh nhu cầu đọc khá cao và quy trình xác nhận đặt chỗ đang hoạt động hiệu quả.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "bd-01",
+   "category": "budget",
+   "turn": 1,
+   "q": "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.",
+   "seconds": 7.480294699999831,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Không có kịch bản nào tối ưu tuyệt đối: ngân sách lớn hơn nhập được nhiều đầu sách ưu tiên cao hơn, đổi lại chi phí cao hơn. Ý nghĩa: Chọn mức nào phụ thuộc vào việc chấp nhận để lại bao nhiêu đầu sách ưu tiên cao chưa được nhập.\n\n- **Nhu cầu đầy đủ**: 116 đầu sách (95 ưu tiên cao), 563 bản, ước tính 68.375.250 ₫.\n- **Ngân sách 5.000.000 ₫**: duyệt 4.947.000 ₫ cho 8 đầu sách / 64 bản; 91 đầu sách ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "bd-02",
+   "category": "budget",
+   "turn": 1,
+   "q": "Nếu ngân sách nhập sách là 5 triệu, 10 triệu và 20 triệu thì phương án nào tốt hơn? Hiển thị biểu đồ.",
+   "seconds": 8.079966799999966,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Không có kịch bản nào tối ưu tuyệt đối: ngân sách lớn hơn nhập được nhiều đầu sách ưu tiên cao hơn, đổi lại chi phí cao hơn. Ý nghĩa: Chọn mức nào phụ thuộc vào việc chấp nhận để lại bao nhiêu đầu sách ưu tiên cao chưa được nhập.\n\n- **Nhu cầu nhập đầy đủ**: 116 đầu sách (95 ưu tiên cao), 563 bản, ước tính 68.375.250 ₫.\n- **Ngân sách 5.000.000 ₫**: duyệt 4.947.000 ₫ cho 8 đầu sách / 64 bản; 91 đầu ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "bd-03",
+   "category": "budget",
+   "turn": 1,
+   "q": "Nếu ngân sách nhập sách là 12 triệu thì sao? Hiển thị biểu đồ.",
+   "seconds": 7.183280400000058,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Với ngân sách 12.000.000 ₫, hệ thống duyệt chi 11.889.000 ₫ cho 10 đầu sách (100 bản), trong đó có 6 đầu sách ưu tiên cao và còn dư 111.000 ₫.\n\n**Kết quả chính của kịch bản:**\n- **Được duyệt nhập:** Norwegian Wood (28 bản), Sắc Lời Đắc Thế (5 bản), Kafka on the Shore (7 bản), Cây Cam Ngọt Của Tôi (Tái Bản 2026) (5 bản), Cuộc Đời Của Pi (6 bản).\n- **Ưu tiên cao bị bỏ lại:** One Hundred Years of Sol",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    15,
+    15
+   ]
+  },
+  {
+   "case": "bd-05",
+   "category": "budget",
+   "turn": 1,
+   "q": "Nếu cắt ngân sách nhập 20% thì sao? Vẽ biểu đồ",
+   "seconds": 6.90670769999997,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Sau khi cắt ngân sách nhập 20%, hệ thống duyệt được **54.645.850 ₫** cho **79 đầu sách** (tương ứng **459 bản**), giảm so với mức đầy đủ là **13.729.400 ₫**.\n\nMặc dù tiết kiệm chi phí đáng kể, phương án này để lại **20 đầu sách ưu tiên cao** chưa được nhập, bao gồm các tựa như *Cố Nhân Tình*, *Đi Ra Thế Giới Ngắm Nhìn Bản Thân*, và *Gió Lạnh Đầu Mùa (Tái Bản 2023)*. Điều này đồng nghĩa với việc rủ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    27,
+    27
+   ]
+  },
+  {
+   "case": "bd-06",
+   "category": "budget",
+   "turn": 1,
+   "q": "Tôi nên nhập sách nào trước? Hiển thị bảng số liệu",
+   "seconds": 7.2241455999997015,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "table"
+   ],
+   "notes": [
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "answer": "Nên xem xét nhập **Norwegian Wood** trước.\n\n**Lý do**:\n*   Đầu sách này có mức ưu tiên cao nhất (HIGH) và tồn kho hiện tại chỉ còn 5 bản, thấp hơn ngưỡng an toàn là 10 bản.\n*   Dù lượt mượn trong tháng vừa qua có giảm 50% (61 lượt so với 122 lượt), hệ thống dự báo số lượng tồn tại vẫn đủ để duy trì hoạt động cho mượn trong khoảng 170 ngày tới.\n*   Đề xuất nhập là 28 bản với chi phí ước tính khoảng",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    52,
+    52
+   ]
+  },
+  {
+   "case": "fu-01",
+   "category": "followup",
+   "turn": 1,
+   "q": "Thống kê lượt mượn 6 tháng gần đây.",
+   "seconds": 2.6827213999999913,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Trong 6 tháng gần đây (từ 18/04/2026 đến 15/10/2026), tổng số lượt mượn là 5.445 lượt, cao điểm nhất vào tháng 08/2026 với 1.097 lượt.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-01",
+   "category": "followup",
+   "turn": 2,
+   "q": "Vẽ lại bằng biểu đồ cột.",
+   "seconds": 0.34854819999964093,
+   "llm": false,
+   "stream": false,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Đã chuyển \"Lượt mượn theo tháng\" sang biểu đồ cột. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:57 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-01",
+   "category": "followup",
+   "turn": 3,
+   "q": "Hiển thị số liệu dưới dạng bảng.",
+   "seconds": 0.29849400000011883,
+   "llm": false,
+   "stream": false,
+   "types": [
+    "kpi",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Đã chuyển \"Lượt mượn theo tháng\" sang bảng số liệu. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:57 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-02",
+   "category": "followup",
+   "turn": 1,
+   "q": "Thống kê top 10 sách bằng biểu đồ.",
+   "seconds": 2.5820611000003737,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Top 10 sách được mượn nhiều nhất trong 30 ngày qua là: Norwegian Wood (61 lượt), Dế mèn phiêu lưu ký (29 lượt), Tư Duy Phản Biện (27 lượt), Babel Hay Sự Cần Thiết Của Bạo Lực (20 lượt), Kafka on the Shore (19 lượt), Dac trung tam ly hoc cua nguoi Viet (19 lượt), Project Hail Mary (15 lượt), Nghệ Thuật Giao Tiếp Đỉnh Cao (14 lượt), 48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản) (13 lượt), và One Hu",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-02",
+   "category": "followup",
+   "turn": 2,
+   "q": "Đổi sang biểu đồ tròn.",
+   "seconds": 0.2767352999999275,
+   "llm": false,
+   "stream": true,
+   "types": [
+    "bar"
+   ],
+   "notes": [
+    "Không thể hiển thị \"Top 10 sách được mượn nhiều nhất\" dưới dạng biểu đồ tròn: biểu đồ tròn chỉ dùng cho các phần cộng lại thành một tổng thể. Giữ biểu đồ cột; có thể chọn: bảng số liệu."
+   ],
+   "answer": "Đây là biểu đồ cột \"Top 10 sách được mượn nhiều nhất\". Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:57 15/10/2026); số liệu không thay đổi. Không thể hiển thị \"Top 10 sách được mượn nhiều nhất\" dưới dạng biểu đồ tròn: biểu đồ tròn chỉ dùng cho các phần cộng lại thành một tổng thể. Giữ biểu đồ cột; có thể chọn: bảng số liệu.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-03",
+   "category": "followup",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "seconds": 2.3479029000000082,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ \"Lượt mượn theo tháng\" đã được hiển thị ở trên, bao gồm các chỉ số tổng hợp và xu hướng trong 6 tháng qua (18/04/2026–15/10/2026).",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-03",
+   "category": "followup",
+   "turn": 2,
+   "q": "Chỉ lấy dữ liệu tháng này.",
+   "seconds": 2.1461239000000205,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ \"Lượt mượn theo ngày\" cho tháng 10/2026 (đến hôm nay) đã được hiển thị ở trên. Trong khoảng thời gian từ 01/10 đến 15/10, tổng số lượt mượn là 72 lượt, với cao điểm vào ngày 06/10 đạt 33 lượt.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    51,
+    51
+   ]
+  },
+  {
+   "case": "fu-04",
+   "category": "followup",
+   "turn": 1,
+   "q": "So sánh tình hình tồn kho Hà Nội và HCM bằng biểu đồ.",
+   "seconds": 5.434822400000485,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Kho HCM Chinh (giả định \"HCM\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi, thể hiện rõ ở số đầu sách hết hàng và dưới ngưỡng tồn tối thiểu.\n\n- **Hết hàng**: Kho HCM Chinh có 3 đầu sách đã cạn hoàn toàn, trong khi Kho Ha Noi không có đầu sách nào hết hàng. Đây là tiêu chí rủi ro nhất vì bạn đọc không thể mượn ngay.\n- **Dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm): Kh",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-04",
+   "category": "followup",
+   "turn": 2,
+   "q": "Biểu đồ này cho thấy điều gì?",
+   "seconds": 4.393568800000139,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ cho thấy **Kho HCM Chinh đang có rủi ro thiếu sách cao hơn Kho Ha Noi**, thể hiện qua hai điểm khác biệt quan trọng:\n\n*   **Số đầu sách hết hàng**: Kho HCM Chinh có 3 đầu sách đã cạn hoàn toàn, trong khi Kho Ha Noi không có đầu sách nào hết hàng. Đây là yếu tố rủi ro nhất vì bạn đọc không thể tiếp cận ngay những tựa sách này.\n*   **Số đầu sách dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-05",
+   "category": "followup",
+   "turn": 1,
+   "q": "Lượt mượn tháng này bao nhiêu?",
+   "seconds": 1.8867107999994914,
+   "llm": true,
+   "stream": false,
+   "types": [],
+   "notes": [],
+   "answer": "Lượt mượn tháng 10/2026 (tính đến 15/10) là **72 lượt**.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "fu-05",
+   "category": "followup",
+   "turn": 2,
+   "q": "Vẽ biểu đồ",
+   "seconds": 0.32570249999935186,
+   "llm": false,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Đây là biểu đồ đường \"Lượt mượn theo ngày\". Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:58 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    51,
+    51
+   ]
+  },
+  {
+   "case": "fu-06",
+   "category": "followup",
+   "turn": 1,
+   "q": "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.",
+   "seconds": 6.175332199999502,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Không có kịch bản nào tối ưu tuyệt đối: ngân sách lớn hơn giúp nhập được nhiều đầu sách ưu tiên cao hơn, đổi lại chi phí cao hơn.\n\n- **Nhu cầu đầy đủ**: 116 đầu sách (95 ưu tiên cao), 563 bản, ước tính 68.375.250 ₫.\n- **Ngân sách 5.000.000 ₫**: duyệt 4.947.000 ₫ cho 8 đầu sách / 64 bản; còn 91 đầu sách ưu tiên cao chưa được nhập.\n- **Ngân sách 10.000.000 ₫**: duyệt 9.987.000 ₫ cho 9 đầu sách / 92 ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "fu-06",
+   "category": "followup",
+   "turn": 2,
+   "q": "Đổi sang dạng bảng",
+   "seconds": 0.41743009999936476,
+   "llm": false,
+   "stream": true,
+   "types": [
+    "kpi",
+    "table",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "answer": "Đã chuyển \"Ngân sách và chi phí được duyệt theo phương án\" sang bảng số liệu. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:58 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "fu-07",
+   "category": "followup",
+   "turn": 1,
+   "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+   "seconds": 7.8063694000002215,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Dựa trên kết quả truy xuất dữ liệu, hiện tại hệ thống chỉ cung cấp các thông tin tổng hợp sau về phễu đặt chỗ:\n\n*   **Tổng số reservation:** 8.210\n*   **Số lượng đã chuyển thành phiếu mượn:** 5.206\n*   **Tỷ lệ chuyển đổi:** 63,4%\n\nDo dữ liệu trả về không chứa chi tiết phân bổ theo từng trạng thái (như Pending, Confirmed, Ready for pickup...), tôi không thể vẽ biểu đồ hoặc liệt kê các con số cụ thể",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "fu-07",
+   "category": "followup",
+   "turn": 2,
+   "q": "chuyen sang bieu do tron",
+   "seconds": 0.3945498000002772,
+   "llm": false,
+   "stream": false,
+   "types": [
+    "kpi",
+    "pie"
+   ],
+   "notes": [],
+   "answer": "Đã chuyển \"Lượt đặt chỗ theo trạng thái\" sang biểu đồ tròn. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:58 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "fu-08",
+   "category": "followup",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "seconds": 3.5213116000004447,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ lượt mượn theo tháng (6 tháng gần đây) đã được hệ thống tự động hiển thị ở trên. Tổng lượt mượn trong kỳ là 5.445 lượt, cao nhất vào tháng 08/2026 với 1.097 lượt và xu hướng chung có dấu hiệu giảm trong các tháng trọn kỳ.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-08",
+   "category": "followup",
+   "turn": 2,
+   "q": "Giải thích biểu đồ vừa rồi.",
+   "seconds": 4.049743300000046,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ cho thấy xu hướng lượt mượn có dấu hiệu giảm trong 6 tháng qua. Cụ thể, số lượt mượn dao động từ mức cao nhất là 1.097 lượt vào tháng 08/2026 xuống còn khoảng 914 lượt vào tháng 09/2026 (giảm khoảng 16,5%). Tổng cộng hệ thống ghi nhận 5.445 lượt mượn trong kỳ phân tích.\n\nĐiều cần lưu ý là dữ liệu của hai tháng chưa trọn kỳ (tháng 04 và tháng 10) không được dùng để xác định xu hướng chính t",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-09",
+   "category": "followup",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "seconds": 2.2670717000000877,
+   "llm": true,
+   "stream": false,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ lượt mượn 6 tháng gần đây đã được hiển thị ở trên. Tổng số lượt mượn trong kỳ là 5.445 lượt, với cao điểm đạt 1.097 lượt vào tháng 8/2026.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-09",
+   "category": "followup",
+   "turn": 2,
+   "q": "Đổi biểu đồ vừa rồi sang biểu đồ cột.",
+   "seconds": 0.4676572999997006,
+   "llm": false,
+   "stream": false,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Đã chuyển \"Lượt mượn theo tháng\" sang biểu đồ cột. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:59 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-10",
+   "category": "followup",
+   "turn": 1,
+   "q": "Thống kê top 10 sách bằng biểu đồ.",
+   "seconds": 2.39431119999972,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ \"Top 10 sách được mượn nhiều nhất\" đã hiển thị, phản ánh số lượt mượn trong 30 ngày gần nhất. Top 3 đầu sách dẫn đầu là: Norwegian Wood (61 lượt), Dế mèn phiêu lưu ký (29 lượt) và Tư Duy Phản Biện (27 lượt).",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-10",
+   "category": "followup",
+   "turn": 2,
+   "q": "Hiển thị số liệu dưới dạng bảng",
+   "seconds": 0.3298234000003504,
+   "llm": false,
+   "stream": true,
+   "types": [
+    "table"
+   ],
+   "notes": [],
+   "answer": "Đã chuyển \"Top 10 sách được mượn nhiều nhất\" sang bảng số liệu. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 09:59 15/10/2026); số liệu không thay đổi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "md-01",
+   "category": "missing",
+   "turn": 1,
+   "q": "Vẽ biểu đồ doanh thu bán sách online theo quý.",
+   "seconds": 0.28717839999990247,
+   "llm": false,
+   "stream": false,
+   "types": [],
+   "notes": [],
+   "answer": "Tôi chưa có dữ liệu cho số liệu bạn muốn vẽ, nên không tạo biểu đồ để tránh hiển thị số liệu không có căn cứ. Hiện tôi vẽ được: lượt mượn theo thời gian, top sách được mượn, tồn kho và rủi ro thiếu sách theo kho, đề xuất nhập và mô phỏng ngân sách, quá hạn, tiền phạt, đặt chỗ.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "md-02",
+   "category": "missing",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt truy cập website tháng này",
+   "seconds": 0.4764063000002352,
+   "llm": false,
+   "stream": true,
+   "types": [],
+   "notes": [],
+   "answer": "Tôi chưa có dữ liệu cho số liệu bạn muốn vẽ, nên không tạo biểu đồ để tránh hiển thị số liệu không có căn cứ. Hiện tôi vẽ được: lượt mượn theo thời gian, top sách được mượn, tồn kho và rủi ro thiếu sách theo kho, đề xuất nhập và mô phỏng ngân sách, quá hạn, tiền phạt, đặt chỗ.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "pm-01",
+   "category": "permission",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "seconds": 2.7393779000003633,
+   "llm": true,
+   "stream": true,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ xu hướng mượn: tài khoản không có quyền xem dữ liệu này."
+   ],
+   "answer": "Tài khoản của bạn không có quyền xem dữ liệu xu hướng mượn, nên phần này chưa được phân tích.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "pm-02",
+   "category": "permission",
+   "turn": 1,
+   "q": "Tình hình quá hạn thế nào? Vẽ biểu đồ",
+   "seconds": 1.862680199999886,
+   "llm": true,
+   "stream": false,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ phiếu quá hạn: tài khoản không có quyền xem dữ liệu này."
+   ],
+   "answer": "Tài khoản của bạn không có quyền xem dữ liệu phiếu quá hạn, nên phần này chưa được phân tích.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "pm-03",
+   "category": "permission",
+   "turn": 1,
+   "q": "Cho tôi xem biểu đồ tồn kho.",
+   "seconds": 4.186088000000382,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "answer": "Biểu đồ tồn kho đã được hiển thị ở trên, bao gồm số lượng đầu sách hết hàng và dưới ngưỡng theo từng kho, cũng như phân bổ số bản theo trạng thái (tồn khả dụng, đang giữ, đang cho mượn) tại 4 kho hiện có.\n\nDữ liệu cho thấy **Kho HCM Chinh** là kho cần lưu ý nhất với 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng tồn tối thiểu, dù vẫn còn 120 bản tồn khả dụng. Trong khi đó, **Chi Nhanh District 1** ",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    20,
+    20
+   ]
+  },
+  {
+   "case": "pm-04",
+   "category": "permission",
+   "turn": 1,
+   "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+   "seconds": 1.5278707999996186,
+   "llm": true,
+   "stream": false,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ đặt chỗ: tài khoản không có quyền xem dữ liệu này."
+   ],
+   "answer": "Tài khoản của bạn không có quyền xem dữ liệu đặt chỗ, nên phần này chưa được phân tích.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-01",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Vẽ biểu đồ",
+   "seconds": 0.2964216000000306,
+   "llm": false,
+   "stream": true,
+   "types": [],
+   "notes": [],
+   "answer": "Chưa có dữ liệu nào trong hội thoại để vẽ. Bạn muốn xem biểu đồ của số liệu nào? Ví dụ: lượt mượn theo tháng, tồn kho giữa các kho, hoặc các phương án ngân sách nhập sách.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-02",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "So sánh hai kho bằng biểu đồ cột",
+   "seconds": 0.29831709999962186,
+   "llm": false,
+   "stream": false,
+   "types": [],
+   "notes": [],
+   "answer": "Bạn muốn so sánh hai kho nào? Các kho hiện có: Chi Nhanh District 3, Kho HCM Chinh, Chi Nhanh District 1, Kho Ha Noi.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-03",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Đổi sang biểu đồ cột.",
+   "seconds": 0.31619769999997516,
+   "llm": false,
+   "stream": true,
+   "types": [],
+   "notes": [],
+   "answer": "Chưa có dữ liệu nào trong hội thoại để vẽ. Bạn muốn xem biểu đồ của số liệu nào? Ví dụ: lượt mượn theo tháng, tồn kho giữa các kho, hoặc các phương án ngân sách nhập sách.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-04",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Giải thích biểu đồ vừa rồi.",
+   "seconds": 0.3177521000006891,
+   "llm": false,
+   "stream": false,
+   "types": [],
+   "notes": [],
+   "answer": "Chưa có dữ liệu nào trong hội thoại để vẽ. Bạn muốn xem biểu đồ của số liệu nào? Ví dụ: lượt mượn theo tháng, tồn kho giữa các kho, hoặc các phương án ngân sách nhập sách.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-05",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Hiển thị số liệu dưới dạng bảng.",
+   "seconds": 0.288012300000446,
+   "llm": false,
+   "stream": true,
+   "types": [],
+   "notes": [],
+   "answer": "Chưa có dữ liệu nào trong hội thoại để vẽ. Bạn muốn xem biểu đồ của số liệu nào? Ví dụ: lượt mượn theo tháng, tồn kho giữa các kho, hoặc các phương án ngân sách nhập sách.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "iv-06",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Vẽ biểu đồ tròn lượt mượn 6 tháng gần đây",
+   "seconds": 2.664103199999772,
+   "llm": true,
+   "stream": true,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [
+    "Không thể hiển thị \"Lượt mượn theo tháng\" dưới dạng biểu đồ tròn: biểu đồ tròn chỉ dùng cho các phần cộng lại thành một tổng thể. Giữ biểu đồ đường; có thể chọn: biểu đồ miền, biểu đồ cột, bảng số liệu."
+   ],
+   "answer": "Dữ liệu hiện tại chỉ cung cấp tổng lượt mượn và ngày cao điểm, chưa có chi tiết phân bổ theo từng tháng để vẽ biểu đồ tròn. Bạn vui lòng yêu cầu hệ thống hiển thị trực quan từ giao diện quản trị để xem biểu đồ chi tiết nhé.",
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  }
+ ]
+}

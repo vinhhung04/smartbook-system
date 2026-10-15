@@ -1,0 +1,1913 @@
+{
+ "summary": {
+  "mode": "offline",
+  "turns": 75,
+  "cases": 64,
+  "metrics": {
+   "selection": {
+    "passed": 75,
+    "total": 75,
+    "rate": 100.0
+   },
+   "clarification": {
+    "passed": 75,
+    "total": 75,
+    "rate": 100.0
+   },
+   "tools": {
+    "passed": 48,
+    "total": 48,
+    "rate": 100.0
+   },
+   "schema": {
+    "passed": 60,
+    "total": 60,
+    "rate": 100.0
+   },
+   "null_fidelity": {
+    "passed": 4,
+    "total": 4,
+    "rate": 100.0
+   },
+   "source": {
+    "passed": 60,
+    "total": 60,
+    "rate": 100.0
+   },
+   "followup": {
+    "passed": 11,
+    "total": 11,
+    "rate": 100.0
+   },
+   "faithfulness": {
+    "passed": 60,
+    "total": 60,
+    "rate": 100.0
+   },
+   "usefulness": {
+    "passed": 75,
+    "total": 75,
+    "rate": 100.0
+   },
+   "data_fidelity_cells": {
+    "passed": 1184,
+    "total": 1184,
+    "rate": 100.0
+   }
+  },
+  "by_category": {
+   "ambiguous": {
+    "passed": 5,
+    "total": 5
+   },
+   "budget": {
+    "passed": 6,
+    "total": 6
+   },
+   "comparison": {
+    "passed": 8,
+    "total": 8
+   },
+   "followup": {
+    "passed": 21,
+    "total": 21
+   },
+   "invalid": {
+    "passed": 6,
+    "total": 6
+   },
+   "kpi": {
+    "passed": 6,
+    "total": 6
+   },
+   "missing": {
+    "passed": 5,
+    "total": 5
+   },
+   "permission": {
+    "passed": 4,
+    "total": 4
+   },
+   "ranking": {
+    "passed": 6,
+    "total": 6
+   },
+   "trend": {
+    "passed": 8,
+    "total": 8
+   }
+  },
+  "all_checks_passed_turns": 75,
+  "latency_viz_build_ms": {
+   "n": 75,
+   "p50": 0.84,
+   "p95": 1.63,
+   "max": 2.02
+  },
+  "failures": []
+ },
+ "turns": [
+  {
+   "case": "tr-01",
+   "category": "trend",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn sách trong 6 tháng gần đây và phân tích xu hướng.",
+   "viz_ms": 1.5393000003314228,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-02",
+   "category": "trend",
+   "turn": 1,
+   "q": "Thống kê lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.8558000008633826,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-03",
+   "category": "trend",
+   "turn": 1,
+   "q": "ve bieu do luot muon 6 thang gan day",
+   "viz_ms": 0.8126000002448563,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-04",
+   "category": "trend",
+   "turn": 1,
+   "q": "Xu hướng mượn sách năm nay thế nào?",
+   "viz_ms": 1.3702000005650916,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    34,
+    34
+   ]
+  },
+  {
+   "case": "tr-05",
+   "category": "trend",
+   "turn": 1,
+   "q": "Biểu đồ lượt mượn từng ngày trong tháng này",
+   "viz_ms": 2.022699999542965,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    49,
+    49
+   ]
+  },
+  {
+   "case": "tr-06",
+   "category": "trend",
+   "turn": 1,
+   "q": "Vẽ biểu đồ miền lượt mượn 6 tháng qua",
+   "viz_ms": 1.0247999998682644,
+   "types": [
+    "kpi",
+    "area"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-07",
+   "category": "trend",
+   "turn": 1,
+   "q": "Trực quan hóa tình hình mượn sách 6 tháng gần đây",
+   "viz_ms": 1.0641999997460516,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "tr-08",
+   "category": "trend",
+   "turn": 1,
+   "q": "Xu hướng mượn 6 tháng gần đây có ổn định không? Vẽ biểu đồ",
+   "viz_ms": 0.9296999996877275,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "cp-01",
+   "category": "comparison",
+   "turn": 1,
+   "q": "So sánh tình hình tồn kho Hà Nội và HCM bằng biểu đồ.",
+   "viz_ms": 0.976999999693362,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "cp-02",
+   "category": "comparison",
+   "turn": 1,
+   "q": "So sánh hai kho Hà Nội và Đà Nẵng bằng biểu đồ cột",
+   "viz_ms": 0.8888000002116314,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "cp-03",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Vì sao kho HCM rủi ro thiếu hàng hơn kho Hà Nội?",
+   "viz_ms": 1.2313999995967606,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "cp-04",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Lượt mượn tháng này so với tháng trước thế nào? Vẽ biểu đồ",
+   "viz_ms": 1.0690999997677864,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    9,
+    9
+   ]
+  },
+  {
+   "case": "cp-05",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Top sách tháng này khác gì tháng trước? Hiển thị biểu đồ",
+   "viz_ms": 0.8901999999579857,
+   "types": [
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "null_fidelity": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "cp-06",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Cho tôi xem biểu đồ tồn kho.",
+   "viz_ms": 0.8493000004818896,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    15,
+    15
+   ]
+  },
+  {
+   "case": "cp-07",
+   "category": "comparison",
+   "turn": 1,
+   "q": "Kho nào đang rủi ro thiếu sách nhất? Vẽ biểu đồ",
+   "viz_ms": 0.9055000000444124,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    15,
+    15
+   ]
+  },
+  {
+   "case": "cp-08",
+   "category": "comparison",
+   "turn": 1,
+   "q": "So sánh tồn kho các kho bằng biểu đồ",
+   "viz_ms": 0.8459000000584638,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "rk-01",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Thống kê top 10 sách bằng biểu đồ.",
+   "viz_ms": 0.5718000002161716,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "rk-02",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Top 5 sách được mượn nhiều nhất tháng này",
+   "viz_ms": 0.6085999993956648,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    5,
+    5
+   ]
+  },
+  {
+   "case": "rk-03",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Top 10 sách mượn nhiều hiển thị dưới dạng bảng",
+   "viz_ms": 1.2768999995387276,
+   "types": [
+    "table",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    20,
+    20
+   ]
+  },
+  {
+   "case": "rk-04",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Sách nào được mượn nhiều nhất 30 ngày qua? Vẽ biểu đồ",
+   "viz_ms": 0.5205000006753835,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    12,
+    12
+   ]
+  },
+  {
+   "case": "rk-05",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Nên ưu tiên xử lý việc gì hôm nay? Hiển thị dạng bảng",
+   "viz_ms": 0.7277999993675621,
+   "types": [
+    "table"
+   ],
+   "notes": [
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "rk-06",
+   "category": "ranking",
+   "turn": 1,
+   "q": "Sách nào tồn kho lâu không ai mượn? Lập bảng số liệu",
+   "viz_ms": 0.6517000001622364,
+   "types": [
+    "table"
+   ],
+   "notes": [
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "null_fidelity": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    3,
+    3
+   ]
+  },
+  {
+   "case": "kp-01",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Có bao nhiêu phiếu quá hạn?",
+   "viz_ms": 0.12090000018361025,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "kp-02",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tình hình quá hạn thế nào?",
+   "viz_ms": 0.7556999998996616,
+   "types": [
+    "kpi"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    4,
+    4
+   ]
+  },
+  {
+   "case": "kp-03",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tổng quan thư viện hiện nay ra sao?",
+   "viz_ms": 0.7206000000223867,
+   "types": [
+    "kpi"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    6,
+    6
+   ]
+  },
+  {
+   "case": "kp-04",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tổng tiền phạt chưa thu là bao nhiêu?",
+   "viz_ms": 0.08619999971415382,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "kp-05",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Tỷ trọng tiền phạt theo loại bằng biểu đồ tròn",
+   "viz_ms": 1.2943000001541805,
+   "types": [
+    "kpi",
+    "pie"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    7,
+    7
+   ]
+  },
+  {
+   "case": "kp-06",
+   "category": "kpi",
+   "turn": 1,
+   "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+   "viz_ms": 1.2281000008442788,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "bd-01",
+   "category": "budget",
+   "turn": 1,
+   "q": "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.",
+   "viz_ms": 1.7163999991680612,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "bd-02",
+   "category": "budget",
+   "turn": 1,
+   "q": "Nếu ngân sách nhập sách là 5 triệu, 10 triệu và 20 triệu thì phương án nào tốt hơn? Hiển thị biểu đồ.",
+   "viz_ms": 1.5858000006119255,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "bd-03",
+   "category": "budget",
+   "turn": 1,
+   "q": "Nếu ngân sách nhập sách là 12 triệu thì sao? Hiển thị biểu đồ.",
+   "viz_ms": 1.6122999995786813,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    15,
+    15
+   ]
+  },
+  {
+   "case": "bd-04",
+   "category": "budget",
+   "turn": 1,
+   "q": "Mô phỏng ngân sách 5 triệu, 10 triệu, 20 triệu bằng bảng số liệu",
+   "viz_ms": 1.8224999994345126,
+   "types": [
+    "kpi",
+    "table",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "null_fidelity": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    29,
+    29
+   ]
+  },
+  {
+   "case": "bd-05",
+   "category": "budget",
+   "turn": 1,
+   "q": "Nếu cắt ngân sách nhập 20% thì sao? Vẽ biểu đồ",
+   "viz_ms": 1.6276999995170627,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    51,
+    51
+   ]
+  },
+  {
+   "case": "bd-06",
+   "category": "budget",
+   "turn": 1,
+   "q": "Tôi nên nhập sách nào trước? Hiển thị bảng số liệu",
+   "viz_ms": 1.1087999992014375,
+   "types": [
+    "kpi",
+    "table"
+   ],
+   "notes": [
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    36,
+    36
+   ]
+  },
+  {
+   "case": "fu-01",
+   "category": "followup",
+   "turn": 1,
+   "q": "Thống kê lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.8827000001474516,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-01",
+   "category": "followup",
+   "turn": 2,
+   "q": "Vẽ lại bằng biểu đồ cột.",
+   "viz_ms": 0.25469999945926247,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-01",
+   "category": "followup",
+   "turn": 3,
+   "q": "Hiển thị số liệu dưới dạng bảng.",
+   "viz_ms": 0.21560000004683388,
+   "types": [
+    "kpi",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-02",
+   "category": "followup",
+   "turn": 1,
+   "q": "Thống kê top 10 sách bằng biểu đồ.",
+   "viz_ms": 0.5595999991783174,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-02",
+   "category": "followup",
+   "turn": 2,
+   "q": "Đổi sang biểu đồ tròn.",
+   "viz_ms": 0.05909999981668079,
+   "types": [
+    "bar"
+   ],
+   "notes": [
+    "Không thể hiển thị \"Top 10 sách được mượn nhiều nhất\" dưới dạng biểu đồ tròn: biểu đồ tròn chỉ dùng cho các phần cộng lại thành một tổng thể. Giữ biểu đồ cột; có thể chọn: bảng số liệu."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-03",
+   "category": "followup",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.8145000001604785,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-03",
+   "category": "followup",
+   "turn": 2,
+   "q": "Chỉ lấy dữ liệu tháng này.",
+   "viz_ms": 0.9721999995235819,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    49,
+    49
+   ]
+  },
+  {
+   "case": "fu-04",
+   "category": "followup",
+   "turn": 1,
+   "q": "So sánh tình hình tồn kho Hà Nội và HCM bằng biểu đồ.",
+   "viz_ms": 0.8398999998462386,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-04",
+   "category": "followup",
+   "turn": 2,
+   "q": "Biểu đồ này cho thấy điều gì?",
+   "viz_ms": 0.8388999995077029,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-05",
+   "category": "followup",
+   "turn": 1,
+   "q": "Lượt mượn tháng này bao nhiêu?",
+   "viz_ms": 0.15970000004017493,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "fu-05",
+   "category": "followup",
+   "turn": 2,
+   "q": "Vẽ biểu đồ",
+   "viz_ms": 0.8830000006128103,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    49,
+    49
+   ]
+  },
+  {
+   "case": "fu-06",
+   "category": "followup",
+   "turn": 1,
+   "q": "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.",
+   "viz_ms": 2.0143000001553446,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "fu-06",
+   "category": "followup",
+   "turn": 2,
+   "q": "Đổi sang dạng bảng",
+   "viz_ms": 0.3264999995735707,
+   "types": [
+    "kpi",
+    "table",
+    "bar",
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    39,
+    39
+   ]
+  },
+  {
+   "case": "fu-07",
+   "category": "followup",
+   "turn": 1,
+   "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+   "viz_ms": 1.2154999994891114,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "fu-07",
+   "category": "followup",
+   "turn": 2,
+   "q": "chuyen sang bieu do tron",
+   "viz_ms": 0.15310000071622198,
+   "types": [
+    "kpi",
+    "pie"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "fu-08",
+   "category": "followup",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.8354999999937718,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-08",
+   "category": "followup",
+   "turn": 2,
+   "q": "Giải thích biểu đồ vừa rồi.",
+   "viz_ms": 0.8197999995900318,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-09",
+   "category": "followup",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.7943999999042717,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-09",
+   "category": "followup",
+   "turn": 2,
+   "q": "Đổi biểu đồ vừa rồi sang biểu đồ cột.",
+   "viz_ms": 0.24229999962699367,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  },
+  {
+   "case": "fu-10",
+   "category": "followup",
+   "turn": 1,
+   "q": "Thống kê top 10 sách bằng biểu đồ.",
+   "viz_ms": 0.4974000003130641,
+   "types": [
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "fu-10",
+   "category": "followup",
+   "turn": 2,
+   "q": "Hiển thị số liệu dưới dạng bảng",
+   "viz_ms": 0.13939999917056412,
+   "types": [
+    "table"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "schema": true,
+    "source": true,
+    "followup": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    10,
+    10
+   ]
+  },
+  {
+   "case": "md-01",
+   "category": "missing",
+   "turn": 1,
+   "q": "Vẽ biểu đồ doanh thu bán sách online theo quý.",
+   "viz_ms": 0.002599999788799323,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "md-02",
+   "category": "missing",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt truy cập website tháng này",
+   "viz_ms": 0.0002999995558639057,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "md-03",
+   "category": "missing",
+   "turn": 1,
+   "q": "Top sách được mượn hôm nay bằng biểu đồ",
+   "viz_ms": 0.019300000531075057,
+   "types": [],
+   "notes": [
+    "Không có lượt mượn nào trong kỳ đã chọn nên không có dữ liệu để vẽ."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "md-04",
+   "category": "missing",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn hôm nay",
+   "viz_ms": 0.683000000208267,
+   "types": [
+    "kpi"
+   ],
+   "notes": [
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    3,
+    3
+   ]
+  },
+  {
+   "case": "md-05",
+   "category": "missing",
+   "turn": 1,
+   "q": "Vẽ biểu đồ tồn kho các kho",
+   "viz_ms": 0.02229999972769292,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ rủi ro tồn kho: chưa lấy được dữ liệu này."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "pm-01",
+   "category": "permission",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.01630000042496249,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ xu hướng mượn: tài khoản không có quyền xem dữ liệu này."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "pm-02",
+   "category": "permission",
+   "turn": 1,
+   "q": "Tình hình quá hạn thế nào? Vẽ biểu đồ",
+   "viz_ms": 0.01669999983278103,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ phiếu quá hạn: tài khoản không có quyền xem dữ liệu này."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "pm-03",
+   "category": "permission",
+   "turn": 1,
+   "q": "Cho tôi xem biểu đồ tồn kho.",
+   "viz_ms": 0.8472999998048181,
+   "types": [
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    15,
+    15
+   ]
+  },
+  {
+   "case": "pm-04",
+   "category": "permission",
+   "turn": 1,
+   "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+   "viz_ms": 0.029200000426499173,
+   "types": [],
+   "notes": [
+    "Không tạo biểu đồ đặt chỗ: tài khoản không có quyền xem dữ liệu này."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-01",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Vẽ biểu đồ",
+   "viz_ms": 0.0004000003173132427,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-02",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "So sánh hai kho bằng biểu đồ cột",
+   "viz_ms": 0.00030000046535860747,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-03",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Đổi sang biểu đồ cột.",
+   "viz_ms": 0.00019999970390927047,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-04",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Giải thích biểu đồ vừa rồi.",
+   "viz_ms": 0.0002999995558639057,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "am-05",
+   "category": "ambiguous",
+   "turn": 1,
+   "q": "Hiển thị số liệu dưới dạng bảng.",
+   "viz_ms": 0.00019999970390927047,
+   "types": [],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    0,
+    0
+   ]
+  },
+  {
+   "case": "iv-01",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.8968000001914334,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "null_fidelity": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    22,
+    22
+   ]
+  },
+  {
+   "case": "iv-02",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+   "viz_ms": 0.8611000002929359,
+   "types": [
+    "kpi"
+   ],
+   "notes": [
+    "Bỏ qua \"Lượt mượn theo tháng\" vì dữ liệu không đủ hoặc không hợp lệ để hiển thị."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    2,
+    2
+   ]
+  },
+  {
+   "case": "iv-03",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Vẽ biểu đồ phiếu quá hạn theo số ngày trễ",
+   "viz_ms": 0.584299999900395,
+   "types": [
+    "kpi"
+   ],
+   "notes": [
+    "Không vẽ phân bố số ngày trễ: hệ thống chỉ trả về 12/40 phiếu quá hạn, quá ít để đại diện cho toàn bộ.",
+    "Dữ liệu của câu hỏi này không phù hợp để vẽ biểu đồ (không có chuỗi số cùng đơn vị); hiển thị dạng thẻ chỉ số hoặc bảng."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    4,
+    4
+   ]
+  },
+  {
+   "case": "iv-04",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Vẽ biểu đồ phiếu quá hạn theo số ngày trễ",
+   "viz_ms": 0.990300000012212,
+   "types": [
+    "kpi",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    8,
+    8
+   ]
+  },
+  {
+   "case": "iv-05",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Kho HCM có những sách nào sắp hết? Vẽ biểu đồ",
+   "viz_ms": 1.585200000590703,
+   "types": [
+    "kpi",
+    "bar",
+    "bar",
+    "bar"
+   ],
+   "notes": [],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    47,
+    47
+   ]
+  },
+  {
+   "case": "iv-06",
+   "category": "invalid",
+   "turn": 1,
+   "q": "Vẽ biểu đồ tròn lượt mượn 6 tháng gần đây",
+   "viz_ms": 1.054600000315986,
+   "types": [
+    "kpi",
+    "line"
+   ],
+   "notes": [
+    "Không thể hiển thị \"Lượt mượn theo tháng\" dưới dạng biểu đồ tròn: biểu đồ tròn chỉ dùng cho các phần cộng lại thành một tổng thể. Giữ biểu đồ đường; có thể chọn: biểu đồ miền, biểu đồ cột, bảng số liệu."
+   ],
+   "checks": {
+    "selection": true,
+    "clarification": true,
+    "tools": true,
+    "schema": true,
+    "source": true,
+    "faithfulness": true,
+    "usefulness": true
+   },
+   "fidelity": [
+    25,
+    25
+   ]
+  }
+ ]
+}

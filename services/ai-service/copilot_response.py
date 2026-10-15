@@ -25,6 +25,7 @@ from copilot_plan import (
     normalize_query,
 )
 from copilot_tools import data_confidence
+from copilot_visualization import build_visualizations, consistency_issues
 
 COPILOT_SYSTEM_PROMPT = (
     "Bạn là trợ lý phân tích và hỗ trợ ra quyết định cho quản lý thư viện/kho của SmartBook "
@@ -73,7 +74,8 @@ COPILOT_SYSTEM_PROMPT = (
     "- Không lặp lại câu hỏi, không câu đệm (\"Dưới đây là...\", \"Hy vọng...\"), không kết bằng lời mời chung chung, "
     "không thêm đoạn \"Kết luận\" ở cuối nhắc lại câu đầu.\n"
     "- Markdown nhẹ: in đậm tiêu đề mục ngắn khi câu trả lời có từ hai phần trở lên, gạch đầu dòng cho căn cứ; không "
-    "dùng bảng, không dùng tiêu đề #.\n"
+    "dùng bảng, không dùng tiêu đề #. Không vẽ biểu đồ hay bảng bằng ký tự (█, |, ---, khối code): giao diện tự hiển thị "
+    "biểu đồ từ dữ liệu hệ thống.\n"
     "- Không in JSON, không dùng tên trường kỹ thuật (variant_id, available_qty...) hay mã ID; gọi chỉ số bằng tên "
     "tiếng Việt.\n"
     "- Tiền tệ viết dạng \"1.234.567 ₫\"; chép số nguyên vẹn từ dữ liệu, không làm tròn lại.\n"
@@ -735,12 +737,18 @@ def _style_followups(plan: QueryPlan, explanation: dict | None) -> list[str]:
 
 def build_extras(plan: QueryPlan, collected: dict, user_ctx=None, warehouses: list[dict] | None = None,
                  now: datetime | None = None, question: str | None = None, answer: str | None = None,
-                 explanation: dict | None = None) -> dict:
+                 explanation: dict | None = None, visualizations: tuple[list[dict], list[str]] | None = None) -> dict:
+    """`visualizations` = (specs, notes) when the caller already built them
+    (a chart follow-up reusing a snapshot); otherwise built here from the
+    same tool data as everything else."""
     now = (now or datetime.now(VN_TZ)).astimezone(VN_TZ)
     now_iso = now.isoformat(timespec="seconds")
     if plan.clarification_needed:
         return {"suggested_followups": plan.clarification_options[:4], "caveats": [], "recommendations": [],
-                "data_as_of": None, "explanation": None}
+                "data_as_of": None, "explanation": None, "visualizations": [], "visualization_notes": []}
+    specs, viz_notes = visualizations if visualizations is not None else build_visualizations(plan, collected, now)
+    if explanation is not None and specs:
+        explanation["chart_mismatches"] = consistency_issues(specs, explanation)
     asked = normalize_query(question or "").strip(" ?.")
     followups = [q for q in _followups(plan, collected, user_ctx, warehouses or [])
                  if normalize_query(q).strip(" ?.") != asked]
@@ -752,4 +760,6 @@ def build_extras(plan: QueryPlan, collected: dict, user_ctx=None, warehouses: li
         "recommendations": _recommendations(collected, now_iso),
         "data_as_of": now_iso if collected else None,
         "explanation": explanation,
+        "visualizations": specs,
+        "visualization_notes": viz_notes,
     }
