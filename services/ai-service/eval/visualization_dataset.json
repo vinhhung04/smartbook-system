@@ -1,0 +1,2823 @@
+{
+ "version": 1,
+ "description": "AI Copilot 3.0 visualization eval: 64 cases / 75 turns in 10 categories. Offline = planner + builders on these fixtures (deterministic); live = the same questions against the running stack (fixtures ignored; live=false cases are fixture-only).",
+ "now": "2026-10-15T10:00:00+07:00",
+ "warehouses": [
+  {
+   "id": "w-hn",
+   "code": "WH-HN-01",
+   "name": "Kho Ha Noi"
+  },
+  {
+   "id": "w-hcm",
+   "code": "WH-HCM-01",
+   "name": "Kho HCM Chinh"
+  },
+  {
+   "id": "w-dn",
+   "code": "WH-DN-01",
+   "name": "Kho Da Nang"
+  }
+ ],
+ "default_fixtures": {
+  "get_borrow_trends": "MONTHLY_DOWN",
+  "get_top_books": "TOP10",
+  "compare_top_books": "CMP_TOP",
+  "compare_borrow_periods": "CMP_PERIODS_UNEQUAL",
+  "get_warehouse_stock_risk": "STOCK_RISK_3",
+  "compare_warehouses": "CMP_WH",
+  "get_warehouse_low_stock_items": "LOW_HCM",
+  "explain_warehouse_shortage": "SHORT_HCM",
+  "simulate_reorder_budget": "SIM_3",
+  "get_reorder_suggestions": "REORDER",
+  "get_overdue_summary": "OVERDUE_FULL",
+  "get_fine_summary": "FINES",
+  "get_reservation_funnel": "FUNNEL",
+  "get_dashboard_kpis": "KPIS",
+  "get_aging_inventory": "AGING",
+  "rank_priority_tasks": "PRIORITIES"
+ },
+ "fixtures": {
+  "MONTHLY_DOWN": [
+   {
+    "date": "2026-04",
+    "loans": 457,
+    "returns": 452,
+    "reservations": 3
+   },
+   {
+    "date": "2026-05",
+    "loans": 1095,
+    "returns": 1090,
+    "reservations": 3
+   },
+   {
+    "date": "2026-06",
+    "loans": 902,
+    "returns": 897,
+    "reservations": 3
+   },
+   {
+    "date": "2026-07",
+    "loans": 908,
+    "returns": 903,
+    "reservations": 3
+   },
+   {
+    "date": "2026-08",
+    "loans": 1097,
+    "returns": 1092,
+    "reservations": 3
+   },
+   {
+    "date": "2026-09",
+    "loans": 914,
+    "returns": 909,
+    "reservations": 3
+   },
+   {
+    "date": "2026-10",
+    "loans": 72,
+    "returns": 67,
+    "reservations": 3
+   }
+  ],
+  "MONTHLY_UP": [
+   {
+    "date": "2026-04",
+    "loans": 30,
+    "returns": 25,
+    "reservations": 3
+   },
+   {
+    "date": "2026-05",
+    "loans": 80,
+    "returns": 75,
+    "reservations": 3
+   },
+   {
+    "date": "2026-06",
+    "loans": 95,
+    "returns": 90,
+    "reservations": 3
+   },
+   {
+    "date": "2026-07",
+    "loans": 110,
+    "returns": 105,
+    "reservations": 3
+   },
+   {
+    "date": "2026-08",
+    "loans": 130,
+    "returns": 125,
+    "reservations": 3
+   },
+   {
+    "date": "2026-09",
+    "loans": 150,
+    "returns": 145,
+    "reservations": 3
+   },
+   {
+    "date": "2026-10",
+    "loans": 20,
+    "returns": 15,
+    "reservations": 3
+   }
+  ],
+  "MONTHLY_FLAT": [
+   {
+    "date": "2026-04",
+    "loans": 50,
+    "returns": 45,
+    "reservations": 3
+   },
+   {
+    "date": "2026-05",
+    "loans": 100,
+    "returns": 95,
+    "reservations": 3
+   },
+   {
+    "date": "2026-06",
+    "loans": 101,
+    "returns": 96,
+    "reservations": 3
+   },
+   {
+    "date": "2026-07",
+    "loans": 99,
+    "returns": 94,
+    "reservations": 3
+   },
+   {
+    "date": "2026-08",
+    "loans": 100,
+    "returns": 95,
+    "reservations": 3
+   },
+   {
+    "date": "2026-09",
+    "loans": 102,
+    "returns": 97,
+    "reservations": 3
+   },
+   {
+    "date": "2026-10",
+    "loans": 30,
+    "returns": 25,
+    "reservations": 3
+   }
+  ],
+  "MONTHLY_YEAR": [
+   {
+    "date": "2026-01",
+    "loans": 300,
+    "returns": 295,
+    "reservations": 3
+   },
+   {
+    "date": "2026-02",
+    "loans": 310,
+    "returns": 305,
+    "reservations": 3
+   },
+   {
+    "date": "2026-03",
+    "loans": 290,
+    "returns": 285,
+    "reservations": 3
+   },
+   {
+    "date": "2026-04",
+    "loans": 320,
+    "returns": 315,
+    "reservations": 3
+   },
+   {
+    "date": "2026-05",
+    "loans": 330,
+    "returns": 325,
+    "reservations": 3
+   },
+   {
+    "date": "2026-06",
+    "loans": 340,
+    "returns": 335,
+    "reservations": 3
+   },
+   {
+    "date": "2026-07",
+    "loans": 350,
+    "returns": 345,
+    "reservations": 3
+   },
+   {
+    "date": "2026-08",
+    "loans": 360,
+    "returns": 355,
+    "reservations": 3
+   },
+   {
+    "date": "2026-09",
+    "loans": 370,
+    "returns": 365,
+    "reservations": 3
+   },
+   {
+    "date": "2026-10",
+    "loans": 120,
+    "returns": 115,
+    "reservations": 3
+   }
+  ],
+  "MONTHLY_NAN": [
+   {
+    "date": "2026-04",
+    "loans": 40,
+    "returns": 30,
+    "reservations": 1
+   },
+   {
+    "date": "2026-05",
+    "loans": NaN,
+    "returns": 30,
+    "reservations": 1
+   },
+   {
+    "date": "2026-06",
+    "loans": 130,
+    "returns": 30,
+    "reservations": 1
+   },
+   {
+    "date": "2026-07",
+    "loans": Infinity,
+    "returns": 30,
+    "reservations": 1
+   },
+   {
+    "date": "2026-08",
+    "loans": 100,
+    "returns": "abc",
+    "reservations": 1
+   },
+   {
+    "date": "2026-09",
+    "loans": 90,
+    "returns": 30,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10",
+    "loans": 20,
+    "returns": 30,
+    "reservations": 1
+   }
+  ],
+  "MONTHLY_MOSTLY_NAN": [
+   {
+    "date": "2026-04",
+    "loans": NaN,
+    "returns": NaN,
+    "reservations": NaN
+   },
+   {
+    "date": "2026-05",
+    "loans": NaN,
+    "returns": NaN,
+    "reservations": NaN
+   },
+   {
+    "date": "2026-06",
+    "loans": NaN,
+    "returns": NaN,
+    "reservations": NaN
+   },
+   {
+    "date": "2026-07",
+    "loans": NaN,
+    "returns": NaN,
+    "reservations": NaN
+   },
+   {
+    "date": "2026-08",
+    "loans": NaN,
+    "returns": NaN,
+    "reservations": NaN
+   },
+   {
+    "date": "2026-09",
+    "loans": NaN,
+    "returns": NaN,
+    "reservations": NaN
+   },
+   {
+    "date": "2026-10",
+    "loans": 5,
+    "returns": 4,
+    "reservations": 1
+   }
+  ],
+  "DAILY_15": [
+   {
+    "date": "2026-10-01",
+    "loans": 30,
+    "returns": 28,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-02",
+    "loans": 41,
+    "returns": 39,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-03",
+    "loans": 25,
+    "returns": 23,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-04",
+    "loans": 0,
+    "returns": 0,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-05",
+    "loans": 18,
+    "returns": 16,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-06",
+    "loans": 33,
+    "returns": 31,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-07",
+    "loans": 29,
+    "returns": 27,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-08",
+    "loans": 40,
+    "returns": 38,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-09",
+    "loans": 22,
+    "returns": 20,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-10",
+    "loans": 31,
+    "returns": 29,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-11",
+    "loans": 35,
+    "returns": 33,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-12",
+    "loans": 27,
+    "returns": 25,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-13",
+    "loans": 24,
+    "returns": 22,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-14",
+    "loans": 38,
+    "returns": 36,
+    "reservations": 1
+   },
+   {
+    "date": "2026-10-15",
+    "loans": 12,
+    "returns": 10,
+    "reservations": 1
+   }
+  ],
+  "DAILY_1": [
+   {
+    "date": "2026-10-01",
+    "loans": 17,
+    "returns": 15,
+    "reservations": 1
+   }
+  ],
+  "TOP10": [
+   {
+    "variant_id": "v0",
+    "title": "Sách thử nghiệm số 0 với tên khá dài",
+    "borrow_count": 60
+   },
+   {
+    "variant_id": "v1",
+    "title": "Sách thử nghiệm số 1 với tên khá dài",
+    "borrow_count": 57
+   },
+   {
+    "variant_id": "v2",
+    "title": "Sách thử nghiệm số 2 với tên khá dài",
+    "borrow_count": 54
+   },
+   {
+    "variant_id": "v3",
+    "title": "Sách thử nghiệm số 3 với tên khá dài",
+    "borrow_count": 51
+   },
+   {
+    "variant_id": "v4",
+    "title": "Sách thử nghiệm số 4 với tên khá dài",
+    "borrow_count": 48
+   },
+   {
+    "variant_id": "v5",
+    "title": "Sách thử nghiệm số 5 với tên khá dài",
+    "borrow_count": 45
+   },
+   {
+    "variant_id": "v6",
+    "title": "Sách thử nghiệm số 6 với tên khá dài",
+    "borrow_count": 42
+   },
+   {
+    "variant_id": "v7",
+    "title": "Sách thử nghiệm số 7 với tên khá dài",
+    "borrow_count": 39
+   },
+   {
+    "variant_id": "v8",
+    "title": "Sách thử nghiệm số 8 với tên khá dài",
+    "borrow_count": 36
+   },
+   {
+    "variant_id": "v9",
+    "title": "Sách thử nghiệm số 9 với tên khá dài",
+    "borrow_count": 33
+   }
+  ],
+  "TOP5": [
+   {
+    "variant_id": "v0",
+    "title": "Sách thử nghiệm số 0 với tên khá dài",
+    "borrow_count": 60
+   },
+   {
+    "variant_id": "v1",
+    "title": "Sách thử nghiệm số 1 với tên khá dài",
+    "borrow_count": 57
+   },
+   {
+    "variant_id": "v2",
+    "title": "Sách thử nghiệm số 2 với tên khá dài",
+    "borrow_count": 54
+   },
+   {
+    "variant_id": "v3",
+    "title": "Sách thử nghiệm số 3 với tên khá dài",
+    "borrow_count": 51
+   },
+   {
+    "variant_id": "v4",
+    "title": "Sách thử nghiệm số 4 với tên khá dài",
+    "borrow_count": 48
+   }
+  ],
+  "TOP_EMPTY": [],
+  "TOP_TRUNC": [
+   {
+    "variant_id": "v0",
+    "title": "Sách thử nghiệm số 0 với tên khá dài",
+    "borrow_count": 60
+   },
+   {
+    "variant_id": "v1",
+    "title": "Sách thử nghiệm số 1 với tên khá dài",
+    "borrow_count": 57
+   },
+   {
+    "variant_id": "v2",
+    "title": "Sách thử nghiệm số 2 với tên khá dài",
+    "borrow_count": 54
+   },
+   {
+    "variant_id": "v3",
+    "title": "Sách thử nghiệm số 3 với tên khá dài",
+    "borrow_count": 51
+   },
+   {
+    "variant_id": "v4",
+    "title": "Sách thử nghiệm số 4 với tên khá dài",
+    "borrow_count": 48
+   },
+   {
+    "variant_id": "v5",
+    "title": "Sách thử nghiệm số 5 với tên khá dài",
+    "borrow_count": 45
+   },
+   {
+    "variant_id": "v6",
+    "title": "Sách thử nghiệm số 6 với tên khá dài",
+    "borrow_count": 42
+   },
+   {
+    "variant_id": "v7",
+    "title": "Sách thử nghiệm số 7 với tên khá dài",
+    "borrow_count": 39
+   },
+   {
+    "variant_id": "v8",
+    "title": "Sách thử nghiệm số 8 với tên khá dài",
+    "borrow_count": 36
+   },
+   {
+    "variant_id": "v9",
+    "title": "Sách thử nghiệm số 9 với tên khá dài",
+    "borrow_count": 33
+   },
+   {
+    "variant_id": "v10",
+    "title": "Sách thử nghiệm số 10 với tên khá dài",
+    "borrow_count": 30
+   },
+   {
+    "variant_id": "v11",
+    "title": "Sách thử nghiệm số 11 với tên khá dài",
+    "borrow_count": 27
+   },
+   {
+    "_truncated": "... va 8 dong khac, hay thu hep dieu kien de xem day du"
+   }
+  ],
+  "CMP_TOP": {
+   "current_period": {
+    "from": "2026-10-01",
+    "to": "2026-10-15"
+   },
+   "previous_period": {
+    "from": "2026-09-01",
+    "to": "2026-09-30"
+   },
+   "current": [
+    {
+     "rank": 1,
+     "title": "Rừng Na Uy",
+     "variant_id": "a",
+     "borrow_count": 30,
+     "previous_rank": 2,
+     "previous_borrow_count": 41,
+     "status": "TĂNG HẠNG"
+    },
+    {
+     "rank": 2,
+     "title": "Nhà Giả Kim",
+     "variant_id": "b",
+     "borrow_count": 25,
+     "previous_rank": null,
+     "previous_borrow_count": null,
+     "status": "MỚI VÀO TOP"
+    },
+    {
+     "rank": 3,
+     "title": "Đắc Nhân Tâm",
+     "variant_id": "c",
+     "borrow_count": 21,
+     "previous_rank": 1,
+     "previous_borrow_count": 50,
+     "status": "GIẢM HẠNG"
+    }
+   ],
+   "dropped_out": [
+    {
+     "title": "X",
+     "variant_id": "x",
+     "previous_rank": 3
+    }
+   ],
+   "join_key": "variant_id"
+  },
+  "CMP_PERIODS_UNEQUAL": {
+   "current_period": {
+    "from": "2026-10-01",
+    "to": "2026-10-15",
+    "days": 15,
+    "peak_day": "2026-10-02",
+    "peak_loans": 41
+   },
+   "previous_period": {
+    "from": "2026-09-01",
+    "to": "2026-09-30",
+    "days": 30,
+    "peak_day": "2026-09-12",
+    "peak_loans": 50
+   },
+   "metrics": {
+    "loans": {
+     "current": 433,
+     "previous": 914,
+     "change": -481,
+     "change_pct": -52.6,
+     "current_per_day": 28.87,
+     "previous_per_day": 30.47,
+     "per_day_change_pct": -5.3
+    },
+    "returns": {
+     "current": 410,
+     "previous": 998,
+     "change": -588,
+     "change_pct": -58.9,
+     "current_per_day": 27.33,
+     "previous_per_day": 33.27,
+     "per_day_change_pct": -17.8
+    },
+    "reservations": {
+     "current": 120,
+     "previous": 333,
+     "change": -213,
+     "change_pct": -64.0,
+     "current_per_day": 8.0,
+     "previous_per_day": 11.1,
+     "per_day_change_pct": -27.9
+    }
+   },
+   "unequal_length": true,
+   "note": "Hai kỳ dài khác nhau; nên so sánh theo trung bình mỗi ngày."
+  },
+  "STOCK_RISK_3": [
+   {
+    "warehouse_name": "Kho Ha Noi",
+    "out_of_stock_variants": 0,
+    "low_stock_variants": 2,
+    "total_available_qty": 40,
+    "total_reserved_qty": 2,
+    "total_borrowed_qty": 10
+   },
+   {
+    "warehouse_name": "Kho HCM Chinh",
+    "out_of_stock_variants": 3,
+    "low_stock_variants": 7,
+    "total_available_qty": 120,
+    "total_reserved_qty": 2,
+    "total_borrowed_qty": 10
+   },
+   {
+    "warehouse_name": "Kho Da Nang",
+    "out_of_stock_variants": 1,
+    "low_stock_variants": 4,
+    "total_available_qty": 60,
+    "total_reserved_qty": 2,
+    "total_borrowed_qty": 10
+   }
+  ],
+  "STOCK_RISK_TIE": [
+   {
+    "warehouse_name": "Kho Ha Noi",
+    "out_of_stock_variants": 1,
+    "low_stock_variants": 2,
+    "total_available_qty": 40,
+    "total_reserved_qty": 2,
+    "total_borrowed_qty": 10
+   },
+   {
+    "warehouse_name": "Kho HCM Chinh",
+    "out_of_stock_variants": 1,
+    "low_stock_variants": 2,
+    "total_available_qty": 40,
+    "total_reserved_qty": 2,
+    "total_borrowed_qty": 10
+   }
+  ],
+  "CMP_WH": {
+   "ranking": [
+    {
+     "rank": 1,
+     "warehouse_name": "Kho HCM Chinh",
+     "out_of_stock_variants": 3,
+     "low_stock_variants": 7,
+     "total_available_qty": 120,
+     "total_reserved_qty": 2,
+     "total_borrowed_qty": 10
+    },
+    {
+     "rank": 2,
+     "warehouse_name": "Kho Ha Noi",
+     "out_of_stock_variants": 0,
+     "low_stock_variants": 1,
+     "total_available_qty": 8,
+     "total_reserved_qty": 2,
+     "total_borrowed_qty": 10
+    }
+   ],
+   "comparison": {
+    "riskier": "Kho HCM Chinh",
+    "less_risky": "Kho Ha Noi",
+    "tie": false
+   },
+   "unresolved": [],
+   "criteria": "x"
+  },
+  "CMP_WH_DN": {
+   "ranking": [
+    {
+     "rank": 1,
+     "warehouse_name": "Kho Da Nang",
+     "out_of_stock_variants": 1,
+     "low_stock_variants": 4,
+     "total_available_qty": 60,
+     "total_reserved_qty": 2,
+     "total_borrowed_qty": 10
+    },
+    {
+     "rank": 2,
+     "warehouse_name": "Kho Ha Noi",
+     "out_of_stock_variants": 0,
+     "low_stock_variants": 1,
+     "total_available_qty": 8,
+     "total_reserved_qty": 2,
+     "total_borrowed_qty": 10
+    }
+   ],
+   "comparison": {
+    "riskier": "Kho Da Nang",
+    "less_risky": "Kho Ha Noi",
+    "tie": false
+   },
+   "unresolved": [],
+   "criteria": "x"
+  },
+  "LOW_HCM": {
+   "warehouse_id": "w-hcm",
+   "warehouse_name": "Kho HCM Chinh",
+   "warehouse_code": "WH-HCM-01",
+   "total_items": 40,
+   "out_of_stock_count": 3,
+   "truncated": true,
+   "items": [
+    {
+     "variant_id": "v0",
+     "title": "Đầu sách 0",
+     "status": "HẾT HÀNG",
+     "available_qty": 0,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v1",
+     "title": "Đầu sách 1",
+     "status": "HẾT HÀNG",
+     "available_qty": 0,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v2",
+     "title": "Đầu sách 2",
+     "status": "HẾT HÀNG",
+     "available_qty": 0,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v3",
+     "title": "Đầu sách 3",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 3,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v4",
+     "title": "Đầu sách 4",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 4,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v5",
+     "title": "Đầu sách 5",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 5,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v6",
+     "title": "Đầu sách 6",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 6,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v7",
+     "title": "Đầu sách 7",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 7,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v8",
+     "title": "Đầu sách 8",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 8,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v9",
+     "title": "Đầu sách 9",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 9,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v10",
+     "title": "Đầu sách 10",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 10,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v11",
+     "title": "Đầu sách 11",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 11,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v12",
+     "title": "Đầu sách 12",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 12,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v13",
+     "title": "Đầu sách 13",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 13,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v14",
+     "title": "Đầu sách 14",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 14,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v15",
+     "title": "Đầu sách 15",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 15,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v16",
+     "title": "Đầu sách 16",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 16,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v17",
+     "title": "Đầu sách 17",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 17,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v18",
+     "title": "Đầu sách 18",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 18,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v19",
+     "title": "Đầu sách 19",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 19,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v20",
+     "title": "Đầu sách 20",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 20,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v21",
+     "title": "Đầu sách 21",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 21,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v22",
+     "title": "Đầu sách 22",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 22,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v23",
+     "title": "Đầu sách 23",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 23,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v24",
+     "title": "Đầu sách 24",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 24,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v25",
+     "title": "Đầu sách 25",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 25,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v26",
+     "title": "Đầu sách 26",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 26,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v27",
+     "title": "Đầu sách 27",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 27,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v28",
+     "title": "Đầu sách 28",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 28,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    },
+    {
+     "variant_id": "v29",
+     "title": "Đầu sách 29",
+     "status": "DƯỚI NGƯỠNG",
+     "available_qty": 29,
+     "reorder_point": 10,
+     "reserved_qty": 1,
+     "borrowed_qty": 4
+    }
+   ]
+  },
+  "SHORT_HCM": {
+   "warehouse_name": "Kho HCM Chinh",
+   "summary": {
+    "low_stock_items": 7,
+    "out_of_stock_items": 3,
+    "items_with_recent_demand": 5,
+    "items_with_rising_demand": 1
+   },
+   "items": [
+    {
+     "variant_id": "a",
+     "title": "Rừng Na Uy",
+     "status": "HẾT HÀNG",
+     "available_qty": 0,
+     "borrow_count": 61,
+     "demand_trend_pct": 12.0,
+     "lead_time_days": 21
+    }
+   ],
+   "factors": [],
+   "limitations": [
+    "Nhu cầu toàn hệ thống."
+   ]
+  },
+  "SHORT_HN": {
+   "warehouse_name": "Kho Ha Noi",
+   "summary": {
+    "low_stock_items": 1,
+    "out_of_stock_items": 0,
+    "items_with_recent_demand": 1,
+    "items_with_rising_demand": 0
+   },
+   "items": [],
+   "factors": [],
+   "limitations": []
+  },
+  "SIM_3": {
+   "full_need": {
+    "total_candidates": 116,
+    "high_priority": 95,
+    "estimated_total_cost": 68375250,
+    "estimated_total_reorder_qty": 563
+   },
+   "funding_rule": "rule",
+   "scenarios_are_assumed": false,
+   "items_not_listed": 16,
+   "limitations": [
+    "Không tối ưu theo ràng buộc nhà cung cấp."
+   ],
+   "scenarios": [
+    {
+     "label": "Ngân sách 5.000.000 ₫",
+     "budget_vnd": 5000000.0,
+     "funded_cost": 4947000,
+     "remaining_vnd": 53000.0,
+     "funded_lines": 8,
+     "funded_qty": 64,
+     "funded_high_priority": 4,
+     "unfunded_high_priority": 91,
+     "shortfall_covered_pct": 100.0
+    },
+    {
+     "label": "Ngân sách 10.000.000 ₫",
+     "budget_vnd": 10000000.0,
+     "funded_cost": 9987000,
+     "remaining_vnd": 13000.0,
+     "funded_lines": 9,
+     "funded_qty": 92,
+     "funded_high_priority": 5,
+     "unfunded_high_priority": 90,
+     "shortfall_covered_pct": 100.0
+    },
+    {
+     "label": "Ngân sách 20.000.000 ₫",
+     "budget_vnd": 20000000.0,
+     "funded_cost": 19944000,
+     "remaining_vnd": 56000.0,
+     "funded_lines": 19,
+     "funded_qty": 155,
+     "funded_high_priority": 15,
+     "unfunded_high_priority": 80,
+     "shortfall_covered_pct": 100.0
+    }
+   ]
+  },
+  "SIM_FAIL": {
+   "full_need": {
+    "total_candidates": 116,
+    "high_priority": 95,
+    "estimated_total_cost": 68375250,
+    "estimated_total_reorder_qty": 563
+   },
+   "funding_rule": "rule",
+   "scenarios_are_assumed": false,
+   "items_not_listed": 0,
+   "limitations": [],
+   "scenarios": [
+    {
+     "label": "Ngân sách 5.000.000 ₫",
+     "budget_vnd": 5000000.0,
+     "funded_cost": 4947000,
+     "remaining_vnd": 53000.0,
+     "funded_lines": 8,
+     "funded_qty": 64,
+     "funded_high_priority": 4,
+     "unfunded_high_priority": 91,
+     "shortfall_covered_pct": 20.0
+    },
+    {
+     "label": "Ngân sách 10.000.000 ₫",
+     "budget_vnd": 10000000.0,
+     "error": "timeout"
+    },
+    {
+     "label": "Ngân sách 20.000.000 ₫",
+     "budget_vnd": 20000000.0,
+     "funded_cost": 19944000,
+     "remaining_vnd": 56000.0,
+     "funded_lines": 19,
+     "funded_qty": 155,
+     "funded_high_priority": 15,
+     "unfunded_high_priority": 80,
+     "shortfall_covered_pct": 70.0
+    }
+   ]
+  },
+  "SIM_ASSUMED": {
+   "full_need": {
+    "total_candidates": 116,
+    "high_priority": 95,
+    "estimated_total_cost": 68375250,
+    "estimated_total_reorder_qty": 563
+   },
+   "funding_rule": "rule",
+   "scenarios_are_assumed": true,
+   "items_not_listed": 16,
+   "limitations": [],
+   "scenarios": [
+    {
+     "label": "100% nhu cầu",
+     "budget_vnd": 68375250.0,
+     "funded_cost": 68374250.0,
+     "remaining_vnd": 1000.0,
+     "funded_lines": 110,
+     "funded_qty": 500,
+     "funded_high_priority": 50,
+     "unfunded_high_priority": 45,
+     "shortfall_covered_pct": 100.0
+    },
+    {
+     "label": "75% nhu cầu",
+     "budget_vnd": 51281437.5,
+     "funded_cost": 51280437.5,
+     "remaining_vnd": 1000.0,
+     "funded_lines": 85,
+     "funded_qty": 375,
+     "funded_high_priority": 37,
+     "unfunded_high_priority": 58,
+     "shortfall_covered_pct": 75.0
+    },
+    {
+     "label": "50% nhu cầu",
+     "budget_vnd": 34187625.0,
+     "funded_cost": 34186625.0,
+     "remaining_vnd": 1000.0,
+     "funded_lines": 60,
+     "funded_qty": 250,
+     "funded_high_priority": 25,
+     "unfunded_high_priority": 70,
+     "shortfall_covered_pct": 50.0
+    },
+    {
+     "label": "25% nhu cầu",
+     "budget_vnd": 17093812.5,
+     "funded_cost": 17092812.5,
+     "remaining_vnd": 1000.0,
+     "funded_lines": 35,
+     "funded_qty": 125,
+     "funded_high_priority": 12,
+     "unfunded_high_priority": 83,
+     "shortfall_covered_pct": 25.0
+    }
+   ]
+  },
+  "SIM_1": {
+   "full_need": {
+    "total_candidates": 116,
+    "high_priority": 95,
+    "estimated_total_cost": 68375250,
+    "estimated_total_reorder_qty": 563
+   },
+   "funding_rule": "rule",
+   "scenarios_are_assumed": false,
+   "items_not_listed": 16,
+   "limitations": [],
+   "scenarios": [
+    {
+     "label": "Ngân sách 12.000.000 ₫",
+     "budget_vnd": 12000000.0,
+     "funded_cost": 11950000,
+     "remaining_vnd": 50000.0,
+     "funded_lines": 11,
+     "funded_qty": 100,
+     "funded_high_priority": 7,
+     "unfunded_high_priority": 88,
+     "shortfall_covered_pct": 100.0
+    }
+   ]
+  },
+  "REORDER": {
+   "summary": {
+    "total_candidates": 116,
+    "high_priority": 95,
+    "medium_priority": 15,
+    "low_priority": 6,
+    "estimated_total_reorder_qty": 563,
+    "estimated_total_cost": 68375250
+   },
+   "items": [
+    {
+     "variant_id": "r0",
+     "title": "Sách cần nhập 0",
+     "priority": "HIGH",
+     "available_qty": 0,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 5,
+     "estimated_cost": 500000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r1",
+     "title": "Sách cần nhập 1",
+     "priority": "HIGH",
+     "available_qty": 1,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 6,
+     "estimated_cost": 501000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r2",
+     "title": "Sách cần nhập 2",
+     "priority": "HIGH",
+     "available_qty": 2,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 7,
+     "estimated_cost": 502000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r3",
+     "title": "Sách cần nhập 3",
+     "priority": "HIGH",
+     "available_qty": 3,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 8,
+     "estimated_cost": 503000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r4",
+     "title": "Sách cần nhập 4",
+     "priority": "HIGH",
+     "available_qty": 4,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 9,
+     "estimated_cost": 504000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r5",
+     "title": "Sách cần nhập 5",
+     "priority": "HIGH",
+     "available_qty": 5,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 10,
+     "estimated_cost": 505000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r6",
+     "title": "Sách cần nhập 6",
+     "priority": "HIGH",
+     "available_qty": 6,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 11,
+     "estimated_cost": 506000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    },
+    {
+     "variant_id": "r7",
+     "title": "Sách cần nhập 7",
+     "priority": "HIGH",
+     "available_qty": 7,
+     "reorder_point": 10,
+     "suggested_reorder_qty": 12,
+     "estimated_cost": 507000,
+     "lead_time_source": "DEFAULT",
+     "borrow_count": 10
+    }
+   ],
+   "range": {
+    "from": "2026-09-15",
+    "to": "2026-10-15"
+   }
+  },
+  "OVERDUE_FULL": {
+   "total_overdue_loans": 5,
+   "total_overdue_items": 6,
+   "average_overdue_days": 20.4,
+   "oldest_overdue_days": 95,
+   "items": [
+    {
+     "overdue_days": 3
+    },
+    {
+     "overdue_days": 10
+    },
+    {
+     "overdue_days": 15
+    },
+    {
+     "overdue_days": 40
+    },
+    {
+     "overdue_days": 95
+    }
+   ]
+  },
+  "OVERDUE_TRUNC": {
+   "total_overdue_loans": 40,
+   "total_overdue_items": 52,
+   "average_overdue_days": 12.0,
+   "oldest_overdue_days": 95,
+   "items": [
+    {
+     "overdue_days": 1
+    },
+    {
+     "overdue_days": 2
+    },
+    {
+     "overdue_days": 3
+    },
+    {
+     "overdue_days": 4
+    },
+    {
+     "overdue_days": 5
+    },
+    {
+     "overdue_days": 6
+    },
+    {
+     "overdue_days": 7
+    },
+    {
+     "overdue_days": 8
+    },
+    {
+     "overdue_days": 9
+    },
+    {
+     "overdue_days": 10
+    },
+    {
+     "overdue_days": 11
+    },
+    {
+     "overdue_days": 12
+    }
+   ]
+  },
+  "FINES": {
+   "total_unpaid": 3150000,
+   "total_paid": 900000,
+   "total_waived": 50000,
+   "unpaid_count": 27,
+   "paid_count": 9,
+   "by_type": [
+    {
+     "fine_type": "OVERDUE",
+     "amount": 2800000,
+     "count": 30
+    },
+    {
+     "fine_type": "LOST",
+     "amount": 1100000,
+     "count": 4
+    },
+    {
+     "fine_type": "DAMAGE",
+     "amount": 200000,
+     "count": 2
+    }
+   ]
+  },
+  "FUNNEL": {
+   "total": 100,
+   "pending": 5,
+   "confirmed": 10,
+   "ready_for_pickup": 5,
+   "converted_to_loan": 60,
+   "cancelled": 12,
+   "expired": 8,
+   "conversion_rate": 60.0
+  },
+  "KPIS": {
+   "total_titles": 300,
+   "total_copies": 4000,
+   "low_stock_variants": 20,
+   "active_loans": 210,
+   "overdue_loans": 40,
+   "pending_reservations": 5,
+   "confirmed_reservations": 10,
+   "ready_for_pickup_reservations": 5,
+   "pickup_codes_expiring_soon": 2,
+   "unpaid_fine_amount": 3150000,
+   "reservation_conversion_rate": 60.0
+  },
+  "AGING": {
+   "threshold_days": 90,
+   "items": [
+    {
+     "variant_id": "a",
+     "title": "Sách cũ A",
+     "warehouse_name": "Kho Ha Noi",
+     "on_hand_qty": 5,
+     "days_since_last_activity": 200
+    },
+    {
+     "variant_id": "b",
+     "title": "Sách cũ B",
+     "warehouse_name": "Kho Da Nang",
+     "on_hand_qty": 2,
+     "days_since_last_activity": null
+    }
+   ]
+  },
+  "PRIORITIES": {
+   "ranking_rule": "x",
+   "unavailable": [],
+   "tasks": [
+    {
+     "rank": 1,
+     "tier": 1,
+     "task": "Bổ sung sách hết hàng",
+     "value": 12,
+     "unit": "đầu sách",
+     "why": "x",
+     "next_step": "Lập phiếu",
+     "source": "x"
+    }
+   ]
+  },
+  "ERR403": {
+   "error": "/analytics/borrow-trends tra ve HTTP 403"
+  },
+  "ERR_TIMEOUT": {
+   "error": "/analytics/warehouse-stock-risk het thoi gian cho phan hoi"
+  }
+ },
+ "cases": [
+  {
+   "id": "tr-01",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn sách trong 6 tháng gần đây và phân tích xu hướng.",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "kpi": true,
+      "direction": "giảm",
+      "partial": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "tr-02",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Thống kê lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "tr-03",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "ve bieu do luot muon 6 thang gan day",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "tr-04",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "MONTHLY_YEAR"
+   },
+   "turns": [
+    {
+     "q": "Xu hướng mượn sách năm nay thế nào?",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "granularity": "month"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "tr-05",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "DAILY_15"
+   },
+   "turns": [
+    {
+     "q": "Biểu đồ lượt mượn từng ngày trong tháng này",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "tr-06",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ miền lượt mượn 6 tháng qua",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "area"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "tr-07",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "MONTHLY_UP"
+   },
+   "turns": [
+    {
+     "q": "Trực quan hóa tình hình mượn sách 6 tháng gần đây",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "direction": "tăng"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "tr-08",
+   "category": "trend",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "MONTHLY_FLAT"
+   },
+   "turns": [
+    {
+     "q": "Xu hướng mượn 6 tháng gần đây có ổn định không? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "direction": "đi ngang"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "cp-01",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "So sánh tình hình tồn kho Hà Nội và HCM bằng biểu đồ.",
+     "expect": {
+      "tools": [
+       "compare_warehouses"
+      ],
+      "primary": "bar",
+      "riskiest": "Kho HCM Chinh",
+      "unit": "đầu sách"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-02",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {
+    "compare_warehouses": "CMP_WH_DN"
+   },
+   "turns": [
+    {
+     "q": "So sánh hai kho Hà Nội và Đà Nẵng bằng biểu đồ cột",
+     "expect": {
+      "tools": [
+       "compare_warehouses"
+      ],
+      "primary": "bar"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-03",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {
+    "explain_warehouse_shortage#2": "SHORT_HN"
+   },
+   "turns": [
+    {
+     "q": "Vì sao kho HCM rủi ro thiếu hàng hơn kho Hà Nội?",
+     "expect": {
+      "tools": [
+       "compare_warehouses",
+       "explain_warehouse_shortage",
+       "explain_warehouse_shortage"
+      ],
+      "primary": "bar",
+      "riskiest": "Kho HCM Chinh"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-04",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Lượt mượn tháng này so với tháng trước thế nào? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "compare_borrow_periods"
+      ],
+      "primary": "bar",
+      "kpi": true,
+      "unit": "lượt/ngày"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-05",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Top sách tháng này khác gì tháng trước? Hiển thị biểu đồ",
+     "expect": {
+      "tools": [
+       "compare_top_books"
+      ],
+      "primary": "bar",
+      "null_cells": 1
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-06",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Cho tôi xem biểu đồ tồn kho.",
+     "expect": {
+      "tools": [
+       "get_warehouse_stock_risk"
+      ],
+      "primary": "bar",
+      "riskiest": "Kho HCM Chinh"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-07",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Kho nào đang rủi ro thiếu sách nhất? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_warehouse_stock_risk"
+      ],
+      "primary": "bar",
+      "riskiest": "Kho HCM Chinh"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "cp-08",
+   "category": "comparison",
+   "user": "hung",
+   "fixtures": {
+    "get_warehouse_stock_risk": "STOCK_RISK_TIE"
+   },
+   "turns": [
+    {
+     "q": "So sánh tồn kho các kho bằng biểu đồ",
+     "expect": {
+      "tools": [
+       "get_warehouse_stock_risk"
+      ],
+      "primary": "bar",
+      "tie": true
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "rk-01",
+   "category": "ranking",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Thống kê top 10 sách bằng biểu đồ.",
+     "expect": {
+      "tools": [
+       "get_top_books"
+      ],
+      "primary": "bar",
+      "rows": 10
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "rk-02",
+   "category": "ranking",
+   "user": "hung",
+   "fixtures": {
+    "get_top_books": "TOP5"
+   },
+   "turns": [
+    {
+     "q": "Top 5 sách được mượn nhiều nhất tháng này",
+     "expect": {
+      "tools": [
+       "get_top_books"
+      ],
+      "primary": "bar",
+      "rows": 5
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "rk-03",
+   "category": "ranking",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Top 10 sách mượn nhiều hiển thị dưới dạng bảng",
+     "expect": {
+      "tools": [
+       "get_top_books"
+      ],
+      "types_include": [
+       "table"
+      ]
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "rk-04",
+   "category": "ranking",
+   "user": "hung",
+   "fixtures": {
+    "get_top_books": "TOP_TRUNC"
+   },
+   "turns": [
+    {
+     "q": "Sách nào được mượn nhiều nhất 30 ngày qua? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_top_books"
+      ],
+      "primary": "bar",
+      "partial": true
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "rk-05",
+   "category": "ranking",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Nên ưu tiên xử lý việc gì hôm nay? Hiển thị dạng bảng",
+     "expect": {
+      "tools": [
+       "rank_priority_tasks"
+      ],
+      "types_include": [
+       "table"
+      ]
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "rk-06",
+   "category": "ranking",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Sách nào tồn kho lâu không ai mượn? Lập bảng số liệu",
+     "expect": {
+      "tools": [
+       "get_aging_inventory"
+      ],
+      "types_include": [
+       "table"
+      ],
+      "null_cells": 1
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "kp-01",
+   "category": "kpi",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Có bao nhiêu phiếu quá hạn?",
+     "expect": {
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "kp-02",
+   "category": "kpi",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Tình hình quá hạn thế nào?",
+     "expect": {
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "kpi": true,
+      "primary": null
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "kp-03",
+   "category": "kpi",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Tổng quan thư viện hiện nay ra sao?",
+     "expect": {
+      "tools": [
+       "get_dashboard_kpis"
+      ],
+      "kpi": true,
+      "primary": null
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "kp-04",
+   "category": "kpi",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Tổng tiền phạt chưa thu là bao nhiêu?",
+     "expect": {
+      "tools": [
+       "get_fine_summary"
+      ],
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "kp-05",
+   "category": "kpi",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Tỷ trọng tiền phạt theo loại bằng biểu đồ tròn",
+     "expect": {
+      "tools": [
+       "get_fine_summary"
+      ],
+      "primary": "pie",
+      "kpi": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "kp-06",
+   "category": "kpi",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_reservation_funnel"
+      ],
+      "primary": "bar",
+      "kpi": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "bd-01",
+   "category": "budget",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.",
+     "expect": {
+      "tools": [
+       "simulate_reorder_budget"
+      ],
+      "primary": "bar",
+      "types_include": [
+       "table",
+       "kpi"
+      ],
+      "analysis": "what_if",
+      "partial": true,
+      "budget_slider": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "bd-02",
+   "category": "budget",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Nếu ngân sách nhập sách là 5 triệu, 10 triệu và 20 triệu thì phương án nào tốt hơn? Hiển thị biểu đồ.",
+     "expect": {
+      "tools": [
+       "simulate_reorder_budget"
+      ],
+      "primary": "bar",
+      "analysis": "what_if"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "bd-03",
+   "category": "budget",
+   "user": "hung",
+   "fixtures": {
+    "simulate_reorder_budget": "SIM_1"
+   },
+   "turns": [
+    {
+     "q": "Nếu ngân sách nhập sách là 12 triệu thì sao? Hiển thị biểu đồ.",
+     "expect": {
+      "tools": [
+       "simulate_reorder_budget"
+      ],
+      "primary": "bar"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "bd-04",
+   "category": "budget",
+   "user": "hung",
+   "fixtures": {
+    "simulate_reorder_budget": "SIM_FAIL"
+   },
+   "turns": [
+    {
+     "q": "Mô phỏng ngân sách 5 triệu, 10 triệu, 20 triệu bằng bảng số liệu",
+     "expect": {
+      "tools": [
+       "simulate_reorder_budget"
+      ],
+      "types_include": [
+       "table"
+      ],
+      "null_cells": 7,
+      "partial": true
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "bd-05",
+   "category": "budget",
+   "user": "hung",
+   "fixtures": {
+    "simulate_reorder_budget": "SIM_ASSUMED"
+   },
+   "turns": [
+    {
+     "q": "Nếu cắt ngân sách nhập 20% thì sao? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "simulate_reorder_budget"
+      ],
+      "primary": "bar"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "bd-06",
+   "category": "budget",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Tôi nên nhập sách nào trước? Hiển thị bảng số liệu",
+     "expect": {
+      "tools": [
+       "get_reorder_suggestions"
+      ],
+      "types_include": [
+       "table"
+      ]
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-01",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Thống kê lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "primary": "line"
+     }
+    },
+    {
+     "q": "Vẽ lại bằng biểu đồ cột.",
+     "expect": {
+      "mode": "retype",
+      "primary": "bar",
+      "same_rows": true,
+      "no_llm": true
+     }
+    },
+    {
+     "q": "Hiển thị số liệu dưới dạng bảng.",
+     "expect": {
+      "mode": "retype",
+      "primary": "table",
+      "same_rows": true,
+      "no_llm": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-02",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Thống kê top 10 sách bằng biểu đồ.",
+     "expect": {
+      "primary": "bar"
+     }
+    },
+    {
+     "q": "Đổi sang biểu đồ tròn.",
+     "expect": {
+      "mode": "retype",
+      "primary": "bar",
+      "note_contains": "biểu đồ tròn",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-03",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {
+    "turn2:get_borrow_trends": "DAILY_15"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "primary": "line"
+     }
+    },
+    {
+     "q": "Chỉ lấy dữ liệu tháng này.",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "period": "this_month"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-04",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "So sánh tình hình tồn kho Hà Nội và HCM bằng biểu đồ.",
+     "expect": {
+      "primary": "bar"
+     }
+    },
+    {
+     "q": "Biểu đồ này cho thấy điều gì?",
+     "expect": {
+      "mode": "explain",
+      "primary": "bar",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-05",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "DAILY_15"
+   },
+   "turns": [
+    {
+     "q": "Lượt mượn tháng này bao nhiêu?",
+     "expect": {
+      "no_viz": true
+     }
+    },
+    {
+     "q": "Vẽ biểu đồ",
+     "expect": {
+      "mode": "render",
+      "primary": "line"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-06",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.",
+     "expect": {
+      "primary": "bar"
+     }
+    },
+    {
+     "q": "Đổi sang dạng bảng",
+     "expect": {
+      "mode": "retype",
+      "primary": "table",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-07",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+     "expect": {
+      "primary": "bar"
+     }
+    },
+    {
+     "q": "chuyen sang bieu do tron",
+     "expect": {
+      "mode": "retype",
+      "primary": "pie",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-08",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "primary": "line"
+     }
+    },
+    {
+     "q": "Giải thích biểu đồ vừa rồi.",
+     "expect": {
+      "mode": "explain",
+      "primary": "line",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-09",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "primary": "line"
+     }
+    },
+    {
+     "q": "Đổi biểu đồ vừa rồi sang biểu đồ cột.",
+     "expect": {
+      "mode": "retype",
+      "primary": "bar",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "fu-10",
+   "category": "followup",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Thống kê top 10 sách bằng biểu đồ.",
+     "expect": {
+      "primary": "bar"
+     }
+    },
+    {
+     "q": "Hiển thị số liệu dưới dạng bảng",
+     "expect": {
+      "mode": "retype",
+      "primary": "table",
+      "same_rows": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "md-01",
+   "category": "missing",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ doanh thu bán sách online theo quý.",
+     "expect": {
+      "clarification": true,
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "md-02",
+   "category": "missing",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt truy cập website tháng này",
+     "expect": {
+      "clarification": true,
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "md-03",
+   "category": "missing",
+   "user": "hung",
+   "fixtures": {
+    "get_top_books": "TOP_EMPTY"
+   },
+   "turns": [
+    {
+     "q": "Top sách được mượn hôm nay bằng biểu đồ",
+     "expect": {
+      "tools": [
+       "get_top_books"
+      ],
+      "no_viz": true,
+      "note_contains": "Không có lượt mượn"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "md-04",
+   "category": "missing",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "DAILY_1"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn hôm nay",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "no_chart": true
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "md-05",
+   "category": "missing",
+   "user": "hung",
+   "fixtures": {
+    "get_warehouse_stock_risk": "ERR_TIMEOUT"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ tồn kho các kho",
+     "expect": {
+      "tools": [
+       "get_warehouse_stock_risk"
+      ],
+      "no_viz": true,
+      "note_contains": "chưa lấy được"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "pm-01",
+   "category": "permission",
+   "user": "manager01",
+   "fixtures": {
+    "get_borrow_trends": "ERR403"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "no_viz": true,
+      "note_contains": "không có quyền"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "pm-02",
+   "category": "permission",
+   "user": "manager01",
+   "fixtures": {
+    "get_overdue_summary": "ERR403"
+   },
+   "turns": [
+    {
+     "q": "Tình hình quá hạn thế nào? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "no_viz": true,
+      "note_contains": "không có quyền"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "pm-03",
+   "category": "permission",
+   "user": "manager01",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Cho tôi xem biểu đồ tồn kho.",
+     "expect": {
+      "tools": [
+       "get_warehouse_stock_risk"
+      ],
+      "primary": "bar"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "pm-04",
+   "category": "permission",
+   "user": "manager01",
+   "fixtures": {
+    "get_reservation_funnel": "ERR403"
+   },
+   "turns": [
+    {
+     "q": "Phễu đặt chỗ đang thế nào? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_reservation_funnel"
+      ],
+      "no_viz": true,
+      "note_contains": "không có quyền"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "am-01",
+   "category": "ambiguous",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ",
+     "expect": {
+      "clarification": true,
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "am-02",
+   "category": "ambiguous",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "So sánh hai kho bằng biểu đồ cột",
+     "expect": {
+      "clarification": true,
+      "no_viz": true,
+      "options_suffix": "bằng biểu đồ cột"
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "am-03",
+   "category": "ambiguous",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Đổi sang biểu đồ cột.",
+     "expect": {
+      "clarification": true,
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "am-04",
+   "category": "ambiguous",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Giải thích biểu đồ vừa rồi.",
+     "expect": {
+      "clarification": true,
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "am-05",
+   "category": "ambiguous",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Hiển thị số liệu dưới dạng bảng.",
+     "expect": {
+      "clarification": true,
+      "no_viz": true
+     }
+    }
+   ],
+   "live": true
+  },
+  {
+   "id": "iv-01",
+   "category": "invalid",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "MONTHLY_NAN"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "partial": true,
+      "null_cells": 2,
+      "limit_contains": "không phải số hợp lệ"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "iv-02",
+   "category": "invalid",
+   "user": "hung",
+   "fixtures": {
+    "get_borrow_trends": "MONTHLY_MOSTLY_NAN"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ lượt mượn 6 tháng gần đây.",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "no_chart": true
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "iv-03",
+   "category": "invalid",
+   "user": "hung",
+   "fixtures": {
+    "get_overdue_summary": "OVERDUE_TRUNC"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ phiếu quá hạn theo số ngày trễ",
+     "expect": {
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "no_chart": true,
+      "note_contains": "12/40"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "iv-04",
+   "category": "invalid",
+   "user": "hung",
+   "fixtures": {
+    "get_overdue_summary": "OVERDUE_FULL"
+   },
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ phiếu quá hạn theo số ngày trễ",
+     "expect": {
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "primary": "bar"
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "iv-05",
+   "category": "invalid",
+   "user": "hung",
+   "fixtures": {
+    "get_warehouse_low_stock_items": "LOW_HCM"
+   },
+   "turns": [
+    {
+     "q": "Kho HCM có những sách nào sắp hết? Vẽ biểu đồ",
+     "expect": {
+      "tools": [
+       "get_warehouse_low_stock_items",
+       "get_warehouse_stock_risk"
+      ],
+      "primary": "bar",
+      "partial": true
+     }
+    }
+   ],
+   "live": false
+  },
+  {
+   "id": "iv-06",
+   "category": "invalid",
+   "user": "hung",
+   "fixtures": {},
+   "turns": [
+    {
+     "q": "Vẽ biểu đồ tròn lượt mượn 6 tháng gần đây",
+     "expect": {
+      "tools": [
+       "get_borrow_trends"
+      ],
+      "primary": "line",
+      "note_contains": "biểu đồ tròn"
+     }
+    }
+   ],
+   "live": true
+  }
+ ]
+}

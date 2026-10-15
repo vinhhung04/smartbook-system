@@ -79,8 +79,11 @@ CAP_KEYWORDS: dict[str, list] = {
     KPI: ["kpi", "dashboard", "tong quan", "tinh hinh thu vien", "tinh hinh he thong", "thu vien minh",
           "so lieu chung", "dau sach trong thu vien", "tong so dau sach", "phieu muon dang mo", "dang mo",
           "tong so phieu muon", "thu vien dao nay", "can chu y"],
-    BORROW_TREND: ["xu huong", "bieu do", "trend", "luot muon", "muon tra", "so luot", "thong ke muon",
-                   "muon theo thang", "muon theo ngay", _R(r"\bmuon (nhieu|it) hon\b"), _R(r"\bmuon (giam|tang)\b")],
+    # "biểu đồ" alone is a presentation request (detect_visualization), not a
+    # metric: "biểu đồ tồn kho" must not become a borrow-trend question.
+    BORROW_TREND: ["xu huong", "trend", "luot muon", "muon tra", "so luot", "thong ke muon",
+                   "muon theo thang", "muon theo ngay", _R(r"\bmuon (nhieu|it) hon\b"), _R(r"\bmuon (giam|tang)\b"),
+                   _R(r"\b(tinh hinh|so lieu|du lieu) muon( sach| tra)?\b")],
     TOP_BORROWED: [_R(r"\btop\b"), _R(r"\bhot\b"), "pho bien", _R(r"\bmuon nhieu(?! hon)"), "duoc muon nhieu",
                    "hut khach", "ban chay", "yeu thich nhat"],
     OVERDUE: ["qua han", "tre han", "tra tre", "tra sach tre", "chua tra", "overdue"],
@@ -91,7 +94,7 @@ CAP_KEYWORDS: dict[str, list] = {
     WAREHOUSE_RISK: ["rui ro", "sap het", "het hang", "het sach", "ton kho thap", "ton thap", "ton it",
                      "thieu sach", "thieu hang", "duoi nguong", "nguong ton", "canh bao ton", "low stock",
                      "out of stock", "con nhieu sach hon", "con it sach", _R(r"\bkho nao\b"),
-                     _R(r"\b(cac|tung|moi) kho\b")],
+                     _R(r"\b(cac|tung|moi) kho\b"), _R(r"\b(tinh hinh|bieu do|so sanh|thong ke|so lieu) ton kho\b")],
     REORDER: ["nhap them", "nhap gi", "nen nhap", "nhap sach", "nhap hang", "bo sung", "de xuat nhap",
               "goi y nhap", "mua them", "reorder", "can nhap", "ngan sach", "dat mua", "nhap bao nhieu",
               "luong nhap", "de xuat nhap", "nhap uu tien"],
@@ -123,6 +126,65 @@ _STYLE_PATTERNS: dict[str, re.Pattern] = {
 def detect_style(text: str) -> dict:
     """{"brief"|"deep"|"plain"|"why_not": True} for every modifier asked for."""
     return {name: True for name, pattern in _STYLE_PATTERNS.items() if pattern.search(text)}
+
+
+# ── visualization requests ──────────────────────────────────────────────────
+# Matched on normalize_query() output. "bảng" and "bằng" both normalize to
+# "bang", so a table is only recognised in table phrases ("dưới dạng bảng",
+# "bảng số liệu", "bằng bảng"), never from "bằng biểu đồ".
+_VIZ_WORDS = _R(r"\b(bieu do|do thi|chart|graph|truc quan( hoa)?|visuali[sz]e|"
+                r"ve (lai|bieu do|do thi|chart|thanh|duoi dang|dang|giup|cho toi|ra))\b")
+_VIZ_TYPE_PATTERNS: list[tuple[str, re.Pattern]] = [
+    ("line", _R(r"\b(bieu do|do thi|dang) duong\b|\bline( chart)?\b|\bduong xu huong\b")),
+    ("area", _R(r"\b(bieu do|do thi|dang) (mien|vung)\b|\barea( chart)?\b")),
+    ("pie", _R(r"\b(bieu do|do thi|dang) (tron|banh|vanh khuyen|quat)\b|\b(pie|donut)( chart)?\b")),
+    ("bar", _R(r"\b(bieu do|do thi|dang) cot\b|\bcot (ngang|doc|chong)\b|\b(bar|column)( chart)?\b")),
+    ("table", _R(r"\b(duoi dang|dang|thanh|ra|xem|lap|ke|hien thi|bang) bang\b(?! bieu do| do thi)|"
+                 r"\bbang (so lieu|du lieu|thong ke|tong hop|xep hang|chi tiet|doi chieu)\b|\btable\b")),
+]
+_VIZ_REF = _R(r"\b(bieu do|do thi|chart|bang)( nay| vua roi| vua xong| vua ve| vua hien thi| tren| do| ay| luc nay|"
+              r" truoc( do)?)\b")
+_VIZ_EXPLAIN = _R(r"\b(giai thich|phan tich|doc|y nghia|nhan xet|noi gi|noi len|cho thay|the hien)\b")
+_VIZ_CHANGE = _R(r"\b(doi|chuyen|ve lai|hien thi lai|trinh bay lai|xem lai|doi lai|thay)\b")
+_TREND_WORDS = _R(r"\b(xu huong|bien dong|dien bien|theo (thang|ngay|tuan|quy)|hang (thang|ngay|tuan)|thong ke)\b")
+_PROPORTION = _R(r"\b(ty trong|ti trong|co cau|phan bo|chiem bao nhieu)\b")
+# Words a pure presentation request is made of. "Vẽ biểu đồ doanh thu bán sách
+# online" has content words left over - a new (unsupported) data question,
+# not a redraw of the previous turn.
+_VIZ_FILLER = set(
+    "bieu do do thi ve lai doi chuyen sang thanh qua dang cot duong tron mien vung banh quat vanh khuyen bang hien thi "
+    "so lieu du lieu giai thich cho thay dieu gi nay vua roi xong tren toi minh xem giup truc quan hoa chart table "
+    "graph duoi nhu the nao the hien y nghia phan tich nhan xet doc noi len hay di nhe voi a luc truoc ay kia cua cai "
+    "la va sao thi duoc khong ra lam ket qua trinh bay hinh anh tat ca ngang chong lai".split())
+VIZ_TYPE_PHRASE = {"line": "bằng biểu đồ đường", "bar": "bằng biểu đồ cột", "area": "bằng biểu đồ miền",
+                   "pie": "bằng biểu đồ tròn", "table": "dưới dạng bảng"}
+
+
+def detect_visualization(text: str) -> dict:
+    """What the user asked about presentation: a chart at all, a specific
+    form, the chart just shown ("biểu đồ vừa rồi"), an explanation of it.
+    The form named after "sang/thành" wins ("đổi biểu đồ đường sang cột")."""
+    chart_type = None
+    after = re.search(r"\b(sang|thanh|qua)\b", text)
+    bare = re.match(r"\s*(cot|duong|tron|mien|bang)\b", text[after.end():]) if after else None
+    if bare:  # "đổi biểu đồ đường sang cột"
+        chart_type = {"cot": "bar", "duong": "line", "tron": "pie", "mien": "area", "bang": "table"}[bare.group(1)]
+    for zone in [] if chart_type else ([text[after.end():]] if after else []) + [text]:
+        hits = [(m.start(), name) for name, pattern in _VIZ_TYPE_PATTERNS for m in [pattern.search(zone)] if m]
+        if hits:
+            chart_type = min(hits)[1]
+            break
+    refers = bool(_VIZ_REF.search(text))
+    return {
+        "requested": bool(_VIZ_WORDS.search(text)) or chart_type is not None,
+        "chart_type": chart_type,
+        "table": chart_type == "table",
+        "refers_previous": refers,
+        "change": chart_type is not None and bool(_VIZ_CHANGE.search(text)),
+        "explain": refers and bool(_VIZ_EXPLAIN.search(text)),
+        "trend": bool(_TREND_WORDS.search(text)),
+        "proportion": bool(_PROPORTION.search(text)),
+    }
 
 
 def answer_mode(analysis: str, caps: list[str], text: str) -> str:
@@ -441,6 +503,10 @@ _ORDINAL_BOOK = _R(r"(?<!\d )\b(cuon|quyen|sach|dau sach)\s*(dau tien|thu nhat|s
 _SENSITIVE = _R(r"so dien thoai|\bsdt\b|dia chi nha|\bemail\b|\bcccd\b|\bcmnd\b|mat khau|password|"
                 r"so tai khoan|the tin dung")
 _ALL_WAREHOUSES = _R(r"\b(tat ca|cac|tung|moi|nhung|toan bo) kho\b|\bkho nao\b")
+# Words after "kho" that are not a warehouse name.
+_HINT_STOP = {"nay", "do", "kia", "ay", "nao", "thap", "cao", "lau", "hang", "sach", "va", "voi", "vs", "thi",
+              "co", "dang", "con", "it", "nhieu", "rui", "can", "duoc", "khong", "toan", "tren", "vua", "bang",
+              "bieu", "kho", "tinh", "so", "cac", "hai", "the", "nhu", "ra", "sao", "gi", "bao", "ton", "theo"}
 
 
 def _wh_norm(text: str) -> str:
@@ -489,8 +555,7 @@ def resolve_warehouses(text: str, warehouses: list[dict]) -> dict:
             continue
         hint_words = m.group(1).split()
         hint = hint_words[0]
-        if hint in {"nay", "do", "kia", "ay", "nao", "thap", "cao", "lau", "hang", "sach", "va", "voi", "vs", "thi",
-                    "co", "dang", "con", "it", "nhieu", "rui", "can", "duoc", "khong", "toan", "tren", "vua"}:
+        if hint in _HINT_STOP:
             continue
         candidates = [w for w in warehouses
                       if any(a.startswith(hint) or f" {hint}" in f" {a}" for a in (_wh_norm(w.get("name", "")),))
@@ -507,6 +572,22 @@ def resolve_warehouses(text: str, warehouses: list[dict]) -> dict:
             assumptions.append(note)
         elif len(candidates) > 1:
             ambiguous = candidates
+    if resolved:
+        # "tồn kho Hà Nội và HCM": the second warehouse is named without its
+        # own "kho". Accepted only when the bare word is a whole word of
+        # exactly one other warehouse's name.
+        for m in re.finditer(r"\b(?:va|voi|vs|hay|so voi)\s+(?:kho\s+)?([a-z0-9]+)\b", text):
+            hint = m.group(1)
+            if len(hint) < 2 or hint in _HINT_STOP or any(s <= m.start(1) < e for s, e in covered):
+                continue
+            candidates = [w for w in warehouses
+                          if w["id"] not in taken and hint in _wh_norm(w.get("name", "")).split()]
+            if len(candidates) == 1:
+                w = candidates[0]
+                taken.add(w["id"])
+                covered.append((m.start(1), m.end(1)))
+                resolved.append((m.start(1), w))
+                assumptions.append(f"Đã hiểu \"{hint.upper() if len(hint) <= 3 else hint}\" là {w.get('name')}")
     resolved.sort(key=lambda item: item[0])
     return {
         "warehouses": [{"id": w["id"], "name": w.get("name"), "code": w.get("code")} for _p, w in resolved],
@@ -536,6 +617,10 @@ class QueryPlan:
     capabilities: list[str] = field(default_factory=list)
     answer_mode: str = LOOKUP
     style: dict = field(default_factory=dict)
+    # Presentation request (detect_visualization) plus, for a follow-up about
+    # the chart just shown, `mode`: "retype" / "render" / "explain" - those
+    # reuse the previous turn's data snapshot instead of new tool calls.
+    visualization: dict = field(default_factory=dict)
     normalized: str = ""
 
     def to_dict(self) -> dict:
@@ -624,10 +709,17 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     ordinal_book = _ORDINAL_BOOK.search(text)
     book_title = _book_title_in(text, message)
     style = detect_style(text)
+    viz = detect_visualization(text)
     # "Giải thích kỹ hơn", "nói ngắn gọn", "vì sao không chọn phương án khác":
     # a request about HOW to say the previous answer, not a new data question.
-    style_only = bool(style) and not caps and not periods and not named_warehouses and not budgets \
+    no_new_scope = not caps and not periods and not named_warehouses and not budgets \
         and budget_pct is None and limit is None and not book_title and not ordinal_book
+    style_only = bool(style) and no_new_scope
+    # "Đổi sang biểu đồ cột", "hiển thị dưới dạng bảng", "biểu đồ này cho thấy
+    # điều gì?": about the data already shown, not a new question.
+    content_words = [w for w in re.findall(r"[a-z0-9]+", text) if w not in _VIZ_FILLER]
+    viz_only = (viz["requested"] or viz["refers_previous"]) and no_new_scope \
+        and not deictic_warehouse and not deictic_book and len(content_words) <= 1
 
     if lead_time is not None:
         periods = [p for p in periods if not p.token.startswith("last_") or str(lead_time) not in p.token]
@@ -636,6 +728,10 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             caps.append(REORDER)
     if analysis == WHAT_IF and not caps and "ngan sach" in text:
         caps.append(REORDER)
+    if len(budgets) >= 2 and analysis in (LOOKUP, COMPARISON):
+        # "So sánh các phương án 5, 10 và 20 triệu": comparing budget
+        # scenarios is a what-if - no scenario may be called optimal.
+        analysis = WHAT_IF
     if named_warehouses and not caps and re.search(r"\b(kho|chi nhanh|chuyen sach|ton)\b", text):
         # "Có nên chuyển sách từ kho A sang kho B?" names warehouses but no metric.
         # A bare city ("Thời tiết Hà Nội") is not a warehouse question.
@@ -653,11 +749,13 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     entity_only = not caps and bool(periods or named_warehouses or budgets or limit or budget_pct is not None)
     referential = deictic_warehouse or deictic_book or deictic_generic or bool(ordinal_book) or "trong so do" in text
     bare_why = text.strip(" ?") in ("tai sao", "vi sao", "ly do", "tai sao vay", "vi sao vay", "sao vay")
-    is_followup = has_state and (looks_followup or entity_only or referential or bare_why or style_only
+    is_followup = has_state and (looks_followup or entity_only or referential or bare_why or style_only or viz_only
                                  or (not caps and analysis in (CAUSAL, COMPARISON, WHAT_IF, DECISION)))
     plan.is_followup = is_followup
     restyle = style_only and is_followup
-    if restyle:
+    prev_viz = state.get("viz") or {}
+    viz_followup = viz_only and is_followup and bool(state.get("tool_calls") or prev_viz.get("shown"))
+    if restyle or viz_followup:
         # Same question, same data, different presentation: inherit the whole
         # previous turn so the re-explanation is about exactly what was shown.
         caps = list(state.get("capabilities") or [])
@@ -668,7 +766,7 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         budgets = list(state.get("budgets") or [])
         priority = state.get("priority")
         limit = state.get("limit")
-        carried.append("previous_turn")
+        carried.append("visualization" if viz_followup and not restyle else "previous_turn")
 
     if is_followup and not caps:
         caps = list(state.get("capabilities") or [])
@@ -748,6 +846,19 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         question = ("Bạn muốn tôi giải thích nội dung nào? Hãy hỏi một câu cụ thể trước, ví dụ: kho nào đang rủi ro "
                     "thiếu sách nhất, hoặc nên nhập sách nào trước.")
         options = ["Kho nào đang rủi ro thiếu sách nhất?", "Tôi nên nhập sách nào trước?"]
+    elif viz_only and not viz_followup:
+        question = ("Chưa có dữ liệu nào trong hội thoại để vẽ. Bạn muốn xem biểu đồ của số liệu nào? Ví dụ: lượt mượn "
+                    "theo tháng, tồn kho giữa các kho, hoặc các phương án ngân sách nhập sách.")
+        options = ["Vẽ biểu đồ lượt mượn 6 tháng gần đây", "So sánh tồn kho giữa các kho bằng biểu đồ",
+                   "So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ"]
+    elif viz["requested"] and not caps and not deictic_warehouse:
+        # A chart of data SmartBook does not have (revenue, web traffic...):
+        # say so and list what can be drawn - never a chart of something else.
+        question = ("Tôi chưa có dữ liệu cho số liệu bạn muốn vẽ, nên không tạo biểu đồ để tránh hiển thị số liệu không "
+                    "có căn cứ. Hiện tôi vẽ được: lượt mượn theo thời gian, top sách được mượn, tồn kho và rủi ro thiếu "
+                    "sách theo kho, đề xuất nhập và mô phỏng ngân sách, quá hạn, tiền phạt, đặt chỗ.")
+        options = ["Vẽ biểu đồ lượt mượn 6 tháng gần đây", "So sánh tồn kho giữa các kho bằng biểu đồ",
+                   "Thống kê top 10 sách bằng biểu đồ"]
     elif text.strip(" ?.") in ("kho nao", "sach nao", "cuon nao", "cai nao", "nao") and not has_state:
         question = ("Bạn muốn hỏi kho/sách nào, và về nội dung gì? Ví dụ: kho nào đang rủi ro thiếu sách nhất, "
                     "hoặc sách nào cần nhập thêm.")
@@ -769,7 +880,12 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         question = f"Bạn muốn so sánh {named_warehouses[0]['name']} với kho nào?"
         options = [f"So sánh {named_warehouses[0]['name']} và {w['name']}" for w in warehouses
                    if w["id"] != named_warehouses[0]["id"]][:3]
+    if question and viz["requested"] and not viz_only:
+        # Keep the presentation the user asked for in the suggested answers.
+        phrase = VIZ_TYPE_PHRASE[viz["chart_type"]] if viz.get("chart_type") else "bằng biểu đồ"
+        options = [o if re.search(r"biểu đồ|bảng", o) else f"{o.rstrip('?')} {phrase}" for o in options]
     if question:
+        plan.visualization = viz
         plan.clarification_needed = True
         plan.clarification_question = question
         plan.clarification_options = options
@@ -799,6 +915,8 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     # A book title is data, not a verb: "Lập Trình Lượng Tử" must not read as
     # "lập (phiếu)" and turn a lookup into a write request with no tools.
     action_text = text.replace(normalize_query(book_title), " ") if book_title else text
+    # "Lập bảng số liệu", "tạo biểu đồ": a presentation request, not a write.
+    action_text = re.sub(r"\b(lap|tao|ve|ke) (bang|bieu do|do thi)\b", " ", action_text)
     action_surface = bool(_ACTION_SURFACE.search(action_text))
     capset = set(caps)
     if PRIORITY in capset:
@@ -833,7 +951,10 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             add("compare_borrow_periods", {**period_args(current, now), **period_args(comparison, now, "compare_")})
         else:
             args = period_args(current, now) if current else {}
-            if re.search(r"theo thang|hang thang|\d+ thang", text):
+            span = (current.dates()[1] - current.dates()[0]).days if current else 0
+            # Daily buckets over months are unreadable as a chart (and exceed
+            # its point limit): anything past ~2 months is shown per month.
+            if re.search(r"theo thang|hang thang|\d+ thang", text) or span > 62:
                 args["granularity"] = "month"
             add("get_borrow_trends", args)
         capset.discard(BORROW_TREND)
@@ -892,9 +1013,11 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         if cap in capset:
             add(_SIMPLE_CAP_TOOL[cap])
 
-    if restyle:
+    if restyle or viz_followup:
         # Replay the previous turn's planner-built calls (never model-chosen
-        # ones): the re-explanation must rest on the same evidence.
+        # ones): the re-explanation must rest on the same evidence. A chart
+        # follow-up normally reuses the stored snapshot instead (main.py);
+        # these calls are the fallback when that snapshot is too old.
         replay = [{"name": c["name"], "args": dict(c.get("args") or {})} for c in state.get("tool_calls") or []
                   if isinstance(c, dict) and c.get("name") in PLANNABLE_TOOLS]
         if replay:
@@ -916,9 +1039,25 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     plan.capabilities = caps
     plan.intent, plan.secondary_intents = _intent_of(caps)
     plan.requested_analysis = analysis
-    plan.answer_mode = (state.get("answer_mode") if restyle and state.get("answer_mode")
+    plan.answer_mode = (state.get("answer_mode") if (restyle or viz_followup) and state.get("answer_mode")
                         else answer_mode(analysis, caps, text))
+    if viz_followup and viz["explain"] and plan.answer_mode == LOOKUP:
+        plan.answer_mode = ANALYSIS  # "biểu đồ này cho thấy gì" asks for a reading, not a number
     plan.style = style
+    request = dict(viz)
+    if viz_followup:
+        request.update(requested=True, mode="explain" if viz["explain"] else "retype" if viz["chart_type"] else "render")
+        if not viz["chart_type"] and prev_viz.get("chart_type"):
+            request.update(chart_type=prev_viz["chart_type"], inherited_type=True)
+    elif is_followup and prev_viz.get("shown") and not viz["requested"] and caps \
+            and set(caps) == set(state.get("capabilities") or []):
+        # "Chỉ lấy dữ liệu tháng này" after a chart: same data shape, new
+        # scope - keep showing it the way the user last saw it.
+        request["requested"] = True
+        if prev_viz.get("chart_type"):
+            request.update(chart_type=prev_viz["chart_type"], inherited_type=True)
+        carried.append("visualization")
+    plan.visualization = request
     plan.entities = {
         "warehouses": named_warehouses,
         "book_title": book_title,
@@ -951,10 +1090,21 @@ _ITEM_SOURCES = (
 )
 
 
-def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = None) -> dict:
+def _viz_state(visualizations: list[dict] | None, previous: dict) -> dict:
+    if visualizations is None:
+        return previous.get("viz") or {}
+    charts = [v for v in visualizations if v.get("type") in ("line", "bar", "area", "pie", "table")]
+    primary = next((v for v in charts if v.get("type") != "table"), charts[0] if charts else None)
+    return {"shown": bool(visualizations), "chart_type": primary.get("type") if primary else None,
+            "types": [v.get("type") for v in visualizations], "titles": [v.get("title") for v in visualizations][:4]}
+
+
+def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = None,
+               visualizations: list[dict] | None = None) -> dict:
     """Structured memory carried to the next turn: topic, entities, period,
     filters, budget and the items just shown (so "cuốn đầu tiên" / "trong số
-    đó" resolve to real variant_ids, not to titles guessed from prose).
+    đó" resolve to real variant_ids, not to titles guessed from prose), and
+    which chart was shown (so "đổi sang biểu đồ cột" knows what to redraw).
     A clarification turn keeps the previous state - nothing was answered."""
     previous = previous or {}
     if plan.clarification_needed:
@@ -988,4 +1138,5 @@ def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = No
         "tools": [t["name"] for t in plan.required_tools],
         "tool_calls": plan.required_tools,
         "answer_mode": plan.answer_mode,
+        "viz": _viz_state(visualizations, previous),
     }

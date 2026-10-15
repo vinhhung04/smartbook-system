@@ -15,6 +15,7 @@ import hashlib
 import html as _html_module
 import time
 import signal
+from datetime import datetime
 import sys
 from html.parser import HTMLParser
 from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
@@ -99,7 +100,10 @@ from tool_context import render_tool_result as _compact_tool_result
 import copilot_explain
 import copilot_response
 import copilot_tools
+import copilot_visualization
 from copilot_plan import QueryPlan as CopilotPlan, build_plan as build_copilot_plan, next_state as copilot_next_state
+from copilot_plan import VN_TZ as COPILOT_TZ
+from copilot_visualization import Visualization
 from copilot_response import COPILOT_SYSTEM_PROMPT
 from routes_actions import router as actions_router
 from routes_conversations import router as conversations_router
@@ -230,6 +234,10 @@ ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
 # also silently truncated a correct direct answer (no tool needed) at 200
 # tokens - the one case where the model is actually generating prose there.
 ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
+# A chart follow-up ("đổi sang biểu đồ cột") redraws the previous turn's data
+# snapshot while it is younger than this; older, the same planner-built tool
+# calls are replayed (same scope, same permissions) and the answer says so.
+VIZ_SNAPSHOT_MAX_AGE_SECONDS = int(os.getenv("VIZ_SNAPSHOT_MAX_AGE_SECONDS", "1800"))
 
 
 @app.on_event("startup")
@@ -3533,6 +3541,12 @@ class AssistantResponse(BaseModel):
     # tool data - FACT / INFERENCE / ASSUMPTION / UNKNOWN with evidence,
     # meaning, certainty - plus alternatives and next steps (copilot_explain).
     explanation: dict | None = None
+    # AI Copilot 3.0 (optional, additive): validated visualization specs built
+    # from the same tool data (copilot_visualization) - never by the model -
+    # and short notes on charts that were not drawn (no permission, too little
+    # data, incompatible chart type).
+    visualizations: list[Visualization] = []
+    visualization_notes: list[str] = []
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -4278,11 +4292,30 @@ async def _plan_assistant_turn(message_text: str, state: dict | None, auth_heade
     return plan, warehouses
 
 
-def _plan_fast_path(plan):
+def _snapshot_results(snapshot: dict) -> list[dict]:
+    """A stored turn's tool results in seed_fast_path's shape: data keys as
+    stored (a second call of one tool is "name#2"), arguments from the stored
+    tool_calls in order."""
+    calls = [c for c in snapshot.get("tool_calls") or [] if isinstance(c, dict)]
+    out = []
+    for key, result in (snapshot.get("data") or {}).items():
+        name = key.split("#")[0]
+        call = next((c for c in calls if c.get("name") == name), None)
+        if call is not None:
+            calls.remove(call)
+        out.append({"tool_name": key, "tool_args": dict((call or {}).get("arguments") or {}), "tool_result": result})
+    return out
+
+
+def _plan_fast_path(plan, snapshot: dict | None = None):
     """seed_fast_path's tool runner for this turn: the plan's whitelisted tools
     when it has any; the original rule fast path when the plan understood
-    nothing; nothing at all for out-of-scope/sensitive requests."""
+    nothing; nothing at all for out-of-scope/sensitive requests. With a
+    `snapshot` ("biểu đồ này cho thấy gì?"), the data the chart was drawn
+    from - so the explanation is about exactly what the user saw."""
     async def run(message: str, auth_header: str | None) -> list[dict]:
+        if snapshot and snapshot.get("data"):
+            return _snapshot_results(snapshot)
         if not plan.required_tools:
             if plan.requested_analysis == "out_of_scope" or plan.clarification_needed:
                 return []
@@ -4327,6 +4360,8 @@ def _assistant_payload(
         "recommendations": extras.get("recommendations", []),
         "data_as_of": extras.get("data_as_of"),
         "explanation": extras.get("explanation"),
+        "visualizations": extras.get("visualizations") or [],
+        "visualization_notes": extras.get("visualization_notes") or [],
     }
     if debug is not None:
         payload["debug"] = debug
@@ -4368,25 +4403,153 @@ async def _cached_turn(cached: dict, conversation, conversation_id_str: str, mes
     return payload
 
 
+async def _load_viz_snapshot(conversation) -> dict | None:
+    """The last answered turn's data snapshot in THIS conversation (already
+    ownership-checked): its tool results, tool calls, visualizations and read
+    time. Clarification turns are skipped - they hold no data."""
+    recent = await conversation_store.get_recent_messages(conversation.id)
+    for m in reversed(recent):
+        meta = getattr(m, "msg_metadata", None)
+        if m.role != "assistant" or not isinstance(meta, dict):
+            continue
+        if (meta.get("plan") or {}).get("clarification_needed"):
+            continue
+        extras = meta.get("extras") or {}
+        data = getattr(m, "data", None)
+        data = data if isinstance(data, dict) else {}
+        if not data and not extras.get("visualizations"):
+            return None
+        return {"data": data, "tool_calls": getattr(m, "tool_calls", None) or [],
+                "visualizations": extras.get("visualizations") or [], "data_as_of": extras.get("data_as_of")}
+    return None
+
+
+def _viz_data(plan, collected_data: dict) -> dict:
+    """The tool results a turn's charts are drawn from: when the planner
+    planned the tools, only those - an extra call the model chose in a later
+    round (its own periods, its own framing) informs the text but is not
+    turned into a chart. Without a plan, every result."""
+    planned = {t["name"] for t in (plan.required_tools if plan is not None else [])}
+    if not planned:
+        return collected_data
+    return {k: v for k, v in collected_data.items() if k.split("#")[0] in planned}
+
+
+def _snapshot_time(snapshot: dict | None) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str((snapshot or {}).get("data_as_of"))).astimezone(COPILOT_TZ)
+    except (TypeError, ValueError):
+        return None
+
+
+def _vn_time(moment: datetime | None) -> str:
+    return moment.astimezone(COPILOT_TZ).strftime("%H:%M %d/%m/%Y") if moment else "không rõ"
+
+
+def _visualization_answer(plan, specs: list[dict], notes: list[str], as_of: datetime | None,
+                          refetched: bool, refreshed_from: datetime | None) -> str:
+    """The deterministic reply to "đổi sang biểu đồ cột" / "hiển thị dạng bảng":
+    what was redrawn, from which data, read when. No model, no new numbers."""
+    request = plan.visualization or {}
+    shown = [v for v in specs if v["type"] != "kpi"] or specs
+    if not shown:
+        return " ".join(["Dữ liệu của lượt trước không có số liệu nào phù hợp để trực quan hóa."] + notes)
+    primary = shown[0]
+    label = copilot_visualization.TYPE_LABELS[primary["type"]]
+    if request.get("mode") == "retype" and request.get("chart_type") == primary["type"]:
+        lead = f"Đã chuyển \"{primary['title']}\" sang {label}."
+    else:
+        lead = f"Đây là {label} \"{primary['title']}\"."
+    if refetched and refreshed_from is not None:
+        source = (f"Dữ liệu lượt trước đã cũ (truy xuất lúc {_vn_time(refreshed_from)}) nên tôi đã truy vấn lại với cùng "
+                  f"phạm vi lúc {_vn_time(as_of)}.")
+    elif refetched:
+        source = f"Dữ liệu được truy vấn lại với cùng phạm vi lúc {_vn_time(as_of)}."
+    else:
+        source = f"Dùng đúng dữ liệu của lượt trước (truy xuất lúc {_vn_time(as_of)}); số liệu không thay đổi."
+    return " ".join([lead, source] + notes)
+
+
+async def _visualization_turn(turn: dict) -> dict:
+    """A chart follow-up without new data: redraw the previous turn's snapshot
+    as asked (same rows - copilot_visualization.apply_chart_type), or draw it
+    for the first time. A snapshot older than VIZ_SNAPSHOT_MAX_AGE_SECONDS is
+    re-read by replaying the previous turn's planner-built tool calls with the
+    caller's own token. Deterministic: no LLM call, nothing recomputed."""
+    plan, snapshot = turn["plan"], turn.get("snapshot")
+    conversation, message_text = turn["conversation"], turn["message_text"]
+    now = datetime.now(COPILOT_TZ)
+    taken_at = _snapshot_time(snapshot)
+    fresh = bool(snapshot and snapshot.get("data")) and taken_at is not None \
+        and (now - taken_at).total_seconds() <= VIZ_SNAPSHOT_MAX_AGE_SECONDS
+    request = plan.visualization or {}
+    refreshed_from = None
+    if fresh:
+        collected, tool_calls, as_of = snapshot["data"], list(snapshot.get("tool_calls") or []), taken_at
+    else:
+        results = await _plan_fast_path(plan)(message_text, turn["auth_header"])
+        collected = {}
+        for r in results:
+            key = r["tool_name"] if r["tool_name"] not in collected else f"{r['tool_name']}#2"
+            collected[key] = r["tool_result"]
+        tool_calls = [{"name": r["tool_name"], "arguments": r["tool_args"]} for r in results]
+        as_of = now
+        refreshed_from = taken_at if snapshot else None
+    previous = (snapshot or {}).get("visualizations") or []
+    specs, notes = [], []
+    if fresh and previous and request.get("mode") == "retype":
+        try:
+            specs, note = copilot_visualization.apply_chart_type(previous, request["chart_type"])
+            notes = [note] if note else []
+        except Exception:  # noqa: BLE001 - a stored spec that no longer validates is rebuilt
+            logger.info("stored visualization did not validate; rebuilding from snapshot data")
+            specs = []
+    if not specs:
+        specs, notes = copilot_visualization.build_visualizations(plan, collected, as_of)
+    answer = _visualization_answer(plan, specs, notes, as_of, not fresh, refreshed_from)
+    followups = []
+    for v in specs:
+        followups += [q for q in (v.get("interactions") or {}).get("followups") or [] if q not in followups]
+    extras = {"suggested_followups": (["Giải thích biểu đồ vừa rồi"] + followups)[:3] if specs else [],
+              "caveats": [], "recommendations": [], "data_as_of": as_of.isoformat(timespec="seconds") if collected else None,
+              "explanation": None, "visualizations": specs, "visualization_notes": notes}
+    new_state = copilot_next_state(plan, collected, turn["state"], specs)
+    await conversation_store.append_message(conversation.id, role="user", content=message_text)
+    await conversation_store.append_message(
+        conversation.id, role="assistant", content=answer, tool_calls=tool_calls, data=collected,
+        metadata={"copilot_state": new_state, "plan": plan.public(), "extras": extras},
+    )
+    return _assistant_payload(
+        answer=answer, tools_used=tool_calls, collected_data=collected, conversation_id=turn["conversation_id_str"],
+        grounding_warning=None, pending_action=None, plan=plan, extras=extras, debug={"llm_calls": []},
+    )
+
+
 async def _finalize_assistant_turn(
     *, message_text: str, answer: str, answered_normally: bool, tools_used: list, collected_data: dict,
     messages: list[dict], provider, call_usage: list[dict], plan, state: dict | None, warehouses: list[dict],
     user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str,
-    plan_note_text: str = "",
+    plan_note_text: str = "", viz_now: datetime | None = None,
 ) -> dict:
     """Everything after the tool loop, shared by both endpoints: one grounding
     retry, the reorder pending action (still confirmation-gated), the
-    deterministic extras, the next conversation state, cache and persistence."""
+    deterministic extras, the next conversation state, cache and persistence.
+    `viz_now` is the snapshot time when the data is a stored snapshot."""
     if not answer:
         answer = "Xin lỗi, tôi chưa thể tạo câu trả lời cho câu hỏi này."
     if _RAW_JSON_REPLY.match(answer):
         answer = RAW_JSON_REFUSAL
 
     explanation = copilot_explain.build_explanation(plan, collected_data)
-    # The brief's derived values (differences, per-day averages) were shown to
-    # the model, so quoting them is grounded.
-    grounded_context = f"{plan_note_text}\n{copilot_explain.explanation_brief(explanation)}"
-    grounded_values = copilot_explain.numbers_in(explanation)
+    visualizations = copilot_visualization.build_visualizations(plan, _viz_data(plan, collected_data), viz_now)
+    if visualizations[0]:
+        answer = copilot_visualization.strip_text_charts(answer)
+    # The brief's derived values (differences, per-day averages, chart totals)
+    # were shown to the model, so quoting them is grounded.
+    grounded_context = (f"{plan_note_text}\n{copilot_explain.explanation_brief(explanation)}\n"
+                        f"{copilot_visualization.visualization_brief(*visualizations)}")
+    grounded_values = copilot_explain.numbers_in(explanation) \
+        + copilot_visualization.numbers_in_visualizations(visualizations[0])
 
     def check(text: str) -> tuple[str | None, list[dict]]:
         return (_grounding_check(text, collected_data, message_text, grounded_context, grounded_values),
@@ -4415,9 +4578,9 @@ async def _finalize_assistant_turn(
             message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
         )
 
-    extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, question=message_text,
-                                           answer=answer, explanation=explanation)
-    new_state = copilot_next_state(plan, collected_data, state)
+    extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, now=viz_now, question=message_text,
+                                           answer=answer, explanation=explanation, visualizations=visualizations)
+    new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
     metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras}
     tool_calls = _tool_call_dicts(tools_used)
     payload = _assistant_payload(
@@ -4426,7 +4589,9 @@ async def _finalize_assistant_turn(
         debug={"llm_calls": call_usage},
     )
 
-    if answered_normally and not pending_action_data:
+    # A chart follow-up depends on the previous turn's snapshot, not only on
+    # its own text - never served from the per-message cache.
+    if answered_normally and not pending_action_data and not (plan.visualization or {}).get("mode"):
         assistant_response_cache.set(cache_key, {
             **{k: v for k, v in payload.items() if k not in ("conversation_id", "pending_action", "debug")},
             "metadata": metadata,
@@ -4480,8 +4645,20 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     turn.update({"history": history, "state": state, "plan": plan, "warehouses": warehouses})
     if plan.clarification_needed:
         return turn
+    viz_mode = (plan.visualization or {}).get("mode")
+    if viz_mode:
+        turn["snapshot"] = await _load_viz_snapshot(conversation)
+    if viz_mode in ("retype", "render"):
+        return turn  # _visualization_turn persists both sides, no LLM
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
     turn["plan_note"] = copilot_response.plan_note(plan)
+    snapshot = turn.get("snapshot")
+    if viz_mode == "explain" and snapshot and snapshot.get("data"):
+        turn["viz_now"] = _snapshot_time(snapshot)
+        turn["plan_note"] += (
+            f"\n- Lượt này giải thích biểu đồ/bảng vừa hiển thị. Dữ liệu bên dưới là ảnh chụp đã truy xuất lúc "
+            f"{_vn_time(turn['viz_now'])}, không truy vấn lại: nói rõ mốc thời gian đó, đọc xu hướng/so sánh chính "
+            "của biểu đồ và ý nghĩa với người quản lý; không gọi thêm tool.")
     turn["messages"] = _assistant_prompt_messages(history, message_text, turn["plan_note"],
                                                   copilot_response.few_shot(plan))
     style_request = copilot_response.style_request(plan)
@@ -4490,12 +4667,16 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     return turn
 
 
-def _attach_explanation_brief(messages: list[dict], plan, collected_data: dict) -> None:
+def _attach_explanation_brief(messages: list[dict], plan, collected_data: dict, viz_now: datetime | None = None) -> None:
     """After the planned tools ran: put the structured explanation of their
     results into the system message, so the model reasons from claims whose
     kind and certainty the backend already decided (both endpoints)."""
     brief = copilot_explain.explanation_brief(
         copilot_explain.build_explanation(plan, collected_data), copilot_response.card_titles(collected_data))
+    specs, notes = copilot_visualization.build_visualizations(plan, _viz_data(plan, collected_data), viz_now)
+    viz_brief = copilot_visualization.visualization_brief(specs, notes)
+    if viz_brief:
+        brief = f"{brief}\n\n{viz_brief}" if brief else viz_brief
     if not collected_data and plan.capabilities and not plan.clarification_needed \
             and plan.requested_analysis != "out_of_scope":
         # A data question with nothing fetched yet (e.g. a write request, whose
@@ -4516,6 +4697,8 @@ async def assistant(request: Request, req: AssistantRequest):
     plan = turn["plan"]
     if plan.clarification_needed:
         return AssistantResponse(**await _clarify_turn(plan, conversation, conversation_id_str, message_text, turn["state"]))
+    if (plan.visualization or {}).get("mode") in ("retype", "render"):
+        return AssistantResponse(**await _visualization_turn(turn))
 
     messages = turn["messages"]
     answer = ""
@@ -4523,9 +4706,9 @@ async def assistant(request: Request, req: AssistantRequest):
     call_usage: list[dict] = []
 
     tools_used, collected_data, start_round = await seed_fast_path(
-        message_text, auth_header, messages, _plan_fast_path(plan), _render_tool_result,
+        message_text, auth_header, messages, _plan_fast_path(plan, turn.get("snapshot")), _render_tool_result,
     )
-    _attach_explanation_brief(messages, plan, collected_data)
+    _attach_explanation_brief(messages, plan, collected_data, turn.get("viz_now"))
 
     try:
         provider = _get_assistant_provider()
@@ -4567,9 +4750,15 @@ async def assistant(request: Request, req: AssistantRequest):
         collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
         state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
         conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
-        plan_note_text=turn["plan_note"],
+        plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
     )
     return AssistantResponse(**payload)
+
+
+def _validated_payload(payload: dict) -> dict:
+    """The SSE `done` body through the same response model /assistant uses,
+    so both endpoints emit one validated schema (visualizations included)."""
+    return AssistantResponse(**payload).model_dump()
 
 
 def _sse(event: str, data: dict) -> str:
@@ -4604,6 +4793,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             yield _sse("done", payload)
         return StreamingResponse(clarify_event_generator(), media_type="text/event-stream")
 
+    if (plan.visualization or {}).get("mode") in ("retype", "render"):
+        async def visualization_event_generator():
+            payload = _validated_payload(await _visualization_turn(turn))
+            yield _sse("token", {"text": payload["answer"]})
+            yield _sse("done", payload)
+        return StreamingResponse(visualization_event_generator(), media_type="text/event-stream")
+
     messages = turn["messages"]
 
     async def event_generator():
@@ -4612,9 +4808,9 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         call_usage: list[dict] = []
 
         tools_used, collected_data, start_round = await seed_fast_path(
-            message_text, auth_header, messages, _plan_fast_path(plan), _render_tool_result,
+            message_text, auth_header, messages, _plan_fast_path(plan, turn.get("snapshot")), _render_tool_result,
         )
-        _attach_explanation_brief(messages, plan, collected_data)
+        _attach_explanation_brief(messages, plan, collected_data, turn.get("viz_now"))
 
         try:
             provider = _get_assistant_provider()
@@ -4670,9 +4866,9 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
             state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
             conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
-            plan_note_text=turn["plan_note"],
+            plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
         )
-        yield _sse("done", payload)
+        yield _sse("done", _validated_payload(payload))
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
