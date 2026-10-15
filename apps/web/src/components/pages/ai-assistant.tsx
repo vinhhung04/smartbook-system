@@ -37,6 +37,7 @@ import {
   type AiConversationSummary,
   type AiEvidenceItem,
   type AiExplanation,
+  type AiFaithfulness,
   type AiRecommendation,
   type AssistantExtras,
   type PendingAction,
@@ -48,11 +49,12 @@ import {
   CopilotCaveats,
   CopilotDataAsOf,
   CopilotExplanation,
+  CopilotFaithfulness,
   CopilotFollowups,
   CopilotRecommendations,
 } from '@/components/ai-copilot-insights';
 import { CopilotVisualizationNotes, CopilotVisualizations } from '@/components/ai-copilot-visualization';
-import { sanitizeVisualizations, type CopilotVisualizationSpec } from '@/lib/copilot-visualization';
+import { formatDataAsOf, sanitizeVisualizations, type CopilotVisualizationSpec } from '@/lib/copilot-visualization';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { ActionCard } from '@/components/ai-action-card';
@@ -73,6 +75,7 @@ interface AssistantMessage {
   explanation?: AiExplanation | null;
   visualizations?: CopilotVisualizationSpec[];
   visualizationNotes?: string[];
+  faithfulness?: AiFaithfulness | null;
   /** Reopened from history: charts show the stored snapshot, never refreshed. */
   fromHistory?: boolean;
   isError?: boolean;
@@ -87,6 +90,7 @@ function extrasToMessageFields(extras?: AssistantExtras | null): Partial<Assista
     explanation: extras?.explanation ?? null,
     visualizations: sanitizeVisualizations(extras?.visualizations),
     visualizationNotes: extras?.visualization_notes ?? [],
+    faithfulness: extras?.faithfulness ?? null,
   };
 }
 
@@ -215,7 +219,7 @@ function ConversationList({ conversations, activeId, onSwitch, onRename, onDelet
               {conv.title || 'Hội thoại chưa đặt tên'}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {conv.last_message_at ? new Date(conv.last_message_at).toLocaleString('vi-VN') : ''}
+              {formatDataAsOf(conv.last_message_at) ?? ''}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -761,6 +765,7 @@ export function AIAssistantPage() {
                           </Alert>
                         )}
 
+                        {!isStreamingMessage && <CopilotFaithfulness result={message.faithfulness} />}
                         {!isStreamingMessage && <CopilotExplanation explanation={message.explanation} />}
                         {!isStreamingMessage && message.recommendations && message.recommendations.length > 0 && (
                           <CopilotRecommendations items={message.recommendations} />

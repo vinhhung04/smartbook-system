@@ -1,5 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 
+const {
+  readableWarehouseFilter,
+  requireWarehouseReadAccess,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
+
 const prisma = new PrismaClient();
 
 function parseId(value) {
@@ -8,7 +14,10 @@ function parseId(value) {
 
 async function getAllWarehouses(req, res) {
   try {
+    // Only the warehouses in the caller's scope (all of them for a superuser).
+    const readable = await readableWarehouseFilter(req.user);
     const warehouses = await prisma.warehouses.findMany({
+      where: readable ? { id: { in: readable } } : undefined,
       orderBy: { id: 'desc' },
       include: {
         _count: {
@@ -22,7 +31,7 @@ async function getAllWarehouses(req, res) {
     return res.json(warehouses);
   } catch (error) {
     console.error('Error while fetching warehouses:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(scopeErrorStatus(error)).json({ message: error.expose ? error.message : 'Internal server error' });
   }
 }
 
@@ -34,6 +43,7 @@ async function getWarehouseById(req, res) {
   }
 
   try {
+    if (!(await requireWarehouseReadAccess(req, res, id))) return undefined;
     const warehouse = await prisma.warehouses.findUnique({
       where: { id },
       include: {

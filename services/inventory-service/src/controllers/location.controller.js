@@ -1,5 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 
+const { requireWarehouseReadAccess } = require('../utils/warehouse-scope.utils');
+
 const prisma = new PrismaClient();
 
 const LOCATION_TYPES = ['ZONE', 'SHELF', 'SHELF_COMPARTMENT', 'BIN'];
@@ -254,6 +256,7 @@ async function getZonesAndBinsByWarehouse(req, res) {
   }
 
   try {
+    if (!(await requireWarehouseReadAccess(req, res, warehouseId))) return undefined;
     const warehouse = await prisma.warehouses.findUnique({
       where: { id: warehouseId },
       include: {

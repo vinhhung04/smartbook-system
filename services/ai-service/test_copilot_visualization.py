@@ -386,6 +386,30 @@ class PlannerVisualizationTests(unittest.TestCase):
         p = plan("So sánh các phương án nhập sách 5 triệu, 10 triệu và 20 triệu bằng biểu đồ.")
         self.assertEqual(p.required_tools[0]["args"]["budgets_vnd"], [5_000_000, 10_000_000, 20_000_000])
 
+    def test_period_rules_rolling_completed_calendar(self):
+        # Unchanged meaning: last 6 x 30 days (first and last month partial).
+        p = plan("Vẽ biểu đồ lượt mượn 6 tháng gần đây")
+        self.assertEqual((p.time_range["token"], p.time_range["start"], p.time_range["end"]),
+                         ("last_6_months", "2026-04-18", "2026-10-15"))
+        # 6 completed months: Apr-Sep 2026, every bucket whole.
+        p = plan("Vẽ biểu đồ lượt mượn 6 tháng trọn")
+        self.assertEqual((p.time_range["start"], p.time_range["end"]), ("2026-04-01", "2026-09-30"))
+        self.assertEqual(p.required_tools[0]["args"]["granularity"], "month")
+        # 6 calendar months: May 1 to today (October month-to-date).
+        p = plan("Lượt mượn 6 tháng theo lịch")
+        self.assertEqual((p.time_range["start"], p.time_range["end"]), ("2026-05-01", "2026-10-15"))
+        # month to date
+        p = plan("Lượt mượn tháng này")
+        self.assertEqual((p.time_range["start"], p.time_range["end"]), ("2026-10-01", "2026-10-15"))
+
+    def test_completed_months_have_no_partial_bucket(self):
+        p = plan("Vẽ biểu đồ lượt mượn 6 tháng trọn")
+        rows = [{"date": f"2026-{m:02d}", "loans": n, "returns": 1, "reservations": 1}
+                for m, n in zip(range(4, 10), [120, 130, 110, 100, 90, 80])]
+        line = next(v for v in cv.build_visualizations(p, {"get_borrow_trends": rows}, NOW)[0] if v["type"] == "line")
+        self.assertFalse(line["is_partial"])
+        self.assertEqual(line["annotations"], [])
+
     def test_long_periods_are_charted_per_month(self):
         args = plan("Xu hướng mượn năm nay").required_tools[0]["args"]
         self.assertEqual(args.get("granularity"), "month")

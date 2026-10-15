@@ -3,12 +3,15 @@
 // esbuild transform so this runs on CI's Node 20 as well (no native TS there).
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { test } from 'node:test';
 import { transformWithEsbuild } from 'vite';
 
 const source = await readFile(new URL('../src/lib/copilot-visualization.ts', import.meta.url), 'utf8');
 const { code } = await transformWithEsbuild(source, 'copilot-visualization.ts', { loader: 'ts', format: 'esm' });
+const moduleUrl = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
 const {
+  formatDataAsOf,
   budgetPrompt,
   filterRows,
   formatAxisTick,
@@ -19,7 +22,7 @@ const {
   switchableTypes,
   tableColumns,
   VIZ_LIMITS,
-} = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+} = await import(moduleUrl);
 
 const base = (over = {}) => ({
   id: 'viz-0123456789ab',
@@ -126,4 +129,21 @@ test('filtering is accent-insensitive', () => {
 
 test('the budget slider asks the backend instead of interpolating', () => {
   assert.equal(budgetPrompt([12_000_000]), 'Nếu ngân sách nhập sách là 12 triệu thì sao? Hiển thị biểu đồ.');
+});
+
+test('snapshot times are shown in Vietnam time whatever the zone of the instant', () => {
+  assert.equal(formatDataAsOf('2026-10-15T09:31:50+07:00'), '09:31 15/10/2026');
+  assert.equal(formatDataAsOf('2026-10-15T02:31:50Z'), '09:31 15/10/2026');
+  // 17:30 UTC on the last day of a month is already the next month in Vietnam.
+  assert.equal(formatDataAsOf('2026-09-30T17:30:00Z'), '00:30 01/10/2026');
+  assert.equal(formatDataAsOf('not a date'), null);
+  assert.equal(formatDataAsOf(null), null);
+});
+
+test('the machine time zone does not change the label (CI runs in UTC)', () => {
+  const script = `const m = await import(${JSON.stringify(moduleUrl)}); console.log(m.formatDataAsOf('2026-10-15T09:31:50+07:00'));`;
+  for (const TZ of ['UTC', 'America/New_York', 'Asia/Tokyo', 'Asia/Ho_Chi_Minh']) {
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e', script], { env: { ...process.env, TZ } }).toString().trim();
+    assert.equal(out, '09:31 15/10/2026', TZ);
+  }
 });

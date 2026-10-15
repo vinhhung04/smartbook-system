@@ -196,24 +196,61 @@ test.describe('AI copilot visualizations', () => {
     await expect.poll(() => asked.at(-1)).toBe('Nếu ngân sách nhập sách là 11 triệu thì sao? Hiển thị biểu đồ.');
   });
 
-  test('a reopened conversation shows the stored snapshot, labelled as such', async ({ page }) => {
-    await stubAssistant(page, []);
-    await page.route('**/assistant/conversations/e2e-history', (route) => route.fulfill({
-      json: {
-        conversation: { conversation_id: 'e2e-history', title: 'Lịch sử', status: 'ACTIVE' },
-        messages: [
-          { role: 'user', content: 'Vẽ biểu đồ lượt mượn', created_at: AS_OF },
-          { role: 'assistant', content: 'Lượt mượn giảm.', extras: { visualizations: [LINE], data_as_of: AS_OF }, created_at: AS_OF },
-        ],
-      },
-    }));
-    await loginStaff(page);
-    await page.evaluate(() => localStorage.setItem('smartbook:ai-assistant:active-conversation-id', 'e2e-history'));
-    await page.goto('/ai-assistant');
-    const chart = page.getByRole('region', { name: 'Đường: Lượt mượn theo tháng' });
-    await expect(chart).toBeVisible();
-    await expect(chart.getByText('Ảnh chụp dữ liệu lúc 09:31 15/10/2026')).toBeVisible();
-    await expect(page.getByText(/không tự cập nhật/)).toBeVisible();
+  // CI runs the browser in UTC; the label must read the same Vietnam time in
+  // any zone, and the stored timestamp (+07:00 or Z) must not be rewritten.
+  for (const { timezoneId, asOf } of [
+    { timezoneId: 'UTC', asOf: AS_OF },
+    { timezoneId: 'America/New_York', asOf: '2026-10-15T02:31:50Z' },
+    { timezoneId: 'Asia/Ho_Chi_Minh', asOf: AS_OF },
+  ]) {
+    test.describe(`browser in ${timezoneId}`, () => {
+      test.use({ timezoneId });
+
+      test('a reopened conversation shows the stored snapshot, labelled as such', async ({ page }) => {
+        await stubAssistant(page, []);
+        await page.route('**/assistant/conversations/e2e-history', (route) => route.fulfill({
+          json: {
+            conversation: { conversation_id: 'e2e-history', title: 'Lịch sử', status: 'ACTIVE' },
+            messages: [
+              { role: 'user', content: 'Vẽ biểu đồ lượt mượn', created_at: asOf },
+              {
+                role: 'assistant', content: 'Lượt mượn giảm.', created_at: asOf,
+                extras: { visualizations: [{ ...LINE, data_as_of: asOf }], data_as_of: asOf },
+              },
+            ],
+          },
+        }));
+        await loginStaff(page);
+        await page.evaluate(() => localStorage.setItem('smartbook:ai-assistant:active-conversation-id', 'e2e-history'));
+        await page.goto('/ai-assistant');
+        const chart = page.getByRole('region', { name: 'Đường: Lượt mượn theo tháng' });
+        await expect(chart).toBeVisible();
+        await expect(chart.getByText('Ảnh chụp dữ liệu lúc 09:31 15/10/2026')).toBeVisible();
+        await expect(page.getByText(/không tự cập nhật/)).toBeVisible();
+      });
+    });
+  }
+
+  test('an answer the faithfulness check replaced says so; a passing one shows nothing', async ({ page }) => {
+    const replaced = {
+      status: 'fallback', retried: true, latency_ms: 1.2,
+      issues: [{ type: 'CONTRADICTION', phrase: 'Lượt mượn tăng mạnh.', detail: 'Dữ liệu: giảm', blocking: true, label: 'mâu thuẫn với xu hướng trong dữ liệu' }],
+    };
+    let call = 0;
+    await page.route('**/assistant/stream', async (route) => {
+      call += 1;
+      const payload = { ...answer([LINE]), faithfulness: call === 1 ? replaced : { status: 'passed', retried: false, issues: [] } };
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: sse(payload) });
+    });
+    await page.route('**/assistant/conversations', (route) => route.fulfill({ json: { items: [] } }));
+    await page.route('**/assistant/actions?**', (route) => route.fulfill({ json: { items: [] } }));
+    await openAssistant(page);
+    await ask(page, 'Vẽ biểu đồ lượt mượn 6 tháng gần đây');
+    const note = page.getByRole('note').filter({ hasText: 'thay bằng kết luận tính trực tiếp từ dữ liệu' });
+    await expect(note).toBeVisible();
+    await expect(note).toContainText('mâu thuẫn với xu hướng trong dữ liệu');
+    await ask(page, 'Vẽ lại biểu đồ');
+    await expect(page.getByRole('note')).toHaveCount(1); // the passing answer adds none
   });
 
   test('dark mode recolours the series and the chart fits a phone screen', async ({ page }) => {

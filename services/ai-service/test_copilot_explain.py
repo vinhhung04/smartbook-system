@@ -242,6 +242,14 @@ class OverclaimTests(unittest.TestCase):
         self.assertEqual(self.phrases("Bù đủ 100% thiếu hụt, tức đáp ứng 100% của 100 dòng được liệt kê.", self.sim), [])
         self.assertEqual(self.phrases("Ngân sách này đáp ứng **100%** thiếu hụt.", self.sim), ["đáp ứng 100%"])
 
+    def test_scenario_names_and_selected_lines_are_not_coverage_claims(self):
+        # false positives found in the 3.1 held-out evaluation (xai-wi-05, xai-wi-02)
+        self.assertEqual(self.phrases("- **100% nhu cầu (68.375.250 ₫)**: duyệt 68.375.250 ₫ cho 100 đầu sách.", self.sim), [])
+        self.assertEqual(self.phrases("- Từ \"100% nhu cầu\" xuống \"75%\": tiết kiệm 17.133.150 ₫.", self.sim), [])
+        self.assertEqual(self.phrases("Mức ngân sách này đáp ứng đủ thiếu hụt dự kiến của các dòng được chọn, nhưng chưa "
+                                      "bao phủ toàn bộ nhu cầu.", self.sim), [])
+        self.assertEqual(self.phrases("Ngân sách này đáp ứng 100% nhu cầu của thư viện.", self.sim), ["đáp ứng 100%"])
+
     def test_no_explanation_means_nothing_to_check(self):
         self.assertEqual(ce.overclaims("chắc chắn là do", None), [])
         self.assertIsNone(ce.overclaim_warning([]))

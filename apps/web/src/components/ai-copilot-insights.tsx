@@ -1,6 +1,7 @@
 import { Fragment, useId, useState, type ReactNode } from 'react';
 import { ArrowRight, ChevronDown, Clock3, HelpCircle, Info, Lightbulb, ShieldAlert, Sparkles } from 'lucide-react';
-import type { AiExplanation, AiExplanationClaim, AiRecommendation } from '@/services/ai';
+import type { AiExplanation, AiExplanationClaim, AiFaithfulness, AiRecommendation } from '@/services/ai';
+import { formatDataAsOf } from '@/lib/copilot-visualization';
 
 // Renders the structured parts of a copilot answer that the backend computes
 // from tool data (never from the model): recommendations with their evidence,
@@ -113,10 +114,7 @@ function formatMetric(value: unknown, unit?: string): string {
 }
 
 function formatTime(iso?: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatDataAsOf(iso);
 }
 
 const CONFIDENCE_TONE: Record<string, string> = {
@@ -345,6 +343,30 @@ export function CopilotExplanation({ explanation }: { explanation?: AiExplanatio
         </div>
       )}
     </section>
+  );
+}
+
+/** Shown only when the faithfulness check could not fully vouch for the text:
+ * "warning" keeps the answer and lists what does not match the data;
+ * "fallback" says the answer was replaced by the data's own conclusion. */
+export function CopilotFaithfulness({ result }: { result?: AiFaithfulness | null }) {
+  if (!result || (result.status !== 'warning' && result.status !== 'fallback')) return null;
+  const issues = result.issues.filter((i) => i.type !== 'INTERNAL_LABEL');
+  const labels = [...new Set(issues.map((i) => i.label))];
+  return (
+    <div role="note" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      <p className="flex items-center gap-1.5 font-semibold">
+        <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+        {result.status === 'fallback'
+          ? 'Câu trả lời đã được thay bằng kết luận tính trực tiếp từ dữ liệu'
+          : 'Một số nhận định chưa khớp hoàn toàn với dữ liệu'}
+      </p>
+      {labels.length > 0 && (
+        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+          {labels.map((label) => <li key={label}>{label}</li>)}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -794,8 +794,11 @@ _CLAUSE_END = re.compile(r"[.;:!?\n,]")
 _CERTAIN = re.compile(r"\b(?<!mức )(?<!độ )(chắc chắn|rõ ràng là|hiển nhiên|không còn nghi ngờ)\b")
 _CAUSAL_WORDS = re.compile(r"(chủ yếu (là )?do|nguyên nhân (chính|chủ yếu)|chính là do|\blà do\b|bắt nguồn từ|\bgây ra\b)")
 _OPTIMAL = re.compile(r"(tối ưu(?! hóa| hoá)|tốt nhất)")
-_FULL = re.compile(r"(đáp ứng (toàn bộ|đầy đủ|đủ|hết|100%)|toàn bộ nhu cầu|100% nhu cầu|giải quyết (hoàn toàn|triệt để))")
-_QUALIFIED = re.compile(r"(được liệt kê|trong danh sách|được tính|dòng đầu)")
+# "100% nhu cầu (68.375.250 ₫)", 'từ "100% nhu cầu" xuống "75%"' name a budget
+# scenario - not a coverage claim.
+_FULL = re.compile(r"(đáp ứng (toàn bộ|đầy đủ|đủ|hết|100%)|toàn bộ nhu cầu|(?<![\"“])100% nhu cầu(?!\s*\()|"
+                   r"giải quyết (hoàn toàn|triệt để))")
+_QUALIFIED = re.compile(r"(được liệt kê|trong danh sách|được tính|dòng đầu|dòng được chọn|dòng được duyệt)")
 
 
 def _hits(pattern: re.Pattern, text: str, qualified: re.Pattern | None = None) -> list[str]:

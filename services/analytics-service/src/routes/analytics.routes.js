@@ -1,4 +1,5 @@
 const express = require('express');
+const { attachWarehouseScope } = require('../middlewares/warehouse-scope.middleware');
 const analyticsController = require('../controllers/analytics.controller');
 const { authenticateToken, authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
@@ -34,7 +35,7 @@ function authenticateInternalOrUser(permissionCheck = readAnalytics) {
   };
 }
 
-router.get('/aging-inventory', authenticateInternalOrUser(), analyticsController.getAgingInventory);
+router.get('/aging-inventory', authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getAgingInventory);
 router.get('/book-turnover', authenticateInternalOrUser(), analyticsController.getBookTurnover);
 // inventory-service's public catalog (popular / trending / top rated) calls this
 // with the internal service key; the response holds aggregate counts only.
@@ -46,11 +47,12 @@ router.get('/late-return-risk', authenticateInternalOrUser(readBorrowAnalytics),
 // these six with the internal service key - same convention as the routes above.
 router.get('/overdue-summary', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getOverdueSummary);
 router.get('/fine-summary', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getFineSummary);
-router.get('/warehouse-stock-risk', authenticateInternalOrUser(), analyticsController.getWarehouseStockRisk);
-router.get('/warehouse-stock-items', authenticateInternalOrUser(), analyticsController.getWarehouseStockItems);
+// Per-warehouse rows: only the warehouses in the caller's scope (attachWarehouseScope).
+router.get('/warehouse-stock-risk', authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWarehouseStockRisk);
+router.get('/warehouse-stock-items', authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWarehouseStockItems);
 router.get('/reorder-suggestions', authenticateInternalOrUser(), analyticsController.getReorderSuggestions);
 router.get('/reservation-funnel', authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getReservationFunnel);
-router.get('/weeding-suggestions', authenticateInternalOrUser(), analyticsController.getWeedingSuggestions);
+router.get('/weeding-suggestions', authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWeedingSuggestions);
 
 router.use(authenticateToken, readAnalytics);
 

@@ -86,7 +86,11 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   // 5. Staff counts the received stock.
   await loginAs(page, { identifier: 'staff01', password: '123456' });
   await page.goto('/my-warehouse-tasks');
-  await page.getByRole('link', { name: 'Ghi nhận' }).first().click();
+  // The queue is paged (10, oldest first) and may hold older receipts on a
+  // database that is not fresh: narrow to receiving tasks, then open this receipt's task.
+  await page.getByRole('button', { name: /^Tiếp nhận/ }).click();
+  const receiptPath = new URL(receiptUrl).pathname;
+  await page.locator(`a[href="${receiptPath}"]`, { hasText: 'Ghi nhận' }).click();
   await page.getByTestId('save-received-count-button').first().click();
   await expect(page.getByText(/chờ manager duyệt/)).toBeVisible();
 
