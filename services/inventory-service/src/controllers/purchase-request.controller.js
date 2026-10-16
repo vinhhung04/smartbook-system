@@ -1,5 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
-const { requireWarehouseWriteAccess } = require('../utils/warehouse-scope.utils');
+const {
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
 const { pushToRooms } = require('../lib/socket-emitter');
 
 const prisma = new PrismaClient();
@@ -111,11 +116,11 @@ async function getMyPurchaseRequests(req, res) {
 
 async function getAllPurchaseRequests(req, res) {
   const { status, warehouse_id, page = 1, limit = 50 } = req.query;
-  const where = {};
-  if (status) where.status = status;
-  if (warehouse_id) where.warehouse_id = warehouse_id;
 
   try {
+    // Rows, total and pagination are all computed on the caller's warehouses.
+    const where = { ...(await scopedWarehouseWhere(req.user, 'warehouse_id', warehouse_id || null)) };
+    if (status) where.status = status;
     const [requests, total] = await Promise.all([
       prisma.purchase_requests.findMany({
         where,
@@ -138,6 +143,7 @@ async function getAllPurchaseRequests(req, res) {
 
     return res.json({ data: requests, total, page: Number(page), limit: Number(limit) });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -169,6 +175,10 @@ async function getPurchaseRequestById(req, res) {
     if (!isManager && request.created_by_user_id !== userId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
+    // A manager reads other people's requests only in warehouses they may read.
+    if (request.created_by_user_id !== userId && !(await requireWarehouseReadAccess(req, res, request.warehouse_id))) {
+      return undefined;
+    }
 
     return res.json({ data: request });
   } catch (error) {
@@ -185,6 +195,8 @@ async function approvePurchaseRequest(req, res) {
     if (!request) {
       return res.status(404).json({ message: 'Purchase request not found' });
     }
+    // Deciding on a request writes in its warehouse: write scope required there.
+    if (!(await requireWarehouseWriteAccess(req, res, request.warehouse_id))) return undefined;
     if (request.status !== 'PENDING') {
       return res.status(400).json({ message: `Cannot approve a request with status ${request.status}` });
     }
@@ -222,6 +234,7 @@ async function rejectPurchaseRequest(req, res) {
     if (!request) {
       return res.status(404).json({ message: 'Purchase request not found' });
     }
+    if (!(await requireWarehouseWriteAccess(req, res, request.warehouse_id))) return undefined;
     if (request.status !== 'PENDING') {
       return res.status(400).json({ message: `Cannot reject a request with status ${request.status}` });
     }
@@ -304,6 +317,7 @@ async function convertPurchaseRequestToPO(req, res) {
     if (!request) {
       return res.status(404).json({ message: 'Purchase request not found' });
     }
+    if (!(await requireWarehouseWriteAccess(req, res, request.warehouse_id))) return undefined;
     if (request.status !== 'APPROVED') {
       return res.status(400).json({ message: `Request must be APPROVED before converting (current: ${request.status})` });
     }

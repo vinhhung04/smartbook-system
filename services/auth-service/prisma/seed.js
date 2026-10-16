@@ -608,7 +608,7 @@ async function main() {
   await assignUserRoles('supplier-ibd', [supplierRole]);
 
   // Fixed warehouse IDs, created with these same ids by inventory-service's seed
-  // (an existing database is aligned once by scripts/reconcile-warehouse-scopes.sh).
+  // (an existing database is aligned once by scripts/reconcile-warehouse-scopes.mjs, run by `pnpm demo:upgrade`).
   // Warehouse scope is fail-closed: a scope row pointing at a missing warehouse
   // grants nothing.
   const warehouseIds = {

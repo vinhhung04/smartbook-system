@@ -7,7 +7,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "LLM call p95 latency, by provider",
+      "title": "LLM call p95 latency, by endpoint",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
@@ -46,6 +46,46 @@
           "expr": "100 * sum(rate(http_requests_total{job=\"ai-service\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"ai-service\"}[5m]))",
           "refId": "A"
         }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "OpenRouter tokens / hour, by feature",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(rate(ai_llm_tokens_total[5m])) by (feature) * 3600", "refId": "A" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "OpenRouter cost (USD, last 24h), by feature",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(increase(ai_llm_cost_usd_total[24h])) by (feature)", "refId": "A" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Catalog sync: minutes since last success",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "(time() - ai_catalog_sync_last_success_timestamp_seconds) / 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Catalog sync runs (1h), by outcome",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "sum(increase(ai_catalog_sync_runs_total[1h])) by (outcome)", "refId": "A" }
       ]
     }
   ]

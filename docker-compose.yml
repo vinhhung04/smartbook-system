@@ -1,3 +1,11 @@
+# `docker compose logs` (Docker's json-file driver) is the default log store; rotate
+# it so the request logs of a long demo session don't grow without bound.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: pgvector/pgvector:pg15
@@ -62,20 +70,16 @@ services:
       retries: 20
       start_period: 20s
 
-  tempo:
-    image: grafana/tempo:2.5.0
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./observability/tempo/tempo.yml:/etc/tempo.yaml:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3200/ready >/dev/null 2>&1 || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
-
+  # Optional monitoring (`--profile monitoring`): Prometheus scrapes the services'
+  # /metrics endpoints, Grafana shows the dashboards. No business service depends
+  # on either, so the stack runs the same with or without them.
   prometheus:
+    profiles: ["monitoring"]
     image: prom/prometheus:v2.53.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -86,40 +90,20 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
-
-  loki:
-    image: grafana/loki:3.1.1
-    command: ["-config.file=/etc/loki/local-config.yaml"]
-    volumes:
-      - ./observability/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready >/dev/null 2>&1 || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
-
-  promtail:
-    image: grafana/promtail:3.1.1
-    command: ["-config.file=/etc/promtail/config.yml"]
-    volumes:
-      - ./observability/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9080/ready >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
-    depends_on:
-      loki:
-        condition: service_healthy
+    logging: *default-logging
 
   grafana:
+    profiles: ["monitoring"]
     image: grafana/grafana:11.1.0
+    # Passed through un-interpolated so the default (no-monitoring) stack needs no
+    # Grafana secret; Grafana itself refuses to start without one rather than
+    # falling back to admin/admin.
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+      - GRAFANA_ADMIN_PASSWORD
+    entrypoint:
+      - sh
+      - -c
+      - '[ -n "$$GRAFANA_ADMIN_PASSWORD" ] || { echo "Set GRAFANA_ADMIN_PASSWORD in .env" >&2; exit 1; }; GF_SECURITY_ADMIN_PASSWORD="$$GRAFANA_ADMIN_PASSWORD" exec /run.sh'
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -134,16 +118,13 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
-      loki:
-        condition: service_healthy
-      tempo:
-        condition: service_healthy
+    logging: *default-logging
 
   inventory-service:
     build:
       context: .
       dockerfile: services/inventory-service/Dockerfile
-    command: sh -c "npx prisma migrate deploy && node -r ./src/tracing.js src/index.js"
+    command: sh -c "npx prisma migrate deploy && node -r ./src/telemetry.js src/index.js"
     environment:
       - PORT=3001
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${INVENTORY_DB_NAME:-inventory_db}?schema=public
@@ -156,7 +137,6 @@ services:
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AGING_INVENTORY_DAYS_THRESHOLD=${AGING_INVENTORY_DAYS_THRESHOLD:-90}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     volumes:
       - packing_evidence_data:/app/evidence/packing
     depends_on:
@@ -166,8 +146,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      tempo:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
@@ -175,6 +153,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    logging: *default-logging
 
   auth-service:
     build:
@@ -196,13 +175,10 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.vn>}
       - AUTH_LOGIN_RATE_LIMIT_MAX=${AUTH_LOGIN_RATE_LIMIT_MAX:-10}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       db:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      tempo:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -211,6 +187,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    logging: *default-logging
 
   borrow-service:
     build:
@@ -237,13 +214,10 @@ services:
       - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET:-}
       - VNPAY_PAYMENT_URL=${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
       - VNPAY_RETURN_URL=${VNPAY_RETURN_URL:-http://localhost:3000/webhooks/vnpay/return}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       db:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
-      tempo:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -252,6 +226,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    logging: *default-logging
 
   analytics-service:
     build:
@@ -265,11 +240,12 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - LOW_STOCK_THRESHOLD=${LOW_STOCK_THRESHOLD:-5}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      # token revocation (logout / locked account / role change), same keys as auth-service
+      - REDIS_URL=redis://redis:6379
     depends_on:
       db:
         condition: service_healthy
-      tempo:
+      redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -278,6 +254,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    logging: *default-logging
 
   demo-seed-auth:
     profiles: ["demo"]
@@ -347,14 +324,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      tempo:
+      # catalog_sync reads inventory-service at startup; without this wait the first
+      # sync can fail with ConnectError and the AI index stays stale until the next run.
+      inventory-service:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${AI_DB_NAME:-ai_db}
-      - OTEL_SERVICE_NAME=ai-service
-      - OTEL_TRACES_EXPORTER=otlp
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
-      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - SMARTBOOK_GATEWAY_URL=${SMARTBOOK_GATEWAY_URL:-http://api-gateway:3000}
       # metadata-intelligence/extract calls inventory-service to verify catalog
       # authorization before running the pipeline; without this it falls back to
@@ -446,6 +421,7 @@ services:
       # lookup effectively restarted the download from zero (the true cause behind
       # the multi-minute-to-34-minute CloakBrowser hangs, not a network block).
       - ./ai_service_cloakbrowser_cache:/root/.cloakbrowser
+    logging: *default-logging
 
   api-gateway:
     build:
@@ -466,7 +442,6 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SOCKET_CORS_ORIGIN=${SOCKET_CORS_ORIGIN:-http://localhost:5173}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     depends_on:
       auth-service:
         condition: service_healthy
@@ -478,14 +453,13 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      tempo:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 15s
+    logging: *default-logging
 
   smartbook-ui:
     build:
@@ -526,6 +500,7 @@ services:
         condition: service_healthy
       analytics-service:
         condition: service_healthy
+    logging: *default-logging
 
   k6:
     profiles: ["loadtest"]

@@ -101,6 +101,8 @@ import copilot_explain
 import copilot_response
 import copilot_tools
 import copilot_faithfulness
+import copilot_verification
+import action_guard
 import copilot_visualization
 import warehouse_scope
 from copilot_plan import QueryPlan as CopilotPlan, build_plan as build_copilot_plan, next_state as copilot_next_state
@@ -108,7 +110,7 @@ from copilot_plan import VN_TZ as COPILOT_TZ
 from copilot_visualization import Visualization
 from copilot_response import COPILOT_SYSTEM_PROMPT
 from routes_actions import router as actions_router
-from routes_conversations import router as conversations_router
+from routes_conversations import ASSISTANT_PERMISSIONS, ASSISTANT_ROLES, router as conversations_router
 from routes_cover_search import router as cover_search_router
 from routes_public_discover import router as public_discover_router
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -325,14 +327,10 @@ async def catalog_sync_trigger(request: Request):
     return await catalog_sync.sync_book_corpus()
 
 
-ASSISTANT_ALLOWED_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
-ASSISTANT_ALLOWED_PERMISSIONS = {
-    "analytics.reports.view",
-    "analytics.dashboard.read",
-    "analytics.forecast.view",
-    "analytics.read",
-    "reports.read",
-}
+# One definition, shared with routes_conversations (history is masked for a
+# reader who no longer passes this gate).
+ASSISTANT_ALLOWED_ROLES = ASSISTANT_ROLES
+ASSISTANT_ALLOWED_PERMISSIONS = ASSISTANT_PERMISSIONS
 
 def _extract_json(raw: str) -> dict:
     """Trích xuất JSON từ response text của text LLM (có thể lẫn markdown/text thừa).
@@ -3553,6 +3551,12 @@ class AssistantResponse(BaseModel):
     # answer - status (passed / repaired / retried_passed / warning /
     # fallback), findings, whether the one retry was used, check latency.
     faithfulness: dict | None = None
+    # AI Copilot 3.2 (optional, additive): structured decision verification of
+    # the final answer - status PASSED / REPAIRED / WARNING / BLOCKED, the
+    # claims checked against backend evidence (SUPPORTED / CONTRADICTED /
+    # UNSUPPORTED / UNVERIFIABLE) with severity, deterministic repairs, and
+    # `safe_to_act` (False when the answer was blocked: no action proposed).
+    verification: dict | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -4069,12 +4073,30 @@ async def _run_fast_path_tool(message: str, auth_header: str | None) -> list[dic
     return [result for result in results if result is not None]
 
 
-def _assistant_cache_key(conversation_id: str, message: str) -> str:
+def _assistant_cache_key(conversation_id: str, message: str, partition: str = "") -> str:
     # Keyed by conversation, not just message text — /assistant now injects each
     # conversation's own history into the prompt, so the same literal question can need a
     # different, context-dependent answer in different conversations. Without conversation_id
     # in the key, a hit here would serve one conversation's cached answer to another.
-    return f"assistant:{conversation_id}:{normalize_text(message.strip())[:200]}"
+    # `partition` (Copilot 3.2) is the reader's access fingerprint: an answer cached before
+    # their roles, permissions or warehouse scope changed is not served after the change.
+    return f"assistant:{conversation_id}:{partition}:{normalize_text(message.strip())[:200]}"
+
+
+async def _access_fingerprint(user_ctx) -> str | None:
+    """Who cached data may be served to: user, roles, permissions and the
+    warehouses they can read right now. None when the scope cannot be read
+    (auth-service down): nothing is cached or served from cache then."""
+    try:
+        readable = await warehouse_scope.readable_warehouses(user_ctx)
+    except warehouse_scope.ScopeUnavailable:
+        return None
+    raw = "|".join([
+        str(getattr(user_ctx, "user_id", "") or ""), ",".join(sorted(getattr(user_ctx, "roles", None) or [])),
+        ",".join(sorted(getattr(user_ctx, "permissions", None) or [])), str(bool(getattr(user_ctx, "is_superuser", False))),
+        "ALL" if readable is None else ",".join(sorted(readable)),
+    ])
+    return hashlib.sha256(raw.encode()).hexdigest()[:20]
 
 
 def _grounding_check(
@@ -4369,6 +4391,7 @@ def _assistant_payload(
         "visualizations": extras.get("visualizations") or [],
         "visualization_notes": extras.get("visualization_notes") or [],
         "faithfulness": extras.get("faithfulness"),
+        "verification": extras.get("verification"),
     }
     if debug is not None:
         payload["debug"] = debug
@@ -4542,7 +4565,7 @@ async def _visualization_turn(turn: dict) -> dict:
 async def _finalize_assistant_turn(
     *, message_text: str, answer: str, answered_normally: bool, tools_used: list, collected_data: dict,
     messages: list[dict], provider, call_usage: list[dict], plan, state: dict | None, warehouses: list[dict],
-    user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str,
+    user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str | None,
     plan_note_text: str = "", viz_now: datetime | None = None,
 ) -> dict:
     """Everything after the tool loop, shared by both endpoints: one grounding
@@ -4572,21 +4595,39 @@ async def _finalize_assistant_turn(
     # deterministically; the rest joins the one corrective retry below.
     faith_started = time.perf_counter()
     faith_ctx = copilot_faithfulness.build_context(collected_data, explanation, visualizations[0])
+    # Copilot 3.2: the structured evidence sheet (role / scope / period /
+    # entity of every value) built once from the same tool data, reused by
+    # every check below - no business tool is called again.
+    sheet = copilot_verification.build_sheet(collected_data, explanation, visualizations[0])
     answer, label_issues = copilot_faithfulness.strip_internal_labels(answer)
 
-    def check(text: str) -> tuple[str | None, list[dict], list]:
+    def check(text: str):
+        semantic_ = copilot_faithfulness.validate(text, faith_ctx)
         return (_grounding_check(text, collected_data, message_text, grounded_context, grounded_values),
-                copilot_explain.overclaims(text, explanation),
-                copilot_faithfulness.validate(text, faith_ctx))
+                copilot_explain.overclaims(text, explanation), semantic_,
+                copilot_verification.verify(text, sheet, semantic_))
 
-    grounding_warning, language_flags, semantic = check(answer)
+    def deterministic_repair(text: str, rep):
+        """Fix contradicted numbers whose correct value is certain, without
+        an LLM call (copilot_verification.repair is conservative)."""
+        if not rep.critical:
+            return text, []
+        fixed_text, fixed_claims = copilot_verification.repair(text, rep)
+        return (fixed_text, fixed_claims) if fixed_claims else (text, [])
+
+    grounding_warning, language_flags, semantic, report = check(answer)
+    answer, repairs = deterministic_repair(answer, report)
+    if repairs:
+        grounding_warning, language_flags, semantic, report = check(answer)
+    contradicted_before_retry = bool(report.critical)
     retried = False
-    if (grounding_warning or language_flags or semantic) and answered_normally:
+    if (grounding_warning or language_flags or semantic or report.problems) and answered_normally:
         # One corrective turn covers all of it: numbers with no basis, wording
-        # stronger than the evidence, and claims the data contradicts. An answer
-        # that passes costs no extra LLM call.
+        # stronger than the evidence, claims the data contradicts (with the
+        # value the data holds). An answer that passes costs no extra LLM call.
         problems = " ".join(p for p in (
             grounding_warning,
+            copilot_verification.retry_instruction(report),
             copilot_faithfulness.retry_instruction(semantic) or copilot_explain.overclaim_warning(language_flags),
         ) if p)
         answer, retry_usage = await retry_once_if_ungrounded(
@@ -4600,24 +4641,32 @@ async def _finalize_assistant_turn(
             answer = RAW_JSON_REFUSAL
         answer, more_labels = copilot_faithfulness.strip_internal_labels(answer)
         label_issues += more_labels
-        grounding_warning, language_flags, semantic = check(answer)
-    faith_status = "retried_passed" if retried else ("repaired" if label_issues else "passed")
-    if copilot_faithfulness.blocking(semantic):
-        # Still saying what the data contradicts after the retry: the answer is
-        # replaced by the explanation's own conclusion, never left standing.
-        fallback = copilot_faithfulness.fallback_answer(explanation)
-        if fallback:
-            answer, faith_status = fallback, "fallback"
-        else:
-            faith_status = "warning"
+        grounding_warning, language_flags, semantic, report = check(answer)
+        answer, more_repairs = deterministic_repair(answer, report)
+        if more_repairs:
+            repairs += more_repairs
+            grounding_warning, language_flags, semantic, report = check(answer)
+    faith_status = "retried_passed" if retried else ("repaired" if label_issues or repairs else "passed")
+    blocked = False
+    if copilot_faithfulness.blocking(semantic) or report.critical:
+        # Still saying what the data contradicts after the repair and the
+        # retry: the answer is replaced by a conclusion built from backend
+        # data, never left standing - and no action is proposed for it.
+        answer, faith_status, blocked = copilot_verification.fallback_answer(explanation, sheet), "fallback", True
+        grounding_warning = None
     elif semantic:
         faith_status = "warning"
     faithfulness = copilot_faithfulness.summarize(label_issues + semantic, faith_status, retried, faith_started)
+    verification_status = copilot_verification.status_of(
+        report, repaired=bool(repairs) or (retried and contradicted_before_retry), fallback=blocked)
+    verification = copilot_verification.summarize(report, verification_status, repaired=repairs, retried=retried,
+                                                  started=faith_started, labels_stripped=bool(label_issues))
+    copilot_verification.log_outcome(verification)
     if explanation is not None:
         explanation["language_flags"] = language_flags
 
     pending_action_data = None
-    if answered_normally:
+    if answered_normally and not blocked:
         pending_action_data = await _build_assistant_pending_action(
             message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
         )
@@ -4625,6 +4674,7 @@ async def _finalize_assistant_turn(
     extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, now=viz_now, question=message_text,
                                            answer=answer, explanation=explanation, visualizations=visualizations)
     extras["faithfulness"] = faithfulness
+    extras["verification"] = verification
     new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
     metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras,
                 "warehouse_ids": sorted(warehouse_scope.warehouse_ids_in(collected_data))}
@@ -4637,7 +4687,7 @@ async def _finalize_assistant_turn(
 
     # A chart follow-up depends on the previous turn's snapshot, not only on
     # its own text - never served from the per-message cache.
-    if answered_normally and not pending_action_data and not (plan.visualization or {}).get("mode"):
+    if cache_key and answered_normally and not pending_action_data and not (plan.visualization or {}).get("mode"):
         assistant_response_cache.set(cache_key, {
             **{k: v for k, v in payload.items() if k not in ("conversation_id", "pending_action", "debug")},
             "metadata": metadata,
@@ -4677,11 +4727,14 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     message_text = req.message.strip()
     conversation = await _resolve_owned_conversation(req.conversation_id, user_ctx, message_text)
     conversation_id_str = str(conversation.conversation_id)
-    cache_key = _assistant_cache_key(conversation_id_str, message_text)
+    partition = await _access_fingerprint(user_ctx)
+    copilot_tools.CACHE_PARTITION.set(partition)
+    cache_key = _assistant_cache_key(conversation_id_str, message_text, partition) if partition else None
     turn = {
         "auth_header": auth_header, "user_ctx": user_ctx, "message_text": message_text,
         "conversation": conversation, "conversation_id_str": conversation_id_str, "cache_key": cache_key,
-        "cached": assistant_response_cache.get(cache_key),
+        "cache_partition": partition,
+        "cached": assistant_response_cache.get(cache_key) if cache_key else None,
     }
     cached = turn["cached"]
     if cached is not None and not await warehouse_scope.can_view(
@@ -4845,6 +4898,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 
     if (plan.visualization or {}).get("mode") in ("retype", "render"):
         async def visualization_event_generator():
+            copilot_tools.CACHE_PARTITION.set(turn.get("cache_partition"))
             payload = _validated_payload(await _visualization_turn(turn))
             yield _sse("token", {"text": payload["answer"]})
             yield _sse("done", payload)
@@ -4853,6 +4907,8 @@ async def assistant_stream(request: Request, req: AssistantRequest):
     messages = turn["messages"]
 
     async def event_generator():
+        # the generator may run outside the context the prologue set the cache partition in
+        copilot_tools.CACHE_PARTITION.set(turn.get("cache_partition"))
         answer = ""
         answered_normally = False
         call_usage: list[dict] = []
@@ -4911,6 +4967,10 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             ))
             return
 
+        # The streamed text is a draft: tell the client it is being checked
+        # against the data before the verified answer (and any action) arrives
+        # in `done`. Clients that do not know this event ignore it.
+        yield _sse("status", {"stage": "verifying"})
         payload = await _finalize_assistant_turn(
             message_text=message_text, answer=answer, answered_normally=answered_normally, tools_used=tools_used,
             collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
@@ -5169,10 +5229,14 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
 
     require_can_confirm_action(user_ctx, action)
 
-    # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload
-    if req.override_payload:
-        merged_payload = {**action.payload, **req.override_payload}
-        action = action.model_copy(update={"payload": merged_payload})
+    # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload -
+    # only the fields the confirm dialog edits (action_guard), then re-check the
+    # user's CURRENT write scope for every target warehouse before the action is
+    # claimed, so a refused confirm leaves it pending.
+    override = action_guard.validated_override(action.type, action.payload or {}, req.override_payload)
+    if override:
+        action = action.model_copy(update={"payload": {**action.payload, **override}})
+    await action_guard.require_write_scope(action.type, action.payload or {}, user_ctx)
 
     user_id_for_emit = action.created_by_user_id
     # Atomic claim: of two concurrent confirms only one gets here; the other

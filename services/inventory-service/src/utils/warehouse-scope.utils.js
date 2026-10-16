@@ -96,6 +96,26 @@ async function readableWarehouseFilter(user) {
   return scope.all ? null : [...scope.read];
 }
 
+/**
+ * Prisma `where` fragment that limits a list to the caller's readable
+ * warehouses (Copilot 3.2): {} for a superuser, otherwise
+ * { [field]: { in: ids } } - an empty scope lists nothing, never "all".
+ * With several fields a row is kept when ANY of them is readable (a transfer
+ * is visible to its source and its destination). `requested` is a
+ * warehouse_id the client named; enforceRequestedWarehouseScope has already
+ * checked it, so it only narrows. Throws WarehouseScopeUnavailableError.
+ */
+async function scopedWarehouseWhere(user, fields = 'warehouse_id', requested = null) {
+  const list = Array.isArray(fields) ? fields : [fields];
+  if (requested) {
+    if (!(await canReadWarehouse(user, requested))) return { [list[0]]: { in: [] } };
+    return list.length === 1 ? { [list[0]]: requested } : { OR: list.map((f) => ({ [f]: requested })) };
+  }
+  const readable = await readableWarehouseFilter(user);
+  if (readable === null) return {};
+  return list.length === 1 ? { [list[0]]: { in: readable } } : { OR: list.map((f) => ({ [f]: { in: readable } })) };
+}
+
 /** Express error tail for list endpoints: scope unavailable -> 503. */
 function scopeErrorStatus(error) {
   return error instanceof WarehouseScopeUnavailableError ? 503 : 500;
@@ -118,6 +138,7 @@ module.exports = {
   requireWarehouseWriteAccess,
   filterReadableWarehouses,
   readableWarehouseFilter,
+  scopedWarehouseWhere,
   scopeErrorStatus,
   setWarehouseScopeResolver,
 };

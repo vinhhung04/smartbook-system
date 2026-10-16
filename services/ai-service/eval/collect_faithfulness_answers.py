@@ -41,12 +41,21 @@ def load_turns() -> list[dict]:
     return cases
 
 
+def load_v32_turns() -> list[dict]:
+    """Copilot 3.2 live held-out questions (decision_verification_live_questions.json)."""
+    with open(os.path.join(EVAL_DIR, "decision_verification_live_questions.json"), encoding="utf-8") as fh:
+        return [{"id": c["id"], "category": c["id"].split("-")[1], "user": c["user"], "turns": c["turns"]}
+                for c in json.load(fh)["cases"]]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gateway", default=os.getenv("EVAL_GATEWAY_URL", "http://localhost:3000"))
     parser.add_argument("--password", default=os.getenv("EVAL_PASSWORD", ""))
     parser.add_argument("--delay", type=float, default=4.5)
     parser.add_argument("--out", default="")
+    parser.add_argument("--cases", choices=["v31", "v32"], default="v31",
+                        help="v31: the 3.1 sets (XAI 2.0 + Copilot 3.0 charts); v32: the 3.2 live held-out questions")
     args = parser.parse_args()
     tokens: dict[str, str] = {}
     rows = []
@@ -58,7 +67,7 @@ def main() -> None:
                 tokens[user] = r.json()["token"]
             return tokens[user]
 
-        for case in load_turns():
+        for case in (load_v32_turns() if args.cases == "v32" else load_turns()):
             cid = str(uuid.uuid4())
             for n, q in enumerate(case["turns"]):
                 for attempt in range(6):
@@ -79,6 +88,7 @@ def main() -> None:
                     "status": 200, "seconds": round(seconds, 2),
                     "draft_answer": (b.get("debug") or {}).get("draft_answer") or b.get("answer"),
                     "answer": b.get("answer"), "faithfulness": b.get("faithfulness"),
+                    "verification": b.get("verification"), "pending_action": bool(b.get("pending_action")),
                     "llm_calls": len((b.get("debug") or {}).get("llm_calls") or []),
                     "explanation": b.get("explanation"), "visualizations": b.get("visualizations"),
                     "data": b.get("data"), "mode": (b.get("plan") or {}).get("answer_mode"),

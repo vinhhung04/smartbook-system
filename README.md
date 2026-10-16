@@ -37,7 +37,7 @@ Mục tiêu của project là chứng minh một hệ thống thư viện kiêm 
 | 🧪 **Dữ liệu đánh giá** | Bộ dữ liệu hành vi **tổng hợp** (synthetic) có điều kiện theo persona, có ground truth — dùng để đánh giá mô hình rủi ro, dự báo và gợi ý sách (không phải dữ liệu người dùng thật) |
 | 📱 **Mobile** | Expo/React Native — app cho nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán) |
 | 📨 **Event-driven** | RabbitMQ + transactional outbox (Inventory Service phát sự kiện, API Gateway relay qua Socket.IO) |
-| 📈 **Observability** | OpenTelemetry tracing (Tempo), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log tập trung) |
+| 📈 **Observability** | Mặc định: Docker health check, `docker compose logs`, `/health` + `/ready`, request log JSON có `request_id`. Tùy chọn (profile `monitoring`): Prometheus + Grafana (metric, dashboard, alert) |
 | 🔔 **Real-time** | Socket.IO qua API Gateway, theo phòng user/role |
 | 🌐 **Ngôn ngữ** | Tiếng Việt (giao diện & tài liệu) |
 
@@ -159,10 +159,10 @@ SmartBook giải bài toán này bằng cách chia hệ thống thành các doma
 - 📊 Analytics Service: tổng hợp KPI/báo cáo thật từ dữ liệu thư viện lẫn kho vận.
 - 🔔 Real-time: API Gateway phát sự kiện qua WebSocket (Socket.IO) cho cả hai phía thư viện và kho vận.
 - 📨 Event bus: RabbitMQ + transactional outbox — Inventory Service ghi sự kiện nghiệp vụ (đặt/nhả/tiêu tồn kho, duyệt/gửi PO, post goods receipt) vào cùng transaction rồi publish bất đồng bộ; API Gateway consume để đẩy realtime.
-- 📈 Observability: OpenTelemetry tracing (Tempo) cho các service Node.js, metric (Prometheus) + dashboard (Grafana), log tập trung (Loki/Promtail).
+- 📈 Observability: mặc định chỉ dùng Docker health check, `docker compose logs` và `/health`/`/ready`; Prometheus + Grafana là profile `monitoring` tùy chọn, không service nghiệp vụ nào phụ thuộc vào chúng.
 - 🖥️ Web UI: giao diện quản trị, kho vận và customer portal trên React/Vite.
 - 📱 Mobile App: ứng dụng Expo/React Native — một app dùng chung cho cả nhân viên kho (picking/putaway/outbound/audit) và khách hàng (quét bìa sách, ví/thanh toán).
-- 🐳 Docker Compose: dựng toàn bộ stack local gồm database, Redis, RabbitMQ, services, gateway, web, bộ observability, pgAdmin. AI Service gọi OpenRouter qua HTTPS — không cần container GPU.
+- 🐳 Docker Compose: dựng toàn bộ stack local gồm database, Redis, RabbitMQ, services, gateway, web; AI, Prometheus/Grafana và pgAdmin là các profile tùy chọn. AI Service gọi OpenRouter qua HTTPS — không cần container GPU.
 
 ## 🏗️ Kiến Trúc Tổng Quan
 
@@ -188,7 +188,7 @@ flowchart LR
     REDIS["⚡ Redis"]
     MQ["🐰 RabbitMQ"]
     OPENROUTER(["☁️ OpenRouter (Qwen) — chat/tool-calling/vision/embedding"])
-    OBS["📈 Tempo / Prometheus / Grafana / Loki"]
+    OBS["📈 Prometheus + Grafana (profile monitoring, tùy chọn)"]
 
     Client --> GW
     GW --> Core
@@ -201,8 +201,8 @@ flowchart LR
     AI -. "HTTPS (không cần GPU)" .-> OPENROUTER
 
     INV -. "outbox event" .-> MQ
-    Core -. "traces / metrics / logs" .-> OBS
-    AI -. "traces" .-> OBS
+    OBS -. "scrape /metrics" .-> Core
+    OBS -. "scrape /metrics" .-> AI
 
     classDef gateway fill:#ede9fe,stroke:#7c3aed,color:#4c1d95;
     classDef aiservice fill:#ffedd5,stroke:#ea580c,color:#7c2d12;
@@ -211,7 +211,7 @@ flowchart LR
 ```
 
 > [!TIP]
-> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. AI Service (Python) cũng xuất trace về Tempo qua `opentelemetry-instrument` (xem [📈 Observability](#observability)). AI Service tự chạy CLIP (local, CPU) cho visual similarity ảnh bìa — không phải một service/container riêng nên không có node riêng trên sơ đồ. Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway và Borrow Service cũng consume sự kiện từ RabbitMQ (relay realtime; thông báo "có sách"), và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
+> Sơ đồ đã gom nhóm để dễ nhìn — chi tiết từng route/database theo domain nằm ở phần chữ ngay dưới. Prometheus/Grafana chỉ chạy khi bật profile `monitoring` và chỉ *đọc* (scrape) endpoint `/metrics` của các service — không service nào gọi hay chờ chúng (xem [📈 Observability](#observability)). AI Service tự chạy CLIP (local, CPU) cho visual similarity ảnh bìa — không phải một service/container riêng nên không có node riêng trên sơ đồ. Hai chiều ngược lại không vẽ ở đây để tránh vòng lặp làm rối sơ đồ: API Gateway và Borrow Service cũng consume sự kiện từ RabbitMQ (relay realtime; thông báo "có sách"), và đẩy realtime cho Web UI/Mobile qua WebSocket (Socket.IO) — xem [🔔 Real-time / Thông báo](#real-time--thông-báo).
 
 API Gateway là cổng vào tập trung cho frontend, vừa proxy HTTP vừa giữ kết nối WebSocket:
 
@@ -456,18 +456,24 @@ Inventory Service không publish thẳng lên RabbitMQ trong lúc xử lý reque
 
 ### 📈 Observability
 
-Toàn bộ stack có thể quan sát được qua ba trụ cột kinh điển, không cần đăng nhập vào từng container để xem log:
+Giám sát có hai mức. Mức cơ bản luôn có sẵn; Prometheus + Grafana là tùy chọn, bật/tắt lúc nào cũng được mà không ảnh hưởng nghiệp vụ.
 
-| Trụ cột | Công cụ | Vai trò |
+| Mức | Thành phần | Dùng để |
 |---|---|---|
-| 🔍 Trace | OpenTelemetry → **Tempo** | Theo dấu 1 request đi qua bao nhiêu service, mất bao lâu ở mỗi bước (`services/*/src/tracing.js`, các service Node.js) |
-| 📊 Metric | **Prometheus** + **Grafana** | Số liệu hệ thống (request rate, latency, outbox pending...), dashboard có sẵn: `ai-performance`, `borrow-flow`, `inventory-health`, `postgresql`, `rabbitmq-outbox`, `system-overview` |
-| 📜 Log | **Loki** + **Promtail** | Gom log tất cả container về một chỗ, tìm kiếm theo service/thời gian |
+| 🩺 Cơ bản (mặc định) | Docker health check, `docker compose ps` / `logs`, `GET /health` + `GET /ready` (gateway gọi `/ready` của từng service lõi, có kiểm tra database), request log JSON có `request_id` | Container nào đang chạy/healthy, service nào chưa sẵn sàng hoặc mất kết nối database, xem log lỗi |
+| 📊 Mở rộng (profile `monitoring`) | **Prometheus** (scrape `/metrics`, giữ 7 ngày) + **Grafana** (dashboard, alert) | Xu hướng theo thời gian: request rate, p95 latency, tỉ lệ lỗi 5xx, outbox, reservation, tồn kho thấp, token/chi phí LLM, OCR, catalog sync |
+
+Metric luôn được xuất sẵn, kể cả khi không bật Monitoring (chỉ là một HTTP endpoint, không gửi đi đâu):
+
+- Node.js (gateway/auth/inventory/borrow/analytics): `packages/shared/telemetry` — OpenTelemetry metrics SDK + Prometheus exporter tại cổng nội bộ `9464`. Gồm `http_server_duration` / `http_client_duration` (rate, latency, lỗi) và metric nghiệp vụ `outbox_pending_total`, `outbox_failed_total`, `rabbitmq_publish_fail_total`, `reservation_created_total`, `reservation_conflict_total`, `stock_mutation_total`, `inventory_low_stock_variant_count`, `db_up`, `websocket_connections`. Các gauge cần truy vấn database chỉ chạy khi Prometheus scrape.
+- AI Service: `GET /metrics` (`prometheus-fastapi-instrumentator` + `metrics.py`): `http_requests_total`, `ai_request_duration_seconds`, `ai_llm_tokens_total`, `ai_llm_cost_usd_total`, `ocr_request_duration_seconds`, `isbn_*`, `ai_retrieval_decisions_total`, `ai_catalog_sync_*`.
+
+Dashboard (thư mục `observability/grafana/dashboards`): `system-overview`, `inventory-health`, `borrow-flow`, `ai-performance`. Alert (`provisioning/alerting/rules.yaml`): tỉ lệ lỗi > 5%, outbox bỏ cuộc, reservation conflict tăng bất thường, database không truy cập được, tồn kho thấp.
 
 > [!NOTE]
-> Các service Node.js (gateway/auth/inventory/borrow/analytics) dùng `src/tracing.js`; AI Service (Python/FastAPI) được chạy bằng `opentelemetry-instrument` (instrument FastAPI + httpx) nên cũng xuất trace về Tempo.
+> Không còn distributed tracing (Tempo) và gom log tập trung (Loki/Promtail). Với quy mô demo, `docker compose logs` cùng `request_id` (gateway truyền qua header `x-request-id` tới service phía sau) đủ để lần theo một request; bỏ chúng bớt được 3 container và phần instrumentation chạy nền. Prometheus/Grafana lỗi hay dừng cũng không làm service nghiệp vụ nào dừng, vì không service nào `depends_on` chúng.
 
-Truy cập: Grafana http://localhost:3100, Prometheus http://localhost:9090.
+Bật/tắt và truy cập: xem [Giám sát: trạng thái, log và Monitoring](#giám-sát-trạng-thái-log-và-monitoring).
 
 ## 🧪 Dữ Liệu Hành Vi Tổng Hợp & Đánh Giá Mô Hình
 
@@ -632,14 +638,12 @@ Quy tắc nghiệp vụ:
 | 🐘 PostgreSQL | 5432 (nội bộ) | Lưu dữ liệu + pgvector cho AI | `auth_db`, `inventory_db`, `borrow_db`, `ai_db` |
 | ⚡ Redis | 6379 (nội bộ) | Cache cho Auth/Inventory Service | Không có UI |
 | 🐰 RabbitMQ | **:5672 / :15672** (host) | Event bus cho outbox pattern | Management UI :15672 |
-| 📈 Tempo | nội bộ | Lưu distributed trace | Xem qua Grafana |
-| 📊 Prometheus | **:9090** (host) | Thu thập metric | Web UI |
-| 📜 Loki + Promtail | nội bộ | Gom log tập trung | Xem qua Grafana |
-| 📉 Grafana | **:3100** (host) | Dashboard trace/metric/log | Web UI |
+| 📊 Prometheus | **:9090** (host, profile `monitoring`) | Thu thập metric | Web UI |
+| 📉 Grafana | **:3100** (host, profile `monitoring`) | Dashboard metric + alert | Web UI |
 | 🛠️ pgAdmin | **:8080** (host, profile `tools`) | Quản trị database | Web UI |
 
 > [!NOTE]
-> Chỉ **Web UI, API Gateway, RabbitMQ, Prometheus, Grafana, pgAdmin** được publish port ra host (`localhost`). Auth/Inventory/Borrow/Analytics/AI Service, PostgreSQL và Redis **chỉ tồn tại trong mạng Docker nội bộ** — không truy cập trực tiếp được từ máy host, phải đi qua API Gateway hoặc `docker compose exec`. AI Service gọi OpenRouter ra ngoài qua HTTPS (không có container/port nào cho inference cục bộ).
+> Chỉ **Web UI, API Gateway, RabbitMQ** (và **Prometheus, Grafana, pgAdmin** khi bật profile tương ứng) được publish port ra host (`localhost`). Auth/Inventory/Borrow/Analytics/AI Service, PostgreSQL và Redis **chỉ tồn tại trong mạng Docker nội bộ** — không truy cập trực tiếp được từ máy host, phải đi qua API Gateway hoặc `docker compose exec`. AI Service gọi OpenRouter ra ngoài qua HTTPS (không có container/port nào cho inference cục bộ).
 
 ## 🛠️ Công Nghệ Sử Dụng
 
@@ -653,7 +657,7 @@ Quy tắc nghiệp vụ:
 - Socket.IO (real-time), `http-proxy-middleware` (API Gateway).
 - RabbitMQ (`amqp-connection-manager`/`amqplib`) — transactional outbox, event bus.
 - VNPay SDK tự viết (HMAC-SHA512 signing/verification) cho thanh toán online.
-- OpenTelemetry SDK (traces xuất về Tempo).
+- OpenTelemetry metrics SDK + Prometheus exporter (`packages/shared/telemetry`).
 
 **🎨 Frontend**
 
@@ -681,7 +685,7 @@ Quy tắc nghiệp vụ:
 
 - Docker Compose.
 - pgAdmin.
-- OpenTelemetry + Tempo (trace), Prometheus + Grafana (metric/dashboard), Loki + Promtail (log).
+- Docker health check + `docker compose logs` (mặc định); Prometheus + Grafana (metric/dashboard/alert, profile `monitoring`).
 - k6 (load test, `scripts/k6/`, profile `loadtest`).
 - Seed data theo từng service + bộ mô phỏng dữ liệu hành vi tổng hợp (seed cố định, tái lập được).
 - GitHub Actions CI: `pnpm verify`, integration test và Playwright E2E trên stack Docker đầy đủ.
@@ -711,13 +715,14 @@ Các biến quan trọng:
 ### 2️⃣ Chạy toàn bộ stack
 
 ```powershell
-docker compose up -d --build
+docker compose --profile ai up -d --build
 pnpm demo:seed
 pnpm demo:status
-docker compose ps
 ```
 
-Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Khi cập nhật code mà database đã có dữ liệu cũ, seed mới (ví dụ kệ và tồn kho của các chi nhánh, nếu thiếu thì web công khai báo 0 sách khả dụng) **không tự áp dụng** — chạy `pnpm demo:upgrade` (build lại và chạy lại seed inventory + catalog-enrichment; idempotent, không xóa dữ liệu hiện có). Để reset hoàn toàn dữ liệu demo:
+Chế độ mặc định này **không** chạy Prometheus/Grafana. Bỏ `--profile ai` nếu chỉ cần nghiệp vụ thư viện/kho vận (xem đoạn về AI bên dưới). Bật Monitoring: xem [Giám sát](#giám-sát-trạng-thái-log-và-monitoring).
+
+Migration chạy khi service khởi động; seed là bước riêng, có thể chạy lại bằng `pnpm demo:seed`. Muốn có thêm lịch sử mượn/trả quy mô lớn (dữ liệu tổng hợp) cho dashboard và mô hình AI, chạy `pnpm demo:seed:history`. Restart container không tự seed và không ghi đè dữ liệu. Khi cập nhật code mà database đã có dữ liệu cũ, seed mới (ví dụ kệ và tồn kho của các chi nhánh, nếu thiếu thì web công khai báo 0 sách khả dụng) **không tự áp dụng** — chạy `pnpm demo:upgrade` (build lại và chạy lại seed inventory + catalog-enrichment, rồi căn phân quyền kho của user demo theo ID kho thật; idempotent, không xóa dữ liệu hiện có). Để reset hoàn toàn dữ liệu demo:
 
 ```powershell
 docker compose down -v
@@ -755,13 +760,53 @@ Database, Redis và các service nội bộ chỉ nằm trong Docker network; ho
 | ❤️ Liveness | http://localhost:3000/health |
 | ✅ Readiness nghiệp vụ lõi | http://localhost:3000/ready |
 | 🛠️ pgAdmin (profile `tools`) | http://localhost:8080 |
-| 📈 Grafana | http://localhost:3100 (chỉ truy cập từ chính máy; đăng nhập `admin` + `GRAFANA_ADMIN_PASSWORD` trong `.env`) |
-| 📊 Prometheus | http://localhost:9090 (chỉ truy cập từ chính máy) |
+| 📈 Grafana (profile `monitoring`) | http://localhost:3100 (chỉ truy cập từ chính máy; đăng nhập `admin` + `GRAFANA_ADMIN_PASSWORD` trong `.env`) |
+| 📊 Prometheus (profile `monitoring`) | http://localhost:9090 (chỉ truy cập từ chính máy) |
 | 🐰 RabbitMQ management | http://localhost:15672 (chỉ truy cập từ chính máy) |
 
 Web UI bản Docker mặc định gọi API tại `http://localhost:3000`. Muốn mở từ máy khác trong LAN, đặt `WEB_API_ORIGIN` và `WEB_WS_ORIGIN` trong `.env` (xem `.env.example`; thêm origin của UI vào `ALLOWED_ORIGINS` và `SOCKET_CORS_ORIGIN`) rồi `docker compose up -d --build smartbook-ui` — giá trị này vừa được build vào bundle vừa được dùng cho Content-Security-Policy của nginx.
 
 `GET /health` công khai chỉ trả `service`, `status`, `version`. `GET /ready` mới kiểm tra dependency (gọi `/ready` của từng service lõi, gồm cả kết nối database) và không công khai URL/topology nội bộ. `GET /system/health` trả trạng thái, độ trễ và chi tiết từng service (kể cả AI) cho trang Giám sát hệ thống — yêu cầu JWT có vai trò `ADMIN` (hoặc quyền quản trị như `auth.users.read`), cùng điều kiện với trang `/admin/monitor`.
+
+### 🩺 Giám sát: trạng thái, log và Monitoring
+
+**Mặc định (không cần Prometheus/Grafana)** — đủ để biết container nào đang chạy, service nào chưa sẵn sàng, mất kết nối database hay lỗi:
+
+```powershell
+# Container đang chạy + trạng thái health check (healthy / unhealthy / starting)
+docker compose ps
+
+# Log tất cả service, hoặc một service (log request là JSON có request_id)
+docker compose logs -f --tail=100
+docker compose logs -f --tail=100 inventory-service
+
+# Nghiệp vụ lõi đã sẵn sàng chưa: gateway gọi /ready của từng service (có kiểm tra database); exit code 1 nếu chưa
+pnpm demo:status
+
+# Service nào không sẵn sàng / mất database: /ready của từng service trả 503 kèm tên service
+docker compose exec inventory-service node -e "fetch('http://localhost:3001/ready').then(async r=>console.log(r.status, await r.text()))"
+
+# AI Service còn hoạt động không (profile ai)
+curl http://localhost:3000/ai/health
+```
+
+Chi tiết trạng thái và độ trễ từng service (kể cả AI) cũng có ở trang **Giám sát hệ thống** `/admin/monitor` trên Web UI (tài khoản admin). Log Docker được xoay vòng (tối đa 3 file × 10 MB mỗi container ứng dụng) nên không đầy ổ đĩa.
+
+**Bật Monitoring (Prometheus + Grafana)** — cần `GRAFANA_ADMIN_PASSWORD` trong `.env` (`pnpm demo:env` sinh sẵn; nếu thiếu, Grafana từ chối khởi động thay vì dùng mật khẩu mặc định):
+
+```powershell
+docker compose --profile ai --profile monitoring up -d --build
+```
+
+Grafana: http://localhost:3100 (`admin` + `GRAFANA_ADMIN_PASSWORD`), Prometheus: http://localhost:9090 (trang **Status → Targets** cho biết service nào đang được scrape). Bật Monitoring khi stack đã chạy cũng không restart service nghiệp vụ nào.
+
+**Tắt Monitoring** (service nghiệp vụ vẫn chạy bình thường):
+
+```powershell
+docker compose stop prometheus grafana
+```
+
+Lần `docker compose --profile ai up -d` sau, Prometheus/Grafana không được khởi động lại. Dữ liệu metric nằm trong container Prometheus (giữ tối đa 7 ngày) và mất khi container bị xóa — chấp nhận được cho demo.
 
 ## 🔑 Tài Khoản Demo
 
@@ -1087,7 +1132,7 @@ smartbook-system/
 |  \- analytics-service/
 |- packages/
 |  \- shared/
-|- observability/       # Config cho Tempo, Prometheus, Loki, Promtail, Grafana
+|- observability/       # Config Prometheus + Grafana (profile monitoring)
 |- db-init/
 |- docs/
 |  |- ARCHITECTURE/

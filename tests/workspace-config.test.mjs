@@ -53,6 +53,9 @@ test("workspace exposes one complete verification command", () => {
 test("workspace exposes repeatable demo seed and golden-flow commands", () => {
   const manifest = readJson("package.json");
   assert.match(manifest.scripts["demo:seed"], /--profile demo/);
+  // Upgrading an existing database must also re-point the warehouse scopes; the
+  // scope check is fail-closed, so stale rows lock warehouse staff out.
+  assert.match(manifest.scripts["demo:upgrade"], /node scripts\/reconcile-warehouse-scopes\.mjs/);
   assert.match(manifest.scripts["test:smoke"], /demo-smoke\.mjs/);
   const smoke = readFileSync(resolve(repositoryRoot, "scripts/demo-smoke.mjs"), "utf8");
   assert.match(smoke, /rbac-role-access-integration/);

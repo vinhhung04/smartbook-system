@@ -1,3 +1,4 @@
+import type { AiVerification } from '@/lib/copilot-verification';
 import { aiAPI, getToken } from './http-clients';
 
 export interface RecommendationResponse {
@@ -291,6 +292,8 @@ export interface AssistantExtras {
   visualization_notes?: string[];
   /** AI Copilot 3.1: semantic faithfulness of the final answer (copilot_faithfulness.py). */
   faithfulness?: AiFaithfulness | null;
+  /** AI Copilot 3.2: structured decision verification (copilot_verification.py). */
+  verification?: AiVerification | null;
 }
 
 export interface AiFaithfulness {
@@ -604,6 +607,8 @@ export const aiService = {
       onToken: (text: string) => void;
       onDone: (data: AssistantResponse) => void;
       onError: (error: unknown) => void;
+      /** Copilot 3.2: the streamed text is a draft being checked against the data. */
+      onStatus?: (stage: string) => void;
     },
   ): Promise<void> => {
     try {
@@ -646,6 +651,8 @@ export const aiService = {
           const parsed = JSON.parse(data);
           if (eventName === 'token') {
             handlers.onToken(parsed.text ?? '');
+          } else if (eventName === 'status') {
+            handlers.onStatus?.(parsed.stage ?? '');
           } else if (eventName === 'done') {
             handlers.onDone(parsed as AssistantResponse);
           }

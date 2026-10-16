@@ -42,6 +42,7 @@ import {
   type AssistantExtras,
   type PendingAction,
 } from '@/services/ai';
+import type { AiVerification } from '@/lib/copilot-verification';
 import { authService, type AuthUser } from '@/services/auth';
 import { hasAnyPermission } from '@/lib/rbac';
 import {
@@ -76,6 +77,9 @@ interface AssistantMessage {
   visualizations?: CopilotVisualizationSpec[];
   visualizationNotes?: string[];
   faithfulness?: AiFaithfulness | null;
+  verification?: AiVerification | null;
+  /** Streaming: the draft text is being checked against the data (Copilot 3.2). */
+  verifying?: boolean;
   /** Reopened from history: charts show the stored snapshot, never refreshed. */
   fromHistory?: boolean;
   isError?: boolean;
@@ -91,6 +95,7 @@ function extrasToMessageFields(extras?: AssistantExtras | null): Partial<Assista
     visualizations: sanitizeVisualizations(extras?.visualizations),
     visualizationNotes: extras?.visualization_notes ?? [],
     faithfulness: extras?.faithfulness ?? null,
+    verification: extras?.verification ?? null,
   };
 }
 
@@ -402,6 +407,9 @@ export function AIAssistantPage() {
     try {
       await aiService.askAssistantStream(trimmed, conversationId, {
         onToken: (token) => updateLastMessage((message) => ({ ...message, content: message.content + token })),
+        onStatus: (stage) => {
+          if (stage === 'verifying') updateLastMessage((message) => ({ ...message, verifying: true }));
+        },
         onDone: (response) => {
           updateLastMessage(() => ({
             role: 'assistant',
@@ -671,7 +679,9 @@ export function AIAssistantPage() {
                               ? 'rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 px-4 py-2.5 text-white'
                               : message.isError
                                 ? 'rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400'
-                                : 'text-foreground'
+                                : isStreamingMessage
+                                  ? 'text-foreground/75'
+                                  : 'text-foreground'
                           }`}
                           aria-live={isStreamingMessage ? 'polite' : undefined}
                           role={isStreamingMessage ? 'status' : undefined}
@@ -713,6 +723,14 @@ export function AIAssistantPage() {
                               )}
                               {isStreamingMessage && (
                                 <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-current" />
+                              )}
+                              {isStreamingMessage && (
+                                // The streamed text is a draft: the verified answer replaces it when done.
+                                <span className="mt-1 block text-[11px] text-muted-foreground" data-testid="copilot-draft-status">
+                                  {message.verifying
+                                    ? 'Đang đối chiếu với dữ liệu…'
+                                    : 'Bản nháp — sẽ được đối chiếu với dữ liệu trước khi hoàn tất'}
+                                </span>
                               )}
                             </>
                           )}
@@ -765,7 +783,7 @@ export function AIAssistantPage() {
                           </Alert>
                         )}
 
-                        {!isStreamingMessage && <CopilotFaithfulness result={message.faithfulness} />}
+                        {!isStreamingMessage && <CopilotFaithfulness result={message.faithfulness} verification={message.verification} />}
                         {!isStreamingMessage && <CopilotExplanation explanation={message.explanation} />}
                         {!isStreamingMessage && message.recommendations && message.recommendations.length > 0 && (
                           <CopilotRecommendations items={message.recommendations} />

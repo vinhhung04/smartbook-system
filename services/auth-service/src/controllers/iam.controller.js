@@ -430,7 +430,9 @@ async function updateUser(req, res) {
     // Locking/deactivating an account should end its existing sessions too, not just
     // block future logins — otherwise a token issued before this stays usable until it
     // naturally expires. See auth.middleware.js authenticateToken in every service.
-    if (nextStatus && nextStatus !== 'ACTIVE') {
+    // A role change does the same (Copilot 3.2): inventory/analytics/borrow read the
+    // roles and permissions from the JWT, so an old token would keep the old rights.
+    if ((nextStatus && nextStatus !== 'ACTIVE') || roleIdsInput) {
       await revokeUserTokensIssuedBefore(userId);
     }
 
@@ -576,7 +578,7 @@ async function updateRolePermissions(req, res) {
       return res.status(400).json({ message: 'Role id is required' });
     }
 
-    await prisma.$transaction(async (tx) => {
+    const affectedUserIds = await prisma.$transaction(async (tx) => {
       const roleRows = await tx.$queryRawUnsafe(`SELECT id FROM roles WHERE id = $1::uuid`, roleId);
       if (!roleRows.length) {
         throw new Error('ROLE_NOT_FOUND');
@@ -598,7 +600,15 @@ async function updateRolePermissions(req, res) {
           );
         }
       }
+      const holders = await tx.$queryRawUnsafe(`SELECT user_id::text AS user_id FROM user_roles WHERE role_id = $1::uuid`, roleId);
+      return holders.map((row) => row.user_id);
     });
+
+    // Every holder of the role carries its old permission list in their JWT:
+    // end those sessions so the next token has the new list (Copilot 3.2).
+    for (const holderId of affectedUserIds) {
+      await revokeUserTokensIssuedBefore(holderId);
+    }
 
     return res.json({ message: 'Role permissions updated' });
   } catch (error) {

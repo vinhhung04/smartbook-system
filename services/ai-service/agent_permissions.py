@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import json
 import logging
 import os
 
@@ -15,27 +13,6 @@ logger = logging.getLogger("uvicorn.error")
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 PERMISSION_TIMEOUT = float(os.getenv("PERMISSION_TIMEOUT_SECONDS", "5"))
-
-
-def _decode_jwt_payload_unverified(token: str) -> dict:
-    """Base64-decode the JWT payload without signature verification.
-
-    Fallback decode is for demo resilience only; executor still calls real backend
-    with Authorization so backend RBAC remains enforced.
-    """
-    try:
-        parts = token.split(".")
-        if len(parts) != 3:
-            return {}
-        payload_b64 = parts[1]
-        # Add padding if needed
-        padding = 4 - len(payload_b64) % 4
-        if padding != 4:
-            payload_b64 += "=" * padding
-        payload_bytes = base64.urlsafe_b64decode(payload_b64)
-        return json.loads(payload_bytes)
-    except Exception:
-        return {}
 
 
 def _parse_roles(raw_roles: list | None) -> list[str]:
@@ -66,43 +43,21 @@ def _parse_permissions(raw_perms: list | None) -> list[str]:
     return result
 
 
-def _fallback_user_context(auth_header: str) -> UserContext:
-    """Unverified JWT decode — demo resilience only for when the Gateway is
-    genuinely unreachable. Must NEVER be reached when the Gateway responded (even
-    with an error): a non-200 from /auth/me means the token itself is invalid, and
-    falling through here would let a forged/unsigned token be trusted locally with
-    whatever roles/is_superuser claims it wants to carry.
-    """
-    token = auth_header.removeprefix("Bearer ").removeprefix("bearer ").strip()
-    payload = _decode_jwt_payload_unverified(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
-
-    roles = _parse_roles(payload.get("roles") or [])
-    permissions = _parse_permissions(payload.get("permissions") or [])
-    return UserContext(
-        user_id=str(payload.get("sub") or payload.get("user_id") or ""),
-        username=payload.get("username"),
-        email=payload.get("email"),
-        roles=roles,
-        permissions=permissions,
-        is_superuser=bool(payload.get("is_superuser", False)),
-    )
-
-
 async def get_user_context(auth_header: str | None) -> UserContext:
-    """Fetch the current user from Gateway /auth/me.
+    """The current user from Gateway /auth/me (auth-service: signature, token
+    blacklist, tokens-valid-after cutoff, and roles/permissions read fresh from
+    the database).
 
-    Falls back to unverified JWT decode only when the Gateway itself could not be
-    reached (network/timeout). A reachable Gateway that rejects the token (401/403,
-    e.g. bad signature or expired) is a hard authentication failure — it must not
-    fall through to the unverified-decode fallback, or a forged token could be
-    trusted locally with self-declared roles/is_superuser.
+    Fail-closed (Copilot 3.2): when /auth/me cannot be reached the request is
+    refused with 503. The former fallback decoded the JWT WITHOUT verifying
+    its signature and trusted the roles / is_superuser / sub it declared, so
+    during an auth outage (or a timeout) a forged token could read another
+    user's stored conversations; it could not check revocation either. A
+    reachable Gateway that rejects the token is a 401, as before.
     """
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
 
-    # Primary path: call Gateway /auth/me
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(PERMISSION_TIMEOUT)) as client:
             resp = await client.get(
@@ -110,12 +65,15 @@ async def get_user_context(auth_header: str | None) -> UserContext:
                 headers={"Authorization": auth_header},
             )
     except Exception as exc:
-        logger.warning("get_user_context: /auth/me unreachable (%s), falling back to JWT decode", exc)
-        return _fallback_user_context(auth_header)
+        logger.warning("get_user_context: /auth/me unreachable (%s); refusing the request (fail-closed)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Chưa xác minh được phiên đăng nhập lúc này. Vui lòng thử lại sau.")
 
     if resp.status_code == 200:
         data = resp.json()
         user = data.get("user") or data  # some services return {user: {...}}, others return the object directly
+        status = str(user.get("status") or "ACTIVE").upper()
+        if status != "ACTIVE" or user.get("deleted_at"):
+            raise HTTPException(status_code=401, detail="Tài khoản không còn hoạt động.")
         roles = _parse_roles(user.get("roles") or [])
         permissions = _parse_permissions(user.get("permissions") or [])
         return UserContext(
@@ -126,6 +84,8 @@ async def get_user_context(auth_header: str | None) -> UserContext:
             permissions=permissions,
             is_superuser=bool(user.get("is_superuser", False)),
         )
+    if resp.status_code >= 500 or resp.status_code == 429:  # auth down / gateway throttling: unknown, not invalid
+        raise HTTPException(status_code=503, detail="Chưa xác minh được phiên đăng nhập lúc này. Vui lòng thử lại sau.")
 
     raise HTTPException(status_code=401, detail="Invalid or expired token.")
 

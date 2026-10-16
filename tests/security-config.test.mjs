@@ -103,6 +103,12 @@ test('long-lived infrastructure restarts itself after a crash or a Docker restar
   }
 });
 
+test('ai-service waits for a healthy inventory-service before its startup catalog sync', () => {
+  const compose = read('docker-compose.yml');
+  const block = compose.split(/^  ai-service:\r?$/m)[1]?.split(/^  [a-z-]+:\r?$/m)[0] ?? '';
+  assert.match(block, /depends_on:[\s\S]*?inventory-service:\r?\n\s+condition: service_healthy/);
+});
+
 test('the generated demo environment covers the Grafana password', () => {
   assert.match(read('.env.example'), /GRAFANA_ADMIN_PASSWORD=GENERATE_GRAFANA_PASSWORD/);
   assert.match(read('scripts/init-demo-env.mjs'), /GENERATE_GRAFANA_PASSWORD/);

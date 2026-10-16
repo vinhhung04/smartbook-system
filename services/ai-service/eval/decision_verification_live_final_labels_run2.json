@@ -1,0 +1,12 @@
+{
+ "about": "Labels of the FINAL answers of LIVE32 run 2 (decision_verification_live_answers_run2.json; verifier version after the run-1 fixes, before the run-2 fixes). Rows whose final answer equals the draft keep the draft label. Same single annotator.",
+ "final_with_errors": ["v32-rq-03#0", "v32-pr-05#0", "v32-pr-mt#0", "v32-wh-02#0", "v32-wh-04#0", "v32-ov-02#0", "v32-dc-02#0", "v32-mg-02#0"],
+ "final_critical": ["v32-rq-03#0", "v32-pr-05#0", "v32-wh-02#0", "v32-wh-04#0", "v32-ov-02#0", "v32-dc-02#0", "v32-mg-02#0"],
+ "answers_blocked_without_a_critical_error": ["v32-bd-25#0", "v32-wh-01#0", "v32-dc-03#0"],
+ "notes": {
+  "v32-bd-mt#0": "retry fixed '5 đầu sách đã được duyệt' -> 11 and removed 'tối ưu nhất'",
+  "v32-dc-04#0": "retry fixed '7 đầu sách khác' -> '4 đầu sách khác … tổng cộng 7'",
+  "v32-dc-02#0": "retry removed 'phương án tốt nhất' and the 'ổn định' trend but INTRODUCED a wrong period 'kỳ 16/10/2025 – 16/10/2026' (data: 16/09-16/10/2026) that the verifier did not catch",
+  "v32-mg-02#0": "retry fixed the trend wording; the library-wide list is still presented as Kho Ha Noi's (SCOPE)"
+ }
+}

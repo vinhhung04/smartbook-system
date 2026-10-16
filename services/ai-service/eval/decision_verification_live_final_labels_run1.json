@@ -1,0 +1,15 @@
+{
+ "about": "Labels of the FINAL answers of LIVE32 run 1 (decision_verification_live_answers.json, verifier as deployed before the live fixes). Rows whose final answer equals the draft keep the draft label. Same single annotator.",
+ "final_with_errors": ["v32-rq-03#0", "v32-pr-01#0", "v32-wh-02#0", "v32-wh-04#0", "v32-wh-06#0", "v32-ov-02#0", "v32-dc-03#0"],
+ "final_critical": ["v32-rq-03#0", "v32-wh-04#0", "v32-wh-06#0", "v32-ov-02#0", "v32-dc-03#0"],
+ "clean_answers_blocked": ["v32-bd-07#0", "v32-pr-mt#1"],
+ "notes": {
+  "v32-rq-03#0": "retry removed 'dưới ngưỡng' but kept the heading 'Tồn kho thấp' for 3 copies vs threshold 1 (strict call)",
+  "v32-dc-02#0": "retry removed 'phương án tốt nhất' - fixed",
+  "v32-dc-03#0": "retry removed the wrong returns figure but kept 'không cho thấy lượt mượn giảm'",
+  "v32-bd-07#0": "clean draft replaced by the fallback (false COVERAGE: 'đáp ứng được 0%' read as 'đáp ứng đủ')",
+  "v32-pr-mt#1": "clean draft replaced by the fallback (returns/reservations % compared with loans)",
+  "v32-dc-04#0": "blocked for a wrong reason (warehouse carried across sentences); the draft did hold a real COUNT error",
+  "v32-mg-02#0": "blocked for a wrong reason (stability rule); the draft did hold real ENTITY/ASSESSMENT/SCOPE errors"
+ }
+}

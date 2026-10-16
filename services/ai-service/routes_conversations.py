@@ -50,21 +50,46 @@ def _stored_warehouse_ids(row: MessageRow) -> set[str]:
 
 
 def _masked_summary(row: MessageRow, notice: str) -> dict:
-    """The stored turn as shown when its warehouses are outside the reader's
-    current scope: text, charts, data and cards withheld; the row is kept."""
+    """The stored turn as shown when the reader may no longer see its data:
+    text, charts, data, cards and checks withheld; the row is kept. Extras are
+    rebuilt from an allow-list (Copilot 3.2): a field added to extras later
+    (e.g. `verification`, whose claims quote figures and warehouse names)
+    cannot leak through a masked turn by default."""
     summary = _message_summary(row)
-    extras = dict(summary.get("extras") or {})
-    for key in ("visualizations", "recommendations", "caveats", "suggested_followups"):
-        extras[key] = []
-    extras.update(explanation=None, visualization_notes=[notice], withheld=True)
-    summary.update(content=notice, data=None, tool_results=None, tool_calls=None, sources=None, extras=extras)
+    original = summary.get("extras") or {}
+    extras = {"suggested_followups": [], "caveats": [], "recommendations": [], "explanation": None,
+              "visualizations": [], "visualization_notes": [notice], "data_as_of": original.get("data_as_of"),
+              "withheld": True}
+    summary.update(content=notice, data=None, tool_results=None, tool_calls=None, sources=None, extras=extras,
+                   grounding_warning=None)
     return summary
 
 
+NO_ACCESS_NOTICE = ("Tài khoản của bạn hiện không còn quyền dùng trợ lý phân tích, nên nội dung các câu trả lời trước đây "
+                    "được ẩn. Bản ghi gốc vẫn được lưu.")
+ASSISTANT_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
+ASSISTANT_PERMISSIONS = {"analytics.reports.view", "analytics.dashboard.read", "analytics.forecast.view", "analytics.read",
+                         "reports.read"}
+
+
+def can_use_assistant(user_ctx) -> bool:
+    """Same gate as main._assistant_can_access (kept here to avoid importing main)."""
+    if user_ctx is None:
+        return False
+    return bool(user_ctx.is_superuser or set(user_ctx.roles or []) & ASSISTANT_ROLES
+                or set(user_ctx.permissions or []) & ASSISTANT_PERMISSIONS)
+
+
 async def _scoped_summaries(messages: list[MessageRow], user_ctx) -> list[dict]:
-    """History is shown under the reader's CURRENT warehouse scope: a turn
-    whose data names a warehouse they can no longer read is masked (fail-closed
-    when the scope cannot be read). Snapshots are never refreshed here."""
+    """History is shown under the reader's CURRENT access: a reader who may no
+    longer use the assistant gets every answer masked (its figures were read
+    under a permission they lost - library-wide numbers carry no warehouse id
+    to check); otherwise a turn whose data names a warehouse they can no
+    longer read is masked (fail-closed when the scope cannot be read).
+    Snapshots are never refreshed here."""
+    if not can_use_assistant(user_ctx):
+        return [_masked_summary(row, NO_ACCESS_NOTICE) if row.role == "assistant" else _message_summary(row)
+                for row in messages]
     try:
         readable = await warehouse_scope.readable_warehouses(user_ctx)
         notice = warehouse_scope.MASKED_NOTICE

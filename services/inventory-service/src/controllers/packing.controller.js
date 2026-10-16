@@ -4,6 +4,11 @@ const prisma = new PrismaClient();
 
 const { parseId, normalizeText } = require("../utils/validation");
 const {
+  requireWarehouseReadAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require("../utils/warehouse-scope.utils");
+const {
   createPackingTask,
   resolveScanCode,
   isTaskFullyVerified,
@@ -131,11 +136,12 @@ async function listPackingTasks(req, res) {
     // Orders that finished Picking but have no active/completed packing task yet —
     // they must still show up as "waiting for packing" even before anyone scans them.
     const includeNotStarted = !status || status === "NOT_STARTED";
+    const scope = await scopedWarehouseWhere(req.user, "warehouse_id", warehouseId);
 
     const [tasks, pendingOrders] = await Promise.all([
       prisma.packing_tasks.findMany({
         where: {
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...scope,
           ...(status && status !== "NOT_STARTED" ? { status } : {}),
         },
         include: {
@@ -149,7 +155,7 @@ async function listPackingTasks(req, res) {
         ? prisma.outbound_orders.findMany({
             where: {
               status: { in: ORDER_READY_FOR_PACKING_STATUS },
-              ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+              ...scope,
               packing_tasks: { none: { status: { in: ["PENDING", "IN_PROGRESS", "COMPLETED"] } } },
             },
             select: {
@@ -176,6 +182,7 @@ async function listPackingTasks(req, res) {
 
     return res.json({ tasks: [...notStartedTasks, ...tasks] });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error("Error while listing packing tasks:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -212,6 +219,7 @@ async function getPackingTaskDetail(req, res) {
     if (!task) {
       return res.status(404).json({ message: "Packing task not found" });
     }
+    if (!(await requireWarehouseReadAccess(req, res, task.warehouse_id))) return undefined;
 
     return res.json({ task });
   } catch (error) {
@@ -618,6 +626,9 @@ async function getPackingTaskHistory(req, res) {
   }
 
   try {
+    const owner = await prisma.packing_tasks.findUnique({ where: { id: taskId }, select: { warehouse_id: true } });
+    if (!owner) return res.status(404).json({ message: "Packing task not found" });
+    if (!(await requireWarehouseReadAccess(req, res, owner.warehouse_id))) return undefined;
     const [auditLogs, scanEvents] = await Promise.all([
       prisma.inventory_audit_logs.findMany({
         where: { entity_type: "PACKING_TASK", entity_id: taskId },

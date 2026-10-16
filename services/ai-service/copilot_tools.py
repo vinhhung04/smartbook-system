@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from contextvars import ContextVar
 from datetime import date, datetime
 from typing import Any
 
@@ -24,14 +25,25 @@ from intent import normalize_text
 REORDER_FETCH_LIMIT = 100  # analytics caps reorder-suggestions at 100 rows
 _CACHE_TTL_SECONDS = 60.0
 _cache: dict[tuple, tuple[float, asyncio.Future]] = {}
+# Copilot 3.2: who the cached data was read for. Set per request by the
+# assistant (main._start_assistant_turn) to a fingerprint of the user, their
+# roles/permissions and their CURRENT warehouse scope, so a result read before
+# a scope or permission change is never served after it (the scope itself is
+# re-read at most every warehouse_scope.TTL_SECONDS). None = do not cache.
+CACHE_PARTITION: ContextVar[str | None] = ContextVar("copilot_cache_partition", default="")
 
 
 async def _cached_get(endpoint: str, auth_header: str | None, params: dict | None = None) -> Any:
     """Coalesces identical reads issued by tools running concurrently in one
     turn (e.g. two explain_warehouse_shortage calls both needing the 100-row
-    reorder list, the heaviest analytics query). Keyed by the auth header, so
-    one user's result is never served to another."""
-    key = (endpoint, auth_header, tuple(sorted((params or {}).items())))
+    reorder list, the heaviest analytics query). Keyed by the auth header AND
+    the request's partition (user + permissions + warehouse scope), so one
+    user's result is never served to another, nor to the same user after
+    their access changed."""
+    partition = CACHE_PARTITION.get()
+    if partition is None:
+        return await _get(endpoint, auth_header, params, truncate=False)
+    key = (endpoint, auth_header, partition, tuple(sorted((params or {}).items())))
     now = time.monotonic()
     hit = _cache.get(key)
     if hit and now - hit[0] < _CACHE_TTL_SECONDS:

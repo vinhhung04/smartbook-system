@@ -52,10 +52,20 @@
       "id": 5,
       "title": "Scrape targets up",
       "type": "table",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 16 },
       "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
       "targets": [
         { "expr": "up", "refId": "A", "instant": true, "format": "table" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Database reachable (1 = up)",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
+      "targets": [
+        { "expr": "db_up", "refId": "A" }
       ]
     }
   ]

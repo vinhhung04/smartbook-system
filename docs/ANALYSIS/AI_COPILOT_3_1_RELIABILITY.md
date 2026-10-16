@@ -154,7 +154,7 @@ flowchart TD
 | ai-service | dữ liệu tool đã lọc theo token người dùng; lịch sử/snapshot kiểm tra lại (mục 7) | **[ĐÃ KIỂM THỬ]** 8 unit test + integration `--ai` |
 
 Dữ liệu seed: ID kho cố định ở cả `inventory-service/prisma/seed.js` và `auth-service/prisma/seed.js`;
-`scripts/reconcile-warehouse-scopes.sh` sửa các DB đã seed trước đó (đã chạy cục bộ: 12 dòng được ánh xạ lại).
+`scripts/reconcile-warehouse-scopes.mjs` (chạy trong `pnpm demo:upgrade`) sửa các DB đã seed trước đó (đã chạy cục bộ: 12 dòng được ánh xạ lại).
 
 Kiểm chứng thật (stack Docker):
 - `scripts/warehouse-scope-integration.mjs`: 8/8 (gồm kiểm tra AI không trả dữ liệu kho Hà Nội cho tài khoản chỉ có HCM).
