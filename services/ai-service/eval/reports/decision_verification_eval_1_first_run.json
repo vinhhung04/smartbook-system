@@ -1,0 +1,641 @@
+{
+ "sizes": {
+  "REAL31": 63,
+  "MUTATED31": 154,
+  "HELDOUT32": 70,
+  "LIVE32": 34
+ },
+ "REAL31": {
+  "v3_1": {
+   "items": 63,
+   "with_errors": 22,
+   "clean": 41,
+   "precision": 1.0,
+   "recall": 0.455,
+   "recall_frac": "10/22",
+   "fpr_clean": 0.0,
+   "fpr_frac": "0/41",
+   "critical_detection": "0/7",
+   "latency_ms": {
+    "p50": 0.592,
+    "p95": 1.447
+   },
+   "per_class": {
+    "CONTRADICTION": {
+     "fn": 7
+    },
+    "INTERNAL_LABEL": {
+     "tp": 7
+    },
+    "REASONING_OVERCLAIM": {
+     "fn": 9,
+     "tp": 1
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 1
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "fn": 1,
+     "fp": 1
+    }
+   }
+  },
+  "v3_2": {
+   "items": 63,
+   "with_errors": 22,
+   "clean": 41,
+   "precision": 0.889,
+   "recall": 0.727,
+   "recall_frac": "16/22",
+   "fpr_clean": 0.049,
+   "fpr_frac": "2/41",
+   "critical_detection": "7/7",
+   "latency_ms": {
+    "p50": 2.021,
+    "p95": 6.57
+   },
+   "per_class": {
+    "CONTRADICTION": {
+     "tp": 7,
+     "fp": 2
+    },
+    "INTERNAL_LABEL": {
+     "tp": 7
+    },
+    "REASONING_OVERCLAIM": {
+     "fn": 8,
+     "tp": 2
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 1
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 1,
+     "fp": 1
+    }
+   }
+  },
+  "disagreements": [
+   {
+    "key": "xai-an-01#0",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "xai-an-03#0",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "xai-wi-01#0",
+    "expected": [],
+    "v3_1": [],
+    "v3_2": [
+     "CONTRADICTION"
+    ]
+   },
+   {
+    "key": "xai-wi-04#0",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "xai-mt-01#0",
+    "expected": [],
+    "v3_1": [],
+    "v3_2": [
+     "CONTRADICTION"
+    ]
+   },
+   {
+    "key": "xai-md-01#0",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "viz-cp-05#0",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "viz-kp-02#0",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   }
+  ]
+ },
+ "MUTATED31": {
+  "v3_1": {
+   "items": 154,
+   "with_errors": 154,
+   "clean": 0,
+   "precision": 1.0,
+   "recall": 0.818,
+   "recall_frac": "126/154",
+   "fpr_clean": null,
+   "fpr_frac": "0/0",
+   "critical_detection": "11/16",
+   "latency_ms": {
+    "p50": 0.522,
+    "p95": 1.172
+   },
+   "per_class": {
+    "CONTRADICTION": {
+     "tp": 2
+    },
+    "INTERNAL_LABEL": {
+     "tp": 41
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 6,
+     "fn": 5
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 12,
+     "fn": 3
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 3
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 31,
+     "fn": 10
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 31,
+     "fn": 10
+    }
+   }
+  },
+  "v3_2": {
+   "items": 154,
+   "with_errors": 154,
+   "clean": 0,
+   "precision": 1.0,
+   "recall": 0.981,
+   "recall_frac": "151/154",
+   "fpr_clean": null,
+   "fpr_frac": "0/0",
+   "critical_detection": "16/16",
+   "latency_ms": {
+    "p50": 1.951,
+    "p95": 4.96
+   },
+   "per_class": {
+    "CONTRADICTION": {
+     "tp": 2,
+     "fp": 7
+    },
+    "INTERNAL_LABEL": {
+     "tp": 41
+    },
+    "RANKING_INCONSISTENCY": {
+     "tp": 11
+    },
+    "REASONING_OVERCLAIM": {
+     "tp": 12,
+     "fn": 3
+    },
+    "SCOPE_CONFUSION": {
+     "tp": 3
+    },
+    "UNSUPPORTED_CAUSAL": {
+     "tp": 41
+    },
+    "UNSUPPORTED_RECOMMENDATION": {
+     "tp": 41
+    }
+   }
+  },
+  "disagreements": [
+   {
+    "key": "xai-ca-02#0+REASONING_OVERCLAIM",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "xai-de-03#0+REASONING_OVERCLAIM",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "xai-mt-05#1+REASONING_OVERCLAIM",
+    "expected": [
+     "REASONING_OVERCLAIM"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   }
+  ]
+ },
+ "HELDOUT32": {
+  "v3_1": {
+   "items": 70,
+   "with_errors": 43,
+   "clean": 27,
+   "precision": 1.0,
+   "recall": 0.14,
+   "recall_frac": "6/43",
+   "fpr_clean": 0.0,
+   "fpr_frac": "0/27",
+   "critical_detection": "3/35",
+   "latency_ms": {
+    "p50": 0.079,
+    "p95": 0.16
+   },
+   "per_class": {
+    "ASSUMPTION": {
+     "fn": 1
+    },
+    "BUDGET": {
+     "fn": 1
+    },
+    "CAUSALITY": {
+     "tp": 1,
+     "fn": 2
+    },
+    "CONSTRAINT": {
+     "fn": 1
+    },
+    "COUNT": {
+     "fn": 8
+    },
+    "COVERAGE": {
+     "fn": 1
+    },
+    "ENTITY": {
+     "fn": 1
+    },
+    "FORECAST": {
+     "fn": 1
+    },
+    "MISSING_DATA": {
+     "fn": 3
+    },
+    "MONEY": {
+     "fn": 5
+    },
+    "OPTIMALITY": {
+     "tp": 1,
+     "fn": 1
+    },
+    "OVERCLAIM": {
+     "fp": 1
+    },
+    "PERCENT": {
+     "fn": 2
+    },
+    "PERIOD": {
+     "fn": 5
+    },
+    "RANKING": {
+     "fn": 2,
+     "tp": 1
+    },
+    "RECOMMENDATION": {
+     "fn": 1
+    },
+    "SCOPE": {
+     "fn": 2
+    },
+    "TREND": {
+     "fp": 1,
+     "fn": 2,
+     "tp": 1
+    }
+   }
+  },
+  "v3_2": {
+   "items": 70,
+   "with_errors": 43,
+   "clean": 27,
+   "precision": 1.0,
+   "recall": 1.0,
+   "recall_frac": "43/43",
+   "fpr_clean": 0.0,
+   "fpr_frac": "0/27",
+   "critical_detection": "35/35",
+   "latency_ms": {
+    "p50": 0.403,
+    "p95": 0.815
+   },
+   "per_class": {
+    "ASSUMPTION": {
+     "tp": 1
+    },
+    "BUDGET": {
+     "tp": 1
+    },
+    "CAUSALITY": {
+     "tp": 3
+    },
+    "CONSTRAINT": {
+     "tp": 1
+    },
+    "COUNT": {
+     "tp": 8
+    },
+    "COVERAGE": {
+     "tp": 1
+    },
+    "ENTITY": {
+     "tp": 1
+    },
+    "FORECAST": {
+     "tp": 1
+    },
+    "MISSING_DATA": {
+     "tp": 3
+    },
+    "MONEY": {
+     "tp": 5
+    },
+    "OPTIMALITY": {
+     "tp": 2
+    },
+    "OVERCLAIM": {
+     "fp": 1
+    },
+    "PERCENT": {
+     "tp": 2
+    },
+    "PERIOD": {
+     "tp": 5,
+     "fp": 1
+    },
+    "RANKING": {
+     "tp": 3
+    },
+    "RECOMMENDATION": {
+     "tp": 1
+    },
+    "SCOPE": {
+     "tp": 2
+    },
+    "TREND": {
+     "fp": 1,
+     "tp": 3
+    }
+   }
+  },
+  "disagreements": []
+ },
+ "LIVE32": {
+  "v3_1": {
+   "items": 34,
+   "with_errors": 11,
+   "clean": 23,
+   "precision": 0.75,
+   "recall": 0.273,
+   "recall_frac": "3/11",
+   "fpr_clean": 0.043,
+   "fpr_frac": "1/23",
+   "critical_detection": "0/8",
+   "latency_ms": {
+    "p50": 0.513,
+    "p95": 1.179
+   },
+   "per_class": {
+    "ASSESSMENT": {
+     "fn": 2
+    },
+    "ASSUMPTION": {
+     "fn": 1
+    },
+    "CAUSALITY": {
+     "fp": 1
+    },
+    "COUNT": {
+     "fn": 4
+    },
+    "COVERAGE": {
+     "fn": 1
+    },
+    "ENTITY": {
+     "fn": 1
+    },
+    "MONEY": {
+     "fn": 1
+    },
+    "OPTIMALITY": {
+     "tp": 2
+    },
+    "OVERCLAIM": {
+     "fp": 2
+    },
+    "PERIOD": {
+     "fn": 1
+    },
+    "SCOPE": {
+     "fn": 1
+    },
+    "TREND": {
+     "fn": 1
+    }
+   }
+  },
+  "v3_2": {
+   "items": 34,
+   "with_errors": 11,
+   "clean": 23,
+   "precision": 0.556,
+   "recall": 0.455,
+   "recall_frac": "5/11",
+   "fpr_clean": 0.174,
+   "fpr_frac": "4/23",
+   "critical_detection": "3/8",
+   "latency_ms": {
+    "p50": 1.843,
+    "p95": 4.669
+   },
+   "per_class": {
+    "ASSESSMENT": {
+     "fn": 2
+    },
+    "ASSUMPTION": {
+     "fn": 1
+    },
+    "CAUSALITY": {
+     "fp": 1
+    },
+    "COUNT": {
+     "fn": 4
+    },
+    "COVERAGE": {
+     "fp": 2,
+     "tp": 1
+    },
+    "ENTITY": {
+     "fp": 1,
+     "fn": 1
+    },
+    "MONEY": {
+     "fn": 1,
+     "fp": 1
+    },
+    "OPTIMALITY": {
+     "tp": 2
+    },
+    "OVERCLAIM": {
+     "fp": 2
+    },
+    "PERCENT": {
+     "fp": 1
+    },
+    "PERIOD": {
+     "fn": 1
+    },
+    "SCOPE": {
+     "fn": 1
+    },
+    "TREND": {
+     "fn": 1,
+     "fp": 1
+    }
+   }
+  },
+  "disagreements": [
+   {
+    "key": "v32-bd-07#0",
+    "expected": [],
+    "v3_1": [],
+    "v3_2": [
+     "COVERAGE"
+    ]
+   },
+   {
+    "key": "v32-bd-03#0",
+    "expected": [],
+    "v3_1": [
+     "OVERCLAIM"
+    ],
+    "v3_2": [
+     "OVERCLAIM"
+    ]
+   },
+   {
+    "key": "v32-bd-mt#1",
+    "expected": [],
+    "v3_1": [],
+    "v3_2": [
+     "COVERAGE"
+    ]
+   },
+   {
+    "key": "v32-rq-03#0",
+    "expected": [
+     "ASSESSMENT"
+    ],
+    "v3_1": [
+     "CAUSALITY"
+    ],
+    "v3_2": [
+     "CAUSALITY"
+    ]
+   },
+   {
+    "key": "v32-pr-01#0",
+    "expected": [
+     "PERIOD"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "v32-pr-mt#1",
+    "expected": [],
+    "v3_1": [],
+    "v3_2": [
+     "PERCENT"
+    ]
+   },
+   {
+    "key": "v32-wh-02#0",
+    "expected": [
+     "ASSUMPTION"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "v32-wh-04#0",
+    "expected": [
+     "COUNT"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "v32-wh-06#0",
+    "expected": [
+     "COUNT"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "v32-ov-02#0",
+    "expected": [
+     "MONEY"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "v32-dc-03#0",
+    "expected": [
+     "COUNT",
+     "TREND"
+    ],
+    "v3_1": [],
+    "v3_2": []
+   },
+   {
+    "key": "v32-dc-04#0",
+    "expected": [
+     "COUNT"
+    ],
+    "v3_1": [],
+    "v3_2": [
+     "ENTITY"
+    ]
+   },
+   {
+    "key": "v32-mg-02#0",
+    "expected": [
+     "ASSESSMENT",
+     "ENTITY",
+     "SCOPE"
+    ],
+    "v3_1": [],
+    "v3_2": [
+     "TREND"
+    ]
+   }
+  ]
+ }
+}

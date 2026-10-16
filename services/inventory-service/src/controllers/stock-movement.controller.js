@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { scopedWarehouseWhere, scopeErrorStatus } = require('../utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 
@@ -23,7 +24,11 @@ function mapMovementType(rawType, fromLocationId, toLocationId) {
 
 async function getStockMovements(req, res) {
   try {
+    // Only movements of warehouses the caller may read: the 500-row window is
+    // taken AFTER the filter, so another warehouse's rows never fill it.
+    const where = await scopedWarehouseWhere(req.user, 'warehouse_id', req.query?.warehouse_id || null);
     const movements = await prisma.stock_movements.findMany({
+      where,
       orderBy: { created_at: 'desc' },
       include: {
         book_variants: {
@@ -113,6 +118,8 @@ async function getStockMovements(req, res) {
 
     return res.json(data);
   } catch (error) {
+    const status = scopeErrorStatus(error);
+    if (status === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error('Error while fetching stock movements:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }

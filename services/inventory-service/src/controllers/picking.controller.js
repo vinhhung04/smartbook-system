@@ -26,6 +26,11 @@ const {
   RECEIVING_LOCATION_TYPES,
 } = require("../utils/constants");
 const { parseId, normalizeText } = require("../utils/validation");
+const {
+  requireWarehouseReadAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require("../utils/warehouse-scope.utils");
 const { toInt } = require("../utils/validation");
 const { normalizeLocationType } = require("../utils/validation");
 const { normalizeTaskType } = require("../utils/validation");
@@ -875,10 +880,16 @@ async function listPickingTasks(req, res) {
   const warehouseId = parseId(req.query.warehouse_id);
 
   try {
+    // Without warehouse_id the queue is every warehouse the caller may read -
+    // never every warehouse (Copilot 3.2 audit: an HN operator listed HCM tasks).
+    const [outboundScope, transferScope] = await Promise.all([
+      scopedWarehouseWhere(req.user, "warehouse_id", warehouseId),
+      scopedWarehouseWhere(req.user, "from_warehouse_id", warehouseId),
+    ]);
     const [outboundOrders, transferOrders, pickingTasksMeta] = await Promise.all([
       prisma.outbound_orders.findMany({
         where: {
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...outboundScope,
           status: { in: OUTBOUND_READY_STATUS },
         },
         include: {
@@ -898,7 +909,7 @@ async function listPickingTasks(req, res) {
       }),
       prisma.transfer_orders.findMany({
         where: {
-          ...(warehouseId ? { from_warehouse_id: warehouseId } : {}),
+          ...transferScope,
           status: { in: TRANSFER_READY_STATUS },
         },
         include: {
@@ -923,7 +934,7 @@ async function listPickingTasks(req, res) {
       prisma.picking_tasks.findMany({
         where: {
           picking_type: "PICK",
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...outboundScope,
         },
         select: {
           id: true,
@@ -1057,6 +1068,7 @@ async function listPickingTasks(req, res) {
 
     return res.json({ data: filtered });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error("Error while listing picking tasks:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -1320,6 +1332,7 @@ async function getPickingTaskDetail(req, res) {
       if (!canAccessTask(req.user || {}, order.processed_by_user_id)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!(await requireWarehouseReadAccess(req, res, order.warehouse_id))) return undefined;
 
       const currentLocation = await resolveWarehouseLocationByInput(
         order.warehouse_id,
@@ -1557,6 +1570,8 @@ async function getPickingTaskDetail(req, res) {
     if (!canAccessTask(req.user || {}, order.shipped_by_user_id)) {
       return res.status(403).json({ message: "Forbidden" });
     }
+    // Picking a transfer happens in its source warehouse.
+    if (!(await requireWarehouseReadAccess(req, res, order.from_warehouse_id))) return undefined;
 
     const currentLocation = await resolveWarehouseLocationByInput(
       order.from_warehouse_id,
@@ -4231,8 +4246,7 @@ async function listPickingTasksHierarchy(req, res) {
   const statusFilter = normalizeText(req.query?.status);
 
   try {
-    const where = {};
-    if (warehouseId) where.warehouse_id = warehouseId;
+    const where = { ...(await scopedWarehouseWhere(req.user, "warehouse_id", warehouseId)) };
     if (statusFilter) where.status = statusFilter;
     // Only return root PICK tasks; REPICKs are fetched via children endpoint
     where.picking_type = "PICK";
@@ -4282,6 +4296,7 @@ async function listPickingTasksHierarchy(req, res) {
       })),
     );
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error("Error listing picking tasks hierarchy:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -4295,6 +4310,9 @@ async function getPickingTaskChildren(req, res) {
   }
 
   try {
+    const parent = await prisma.picking_tasks.findUnique({ where: { id: pickingTaskId }, select: { warehouse_id: true } });
+    if (!parent) return res.status(404).json({ message: "Picking task not found" });
+    if (!(await requireWarehouseReadAccess(req, res, parent.warehouse_id))) return undefined;
     const children = await prisma.picking_tasks.findMany({
       where: { parent_id: pickingTaskId },
       orderBy: { created_at: "asc" },

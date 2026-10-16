@@ -253,6 +253,40 @@ test.describe('AI copilot visualizations', () => {
     await expect(page.getByRole('note')).toHaveCount(1); // the passing answer adds none
   });
 
+  test('Copilot 3.2: a blocked answer says it could not be verified and offers no action; a verified one says it was checked', async ({ page }) => {
+    const blocked = {
+      status: 'BLOCKED', retried: true, safe_to_act: false, counts: { SUPPORTED: 0, CONTRADICTED: 1, UNSUPPORTED: 0, UNVERIFIABLE: 0 },
+      repairs: [], claims: [{ text: 'đề xuất nhập 5 đầu sách', type: 'numeric', category: 'COUNT', label: 'số lượng không khớp dữ liệu',
+                               verdict: 'CONTRADICTED', severity: 'critical', detail: '9 đầu sách được duyệt' }],
+    };
+    const passed = {
+      status: 'PASSED', retried: false, safe_to_act: true, counts: { SUPPORTED: 2, CONTRADICTED: 0, UNSUPPORTED: 0, UNVERIFIABLE: 0 },
+      repairs: [], claims: [{ text: 'x', type: 'numeric', category: 'COUNT', label: 'số lượng không khớp dữ liệu', verdict: 'SUPPORTED' }],
+    };
+    let call = 0;
+    await page.route('**/assistant/stream', async (route) => {
+      call += 1;
+      const payload = { ...answer([LINE]), verification: call === 1 ? blocked : passed };
+      const body = `event: token\ndata: ${JSON.stringify({ text: 'bản nháp' })}\n\nevent: status\ndata: {"stage":"verifying"}\n\n`
+        + `event: done\ndata: ${JSON.stringify(payload)}\n\n`;
+      await route.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body });
+    });
+    await page.route('**/assistant/conversations', (route) => route.fulfill({ json: { items: [] } }));
+    await page.route('**/assistant/actions?**', (route) => route.fulfill({ json: { items: [] } }));
+    await openAssistant(page);
+    await ask(page, 'Với ngân sách 10 triệu nên nhập sách gì?');
+    const note = page.getByRole('note').filter({ hasText: 'Không kiểm chứng được một khuyến nghị an toàn' });
+    await expect(note).toBeVisible();
+    await expect(note).toContainText('số lượng không khớp dữ liệu');
+    await expect(note).not.toContainText('COUNT');
+    await expect(page.getByText('bản nháp', { exact: true })).toHaveCount(0); // the draft was replaced
+    await expect(page.getByTestId('copilot-draft-status')).toHaveCount(0);
+    await ask(page, 'Vẽ lại biểu đồ');
+    await expect(page.getByText('Đã đối chiếu với dữ liệu hệ thống')).toBeVisible();
+    await expect(page.getByRole('note')).toHaveCount(1); // the verified answer adds no warning note
+    await expect(page.getByText(/100\s*%/)).toHaveCount(0);
+  });
+
   test('dark mode recolours the series and the chart fits a phone screen', async ({ page }) => {
     await stubAssistant(page, [KPI, LINE]);
     await openAssistant(page);

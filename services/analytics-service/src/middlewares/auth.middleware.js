@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const { isTokenRevoked } = require('../lib/token-revocation');
 
-function authenticateToken(req, res, next) {
+async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
@@ -8,18 +9,25 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ message: 'Access token required' });
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = {
-      ...payload,
-      id: payload.id || payload.sub,
-      permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
-      roles: Array.isArray(payload.roles) ? payload.roles : [],
-    };
-    return next();
+    payload = jwt.verify(token, process.env.JWT_SECRET);
   } catch (_error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
   }
+  // A logged-out / locked / re-roled account is refused here too, not only at
+  // auth-service and inventory (Copilot 3.2 audit: revoked tokens still read
+  // /analytics/* through the gateway).
+  if (await isTokenRevoked(payload)) {
+    return res.status(401).json({ message: 'Token has been revoked' });
+  }
+  req.user = {
+    ...payload,
+    id: payload.id || payload.sub,
+    permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
+    roles: Array.isArray(payload.roles) ? payload.roles : [],
+  };
+  return next();
 }
 
 function authorizeAnyPermission(permissions = []) {

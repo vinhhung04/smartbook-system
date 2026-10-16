@@ -31,9 +31,10 @@ logger = logging.getLogger(__name__)
 AUTH_URL = (os.getenv("AUTH_SERVICE_INTERNAL_URL") or os.getenv("AUTH_SERVICE_URL") or "http://auth-service:3002").rstrip("/")
 TTL_SECONDS = float(os.getenv("WAREHOUSE_SCOPE_TTL_SECONDS", "30"))
 READ_LEVELS = {"READ", "READ_ONLY", "WRITE", "OPERATOR", "FULL"}
+WRITE_LEVELS = {"WRITE", "OPERATOR", "FULL"}
 _KEYS = ("warehouse_id", "from_warehouse_id", "to_warehouse_id")
 
-_cache: dict[str, tuple[float, frozenset[str] | None]] = {}
+_cache: dict[str, tuple[float, tuple]] = {}  # user id -> (read time, (readable, writable))
 
 MASKED_NOTICE = ("Nội dung này chứa số liệu của kho mà tài khoản của bạn hiện không còn quyền xem, nên đã được ẩn. "
                  "Bản ghi gốc vẫn được lưu; hãy hỏi lại để xem dữ liệu trong phạm vi hiện tại.")
@@ -67,6 +68,20 @@ async def readable_warehouses(user_ctx, *, client: httpx.AsyncClient | None = No
         return frozenset()
     if getattr(user_ctx, "is_superuser", False):
         return None
+    return (await _scopes(user_ctx, client))[0]
+
+
+async def writable_warehouses(user_ctx, *, client: httpx.AsyncClient | None = None) -> frozenset[str] | None:
+    """None = every warehouse (superuser); otherwise the ids the user may
+    write in (WRITE / OPERATOR / FULL). Raises ScopeUnavailable."""
+    if user_ctx is None or not getattr(user_ctx, "user_id", None):
+        return frozenset()
+    if getattr(user_ctx, "is_superuser", False):
+        return None
+    return (await _scopes(user_ctx, client))[1]
+
+
+async def _scopes(user_ctx, client: httpx.AsyncClient | None) -> tuple:
     user_id = str(user_ctx.user_id)
     hit = _cache.get(user_id)
     if hit and time.monotonic() - hit[0] < TTL_SECONDS:
@@ -85,18 +100,20 @@ async def readable_warehouses(user_ctx, *, client: httpx.AsyncClient | None = No
     except httpx.HTTPError as exc:
         raise ScopeUnavailable(str(exc)) from exc
     if response.status_code == 404:
-        value: frozenset[str] | None = frozenset()
+        value: tuple = (frozenset(), frozenset())
     elif response.status_code != 200:
         raise ScopeUnavailable(f"auth-service answered {response.status_code}")
     else:
         body = (response.json() or {}).get("data") or {}
         if body.get("status") != "ACTIVE" or body.get("deleted"):
-            value = frozenset()
+            value = (frozenset(), frozenset())
         elif body.get("is_superuser"):
-            value = None
+            value = (None, None)
         else:
-            value = frozenset(str(s.get("warehouse_id")) for s in body.get("scopes") or []
-                              if str(s.get("access_level", "")).upper() in READ_LEVELS and s.get("warehouse_id"))
+            def ids(levels):
+                return frozenset(str(s.get("warehouse_id")) for s in body.get("scopes") or []
+                                 if str(s.get("access_level", "")).upper() in levels and s.get("warehouse_id"))
+            value = (ids(READ_LEVELS), ids(WRITE_LEVELS))
     _cache[user_id] = (time.monotonic(), value)
     return value
 

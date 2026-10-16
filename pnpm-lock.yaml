@@ -407,6 +407,9 @@ importers:
       pg:
         specifier: ^8.16.3
         version: 8.21.0
+      redis:
+        specifier: ^4.6.0
+        version: 4.7.1
     devDependencies:
       ajv:
         specifier: ^8.17.1
@@ -9758,7 +9761,9 @@ snapshots:
       metro-runtime: 0.84.6
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 

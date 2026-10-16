@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 
 const { parseId, normalizeRequiredUserId, normalizeOptionalUserId } = require("../utils/validation");
 const { toSerializableError } = require("../utils/inventory");
+const { scopedWarehouseWhere, scopeErrorStatus } = require("../utils/warehouse-scope.utils");
 const {
   postTransferReceiptToReceiving,
   createReceiptNumber,
@@ -31,10 +32,12 @@ async function listTransferReceivingQueue(req, res) {
     : { received_by_user_id: scope.currentUserId };
 
   try {
+    // Receiving happens at the destination: only transfers into the caller's warehouses.
+    const destination = await scopedWarehouseWhere(req.user, "to_warehouse_id", warehouseId);
     const orders = await prisma.transfer_orders.findMany({
       where: {
         status: "IN_TRANSIT",
-        ...(warehouseId ? { to_warehouse_id: warehouseId } : {}),
+        ...destination,
         ...assignmentFilter,
       },
       include: {
@@ -75,6 +78,7 @@ async function listTransferReceivingQueue(req, res) {
 
     return res.json({ data });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error("Error while listing transfer receiving queue:", error);
     return res.status(500).json({ message: "Internal server error" });
   }

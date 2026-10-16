@@ -10,6 +10,7 @@ const {
   normalizeOptionalUserId,
 } = require("../utils/validation");
 const { createMovementNumber } = require("../utils/inventory");
+const { requireWarehouseReadAccess, scopedWarehouseWhere, scopeErrorStatus } = require("../utils/warehouse-scope.utils");
 const { toSerializableError } = require("../utils/inventory");
 const {
   resolveOrCreateShippingLocation,
@@ -204,13 +205,19 @@ async function listOutboundQueue(req, res) {
   ];
 
   try {
+    // The queue is limited to warehouses the caller may read (no warehouse_id
+    // = all of THEIR warehouses, never every warehouse).
+    const [outboundScope, transferScope] = await Promise.all([
+      scopedWarehouseWhere(req.user, "warehouse_id", warehouseId),
+      scopedWarehouseWhere(req.user, "from_warehouse_id", warehouseId),
+    ]);
     const [outboundOrders, transferOrders, pickingTasksMeta] = await Promise.all([
       prisma.outbound_orders.findMany({
         where: {
           status: { in: OUTBOUND_VISIBLE_STATUSES },
           // Exclude REPICK orders — they are accounted for in the root order's aggregate
           external_reference: { not: { startsWith: "REPICK:" } },
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...outboundScope,
           ...outboundAssignment,
           // Orders that finished Picking must complete Packing before showing up as
           // ready-to-ship — they stay in the Packing queue until then (see Packing module).
@@ -234,7 +241,7 @@ async function listOutboundQueue(req, res) {
           // Include REPICKING status so root transfers with active repick chain are visible
           status: { in: ["READY_FOR_OUTBOUND", "REPICKING"] },
           // Note: REPICK orders are filtered in JS below (Prisma OR on nullable note unreliable)
-          ...(warehouseId ? { from_warehouse_id: warehouseId } : {}),
+          ...transferScope,
           ...transferAssignment,
         },
         include: {
@@ -255,7 +262,7 @@ async function listOutboundQueue(req, res) {
       prisma.picking_tasks.findMany({
         where: {
           picking_type: "PICK",
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...outboundScope,
         },
         select: {
           id: true,
@@ -429,6 +436,7 @@ async function listOutboundQueue(req, res) {
 
     return res.json({ data });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error("Error while listing outbound queue:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -474,6 +482,7 @@ async function getOutboundOrderDetail(req, res) {
       if (!canAccessAssignedTask(req.user || {}, effectiveAssignee)) {
         return res.status(403).json({ message: "Forbidden" });
       }
+      if (!(await requireWarehouseReadAccess(req, res, order.warehouse_id))) return undefined;
 
       // Fetch full execution chain: PICK task + all REPICK tasks
       const allPickingTasks = await prisma.picking_tasks.findMany({
@@ -635,6 +644,7 @@ async function getOutboundOrderDetail(req, res) {
     if (!canAccessAssignedTask(req.user || {}, effectiveAssignee)) {
       return res.status(403).json({ message: "Forbidden" });
     }
+    if (!(await requireWarehouseReadAccess(req, res, order.from_warehouse_id))) return undefined;
 
     // Aggregate shipped_qty from REPICK chain per variant (for REPICKING root transfers)
     const transferRepickChain = await prisma.transfer_orders.findMany({
