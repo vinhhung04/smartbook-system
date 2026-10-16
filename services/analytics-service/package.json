@@ -5,8 +5,8 @@
   "description": "SmartBook Analytics Service",
   "main": "src/index.js",
   "scripts": {
-    "dev": "node --watch -r ./src/tracing.js src/index.js",
-    "start": "node -r ./src/tracing.js src/index.js",
+    "dev": "node --watch -r ./src/telemetry.js src/index.js",
+    "start": "node -r ./src/telemetry.js src/index.js",
     "test": "node --test test/*.test.js",
     "test:contract": "node --test test/contract/*.test.js",
     "eval:reorder": "node eval/run-all.js"

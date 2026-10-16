@@ -419,7 +419,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Docker image chạy `opentelemetry-instrument uvicorn main:app --host 0.0.0.0 --port 8000`, nên AI Service cũng xuất trace về Tempo như các service Node.js.
+Docker image chạy `uvicorn main:app --host 0.0.0.0 --port 8000` (không còn agent `opentelemetry-instrument`, không xuất trace). Metric vẫn ở `GET /metrics` (`prometheus-fastapi-instrumentator` + `metrics.py`: thời gian gọi LLM, token, chi phí OpenRouter, OCR, ISBN, catalog sync); Prometheus chỉ scrape khi bật profile `monitoring`. Gói `opentelemetry-api` vẫn có trong image vì FastAPI ≥ 0.142 khai báo nó là dependency bắt buộc; khi không có SDK, API này không làm gì (no-op).
 
 ## Demo: Action Center + trí nhớ hội thoại + Evidence-first
 

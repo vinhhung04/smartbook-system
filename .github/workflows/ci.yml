@@ -128,6 +128,14 @@ jobs:
 
       - run: docker compose config -q
 
+      - run: docker compose --profile ai --profile monitoring config -q
+
+      # Monitoring is opt-in: the default stack must not start Prometheus or Grafana.
+      - run: |
+          services="$(docker compose config --services)"
+          echo "$services"
+          ! echo "$services" | grep -Ex 'prometheus|grafana'
+
   integration:
     name: Integration flows (Docker)
     runs-on: ubuntu-latest
