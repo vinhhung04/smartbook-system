@@ -56,6 +56,7 @@ function prepareVariant(variant, firstDay, endDay) {
     pending: [], // { qty, orderDay, arrivalDay }
     returns: new Map(), // day -> copies coming back
     served: [], // timestamps of fulfilled borrows, ascending
+    loans: [], // { startDay, returnDay|null } of fulfilled borrows (returnDay revealed to policies only once past)
     leadTimes: [], // observed lead times of this variant's received orders
     metrics: emptyAccumulator(),
     steady: emptyAccumulator(),
@@ -65,7 +66,7 @@ function prepareVariant(variant, firstDay, endDay) {
 function emptyAccumulator() {
   return {
     total_demand: 0, fulfilled_demand: 0, unmet_demand: 0, stockout_days: 0,
-    inventory_day_sum: 0, available_day_sum: 0, max_inventory: 0,
+    inventory_day_sum: 0, inventory_value_day_sum: 0, available_day_sum: 0, max_inventory: 0,
     ordered_units: 0, order_count: 0, procurement_cost: 0,
   };
 }
@@ -86,7 +87,7 @@ function emptyAccumulator() {
  */
 function runInventoryBacktest({
   variants, firstDay, evalStartDay, endDay, reviewPeriodDays, policy, leadTimeDays,
-  budgetPerReview = null, rankCandidates = null, timelineVariantIds = [], steadyStartDay = evalStartDay,
+  budgetPerReview = null, rankCandidates = null, timelineVariantIds = [], steadyStartDay = evalStartDay, allocate = null,
 }) {
   if (!(evalStartDay >= firstDay && endDay > evalStartDay)) throw new Error('need firstDay <= evalStartDay < endDay');
   if (!(steadyStartDay >= evalStartDay && steadyStartDay < endDay)) throw new Error('need evalStartDay <= steadyStartDay < endDay');
@@ -121,6 +122,7 @@ function runInventoryBacktest({
     // 3. review
     if (scored && (day - evalStartDay) % reviewPeriodDays === 0) {
       decisionStats.reviews += 1;
+      const catalogLoans = policy.wantsLoans ? catalogLoanView(states, day) : null;
       const dayStartMs = day * DAY_MS;
       const decisions = [];
       for (const s of states) {
@@ -135,6 +137,11 @@ function runInventoryBacktest({
           history: s.served,
           variantLeadTimes: s.leadTimes,
           supplierLeadTimes,
+          // Loans as a library system knows them at the start of `day`: an open
+          // loan exposes only its start day (its return is in the future and
+          // never revealed); a returned loan exposes its duration.
+          loanView: policy.wantsLoans ? loanView(s.loans, day) : null,
+          catalogLoanView: policy.wantsLoans ? catalogLoans : null,
         });
         const qty = Math.max(0, Math.floor(decision?.qty || 0));
         if (qty > 0) decisions.push({ state: s, qty, candidate: decision.candidate || null });
@@ -142,7 +149,14 @@ function runInventoryBacktest({
       decisionStats.candidates += decisions.length;
 
       let funded = decisions;
-      if (budgetPerReview !== null) {
+      if (budgetPerReview !== null && allocate) {
+        // custom allocation (e.g. marginal copies per VND): may fund part of a line
+        const result = allocate(decisions.map((d) => ({ ...d, unitCost: d.state.info.unitCost })), budgetPerReview);
+        funded = result.funded.filter((d) => d.qty > 0);
+        decisionStats.unfunded_reorder_count += decisions.length - funded.length;
+        decisionStats.budget_total += budgetPerReview;
+        decisionStats.budget_spent += result.spent;
+      } else if (budgetPerReview !== null) {
         const ordered = rankCandidates ? [...decisions].sort((a, b) => rankCandidates(a.candidate, b.candidate)) : decisions;
         const allocation = allocateBudget(ordered.map((d) => ({ ...d, estimated_cost: d.qty * d.state.info.unitCost })), budgetPerReview);
         funded = allocation.items.filter((item) => item.within_budget);
@@ -179,6 +193,7 @@ function runInventoryBacktest({
           s.available -= 1;
           fulfilled += 1;
           s.served.push(request.at);
+          s.loans.push({ startDay: day, returnDay: request.returnDay });
           if (request.returnDay !== null && request.returnDay < endDay) {
             s.returns.set(request.returnDay, (s.returns.get(request.returnDay) || 0) + 1);
           }
@@ -194,6 +209,7 @@ function runInventoryBacktest({
           m.unmet_demand += unmet;
           if (unmet > 0) m.stockout_days += 1;
           m.inventory_day_sum += s.owned;
+          m.inventory_value_day_sum += s.owned * (s.info.unitCost || 0);
           m.available_day_sum += s.available;
           m.max_inventory = Math.max(m.max_inventory, s.owned);
         }
@@ -227,6 +243,31 @@ function runInventoryBacktest({
     timelines: Object.fromEntries(timelines),
     decisionStats,
   };
+}
+
+// What a library system knows about one variant's loans at the start of `day`.
+function loanView(loans, day) {
+  const open = [];
+  const durations = [];
+  for (const loan of loans) {
+    if (loan.startDay >= day) continue;
+    if (loan.returnDay !== null && loan.returnDay <= day) durations.push(loan.returnDay - loan.startDay);
+    else open.push(day - loan.startDay); // age of a loan still out (censored)
+  }
+  return { openAges: open, returnedDurations: durations };
+}
+
+// The same, pooled over the catalog (one virtual library): the duration
+// distribution is estimated from every loan, not per title.
+function catalogLoanView(states, day) {
+  const openAges = [];
+  const returnedDurations = [];
+  for (const s of states) {
+    const v = loanView(s.loans, day);
+    for (const a of v.openAges) openAges.push(a);
+    for (const d of v.returnedDurations) returnedDurations.push(d);
+  }
+  return { openAges, returnedDurations };
 }
 
 function ratio(numerator, denominator) {
@@ -269,6 +310,9 @@ function summarize(accumulators, evaluatedDays, catalog, decisionStats, budgeted
     stockout_rate: ratio(stockoutDays, accumulators.length * evaluatedDays),
     variants_with_stockout: accumulators.filter((m) => m.stockout_days > 0).length,
     average_inventory: catalog.inventorySum / evaluatedDays,
+    // VND value of the copies owned, averaged over the scored days (the base a
+    // holding-cost rate would apply to; no rate is assumed here)
+    average_inventory_value: sum('inventory_value_day_sum') / evaluatedDays,
     max_inventory: catalog.maxInventory,
     average_available_inventory: catalog.availableSum / evaluatedDays,
     ordered_units: orderedUnits,
@@ -284,4 +328,4 @@ function summarize(accumulators, evaluatedDays, catalog, decisionStats, budgeted
   return metrics;
 }
 
-module.exports = { DAY_MS, runInventoryBacktest };
+module.exports = { DAY_MS, runInventoryBacktest, loanView };

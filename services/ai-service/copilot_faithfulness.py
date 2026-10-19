@@ -231,7 +231,11 @@ def _ranking(sentences: list[str], ctx: Context) -> list[Issue]:
         if not named:
             continue
         subject = named[0][1]
-        more, less = _MORE.search(n), _LESS.search(n)
+        # an aside or a threshold phrase ("(thấp hơn mức an toàn)", "thấp hơn ngưỡng") says
+        # what low stock means, not which warehouse is riskier
+        scan = re.sub(r"\([^)]*\)", lambda g: " " * len(g.group(0)), n)
+        scan = re.sub(r"\b(thap|it|nho|cao) hon (muc|nguong)\b[^,.;]*", lambda g: " " * len(g.group(0)), scan)
+        more, less = _MORE.search(scan), _LESS.search(scan)
         if not (more or less) or (more and _negated(n, more.start())) or (less and _negated(n, less.start())):
             continue
         claims_riskier = bool(more) and not (less and less.start() < more.start())
@@ -373,7 +377,8 @@ def fallback_answer(explanation: dict | None) -> str | None:
     analysis still contradicts the data after the retry."""
     if not explanation or not explanation.get("headline"):
         return None
-    facts = [c["statement"] for c in explanation.get("claims") or [] if c.get("kind") == "FACT"][:3]
+    facts = [c["statement"] for c in explanation.get("claims") or []
+             if c.get("kind") == "FACT" and c.get("statement") != explanation["headline"]][:3]
     unknown = [c["statement"] for c in explanation.get("claims") or [] if c.get("kind") == "UNKNOWN"][:1]
     lines = [explanation["headline"]] + [f"- {f}" for f in facts] + [f"Chưa biết: {u}" for u in unknown]
     lines.append("(Phần phân tích tự động đã được thay bằng kết luận tính trực tiếp từ dữ liệu vì bản phân tích của mô "

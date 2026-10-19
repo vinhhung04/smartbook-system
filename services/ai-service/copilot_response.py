@@ -167,8 +167,7 @@ _FEW_SHOTS: list[tuple[str, set, str]] = [
      "Đáp: Với 10 triệu, hệ thống duyệt được 9.800.000 ₫ cho 7 đầu sách (85 bản), nhưng còn 12 đầu sách ưu tiên cao "
      "chưa được nhập.\n"
      "- **Đánh đổi**: tiết kiệm chi phí nhưng rủi ro hết hàng ở 12 đầu sách ưu tiên cao vẫn còn nguyên.\n"
-     "- **Điều kiện**: tiền được phân bổ cho dòng giảm được nhiều thiếu hụt dự kiến nhất trên mỗi đồng; chưa tính số "
-     "lượng đặt tối thiểu của nhà cung cấp.\n"
+     "- **Điều kiện**: theo quy tắc phân bổ trong dữ liệu; chưa tính số lượng đặt tối thiểu của nhà cung cấp.\n"
      "Mô phỏng cho biết ngân sách mua được gì, không khẳng định đây là mức ngân sách hợp lý nhất."),
 ]
 
@@ -415,11 +414,40 @@ def _render_demand_vs_stock(r: dict) -> str:
     return "\n".join(lines)
 
 
+def deterministic_answer(plan, collected: dict) -> str | None:
+    """Turns whose text is mechanical and must not come from the model
+    (Phase 6): a draft purchase request asked for with a budget. The figures
+    are the analytics allocation for that budget; the text says plainly that
+    nothing has been created yet - the draft is a pending action the user
+    reviews and confirms (or rejects)."""
+    if not (getattr(plan, "style", None) or {}).get("draft_request"):
+        return None
+    r = (collected or {}).get("get_reorder_suggestions")
+    b = (r or {}).get("budget") if isinstance(r, dict) else None
+    if not b or r.get("error"):
+        return None
+    funded = [i for i in r.get("items") or [] if i.get("within_budget")]
+    lines = [f"Tôi đã chuẩn bị bản nháp phiếu đề xuất nhập theo phân bổ của hệ thống cho ngân sách "
+             f"{_f(b.get('budget_vnd'), 'đ')}: {_f(b.get('funded_lines', len(funded)))} đầu sách / "
+             f"{_f(b.get('funded_qty'))} bản, chi phí {_f(b.get('funded_cost'), 'đ')}, còn dư {_f(b.get('remaining_vnd'), 'đ')}."]
+    if b.get("partially_funded_lines"):
+        lines.append(f"{_f(b['partially_funded_lines'])} đầu sách chỉ được duyệt một phần số bản đề xuất.")
+    lines.append("Bản nháp CHƯA được tạo: hãy kiểm tra danh sách bên dưới, điều chỉnh nếu cần và bấm xác nhận để tạo, "
+                 "hoặc từ chối. Hệ thống không tự tạo hay duyệt phiếu nhập.")
+    return "\n".join(lines)
+
+
 def _render_simulation(r: dict) -> str:
     need = r.get("full_need") or {}
     lines = [f"Nhu cầu nhập đầy đủ: {_f(need.get('total_candidates'))} đầu sách (ưu tiên cao {_f(need.get('high_priority'))}), "
              f"{_f(need.get('estimated_total_reorder_qty'))} bản, {_f(need.get('estimated_total_cost'), 'đ')}.",
              f"Quy tắc phân bổ: {r.get('funding_rule')}"]
+    if need.get("need_with_position_vnd") is not None:
+        lines.append(f"Nhu cầu cần tiền khi tính cả bản đang về và bản đang mượn dự kiến trả: "
+                     f"{_f(need.get('need_with_position_vnd'), 'đ')} (đây là mức các phương án ngân sách dưới đây cần để "
+                     f"duyệt đủ; con số {_f(need.get('estimated_total_cost'), 'đ')} ở trên chưa trừ các bản đó).")
+    if r.get("budget_assumptions"):
+        lines.append("Giả định của phân bổ: " + " ".join(r["budget_assumptions"]))
     if r.get("scenarios_are_assumed"):
         lines.append("Người dùng chưa nêu ngân sách: các phương án dưới đây là mức giả định theo % nhu cầu.")
     for s in r.get("scenarios") or []:
@@ -429,16 +457,33 @@ def _render_simulation(r: dict) -> str:
         lines.append(f"- {s['label']}: duyệt {_f(s.get('funded_cost'), 'đ')}, còn dư {_f(s.get('remaining_vnd'), 'đ')}; "
                      f"{_f(s['funded_lines'])} đầu sách / {_f(s['funded_qty'])} bản (ưu tiên cao được duyệt "
                      f"{_f(s['funded_high_priority'])}, bị bỏ lại {_f(s['unfunded_high_priority'])}); đáp ứng "
-                     f"{_f(s.get('shortfall_covered_pct'))}% thiếu hụt dự kiến")
+                     f"{_f(s.get('shortfall_covered_pct'))}% thiếu hụt dự kiến"
+                     + (f"; mức phục vụ (nhu cầu dự kiến trong thời gian chờ được đáp ứng, so với toàn bộ kế hoạch) "
+                        f"{_f(s['expected_service_pct'])}%" if s.get("expected_service_pct") is not None else ""))
+        if s.get("lead_time_delay_days"):
+            lines.append(f"  Giả định: nhà cung cấp giao chậm thêm {_f(s['lead_time_delay_days'])} ngày trên mọi dòng.")
+        if s.get("priority_warehouse"):
+            lines.append(f"  Ưu tiên {s['priority_warehouse']}: {_f(s.get('priority_lines_funded'))}/{_f(s.get('priority_lines'))} "
+                         "dòng đang thiếu ở kho này được duyệt trước.")
         diff = s.get("vs_first_scenario")
         if diff:
             lines.append(f"  So với phương án đầu: ngân sách {_f(diff['budget_vnd'], 'đ')}, chi phí duyệt "
                          f"{_f(diff['funded_cost'], 'đ')}, số đầu sách {_f(diff['funded_lines'])}, số bản {_f(diff['funded_qty'])}, "
                          f"ưu tiên cao bị bỏ lại {_f(diff['unfunded_high_priority'])}")
         if s.get("funded_items"):
-            lines.append("  Được duyệt: " + ", ".join(f"{x['title']} ({_f(x['suggested_reorder_qty'])} bản)" for x in s["funded_items"][:5]))
+            lines.append("  Được duyệt: " + ", ".join(f"{x['title']} ({_f(x.get('funded_qty', x['suggested_reorder_qty']))} bản)" for x in s["funded_items"][:5]))
+        if s.get("lines_covered_by_position"):
+            lines.append(f"  {_f(s['lines_covered_by_position'])} dòng không cần nhập thêm vì bản đang về/dự kiến trả đã đủ.")
         if s.get("unfunded_high_examples"):
             lines.append("  Ưu tiên cao bị bỏ lại: " + ", ".join(x["title"] for x in s["unfunded_high_examples"][:5]))
+    least = r.get("least_risk_scenario")
+    if least:
+        lines.append(f"Phương án ít rủi ro hết sách nhất (do hệ thống xếp, không phải mô hình): {least['label']} — "
+                     f"{least['rule']}")
+    curve = (r.get("service_curve") or {}).get("cost_for_service_pct") or {}
+    if curve:
+        lines.append("Chi phí tối thiểu theo mức phục vụ của toàn bộ kế hoạch: " + ", ".join(
+            f"{k}%: {_f(v, 'đ')}" for k, v in curve.items()))
     if r.get("items_not_listed"):
         lines.append(f"Lưu ý: {r['items_not_listed']} đầu sách ngoài 100 dòng đầu không được đếm số dòng/số lượng.")
     return "\n".join(lines)
@@ -541,10 +586,10 @@ def _recommendations(collected: dict, now_iso: str) -> list[dict]:
         scenario = next((s for s in r.get("scenarios") or [] if not s.get("error")), None)
         if scenario and not r.get("scenarios_are_assumed"):
             for x in scenario.get("funded_items", [])[:3]:
-                recs.append({"title": x["title"], "action": f"Nhập {x['suggested_reorder_qty']} bản trong {scenario['label'].lower()}",
+                recs.append({"title": x["title"], "action": f"Nhập {x.get('funded_qty', x['suggested_reorder_qty'])} bản trong {scenario['label'].lower()}",
                              "priority": x.get("priority"),
                              "metrics": [{"label": "Chi phí ước tính", "value": x.get("estimated_cost"), "unit": "đ"}],
-                             "reason": "Được chọn theo quy tắc phân bổ: giảm nhiều thiếu hụt dự kiến nhất trên mỗi đồng.",
+                             "reason": "Được chọn theo quy tắc phân bổ của hệ thống (xem quy tắc phân bổ).",
                              "risks": [], "confidence": {"level": "QUY TẮC", "basis": r.get("funding_rule")},
                              "source": "analytics/reorder-suggestions?budgetVnd", "retrieved_at": r.get("retrieved_at", now_iso)})
     r = collected.get("rank_priority_tasks")

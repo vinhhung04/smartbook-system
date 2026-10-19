@@ -139,6 +139,15 @@ export type ReorderSuggestionItem = {
   unit_cost: number;
   estimated_cost: number;
   within_budget?: boolean;
+  /** Budget mode (3.3): copies the budget funds - a line can be funded in part. */
+  funded_qty?: number;
+  funded_cost?: number;
+  budget_plan?: {
+    incoming_qty: number;
+    expected_returns: number;
+    inventory_position: number;
+    cap_qty: number;
+  };
 };
 
 export type ReorderSuggestionsData = {
@@ -161,6 +170,11 @@ export type ReorderSuggestionsData = {
     budget_vnd: number;
     funded_cost: number;
     remaining_vnd: number;
+    funded_lines?: number;
+    funded_qty?: number;
+    partially_funded_lines?: number;
+    funding_order?: string;
+    assumptions?: string[];
   } | null;
   items: ReorderSuggestionItem[];
 };

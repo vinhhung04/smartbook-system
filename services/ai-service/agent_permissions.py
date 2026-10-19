@@ -83,6 +83,7 @@ async def get_user_context(auth_header: str | None) -> UserContext:
             roles=roles,
             permissions=permissions,
             is_superuser=bool(user.get("is_superuser", False)),
+            revocation_verified=resp.headers.get("x-token-revocation-check") != "unverified",
         )
     if resp.status_code >= 500 or resp.status_code == 429:  # auth down / gateway throttling: unknown, not invalid
         raise HTTPException(status_code=503, detail="Chưa xác minh được phiên đăng nhập lúc này. Vui lòng thử lại sau.")

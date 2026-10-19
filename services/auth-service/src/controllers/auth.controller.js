@@ -2,9 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
-const redis = require('../lib/redis');
 const { sendEmail } = require('../lib/email-sender');
-const { revokeUserTokensIssuedBefore } = require('../lib/token-revocation');
+const { revokeUserTokensIssuedBefore, blacklistToken } = require('../lib/token-revocation');
 
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -360,18 +359,19 @@ async function updateMe(req, res) {
 }
 
 async function logout(req, res) {
+  let recorded = true;
   try {
     const auth = req.auth;
     if (auth?.jti && auth?.exp) {
-      const expiresInSeconds = auth.exp - Math.floor(Date.now() / 1000);
-      if (expiresInSeconds > 0) {
-        await redis.set(`blacklist:token:${auth.jti}`, '1', expiresInSeconds);
-      }
+      recorded = await blacklistToken(auth.jti, auth.exp - Math.floor(Date.now() / 1000));
     }
   } catch (error) {
+    recorded = false;
     console.error('logout revoke error:', error);
   }
-  return res.json({ message: 'Logout successful' });
+  // PENDING: Redis was unreachable; the revocation is retried until it lands
+  // (lib/token-revocation.js). The client must discard the token either way.
+  return res.json({ message: 'Logout successful', token_revocation: recorded ? 'RECORDED' : 'PENDING' });
 }
 
 async function login(req, res) {

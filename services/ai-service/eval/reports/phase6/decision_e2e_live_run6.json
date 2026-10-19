@@ -1,0 +1,581 @@
+{
+ "ran_at": "2026-10-19T02:26:39.822Z",
+ "results": [
+  {
+   "name": "budget session: 15 triệu: a decision object built from the 15M scenario",
+   "ok": true
+  },
+  {
+   "name": "budget session: “giảm 20%” applies to the previous 15M budget (12M), not the full need",
+   "ok": true
+  },
+  {
+   "name": "budget session: “còn 5 triệu” compares 5M with the previous 15M",
+   "ok": true
+  },
+  {
+   "name": "budget session: “ít rủi ro hơn” is ranked by the backend (higher expected service) and the recommendation names it",
+   "ok": true
+  },
+  {
+   "name": "budget session: supplier +7 days: same budget, delayed scenario serves less of the lead-time demand",
+   "ok": true
+  },
+  {
+   "name": "budget session: priority warehouse: funding what-if for Kho Ha Noi inside the manager's scope",
+   "ok": true
+  },
+  {
+   "name": "budget session: no purchase order or draft was proposed on its own",
+   "ok": true
+  },
+  {
+   "name": "cost vs service: the least budgets for 99 / 95 / 90 % service come from the analytics curve",
+   "ok": true
+  },
+  {
+   "name": "high priority only: priority filter passed to the simulation",
+   "ok": true
+  },
+  {
+   "name": "trend follow-ups: “so với tháng trước” compares the two months; “tại sao” keeps them",
+   "ok": true
+  },
+  {
+   "name": "trend follow-ups: a lookup / trend answer carries no decision card",
+   "ok": true
+  },
+  {
+   "name": "warehouse follow-up: “còn kho Hà Nội?” re-asks the same question for Ha Noi",
+   "ok": true
+  },
+  {
+   "name": "draft from a decision: the draft is only a PENDING action that waits for an explicit confirm",
+   "ok": true
+  }
+ ],
+ "turns": [
+  {
+   "conversation": "budget session",
+   "q": "Với 15 triệu nên nhập những sách nào?",
+   "status": 200,
+   "seconds": 22.131,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       15000000
+      ]
+     }
+    },
+    {
+     "name": "get_reorder_suggestions",
+     "args": {
+      "budget_vnd": 15000000,
+      "limit": 20
+     }
+    },
+    {
+     "name": "explain_reorder_item",
+     "args": {
+      "title": "Dac trung tam ly hoc cua nguoi Viet",
+      "priority": "HIGH",
+      "rank": 4
+     }
+    }
+   ],
+   "verification": "WARNING",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 15.000.000 ₫",
+     "cost": 14998930,
+     "service": 97.1,
+     "unfunded_high": 13
+    }
+   ],
+   "least_risk": null,
+   "answer": "Với ngân sách 15.000.000 ₫, hệ thống đề xuất duyệt nhập **Dac trung tâm lý học của người Việt** trước: đây là đầu sách có chi phí được duyệt cao nhất (khoảng 12.193.000 ₫) trong danh mục ưu tiên cao.\n\n**Vì sao chọn:**\n* **Nguy cơ thiếu hàng cấp bách:** Tồn kho hiện chỉ còn 2 bản trong khi nhu cầu mượn vẫn duy trì ở mức 32 lượt/tháng. Với tốc độ này, sách dự kiến sẽ hết hàng sau chưa đầy 2 ngày (1,",
+   "draft": "Với ngân sách 15.000.000 ₫, hệ thống đề xuất tập trung nhập **Dac trung tâm lý học của người Việt** trước: đây là đầu sách được duyệt chi phí cao nhất (khoảng 12.193.000 ₫) và nằm trong danh mục ưu tiên cao.\n\n**Vì sao chọn:**\n*   **Nguy cơ thiếu hàng cấp bách:** Tồn kho hiện chỉ còn 2 bản trong khi nhu cầu mượn vẫn duy trì ở mức 32 lượt/tháng. Với tốc độ này, sách dự kiến sẽ hết hàng sau chưa đầy 2 ngày (1,3 ngày).\n*   **Hiệu quả phân bổ vốn:** Hệ thống đã tính toán để đảm bảo mức phục vụ 97,1% cho toàn bộ kế hoạch nhập hàng. Việc duyệt dòng này giúp đáp ứng 100% thiếu hụt dự kiến của các dòng ưu tiên cao có trong danh sách 100 đầu sách đầu tiên.\n*   **Độ tin cậy dữ liệu:** Dữ liệu mượn khá rõ ràng (32 lượt), tuy nhiên thời gian chờ hàng đang dựa trên cam kết của nhà cung cấp (30 ngày) nên cần theo dõi sát tiến độ giao thực tế.\n\n**Rủi ro chính:**\n*   **Ưu tiên cao bị bỏ lại:** Do giới hạn ngân sách, có 13 đầu sách khác thuộc nhóm ưu tiên cao (như *One Hundred Years of Solitude*, *Những Quy Luật Của Bản Chất Con Người*) chưa được duyệt nhập.\n*   **Giới hạn dữ liệu:** Kết quả mô phỏng này mới chỉ tính toán tối ưu cho 100 dòng đầu tiên; 16 đầu sách còn lại trong tổng số 116 đầu sách cần xem xét chưa được đưa vào phương án phân bổ này.\n\n**Phương án thay thế:**\nNếu bạn muốn duy trì mức phục vụ 95% cho toàn hệ thống, ngân sách tối thiểu cần thiết là khoảng 13.350.730 ₫. Tuy nhiên, với con số 15 triệu hiện tại, việc tập trung vào *Dac trung tâm lý học của người Việt* cùng các đầu sá",
+   "problems": [
+    {
+     "category": "OPTIMALITY",
+     "text": "Giới hạn dữ liệu: Kết quả mô phỏng này mới chỉ tính toán tối ưu cho 100 dòng đầu tiên;",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu."
+    },
+    {
+     "category": "OPTIMALITY",
+     "text": "Tuy nhiên, với con số 15 triệu hiện tại, việc tập trung vào Dac trung tâm lý học của người Việt cùng các đầu sách nhỏ lẻ khác (như Con Đường Chẳng Mấy Ai Đi, Cá Voi Tỷ Đô) là cách sử dụng vốn hiệu quả",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu."
+    }
+   ]
+  },
+  {
+   "conversation": "budget session",
+   "q": "Nếu giảm 20% thì bỏ bớt cuốn nào?",
+   "status": 200,
+   "seconds": 14.239,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       15000000
+      ],
+      "budget_change_pct": -20
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "ngân sách nêu (15.000.000 ₫)",
+     "cost": 14998930,
+     "service": 97.1,
+     "unfunded_high": 13
+    },
+    {
+     "label": "Sau khi giảm 20%",
+     "cost": 11999510,
+     "service": 92.6,
+     "unfunded_high": 26
+    }
+   ],
+   "least_risk": "ngân sách nêu (15.000.000 ₫)",
+   "answer": "Với việc giảm 20% ngân sách (xuống còn **12.000.490 ₫** sau khi trừ số dư), hệ thống sẽ phải bỏ bớt các đầu sách so với phương án 15 triệu như sau:\n\n**Các đầu sách bị loại bỏ hoàn toàn (không được duyệt):**\n* **Con Đường Chẳng Mấy Ai Đi**: Đây là điểm khác biệt lớn nhất, vì ở mức 15 triệu cuốn này vẫn được duyệt (1 bản).\n* **Lời Thú Tội Của Một Sát Thủ Kinh Tế - Bìa Cứng (Tái Bản 2023)**\n* **Sống "
+  },
+  {
+   "conversation": "budget session",
+   "q": "Nếu ngân sách còn 5 triệu?",
+   "status": 200,
+   "seconds": 10.591,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       5000000,
+       15000000
+      ]
+     }
+    }
+   ],
+   "verification": "WARNING",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 5.000.000 ₫",
+     "cost": 4984000,
+     "service": 57.4,
+     "unfunded_high": 64
+    },
+    {
+     "label": "Ngân sách 15.000.000 ₫",
+     "cost": 14998930,
+     "service": 97.1,
+     "unfunded_high": 13
+    }
+   ],
+   "least_risk": "Ngân sách 15.000.000 ₫",
+   "answer": "Với ngân sách **5.000.000 ₫**, hệ thống chỉ có thể duyệt nhập duy nhất **1 đầu sách** là **Dac trung tam ly hoc cua nguoi Viet**.\n\n**Chi tiết phương án:**\n* **Số lượng bản được duyệt:** 56 bản (chi phí khoảng 4.984.000 ₫).\n* **Mức phục vụ dự kiến:** Chỉ đạt **57,4%** so với toàn bộ kế hoạch nhập hàng. Điều này có nghĩa là hơn 40% nhu cầu mượn dự kiến trong thời gian chờ hàng sẽ không được đáp ứng ",
+   "draft": "Với ngân sách **5.000.000 ₫**, hệ thống chỉ có thể duyệt nhập duy nhất **1 đầu sách** là **Dac trung tam ly hoc cua nguoi Viet**.\n\n**Chi tiết phương án:**\n*   **Số lượng bản được duyệt:** 56 bản (chi phí khoảng 4.984.000 ₫).\n*   **Mức phục vụ dự kiến:** Chỉ đạt **57,4%** so với toàn bộ kế hoạch nhập hàng. Điều này có nghĩa là hơn 40% nhu cầu mượn dự kiến trong thời gian chờ hàng sẽ không được đáp ứng kịp thời.\n*   **Thiếu hụt ưu tiên cao:** Có tới **64 đầu sách** thuộc nhóm ưu tiên cao bị bỏ lại hoàn toàn, bao gồm các tựa sách đang có nguy cơ hết hàng rất cao như *One Hundred Years of Solitude*, *Con Đường Chẳng Mấy Ai Đi*, và *Cá Voi Tỷ Đô*.\n\n**Đánh đổi rủi ro:**\nSo với mức 15 triệu, việc giảm xuống 5 triệu khiến bạn mất đi khả năng đáp ứng gần như toàn bộ các đầu sách khác. Mức phục vụ giảm mạnh từ 97,1% xuống còn 57,4%. Đây là mức ngân sách tối thiểu để giữ cho một đầu sách \"nóng\" nhất không bị đứt nguồn, nhưng sẽ gây ra tình trạng thiếu sách cục bộ nghiêm trọng ở các danh mục khác.",
+   "problems": [
+    {
+     "category": "CAUSALITY",
+     "text": "Đây là mức ngân sách tối thiểu để giữ cho một đầu sách \"nóng\" nhất không bị đứt nguồn, nhưng sẽ gây ra tình trạng thiếu sách cục bộ nghiêm trọng ở các danh mục ",
+     "detail": "Dữ liệu chỉ cho thấy các yếu tố đi kèm (tương quan); hệ thống không có dữ liệu chứng minh nguyên nhân."
+    }
+   ]
+  },
+  {
+   "conversation": "budget session",
+   "q": "Phương án nào ít rủi ro hơn?",
+   "status": 200,
+   "seconds": 15.836,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       5000000,
+       15000000
+      ]
+     }
+    }
+   ],
+   "verification": "WARNING",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 5.000.000 ₫",
+     "cost": 4984000,
+     "service": 57.4,
+     "unfunded_high": 64
+    },
+    {
+     "label": "Ngân sách 15.000.000 ₫",
+     "cost": 14998930,
+     "service": 97.1,
+     "unfunded_high": 13
+    }
+   ],
+   "least_risk": "Ngân sách 15.000.000 ₫",
+   "answer": "Phương án **ngân sách 15.000.000 ₫** là phương án ít rủi ro hơn cả.\n\nDưới đây là so sánh chi tiết giữa hai mức ngân sách:\n\n### 1. Mức độ đáp ứng nhu cầu (Rủi ro hết hàng)\n* **Ngân sách 15 triệu:** Đạt mức phục vụ **97,1%**. Hệ thống có thể đáp ứng gần như toàn bộ nhu cầu mượn dự kiến trong thời gian chờ hàng cho các đầu sách được duyệt.\n* **Ngân sách 5 triệu:** Chỉ đạt mức phục vụ **57,4%**. Điều ",
+   "draft": "Phương án **ngân sách 15.000.000 ₫** là phương án ít rủi ro hơn cả.\n\nDưới đây là so sánh chi tiết giữa hai mức ngân sách:\n\n### 1. Mức độ đáp ứng nhu cầu (Rủi ro hết hàng)\n*   **Ngân sách 15 triệu:** Đạt mức phục vụ **97,1%**. Hệ thống có thể đáp ứng gần như toàn bộ nhu cầu mượn dự kiến trong thời gian chờ hàng cho các đầu sách được duyệt.\n*   **Ngân sách 5 triệu:** Chỉ đạt mức phục vụ **57,4%**. Điều này đồng nghĩa với việc hơn 40% nhu cầu sẽ không được đáp ứng kịp thời, dẫn đến nguy cơ cao xảy ra tình trạng \"cháy\" sách trên kệ và làm giảm trải nghiệm của bạn đọc.\n\n### 2. Số lượng đầu sách ưu tiên cao bị bỏ lại\n*   **Ngân sách 15 triệu:** Chỉ có **13** đầu sách ưu tiên cao bị loại bỏ.\n*   **Ngân sách 5 triệu:** Có tới **64** đầu sách ưu tiên cao bị loại bỏ hoàn toàn. Việc cắt giảm này khiến nhiều tựa sách đang có nhu cầu thực tế cao (như *One Hundred Years of Solitude*, *Con Đường Chẳng Mấy Ai Đi*) mất đi khả năng được nhập thêm.\n\n### 3. Tổng quan tác động\n| Tiêu chí | Ngân sách 5.000.000 ₫ | Ngân sách 15.000.000 ₫ |\n| :--- | :--- | :--- |\n| **Số đầu sách được duyệt** | 1 | 52 |\n| **Số bản được duyệt** | 56 | 154 |\n| **Mức phục vụ dự kiến** | 57,4% | 97,1% |\n| **Ưu tiên cao bị bỏ lại** | 64 | 13 |\n\n**Kết luận:** Phương án 15 triệu giúp duy trì sự ổn định cho kho sách ở quy mô lớn hơn, giảm thiểu tối đa các điểm đứt gãy nguồn cung. Nếu muốn cân đối chi phí nhưng vẫn đảm bảo an toàn, hệ thống gợi ý mức ngân sách khoảng **13.350.730 ₫** để đạt mức phục vụ 95%.",
+   "problems": [
+    {
+     "category": "OVERCLAIM",
+     "text": "toàn bộ nhu cầu",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính"
+    }
+   ]
+  },
+  {
+   "conversation": "budget session",
+   "q": "Nếu nhà cung cấp giao chậm thêm 7 ngày thì sao?",
+   "status": 200,
+   "seconds": 7.545,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       5000000
+      ],
+      "lead_time_delay_days": 7
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 5.000.000 ₫",
+     "cost": 4984000,
+     "service": 57.4,
+     "unfunded_high": 64
+    },
+    {
+     "label": "Ngân sách 5.000.000 ₫, nhà cung cấp giao chậm thêm 7 ngày",
+     "cost": 4995000,
+     "service": 39.3,
+     "unfunded_high": 54
+    }
+   ],
+   "least_risk": null,
+   "answer": "Khi nhà cung cấp giao chậm thêm 7 ngày, hệ thống sẽ điều chỉnh danh sách nhập hàng để tập trung vào các đầu sách có thời gian chờ dài hơn.\n\n**Thay đổi chính:**\n* **Số đầu sách được duyệt:** Tăng từ **1** lên **3** đầu sách (tăng 2 đầu).\n* **Chi phí duyệt:** Tăng nhẹ từ **4.984.000 ₫** lên **4.995.000 ₫**.\n* **Mức phục vụ dự kiến:** Giảm mạnh từ **57,4%** xuống còn **39,3%**. Điều này cho thấy việc"
+  },
+  {
+   "conversation": "budget session",
+   "q": "Nếu ưu tiên kho Hà Nội thì sao?",
+   "status": 200,
+   "seconds": 5.187,
+   "tools": [
+    {
+     "name": "get_warehouse_low_stock_items",
+     "args": {
+      "warehouse": "Kho Ha Noi"
+     }
+    },
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       5000000
+      ],
+      "priority_warehouse": "Kho Ha Noi"
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 5.000.000 ₫",
+     "cost": 4984000,
+     "service": 57.4,
+     "unfunded_high": 64
+    },
+    {
+     "label": "Ngân sách 5.000.000 ₫, ưu tiên Kho Ha Noi",
+     "cost": 4984000,
+     "service": 57.4,
+     "unfunded_high": 64
+    }
+   ],
+   "least_risk": "Ngân sách 5.000.000 ₫",
+   "answer": "Việc ưu tiên **Kho Ha Noi** không làm thay đổi kết quả nhập hàng so với phương án thông thường.\n\n**Kết quả:**\n* **Số đầu sách được duyệt:** Vẫn là **1** (Dac trung tam ly hoc cua nguoi Viet).\n* **Chi phí duyệt:** 4.984.000 ₫.\n* **Mức phục vụ dự kiến:** 57,4%.\n\n**Lý do:**\nTheo dữ liệu tồn kho hiện tại, Kho Ha Noi chỉ có **1 đầu sách** đang ở mức dưới ngưỡng tồn tối thiểu và **không có đầu sách nào "
+  },
+  {
+   "conversation": "cost vs service",
+   "q": "Làm sao giảm chi phí nhập sách mà vẫn giữ mức phục vụ?",
+   "status": 200,
+   "seconds": 18.658,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "keep_service": true
+     }
+    }
+   ],
+   "verification": "WARNING",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Toàn bộ kế hoạch theo tồn dự kiến (25.524.370 ₫)",
+     "cost": 25524370,
+     "service": 100,
+     "unfunded_high": 0
+    },
+    {
+     "label": "Giữ 99% mức phục vụ của toàn bộ kế hoạch (17.655.260 ₫)",
+     "cost": 17655260,
+     "service": 99,
+     "unfunded_high": 8
+    },
+    {
+     "label": "Giữ 95% mức phục vụ của toàn bộ kế hoạch (13.350.730 ₫)",
+     "cost": 13350730,
+     "service": 95.1,
+     "unfunded_high": 21
+    },
+    {
+     "label": "Giữ 90% mức phục vụ của toàn bộ kế hoạch (10.808.510 ₫)",
+     "cost": 10808510,
+     "service": 90.1,
+     "unfunded_high": 34
+    }
+   ],
+   "least_risk": "Toàn bộ kế hoạch theo tồn dự kiến (25.524.370 ₫)",
+   "answer": "Để giảm chi phí nhập sách mà vẫn giữ mức phục vụ, hệ thống đã mô phỏng các phương án ngân sách khác nhau dựa trên nhu cầu thực tế và tồn kho dự kiến.\n\n**Kết luận:** Việc giảm ngân sách cho phép tiết kiệm chi phí đáng kể nhưng đi kèm với việc một số đầu sách ưu tiên cao chưa được duyệt nhập ngay. Không có kịch bản nào tối ưu tuyệt đối; sự đánh đổi nằm ở chi phí tiết kiệm được so với số lượng đầu sá",
+   "draft": "Để giảm chi phí nhập sách mà vẫn giữ mức phục vụ, hệ thống đã mô phỏng các phương án ngân sách khác nhau dựa trên nhu cầu thực tế và tồn kho dự kiến.\n\n**Kết luận:** Bạn có thể giảm đáng kể chi phí bằng cách chọn mức phục vụ phù hợp (90%, 95% hay 99%), nhưng điều này đồng nghĩa với việc chấp nhận để lại một số đầu sách ưu tiên cao chưa được nhập ngay. Không có kịch bản nào là tối ưu tuyệt đối; sự đánh đổi nằm ở chi phí tiết kiệm được so với số lượng đầu sách ưu tiên cao bị bỏ lại.\n\nDưới đây là các phương án cụ thể:\n\n*   **Toàn bộ kế hoạch theo tồn dự kiến (25.524.370 ₫):**\n    *   Duyệt đủ 100% thiếu hụt dự kiến cho 65 đầu sách / 242 bản.\n    *   Mức phục vụ: 100%.\n    *   Ưu tiên cao bị bỏ lại: 0.\n    *   Ý nghĩa: Đây là mức chi phí cần thiết để đáp ứng toàn bộ nhu cầu tính cả bản đang về và dự kiến trả trong thời gian chờ hàng.\n\n*   **Giữ 99% mức phục vụ (17.655.260 ₫):**\n    *   Tiết kiệm 7.869.110 ₫ so với phương án 100%.\n    *   Duyệt 57 đầu sách / 175 bản.\n    *   Ưu tiên cao bị bỏ lại: 8 đầu sách (bao gồm *One Hundred Years of Solitude*, *Những Quy Luật Của Bản Chất Con Người*, v.v.).\n    *   Ý nghĩa: Vẫn đáp ứng gần như đầy đủ nhu cầu dự kiến, nhưng chấp nhận rủi ro hết hàng ở 8 tựa sách quan trọng nhất.\n\n*   **Giữ 95% mức phục vụ (13.350.730 ₫):**\n    *   Tiết kiệm 12.173.640 ₫ so với phương án 100%.\n    *   Duyệt 44 đầu sách / 139 bản.\n    *   Ưu tiên cao bị bỏ lại: 21 đầu sách.\n    *   Ý nghĩa: Giảm chi phí mạnh hơn, nhưng rủi ro hết hàng ở nhiều đầu sách ưu tiên ca",
+   "problems": [
+    {
+     "category": "OVERCLAIM",
+     "text": "toàn bộ nhu cầu",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính"
+    }
+   ]
+  },
+  {
+   "conversation": "high priority only",
+   "q": "Với 10 triệu, chỉ nhập sách ưu tiên cao thì được gì?",
+   "status": 200,
+   "seconds": 13.274,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       10000000
+      ],
+      "priority": "HIGH"
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 10.000.000 ₫",
+     "cost": 9980930,
+     "service": 88,
+     "unfunded_high": 38
+    }
+   ],
+   "least_risk": null,
+   "answer": "Với ngân sách 10.000.000 ₫ và chỉ tập trung vào các đầu sách ưu tiên cao, hệ thống sẽ duyệt chi phí **9.980.930 ₫** để nhập **27 đầu sách** (tổng cộng **111 bản**).\n\nCác số liệu chính cho thấy:\n* **Phạm vi được duyệt:** Trong tổng số 88 đầu sách ưu tiên cao cần xem xét, 27 đầu sách được đưa vào đề xuất nhập, trong khi 38 đầu sách khác chưa được duyệt (ví dụ: *One Hundred Years of Solitude*, *Con Đ"
+  },
+  {
+   "conversation": "trend follow-ups",
+   "q": "Lượt mượn tháng này thế nào?",
+   "status": 200,
+   "seconds": 1.409,
+   "tools": [
+    {
+     "name": "get_borrow_trends",
+     "args": {
+      "from_date": "2026-10-01T00:00:00+07:00",
+      "to_date": "2026-10-19T09:25:49+07:00"
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": false,
+   "pending_action": null,
+   "scenarios": null,
+   "least_risk": null,
+   "answer": "Tài khoản của bạn không có quyền xem dữ liệu xu hướng mượn, nên phần này chưa được phân tích."
+  },
+  {
+   "conversation": "trend follow-ups",
+   "q": "So với tháng trước?",
+   "status": 200,
+   "seconds": 1.44,
+   "tools": [
+    {
+     "name": "compare_borrow_periods",
+     "args": {
+      "from_date": "2026-10-01T00:00:00+07:00",
+      "to_date": "2026-10-19T09:25:56+07:00",
+      "compare_from_date": "2026-09-01T00:00:00+07:00",
+      "compare_to_date": "2026-09-30T23:59:59+07:00"
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": false,
+   "pending_action": null,
+   "scenarios": null,
+   "least_risk": null,
+   "answer": "Tài khoản của bạn không có quyền xem dữ liệu so sánh lượt mượn, nên phần này chưa được phân tích."
+  },
+  {
+   "conversation": "trend follow-ups",
+   "q": "Tại sao?",
+   "status": 200,
+   "seconds": 1.617,
+   "tools": [
+    {
+     "name": "compare_borrow_periods",
+     "args": {
+      "from_date": "2026-10-01T00:00:00+07:00",
+      "to_date": "2026-10-19T09:26:02+07:00",
+      "compare_from_date": "2026-09-01T00:00:00+07:00",
+      "compare_to_date": "2026-09-30T23:59:59+07:00"
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": false,
+   "pending_action": null,
+   "scenarios": null,
+   "least_risk": null,
+   "answer": "Tài khoản của bạn không có quyền xem dữ liệu so sánh lượt mượn, nên phần này chưa được phân tích."
+  },
+  {
+   "conversation": "warehouse follow-up",
+   "q": "Kho HCM Chinh có bao nhiêu sách dưới ngưỡng?",
+   "status": 200,
+   "seconds": 2.22,
+   "tools": [
+    {
+     "name": "get_warehouse_low_stock_items",
+     "args": {
+      "warehouse": "Kho HCM Chinh"
+     }
+    },
+    {
+     "name": "get_warehouse_stock_risk",
+     "args": {}
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": false,
+   "pending_action": null,
+   "scenarios": null,
+   "least_risk": null,
+   "answer": "Kho HCM Chinh hiện có 7 đầu sách dưới ngưỡng tồn tối thiểu, trong đó 3 đầu sách đã hết hàng."
+  },
+  {
+   "conversation": "warehouse follow-up",
+   "q": "Còn kho Hà Nội?",
+   "status": 200,
+   "seconds": 1.964,
+   "tools": [
+    {
+     "name": "get_warehouse_low_stock_items",
+     "args": {
+      "warehouse": "Kho Ha Noi"
+     }
+    },
+    {
+     "name": "get_warehouse_stock_risk",
+     "args": {}
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": false,
+   "pending_action": null,
+   "scenarios": null,
+   "least_risk": null,
+   "answer": "Kho Hà Nội hiện có 1 đầu sách dưới ngưỡng tồn tối thiểu, trong đó 0 đầu sách đã hết hàng."
+  },
+  {
+   "conversation": "draft from a decision",
+   "q": "Với 15 triệu nên nhập những sách nào?",
+   "status": 200,
+   "seconds": 6.098,
+   "tools": [
+    {
+     "name": "simulate_reorder_budget",
+     "args": {
+      "budgets_vnd": [
+       15000000
+      ]
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": true,
+   "pending_action": null,
+   "scenarios": [
+    {
+     "label": "Ngân sách 15.000.000 ₫",
+     "cost": 14998930,
+     "service": 97.1,
+     "unfunded_high": 13
+    }
+   ],
+   "least_risk": null,
+   "answer": "Với ngân sách 15.000.000 ₫, hệ thống sẽ duyệt chi phí **14.998.930 ₫** cho **52 đầu sách** (tổng cộng **154 bản**), giúp đáp ứng **100% thiếu hụt dự kiến** và duy trì mức phục vụ nhu cầu ở mức **97,1%**.\n\nDanh sách các đầu sách được duyệt nhập trong đợt này bao gồm:\n* **Dac trung tam ly hoc cua nguoi Viet**: 92 bản\n* **Con Đường Chẳng Mấy Ai Đi**: 1 bản\n* **Cá Voi Tỷ Đô (Tái Bản 2022)**: 1 bản\n* *"
+  },
+  {
+   "conversation": "draft from a decision",
+   "q": "Lập phiếu đề xuất nhập nháp với ngân sách 15.000.000 ₫",
+   "status": 200,
+   "seconds": 0.253,
+   "tools": [
+    {
+     "name": "get_reorder_suggestions",
+     "args": {
+      "budget_vnd": 15000000,
+      "limit": 100
+     }
+    }
+   ],
+   "verification": "PASSED",
+   "safe_to_act": true,
+   "decision": false,
+   "pending_action": "CREATE_REORDER_DRAFT",
+   "scenarios": null,
+   "least_risk": null,
+   "answer": "Tôi đã chuẩn bị bản nháp phiếu đề xuất nhập theo phân bổ của hệ thống cho ngân sách 15.000.000 ₫: 52 đầu sách / 154 bản, chi phí 14.998.930 ₫, còn dư 1.070 ₫.\n22 đầu sách chỉ được duyệt một phần số bản đề xuất.\nBản nháp CHƯA được tạo: hãy kiểm tra danh sách bên dưới, điều chỉnh nếu cần và bấm xác nhận để tạo, hoặc từ chối. Hệ thống không tự tạo hay duyệt phiếu nhập."
+  }
+ ]
+}

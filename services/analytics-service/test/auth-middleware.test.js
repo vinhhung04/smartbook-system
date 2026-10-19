@@ -58,3 +58,41 @@ test('a forged token is refused before the revocation lookup', async () => {
   assert.equal(res.statusCode, 401);
   assert.equal(looked, false);
 });
+
+// Phase 5: Redis unreachable is "cannot tell", not "not revoked".
+async function authenticateMethod(token, store, method) {
+  setRevocationStore(store);
+  process.env.JWT_SECRET = 'test-secret';
+  const res = { statusCode: 200, body: null, headers: {}, status(code) { this.statusCode = code; return this; },
+    json(b) { this.body = b; return this; }, setHeader(k, v) { this.headers[k] = v; } };
+  let reached = false;
+  await authenticateToken({ method, headers: { authorization: `Bearer ${token}` } }, res, () => { reached = true; });
+  return { reached, res };
+}
+
+test('Redis down: a read continues (flagged), a write is refused with 503', async () => {
+  const token = jwt.sign({ sub: 'u4', jti: 'j4', permissions: ['analytics.read'] }, 'test-secret');
+  const down = { get: async () => { throw new Error('The client is closed'); } };
+  const read = await authenticateMethod(token, down, 'GET');
+  assert.equal(read.reached, true);
+  assert.equal(read.res.headers['X-Token-Revocation-Check'], 'unverified');
+  const write = await authenticateMethod(token, down, 'POST');
+  assert.equal(write.reached, false);
+  assert.equal(write.res.statusCode, 503);
+});
+
+// Phase 5: every analytics answer declares its population.
+const { declareDataScope } = require('../src/middlewares/data-scope.middleware');
+
+test('data scope is declared in the body meta and a header; errors are left alone', () => {
+  const res = { statusCode: 200, headers: {}, body: null, setHeader(k, v) { this.headers[k] = v; }, json(b) { this.body = b; return this; } };
+  declareDataScope('SYSTEM')({}, res, () => {});
+  res.json({ data: { total: 1 } });
+  assert.equal(res.headers['X-Data-Scope'], 'SYSTEM');
+  assert.deepEqual(res.body, { data: { total: 1 }, meta: { data_scope: 'SYSTEM' } });
+  const err = { statusCode: 403, headers: {}, body: null, setHeader() {}, json(b) { this.body = b; return this; } };
+  declareDataScope('WAREHOUSE_SCOPED')({}, err, () => {});
+  err.json({ message: 'no' });
+  assert.deepEqual(err.body, { message: 'no' });
+  assert.throws(() => declareDataScope('ALL'));
+});

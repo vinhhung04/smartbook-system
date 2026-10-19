@@ -64,6 +64,22 @@ function fuzzyScore(str1, str2) {
 /**
  * Match a single extracted item against catalog
  */
+const {
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require("../utils/warehouse-scope.utils");
+
+// Phase 5: the draft's stored warehouse decides access (read to open / list,
+// write to change / cancel, write re-read without cache to convert into a goods
+// receipt); the acting user is the authenticated one - a user_id in the body
+// is ignored (it used to be trusted as creator / receiver); an item update must
+// belong to the draft named in the path.
+function actorId(req) {
+  return req.user?.id || req.user?.sub || null;
+}
+
 async function matchSingleItem(item) {
   const isbn = normalizeIsbn(item.isbn || item.extracted_isbn);
   const title = item.title || item.extracted_title || "";
@@ -308,15 +324,14 @@ async function createDraft(req, res) {
     source_file_name,
     source_file_type,
     items,
-    user_id,
   } = req.body;
 
   // Validation
   if (!warehouse_id) {
     return res.status(400).json({ message: "warehouse_id is required" });
   }
-  if (!user_id) {
-    return res.status(400).json({ message: "user_id is required" });
+  if (!actorId(req)) {
+    return res.status(401).json({ message: "Invalid current user context" });
   }
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
@@ -336,7 +351,7 @@ async function createDraft(req, res) {
         source_file_name: source_file_name || null,
         source_file_type: source_file_type || null,
         status: "DRAFT",
-        created_by_user_id: user_id,
+        created_by_user_id: actorId(req),
         smart_receiving_items: {
           create: items.map((item) => ({
             extracted_title: item.title || item.extracted_title || null,
@@ -416,6 +431,7 @@ async function getDraft(req, res) {
     if (!draft) {
       return res.status(404).json({ message: "Draft not found" });
     }
+    if (!(await requireWarehouseReadAccess(req, res, draft.warehouse_id))) return undefined;
 
     return res.json({
       success: true,
@@ -437,10 +453,10 @@ async function listDrafts(req, res) {
   const { warehouse_id, status, page = 1, limit = 20 } = req.query;
 
   const where = {};
-  if (warehouse_id) where.warehouse_id = warehouse_id;
   if (status) where.status = status;
 
   try {
+    Object.assign(where, await scopedWarehouseWhere(req.user, "warehouse_id", warehouse_id || null));
     const [drafts, total] = await Promise.all([
       prisma.smart_receiving_drafts.findMany({
         where,
@@ -477,6 +493,7 @@ async function listDrafts(req, res) {
       },
     });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error("Error listing drafts:", error);
     return res.status(500).json({
       message: "Internal server error",
@@ -512,18 +529,19 @@ async function updateDraft(req, res) {
       return res.status(404).json({ message: "Draft not found" });
     }
 
+    if (!(await requireWarehouseWriteAccess(req, res, draft.warehouse_id))) return undefined;
     if (draft.status !== "DRAFT") {
       return res.status(400).json({
         message: "Can only update DRAFT drafts",
       });
     }
 
-    // Update each item
+    // Update each item - only items of THIS draft
     for (const itemUpdate of items) {
       if (!itemUpdate.id) continue;
 
-      await prisma.smart_receiving_items.update({
-        where: { id: itemUpdate.id },
+      await prisma.smart_receiving_items.updateMany({
+        where: { id: itemUpdate.id, smart_receiving_draft_id: draftId },
         data: {
           corrected_variant_id: itemUpdate.corrected_variant_id || null,
           corrected_quantity: itemUpdate.corrected_quantity || null,
@@ -568,13 +586,13 @@ async function updateDraft(req, res) {
  */
 async function convertDraft(req, res) {
   const draftId = parseId(req.params.id);
-  const { user_id } = req.body;
+  const user_id = actorId(req);
 
   if (!draftId) {
     return res.status(400).json({ message: "Invalid draft id" });
   }
   if (!user_id) {
-    return res.status(400).json({ message: "user_id is required" });
+    return res.status(401).json({ message: "Invalid current user context" });
   }
 
   try {
@@ -589,6 +607,7 @@ async function convertDraft(req, res) {
       return res.status(404).json({ message: "Draft not found" });
     }
 
+    if (!(await requireWarehouseWriteAccess(req, res, draft.warehouse_id, { fresh: true }))) return undefined;
     if (draft.status !== "DRAFT") {
       return res.status(400).json({
         message: `Cannot convert draft with status: ${draft.status}`,
@@ -697,6 +716,7 @@ async function cancelDraft(req, res) {
       return res.status(404).json({ message: "Draft not found" });
     }
 
+    if (!(await requireWarehouseWriteAccess(req, res, draft.warehouse_id))) return undefined;
     if (draft.status !== "DRAFT") {
       return res.status(400).json({
         message: "Can only cancel DRAFT drafts",

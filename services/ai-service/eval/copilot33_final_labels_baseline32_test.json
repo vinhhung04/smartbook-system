@@ -1,0 +1,264 @@
+{
+ "about": "Labels of the FINAL answers of the 3.2 baseline run on the TEST split (eval/copilot33_answers_baseline32.json). Same annotator; finals equal to the draft (or differing only in markdown whitespace) keep the draft label.",
+ "labels": {
+  "c33-nat-08#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-nat-09#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-nat-10#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-nat-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "retry removed the 42% sentence"
+  },
+  "c33-abbr-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-abbr-09#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-abbr-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-abbr-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-multi-08#0": {
+   "expected": [
+    "ENTITY",
+    "ASSUMPTION"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-multi-09#0": {
+   "expected": [],
+   "critical": false,
+   "note": "repaired/retried: 10 titles / 56 copies, consistent"
+  },
+  "c33-multi-10#0": {
+   "expected": [],
+   "critical": false,
+   "blocked_without_cause": true,
+   "note": "BLOCKED: draft had only a non-critical MISSING_DATA error; fallback is data-derived but does not answer the question"
+  },
+  "c33-multi-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wh-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wh-09#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wh-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wh-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "retried; 'cân bằng tốt hơn' kept"
+  },
+  "c33-bd-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-bd-09#0": {
+   "expected": [],
+   "critical": false,
+   "blocked_without_cause": true,
+   "note": "BLOCKED although the draft was clean (3.2 lexicon flags)"
+  },
+  "c33-bd-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-bd-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "retry removed 'Đắc nhân tâm' and the 8,8% claim"
+  },
+  "c33-tr-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-tr-09#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-tr-10#0": {
+   "expected": [
+    "RANKING"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-tr-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wi-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "repaired saving 3.000.000 -> 2.975.000 (approved-cost difference); both readings defensible"
+  },
+  "c33-wi-09#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wi-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-wi-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-nd-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-nd-09#0": {
+   "expected": [
+    "CAUSALITY",
+    "PERIOD"
+   ],
+   "critical": true,
+   "note": "retried; exam-season cause and the 'đến 17/09' window kept"
+  },
+  "c33-nd-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-nd-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-bait-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-bait-09#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-bait-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-bait-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-08#0": {
+   "expected": [
+    "PERIOD"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-08#1": {
+   "expected": [
+    "BUDGET"
+   ],
+   "critical": true,
+   "note": "BLOCKED (justified by the draft) but the data-derived fallback still presents the full-need -20% scenario as the answer to '15 triệu giảm 20%' (planner context error)"
+  },
+  "c33-mt-09#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-09#1": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-10#0": {
+   "expected": [
+    "PERCENT",
+    "PERIOD"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-10#1": {
+   "expected": [
+    "ENTITY",
+    "CAUSALITY",
+    "PERCENT"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "final == draft (or formatting only): draft label kept"
+  },
+  "c33-mt-11#1": {
+   "expected": [
+    "MISSING_DATA"
+   ],
+   "critical": true,
+   "note": "final == draft (or formatting only): draft label kept"
+  }
+ }
+}

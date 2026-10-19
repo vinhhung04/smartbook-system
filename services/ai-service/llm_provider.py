@@ -64,6 +64,15 @@ class ChatUsage:
         }
 
 
+class JSONContentError(ValueError):
+    """chat_json got text that is not a JSON object; the text and the call's
+    usage are kept so a caller can salvage a truncated answer."""
+
+    def __init__(self, message: str, content: str, usage: "ChatUsage") -> None:
+        super().__init__(message)
+        self.content, self.usage = content, usage
+
+
 @dataclass
 class ChatResult:
     """Result of one non-streaming chat() round."""
@@ -516,8 +525,44 @@ class OpenRouterProvider:
             raise VisionResponseError(f"vision response is not a JSON object: {content[:200]!r}")
         return parsed, usage
 
+    async def chat_json(
+        self, messages: list[dict], *, max_tokens: int, timeout: float, feature: str = "",
+    ) -> tuple[dict, ChatUsage]:
+        """Text-only JSON-object completion (response_format json_object, same
+        caveat as analyze_image: the schema is validated by the caller).
+        Raises ValueError when the content is not a JSON object."""
+        import json
 
-TEXT_MODEL = os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
+        payload: dict[str, Any] = {
+            "messages": to_openrouter_messages(messages), "max_tokens": max_tokens, "temperature": 0.0,
+            "reasoning": {"enabled": False}, "response_format": {"type": "json_object"},
+        }
+        started = time.perf_counter()
+        try:
+            data, used_model = await self._request_completion(payload, timeout)
+        except Exception as exc:
+            _log_call(ChatUsage(provider=self.name, model=self.model, latency_ms=(time.perf_counter() - started) * 1000,
+                                prompt_tokens=None, completion_tokens=None, tool_call_count=0, error=str(exc),
+                                feature=feature))
+            raise
+        usage_data = data.get("usage") or {}
+        usage = ChatUsage(
+            provider=self.name, model=used_model, latency_ms=(time.perf_counter() - started) * 1000,
+            prompt_tokens=usage_data.get("prompt_tokens"), completion_tokens=usage_data.get("completion_tokens"),
+            tool_call_count=0, cost_usd=usage_data.get("cost"), feature=feature,
+        )
+        _log_call(usage)
+        content = (data["choices"][0]["message"].get("content") or "").strip()
+        try:
+            parsed = json.loads(content)
+        except ValueError as exc:
+            raise JSONContentError("response is not valid JSON", content, usage) from exc
+        if not isinstance(parsed, dict):
+            raise JSONContentError("response is not a JSON object", content, usage)
+        return parsed, usage
+
+
+TEXT_MODEL =os.getenv("OPENROUTER_TEXT_MODEL", "qwen/qwen3.7-flash")
 ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", TEXT_MODEL)
 VISION_MODEL = os.getenv("OPENROUTER_VISION_MODEL", TEXT_MODEL)
 

@@ -294,6 +294,38 @@ export interface AssistantExtras {
   faithfulness?: AiFaithfulness | null;
   /** AI Copilot 3.2: structured decision verification (copilot_verification.py). */
   verification?: AiVerification | null;
+  /** Phase 6: structured decision for a reorder decision / what-if, built from tool data (copilot_decision.py). */
+  decision?: AiDecision | null;
+}
+
+export interface AiDecisionOption {
+  label: string;
+  budget_vnd: number | null;
+  funded_cost: number | null;
+  remaining_vnd: number | null;
+  funded_lines: number | null;
+  funded_qty: number | null;
+  expected_service_pct: number | null;
+  unfunded_high_priority: number | null;
+  funded_items: Array<{ title: string; funded_qty: number | null; estimated_cost: number | null }>;
+  pros: string[];
+  cons: string[];
+  is_least_risk: boolean;
+  /** 'condition': a what-if about the world (supplier delay), shown for its impact, not an option to choose. */
+  kind?: 'choice' | 'condition' | string;
+}
+
+export interface AiDecision {
+  kind: 'BUDGET_DECISION' | string;
+  conclusion: string;
+  data_points: Array<{ label: string; value: number; unit: string; source: string }>;
+  options: AiDecisionOption[];
+  risks: string[];
+  assumptions: string[];
+  recommendation: { option: string; condition: string; basis?: string | null };
+  evidence: Array<{ source: string; as_of?: string | null; rule?: string | null }>;
+  verification: { status: string | null; safe_to_act: boolean };
+  next_step: { type: string; option: string; label: string; message: string; note: string } | null;
 }
 
 export interface AiFaithfulness {

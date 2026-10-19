@@ -1,4 +1,4 @@
-// AI Copilot 3.2: which verification note (if any) to show under an answer.
+// AI Copilot 3.2/3.3: which verification note (if any) to show under an answer.
 // Pure function so it can be unit-tested; the component only renders it.
 // Never shows internal codes (categories, claim/scope ids) or "100%": only the
 // reader-facing labels the backend sends and one of four short states.
@@ -21,6 +21,8 @@ export interface AiVerification {
   repairs?: Array<{ category: string; label: string }>;
   retried?: boolean;
   safe_to_act?: boolean;
+  /** 3.3: sentences withdrawn because a heuristic/semantic check found them contradicted. */
+  withdrawn?: Array<{ category: string; label: string }>;
 }
 
 export interface LegacyFaithfulness {
@@ -36,10 +38,11 @@ export interface VerificationNotice {
   items: string[];
 }
 
-const TITLES: Record<VerificationTone, string> = {
+const TITLES: Record<VerificationTone | 'withdrawn', string> = {
   checked: 'Đã đối chiếu với dữ liệu hệ thống',
   adjusted: 'Một số số liệu trong câu trả lời đã được điều chỉnh theo dữ liệu',
   warning: 'Một số nhận định chưa có dữ liệu hỗ trợ',
+  withdrawn: 'Một số nhận định không khớp với dữ liệu đã được lược bỏ khỏi câu trả lời',
   blocked: 'Không kiểm chứng được một khuyến nghị an toàn — câu trả lời đã được thay bằng kết luận tính trực tiếp từ dữ liệu',
 };
 
@@ -62,8 +65,11 @@ export function verificationNotice(
     switch (verification.status) {
       case 'BLOCKED':
         return { tone: 'blocked', title: TITLES.blocked, items: problems };
-      case 'WARNING':
+      case 'WARNING': {
+        const withdrawn = unique((verification.withdrawn ?? []).map((w) => w.label));
+        if (withdrawn.length) return { tone: 'warning', title: TITLES.withdrawn, items: withdrawn };
         return { tone: 'warning', title: TITLES.warning, items: problems };
+      }
       case 'REPAIRED': {
         const repaired = unique((verification.repairs ?? []).map((r) => r.label));
         // Only internal labels were stripped: nothing the reader needs to know.

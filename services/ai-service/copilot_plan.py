@@ -78,11 +78,12 @@ _R = re.compile
 CAP_KEYWORDS: dict[str, list] = {
     KPI: ["kpi", "dashboard", "tong quan", "tinh hinh thu vien", "tinh hinh he thong", "thu vien minh",
           "so lieu chung", "dau sach trong thu vien", "tong so dau sach", "phieu muon dang mo", "dang mo",
-          "tong so phieu muon", "thu vien dao nay", "can chu y"],
+          "tong so phieu muon", "thu vien dao nay", "can chu y", _R(r"\b(cac )?chi so (chinh|chung|tong quan|quan trong)\b")],
     # "biểu đồ" alone is a presentation request (detect_visualization), not a
     # metric: "biểu đồ tồn kho" must not become a borrow-trend question.
     BORROW_TREND: ["xu huong", "trend", "luot muon", "muon tra", "so luot", "thong ke muon",
                    "muon theo thang", "muon theo ngay", _R(r"\bmuon (nhieu|it) hon\b"), _R(r"\bmuon (giam|tang)\b"),
+                   _R(r"\bluot tra\b"), _R(r"\b(hoan tra|tra sach) (\d+ ngay|tuan|thang|quy|nam|gan day|qua)\b"),
                    _R(r"\b(tinh hinh|so lieu|du lieu) muon( sach| tra)?\b")],
     TOP_BORROWED: [_R(r"\btop\b"), _R(r"\bhot\b"), "pho bien", _R(r"\bmuon nhieu(?! hon)"), "duoc muon nhieu",
                    "hut khach", "ban chay", "yeu thich nhat"],
@@ -93,12 +94,14 @@ CAP_KEYWORDS: dict[str, list] = {
                   "pickup", "cho lay sach"],
     WAREHOUSE_RISK: ["rui ro", "sap het", "het hang", "het sach", "ton kho thap", "ton thap", "ton it",
                      "thieu sach", "thieu hang", "duoi nguong", "nguong ton", "canh bao ton", "low stock",
+                     _R(r"\b(duoi )?muc ton (toi thieu|an toan)\b"), "ton toi thieu",
                      "out of stock", "con nhieu sach hon", "con it sach", _R(r"\bkho nao\b"),
                      _R(r"\b(cac|tung|moi) kho\b"), _R(r"\b(tinh hinh|bieu do|so sanh|thong ke|so lieu) ton kho\b")],
     REORDER: ["nhap them", "nhap gi", "nen nhap", "nhap sach", "nhap hang", "bo sung", "de xuat nhap",
               "goi y nhap", "mua them", "reorder", "can nhap", "ngan sach", "dat mua", "nhap bao nhieu",
-              "luong nhap", "de xuat nhap", "nhap uu tien"],
-    AGING: ["ton lau", "ton kho lau", "khong ai muon", "lau khong ai", "e ton", _R(r"\bsach e\b"), "hang chet",
+              "luong nhap", "de xuat nhap", "nhap uu tien", _R(r"\bnhap (du|het|toan bo)\b"),
+              _R(r"\bsach (duoc )?de xuat\b"), _R(r"\b(dau sach|sach) (co )?uu tien (cao|trung binh|thap)\b")],
+    AGING: ["ton lau", "ton kho lau", "khong ai muon", "lau khong ai", _R(r"\be ton\b"), _R(r"\bsach e\b"), "hang chet",
             "dead stock", "nam kho", "khong ai dung", "khong hoat dong"],
     WEEDING: ["thanh ly", "chon von", "chuyen kho", "dieu chuyen", "weeding"],
     BOOK_SEARCH: [_R(r"\bco sach (?!nao)\S.* (khong|ko)\b"), "tim sach", "sach cua tac gia", "tac gia", "isbn", "sach ve chu de"],
@@ -452,7 +455,14 @@ def _num(text: str) -> float:
     return float(text.replace(",", "."))
 
 
+_PRICE_CONTEXT = re.compile(r"\b(gia|don gia|gia tien|gia ban|gia moi ban|re hon|dat hon)\s*(duoi|tren|tu|khoang|hon|toi|"
+                            r"chua|khong qua|it hon|nhieu hon|cao hon|thap hon)?\s*$")
+_PER_COPY = re.compile(r"\s*(trieu|tr|nghin|ngan|k|ty|d|dong)?\s*(/|mot|moi|1)\s*(ban|cuon|quyen)\b")
+
+
 def parse_budgets(text: str) -> list[float]:
+    """Budget amounts in a normalized message. An amount that is a price
+    ("giá dưới 100 nghìn một bản") is a filter, never a budget."""
     budgets: list[tuple[int, float]] = []
     for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*(ty|ti)\b", text):
         budgets.append((m.start(), _num(m.group(1)) * 1e9))
@@ -463,6 +473,8 @@ def parse_budgets(text: str) -> list[float]:
     if re.search(r"ngan sach|tien|chi phi|von|dong|vnd", text):
         for m in re.finditer(r"\b(\d{1,3}(?:[.,]\d{3}){2,}|\d{6,})\s*(d|dong|vnd)?\b", text):
             budgets.append((m.start(), float(re.sub(r"[.,]", "", m.group(1)))))
+    budgets = [(pos, v) for pos, v in budgets if not _PRICE_CONTEXT.search(text[max(0, pos - 24):pos])
+               and not _PER_COPY.match(re.sub(r"^\d+(?:[.,]\d+)?", "", text[pos:pos + 30]))]
     budgets.sort()
     out: list[float] = []
     for _pos, value in budgets:
@@ -472,7 +484,14 @@ def parse_budgets(text: str) -> list[float]:
 
 
 def parse_budget_change_pct(text: str) -> float | None:
-    m = re.search(r"\b(cat|giam|bot|tang|them)\s*(?:ngan sach\s*(?:nhap\s*(?:hang\s*)?)?)?(\d{1,3})\s*%", text)
+    """Signed % change of the budget. "giảm … xuống X%" is read literally as
+    "down TO X%" (a change of X - 100); build_plan states that reading."""
+    amount = r"(?:\d+(?:[.,]\d+)?\s*(?:trieu|tr|ty|ti|nghin|ngan|k)\s*)?"
+    m = re.search(r"\b(cat|giam|bot)\s*(?:ngan sach\s*)?" + amount + r"xuong (?:con |muc |chi con )?(\d{1,3})\s*%", text)
+    if m and 0 < float(m.group(2)) < 100:
+        return float(m.group(2)) - 100
+    m = re.search(r"\b(cat|giam|bot|tang|them)\s*(?:ngan sach\s*(?:nhap\s*(?:hang\s*)?)?)?" + amount
+                  + r"(?:di |them |bot |len )?(\d{1,3})\s*%", text)
     if not m:
         m = re.search(r"(\d{1,3})\s*%\s*(?:ngan sach)?.*?\b(cat|giam|bot|tang)\b", text)
         if not m:
@@ -497,6 +516,26 @@ def parse_lead_time(text: str) -> int | None:
     return int(m.group(3)) if m else None
 
 
+_DELAY = re.compile(r"\b(cham|tre|lui|keo dai)( giao)?( hang)?( them| hon| di)?\s*(\d{1,3})\s*(ngay|tuan)\b")
+
+
+def parse_lead_time_delay(text: str) -> int | None:
+    """Phase 6 what-if: "nhà cung cấp giao chậm thêm 7 ngày", "trễ 1 tuần" -> extra days
+    on every item's own lead time (not a fixed lead time)."""
+    m = _DELAY.search(text)
+    if not m:
+        return None
+    n = int(m.group(5)) * (7 if m.group(6) == "tuan" else 1)
+    return n if 0 < n <= 180 else None
+
+
+_PRIORITY_WAREHOUSE = re.compile(r"\buu tien (nhap |cap |danh |cho )*(cho )?(kho|chi nhanh)\b")
+_KEEP_SERVICE = re.compile(r"\b(giam|tiet kiem|cat|bot|it)\b.{0,25}\bchi phi\b.{0,50}\b(giu|dam bao|duy tri|khong (giam|anh huong))\b"
+                           r".{0,25}\b(phuc vu|dap ung|muc do)\b")
+_LEAST_RISK = re.compile(r"\b(phuong an|lua chon|muc|cach) nao\b.{0,20}\b(it|thap|an toan)\b.{0,10}\b(rui ro|hon|nhat)\b"
+                         r"|\bit rui ro (hon|nhat)\b|\ban toan hon\b")
+
+
 def parse_priority(text: str) -> str | None:
     if re.search(r"uu tien cao|muc cao|gap nhat|khan cap", text):
         return "HIGH"
@@ -515,6 +554,8 @@ def parse_threshold_days(text: str) -> int | None:
 # ── warehouses ───────────────────────────────────────────────────────────────
 
 _DEICTIC_WAREHOUSE = _R(r"\bkho (nay|do|kia|ay|vua roi|tren)\b|\bhai kho\b|\b2 kho\b")
+_TITLE_DEMAND = _R(r"\b(nhu cau|luot muon|ton kho|xu huong|duoc muon|it muon|muon it|muon nhieu|it duoc muon|nhap them)\b")
+_TREND_QUESTION = _R(r"\b(tang hay giam|giam hay tang|co (dang )?(tang|giam)( khong| ko)?|dang (tang|giam) (khong|ko|ha))\b")
 _DEICTIC_BOOK = _R(r"\b(cuon|quyen|sach|dau sach|tua) (do|nay|kia|ay|vua roi|tren)\b")
 _DEICTIC_GENERIC = _R(r"\bcai (do|kia|nay|ay)\b")
 # "cuốn đầu tiên" points at one item; "3 cuốn đầu" is a limit, not a reference.
@@ -689,10 +730,14 @@ def _book_title_in(text: str, original: str) -> str | None:
         return m.group(1).strip()
     m = re.search(r"(?:cuốn|quyển|sách|tựa)\s+([A-ZÀ-Ỹ0-9][^?,.;!]{1,80}?)(?:\s+(?:không|còn|được|có|thì|nên|bao)\b|[?,.;!]|$)",
                   original)
-    if m and not re.match(r"(nào|đó|này|kia|ấy|đầu)\b", m.group(1).strip().lower()):
+    if m and m.group(1)[0].isupper() and not re.match(r"(nào|đó|này|kia|ấy|đầu)\b", m.group(1).strip().lower()):
         return m.group(1).strip()
-    m = re.search(r"(?:tại sao|vì sao|nên nhập bao nhiêu cuốn|nhập bao nhiêu)\s+([A-ZÀ-Ỹ][^?,.;!]{1,80}?)\s+(?:được|lại|có|bị|\?|$)",
-                  original, re.IGNORECASE)
+    m = re.search(r"(?:tại sao|vì sao|nên nhập bao nhiêu cuốn|nhập bao nhiêu)\s+([A-ZÀ-Ỹ][^?,.;!]{1,80}?)\s+"
+                  r"(?:được|lại|có|bị|ít|nhiều|không|chưa|\?|$)", original, re.IGNORECASE)
+    if m and m.group(1)[0].isupper():
+        return m.group(1).strip()
+    m = re.search(r"(?i:nhu cầu|lượt mượn|tồn kho|xu hướng mượn)\s+(?i:của|đối với|cho|với)\s+([A-ZÀ-Ỹ][^?,.;!]{1,80}?)"
+                  r"(?:\s+(?:đang|có|là|ra|thế|như|tăng|giảm|ở|tại|hiện)\b|[?,.;!]|$)", original)
     if m and m.group(1)[0].isupper():
         return m.group(1).strip()
     return None
@@ -718,6 +763,9 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     limit = parse_limit(text)
     lead_time = parse_lead_time(text)
     priority = parse_priority(text)
+    lead_time_delay = parse_lead_time_delay(text)
+    keep_service = bool(_KEEP_SERVICE.search(text))
+    least_risk = bool(_LEAST_RISK.search(text))
     wh = resolve_warehouses(text, warehouses)
     named_warehouses = wh["warehouses"]
     assumptions = list(wh["assumptions"])
@@ -743,9 +791,30 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
 
     if lead_time is not None:
         periods = [p for p in periods if not p.token.startswith("last_") or str(lead_time) not in p.token]
-    if budgets or budget_pct is not None or lead_time is not None:
+    if budgets or budget_pct is not None or lead_time is not None or lead_time_delay or keep_service:
         if REORDER not in caps:
             caps.append(REORDER)
+    if lead_time_delay or keep_service:
+        analysis = WHAT_IF
+    prev_reorder = REORDER in (state.get("capabilities") or [])
+    if least_risk and prev_reorder and not budgets:
+        # "Phương án nào ít rủi ro hơn?" about the scenarios just shown - "rủi ro"
+        # here is not the warehouse stock-risk metric
+        caps = [c for c in caps if c != WAREHOUSE_RISK]
+    if _PRIORITY_WAREHOUSE.search(text) and named_warehouses and (budgets or prev_reorder):
+        # "Nếu ưu tiên kho Hà Nội thì sao?" after a budget question: a funding what-if
+        if REORDER not in caps:
+            caps.append(REORDER)
+        analysis = WHAT_IF
+    if book_title and not caps and _TITLE_DEMAND.search(text):
+        # "Nhu cầu đối với X đang tăng hay giảm?", "Tại sao X ít được mượn hơn?":
+        # the title's own demand/stock figures live in the reorder analysis.
+        caps.append(REORDER)
+    if RESERVATION in caps and BORROW_TREND not in caps and _TREND_QUESTION.search(text):
+        # "Lượt đặt chỗ có đang tăng không?" is a trend over time, not the funnel totals
+        caps.append(BORROW_TREND)
+    if budget_pct is not None and re.search(r"\bxuong (con |muc |chi con )?\d{1,3}\s*%", text):
+        assumptions.append(f"Hiểu “xuống {int(100 + budget_pct)}%” là ngân sách còn {int(100 + budget_pct)}% mức ban đầu")
     if analysis == WHAT_IF and not caps and "ngan sach" in text:
         caps.append(REORDER)
     if len(budgets) >= 2 and analysis in (LOOKUP, COMPARISON):
@@ -762,15 +831,18 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         analysis = RANKING if analysis in (LOOKUP, DECISION) else analysis
 
     plan = QueryPlan(intent="GENERAL_QUERY", requested_analysis=analysis, normalized=text)
+    has_state = bool(state.get("capabilities"))
 
     # ── follow-up resolution ────────────────────────────────────────────────
-    has_state = bool(state.get("capabilities"))
     looks_followup = bool(_FOLLOWUP_START.search(text)) and len(words) <= 10
     entity_only = not caps and bool(periods or named_warehouses or budgets or limit or budget_pct is not None)
+    entity_only = entity_only or (REORDER in caps and has_state and not budgets and set(caps) == {REORDER}
+                                  and bool(budget_pct is not None or lead_time_delay or keep_service or least_risk))
     referential = deictic_warehouse or deictic_book or deictic_generic or bool(ordinal_book) or "trong so do" in text
     bare_why = text.strip(" ?") in ("tai sao", "vi sao", "ly do", "tai sao vay", "vi sao vay", "sao vay")
     is_followup = has_state and (looks_followup or entity_only or referential or bare_why or style_only or viz_only
-                                 or (not caps and analysis in (CAUSAL, COMPARISON, WHAT_IF, DECISION)))
+                                 or (not caps and analysis in (CAUSAL, COMPARISON, WHAT_IF, DECISION))
+                                 or (least_risk and not caps))
     plan.is_followup = is_followup
     restyle = style_only and is_followup
     prev_viz = state.get("viz") or {}
@@ -799,6 +871,12 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     if is_followup and REORDER in caps and REORDER in (state.get("capabilities") or []):
         if budgets and state.get("budgets") and not budget_pct:
             budgets = budgets + [b for b in state["budgets"] if b not in budgets][:1]
+            carried.append("budget_vnd(phương án trước)")
+        elif not budgets and state.get("budgets") and not least_risk and (
+                budget_pct is not None or lead_time_delay or keep_service or _PRIORITY_WAREHOUSE.search(text)):
+            # "Nếu giảm 20% thì…", "nếu nhà cung cấp chậm 7 ngày", "ưu tiên kho Hà Nội":
+            # the budget of the previous turn, not the full need (Phase 3 test c33-mt-08#1)
+            budgets = list(state["budgets"])[:1]
             carried.append("budget_vnd(phương án trước)")
         if priority is None and state.get("priority"):
             priority = state["priority"]
@@ -919,7 +997,11 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     # ── tools ───────────────────────────────────────────────────────────────
     current = periods[0] if periods else None
     comparison = periods[1] if len(periods) > 1 else None
-    if analysis in (COMPARISON, CAUSAL) and current and not comparison and set(caps) & TIME_AWARE \
+    trend_question = bool(_TREND_QUESTION.search(text)) and BORROW_TREND in caps
+    if trend_question and not current:
+        current = parse_periods("30 ngay qua", today)[0]
+        assumptions.append(f"Không nêu kỳ: dùng {current.label}")
+    if (analysis in (COMPARISON, CAUSAL) or trend_question) and current and not comparison and set(caps) & TIME_AWARE \
             and (analysis == COMPARISON or re.search(r"\b(giam|tang)\b", text)):
         comparison = previous_period(current)
         assumptions.append(f"So sánh {current.label} với {comparison.label}")
@@ -988,7 +1070,8 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             add("get_top_books", args)
         capset.discard(TOP_BORROWED)
     if REORDER in capset:
-        if budgets or budget_pct is not None or (analysis == WHAT_IF and "ngan sach" in text):
+        if budgets or budget_pct is not None or lead_time_delay or keep_service \
+                or (analysis == WHAT_IF and "ngan sach" in text):
             args: dict = {}
             if budgets:
                 args["budgets_vnd"] = budgets[:3]
@@ -998,8 +1081,15 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
                 args["lead_time_days"] = lead_time
             if priority:
                 args["priority"] = priority
+            if lead_time_delay:
+                args["lead_time_delay_days"] = lead_time_delay
+            if keep_service:
+                args["keep_service"] = True
+            if len(named_warehouses) == 1 and _PRIORITY_WAREHOUSE.search(text):
+                args["priority_warehouse"] = named_warehouses[0]["name"]
             add("simulate_reorder_budget", args)
-        elif focus_item or (analysis == CAUSAL and book_title) or (book_title and re.search(r"bao nhieu|nen nhap", text)):
+        elif focus_item or (analysis == CAUSAL and book_title) or (book_title and re.search(r"bao nhieu|nen nhap", text)) \
+                or (book_title and _TITLE_DEMAND.search(text)):
             add("explain_reorder_item", {"variant_id": focus_item.get("variant_id")} if focus_item
                 else {"title": book_title})
         elif ordinal_book:
@@ -1033,6 +1123,14 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         if cap in capset:
             add(_SIMPLE_CAP_TOOL[cap])
 
+    if least_risk and is_followup and not budgets and any(
+            isinstance(c, dict) and c.get("name") == "simulate_reorder_budget" for c in state.get("tool_calls") or []):
+        # "Phương án nào ít rủi ro hơn?": the same scenarios again; the tool ranks
+        # them by expected service (least_risk_scenario), the model never does
+        tools = [{"name": "simulate_reorder_budget", "args": dict(c.get("args") or {})}
+                 for c in state["tool_calls"] if isinstance(c, dict) and c.get("name") == "simulate_reorder_budget"][:1]
+        analysis = DECISION
+        carried.append("scenarios")
     if restyle or viz_followup:
         # Replay the previous turn's planner-built calls (never model-chosen
         # ones): the re-explanation must rest on the same evidence. A chart
@@ -1055,6 +1153,13 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         # user must confirm. Seeding here would bypass nothing, but it would
         # change what data the action builder sees.
         tools = []
+        if REORDER in caps and budgets:
+            # Phase 6: "Lập phiếu đề xuất nhập nháp với ngân sách X" (the decision
+            # card's button) must rest on the same budget allocation the decision
+            # showed - seeded, not left to the model (which may call nothing).
+            # The draft still only becomes a pending action the user confirms.
+            tools = [{"name": "get_reorder_suggestions", "args": {"budget_vnd": budgets[0], "limit": 100}}]
+            style = {**style, "draft_request": True}
 
     plan.capabilities = caps
     plan.intent, plan.secondary_intents = _intent_of(caps)
@@ -1151,7 +1256,9 @@ def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = No
         "warehouses": plan.entities.get("warehouses") or previous.get("warehouses") or [],
         "time_range": plan.time_range or (previous.get("time_range") if set(caps) & TIME_AWARE else None),
         "comparison_period": plan.comparison_period,
-        "budgets": plan.entities.get("budgets_vnd") or [],
+        # a turn that only re-ranked the previous scenarios keeps their budgets
+        "budgets": plan.entities.get("budgets_vnd") or (previous.get("budgets") or [] if "scenarios" in plan.carried_over
+                                                        else []),
         "priority": plan.filters.get("priority"),
         "limit": plan.filters.get("limit"),
         "last_items": last_items or (previous.get("last_items") or []),

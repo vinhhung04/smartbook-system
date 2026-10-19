@@ -81,25 +81,27 @@ function createWarehouseScopeResolver(options = {}) {
     return scopeFromRows(body?.data ?? body);
   }
 
-  /** {all, read: Set|null, write: Set|null} for a req.user (verified JWT payload). */
-  async function resolve(user) {
+  /** {all, read: Set|null, write: Set|null} for a req.user (verified JWT payload).
+   * `fresh`: skip the cache - for confirmation steps (approve, convert, post),
+   * so access removed since the request was created is honoured at once. */
+  async function resolve(user, { fresh = false } = {}) {
     if (user?.is_superuser === true) return ALL_ACCESS;
     const userId = String(user?.id || user?.sub || '');
     if (!userId) return NO_ACCESS;
     const hit = cache.get(userId);
-    if (hit && Date.now() - hit.at < ttlMs) return hit.value;
+    if (!fresh && hit && Date.now() - hit.at < ttlMs) return hit.value;
     const value = await load(userId);
     cache.set(userId, { at: Date.now(), value });
     return value;
   }
 
-  async function canRead(user, warehouseId) {
-    const scope = await resolve(user);
+  async function canRead(user, warehouseId, options) {
+    const scope = await resolve(user, options);
     return scope.all || scope.read.has(String(warehouseId || ''));
   }
 
-  async function canWrite(user, warehouseId) {
-    const scope = await resolve(user);
+  async function canWrite(user, warehouseId, options) {
+    const scope = await resolve(user, options);
     return scope.all || scope.write.has(String(warehouseId || ''));
   }
 

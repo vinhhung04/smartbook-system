@@ -1,0 +1,104 @@
+{
+ "items": 44,
+ "with_errors": 19,
+ "clean": 25,
+ "precision": 0.625,
+ "recall": 0.263,
+ "recall_frac": "5/19",
+ "fpr": 0.12,
+ "fpr_frac": "3/25",
+ "critical_detection": "1/12",
+ "latency_ms": {
+  "p50": 2.29,
+  "p95": 6.65
+ },
+ "per_class": {
+  "ASSUMPTION": {
+   "fn": 6
+  },
+  "BUDGET": {
+   "fn": 1
+  },
+  "CAUSALITY": {
+   "fn": 2
+  },
+  "COUNT": {
+   "fn": 3,
+   "fp": 1
+  },
+  "COVERAGE": {
+   "fp": 1
+  },
+  "ENTITY": {
+   "fn": 3
+  },
+  "LABEL": {
+   "fp": 2
+  },
+  "MISSING_DATA": {
+   "fn": 2
+  },
+  "MONEY": {
+   "fp": 1
+  },
+  "NO_DATA": {
+   "fp": 1
+  },
+  "OPTIMALITY": {
+   "fp": 1
+  },
+  "OVERCLAIM": {
+   "fp": 2
+  },
+  "PERCENT": {
+   "fn": 4
+  },
+  "PERIOD": {
+   "fn": 3
+  },
+  "RANKING": {
+   "fn": 1
+  },
+  "TREND": {
+   "fp": 1
+  }
+ },
+ "misses": [
+  "c33-nat-10#0",
+  "c33-nat-11#0",
+  "c33-multi-08#0",
+  "c33-multi-11#0",
+  "c33-bd-11#0",
+  "c33-tr-09#0",
+  "c33-tr-10#0",
+  "c33-nd-09#0",
+  "c33-bait-09#0",
+  "c33-bait-11#0",
+  "c33-mt-08#0",
+  "c33-mt-10#0",
+  "c33-mt-10#1",
+  "c33-mt-11#1"
+ ],
+ "false_alarms": [
+  {
+   "key": "c33-multi-09#0",
+   "found": [
+    "COUNT",
+    "LABEL"
+   ]
+  },
+  {
+   "key": "c33-bd-09#0",
+   "found": [
+    "COVERAGE",
+    "OVERCLAIM"
+   ]
+  },
+  {
+   "key": "c33-wi-08#0",
+   "found": [
+    "MONEY"
+   ]
+  }
+ ]
+}

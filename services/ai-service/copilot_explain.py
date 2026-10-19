@@ -533,12 +533,22 @@ def _x_simulation(r: dict, plan: QueryPlan) -> dict:
     for s in r.get("scenarios") or []:
         if s.get("error"):
             p["claims"].append(_claim(UNKNOWN, f"Không mô phỏng được \"{s.get('label')}\" (lỗi truy xuất)."))
-    incomplete = bool(r.get("items_not_listed"))
+    covers = [s for s in ok if s.get("covers_need_with_position")]
+    incomplete = bool(r.get("items_not_listed")) and not covers
+    need_pos = (r.get("full_need") or {}).get("need_with_position_vnd")
+    if need_pos is not None:
+        p["claims"].append(_claim(
+            FACT, f"Tính cả bản đang về và bản đang mượn dự kiến trả trong thời gian chờ hàng, các dòng cần "
+                  f"{_f(need_pos, 'đ')} để duyệt đủ.",
+            [_ev("Nhu cầu theo tồn dự kiến", need_pos, "đ", src)],
+            "Con số nhu cầu nhập đầy đủ ở trên chưa trừ các bản đang về và dự kiến trả."))
     for s in ok:
         label = s.get("label")
         pct = s.get("shortfall_covered_pct")
         meaning = ""
-        if pct is not None and pct >= 100 and r.get("items_not_listed"):
+        if s.get("covers_need_with_position"):
+            meaning = "Phương án này duyệt đủ toàn bộ nhu cầu tính theo tồn dự kiến (gồm bản đang về và dự kiến trả)."
+        elif pct is not None and pct >= 100 and r.get("items_not_listed"):
             meaning = (f"Đủ thiếu hụt dự kiến của {_f(r.get('items_counted'))} dòng được liệt kê; "
                        f"{_f(r.get('items_not_listed'))} đầu sách ngoài danh sách chưa được tính, nên chưa thể nói là "
                        "đáp ứng toàn bộ nhu cầu.")
@@ -550,6 +560,10 @@ def _x_simulation(r: dict, plan: QueryPlan) -> dict:
              _ev("Ưu tiên cao chưa nhập", s.get("unfunded_high_priority"), "đầu sách", src)], meaning))
         if s.get("unfunded_high_priority"):
             incomplete = True
+        if s.get("partially_funded_lines"):
+            p["claims"].append(_claim(
+                FACT, f"{label}: {_f(s['partially_funded_lines'])} đầu sách chỉ được duyệt một phần số bản đề xuất.",
+                [_ev("Dòng duyệt một phần", s.get("partially_funded_lines"), "đầu sách", src)]))
         if pct == 0 and s.get("funded_lines") and r.get("lines_with_shortfall"):
             p["claims"].append(_claim(
                 INFERENCE, f"{label} chưa bù được phần thiếu hụt dự kiến nào, dù vẫn duyệt {_f(s.get('funded_lines'))} đầu sách.",
@@ -793,12 +807,13 @@ _CLAUSE_END = re.compile(r"[.;:!?\n,]")
 # "mức (độ) chắc chắn: trung bình" names the certainty level - not a claim.
 _CERTAIN = re.compile(r"\b(?<!mức )(?<!độ )(chắc chắn|rõ ràng là|hiển nhiên|không còn nghi ngờ)\b")
 _CAUSAL_WORDS = re.compile(r"(chủ yếu (là )?do|nguyên nhân (chính|chủ yếu)|chính là do|\blà do\b|bắt nguồn từ|\bgây ra\b)")
-_OPTIMAL = re.compile(r"(tối ưu(?! hóa| hoá)|tốt nhất)")
+_OPTIMAL = re.compile(r"(tối ưu(?! hóa| hoá| hơn)|tốt nhất)")  # "nếu cần tối ưu hơn" is a goal, not a claim
 # "100% nhu cầu (68.375.250 ₫)", 'từ "100% nhu cầu" xuống "75%"' name a budget
 # scenario - not a coverage claim.
 _FULL = re.compile(r"(đáp ứng (toàn bộ|đầy đủ|đủ|hết|100%)|toàn bộ nhu cầu|(?<![\"“])100% nhu cầu(?!\s*\()|"
                    r"giải quyết (hoàn toàn|triệt để))")
-_QUALIFIED = re.compile(r"(được liệt kê|trong danh sách|được tính|dòng đầu|dòng được chọn|dòng được duyệt)")
+# "đáp ứng 100% thiếu hụt dự kiến" quotes the simulation's own metric, not a claim of full coverage
+_QUALIFIED = re.compile(r"(được liệt kê|trong danh sách|được tính|dòng đầu|dòng được chọn|dòng được duyệt|thiếu hụt dự kiến)")
 
 
 def _hits(pattern: re.Pattern, text: str, qualified: re.Pattern | None = None) -> list[str]:

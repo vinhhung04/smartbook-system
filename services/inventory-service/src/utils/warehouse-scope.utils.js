@@ -47,14 +47,14 @@ async function getWritableWarehouseIds(user) {
   return [...scope.write];
 }
 
-async function canReadWarehouse(user, warehouseId) {
+async function canReadWarehouse(user, warehouseId, options) {
   if (!warehouseId) return isAdminUser(user);
-  return resolver.canRead(user, warehouseId);
+  return resolver.canRead(user, warehouseId, options);
 }
 
-async function canWriteWarehouse(user, warehouseId) {
+async function canWriteWarehouse(user, warehouseId, options) {
   if (!warehouseId) return isAdminUser(user);
-  return resolver.canWrite(user, warehouseId);
+  return resolver.canWrite(user, warehouseId, options);
 }
 
 function respondUnavailable(res, error) {
@@ -62,14 +62,14 @@ function respondUnavailable(res, error) {
   return false;
 }
 
-async function requireAccess(req, res, warehouseId, check, verb) {
+async function requireAccess(req, res, warehouseId, check, verb, options) {
   const user = req.user;
   if (!user) {
     res.status(401).json({ message: 'Authentication required' });
     return false;
   }
   try {
-    if (await check(user, warehouseId)) return true;
+    if (await check(user, warehouseId, options)) return true;
   } catch (error) {
     if (error instanceof WarehouseScopeUnavailableError) return respondUnavailable(res, error);
     throw error;
@@ -82,12 +82,13 @@ async function requireAccess(req, res, warehouseId, check, verb) {
 }
 
 /** Usage: if (!(await requireWarehouseReadAccess(req, res, warehouseId))) return; */
-async function requireWarehouseReadAccess(req, res, warehouseId) {
-  return requireAccess(req, res, warehouseId, canReadWarehouse, 'read');
+async function requireWarehouseReadAccess(req, res, warehouseId, options) {
+  return requireAccess(req, res, warehouseId, canReadWarehouse, 'read', options);
 }
 
-async function requireWarehouseWriteAccess(req, res, warehouseId) {
-  return requireAccess(req, res, warehouseId, canWriteWarehouse, 'write');
+/** options.fresh: re-read the scope (no cache) - use on confirmation steps. */
+async function requireWarehouseWriteAccess(req, res, warehouseId, options) {
+  return requireAccess(req, res, warehouseId, canWriteWarehouse, 'write', options);
 }
 
 /** null = no filter needed (superuser); otherwise the readable warehouse IDs. */

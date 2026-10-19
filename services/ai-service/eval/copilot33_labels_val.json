@@ -1,0 +1,196 @@
+{
+ "about": "Hand labels of the FIRST drafts of the Copilot 3.3 VALIDATION split (eval/copilot33_answers_baseline32.json, collected live from the deployed 3.2 pipeline on 2026-10-17). Same protocol and single annotator as copilot33_labels_dev.json; written before any detector was run on these answers.",
+ "labels": {
+  "c33-nat-05#0": {
+   "expected": [
+    "MONEY"
+   ],
+   "critical": true,
+   "note": "'còn nợ 500.644.500 ₫, trong đó ... OVERDUE ... 592.250.000 ₫': the OVERDUE amount covers paid + unpaid fines and is larger than the unpaid total"
+  },
+  "c33-nat-06#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nat-07#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'hiệu quả hoạt động khá tốt', 'nhu cầu ... đang được đáp ứng khá tốt', 'tối ưu hóa việc phân phối' - not in the data (36,6% of reservations expired or were cancelled)"
+  },
+  "c33-abbr-05#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'3 đầu sách bị hết hàng hoàn toàn và 7 đầu sách khác còn dưới ngưỡng': the 7 below threshold already include the 3 out of stock (4 others). LABEL CORRECTED on 2026-10-17 after the 3.3 detector flagged it: the annotator had missed it (original label: clean). Counted as a post-hoc correction in the evaluation doc."
+  },
+  "c33-abbr-06#0": {
+   "expected": [
+    "MONEY"
+   ],
+   "critical": true,
+   "note": "same 'trong đó' error: 592.250.000 ₫ OVERDUE presented as part of 500.644.500 ₫ unpaid"
+  },
+  "c33-abbr-07#0": {
+   "expected": [
+    "ASSESSMENT"
+   ],
+   "critical": true,
+   "note": "'nguy cơ thiếu hụt trong tương lai gần' while the estimate is 403 days to stock-out (lead time 30)"
+  },
+  "c33-multi-05#0": {
+   "expected": [
+    "RANKING"
+   ],
+   "critical": true,
+   "note": "Dac trung... 'giảm mạnh nhất' (-68,9%) while Kafka (-70,5%) and Sắc Lời (-71,4%) fell more - in the same answer"
+  },
+  "c33-multi-06#0": {
+   "expected": [],
+   "critical": false,
+   "note": "30 days is tied with Norwegian Wood / Kafka; not false, tie not mentioned"
+  },
+  "c33-multi-07#0": {
+   "expected": [
+    "MISSING_DATA"
+   ],
+   "critical": false,
+   "note": "says wishlist data is not in the system while get_reorder_suggestions carries wishlist_count"
+  },
+  "c33-wh-05#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-06#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-07#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-05#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'ngân sách này chủ yếu dùng để duy trì an toàn tồn kho' - an interpretation of the 0% shortfall coverage not in the data"
+  },
+  "c33-bd-06#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-07#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'chỉ có thể nhập được 7 đầu sách trong tổng số 94 đầu sách ưu tiên cao': 7 is all funded lines, 2 high-priority titles were funded"
+  },
+  "c33-tr-05#0": {
+   "expected": [],
+   "critical": false,
+   "note": "the planner asked a clarification for a clear question (usefulness problem, no claim)"
+  },
+  "c33-tr-06#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-tr-07#0": {
+   "expected": [],
+   "critical": false,
+   "note": "does not answer the trend question (funnel totals only); no false claim"
+  },
+  "c33-wi-05#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-06#0": {
+   "expected": [
+    "SCOPE"
+   ],
+   "critical": true,
+   "note": "library-wide reorder list given as what to buy 'nếu ưu tiên kho Hà Nội'; Kho Ha Noi's only low-stock title is So do"
+  },
+  "c33-wi-07#0": {
+   "expected": [
+    "COVERAGE",
+    "ASSUMPTION"
+   ],
+   "critical": true,
+   "note": "'giảm 25% vẫn đáp ứng được 100% nhu cầu thiếu hụt dự kiến của nhóm ưu tiên cao' (100% covers 1 shortfall line, 33 HP titles unfunded); 'không làm tăng số lượng bản hết hàng trong ngắn hạn' not computed"
+  },
+  "c33-nd-05#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-06#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-07#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-05#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-06#0": {
+   "expected": [
+    "SCOPE"
+   ],
+   "critical": true,
+   "note": "96 loans is the library-wide October total, presented as Chi Nhanh District 1's"
+  },
+  "c33-bait-07#0": {
+   "expected": [
+    "ENTITY"
+   ],
+   "critical": true,
+   "note": "'Kafka on the Shore ở Kho Ha Noi là 8 bản': 8 is the available stock of So do / the whole warehouse"
+  },
+  "c33-mt-05#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-05#1": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-06#0": {
+   "expected": [],
+   "critical": false,
+   "note": "'gấp nhất' for 0,5 days to stock-out while other titles are at 0 days - judgment, not labelled an error"
+  },
+  "c33-mt-06#1": {
+   "expected": [],
+   "critical": false,
+   "note": "figures from the previous turn's data"
+  },
+  "c33-mt-07#0": {
+   "expected": [],
+   "critical": false,
+   "note": "answers tickets (416) for 'sách quá hạn'; no false claim"
+  },
+  "c33-mt-07#1": {
+   "expected": [
+    "MONEY"
+   ],
+   "critical": true,
+   "note": "same 'trong đó' OVERDUE 592.250.000 > unpaid 500.644.500"
+  }
+ },
+ "corrections": [
+  {
+   "key": "c33-abbr-05#0",
+   "from": {
+    "expected": [],
+    "critical": false
+   },
+   "reason": "annotator miss surfaced by a detector flag"
+  }
+ ]
+}

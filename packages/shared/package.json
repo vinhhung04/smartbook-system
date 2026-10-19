@@ -13,7 +13,8 @@
     "./runtime": "./runtime/index.cjs",
     "./warehouse-scope": "./runtime/warehouse-scope.cjs",
     "./telemetry": "./telemetry/index.cjs",
-    "./metrics": "./metrics/index.cjs"
+    "./metrics": "./metrics/index.cjs",
+    "./token-revocation": "./runtime/token-revocation.cjs"
   },
   "scripts": {
     "test": "node --test test/*.test.cjs"

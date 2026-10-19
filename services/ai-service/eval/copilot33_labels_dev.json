@@ -1,0 +1,245 @@
+{
+ "about": "Hand labels of the FIRST drafts (debug.draft_answer) of the Copilot 3.3 DEV split, collected live from the deployed 3.2 pipeline on 2026-10-17 (eval/copilot33_answers_baseline32.json). Written from the draft + tool data only (eval/copilot33_eval.py view), before any detector was run on these answers. Single annotator (the same agent that writes the 3.3 rules) - see the limitations in docs/ANALYSIS/AI_COPILOT_3_3_EVALUATION.md. Categories use the 3.2 vocabulary; critical = an error of a category the 3.2 policy treats as critical (a wrong figure, period, entity, trend, ranking...).",
+ "labels": {
+  "c33-nat-01#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nat-02#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nat-03#0": {
+   "expected": [
+    "MISSING_DATA"
+   ],
+   "critical": false,
+   "note": "says the total number of copies is not provided while get_dashboard_kpis.total_copies = 472"
+  },
+  "c33-nat-04#0": {
+   "expected": [],
+   "critical": false,
+   "note": "asked for books (cuốn), answers 416 tickets (phiếu) - stated as tickets, so no false claim; incomplete"
+  },
+  "c33-abbr-01#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-02#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-03#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-multi-01#0": {
+   "expected": [
+    "ENTITY"
+   ],
+   "critical": true,
+   "note": "'Ba đầu sách đang hết hàng' lists One Hundred Years (1 copy) and Norwegian Wood (2 copies); the out-of-stock titles are Thuyen bac nho / Dế Mèn / Tam Cam"
+  },
+  "c33-multi-02#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'không có đầu sách ưu tiên cao nào có đơn giá dưới 100.000 ₫' while unit_cost of Sắc Lời Đắc Thế = 90.000 and Dac trung... = 89.000; also says unit prices are not in the data (planner parsed '100 nghìn' as a budget)"
+  },
+  "c33-multi-03#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-multi-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-01#0": {
+   "expected": [],
+   "critical": false,
+   "note": "planner fetched only aging inventory; the answer correctly says it cannot compare"
+  },
+  "c33-wh-02#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-03#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-01#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'5 đầu sách (tổng cộng 62 bản)': 10 lines / 62 copies approved; 5 is funded_high_priority"
+  },
+  "c33-bd-02#0": {
+   "expected": [
+    "ENTITY"
+   ],
+   "critical": true,
+   "note": "Dế mèn phiêu lưu ký given as an unfunded high-priority title; it is a funded MEDIUM line"
+  },
+  "c33-bd-03#0": {
+   "expected": [
+    "MONEY"
+   ],
+   "critical": true,
+   "note": "no tool data at all; 1.063.592.874 ₫ for 20 titles is invented"
+  },
+  "c33-bd-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-tr-01#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'không bị tồn đọng quá lớn' (416 overdue tickets, not in this data). 'đang giảm dần' is faithful to the backend trend (-16%, first vs last COMPLETE month: April 2026 is a partial month in this 6-month window). LABEL CORRECTED during development: the first label read April's 388 (partial) as a full month."
+  },
+  "c33-tr-02#0": {
+   "expected": [
+    "PERCENT",
+    "RANKING"
+   ],
+   "critical": true,
+   "note": "'tổng số phiếu đặt chỗ giảm 34%': -34% is per day, the total fell 62,6%; peak day 33 'thấp hơn rất nhiều' than 30,7/day (it is higher)"
+  },
+  "c33-tr-03#0": {
+   "expected": [
+    "PERCENT"
+   ],
+   "critical": true,
+   "note": "no tool data; -4,5% and 12 returns/day invented"
+  },
+  "c33-tr-04#0": {
+   "expected": [
+    "PERCENT"
+   ],
+   "critical": true,
+   "note": "no tool data; 12 vs 24 loans, -50% invented (data elsewhere: 18 vs 61, -70,5%)"
+  },
+  "c33-wi-01#0": {
+   "expected": [
+    "MONEY"
+   ],
+   "critical": true,
+   "note": "'ngân sách ... còn 8.000.000 ₫, hệ thống duyệt được 68.576.100 ₫': those figures are the 68.633.000 ₫ scenario (20% below the full need)"
+  },
+  "c33-wi-02#0": {
+   "expected": [
+    "COUNT",
+    "MONEY"
+   ],
+   "critical": true,
+   "note": "1.013 copies / 96.915.990 ₫ vs data 1.154 / 106.449.360 ₫; '~64 triệu → 21 đầu sách / 604 bản' and ranges not in the data"
+  },
+  "c33-wi-03#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-01#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-02#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-03#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-01#0": {
+   "expected": [
+    "ENTITY"
+   ],
+   "critical": false,
+   "note": "'Đắc Nhân Tâm' named as an unfunded high-priority title; not in the tool data (the example list has Dac trung tam ly hoc...)"
+  },
+  "c33-bait-02#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-03#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-04#0": {
+   "expected": [],
+   "critical": false,
+   "note": "answers only the tickets (416), omits the 696 books - incomplete, no false claim"
+  },
+  "c33-mt-01#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-01#1": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "money 'được dùng cho' Luy-Xiêng / Tư Duy Phản Biện, whose lines cost 0 ₫ (one has qty 0); Dế mèn lead time not in this turn's data"
+  },
+  "c33-mt-02#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-02#1": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'7 đầu sách ... chiếm tỷ lệ đáng kể so với tổng số đầu sách' and an allocation explanation the data does not hold"
+  },
+  "c33-mt-03#0": {
+   "expected": [],
+   "critical": false,
+   "note": "-50% (18 → 9) is the backend's first-vs-last complete day rule"
+  },
+  "c33-mt-03#1": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-04#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-04#1": {
+   "expected": [],
+   "critical": false
+  }
+ },
+ "corrections": [
+  {
+   "key": "c33-tr-01#0",
+   "from": {
+    "expected": [
+     "TREND",
+     "ASSUMPTION"
+    ],
+    "critical": true
+   },
+   "reason": "annotator misread a partial month; found while inspecting a dev miss"
+  }
+ ]
+}

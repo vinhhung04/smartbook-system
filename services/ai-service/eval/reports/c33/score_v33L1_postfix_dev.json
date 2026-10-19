@@ -1,0 +1,55 @@
+{
+ "items": 44,
+ "with_errors": 15,
+ "clean": 29,
+ "precision": 1.0,
+ "recall": 0.4,
+ "recall_frac": "6/15",
+ "fpr": 0.0,
+ "fpr_frac": "0/29",
+ "critical_detection": "6/10",
+ "latency_ms": {
+  "p50": 2.02,
+  "p95": 7.16
+ },
+ "per_class": {
+  "ASSUMPTION": {
+   "fn": 3
+  },
+  "COUNT": {
+   "tp": 3
+  },
+  "ENTITY": {
+   "fn": 3
+  },
+  "MISSING_DATA": {
+   "fn": 1
+  },
+  "MONEY": {
+   "fp": 2,
+   "fn": 2,
+   "tp": 1
+  },
+  "NO_DATA": {
+   "fp": 3
+  },
+  "PERCENT": {
+   "fn": 3
+  },
+  "RANKING": {
+   "fn": 1
+  }
+ },
+ "misses": [
+  "c33-nat-03#0",
+  "c33-multi-01#0",
+  "c33-bd-02#0",
+  "c33-tr-01#0",
+  "c33-tr-02#0",
+  "c33-wi-01#0",
+  "c33-bait-01#0",
+  "c33-mt-01#1",
+  "c33-mt-02#1"
+ ],
+ "false_alarms": []
+}

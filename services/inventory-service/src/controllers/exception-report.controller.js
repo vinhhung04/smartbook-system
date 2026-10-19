@@ -1,7 +1,20 @@
 const { PrismaClient } = require('@prisma/client');
 const { pushToRooms } = require('../lib/socket-emitter');
 
+const {
+  canReadWarehouse,
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
+
 const prisma = new PrismaClient();
+
+// Phase 5 warehouse scope: managers list, read, assign and resolve only
+// reports of warehouses in their scope (the warehouse is the stored report's),
+// resolving re-reads the scope without cache, and every record a report links
+// to must belong to the report's warehouse.
 
 const EXC_STAFF_ROOMS = ['admin', 'warehouse_manager'];
 
@@ -109,6 +122,7 @@ async function createExceptionReport(req, res) {
     if (goods_receipt_id) {
       const receipt = await prisma.goods_receipts.findUnique({ where: { id: goods_receipt_id } });
       if (!receipt) return res.status(404).json({ message: 'Goods receipt not found' });
+      if (receipt.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the goods receipt' });
     }
 
     const report = await prisma.warehouse_exception_reports.create({
@@ -191,11 +205,11 @@ async function getAllExceptionReports(req, res) {
   const { status, warehouse_id, task_type, exception_type, page = 1, limit = 50 } = req.query;
   const where = {};
   if (status) where.status = status;
-  if (warehouse_id) where.warehouse_id = warehouse_id;
   if (task_type) where.task_type = task_type;
   if (exception_type) where.exception_type = exception_type;
 
   try {
+    Object.assign(where, await scopedWarehouseWhere(req.user, 'warehouse_id', warehouse_id || null));
     const [reports, total] = await Promise.all([
       prisma.warehouse_exception_reports.findMany({
         where,
@@ -217,6 +231,7 @@ async function getAllExceptionReports(req, res) {
 
     return res.json({ data: reports, total, page: Number(page), limit: Number(limit) });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -246,6 +261,7 @@ async function getExceptionReportById(req, res) {
     if (!isManager && report.created_by_user_id !== userId) {
       return res.status(403).json({ message: 'Forbidden' });
     }
+    if (report.created_by_user_id !== userId && !(await requireWarehouseReadAccess(req, res, report.warehouse_id))) return undefined;
 
     return res.json({ data: report });
   } catch (error) {
@@ -261,6 +277,7 @@ async function resolveExceptionReport(req, res) {
   try {
     const report = await prisma.warehouse_exception_reports.findUnique({ where: { id: req.params.id } });
     if (!report) return res.status(404).json({ message: 'Exception report not found' });
+    if (!(await requireWarehouseWriteAccess(req, res, report.warehouse_id, { fresh: true }))) return undefined;
     if (report.status === 'RESOLVED') {
       return res.status(400).json({ message: 'Report is already resolved' });
     }
@@ -312,6 +329,10 @@ async function assignExceptionReport(req, res) {
     const report = await prisma.warehouse_exception_reports.findUnique({ where: { id } });
     if (!report) {
       return res.status(404).json({ message: 'Exception report not found' });
+    }
+    if (!(await requireWarehouseWriteAccess(req, res, report.warehouse_id))) return undefined;
+    if (!(await canReadWarehouse({ id: assignee_user_id.trim() }, report.warehouse_id))) {
+      return res.status(400).json({ message: 'Người được giao không có quyền ở kho này', code: 'ASSIGNEE_OUT_OF_SCOPE' });
     }
 
     const updated = await prisma.warehouse_exception_reports.update({

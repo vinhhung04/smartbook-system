@@ -335,6 +335,10 @@ async def _build_reorder_draft(
     reorder_data = raw.get("Reorder Suggestions") or {}
     if isinstance(reorder_data, dict):
         items_raw = reorder_data.get("items") or []
+        if reorder_data.get("budget"):
+            # A budgeted list: draft only what the budget funds, at the funded quantity.
+            items_raw = [{**r, "suggested_reorder_qty": r.get("funded_qty", r.get("suggested_reorder_qty"))}
+                         for r in items_raw if isinstance(r, dict) and r.get("within_budget")]
     else:
         items_raw = reorder_data if isinstance(reorder_data, list) else []
 

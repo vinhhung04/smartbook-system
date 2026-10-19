@@ -15,6 +15,8 @@ const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../src/utils/lead-t
 const { calculateSuggestion, compareReorderCandidates, compareByShortfallPerCost, seasonalIndexFromCounts, SAFETY_STOCK_Z_SCORE } = require('../src/utils/reorder-suggestion');
 const { findSeasonalEvent } = require('../src/config/seasonal-events');
 const { DAY_MS, countInRange, dailySeries, activeReservationCount, wishlistCountAt, dayCounts } = require('./point-in-time');
+const { loanSurvival, expectedReturns: expectedReturnsOf } = require('../src/utils/expected-returns');
+const { allocateMarginal, poissonTail } = require('../src/utils/budget-allocation');
 
 const YEAR_MS = 365 * DAY_MS;
 // Production defaults of GET /analytics/reorder-suggestions.
@@ -102,10 +104,17 @@ function smartbookPolicy({
   reservationsByVariant,
   wishlistsByBook,
   defaultLeadTimeDays = DEFAULT_LEAD_TIME_DAYS,
+  // Phase 4 (3.3) candidates: copies expected back from loans within the lead
+  // time counted in the position (Kaplan-Meier over the loans this inventory
+  // has seen), and a safety-stock z per demand class.
+  expectedReturns = false,
+  safetyZ = null, // (avgDailyDemand) => z ; null = production's 1.645
 } = {}) {
+  let survivalCache = { day: null, curve: null };
   return {
     name,
-    params: { seasonality, learned_lead_time: learnedLeadTime, safety_stock: safetyStock, demand_signals: demandSignals, forecast_model: forecastModel, priority_floors: priorityFloors, rank_by: rankBy },
+    wantsLoans: expectedReturns,
+    params: { seasonality, learned_lead_time: learnedLeadTime, safety_stock: safetyStock, demand_signals: demandSignals, forecast_model: forecastModel, priority_floors: priorityFloors, rank_by: rankBy, expected_returns: expectedReturns, adaptive_z: Boolean(safetyZ) },
     rankCandidates: rankBy === 'SHORTFALL_PER_COST' ? compareByShortfallPerCost : compareReorderCandidates,
     decide(ctx) {
       const to = ctx.dayStartMs;
@@ -154,13 +163,47 @@ function smartbookPolicy({
         unit_cost: ctx.variant.unitCost,
       };
       const series = dailySeries(history, from, to);
-      const candidate = calculateSuggestion(row, demand, ranges, seasonal, series, leadTime, { includeSafetyStock: safetyStock, forecastModel, priorityFloors });
+      const options = { includeSafetyStock: safetyStock, forecastModel, priorityFloors };
+      if (safetyZ) options.safetyZ = safetyZ(demand.borrowCount / PRODUCTION_WINDOW_DAYS);
+      if (expectedReturns && ctx.loanView && ctx.catalogLoanView) {
+        if (survivalCache.day !== ctx.day) {
+          survivalCache = { day: ctx.day, curve: loanSurvival(ctx.catalogLoanView.returnedDurations, ctx.catalogLoanView.openAges) };
+        }
+        const expected = expectedReturnsOf(ctx.loanView.openAges, leadTime.days, survivalCache.curve);
+        options.expectedReturns = expected ?? 0; // no curve yet: count no returns (production's behaviour)
+      }
+      const candidate = calculateSuggestion(row, demand, ranges, seasonal, series, leadTime, options);
       return { qty: candidate.suggested_reorder_qty, candidate };
     },
   };
 }
 
+// Budget allocation by marginal expected service per VND (stockout-risk-aware):
+// copies are funded one at a time, each to the line where the next copy most
+// raises the chance that lead-time demand is covered, P(D > position + k),
+// D ~ Poisson(lead-time demand), divided by the copy's cost. A line is never
+// funded beyond the quantity its policy proposed. Delegates to production's
+// allocateMarginal (src/utils/budget-allocation.js) so both run the same code.
+function marginalAllocation(decisions, budget) {
+  const lines = decisions.map((d) => {
+    const c = d.candidate || {};
+    return {
+      cap: d.qty,
+      unitCost: Number(d.unitCost || 0),
+      lambda: Math.max(Number(c.lead_time_demand || 0), Number(c.avg_daily_demand || 0) * Number(c.lead_time_days || 0)),
+      position: Number(c.inventory_position ?? c.available_qty ?? 0),
+    };
+  });
+  const result = allocateMarginal(lines, budget);
+  return {
+    funded: decisions.map((d, i) => ({ ...d, qty: result.qty[i] })).filter((d) => d.qty > 0),
+    spent: result.spent,
+  };
+}
+
 module.exports = {
+  poissonTail,
+  marginalAllocation,
   LOW_STOCK_THRESHOLD,
   PRODUCTION_WINDOW_DAYS,
   noReorderPolicy,

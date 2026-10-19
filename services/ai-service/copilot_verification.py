@@ -59,7 +59,7 @@ CATEGORY_TYPE = {
     "TREND": COMPARATIVE, "RANKING": COMPARATIVE, "ENTITY": ENTITY_T, "SCOPE": ENTITY_T,
     "RECOMMENDATION": DECISION, "COVERAGE": DECISION, "OPTIMALITY": DECISION, "CAUSALITY": DECISION,
     "CONSTRAINT": DECISION, "ASSUMPTION": DECISION, "FORECAST": TEMPORAL, "MISSING_DATA": NUMERIC,
-    "ASSESSMENT": COMPARATIVE, "OVERCLAIM": DECISION, "LABEL": DECISION, "CHART": COMPARATIVE,
+    "ASSESSMENT": COMPARATIVE, "OVERCLAIM": DECISION, "LABEL": DECISION, "CHART": COMPARATIVE, "NO_DATA": NUMERIC,
 }
 # Reader-facing label of each category (the UI shows these, never codes).
 LABELS = {
@@ -75,10 +75,18 @@ LABELS = {
     "FORECAST": "dự báo không có trong dữ liệu", "MISSING_DATA": "coi dữ liệu thiếu/lỗi là bằng 0 hoặc là ổn",
     "ASSESSMENT": "đánh giá trái với quy tắc của hệ thống", "OVERCLAIM": "diễn đạt chắc chắn hơn mức bằng chứng",
     "LABEL": "nhãn nội bộ của hệ thống", "CHART": "phần giải thích và biểu đồ không khớp nhau",
+    "NO_DATA": "đưa ra số liệu khi chưa truy xuất được dữ liệu nào",
 }
 CRITICAL_CATEGORIES = frozenset({"COUNT", "MONEY", "PERCENT", "BUDGET", "PERIOD", "TREND", "RANKING", "ENTITY", "SCOPE",
-                                 "RECOMMENDATION", "COVERAGE", "MISSING_DATA", "ASSESSMENT", "CHART"})
+                                 "RECOMMENDATION", "COVERAGE", "MISSING_DATA", "ASSESSMENT", "CHART", "NO_DATA"})
 MAJOR_CATEGORIES = frozenset({"OPTIMALITY", "CAUSALITY", "CONSTRAINT", "ASSUMPTION", "FORECAST"})
+# Copilot 3.3: how a verdict was reached. "exact" - a number whose role the
+# rules resolved, compared with the backend value; "heuristic" - wording read
+# by a lexicon (trend words, ranking words, a warehouse name carried through a
+# sentence, an assessment threshold); "semantic" - a claim extracted by the
+# Layer 2 model (copilot_claims) and decided by the backend. Only an exact
+# contradiction replaces the whole answer; the others withdraw their sentence.
+EXACT_CATEGORIES = frozenset({"COUNT", "MONEY", "PERCENT", "BUDGET", "PERIOD", "MISSING_DATA", "COVERAGE", "NO_DATA"})
 
 # 3.1 findings folded into the same report (same sentence -> one claim)
 _FROM_31 = {
@@ -122,6 +130,10 @@ class Sheet:
     scenarios: list[dict] = field(default_factory=list)
     full_need: dict = field(default_factory=dict)
     coverage_incomplete: bool = False
+    # Phase 6: least budgets for 90 / 95 / 99 / 100 % of the plan's service (analytics curve)
+    service_costs: list = field(default_factory=list)
+    # rows the simulation listed / left out ("100 dòng đầu", "16 đầu sách ngoài danh sách")
+    listed_counts: list = field(default_factory=list)
     reorder_summary: dict = field(default_factory=dict)
     first_recommended: str | None = None
     titles: dict = field(default_factory=dict)            # norm title -> {"name", "system": {...}, "warehouse": {...}}
@@ -235,18 +247,29 @@ def _ingest(sheet: Sheet, base: str, r) -> None:
         scenarios = [s for s in r.get("scenarios") or [] if isinstance(s, dict) and not s.get("error")]
         for s in scenarios:
             sheet.scenarios.append({
+                "shortfall_pct": _num(s.get("shortfall_covered_pct")),
                 "label": s.get("label"), "budget": _num(s.get("budget_vnd")), "cost": _num(s.get("funded_cost")),
                 "remaining": _num(s.get("remaining_vnd")), "titles": _num(s.get("funded_lines")),
                 "copies": _num(s.get("funded_qty")), "hp_funded": _num(s.get("funded_high_priority")),
                 "hp_unfunded": _num(s.get("unfunded_high_priority")), "diff": s.get("vs_first_scenario") or {},
                 "funded_titles": [_title_key(x.get("title")) for x in s.get("funded_items") or [] if isinstance(x, dict)],
+                "title_qty": {_title_key(x.get("title")): _num(x.get("funded_qty", x.get("suggested_reorder_qty")))
+                              for x in s.get("funded_items") or [] if isinstance(x, dict) and x.get("title")},
+                "partial": _num(s.get("partially_funded_lines")),
+                "title_cost": {_title_key(x.get("title")): _num(x.get("estimated_cost"))
+                               for x in s.get("funded_items") or [] if isinstance(x, dict) and x.get("title")},
             })
             for role, k, unit in (("scenario.cost", "funded_cost", "đ"), ("scenario.titles", "funded_lines", "đầu sách"),
                                   ("scenario.copies", "funded_qty", "bản"), ("scenario.remaining", "remaining_vnd", "đ")):
                 F(Fact(role, _num(s.get(k)), unit, f"{s.get('label')} — {k}", base, entity=s.get("label"), as_of=as_of))
             if s.get("unfunded_high_priority"):
                 sheet.coverage_incomplete = True
-        if r.get("items_not_listed"):
+        # titles beyond the listed rows may still need money - unless a scenario
+        # funds the whole position-based need (3.3 analytics budget mode)
+        curve = (r.get("service_curve") or {}).get("cost_for_service_pct") or {}
+        sheet.service_costs = [_num(v) for v in curve.values() if _num(v) is not None]
+        sheet.listed_counts = [v for v in (_num(r.get("items_counted")), _num(r.get("items_not_listed"))) if v is not None]
+        if r.get("items_not_listed") and not any(s.get("covers_need_with_position") for s in scenarios):
             sheet.coverage_incomplete = True
         lim = list(r.get("limitations") or [])
         if r.get("items_not_listed"):
@@ -266,7 +289,9 @@ def _ingest(sheet: Sheet, base: str, r) -> None:
             sheet.scenarios.append({"label": "budget", "budget": _num(b.get("budget_vnd")), "cost": _num(b.get("funded_cost")),
                                     "remaining": _num(b.get("remaining_vnd")), "titles": _num(b.get("funded_lines")),
                                     "copies": _num(b.get("funded_qty")), "hp_funded": None, "hp_unfunded": None, "diff": {},
-                                    "funded_titles": [_title_key(x.get("title")) for x in within]})
+                                    "funded_titles": [_title_key(x.get("title")) for x in within],
+                                    "title_qty": {_title_key(x.get("title")): _num(x.get("funded_qty", x.get("suggested_reorder_qty")))
+                                                  for x in within}})
         elif items:
             sheet.first_recommended = items[0]["title"]
         for x in items:
@@ -360,7 +385,7 @@ _SCALE = {"trieu": 1e6, "tr": 1e6, "ty": 1e9, "nghin": 1e3, "ngan": 1e3, "k": 1e
 _UNIT = re.compile(
     r"\s*(?P<scale>trieu|ty|nghin|ngan|tr\b|k\b)?\s*(?P<unit>%|₫|vnd\b|vnđ\b|dong\b|d\b|dau sach|tua sach|tua\b|ban\b|"
     r"luot|ngay\b|phieu|cuon|quyen|kho\b|lan\b|thang\b|nam\b|tuan\b)?")
-_APPROX = re.compile(r"\b(khoang|gan|xap xi|tam|chung|hon|tren|duoi|it nhat|toi da|gan nhu)\s*$")
+_APPROX = re.compile(r"(\b(khoang|gan|xap xi|tam|chung|hon|tren|duoi|it nhat|toi da|gan nhu)|[~≈])\s*$")
 
 
 @dataclass
@@ -531,6 +556,11 @@ class Claim:
     token: str | None = None          # the number as written (repair)
     replacement: str | None = None    # its correct value, written the same way
     line: int | None = None
+    basis: str = ""                   # exact | heuristic | semantic (3.3); "" -> from the category
+
+    def __post_init__(self) -> None:
+        if not self.basis:
+            self.basis = "exact" if self.category in EXACT_CATEGORIES else "heuristic"
 
     @property
     def type(self) -> str:
@@ -538,7 +568,7 @@ class Claim:
 
     def public(self) -> dict:
         out = {"text": self.text[:200], "type": self.type, "category": self.category, "label": LABELS[self.category],
-               "verdict": self.verdict, "severity": self.severity, "detail": self.detail}
+               "verdict": self.verdict, "severity": self.severity, "detail": self.detail, "basis": self.basis}
         if self.expected:
             out["expected"] = self.expected
         if self.evidence:
@@ -547,6 +577,8 @@ class Claim:
 
 
 def _severity(category: str, verdict: str) -> str | None:
+    if category == "NO_DATA" and verdict == UNSUPPORTED:
+        return CRITICAL  # a figure with no data behind it at all
     if verdict == CONTRADICTED:
         return CRITICAL if category in CRITICAL_CATEGORIES else MAJOR
     if verdict == UNSUPPORTED:
@@ -576,6 +608,8 @@ _FUNDED = re.compile(r"\b(duyet|nhap duoc|cho phep nhap|duoc nhap|mua duoc|de xu
 _FUNDED_ANY = re.compile(r"\b(duyet|nhap duoc|cho phep nhap|duoc nhap|mua duoc|de xuat nhap)\b")
 _DIFF = re.compile(r"\b(them|tang them|chi them|so voi|chenh lech|nhieu hon|tu .{1,30} len|chuyen tu|giam tu)\b")
 _CANDIDATES = re.compile(r"^\s*(can (xem xet )?nhap|can bo sung|trong danh sach|duoc de xuat|de xuat nhap)")
+_COMPARATIVE = re.compile(r"\b(so voi|trong khi|thay vi|con o muc|o muc|o phuong an|tang len|giam xuong)\b|\btu \d")
+_LEFT_OUT = re.compile(r"\b(bo lai|bi bo( lai)?|bi loai|(chua|khong) (duoc )?(duyet|nhap)|con thieu)\s*(khoang |gan |them )?$")
 
 
 def _scenario_refs(norm: str, sheet: Sheet) -> list[dict]:
@@ -593,8 +627,9 @@ def _scenario_refs(norm: str, sheet: Sheet) -> list[dict]:
     return refs
 
 
-_NEED = re.compile(r"\b(nhu cau (nhap )?(day du|thuc te|toan bo)|toan bo nhu cau|de dap ung (day du|toan bo|het)|tong nhu cau|"
-                   r"nhu cau nhap hang)\b")
+# "nhu cầu thực tế cao / tăng" describes demand, not the cost of the full need
+_NEED = re.compile(r"\b(nhu cau (nhap )?(day du|thuc te(?! (cao|thap|tang|giam|lon|nho))|toan bo)|toan bo nhu cau|"
+                   r"de dap ung (day du|toan bo|het)|tong nhu cau|nhu cau nhap hang)\b")
 
 
 def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carry: dict) -> None:
@@ -612,6 +647,20 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
         vals = [s[field_] for s in sheet.scenarios if s.get(field_) is not None]
         return [abs(b - a) for i, a in enumerate(vals) for b in vals[i + 1:]]
 
+    # partial funding (3.3): "không có đầu sách nào bị duyệt một phần" / "3 đầu sách chỉ được duyệt một phần"
+    if re.search(r"\bmot phan\b", norm) and re.search(r"\b(duyet|nhap|cap)\b", norm):
+        partial = [s["partial"] for s in pool if s and s.get("partial") is not None]
+        if partial:
+            none_said = re.search(r"\b(khong|chua) co (dau sach|dong|tua|cuon) nao\b|\bdeu (nhan|duoc|du)\b[^.]{0,30}\bdu\b", norm)
+            counts = [m for m in mentions(norm) if m.unit == "titles"]
+            if none_said and max(partial) > 0:
+                _claim(out, sent, "COUNT", CONTRADICTED, f"Có {_fmt(max(partial))} đầu sách chỉ được duyệt một phần.",
+                       expected=f"{_fmt(max(partial))} đầu sách duyệt một phần", line=line)
+            elif counts and not none_said:
+                ok_ = any(_matches(m, v) for m in counts for v in partial)
+                _claim(out, sent, "COUNT", SUPPORTED if ok_ else CONTRADICTED,
+                       "Khớp số đầu sách duyệt một phần." if ok_ else f"Số đầu sách duyệt một phần là {_fmt(partial[0])}.",
+                       expected=None if ok_ else f"{_fmt(partial[0])} đầu sách", line=line)
     # budget compliance
     over = [s for s in sheet.scenarios if s["budget"] and s["cost"] is not None and s["cost"] > s["budget"]]
     if re.search(r"\bvuot (qua )?(muc )?ngan sach\b", norm) and not cf._negated(norm, norm.find("vuot")):
@@ -627,15 +676,18 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
     # word boundaries matter: "đáp ứng được 0%" must not read as "đáp ứng đủ"
     # "toàn bộ nhu cầu cần X ₫" alone is a cost, not a claim that it is met
     m = re.search(r"\b(dap ung|bu dap|bao phu) (duoc )?(toan bo|day du|het|du|100\s*%)(?!\w)( nhu cau)?", norm)
-    if m and sheet.coverage_incomplete and not cf._negated(norm, m.start()) \
+    quotes_metric = bool(re.search(r"\b100\s*% (luong )?thieu hut\b", norm)) and any(
+        s.get("shortfall_pct") == 100 for s in (pool if explicit else sheet.scenarios))
+    if m and sheet.coverage_incomplete and not quotes_metric and not cf._negated(norm, m.start()) \
             and not re.search(r"(dong|dau sach) (duoc )?(liet ke|chon|duyet)|trong danh sach|cua (cac dong|danh sach)", norm) \
             and not re.search(r"\b(van con|con lai)\b[^.]{0,40}\bchua\b", norm) \
             and not re.search(r"\b(chi phi|can|tong)\b[^.]{0,30}\bde dap ung\b", norm):
         # (the last two: the sentence says what is left, or gives the COST of full coverage)
         unfunded = max((s["hp_unfunded"] or 0) for s in sheet.scenarios)
         _claim(out, sent, "COVERAGE", CONTRADICTED,
-               f"Dữ liệu cho thấy vẫn còn đầu sách ưu tiên cao chưa được duyệt (tới {_fmt(unfunded)}) và nhu cầu đầy đủ "
-               f"cần {_fmt(sheet.full_need.get('estimated_total_cost'), 'đ')}.",
+               (f"Dữ liệu cho thấy vẫn còn đầu sách ưu tiên cao chưa được duyệt (tới {_fmt(unfunded)}) và nhu cầu đầy đủ "
+                f"cần {_fmt(sheet.full_need.get('estimated_total_cost'), 'đ')}.") if unfunded else
+               "Một phần đầu sách cần nhập nằm ngoài danh sách được tính, nên chưa thể nói đã đáp ứng toàn bộ.",
                expected="chưa đáp ứng toàn bộ nhu cầu", line=line)
 
     if _NEED.search(norm) and not re.search(r"\b(duyet|ngan sach \d)", norm):
@@ -644,6 +696,11 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
         _check_full_need(sent, norm, sheet, out, line)
         return
     for c_start, clause in _clauses(norm):
+        if _NEED.search(clause) and not _FUNDED_ANY.search(clause):
+            # "…, vì tổng nhu cầu lên tới 85,8 triệu cho 117 đầu sách": this clause
+            # is about the full need even when the sentence also names a budget
+            _check_full_need(sent, clause, sheet, out, line)
+            continue
         ms = mentions(clause)
         prev_end = 0
         for mm in ms:
@@ -653,14 +710,19 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
             role = None
             if mm.unit == "titles":
                 if re.match(r"\s*uu tien cao", after):
-                    role = "hp_unfunded" if re.search(r"chua (duoc )?(nhap|duyet)|bi bo lai|chua duoc", after) else (
+                    role = "hp_unfunded" if re.search(r"(chua|khong) (duoc )?(nhap|duyet)|bi bo lai|chua duoc", after) else (
                         "hp_funded" if (_FUNDED.search(before) or re.search(r"(duoc|da) (nhap|duyet)|vao danh sach duoc duyet",
                                                                              after)) else None)
                 elif _CANDIDATES.match(after):
                     continue  # the full candidate list, checked by _check_counts
+                elif _LEFT_OUT.search(before) or re.match(
+                        r"\s*(khac\s+)?(bi bo lai|bi loai|(chua|khong) (duoc )?(duyet|nhap))", after):
+                    role = "left_out"  # "bỏ lại 89 đầu sách", "90 đầu sách bị bỏ lại"
                 elif _FUNDED.search(before) or re.match(r"\s*(duoc|da) (duyet|nhap|chon)", after) or _FUNDED_ANY.search(clause[:mm.start()]):
                     role = "titles"
             elif mm.unit == "copies":
+                if _per_title_copies(clause[:mm.start()], norm, mm, pool or sheet.scenarios):
+                    continue  # "Norwegian Wood (27 bản)": a title's count, checked by _check_title_copies
                 if _FUNDED.search(before) or re.search(r"dau sach\s*\(\s*$", clause[:mm.start()]) \
                         or re.search(r"\btong( cong)?\s*$", before) \
                         or (_FUNDED_ANY.search(clause[:mm.start()]) and not _titles_in(clause, sheet)):
@@ -671,9 +733,24 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
                 elif re.search(r"(chi phi (duoc )?duyet|tong chi phi|ton|het|dung( het)?|chi|chi phi)\s*(la |khoang |gan |chi )?$",
                                before):
                     role = "cost"
-                elif re.search(r"(chi them|tang them|them|chenh lech)\s*(khoang |gan )?$", before):
+                elif re.search(r"(chi them|tang them|them|chenh lech|tiet kiem( duoc)?|bot|giam)\s*(khoang |gan |duoc |hon )*$", before):
                     role = "diff_cost"
             if role is None:
+                continue
+            if role == "left_out":
+                # "bỏ lại 89 đầu sách": the unfunded high-priority titles or all
+                # unfunded lines - never repaired, the reading is ambiguous
+                need = _num((sheet.full_need or {}).get("total_candidates"))
+                left = [v for s in pool if s for v in (s.get("hp_unfunded"),
+                        need - s["titles"] if need is not None and s.get("titles") is not None else None) if v is not None]
+                if not left:
+                    continue
+                if any(_matches(mm, v) for v in left):
+                    _claim(out, sent, "COUNT", SUPPORTED, "Khớp số đầu sách chưa được duyệt.", line=line)
+                elif explicit or scenario:
+                    _claim(out, sent, "COUNT", CONTRADICTED,
+                           f"{(scenario or pool[0])['label']}: {_ROLE_VI['hp_unfunded']} là {_fmt(left[0], 'đầu sách')}.",
+                           expected=_fmt(left[0], "đầu sách"), line=line)
                 continue
             field_ = {"titles": "titles", "copies": "copies", "cost": "cost", "remaining": "remaining",
                       "hp_funded": "hp_funded", "hp_unfunded": "hp_unfunded", "diff_cost": "cost"}[role]
@@ -699,6 +776,11 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
             if any(_matches(mm, t) for t in targets):
                 _claim(out, sent, "MONEY" if unit == "đ" else "COUNT", SUPPORTED, "Khớp dữ liệu mô phỏng ngân sách.", line=line)
                 continue
+            same_kind = ("titles", "hp_funded", "hp_unfunded") if field_ in ("titles", "hp_funded", "hp_unfunded") else (field_,)
+            if _COMPARATIVE.search(norm) and any(_matches(mm, s.get(f)) for s in sheet.scenarios if s for f in same_kind):
+                # "36 … (so với 69 … ở mức 5 triệu)": the other scenario's figure
+                _claim(out, sent, "MONEY" if unit == "đ" else "COUNT", SUPPORTED, "Khớp một phương án khác được so sánh.", line=line)
+                continue
             if not explicit and not scenario:
                 continue  # which scenario is meant cannot be told: leave it to the number check
             s = scenario
@@ -711,18 +793,100 @@ def _check_budget(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
             _claim(out, sent, category, CONTRADICTED, detail + ".", expected=_fmt(truth, unit),
                    evidence=[{"label": f"{s['label']}: {_ROLE_VI[field_]}", "value": truth, "unit": unit,
                               "source": "simulate_reorder_budget"}],
-                   token=mm.raw, replacement=_replacement(mm.raw, truth) if (explicit and not diff_ctx) else None, line=line)
+                   # a number that is another quantity of the data may mean that quantity
+                   # (the role reading is what is wrong): retry, never rewrite it silently
+                   token=mm.raw, replacement=_replacement(mm.raw, truth) if (explicit and not diff_ctx and not confused
+                                                                             and not _is_full_need(mm, sheet)) else None,
+                   line=line)
+
+
+def _is_full_need(m: Mention, sheet: Sheet) -> bool:
+    need = sheet.full_need or {}
+    return any(_matches(m, need.get(k)) for k in ("total_candidates", "high_priority", "estimated_total_reorder_qty",
+                                                     "estimated_total_cost", "need_with_position_vnd"))
+
+
+def _per_title_copies(head: str, norm: str, m: Mention, scenarios: list) -> bool:
+    """A copy count that belongs to one funded title: written right after it, or
+    equal to the funded copies of a title the sentence names."""
+    for s in scenarios:
+        for key, qty in ((s or {}).get("title_qty") or {}).items():
+            if len(key) < 4:
+                continue
+            if re.search(rf"(?<!\w){re.escape(key)}(?!\w)\s*[(:\-–]*\s*$", head):
+                return True
+            if qty is not None and _matches(m, qty) and re.search(rf"(?<!\w){re.escape(key)}(?!\w)", norm):
+                return True
+    return False
+
+
+def _check_title_cost(sent: str, segment: str, key: str, scenario: dict, out: list, line) -> None:
+    """The cost stated for one funded title: "Nhập 67 bản (chi phí ~5.963.000 ₫)"."""
+    truth = (scenario.get("title_cost") or {}).get(key)
+    m = next((x for x in mentions(segment) if x.unit == "money"), None)
+    if truth is None or m is None or not re.search(r"(chi phi|gia|thanh tien|tri gia|tong)\s*(du kien |uoc tinh |khoang |~|≈)*\s*$",
+                                                   segment[:m.start()]):
+        return
+    if _matches(m, truth, rel=0.005):
+        _claim(out, sent, "MONEY", SUPPORTED, "Khớp chi phí được duyệt của đầu sách.", line=line)
+        return
+    others = [scenario.get(k) for k in ("remaining", "budget", "cost") if scenario.get(k) is not None]
+    others += [v for k, v in (scenario.get("title_cost") or {}).items() if k != key and v is not None]
+    _claim(out, sent, "MONEY", CONTRADICTED, f"{scenario['label']}: chi phí được duyệt cho đầu sách này là {_fmt(truth, 'đ')}.",
+           expected=_fmt(truth, "đ"), evidence=[{"label": f"{scenario['label']}: chi phí được duyệt", "value": truth, "unit": "đ",
+                                                 "source": "simulate_reorder_budget"}],
+           token=m.raw, replacement=None if (m.approx or any(_matches(m, o) for o in others)) else _replacement(m.raw, truth),
+           line=line)
+
+
+def _check_title_copies(sent: str, norm: str, sheet: Sheet, out: list, line: int, carry: dict) -> None:
+    """Copies the budget approves for a named title: "Norwegian Wood (27 bản)".
+    Since 3.3 a line can be funded in part, so the approved copies differ from
+    the line's full suggestion. Each title mention is paired with the first
+    copy count after it (up to the next title)."""
+    scenario = carry.get("scenario") or (sheet.scenarios[0] if len(sheet.scenarios) == 1 else None)
+    if not scenario or not scenario.get("title_qty"):
+        return
+    spots = sorted((m.start(), m.end(), key) for key in scenario["title_qty"] if len(key) >= 4
+                   for m in re.finditer(rf"(?<!\w){re.escape(key)}(?!\w)", norm))
+    known = [v for v in scenario["title_qty"].values() if v is not None] + [
+        scenario.get(k) for k in ("copies", "titles", "hp_funded", "hp_unfunded") if scenario.get(k) is not None]
+    for i, (start, end, key) in enumerate(spots):
+        segment = norm[end:spots[i + 1][0] if i + 1 < len(spots) else len(norm)]
+        _check_title_cost(sent, segment, key, scenario, out, line)
+        m = next((x for x in mentions(segment) if x.unit == "copies"), None)
+        truth = scenario["title_qty"][key]
+        prefix = segment[:m.start()] if m else ""
+        if m is None or truth is None or not (re.fullmatch(r"[\s(:\-–*]*", prefix)
+                                              or re.search(r"\b(duyet|nhap|mua)( them| duoc)?\s*(khoang )?$", prefix)):
+            continue  # no approved count right after the title ("cần 27 bản" is the full suggestion)
+        if _matches(m, truth):
+            _claim(out, sent, "COUNT", SUPPORTED, "Khớp số bản được duyệt.", line=line)
+            continue
+        other = any(_matches(m, v) for v in known)
+        _claim(out, sent, "COUNT", CONTRADICTED, f"{scenario['label']}: số bản được duyệt cho đầu sách này là {_fmt(truth, 'bản')}.",
+               expected=_fmt(truth, "bản"), evidence=[{"label": f"{scenario['label']}: số bản được duyệt", "value": truth,
+                                                       "unit": "bản", "source": "simulate_reorder_budget"}],
+               token=m.raw, replacement=None if other else _replacement(m.raw, truth), line=line)
+
+
+_LISTED_WORDS = re.compile(r"\b(danh sach|liet ke|ngoai|pham vi|top|dong dau|nhom)\b")
+
+
+def _is_listed_count(m: Mention, norm: str, sheet: Sheet) -> bool:
+    """A count of the rows the simulation listed or left out, said as such."""
+    return bool(sheet.listed_counts) and bool(_LISTED_WORDS.search(norm)) and any(_matches(m, v) for v in sheet.listed_counts)
 
 
 def _check_full_need(sent: str, norm: str, sheet: Sheet, out: list, line: int) -> None:
     need = sheet.full_need or {}
     roles = {"titles": (need.get("total_candidates"), need.get("high_priority")), "copies": (need.get("estimated_total_reorder_qty"),),
-             "money": (need.get("estimated_total_cost"),)}
+             "money": (need.get("estimated_total_cost"), need.get("need_with_position_vnd"), *sheet.service_costs)}
     for m in mentions(norm):
         truths = [t for t in roles.get(m.unit, ()) if isinstance(t, (int, float))]
         if not truths:
             continue
-        if any(_matches(m, t) for t in truths):
+        if any(_matches(m, t) for t in truths) or (m.unit == "titles" and _is_listed_count(m, norm, sheet)):
             _claim(out, sent, "MONEY" if m.unit == "money" else "COUNT", SUPPORTED, "Khớp nhu cầu nhập đầy đủ.", line=line)
         elif not any(_matches(m, s.get(k)) for s in sheet.scenarios for k in ("budget", "cost", "titles", "copies")):
             unit = {"money": "đ", "titles": "đầu sách", "copies": "bản"}[m.unit]
@@ -747,6 +911,8 @@ def _check_counts(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
     or system-wide, reorder candidates, overdue loans/items, shortage factors."""
     names = list(sheet.warehouses) or [n for n in list(sheet.low_items) + list(sheet.shortage) if n]
     sys_ctx = re.search(r"\b(toan he thong|toan thu vien|tat ca (cac )?kho|ca (\d+|hai|ba|bon|nam) kho|cong (ca|tat ca|lai))\b", norm)
+    if sys_ctx and re.search(r"\bdeu\b", norm[sys_ctx.end():sys_ctx.end() + 25]):
+        sys_ctx = None  # "cả hai kho đều có 1 đầu sách": each warehouse, not their sum
     # A warehouse named earlier in the SAME sentence carries to its later
     # clauses ("Kho X có 12 dưới ngưỡng, trong đó 4 hết hàng"); never across
     # sentences - "kho này" two sentences later may be another warehouse.
@@ -799,6 +965,9 @@ def _check_counts(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
                 continue
             truth, label, others = _count_truth(role, warehouse, sheet)
             if truth is None:
+                continue
+            if role == "candidates" and m is not None and _is_listed_count(m, clause, sheet):
+                _claim(out, sent, "COUNT", SUPPORTED, "Khớp số dòng được liệt kê / ngoài danh sách.", line=line)
                 continue
             if any(abs(v - truth) < 0.5 for v in vals):
                 _claim(out, sent, "COUNT", SUPPORTED, f"Khớp dữ liệu ({label}).", line=line)
@@ -1010,6 +1179,7 @@ def _check_periods(sent: str, norm: str, sheet: Sheet, out: list, line: int) -> 
                                + (f" với {_fmt(p.get('peak_loans'))} lượt." if p.get("peak_loans") else "."),
                                expected=f"{d:02d}/{mo:02d}", line=line)
                     break
+    _check_date_ranges(sent, norm, sheet, out, line)
     # (c) month <-> value in a monthly series / a two-period comparison
     for c_start, clause in _clauses(norm):
         months = [(int(a), int(b) if b else None) for a, b in _MONTH.findall(clause)]
@@ -1079,6 +1249,51 @@ def _check_periods(sent: str, norm: str, sheet: Sheet, out: list, line: int) -> 
                        f"{_fmt(mm.values[0])} là của kỳ {'trước' if period == 'current' else 'hiện tại'}.",
                        expected=_fmt(good, "lượt"), evidence=[{"label": f"Lượt mượn kỳ {period}", "value": good, "unit": "lượt"}],
                        line=line)
+
+
+_RANGE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\s*(?:-|–|—|den|toi)\s*(\d{1,2})/(\d{1,2})/(\d{4})\b")
+
+
+def _known_ranges(sheet: Sheet) -> list[tuple]:
+    from datetime import date
+    out = []
+    pairs = [(r.get("time_range") or {}) for r in sheet.evidence] + list(sheet.periods.values())
+    for tr in pairs:
+        try:
+            a, b = str(tr.get("from") or "")[:10], str(tr.get("to") or "")[:10]
+            if len(a) == 10 and len(b) == 10:
+                out.append((date.fromisoformat(a), date.fromisoformat(b)))
+        except (ValueError, AttributeError):
+            continue
+    return out
+
+
+def _check_date_ranges(sent: str, norm: str, sheet: Sheet, out: list, line: int) -> None:
+    """A fully written period "16/09/2026 – 16/10/2026" against the periods the
+    tools actually covered (Copilot 3.3: a retry once wrote 16/10/2025 –
+    16/10/2026 for a 30-day window and nothing caught it). Only a range sharing
+    one end with a known period but not the other is CONTRADICTED; anything
+    else is left alone."""
+    from datetime import date
+    known = _known_ranges(sheet)
+    if not known:
+        return
+    for m in _RANGE.finditer(norm):
+        try:
+            ws = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+            we = date(int(m.group(6)), int(m.group(5)), int(m.group(4)))
+        except ValueError:
+            continue
+        near = lambda x, y: abs((x - y).days) <= 1  # noqa: E731 - inclusive/exclusive end of the same period
+        if any(near(ws, ks) and near(we, ke) for ks, ke in known):
+            _claim(out, sent, "PERIOD", SUPPORTED, "Khớp khoảng thời gian của dữ liệu.", line=line)
+            continue
+        half = [(ks, ke) for ks, ke in known if near(we, ke) != near(ws, ks)]
+        if half:
+            ks, ke = half[0]
+            _claim(out, sent, "PERIOD", CONTRADICTED,
+                   f"Dữ liệu được tính cho kỳ {ks:%d/%m/%Y} – {ke:%d/%m/%Y}.", expected=f"{ks:%d/%m/%Y} – {ke:%d/%m/%Y}",
+                   evidence=[{"label": "Kỳ dữ liệu", "value": f"{ks.isoformat()}/{ke.isoformat()}", "unit": ""}], line=line)
 
 
 def _vn(iso) -> str:
@@ -1238,7 +1453,7 @@ def _check_decision_language(sent: str, norm: str, sheet: Sheet, out: list, line
     m = re.search(r"\b(khon ngoan nhat|dung dan nhat|hop ly nhat|sang suot nhat|loi nhat|phuong an duy nhat|chac chan dung|"
                   r"tot nhat|toi uu|hieu qua nhat)\b", norm)
     if m and not cf._negated(norm, m.start()) and not re.search(r"\bkhong co (phuong an|kich ban|lua chon) nao\b", norm) \
-            and "toi uu hoa" not in norm:
+            and "toi uu hoa" not in norm and not re.search(r"\b(neu|khi) (can|muon)\b[^.]{0,40}\btoi uu hon\b", norm):
         _claim(out, sent, "OPTIMALITY", UNSUPPORTED,
                "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu.", line=line)
     # supplier constraints the data does not have
@@ -1452,7 +1667,7 @@ def extract_and_verify(answer: str, sheet: Sheet) -> list[Claim]:
         norm = normalize_text(sent)
         if not norm:
             continue
-        for check in (_check_missing, _check_budget, _check_counts, _check_trends, _check_decision_language, _check_scope,
+        for check in (_check_missing, _check_budget, _check_title_copies, _check_counts, _check_trends, _check_decision_language, _check_scope,
                       _check_percents, _check_stock_levels, _check_subtotal, _check_reorder_money, _check_periods,
                       _check_ranking, _check_recommendation, _check_overlap):
             try:
@@ -1500,10 +1715,66 @@ class Report:
         return [c for c in self.claims if c.severity == CRITICAL]
 
 
-def verify(answer: str, sheet: Sheet, semantic_31: list | None = None) -> Report:
+_QUANTITY_UNITS = ("titles", "copies", "money", "%", "events", "tickets", "books")
+
+
+def figures_without_data(answer: str, sheet: Sheet, context: str = "") -> list[Claim]:
+    """Copilot 3.3: a turn that fetched NO tool data (the planner chose no tool
+    and the model called none) but states quantities. Numeric grounding was
+    skipped in that case, so invented figures passed (3 of 44 dev drafts). A
+    figure the question or the earlier turns already gave (`context`) is not
+    new; everything else is UNSUPPORTED and critical."""
+    if sheet.facts or any(not e.get("error") for e in sheet.evidence):
+        return []  # some tool data came back (a turn whose tools all failed has none)
+    known = [v for m in mentions(normalize_text(context or "")) for v in m.values]
+    out: list[Claim] = []
+    for sent, line in _sentences(answer):
+        norm = normalize_text(sent)
+        if re.search(r"\b(chua|khong) (co|lay duoc|truy xuat duoc) (du lieu|so lieu|thong tin)\b", norm):
+            continue
+        for m in mentions(norm):
+            if m.unit not in _QUANTITY_UNITS or any(abs(abs(v) - abs(k)) < 1e-9 for v in m.values for k in known):
+                continue
+            _claim(out, sent, "NO_DATA", UNSUPPORTED, "Lượt này chưa truy xuất dữ liệu nào, nên con số này không có căn cứ.",
+                   expected="không đưa số liệu khi chưa có dữ liệu", line=line)
+            break
+    return out
+
+
+def verify(answer: str, sheet: Sheet, semantic_31: list | None = None, context: str = "") -> Report:
     claims = extract_and_verify(answer, sheet)
     claims += _from_31(semantic_31 or [], claims)
+    claims += figures_without_data(answer, sheet, context)
     return Report(claims, sheet)
+
+
+def _same_sentence(a: str, b: str) -> bool:
+    na, nb = normalize_text(a)[:80], normalize_text(b)[:80]
+    return bool(na and nb) and (na in normalize_text(b) or nb in normalize_text(a))
+
+
+def merge(report: Report, extra: list[Claim]) -> Report:
+    """Layer 1 report + the Layer 3 verdicts on Layer 2 claims. A semantic claim
+    adds nothing when Layer 1 already judged the same category in the same
+    sentence (Layer 1 resolved the role itself, so its verdict stands)."""
+    kept = []
+    for c in extra:
+        if any(x.category == c.category and _same_sentence(x.text, c.text) for x in report.claims):
+            continue
+        if any(k.category == c.category and k.verdict == c.verdict and _same_sentence(k.text, c.text) for k in kept):
+            continue
+        kept.append(c)
+    return Report(report.claims + kept, report.sheet)
+
+
+def blocking_basis(report: Report) -> str | None:
+    """"exact" when a surviving critical contradiction is an exact one (the
+    answer is replaced), "partial" when every critical one is heuristic or
+    semantic (only their sentences are withdrawn), None when nothing is critical."""
+    critical = report.critical
+    if not critical:
+        return None
+    return "exact" if any(c.basis == "exact" for c in critical) else "partial"
 
 
 _LIST_LINE = re.compile(r"^\s*([-*•]|\d+[.)])\s+")
@@ -1541,6 +1812,51 @@ def repair(answer: str, report: Report) -> tuple[str, list[Claim]]:
     return text, fixed
 
 
+def withdraw(answer: str, claims: list[Claim]) -> tuple[str, int] | None:
+    """Remove the sentences that carry `claims` (heuristic / semantic critical
+    contradictions that survived the repair and the retry), keeping every other
+    sentence as written - each of those was checked too. Returns (text, number
+    of sentences removed), or None when too little would be left to stand on
+    its own (then the whole answer is replaced instead)."""
+    targets = [normalize_text(c.text)[:150] for c in claims if c.text]
+    if not targets:
+        return None
+    kept_lines, removed, total = [], 0, 0
+    for line in (answer or "").split("\n"):
+        keep = []
+        # whole sentences only: a claim may be one ";"-clause of a sentence, and
+        # removing just that clause left fragments ("và (2) Tồn kho dưới 5 bản.")
+        for part in re.split(r"(?<=[.!?])\s+", line):
+            plain = normalize_text(re.sub(r"[*_`#>]+", "", part).strip(" -•\t"))
+            if not plain:
+                keep.append(part)
+                continue
+            total += 1
+            if any(t and (t in plain or plain in t) for t in targets):
+                removed += 1
+                continue
+            keep.append(part)
+        text = " ".join(keep).rstrip()
+        if normalize_text(re.sub(r"[*_`#>\s\-•\d.)]+", "", text)):
+            kept_lines.append(text)
+        elif not line.strip():
+            kept_lines.append(line)
+    if not removed or total - removed < 2 or removed * 2 > total:
+        return None
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(kept_lines)).strip()
+    note = f"(Đã lược bỏ {removed} nhận định không khớp với dữ liệu hệ thống; phần còn lại đã được đối chiếu.)"
+    return f"{text}\n\n{note}", removed
+
+
+def score(report: Report, grounding_warning: str | None = None) -> tuple:
+    """Severity of an answer's surviving problems, worst first: exact critical
+    contradictions, other critical ones, numbers with no basis, other
+    problems. Used to keep the draft when the corrective retry made it worse."""
+    critical = report.critical
+    return (sum(c.basis == "exact" for c in critical), sum(c.basis != "exact" for c in critical),
+            int(bool(grounding_warning)), len(report.problems))
+
+
 def fallback_answer(explanation: dict | None, sheet: Sheet) -> str:
     """A reply built only from backend data, used when a critical
     contradiction survives: the explanation's own conclusion, or - without
@@ -1553,6 +1869,9 @@ def fallback_answer(explanation: dict | None, sheet: Sheet) -> str:
             "(Không kiểm chứng được một nhận định an toàn từ bản trả lời tự động, nên câu trả lời được thay bằng kết luận tính "
             "trực tiếp từ dữ liệu.)")
     facts = [f for f in sheet.facts if f.value is not None][:4]
+    if not facts and not any(not e.get("error") for e in sheet.evidence):
+        return ("Tôi chưa truy xuất được dữ liệu cho câu hỏi này nên không đưa ra số liệu, để tránh thông tin sai. "
+                "Bạn có thể hỏi lại cụ thể hơn (ví dụ: chỉ rõ kỳ thời gian, kho hoặc đầu sách cần xem).")
     lines = ["Không kiểm chứng được một khuyến nghị an toàn từ bản trả lời tự động."]
     if facts:
         lines.append("Số liệu đọc trực tiếp từ hệ thống:")
@@ -1565,6 +1884,9 @@ def fallback_answer(explanation: dict | None, sheet: Sheet) -> str:
 def retry_instruction(report: Report) -> str | None:
     """The structured contradictions as constraints for the one corrective retry,
     with the value the data actually holds."""
+    if any(c.category == "NO_DATA" for c in report.claims):
+        return ("Chưa có kết quả tool nào cho câu hỏi này, nên mọi con số trong câu trả lời trước đều không có căn cứ. "
+                "Hãy gọi tool phù hợp để lấy dữ liệu; nếu không có tool phù hợp, nói rõ là chưa có dữ liệu và không đưa số liệu.")
     bad = [c for c in report.claims if c.verdict == CONTRADICTED and c.category not in ("LABEL",)]
     if not bad:
         return None
@@ -1573,9 +1895,11 @@ def retry_instruction(report: Report) -> str | None:
             + "\nViết lại câu trả lời, dùng đúng các giá trị trên, không thêm số liệu mới.")
 
 
-def status_of(report: Report, *, repaired: bool, fallback: bool) -> str:
+def status_of(report: Report, *, repaired: bool, fallback: bool, withdrawn: int = 0) -> str:
     if fallback:
         return BLOCKED
+    if withdrawn:
+        return WARNING
     if any(c.verdict in (CONTRADICTED, UNSUPPORTED) and c.severity in (CRITICAL, MAJOR) for c in report.claims):
         return WARNING
     if any(c.verdict == UNSUPPORTED for c in report.claims if c.category != "LABEL"):
@@ -1584,7 +1908,8 @@ def status_of(report: Report, *, repaired: bool, fallback: bool) -> str:
 
 
 def summarize(report: Report, status: str, *, repaired: list[Claim], retried: bool, started: float,
-              labels_stripped: bool = False) -> dict:
+              labels_stripped: bool = False, withdrawn: list[Claim] | None = None, retry_discarded: bool = False,
+              semantic: dict | None = None) -> dict:
     counts = {v: 0 for v in (SUPPORTED, CONTRADICTED, UNSUPPORTED, UNVERIFIABLE)}
     for c in report.claims:
         counts[c.verdict] += 1
@@ -1598,7 +1923,11 @@ def summarize(report: Report, status: str, *, repaired: list[Claim], retried: bo
                     for c in repaired],
         "labels_stripped": labels_stripped,
         "retried": retried,
-        "safe_to_act": status != BLOCKED,
+        "retry_discarded": retry_discarded,
+        "withdrawn": [{"category": c.category, "label": LABELS[c.category], "basis": c.basis} for c in withdrawn or []],
+        "semantic": semantic or {"used": False},
+        # an answer is safe to act on only when no critical contradiction was found in what the user reads
+        "safe_to_act": status != BLOCKED and not withdrawn,
         "evidence": report.sheet.evidence[:8],
         "latency_ms": round((time.perf_counter() - started) * 1000, 2),
     }
@@ -1607,7 +1936,9 @@ def summarize(report: Report, status: str, *, repaired: list[Claim], retried: bo
 def log_outcome(summary: dict) -> None:
     """Debug log without figures or text: only statuses and categories."""
     bad = sorted({c["category"] for c in summary["claims"] if c["verdict"] in (CONTRADICTED, UNSUPPORTED)})
-    logger.info("copilot verification status=%s checked=%s contradicted=%s unsupported=%s categories=%s repairs=%s retried=%s",
+    logger.info("copilot verification status=%s checked=%s contradicted=%s unsupported=%s categories=%s repairs=%s retried=%s "
+                "withdrawn=%s retry_discarded=%s semantic=%s",
                 summary["status"], summary["checked"], summary["counts"][CONTRADICTED], summary["counts"][UNSUPPORTED],
-                ",".join(bad) or "-", len(summary["repairs"]), summary["retried"])
+                ",".join(bad) or "-", len(summary["repairs"]), summary["retried"], len(summary.get("withdrawn") or []),
+                summary.get("retry_discarded"), (summary.get("semantic") or {}).get("status", "off"))
 

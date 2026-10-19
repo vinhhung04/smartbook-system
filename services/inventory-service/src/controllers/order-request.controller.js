@@ -64,6 +64,24 @@ function normalizeOutboundReferenceType(value) {
   return referenceType;
 }
 
+const {
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require("../utils/warehouse-scope.utils");
+
+// Phase 5 warehouse scope: the approval queue lists only requests of
+// warehouses in the caller's scope, and approving / rejecting needs write
+// access to the request's SOURCE warehouse as stored on the request - read
+// again without cache, since approval is the confirmation step.
+async function requireRequestScope(req, res, taskType, taskId) {
+  const row = taskType === "outbound"
+    ? await prisma.outbound_orders.findUnique({ where: { id: taskId }, select: { warehouse_id: true } })
+    : await prisma.transfer_orders.findUnique({ where: { id: taskId }, select: { from_warehouse_id: true } });
+  if (!row) return true; // the handler answers 404 itself
+  return requireWarehouseWriteAccess(req, res, row.warehouse_id || row.from_warehouse_id, { fresh: true });
+}
+
 async function getCurrentReferenceSequence(tx, referenceType) {
   const prefix = OUTBOUND_REFERENCE_PREFIXES[referenceType];
   const pattern = `^${prefix}-([0-9]+)$`;
@@ -363,10 +381,10 @@ async function listOrderRequests(req, res) {
       transferWhere.requested_by_user_id = currentUserId;
     }
 
-    if (warehouseId) {
-      outboundWhere.warehouse_id = warehouseId;
-      transferWhere.from_warehouse_id = warehouseId;
-    }
+    Object.assign(outboundWhere, await scopedWarehouseWhere(req.user, "warehouse_id", warehouseId));
+    Object.assign(transferWhere, warehouseId
+      ? { from_warehouse_id: warehouseId }
+      : await scopedWarehouseWhere(req.user, ["from_warehouse_id", "to_warehouse_id"]));
 
     const [outboundOrders, transferOrders] = await Promise.all([
       prisma.outbound_orders.findMany({
@@ -414,6 +432,7 @@ async function listOrderRequests(req, res) {
 
     return res.json({ data: rows });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error("Error while listing order requests:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -976,6 +995,7 @@ async function approveRequest(req, res) {
   }
 
   try {
+    if (!(await requireRequestScope(req, res, taskType, taskId))) return undefined;
     if (taskType === "outbound") {
       const updated = await prisma.$transaction(async (tx) => {
         const order = await tx.outbound_orders.findUnique({
@@ -1134,6 +1154,7 @@ async function rejectRequest(req, res) {
   }
 
   try {
+    if (!(await requireRequestScope(req, res, taskType, taskId))) return undefined;
     if (taskType === "outbound") {
       const updated = await prisma.$transaction(async (tx) => {
         const order = await tx.outbound_orders.findUnique({

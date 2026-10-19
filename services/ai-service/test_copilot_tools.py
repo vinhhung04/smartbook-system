@@ -248,3 +248,76 @@ class BudgetDeltaTests(BudgetSimulationTests):
         diff = r["scenarios"][1]["vs_first_scenario"]
         self.assertEqual(diff["budget_vnd"], -300_000)
         self.assertNotIn("vs_first_scenario", r["scenarios"][0])
+
+
+class MarginalBudgetTests(unittest.TestCase):
+    """3.3 analytics budget mode: lines funded in part (funded_qty), position
+    with incoming purchase orders and expected returns (budget_plan)."""
+
+    def _gateway(self):
+        items = [reorder_item("v-1", "A", suggested_reorder_qty=10, estimated_cost=1_000_000, lead_time_demand=12, available_qty=2),
+                 reorder_item("v-2", "B", priority="MEDIUM", suggested_reorder_qty=3, estimated_cost=300_000,
+                              lead_time_demand=3, available_qty=0)]
+
+        def reorder(params):
+            result = {"summary": {"total_candidates": 2, "high_priority": 1, "estimated_total_cost": 1_300_000,
+                                  "estimated_total_reorder_qty": 13}, "items": [dict(i) for i in items]}
+            if params.get("budgetVnd") is not None:
+                funded = {"v-1": 4, "v-2": 0}
+                for i in result["items"]:
+                    i["funded_qty"] = funded[i["variant_id"]]
+                    i["funded_cost"] = i["funded_qty"] * i["unit_cost"]
+                    i["within_budget"] = i["funded_qty"] > 0
+                    i["budget_plan"] = {"incoming_qty": 2, "expected_returns": 1, "inventory_position": i["available_qty"] + 3,
+                                        "cap_qty": 7}
+                result["budget"] = {"budget_vnd": params["budgetVnd"], "funded_cost": 400_000, "remaining_vnd": 100_000,
+                                    "partially_funded_lines": 1, "funding_order": "MARGINAL_SERVICE_PER_COST",
+                                    "assumptions": ["Tồn dùng cho ngân sách = khả dụng + đang về + dự kiến trả."]}
+            return result
+        return FakeGateway({"/analytics/reorder-suggestions": reorder})
+
+    def test_partial_lines_report_funded_copies_not_the_full_suggestion(self):
+        with patch.object(ct, "_cached_get", self._gateway()):
+            r = run(ct.simulate_reorder_budget("Bearer t", budgets_vnd=[500_000]))
+        s = r["scenarios"][0]
+        self.assertEqual((s["funded_lines"], s["funded_qty"], s["partially_funded_lines"]), (1, 4, 1))
+        self.assertEqual(s["funded_items"][0]["funded_qty"], 4)
+        self.assertEqual(s["funded_items"][0]["estimated_cost"], 400_000)
+        # shortfall A = 12 - 2 = 10, covered by 4 funded + 3 already counted on; B (3) unfunded
+        self.assertEqual(s["shortfall_covered_pct"], round(7 / 13 * 100, 1))
+        self.assertIn("một phần", r["funding_rule"])
+        self.assertTrue(r["budget_assumptions"])
+
+
+class BudgetDraftTests(unittest.TestCase):
+    def test_a_budgeted_list_drafts_only_funded_lines_at_the_funded_quantity(self):
+        import agent_planner
+        reorder = {"budget": {"budget_vnd": 500_000}, "items": [
+            {"variant_id": "v-1", "title": "A", "suggested_reorder_qty": 10, "funded_qty": 4, "within_budget": True},
+            {"variant_id": "v-2", "title": "B", "suggested_reorder_qty": 3, "funded_qty": 0, "within_budget": False}]}
+        planned = run(agent_planner._build_reorder_draft("Tạo phiếu đề xuất nhập", {}, {"Reorder Suggestions": reorder},
+                                                         [], [], None))
+        items = planned["payload"]["items"]
+        self.assertEqual([(i["title"], i["suggested_quantity"]) for i in items], [("A", 4)])
+
+
+class PositionCoveredLinesTests(unittest.TestCase):
+    def test_a_line_the_position_covers_is_not_left_out(self):
+        items = [reorder_item("v-1", "A", suggested_reorder_qty=5, estimated_cost=500_000),
+                 reorder_item("v-2", "B", suggested_reorder_qty=5, estimated_cost=500_000)]
+
+        def reorder(params):
+            result = {"summary": {"total_candidates": 2, "high_priority": 2, "estimated_total_cost": 1_000_000,
+                                  "estimated_total_reorder_qty": 10}, "items": [dict(i) for i in items]}
+            if params.get("budgetVnd") is not None:
+                for i, (funded, cap) in zip(result["items"], ((2, 2), (0, 0))):
+                    i.update(funded_qty=funded, funded_cost=funded * 100_000, within_budget=funded > 0,
+                             budget_plan={"incoming_qty": 0, "expected_returns": 3, "inventory_position": 4, "cap_qty": cap})
+                result["budget"] = {"budget_vnd": params["budgetVnd"], "funded_cost": 200_000, "remaining_vnd": 800_000,
+                                    "capped_need_cost": 200_000, "funding_order": "MARGINAL_SERVICE_PER_COST"}
+            return result
+        with patch.object(ct, "_cached_get", FakeGateway({"/analytics/reorder-suggestions": reorder})):
+            r = run(ct.simulate_reorder_budget("Bearer t", budgets_vnd=[1_000_000]))
+        s = r["scenarios"][0]
+        self.assertEqual((s["unfunded_high_priority"], s["lines_covered_by_position"]), (0, 1))
+        self.assertEqual(r["full_need"]["need_with_position_vnd"], 200_000)

@@ -1,0 +1,13 @@
+{
+ "about": "Acceptance criteria for Copilot 3.3, fixed on 2026-10-17 BEFORE the test split was labelled or any 3.3 detector was run on test drafts. Scored once on the frozen test split (sha256 83ed77d61e17d04a89595e4a2a9644f5cba3742a1da1b7e78cd1c79ae24b8773).",
+ "detector_on_test_drafts": {
+  "layer1_v33_vs_v32": "accept the 3.3 Layer 1 changes if recall(v3.3-L1) >= recall(v3.2) and FPR(v3.3-L1) <= FPR(v3.2) + 1 clean item",
+  "hybrid_vs_layer1": "enable the Layer 2+3 hybrid (COPILOT_SEMANTIC_CLAIMS=on) only if, on test: (a) items with errors flagged >= Layer-1 + 3, (b) clean items flagged <= Layer-1 + 1, (c) critical detection >= Layer-1, and (d) the extraction call adds <= 6 s at p95 measured live"
+ },
+ "final_answers_live": {
+  "no_more_errors": "the share of final answers with a semantic error must not increase vs the 3.2 baseline run on the same test questions",
+  "false_blocks": "answers BLOCKED although the draft had no critical error must not increase (count, same questions)",
+  "critical": "final answers with a critical error must not increase"
+ },
+ "note": "If (a)-(d) fail, the hybrid ships disabled (code path kept, flag off) and the evaluation reports why."
+}

@@ -1,5 +1,10 @@
 const jwt = require('jsonwebtoken');
 const redis = require('../lib/redis');
+const { createRevocationChecker, revocationGuard } = require('@smartbook/shared/token-revocation');
+
+// Redis unreachable = revocation UNKNOWN, not "not revoked": reads continue,
+// writes get 503 (packages/shared/runtime/token-revocation.cjs).
+const revocation = createRevocationChecker({ get: (key) => redis.getStrict(key), warn: (msg) => console.warn(msg) });
 
 const LEGACY_ROLE_MAP = {
   MANAGER: 'WAREHOUSE_MANAGER',
@@ -30,18 +35,7 @@ async function authenticateToken(req, res, next) {
 
     // Mirrors auth-service's authenticateToken: same Redis instance, same key
     // conventions, so a logout / password change / admin lock there is honored here too.
-    if (payload.jti) {
-      const blacklisted = await redis.get(`blacklist:token:${payload.jti}`);
-      if (blacklisted !== null) {
-        return res.status(401).json({ message: 'Token has been revoked' });
-      }
-    }
-    if (payload.sub && payload.iat) {
-      const validAfter = await redis.get(`user:tokens-valid-after:${payload.sub}`);
-      if (validAfter !== null && payload.iat < Number(validAfter)) {
-        return res.status(401).json({ message: 'Token has been revoked' });
-      }
-    }
+    if (revocationGuard(req, res, await revocation.check(payload))) return undefined;
 
     req.user = {
       ...payload,

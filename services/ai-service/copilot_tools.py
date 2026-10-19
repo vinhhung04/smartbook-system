@@ -207,7 +207,7 @@ def _reorder_row(item: dict) -> dict:
     keys = ("variant_id", "book_id", "title", "available_qty", "reorder_point", "borrow_count", "previous_borrow_count",
             "demand_trend_pct", "reservation_count", "wishlist_count", "forecast_30d", "lead_time_demand",
             "estimated_days_until_stockout", "priority", "suggested_reorder_qty", "unit_cost", "estimated_cost",
-            "lead_time_days", "lead_time_source", "lead_time_samples", "within_budget", "reason")
+            "lead_time_days", "lead_time_source", "lead_time_samples", "within_budget", "funded_qty", "funded_cost", "reason")
     return {k: item.get(k) for k in keys if k in item}
 
 
@@ -435,17 +435,43 @@ def _shortfall(item: dict) -> float:
     return max(0.0, float(item.get("lead_time_demand") or 0) - float(item.get("available_qty") or 0))
 
 
+def _covered(item: dict) -> float:
+    """Shortfall a funded line covers. A whole funded line covers all of it; a
+    3.3 line funded in part covers its funded copies plus the copies its budget
+    position already counts on (incoming purchase orders, expected returns)."""
+    if "funded_qty" not in item:
+        return _shortfall(item)
+    plan = item.get("budget_plan") or {}
+    already = max(0.0, float(plan.get("inventory_position") or 0) - float(item.get("available_qty") or 0))
+    return min(_shortfall(item), float(item.get("funded_qty") or 0) + already)
+
+
+def _vnd(value: float) -> str:
+    return f"{int(round(value)):,} ₫".replace(",", ".")
+
+
 async def simulate_reorder_budget(
     auth_header: str | None = None, budgets_vnd: list[float] | None = None, budget_change_pct: float | None = None,
-    lead_time_days: int | None = None, priority: str | None = None,
+    lead_time_days: int | None = None, priority: str | None = None, lead_time_delay_days: int | None = None,
+    priority_warehouse: str | None = None, keep_service: bool = False,
 ) -> dict:
     """What each budget buys, computed by the analytics service's own budget
-    allocation (funding by expected shortfall per VND). Without a budget, the
-    scenarios are fractions of the full estimated need - labelled as such."""
+    allocation. Without a budget, the scenarios are fractions of the full
+    estimated need - labelled as such. Phase 6 what-ifs, all computed by
+    analytics (never by the model): `lead_time_delay_days` (supplier N days
+    later on every line), `priority_warehouse` (lines short at that warehouse
+    funded first), `keep_service` (the least budgets that keep 99 / 95 / 90 % of
+    the service the whole plan gives). `least_risk_scenario` is the scenario
+    with the highest expected service - a deterministic ranking."""
     base_params = {"leadTimeDays": lead_time_days, "priority": priority if priority in ("HIGH", "MEDIUM", "LOW") else None}
     base = await _reorder(auth_header, **base_params)
     if _error(base):
         return base
+    priority_wh = None
+    if priority_warehouse:
+        priority_wh, err = await _resolve_or_error(auth_header, priority_warehouse)
+        if err:
+            return err
     summary = base.get("summary") or {}
     total_need = float(summary.get("estimated_total_cost") or 0)
     scenarios_in: list[tuple[str, float]] = []
@@ -459,11 +485,37 @@ async def simulate_reorder_budget(
         scenarios_in = [(f"{label} ({int(reference):,} ₫)".replace(",", "."), reference),
                         (f"Sau khi {'giảm' if budget_change_pct < 0 else 'tăng'} {abs(budget_change_pct):g}%", changed)]
     assumed = False
+    what_if = bool(lead_time_delay_days or priority_wh or keep_service)
+    if not scenarios_in and total_need and what_if:
+        # a what-if without a budget: compare against funding the whole current need
+        scenarios_in = [(f"Đủ nhu cầu hiện tại ({_vnd(total_need)})", total_need)]
     if not scenarios_in and total_need:
         assumed = True
         scenarios_in = [(f"{p}% nhu cầu ({int(total_need * p / 100):,} ₫)".replace(",", "."), round(total_need * p / 100))
                         for p in (100, 75, 50, 25)]
-    results = await asyncio.gather(*(_reorder(auth_header, budgetVnd=value, **base_params) for _l, value in scenarios_in))
+    calls: list[tuple[str, float, dict]] = [(label, value, {}) for label, value in scenarios_in]
+    if scenarios_in and lead_time_delay_days:
+        label, value = scenarios_in[0]
+        calls.append((f"{label}, nhà cung cấp giao chậm thêm {int(lead_time_delay_days)} ngày", value,
+                      {"leadTimeDelayDays": int(lead_time_delay_days)}))
+    if scenarios_in and priority_wh:
+        label, value = scenarios_in[0]
+        calls.append((f"{label}, ưu tiên {priority_wh['name']}", value, {"priorityWarehouseId": priority_wh["id"]}))
+    first_results = await asyncio.gather(*(_reorder(auth_header, budgetVnd=value, **base_params, **extra)
+                                           for _l, value, extra in calls))
+    curve = next(((r.get("budget") or {}).get("service_curve") for r in first_results
+                  if not _error(r) and (r.get("budget") or {}).get("service_curve")), None)
+    if keep_service and curve:
+        # least budgets keeping 99 / 95 / 90 % of the whole plan's expected service
+        points = curve.get("cost_for_service_pct") or {}
+        extra_calls = [(f"Giữ {pct}% mức phục vụ của toàn bộ kế hoạch ({_vnd(points[str(pct)] if str(pct) in points else points.get(pct, 0))})",
+                        float(points.get(str(pct), points.get(pct, 0)) or 0), {}) for pct in (99, 95, 90)]
+        extra_calls = [c for c in extra_calls if c[1] > 0]
+        calls += extra_calls
+        first_results += await asyncio.gather(*(_reorder(auth_header, budgetVnd=value, **base_params)
+                                                for _l, value, _e in extra_calls))
+    scenarios_in = [(label, value) for label, value, _e in calls]
+    results = first_results
     total_shortfall = sum(_shortfall(i) for i in base.get("items") or [])
     lines_with_shortfall = sum(1 for i in base.get("items") or [] if _shortfall(i) > 0)
     scenarios = []
@@ -473,22 +525,39 @@ async def simulate_reorder_budget(
             continue
         items = res.get("items") or []
         funded = [i for i in items if i.get("within_budget")]
-        unfunded_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH"]
-        covered = sum(_shortfall(i) for i in funded)
+        # a 3.3 line re-sized to 0 (copies incoming / expected back cover it) needs no money
+        needs_none = lambda i: (i.get("budget_plan") or {}).get("cap_qty") == 0 and (i.get("suggested_reorder_qty") or 0) > 0  # noqa: E731
+        unfunded_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH" and not needs_none(i)]
+        # Since 3.3 a line can be funded in part (funded_qty); older responses
+        # fund whole lines (suggested_reorder_qty).
+        qty = lambda i: i.get("funded_qty", i.get("suggested_reorder_qty")) or 0  # noqa: E731
+        covered = sum(_covered(i) for i in funded)
         budget_info = res.get("budget") or {}
         scenarios.append({
             "label": label, "budget_vnd": value,
+            # "condition": a what-if about the world (supplier delay), not an option the manager chooses
+            "kind": "condition" if budget_info.get("lead_time_delay_days") else "choice",
+            # expected lead-time demand served, % of what the whole re-sized plan serves (analytics, Poisson model)
+            "expected_service_pct": budget_info.get("expected_service_pct"),
+            **({"lead_time_delay_days": budget_info["lead_time_delay_days"]} if budget_info.get("lead_time_delay_days") else {}),
+            **({"priority_warehouse": priority_wh["name"], "priority_lines": budget_info.get("priority_lines"),
+                "priority_lines_funded": budget_info.get("priority_lines_funded")}
+               if budget_info.get("priority_warehouse_id") and priority_wh else {}),
             "funded_cost": budget_info.get("funded_cost"), "remaining_vnd": budget_info.get("remaining_vnd"),
-            "funded_lines": len(funded), "funded_qty": sum(i.get("suggested_reorder_qty") or 0 for i in funded),
+            "funded_lines": len(funded), "funded_qty": sum(qty(i) for i in funded),
+            "partially_funded_lines": budget_info.get("partially_funded_lines"),
+            "covers_need_with_position": (budget_info.get("capped_need_cost") is not None
+                                          and (budget_info.get("funded_cost") or 0) >= budget_info["capped_need_cost"] - 1),
+            "lines_covered_by_position": sum(1 for i in items if needs_none(i)) if any("budget_plan" in i for i in items) else None,
             "funded_high_priority": sum(1 for i in funded if i.get("priority") == "HIGH"),
             "unfunded_high_priority": len(unfunded_high),
             "shortfall_covered_pct": round(covered / total_shortfall * 100, 1) if total_shortfall else None,
-            # The allocation funds shortfall lines first and skips any that no
-            # longer fit, so 0 here with funded lines > 0 means every shortfall
-            # line cost more than the budget left when it was considered.
+            # 0 here with funded lines > 0 means no shortfall line could be
+            # funded with what the budget left when it was considered.
             "funded_shortfall_lines": sum(1 for i in funded if _shortfall(i) > 0),
             "funded_items": [{"variant_id": i.get("variant_id"), "title": i.get("title"), "priority": i.get("priority"),
-                              "suggested_reorder_qty": i.get("suggested_reorder_qty"), "estimated_cost": i.get("estimated_cost")}
+                              "suggested_reorder_qty": i.get("suggested_reorder_qty"), "funded_qty": qty(i),
+                              "estimated_cost": i.get("funded_cost", i.get("estimated_cost"))}
                              for i in funded[:8]],
             "unfunded_high_examples": [{"title": i.get("title"), "estimated_cost": i.get("estimated_cost")}
                                        for i in unfunded_high[:5]],
@@ -504,15 +573,42 @@ async def simulate_reorder_budget(
                 "funded_lines": s["funded_lines"] - reference["funded_lines"],
                 "funded_qty": s["funded_qty"] - reference["funded_qty"],
                 "unfunded_high_priority": s["unfunded_high_priority"] - reference["unfunded_high_priority"],
+                **({"expected_service_pct": round(s["expected_service_pct"] - reference["expected_service_pct"], 1)}
+                   if s.get("expected_service_pct") is not None and reference.get("expected_service_pct") is not None else {}),
             }
+    first_ok = next((s for s in scenarios if not s.get("error")), None)
+    if what_if and first_ok and first_ok["label"].startswith("Đủ nhu cầu hiện tại") and first_ok.get("covers_need_with_position"):
+        # funding the whole need costs only the position-based plan: say what it actually spends
+        first_ok["label"] = f"Toàn bộ kế hoạch theo tồn dự kiến ({_vnd(first_ok.get('funded_cost') or 0)})"
+    # only options the manager can choose are ranked - a supplier delay is a condition, not a choice
+    ok = [s for s in scenarios if not s.get("error") and s.get("expected_service_pct") is not None and s.get("kind") != "condition"]
+    least_risk = None
+    if len(ok) >= 2:
+        # less stockout risk = more of the expected lead-time demand served; ties: fewer HIGH titles left out
+        best = max(ok, key=lambda s: (s["expected_service_pct"], -s["unfunded_high_priority"]))
+        least_risk = {"label": best["label"], "expected_service_pct": best["expected_service_pct"],
+                      "unfunded_high_priority": best["unfunded_high_priority"],
+                      "rule": "Phương án đáp ứng được nhiều nhất nhu cầu dự kiến trong thời gian chờ hàng (mô hình Poisson của "
+                              "analytics); hòa thì ít đầu sách ưu tiên cao bị bỏ lại hơn."}
     shown = len(base.get("items") or [])
+    meta = next(((res.get("budget") or {}) for res in results if not _error(res) and res.get("budget")), {})
+    marginal = meta.get("funding_order") == "MARGINAL_SERVICE_PER_COST"
     return {
         "full_need": {"total_candidates": summary.get("total_candidates"), "high_priority": summary.get("high_priority"),
                       "estimated_total_cost": summary.get("estimated_total_cost"),
-                      "estimated_total_reorder_qty": summary.get("estimated_total_reorder_qty")},
+                      "estimated_total_reorder_qty": summary.get("estimated_total_reorder_qty"),
+                      # 3.3 budget mode: the same lines re-sized against available + incoming + expected returns
+                      "need_with_position_vnd": meta.get("capped_need_cost")},
         "scenarios": scenarios,
         "scenarios_are_assumed": assumed,
-        "funding_rule": "Phân bổ của dịch vụ analytics: ưu tiên dòng giảm được nhiều thiếu hụt dự kiến nhất trên mỗi đồng.",
+        "least_risk_scenario": least_risk,
+        "service_curve": ({"cost_for_service_pct": curve.get("cost_for_service_pct"),
+                           "full_plan_cost": curve.get("full_plan_cost")} if curve else None),
+        "funding_rule": ("Phân bổ của dịch vụ analytics: duyệt từng bản cho dòng tăng nhiều nhất khả năng đáp ứng nhu cầu "
+                         "trong thời gian chờ hàng trên mỗi đồng; tồn tính cả bản đang về và bản đang mượn dự kiến trả; "
+                         "một dòng có thể chỉ được duyệt một phần." if marginal else
+                         "Phân bổ của dịch vụ analytics: ưu tiên dòng giảm được nhiều thiếu hụt dự kiến nhất trên mỗi đồng."),
+        "budget_assumptions": meta.get("assumptions") or [],
         "shortfall_definition": "Thiếu hụt dự kiến = nhu cầu trong thời gian chờ hàng − tồn khả dụng (tính trên các dòng được liệt kê).",
         "items_counted": shown,
         "lines_with_shortfall": lines_with_shortfall,
@@ -677,7 +773,10 @@ COPILOT_TOOLS = [
             {"budgets_vnd": {"type": "array", "items": {"type": "number"}, "description": "Một đến ba mức ngân sách (VNĐ)"},
              "budget_change_pct": {"type": "number", "description": "Phần trăm thay đổi ngân sách, âm là giảm"},
              "lead_time_days": {"type": "integer", "description": "Ép thời gian chờ hàng (ngày)"},
-             "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]}}),
+             "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]},
+             "lead_time_delay_days": {"type": "integer", "description": "Nếu nhà cung cấp giao chậm thêm N ngày (cộng vào thời gian chờ của từng dòng)"},
+             "priority_warehouse": {"type": "string", "description": "Tên kho được ưu tiên: dòng thiếu ở kho này được duyệt trước"},
+             "keep_service": {"type": "boolean", "description": "Tìm ngân sách nhỏ nhất vẫn giữ 99/95/90% mức phục vụ của toàn bộ kế hoạch"}}),
     _schema("explain_reorder_item",
             "Giải thích vì sao một đầu sách được (hoặc không được) đề xuất nhập: số liệu, lý do, mức độ chắc chắn của dữ liệu.",
             {"title": {"type": "string", "description": "Tên sách"},

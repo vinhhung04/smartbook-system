@@ -103,19 +103,30 @@ function buildReason(item, days, leadTimeDays) {
   return parts.join(' ');
 }
 
-// `options.includeSafetyStock`, `options.forecastModel` and
-// `options.priorityFloors` exist only for the offline evaluation
-// (eval/reorder-policy-backtest.js, eval/reorder-candidates.js). Production
-// never passes them, so the endpoint always includes safety stock, forecasts
-// with EWMA + trend and applies the priority minimum quantities.
+// `options.includeSafetyStock`, `options.forecastModel`, `options.priorityFloors`
+// and `options.safetyZ` exist for the offline evaluation (eval/reorder-*.js).
+// `options.expectedReturns` (copies on loan expected back within the lead time,
+// see expected-returns.js) is the inventory-position input; production passes
+// it only when the estimate is available. Defaults reproduce the pre-3.3
+// endpoint exactly: shelf stock only, safety stock with z = 1.645, EWMA +
+// trend, priority minimum quantities always applied.
+//   priorityFloors: true | false | 'IF_SHORTFALL' (floors only when the
+//                   lead-time demand exceeds the inventory position)
 function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], leadTime = null, options = {}) {
-  const { includeSafetyStock = true, forecastModel = 'EWMA_TREND', priorityFloors = true } = options;
+  const {
+    includeSafetyStock = true, forecastModel = 'EWMA_TREND', priorityFloors = true, safetyZ = SAFETY_STOCK_Z_SCORE,
+    expectedReturns = 0,
+  } = options;
   // Lead time drives both the safety stock and the demand projected over the
   // reorder horizon, so it is resolved per item from real delivery history
   // rather than shared across the whole catalog.
   const resolvedLeadTime = leadTime || { days: ranges.leadTimeDays, source: 'DEFAULT', samples: 0 };
   const leadTimeDays = resolvedLeadTime.days;
   const availableQty = number(row.available_qty);
+  // Inventory position the order quantity is netted against: shelf stock plus
+  // (when known) the whole copies expected back from loans within the lead time.
+  const returnsWithinLeadTime = Math.max(0, Math.floor(number(expectedReturns)));
+  const positionQty = availableQty + returnsWithinLeadTime;
   const onHandQty = number(row.on_hand_qty);
   const reservedQty = number(row.reserved_qty);
   const borrowedQty = number(row.borrowed_qty);
@@ -146,12 +157,12 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
   const safetyStock = includeSafetyStock
     ? Math.max(
       reorderPoint,
-      Math.ceil(SAFETY_STOCK_Z_SCORE * demandVolatility * Math.sqrt(leadTimeDays)),
+      Math.ceil(safetyZ * demandVolatility * Math.sqrt(leadTimeDays)),
       hasDemandSignal ? 2 : 0,
     )
     : 0;
   const expectedDemandDuringLeadTime = projectedDemand(series, leadTimeDays, seasonalIndex, forecastModel);
-  let suggestedReorderQty = Math.max(0, expectedDemandDuringLeadTime + safetyStock - availableQty);
+  let suggestedReorderQty = Math.max(0, expectedDemandDuringLeadTime + safetyStock - positionQty);
   const demandScore = round(
     borrowCount * 2
       + reservationCount * 3
@@ -170,10 +181,16 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     leadTimeDays,
   });
 
-  if (priorityFloors && priority === 'HIGH' && suggestedReorderQty < 5) {
+  // 'IF_SHORTFALL': the minimum order applies only when the copies at hand
+  // (and expected back) do not cover the lead-time demand - a floor on a title
+  // the shelf already covers buys stock nobody is expected to borrow.
+  const floorsApply = priorityFloors === 'IF_SHORTFALL'
+    ? expectedDemandDuringLeadTime > positionQty || (positionQty <= 0 && hasDemandSignal)
+    : Boolean(priorityFloors);
+  if (floorsApply && priority === 'HIGH' && suggestedReorderQty < 5) {
     suggestedReorderQty = 5;
   }
-  if (priorityFloors && priority === 'MEDIUM' && suggestedReorderQty < 3) {
+  if (floorsApply && priority === 'MEDIUM' && suggestedReorderQty < 3) {
     suggestedReorderQty = 3;
   }
 
@@ -206,6 +223,8 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     // Demand expected before an order placed now arrives; with available_qty it
     // gives the shortfall compareByShortfallPerCost ranks on.
     lead_time_demand: expectedDemandDuringLeadTime,
+    expected_returns: returnsWithinLeadTime,
+    inventory_position: positionQty,
     estimated_days_until_stockout: estimatedDaysUntilStockout,
     demand_trend_pct: demandTrendPct,
     demand_score: demandScore,
