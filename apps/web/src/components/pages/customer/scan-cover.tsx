@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { motion, useReducedMotion } from 'motion/react';
 import { Camera, CheckCircle, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -124,6 +125,20 @@ export function CustomerScanCoverPage() {
       setSearching(false);
     }
   }, [clearTimers]);
+
+  // Photo picked from the public search box ("Ảnh bìa"): start on it right away,
+  // then drop it from history so Back/refresh doesn't upload it again.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const handedOver = (location.state as { coverFile?: unknown } | null)?.coverFile;
+  const consumed = useRef<File | null>(null);
+  useEffect(() => {
+    // The ref keeps a re-run (StrictMode, re-render before the replace lands) from uploading twice.
+    if (!(handedOver instanceof File) || consumed.current === handedOver) return;
+    consumed.current = handedOver;
+    navigate(location.pathname, { replace: true, state: null });
+    void handleFileSelect(handedOver);
+  }, [handedOver, handleFileSelect, location.pathname, navigate]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">

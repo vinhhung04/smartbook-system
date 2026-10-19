@@ -1,20 +1,24 @@
 import { Link } from 'react-router';
-import { Star } from 'lucide-react';
+import { Bell, BellRing, Star } from 'lucide-react';
 import type { PublicBook } from '@/services/public-catalog';
 import { cn } from '@/components/ui/utils';
 import { Book3D } from './book-3d';
 import { AvailabilityStamp } from './availability-stamp';
+import type { AvailabilityAlerts } from './use-availability-alerts';
 
 interface PublicBookCardProps {
   book: PublicBook;
   /** Omit to render a browse-only card. The button only appears when a copy can
    *  actually be reserved — the availability stamp already explains the rest. */
   onReserve?: (book: PublicBook) => void;
+  /** When given, borrowed-out books get "Báo khi có sách" instead of no action. */
+  alerts?: AvailabilityAlerts;
   className?: string;
 }
 
-/** Cover-first card: the cover and title open the book; one button reserves it. */
-export function PublicBookCard({ book, onReserve, className }: PublicBookCardProps) {
+/** Cover-first card: the cover and title open the book; one button reserves it
+ *  (or, when every copy is out, asks to be told when one is back). */
+export function PublicBookCard({ book, onReserve, alerts, className }: PublicBookCardProps) {
   const detailPath = `/books/${book.id}`;
   const rating = book.signals && book.signals.rating_count > 0 ? book.signals : null;
 
@@ -49,6 +53,25 @@ export function PublicBookCard({ book, onReserve, className }: PublicBookCardPro
               className="h-9 w-full rounded-full border border-indigo-600/70 px-3 text-[12.5px] font-semibold text-indigo-700 transition-colors hover:border-indigo-600 hover:bg-indigo-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:border-indigo-400/60 dark:text-indigo-300 dark:hover:bg-indigo-500 dark:hover:text-white"
             >
               Đặt trước
+            </button>
+          </div>
+        ) : alerts && !book.reservable ? (
+          <div className="mt-auto pt-3">
+            <button
+              type="button"
+              onClick={() => void alerts.toggle(book)}
+              disabled={alerts.isBusy(book.id)}
+              aria-pressed={alerts.isOn(book.id)}
+              aria-label={`${alerts.isOn(book.id) ? 'Tắt thông báo' : 'Báo khi có sách'}: ${book.title}`}
+              className={cn(
+                'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 disabled:opacity-60',
+                alerts.isOn(book.id)
+                  ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
+                  : 'border border-border text-foreground/80 hover:border-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300',
+              )}
+            >
+              {alerts.isOn(book.id) ? <BellRing className="h-3.5 w-3.5" aria-hidden="true" /> : <Bell className="h-3.5 w-3.5" aria-hidden="true" />}
+              {alerts.isOn(book.id) ? 'Đã bật thông báo' : 'Báo khi có sách'}
             </button>
           </div>
         ) : null}

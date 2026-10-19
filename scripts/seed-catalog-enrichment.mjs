@@ -16,6 +16,7 @@ import { existingRowsQuery, remapCatalogIds } from "./lib/catalog-enrichment-rem
 const root = resolve(import.meta.dirname, "..");
 const envPath = resolve(root, ".env");
 const seedPath = resolve(root, "data", "smartbook_catalog_enrichment_seed.sql");
+const fixPath = resolve(root, "data", "smartbook_catalog_base_fix.sql");
 
 function readEnvVar(name, fallback) {
   if (!existsSync(envPath)) return fallback;
@@ -49,4 +50,19 @@ if (result.error) {
   console.error(result.error.message);
   process.exit(1);
 }
-process.exit(result.status ?? 1);
+if (result.status !== 0) process.exit(result.status ?? 1);
+
+// The base seed writes Vietnamese text without diacritics and links several
+// demo titles to the wrong authors; correct them (idempotent, keyed by
+// book_code / slug / author name).
+console.log("Correcting base catalog names and author links...");
+const fix = spawnSync("docker", [...psqlArgs, "-q"], {
+  cwd: root,
+  input: readFileSync(fixPath, "utf8"),
+  stdio: ["pipe", "ignore", "inherit"],
+});
+if (fix.error) {
+  console.error(fix.error.message);
+  process.exit(1);
+}
+process.exit(fix.status ?? 1);

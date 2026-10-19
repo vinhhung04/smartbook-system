@@ -5,6 +5,7 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { PublicBook } from '@/services/public-catalog';
 import { cn } from '@/components/ui/utils';
 import { BookCardSkeleton, PublicBookCard } from './public-book-card';
+import type { AvailabilityAlerts } from './use-availability-alerts';
 
 interface SectionHeadingProps {
   id: string;
@@ -121,10 +122,11 @@ interface BookRowProps {
   books: PublicBook[];
   seeAllTo?: string;
   onReserve?: (book: PublicBook) => void;
+  alerts?: AvailabilityAlerts;
 }
 
 /** A horizontally scrolling shelf of books (swipe on phones, arrows on desktop). */
-export function BookRow({ id, title, eyebrow, basis, books, seeAllTo, onReserve }: BookRowProps) {
+export function BookRow({ id, title, eyebrow, basis, books, seeAllTo, onReserve, alerts }: BookRowProps) {
   const { trackRef, edges, scrollBy } = useCarousel();
   if (books.length === 0) return null;
   return (
@@ -145,7 +147,7 @@ export function BookRow({ id, title, eyebrow, basis, books, seeAllTo, onReserve 
         >
           {books.map((book) => (
             <li key={book.id} className="w-[42%] shrink-0 snap-start sm:w-[28%] md:w-[22%] lg:w-[calc((100%-6.25rem)/6)]">
-              <PublicBookCard book={book} onReserve={onReserve} />
+              <PublicBookCard book={book} onReserve={onReserve} alerts={alerts} />
             </li>
           ))}
         </ul>

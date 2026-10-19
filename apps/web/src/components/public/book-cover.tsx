@@ -33,14 +33,28 @@ export function BookCover({ title, author, imageUrl, className, eager = false }:
           role="img"
           aria-label={`Bìa sách ${title}`}
           // Container units: the type scales with the cover, from hero shelf to 36px thumbnails.
-          className="@container flex h-full w-full flex-col justify-between p-[9%] text-[#F3EBD8]"
-          style={{ backgroundColor: bindingFor(title) }}
+          className="@container relative flex h-full w-full flex-col justify-between p-[11%] text-[#F3EBD8]"
+          style={{
+            backgroundColor: bindingFor(title),
+            // Cloth weave + a soft light falling from the top-left: reads as a
+            // bound book rather than a flat colour swatch.
+            backgroundImage: [
+              'linear-gradient(155deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 45%, rgba(0,0,0,0.22))',
+              'repeating-linear-gradient(45deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 3px)',
+              'repeating-linear-gradient(-45deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 3px)',
+            ].join(', '),
+          }}
         >
+          {/* Blind-stamped frame, only where there is room for it. */}
+          <span className="pointer-events-none absolute inset-[6%] hidden rounded-[2px] border border-[#F3EBD8]/25 @[5.5rem]:block" aria-hidden="true" />
           <span className="h-px w-1/3 bg-[#F3EBD8]/50" aria-hidden="true" />
           {/* Thumbnails too narrow for a readable title get a monogram instead. */}
           <span className="font-serif text-[46cqw] font-semibold leading-none @[3.5rem]:hidden" aria-hidden="true">{title.trim().charAt(0).toUpperCase()}</span>
-          <span className="hidden font-serif text-[clamp(7px,15cqw,20px)] font-semibold leading-[1.15] [overflow-wrap:anywhere] @[3.5rem]:line-clamp-5">{title}</span>
-          <span className="hidden line-clamp-2 text-[clamp(8px,7.5cqw,12px)] uppercase tracking-[0.08em] text-[#F3EBD8]/75 @[5.5rem]:block">{author || 'SmartBook'}</span>
+          <span className="hidden font-serif text-[clamp(7px,15cqw,20px)] font-semibold leading-[1.15] [overflow-wrap:anywhere] [text-shadow:0_1px_0_rgba(0,0,0,0.25)] @[3.5rem]:line-clamp-5">{title}</span>
+          <span className="hidden @[5.5rem]:block">
+            <span className="mb-[6%] block h-px w-[18%] bg-[#F3EBD8]/45" aria-hidden="true" />
+            <span className="line-clamp-2 text-[clamp(8px,7.5cqw,12px)] uppercase tracking-[0.08em] text-[#F3EBD8]/80">{author || 'SmartBook'}</span>
+          </span>
         </div>
       )}
       {/* Spine crease: the one detail that reads "book" rather than "thumbnail". */}
