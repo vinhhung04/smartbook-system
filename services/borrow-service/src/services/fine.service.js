@@ -224,120 +224,139 @@ async function runOverdueSweep(prisma, options = {}) {
   const now = options.now || new Date();
   const limit = Number(options.limit || 200);
 
-  const overdueItems = await prisma.loan_items.findMany({
-    where: {
-      status: { in: ['BORROWED', 'OVERDUE'] },
-      return_date: null,
-      due_date: { lt: now },
-    },
-    take: limit,
-    include: {
-      loan_transactions: {
-        include: {
-          customers: true,
-        },
-      },
-    },
-    orderBy: [{ due_date: 'asc' }],
-  });
-
   let processedItems = 0;
   let generatedFines = 0;
+  let scanned = 0;
+  let cursor = null;
 
-  for (const item of overdueItems) {
-    const loan = item.loan_transactions;
-    if (!loan) {
-      continue;
-    }
-
-    const membership = await prisma.customer_memberships.findFirst({
+  // Every overdue line, in batches of `limit`. A single `take` used to stop at
+  // the oldest `limit` lines — mostly ones already OVERDUE — so lines that fell
+  // due later were never marked and their fines never accrued. Keyset on
+  // (due_date, id) keeps the order stable across batches, ties included.
+  for (;;) {
+    const overdueItems = await prisma.loan_items.findMany({
       where: {
-        customer_id: loan.customer_id,
-        status: 'ACTIVE',
+        status: { in: ['BORROWED', 'OVERDUE'] },
+        return_date: null,
+        due_date: { lt: now },
+        ...(cursor ? {
+          OR: [
+            { due_date: { gt: cursor.due_date } },
+            { due_date: cursor.due_date, id: { gt: cursor.id } },
+          ],
+        } : {}),
       },
+      take: limit,
       include: {
-        membership_plans: true,
+        loan_transactions: {
+          include: {
+            customers: true,
+          },
+        },
       },
-      orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }],
+      orderBy: [{ due_date: 'asc' }, { id: 'asc' }],
     });
+    scanned += overdueItems.length;
 
-    const finePerDay = normalizeMoney(membership?.membership_plans?.fine_per_day || process.env.DEFAULT_FINE_PER_DAY || 0);
-    const overdueDayCount = daysOverdue(item.due_date, now);
-    const amount = normalizeMoney(overdueDayCount * finePerDay);
-
-    await prisma.$transaction(async (tx) => {
-      if (item.status !== 'OVERDUE') {
-        await tx.loan_items.update({
-          where: { id: item.id },
-          data: { status: 'OVERDUE' },
-        });
+    for (const item of overdueItems) {
+      const loan = item.loan_transactions;
+      if (!loan) {
+        continue;
       }
 
-      if (loan.status === 'BORROWED') {
-        await tx.loan_transactions.update({
-          where: { id: loan.id },
-          data: { status: 'OVERDUE' },
-        });
-      }
-
-      if (amount > 0) {
-        const fine = await upsertFine(tx, {
-          customerId: loan.customer_id,
-          loanItemId: item.id,
-          fineType: 'OVERDUE',
-          amount,
-          actorUserId: null,
-          note: `Scheduled overdue fine for ${overdueDayCount} day(s)`,
-        });
-
-        // A PAID/WAIVED fine returned untouched (see upsertFine) isn't a fine this sweep
-        // generated or updated — don't count it, so callers relying on generated_fines to
-        // mean "how many fine records this run actually touched" aren't misled.
-        if (fine && fine.status !== 'PAID' && fine.status !== 'WAIVED') {
-          generatedFines += 1;
-        }
-      }
-
-      if (item.status !== 'OVERDUE') {
-        await createNotificationRecord(tx, {
+      const membership = await prisma.customer_memberships.findFirst({
+        where: {
           customer_id: loan.customer_id,
-          channel: 'IN_APP',
-          template_code: 'LOAN_OVERDUE',
-          subject: 'Sách quá hạn trả',
-          body: `Phiếu mượn ${loan.loan_number} có sách quá hạn. Vui lòng trả sách sớm nhất có thể.`,
-          reference_type: 'LOAN_TRANSACTION',
-          reference_id: loan.id,
-          metadata: {
-            loan_id: loan.id,
-            loan_number: loan.loan_number,
-            loan_item_id: item.id,
+          status: 'ACTIVE',
+        },
+        include: {
+          membership_plans: true,
+        },
+        orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }],
+      });
+
+      const finePerDay = normalizeMoney(membership?.membership_plans?.fine_per_day || process.env.DEFAULT_FINE_PER_DAY || 0);
+      const overdueDayCount = daysOverdue(item.due_date, now);
+      const amount = normalizeMoney(overdueDayCount * finePerDay);
+
+      await prisma.$transaction(async (tx) => {
+        if (item.status !== 'OVERDUE') {
+          await tx.loan_items.update({
+            where: { id: item.id },
+            data: { status: 'OVERDUE' },
+          });
+        }
+
+        if (loan.status === 'BORROWED') {
+          await tx.loan_transactions.update({
+            where: { id: loan.id },
+            data: { status: 'OVERDUE' },
+          });
+        }
+
+        if (amount > 0) {
+          const fine = await upsertFine(tx, {
+            customerId: loan.customer_id,
+            loanItemId: item.id,
+            fineType: 'OVERDUE',
+            amount,
+            actorUserId: null,
+            note: `Scheduled overdue fine for ${overdueDayCount} day(s)`,
+          });
+
+          // A PAID/WAIVED fine returned untouched (see upsertFine) isn't a fine this sweep
+          // generated or updated — don't count it, so callers relying on generated_fines to
+          // mean "how many fine records this run actually touched" aren't misled.
+          if (fine && fine.status !== 'PAID' && fine.status !== 'WAIVED') {
+            generatedFines += 1;
+          }
+        }
+
+        if (item.status !== 'OVERDUE') {
+          await createNotificationRecord(tx, {
+            customer_id: loan.customer_id,
+            channel: 'IN_APP',
+            template_code: 'LOAN_OVERDUE',
+            subject: 'Sách quá hạn trả',
+            body: `Phiếu mượn ${loan.loan_number} có sách quá hạn. Vui lòng trả sách sớm nhất có thể.`,
+            reference_type: 'LOAN_TRANSACTION',
+            reference_id: loan.id,
+            metadata: {
+              loan_id: loan.id,
+              loan_number: loan.loan_number,
+              loan_item_id: item.id,
+              overdue_days: overdueDayCount,
+              overdue_fine_amount: amount,
+            },
+          });
+        }
+
+        await writeAuditLog(tx, {
+          actor_user_id: null,
+          action_name: 'MARK_ITEM_OVERDUE',
+          entity_type: 'LOAN_ITEM',
+          entity_id: item.id,
+          before_data: { status: item.status },
+          after_data: {
+            status: 'OVERDUE',
             overdue_days: overdueDayCount,
             overdue_fine_amount: amount,
           },
         });
-      }
 
-      await writeAuditLog(tx, {
-        actor_user_id: null,
-        action_name: 'MARK_ITEM_OVERDUE',
-        entity_type: 'LOAN_ITEM',
-        entity_id: item.id,
-        before_data: { status: item.status },
-        after_data: {
-          status: 'OVERDUE',
-          overdue_days: overdueDayCount,
-          overdue_fine_amount: amount,
-        },
+        await recomputeCustomerFineBalance(tx, loan.customer_id);
       });
 
-      await recomputeCustomerFineBalance(tx, loan.customer_id);
-    });
+      processedItems += 1;
+    }
 
-    processedItems += 1;
+    if (overdueItems.length < limit) break;
+    const last = overdueItems[overdueItems.length - 1];
+    cursor = { due_date: last.due_date, id: last.id };
   }
 
   return {
-    scanned: overdueItems.length,
+    scanned,
     processed_items: processedItems,
     generated_fines: generatedFines,
   };

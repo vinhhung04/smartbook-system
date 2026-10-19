@@ -278,7 +278,9 @@ const getTopBooks = asyncHandler(async (req, res) => {
     ORDER BY COUNT(*) DESC
     LIMIT $3
     `,
-    [from, to, limit],
+    // Loans can outlive a title removed from the catalog; over-fetch so the
+    // ranking still has `limit` books that exist once those are dropped.
+    [from, to, limit * 3],
   );
 
   if (!borrowRows.length) {
@@ -303,15 +305,18 @@ const getTopBooks = asyncHandler(async (req, res) => {
   const bookByVariant = new Map(bookRows.map((row) => [row.variant_id, row]));
 
   return res.json({
-    data: borrowRows.map((row) => {
-      const book = bookByVariant.get(row.variant_id) || {};
-      return {
-        variant_id: row.variant_id,
-        book_id: book.book_id || null,
-        title: book.title || `Variant ${row.variant_id.slice(0, 8)}`,
-        borrow_count: number(row.borrow_count),
-      };
-    }),
+    data: borrowRows
+      .filter((row) => bookByVariant.has(row.variant_id))
+      .slice(0, limit)
+      .map((row) => {
+        const book = bookByVariant.get(row.variant_id);
+        return {
+          variant_id: row.variant_id,
+          book_id: book.book_id,
+          title: book.title,
+          borrow_count: number(row.borrow_count),
+        };
+      }),
   });
 });
 

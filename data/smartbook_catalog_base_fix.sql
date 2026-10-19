@@ -9,8 +9,10 @@
 -- between databases): re-running it, or re-running seed.js before it, converges
 -- on the same result.
 --
--- Where the real author of a demo title is unknown, the wrong link is removed
--- (the UI then shows "Chưa rõ tác giả") instead of inventing one.
+-- The base titles that have no real cover photo (BK-001..005, 008, 009,
+-- EXT-001, EXT-002 and the imported "Dế mèn phiêu lưu ký") are removed from the
+-- catalog altogether at the end: every public book has a real cover. Their past
+-- loans in borrow_db stay as history (the book shows as no longer catalogued).
 
 BEGIN;
 
@@ -87,6 +89,39 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Removes the documents listed in sb_touched_docs that no longer have a single
+-- line, with the picking/packing tasks of an emptied outbound order. A staff
+-- task that pointed at an emptied document keeps its text, without the link.
+CREATE FUNCTION pg_temp.sb_drop_emptied_documents() RETURNS void AS $$
+BEGIN
+  DELETE FROM picking_tasks p WHERE p.id IN (SELECT id FROM sb_touched_docs WHERE kind = 'picking_task')
+    AND NOT EXISTS (SELECT 1 FROM picking_task_items i WHERE i.picking_task_id = p.id);
+  DELETE FROM packing_tasks p WHERE p.id IN (SELECT id FROM sb_touched_docs WHERE kind = 'packing_task')
+    AND NOT EXISTS (SELECT 1 FROM packing_task_items i WHERE i.packing_task_id = p.id);
+
+  CREATE TEMP TABLE sb_emptied ON COMMIT DROP AS
+    SELECT t.kind, t.id FROM sb_touched_docs t
+    WHERE (t.kind = 'goods_receipt' AND NOT EXISTS (SELECT 1 FROM goods_receipt_items i WHERE i.goods_receipt_id = t.id))
+       OR (t.kind = 'purchase_order' AND NOT EXISTS (SELECT 1 FROM purchase_order_items i WHERE i.purchase_order_id = t.id))
+       OR (t.kind = 'stock_audit' AND NOT EXISTS (SELECT 1 FROM stock_audit_lines i WHERE i.stock_audit_id = t.id))
+       OR (t.kind = 'outbound_order' AND NOT EXISTS (SELECT 1 FROM outbound_order_items i WHERE i.outbound_order_id = t.id))
+       OR (t.kind = 'supplier_invoice' AND NOT EXISTS (SELECT 1 FROM supplier_delivery_invoice_items i WHERE i.invoice_id = t.id))
+       OR (t.kind = 'transfer_order' AND NOT EXISTS (SELECT 1 FROM transfer_order_items i WHERE i.transfer_order_id = t.id));
+
+  UPDATE staff_tasks SET related_entity_type = NULL, related_entity_id = NULL, updated_at = now()
+    WHERE related_entity_id IN (SELECT id FROM sb_emptied);
+  DELETE FROM picking_tasks WHERE root_order_id IN (SELECT id FROM sb_emptied WHERE kind = 'outbound_order');
+  DELETE FROM packing_tasks WHERE root_order_id IN (SELECT id FROM sb_emptied WHERE kind = 'outbound_order');
+  DELETE FROM outbound_orders WHERE id IN (SELECT id FROM sb_emptied WHERE kind = 'outbound_order');
+  DELETE FROM transfer_orders WHERE id IN (SELECT id FROM sb_emptied WHERE kind = 'transfer_order');
+  DELETE FROM supplier_delivery_invoices WHERE id IN (SELECT id FROM sb_emptied WHERE kind = 'supplier_invoice');
+  DELETE FROM goods_receipts WHERE id IN (SELECT id FROM sb_emptied WHERE kind = 'goods_receipt');
+  DELETE FROM purchase_orders WHERE id IN (SELECT id FROM sb_emptied WHERE kind = 'purchase_order');
+  DELETE FROM stock_audits WHERE id IN (SELECT id FROM sb_emptied WHERE kind = 'stock_audit');
+  DROP TABLE sb_emptied;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ── categories ──
 UPDATE categories c SET name = v.name, description = v.description, updated_at = now()
 FROM (VALUES
@@ -131,10 +166,6 @@ SELECT pg_temp.sb_author(ARRAY['Haruki Murakami'], 'Haruki Murakami',
   'Haruki Murakami (sinh 1949) là nhà văn Nhật Bản, tác giả “Rừng Na Uy”, “Kafka bên bờ biển”, “1Q84”.');
 SELECT pg_temp.sb_author(ARRAY['Gabriel Garcia Marquez'], 'Gabriel García Márquez',
   'Gabriel García Márquez (1927–2014) là nhà văn Colombia, giải Nobel Văn học 1982, tác giả “Trăm năm cô đơn”, “Tình yêu thời thổ tả”.');
-SELECT pg_temp.sb_author(ARRAY[]::text[], 'Vũ Trọng Phụng',
-  'Vũ Trọng Phụng (1912–1939) là nhà văn hiện thực trào phúng, tác giả “Số đỏ”, “Giông tố”.');
-SELECT pg_temp.sb_author(ARRAY[]::text[], 'O. Henry',
-  'O. Henry (1862–1910) là nhà văn Mỹ, bậc thầy truyện ngắn, tác giả “Chiếc lá cuối cùng”, “Món quà của các đạo sĩ”.');
 SELECT pg_temp.sb_author(ARRAY[]::text[], 'Andy Weir', NULL);
 SELECT pg_temp.sb_author(ARRAY['Joses Mauro De Vasconcelos'], 'José Mauro de Vasconcelos', NULL);
 SELECT pg_temp.sb_author(ARRAY['Malcolm Gladwel'], 'Malcolm Gladwell', NULL);
@@ -142,48 +173,21 @@ SELECT pg_temp.sb_author(ARRAY['Malcolm Gladwel'], 'Malcolm Gladwell', NULL);
 -- ── books ──
 UPDATE books b SET title = v.title, subtitle = v.subtitle, description = v.description, updated_at = now()
 FROM (VALUES
-  ('BK-001', 'Số đỏ', 'Tiểu thuyết',
-   'Tiểu thuyết trào phúng của Vũ Trọng Phụng (1936) theo chân Xuân Tóc Đỏ, một kẻ lang thang leo lên giới thượng lưu nhờ thời cuộc, phơi bày lối sống “Âu hóa” lố lăng của xã hội thành thị thời Pháp thuộc.'),
-  ('BK-002', 'Chiếc lá cuối cùng', 'Truyện ngắn',
-   'Truyện ngắn nổi tiếng của O. Henry về cụ Bơ-men, người họa sĩ già vẽ chiếc lá thường xuân trong đêm mưa bão để giữ lại niềm tin sống cho Giôn-xi.'),
-  ('BK-003', 'Thuyền bạc nhỏ', 'Tuyển tập thơ',
-   'Tuyển tập thơ về tình yêu, tuổi trẻ, quê hương và con người.'),
-  ('BK-004', 'Tấm Cám', 'Cổ tích Việt Nam',
-   'Truyện cổ tích dân gian Việt Nam về cô Tấm hiền lành vượt qua sự hãm hại của mẹ con Cám, gửi gắm niềm tin “ở hiền gặp lành”.'),
-  ('BK-005', 'Tôi thấy hoa vàng trên cỏ xanh', 'Tiểu thuyết',
-   'Tiểu thuyết của Nguyễn Nhật Ánh về tuổi thơ của hai anh em Thiều và Tường ở một làng quê nghèo miền Trung: tình anh em, mối tình đầu và những bài học trưởng thành.'),
   ('BK-006', 'Norwegian Wood', 'A Novel',
    'A coming-of-age novel by Haruki Murakami. Set in late 1960s Tokyo, it follows Toru Watanabe as he navigates love, loss, and the transition to adulthood.'),
   ('BK-007', 'One Hundred Years of Solitude', 'Cien años de soledad',
    'Gabriel García Márquez''s masterpiece about seven generations of the Buendía family in the mythical town of Macondo.'),
-  ('BK-008', 'Cho tôi xin một vé đi tuổi thơ', 'Truyện dài',
-   'Truyện dài của Nguyễn Nhật Ánh nhìn thế giới qua đôi mắt cu Mùi và nhóm bạn, gợi lại những trò nghịch ngợm, mơ mộng và triết lý hồn nhiên của tuổi thơ.'),
-  ('BK-009', 'Đặc trưng tâm lý học của người Việt', 'Tâm lý học ứng dụng',
-   'Cuốn sách về tâm lý học người Việt, phân tích tâm lý, hành vi và tính cách của người Việt trong đời sống hiện đại.'),
   ('BK-010', 'Kafka on the Shore', 'A Novel',
    'A Haruki Murakami novel told in two parallel stories: Kafka Tamura, a fifteen-year-old runaway, and Nakata, an elderly man who can talk with cats.')
 ) AS v(code, title, subtitle, description)
 WHERE b.book_code = v.code
   AND (b.title, b.subtitle, b.description) IS DISTINCT FROM (v.title, v.subtitle, v.description);
 
-SELECT pg_temp.sb_book_authors('BK-001', ARRAY['Vũ Trọng Phụng']);
-SELECT pg_temp.sb_book_authors('BK-002', ARRAY['O. Henry']);
-SELECT pg_temp.sb_book_authors('BK-003', ARRAY['Xuân Diệu']);
-SELECT pg_temp.sb_book_authors('BK-004', ARRAY[]::text[]);          -- folk tale
-SELECT pg_temp.sb_book_authors('BK-005', ARRAY['Nguyễn Nhật Ánh']);
 SELECT pg_temp.sb_book_authors('BK-006', ARRAY['Haruki Murakami']);
 SELECT pg_temp.sb_book_authors('BK-007', ARRAY['Gabriel García Márquez']);
-SELECT pg_temp.sb_book_authors('BK-008', ARRAY['Nguyễn Nhật Ánh']);
-SELECT pg_temp.sb_book_authors('BK-009', ARRAY[]::text[]);          -- author unknown
 SELECT pg_temp.sb_book_authors('BK-010', ARRAY['Haruki Murakami']);
-SELECT pg_temp.sb_book_authors('BK-EXT-001', ARRAY['Tô Hoài']);
-SELECT pg_temp.sb_book_authors('BK-EXT-002', ARRAY[]::text[]);      -- author unknown
 SELECT pg_temp.sb_book_authors('BK-EXT-003', ARRAY['Andy Weir']);
 
-SELECT pg_temp.sb_book_categories('BK-002', ARRAY['van-hoc-nuoc-ngoai', 'truyen-ngan']);
-SELECT pg_temp.sb_book_categories('BK-008', ARRAY['van-hoc-viet-nam']);
-SELECT pg_temp.sb_book_categories('BK-EXT-001', ARRAY['van-hoc-viet-nam', 'thieu-nhi']);
-SELECT pg_temp.sb_book_categories('BK-EXT-002', ARRAY['ky-nang-song']);
 SELECT pg_temp.sb_book_categories('BK-EXT-003', ARRAY['van-hoc-nuoc-ngoai']);
 
 -- ── variants: real cover photos (Open Library) for the base titles whose ISBN
@@ -202,6 +206,50 @@ FROM (VALUES
   ('SKU-EXT-003-PB', 'https://covers.openlibrary.org/b/isbn/9780593135204-L.jpg')
 ) AS c(sku, url)
 WHERE v.sku = c.sku AND v.cover_image_url IS NULL;
+
+-- ── remove the titles that have no real cover ──
+-- Listed explicitly (never "every book without a cover"), so a book a librarian
+-- imports later without a photo is never deleted by re-running this script.
+CREATE TEMP TABLE sb_gone_books ON COMMIT DROP AS
+  SELECT b.id FROM books b
+  WHERE b.book_code IN ('BK-001', 'BK-002', 'BK-003', 'BK-004', 'BK-005', 'BK-008', 'BK-009', 'BK-EXT-001', 'BK-EXT-002')
+     OR b.id IN (SELECT v.book_id FROM book_variants v WHERE v.sku = 'IMPORT-9786042125352');
+CREATE TEMP TABLE sb_gone_variants ON COMMIT DROP AS
+  SELECT v.id FROM book_variants v WHERE v.book_id IN (SELECT id FROM sb_gone_books);
+
+-- Documents that hold a line for those variants: once the lines are gone, the
+-- ones left with no line at all are removed too (an empty PO or receipt is
+-- noise, not history). Documents that still list other books are kept.
+CREATE TEMP TABLE sb_touched_docs (kind text, id uuid) ON COMMIT DROP;
+INSERT INTO sb_touched_docs
+  SELECT 'goods_receipt', goods_receipt_id FROM goods_receipt_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'purchase_order', purchase_order_id FROM purchase_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'stock_audit', stock_audit_id FROM stock_audit_lines WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'outbound_order', outbound_order_id FROM outbound_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'supplier_invoice', invoice_id FROM supplier_delivery_invoice_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'picking_task', picking_task_id FROM picking_task_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'packing_task', packing_task_id FROM packing_task_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  UNION SELECT 'transfer_order', transfer_order_id FROM transfer_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+
+-- Line items that point at those variants.
+DELETE FROM supplier_delivery_invoice_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  OR purchase_order_item_id IN (SELECT id FROM purchase_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants));
+DELETE FROM supplier_shortage_report_items WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM picking_task_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  OR outbound_order_item_id IN (SELECT id FROM outbound_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants));
+DELETE FROM packing_task_items WHERE variant_id IN (SELECT id FROM sb_gone_variants)
+  OR outbound_order_item_id IN (SELECT id FROM outbound_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants));
+DELETE FROM outbound_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM purchase_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM goods_receipt_items WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM stock_audit_lines WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM transfer_order_items WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM stock_movements WHERE variant_id IN (SELECT id FROM sb_gone_variants);
+SELECT pg_temp.sb_drop_emptied_documents();
+-- Variants (cascading to balances, reservations, units, images, supplier links),
+-- then the books (cascading to author/category links).
+DELETE FROM book_variants WHERE id IN (SELECT id FROM sb_gone_variants);
+DELETE FROM books WHERE id IN (SELECT id FROM sb_gone_books);
 
 -- ── branches: addresses with diacritics and demo opening hours, shown on the
 -- public site. Branch *names* stay as seeded: the frozen AI Copilot evaluation
