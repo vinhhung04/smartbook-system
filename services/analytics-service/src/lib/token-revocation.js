@@ -1,65 +1,52 @@
 /**
- * Token revocation for analytics-service (Copilot 3.2 audit).
+ * Token revocation for analytics-service (Copilot 3.2 audit, Phase 5).
  *
  * Same Redis keys as auth-service and every other service's authenticateToken:
  * `blacklist:token:<jti>` (logout) and `user:tokens-valid-after:<sub>`
- * (password change, account locked/deactivated, role change). Before this,
+ * (password change, account locked/deactivated, role change). Before 3.2,
  * analytics only verified the JWT signature, so a logged-out or locked
  * account kept reading /analytics/* through the gateway until the token
  * expired.
  *
- * Like the other services' Redis wrappers, an unreachable Redis means "cannot
- * tell" and the request continues (documented residual risk); a reachable
- * Redis that holds the key always refuses the token.
+ * Phase 5: an unreachable Redis is UNKNOWN, not "not revoked"
+ * (@smartbook/shared/token-revocation): a revocation seen before the outage
+ * is kept, a VALID answer is reused for at most 60 s, then reads continue and
+ * writes get 503. The store's get() must throw when Redis cannot answer.
  */
 const { createClient } = require('redis');
+const { createRevocationChecker } = require('@smartbook/shared/token-revocation');
 
-let store = null;
-const CONNECT_WAIT_MS = 2000;
+let checker = null;
 
 function defaultStore() {
   const client = createClient({
     url: process.env.REDIS_URL || 'redis://redis:6379',
-    socket: { reconnectStrategy: (retries) => (retries > 10 ? new Error('Max retries reached') : Math.min(retries * 100, 3000)) },
+    // never give up reconnecting; fail fast while disconnected
+    socket: { reconnectStrategy: (retries) => Math.min(retries * 100, 3000) },
+    disableOfflineQueue: true,
   });
-  let connected = false;
   client.on('error', (err) => console.warn('[Redis] Error:', err.message));
-  client.on('ready', () => { connected = true; });
-  client.on('end', () => { connected = false; });
-  // The first requests after start-up must not slip through while the
-  // connection is still being made: they wait for it (bounded).
-  const ready = client.connect().then(() => { connected = true; })
-    .catch((err) => console.warn('[Redis] Connection failed, revocation checks skipped:', err.message));
+  client.connect().catch((err) => console.warn('[Redis] Connection failed, revocation checks report UNKNOWN:', err.message));
   return {
     async get(key) {
-      if (!connected) await Promise.race([ready, new Promise((resolve) => { setTimeout(resolve, CONNECT_WAIT_MS).unref?.(); })]);
-      if (!connected) return null;
-      try {
-        return await client.get(key);
-      } catch (err) {
-        console.warn('[Redis] Get error:', err.message);
-        return null;
-      }
+      if (!client.isReady) throw new Error('Redis is not connected');
+      return client.get(key);
     },
   };
 }
 
-/** Tests swap the store. */
+/** Tests swap the store ({ get(key) } that throws when "Redis" is down). */
 function setRevocationStore(next) {
-  store = next;
+  checker = createRevocationChecker({ get: (key) => next.get(key), warn: (msg) => console.warn(msg) });
 }
 
-async function isTokenRevoked(payload) {
-  if (!store) store = defaultStore();
-  if (payload?.jti && (await store.get(`blacklist:token:${payload.jti}`)) !== null) return true;
-  if (payload?.sub && payload?.iat) {
-    const validAfter = await store.get(`user:tokens-valid-after:${payload.sub}`);
-    if (validAfter !== null && payload.iat < Number(validAfter)) return true;
-  }
-  return false;
+/** { state: 'REVOKED' | 'VALID' | 'UNKNOWN', stale } */
+async function checkTokenRevocation(payload) {
+  if (!checker) setRevocationStore(defaultStore());
+  return checker.check(payload);
 }
 
 // Connect at start-up rather than on the first request.
-if (process.env.NODE_ENV !== 'test' && !process.env.NODE_TEST_CONTEXT) store = defaultStore();
+if (process.env.NODE_ENV !== 'test' && !process.env.NODE_TEST_CONTEXT) setRevocationStore(defaultStore());
 
-module.exports = { isTokenRevoked, setRevocationStore };
+module.exports = { checkTokenRevocation, setRevocationStore };

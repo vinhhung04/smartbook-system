@@ -48,14 +48,25 @@ def load_v32_turns() -> list[dict]:
                 for c in json.load(fh)["cases"]]
 
 
+def load_c33_turns(splits: str) -> list[dict]:
+    """Copilot 3.3 independent questions (copilot33_questions.json), filtered by split."""
+    wanted = set(splits.split(","))
+    with open(os.path.join(EVAL_DIR, "copilot33_questions.json"), encoding="utf-8") as fh:
+        return [{"id": c["id"], "category": c["id"].split("-")[1], "user": c["user"], "turns": c["turns"],
+                 "split": c["split"]} for c in json.load(fh)["cases"] if c["split"] in wanted]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gateway", default=os.getenv("EVAL_GATEWAY_URL", "http://localhost:3000"))
     parser.add_argument("--password", default=os.getenv("EVAL_PASSWORD", ""))
     parser.add_argument("--delay", type=float, default=4.5)
     parser.add_argument("--out", default="")
-    parser.add_argument("--cases", choices=["v31", "v32"], default="v31",
-                        help="v31: the 3.1 sets (XAI 2.0 + Copilot 3.0 charts); v32: the 3.2 live held-out questions")
+    parser.add_argument("--cases", choices=["v31", "v32", "c33"], default="v31",
+                        help="v31: the 3.1 sets (XAI 2.0 + Copilot 3.0 charts); v32: the 3.2 live held-out questions; "
+                             "c33: the 3.3 independent set (--splits)")
+    parser.add_argument("--splits", default="dev,val,test", help="c33 only: comma-separated splits to collect")
+    parser.add_argument("--only", default="", help="comma-separated case ids (re-collect a few)")
     args = parser.parse_args()
     tokens: dict[str, str] = {}
     rows = []
@@ -67,7 +78,10 @@ def main() -> None:
                 tokens[user] = r.json()["token"]
             return tokens[user]
 
-        for case in (load_v32_turns() if args.cases == "v32" else load_turns()):
+        cases = load_v32_turns() if args.cases == "v32" else load_c33_turns(args.splits) if args.cases == "c33" else load_turns()
+        if args.only:
+            cases = [c for c in cases if c["id"] in args.only.split(",")]
+        for case in cases:
             cid = str(uuid.uuid4())
             for n, q in enumerate(case["turns"]):
                 for attempt in range(6):
@@ -85,13 +99,14 @@ def main() -> None:
                 b = r.json()
                 rows.append({
                     "case": case["id"], "category": case["category"], "user": case["user"], "turn": n, "q": q,
-                    "status": 200, "seconds": round(seconds, 2),
+                    "split": case.get("split"), "status": 200, "seconds": round(seconds, 2),
                     "draft_answer": (b.get("debug") or {}).get("draft_answer") or b.get("answer"),
                     "answer": b.get("answer"), "faithfulness": b.get("faithfulness"),
                     "verification": b.get("verification"), "pending_action": bool(b.get("pending_action")),
                     "llm_calls": len((b.get("debug") or {}).get("llm_calls") or []),
                     "explanation": b.get("explanation"), "visualizations": b.get("visualizations"),
                     "data": b.get("data"), "mode": (b.get("plan") or {}).get("answer_mode"),
+                    "llm_usage": (b.get("debug") or {}).get("llm_calls"),
                 })
                 print(case["id"], n, r.status_code, (b.get("faithfulness") or {}).get("status"), f"{seconds:.1f}s")
     out = args.out or os.path.join(EVAL_DIR, f"faithfulness_answers_{datetime.now():%Y%m%d_%H%M%S}.json")

@@ -1,0 +1,231 @@
+{
+ "about": "Labels of the FINAL answers of the 3.3 live run B on the TEST split (eval/copilot33_answers_v33_test_runB.json), collected after the NO_DATA context fix. Same single annotator (also the rule author); written from the final answer + tool data, without the verifier's claims. Both BLOCKED turns were checked against their drafts (invented figures without tool data) -> justified.",
+ "labels": {
+  "c33-nat-08#0": {
+   "expected": [],
+   "critical": false,
+   "note": "BLOCKED, justified: draft invented '12 đầu sách' with no tool data (planner planned no tool)"
+  },
+  "c33-nat-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nat-10#0": {
+   "expected": [
+    "ENTITY"
+   ],
+   "critical": false,
+   "note": "garbled title 'Đắc tâm lý học…' and placeholder '5. Sách chưa có dữ liệu'"
+  },
+  "c33-nat-11#0": {
+   "expected": [],
+   "critical": false,
+   "note": "BLOCKED, justified: draft invented 12 overdue loans / 3.450.000 ₫ with no tool data"
+  },
+  "c33-abbr-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-multi-08#0": {
+   "expected": [
+    "ENTITY",
+    "ASSUMPTION"
+   ],
+   "critical": true,
+   "note": "same failure as the draft label: entity/assumption error left in the final"
+  },
+  "c33-multi-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-multi-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "WARNING after withdrawal; remaining text is correct but opens abruptly"
+  },
+  "c33-multi-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "unsupported assumption, non-critical"
+  },
+  "c33-wh-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-09#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'3 hết hàng và thêm 7 đầu sách khác … dưới ngưỡng' (7 low-stock variants include the 3 out-of-stock)"
+  },
+  "c33-wh-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-10#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'85.791.250 ₫ cho 40 đầu sách (461 bản)' - full need is 117 candidates / 763 copies. The DRAFT was correct (117/763); the deterministic repair rewrote it (repairs 117->40, 763->461).",
+   "introduced_by_repair": true
+  },
+  "c33-bd-11#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'bỏ lại 5 đầu sách' - data says 89 high-priority titles unfunded. The DRAFT was correct ('bỏ lại 89'); the deterministic repair rewrote 89->5.",
+   "introduced_by_repair": true
+  },
+  "c33-tr-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-tr-09#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "monthly ranking claim not supported by yearly-vs-September top-books data"
+  },
+  "c33-tr-10#0": {
+   "expected": [
+    "RANKING"
+   ],
+   "critical": true,
+   "note": "ranking order contradicts the tool data"
+  },
+  "c33-tr-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-09#0": {
+   "expected": [
+    "ASSESSMENT"
+   ],
+   "critical": true,
+   "note": "'tồn kho hiện tại thấp hơn ngưỡng an toàn' while available 3 > reorder point 1"
+  },
+  "c33-nd-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-09#0": {
+   "expected": [
+    "CAUSALITY",
+    "ASSUMPTION"
+   ],
+   "critical": true,
+   "note": "exam-season causal explanation presented as reason for a purchase decision; no data on exams"
+  },
+  "c33-nd-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "clarifying question, no figures"
+  },
+  "c33-nd-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "system-wide reorder total labelled as system-wide ('hệ thống gợi ý tổng cộng'); same judgement as run A"
+  },
+  "c33-bait-11#0": {
+   "expected": [
+    "MISSING_DATA"
+   ],
+   "critical": false,
+   "note": "conclusion (cannot identify a week) is defensible, but 'thiếu số liệu chi tiết theo từng ngày' is false - daily rows are in the data"
+  },
+  "c33-mt-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-08#1": {
+   "expected": [
+    "BUDGET"
+   ],
+   "critical": true,
+   "note": "follow-up '-20%' applied to the full need (68.6M) instead of the 15M budget of the previous turn (planner context gap)"
+  },
+  "c33-mt-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-09#1": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-10#0": {
+   "expected": [],
+   "critical": false,
+   "note": "443 loans / 465 returns / peak 19-09 43 / 31->9 = -71% all match the data"
+  },
+  "c33-mt-10#1": {
+   "expected": [],
+   "critical": false,
+   "note": "hedged correlation with explicit causal limit"
+  },
+  "c33-mt-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-11#1": {
+   "expected": [
+    "MISSING_DATA"
+   ],
+   "critical": true,
+   "note": "Dế mèn 'không nằm trong danh sách' - it is a MEDIUM candidate (qty 3) in the reorder list (truncated in the prompt)"
+  }
+ }
+}

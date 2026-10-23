@@ -466,9 +466,11 @@ ANALYTICS_TOOLS: list[dict] = [
                 "lịch sử giao hàng thực tế, SUPPLIER_DECLARED = cam kết của nhà cung cấp, DEFAULT = giá trị "
                 "mặc định, REQUESTED = do người hỏi chỉ định) và lead_time_samples (số lần giao đã đo). Mỗi "
                 "sách còn có estimated_cost (chi phí ước tính = số lượng đề xuất × đơn giá). Nếu truyền "
-                "budget_vnd, hệ thống chỉ đánh dấu within_budget=true cho các sách vừa ngân sách (dòng giảm "
-                "được nhiều thiếu hụt dự kiến nhất trên mỗi đồng được xét trước; danh sách vẫn xếp theo mức ưu "
-                "tiên) và trả thêm tổng chi phí đã duyệt/còn lại trong ngân sách. Công "
+                "budget_vnd, mỗi sách có thêm funded_qty (số bản ngân sách duyệt, có thể chỉ một phần số đề xuất), "
+                "funded_cost và within_budget=true khi funded_qty > 0 (từng bản được duyệt cho dòng tăng nhiều nhất "
+                "khả năng đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng; tồn tính cả bản đang về và bản "
+                "đang mượn dự kiến trả; danh sách vẫn xếp theo mức ưu tiên) và trả thêm tổng chi phí đã duyệt/còn "
+                "lại trong ngân sách. Công "
                 "cụ chính cho câu hỏi nên nhập sách gì, kho nào cần ưu tiên, hoặc nên nhập gì trong một ngân sách cụ thể."
             ),
             "parameters": {

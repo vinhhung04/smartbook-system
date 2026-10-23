@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
-import { publicCatalogService, type PublicBook, type PublicHome } from '@/services/public-catalog';
+import { publicCatalogService, type PublicBook, type PublicBranch, type PublicHome } from '@/services/public-catalog';
 import { aiService, type AIRecommendationsResult } from '@/services/ai';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { usePageMeta } from '@/lib/page-meta';
@@ -12,17 +12,20 @@ import { BookCover } from '@/components/public/book-cover';
 import { Book3D } from '@/components/public/book-3d';
 import { useShelfTilt } from '@/components/public/use-shelf-tilt';
 import { BookRow, BookRowSkeleton, Reveal, SectionHeading } from '@/components/public/book-row';
-import { CategoryShowcase, FeaturedTrending, TopTenBand } from '@/components/public/home-sections';
+import { CategoryShowcase, FeaturedTrending, HomeBranches, RankingBand } from '@/components/public/home-sections';
+import { ReaderSummary } from '@/components/public/reader-summary';
 import { CoverFlow } from '@/components/public/cover-flow';
 import { TiltCard } from '@/components/public/tilt-card';
 import { HowBorrowingWorks } from '@/components/public/how-borrowing-works';
-import { DiscoveryBox } from '@/components/public/discovery-box';
-import { SearchAutocomplete } from '@/components/public/search-autocomplete';
+import { HeroSearch } from '@/components/public/hero-search';
 import { useReserveAction } from '@/components/public/use-reserve-action';
+import { useAvailabilityAlerts } from '@/components/public/use-availability-alerts';
 import { ReserveModal } from '@/components/pages/customer/_shared/reserve-modal';
 import { EmptyState } from '@/components/ui/empty-state';
 
 const numberFormat = new Intl.NumberFormat('vi-VN');
+// Same threshold as inventory-service's top_rated list (TOP_RATED_MIN_REVIEWS).
+const TOP_RATED_MIN_REVIEWS = 2;
 
 /** The hero's signature: a shelf of books the library actually holds. */
 function HeroShelf({ books, onShelf }: { books: PublicBook[]; onShelf: boolean }) {
@@ -138,10 +141,12 @@ function ForYouRow() {
 export function PublicHomePage() {
   usePageMeta({});
   const heroRef = useShelfTilt<HTMLElement>();
-  const { isAuthenticated, isCustomer } = useAuthUser();
+  const { user, isAuthenticated, isCustomer } = useAuthUser();
   const [home, setHome] = useState<PublicHome | null>(null);
   const [error, setError] = useState(false);
   const { target, requestReserve, closeReserve } = useReserveAction();
+  const alerts = useAvailabilityAlerts();
+  const [branches, setBranches] = useState<PublicBranch[]>([]);
 
   const [reloadKey, setReloadKey] = useState(0);
   const reload = () => { setError(false); setReloadKey((key) => key + 1); };
@@ -153,6 +158,15 @@ export function PublicHomePage() {
       .catch(() => { if (active) setError(true); });
     return () => { active = false; };
   }, [reloadKey]);
+
+  // Branch section + branch names in "Sách của tôi"; optional, so a failure just hides them.
+  useEffect(() => {
+    let active = true;
+    publicCatalogService.getBranches()
+      .then((data) => { if (active) setBranches(data); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   // Real cover photos, books on the shelf first. The "Có sẵn" row right below
   // already lists what's reservable, so the hero doesn't repeat that row; the
@@ -199,23 +213,9 @@ export function PublicHomePage() {
               của bạn.
             </h1>
             <p className="mt-5 max-w-lg text-[16.5px] leading-relaxed text-muted-foreground">
-              Tìm theo tên sách, tác giả hoặc thể loại. Xem ngay chi nhánh nào còn sách và đặt trước khi đến thư viện.
+              Tìm theo tên sách, tác giả — hoặc mô tả cuốn bạn muốn đọc để AI gợi ý. Xem ngay chi nhánh nào còn sách và đặt trước khi đến thư viện.
             </p>
-            <div className="mt-8"><SearchAutocomplete variant="hero" /></div>
-            {home && home.categories.length ? (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-[12.5px] text-muted-foreground">Phổ biến:</span>
-                {home.categories.slice(0, 4).map((category) => (
-                  <Link
-                    key={category.slug}
-                    to={`/categories/${category.slug}`}
-                    className="rounded-full border border-border bg-card/80 px-3 py-1 text-[12.5px] font-medium text-foreground/85 backdrop-blur transition-colors hover:border-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300"
-                  >
-                    {category.name}
-                  </Link>
-                ))}
-              </div>
-            ) : null}
+            <div className="mt-7"><HeroSearch categories={home?.categories ?? []} /></div>
             <Link to="/books" className="group mt-7 inline-flex items-center gap-1.5 text-[14px] font-semibold text-indigo-700 dark:text-indigo-300">
               Khám phá toàn bộ{home ? ` ${numberFormat.format(home.stats.total_titles)}` : ''} đầu sách
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
@@ -228,6 +228,7 @@ export function PublicHomePage() {
       </section>
 
       <div className="mx-auto max-w-7xl space-y-20 px-4 pt-16 sm:px-6 sm:space-y-24 lg:px-8">
+        {isCustomer ? <ReaderSummary name={user?.full_name} branches={branches} /> : null}
         {error ? (
           <EmptyState
             variant="error"
@@ -252,21 +253,22 @@ export function PublicHomePage() {
               seeAllTo="/books?availability=available"
               onReserve={requestReserve}
             />
-            <FeaturedTrending books={home.trending} days={days} onReserve={requestReserve} />
+            <FeaturedTrending books={home.trending} days={days} onReserve={requestReserve} alerts={alerts} />
             {isCustomer ? <Reveal><ForYouRow /></Reveal> : null}
             <CoverFlow id="sach-moi" eyebrow="Mới cập nhật" title="Sách mới về" basis="Đầu sách được thêm vào thư viện gần đây nhất. Lướt hoặc bấm vào một cuốn để đưa ra giữa." books={home.new_arrivals} seeAllTo="/books?sort=newest" onReserve={requestReserve} />
-            <Reveal><DiscoveryBox /></Reveal>
             <CategoryShowcase categories={home.categories} />
           </>
         )}
       </div>
 
-      {home ? <div className="mt-20 sm:mt-24"><TopTenBand books={home.most_borrowed} days={home.windows?.borrow_days ?? 365} /></div> : null}
+      {home ? (
+        <div className="mt-20 sm:mt-24">
+          <RankingBand mostBorrowed={home.most_borrowed} topRated={home.top_rated} borrowDays={home.windows?.borrow_days ?? 365} minReviews={TOP_RATED_MIN_REVIEWS} alerts={alerts} />
+        </div>
+      ) : null}
 
       <div className="mx-auto max-w-7xl space-y-20 px-4 pt-20 sm:space-y-24 sm:px-6 sm:pt-24 lg:px-8">
-        {home ? (
-          <BookRow id="danh-gia-cao" eyebrow="Bạn đọc chấm điểm" title="Bạn đọc đánh giá cao" basis="Điểm trung bình từ ít nhất 2 đánh giá của bạn đọc." books={home.top_rated} seeAllTo="/books?sort=rating" onReserve={requestReserve} />
-        ) : null}
+        <HomeBranches branches={branches} />
         <Reveal>
           <HowBorrowingWorks
             variant="band"

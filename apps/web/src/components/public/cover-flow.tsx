@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowRight } from 'lucide-react';
 import type { PublicBook } from '@/services/public-catalog';
@@ -18,16 +18,39 @@ interface CoverFlowProps {
 
 const MAX_ANGLE = 55;
 const DEPTH_PX = 70;
+/** Below this many books a loop would show the same cover on both sides of the centre. */
+const MIN_LOOP_BOOKS = 3;
+/** Quiet time after the last scroll event before an edge copy is swapped for the middle one. */
+const SETTLE_MS = 140;
 
 /**
  * Cover Flow: the centred book faces you; the others turn toward the centre in
  * 3D (left ones show their spine, right ones their page edges) and step back.
  * It is a normal scroll-snap list underneath, so swipe, trackpad and wheel work,
  * plus arrow buttons and ←/→ keys. Angles are written as CSS variables on scroll.
+ *
+ * It loops: the list is rendered three times and starts on the middle copy, so
+ * there are always books on both sides. Once scrolling settles on an outer
+ * copy, the track jumps (instantly, to the identical spot) back into the middle
+ * one. Only the middle copy is exposed to screen readers and Tab.
  */
 export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserve }: CoverFlowProps) {
   const trackRef = useRef<HTMLUListElement>(null);
-  const [active, setActive] = useState(0);
+  const count = books.length;
+  const loop = count >= MIN_LOOP_BOOKS;
+  const copies = loop ? 3 : 1;
+  const items = loop ? [...books, ...books, ...books] : books;
+  // Physical index into `items`; books[active % count] is the centred book.
+  const [active, setActive] = useState(loop ? count : 0);
+
+  // Start centred on the first book of the middle copy (before the first paint).
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    const first = track?.children[loop ? count : 0] as HTMLElement | undefined;
+    if (!track || !first) return;
+    // The scroll event this fires lets the layout pass below pick the active book.
+    track.scrollLeft = first.offsetLeft + first.offsetWidth / 2 - track.clientWidth / 2;
+  }, [count, loop]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -58,20 +81,45 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
       setActive((previous) => (previous === nearest ? previous : nearest));
     };
 
+    // Back into the middle copy once the reader stops on an outer one. Snap is
+    // paused for the jump and the 3D transforms are updated right away: snap
+    // positions follow the transformed covers, so stale ones would re-snap the
+    // track off-centre.
+    let timer = 0;
+    const recentre = () => {
+      const children = track.children;
+      const middleStart = (children[count] as HTMLElement).offsetLeft;
+      const copyWidth = middleStart - (children[0] as HTMLElement).offsetLeft;
+      const center = track.scrollLeft + track.clientWidth / 2;
+      const shift = center < middleStart ? copyWidth : center >= middleStart + copyWidth ? -copyWidth : 0;
+      if (!shift) return;
+      track.style.scrollSnapType = 'none';
+      track.scrollLeft += shift;
+      layout();
+      track.style.scrollSnapType = '';
+    };
+
     const schedule = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(layout);
     };
+    const onScroll = () => {
+      schedule();
+      if (!loop) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(recentre, SETTLE_MS);
+    };
     schedule();
-    track.addEventListener('scroll', schedule, { passive: true });
+    track.addEventListener('scroll', onScroll, { passive: true });
     const observer = new ResizeObserver(schedule);
     observer.observe(track);
     return () => {
       cancelAnimationFrame(frame);
-      track.removeEventListener('scroll', schedule);
+      window.clearTimeout(timer);
+      track.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };
-  }, [books.length]);
+  }, [count, loop]);
 
   const scrollToIndex = useCallback((index: number) => {
     const track = trackRef.current;
@@ -81,18 +129,20 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
     track.scrollTo({ left: item.offsetLeft + item.offsetWidth / 2 - track.clientWidth / 2, behavior: reduce ? 'auto' : 'smooth' });
   }, []);
 
+  const step = (direction: 1 | -1) => scrollToIndex(Math.max(0, Math.min(items.length - 1, active + direction)));
+
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
     if (event.key === 'ArrowRight') {
       event.preventDefault();
-      scrollToIndex(Math.min(books.length - 1, active + 1));
+      step(1);
     } else if (event.key === 'ArrowLeft') {
       event.preventDefault();
-      scrollToIndex(Math.max(0, active - 1));
+      step(-1);
     }
   };
 
-  if (books.length === 0) return null;
-  const current = books[Math.min(active, books.length - 1)];
+  if (count === 0) return null;
+  const current = books[active % count];
 
   return (
     <Reveal>
@@ -106,8 +156,8 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
           actions={
             <CarouselArrows
               label={title}
-              edges={{ start: active <= 0, end: active >= books.length - 1 }}
-              onScroll={(direction) => scrollToIndex(Math.max(0, Math.min(books.length - 1, active + direction)))}
+              edges={loop ? { start: false, end: false } : { start: active <= 0, end: active >= count - 1 }}
+              onScroll={step}
             />
           }
         />
@@ -119,10 +169,14 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
             aria-label={`${title} — dùng phím mũi tên để lướt`}
             className="flex snap-x snap-mandatory items-end overflow-x-auto px-[calc(50%-5rem)] pb-16 pt-10 outline-none [scrollbar-width:none] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500/40 sm:px-[calc(50%-6rem)] lg:px-[calc(50%-6.5rem)] [&::-webkit-scrollbar]:hidden"
           >
-            {books.map((book, index) => (
-              <li key={book.id} className="cover-flow__item relative w-40 shrink-0 snap-center sm:w-48 lg:w-52" style={{ '--flow-ry': '0deg' } as CSSProperties}>
+            {items.map((book, index) => {
+              // Outer copies of the loop are visual only.
+              const clone = copies > 1 && Math.floor(index / count) !== 1;
+              return (
+              <li key={`${Math.floor(index / count)}-${book.id}`} aria-hidden={clone || undefined} className="cover-flow__item relative w-40 shrink-0 snap-center sm:w-48 lg:w-52" style={{ '--flow-ry': '0deg' } as CSSProperties}>
                 <Link
                   to={`/books/${book.id}`}
+                  tabIndex={clone ? -1 : undefined}
                   onClick={(event) => {
                     // A side book first comes to the centre; the centred one opens.
                     if (index !== active) {
@@ -139,7 +193,8 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
                   </div>
                 </Link>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </div>
 
@@ -159,7 +214,7 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
               Xem chi tiết <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
             </Link>
           </div>
-          <p className="mt-3 font-mono text-[11.5px] text-muted-foreground">{active + 1} / {books.length}</p>
+          <p className="mt-3 font-mono text-[11.5px] text-muted-foreground">{(active % count) + 1} / {count}</p>
         </div>
       </section>
     </Reveal>

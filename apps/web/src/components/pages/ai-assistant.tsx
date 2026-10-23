@@ -35,6 +35,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import {
   aiService,
   type AiConversationSummary,
+  type AiDecision,
   type AiEvidenceItem,
   type AiExplanation,
   type AiFaithfulness,
@@ -59,6 +60,7 @@ import { formatDataAsOf, sanitizeVisualizations, type CopilotVisualizationSpec }
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { ActionCard } from '@/components/ai-action-card';
+import { CopilotDecision } from '@/components/ai-copilot-decision';
 import { AIActionCenter } from '@/components/ai-action-center';
 import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
 
@@ -78,6 +80,7 @@ interface AssistantMessage {
   visualizationNotes?: string[];
   faithfulness?: AiFaithfulness | null;
   verification?: AiVerification | null;
+  decision?: AiDecision | null;
   /** Streaming: the draft text is being checked against the data (Copilot 3.2). */
   verifying?: boolean;
   /** Reopened from history: charts show the stored snapshot, never refreshed. */
@@ -96,6 +99,7 @@ function extrasToMessageFields(extras?: AssistantExtras | null): Partial<Assista
     visualizationNotes: extras?.visualization_notes ?? [],
     faithfulness: extras?.faithfulness ?? null,
     verification: extras?.verification ?? null,
+    decision: extras?.decision ?? null,
   };
 }
 
@@ -784,6 +788,9 @@ export function AIAssistantPage() {
                         )}
 
                         {!isStreamingMessage && <CopilotFaithfulness result={message.faithfulness} verification={message.verification} />}
+                        {!isStreamingMessage && (
+                          <CopilotDecision decision={message.decision} onDraft={isLastAssistant ? sendMessage : undefined} disabled={loading} />
+                        )}
                         {!isStreamingMessage && <CopilotExplanation explanation={message.explanation} />}
                         {!isStreamingMessage && message.recommendations && message.recommendations.length > 0 && (
                           <CopilotRecommendations items={message.recommendations} />

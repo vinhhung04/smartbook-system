@@ -79,6 +79,9 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.getByRole('option', { name: /Le Van Minh/ }).click();
   await page.getByTestId('goods-receipt-submit').click();
   await expect(page.getByText(/Đã tạo phiếu/)).toBeVisible();
+  // The toast fires before the app navigates to the new receipt (a lazy route), so wait
+  // for its /orders/<id> page -- that is the link the staff task queue shows in step 5.
+  await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/);
   const receiptUrl = page.url();
 
   await logout(page);

@@ -1,0 +1,63 @@
+{
+ "items": 33,
+ "with_errors": 14,
+ "clean": 19,
+ "precision": 1.0,
+ "recall": 0.286,
+ "recall_frac": "4/14",
+ "fpr": 0.0,
+ "fpr_frac": "0/19",
+ "critical_detection": "3/11",
+ "latency_ms": {
+  "p50": 1.83,
+  "p95": 7.67
+ },
+ "per_class": {
+  "ASSESSMENT": {
+   "fn": 1
+  },
+  "ASSUMPTION": {
+   "fn": 3
+  },
+  "COUNT": {
+   "tp": 1,
+   "fp": 1,
+   "fn": 1
+  },
+  "COVERAGE": {
+   "tp": 1
+  },
+  "ENTITY": {
+   "fn": 1
+  },
+  "MISSING_DATA": {
+   "fn": 1
+  },
+  "MONEY": {
+   "fn": 3
+  },
+  "OVERCLAIM": {
+   "fp": 1
+  },
+  "RANKING": {
+   "fn": 1
+  },
+  "SCOPE": {
+   "fn": 1,
+   "tp": 1
+  }
+ },
+ "misses": [
+  "c33-nat-05#0",
+  "c33-nat-07#0",
+  "c33-abbr-06#0",
+  "c33-abbr-07#0",
+  "c33-multi-05#0",
+  "c33-multi-07#0",
+  "c33-bd-07#0",
+  "c33-wi-06#0",
+  "c33-bait-07#0",
+  "c33-mt-07#1"
+ ],
+ "false_alarms": []
+}

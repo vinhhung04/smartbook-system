@@ -95,3 +95,18 @@ test('scopes are cached briefly per user; a revoked scope stops working after th
     Date.now = realNow;
   }
 });
+
+test('fresh: a confirmation step re-reads the scope instead of the 30 s cache (Phase 5)', async () => {
+  let rows = [{ warehouse_id: 'w1', access_level: 'FULL' }];
+  let calls = 0;
+  const resolver = createWarehouseScopeResolver({
+    authUrl: 'http://auth', internalKey: 'k', ttlMs: 60_000,
+    fetchImpl: async () => { calls += 1; return { ok: true, status: 200, json: async () => ({ data: { status: 'ACTIVE', scopes: rows } }) }; },
+  });
+  const user = { id: 'u1' };
+  assert.equal(await resolver.canWrite(user, 'w1'), true);
+  rows = []; // write access removed after the request was created
+  assert.equal(await resolver.canWrite(user, 'w1'), true, 'cached answer within the TTL');
+  assert.equal(await resolver.canWrite(user, 'w1', { fresh: true }), false, 'approval sees the removal at once');
+  assert.equal(calls, 2);
+});

@@ -570,6 +570,11 @@ thực nghiệm (cần đánh giá lại bằng chính pipeline này trước kh
 priority; (3) xếp hạng dưới ngân sách theo unmet kỳ vọng giảm được trên mỗi đồng; (4) ~~chỉ dùng ngày trọn
 vẹn trong chuỗi dự báo~~ — **đã làm** (xem mục 5.2); (5) thu thập lịch sử giao hàng thật để đánh giá lead time học.
 
+**Cập nhật 2026-10-18:** (1)–(3) đã được đánh giá bằng giao thức đăng ký trước trên 8 seed kiểm định mới —
+[REORDER_OPTIMIZATION_EVALUATION.md](REORDER_OPTIMIZATION_EVALUATION.md). Không ngân sách: không ứng viên nào đạt, danh
+sách đề xuất giữ nguyên. Có ngân sách: vị thế (kệ + đang về + dự kiến trả) + sàn có điều kiện + cấp từng bản theo xác suất
+phục vụ/VND đạt 24/24 lần chạy và đã được đưa vào `?budgetVnd=`.
+
 ### 13.1 Vì sao EWMA + trend không vượt MA30 (bổ sung 2026-10-08)
 
 Chẩn đoán phân rã trong `docs/ANALYSIS/FORECAST_DIAGNOSTICS.md` (sinh bởi `eval/forecast-diagnostics.js`;

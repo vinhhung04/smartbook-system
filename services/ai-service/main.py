@@ -102,6 +102,8 @@ import copilot_response
 import copilot_tools
 import copilot_faithfulness
 import copilot_verification
+import copilot_claims
+import copilot_decision
 import action_guard
 import copilot_visualization
 import warehouse_scope
@@ -242,6 +244,10 @@ ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
 # snapshot while it is younger than this; older, the same planner-built tool
 # calls are replayed (same scope, same permissions) and the answer says so.
 VIZ_SNAPSHOT_MAX_AGE_SECONDS = int(os.getenv("VIZ_SNAPSHOT_MAX_AGE_SECONDS", "1800"))
+# Copilot 3.3 hybrid verification (copilot_claims): one extra LLM call that
+# extracts the answer's claims for the backend to decide. Off by default; see
+# docs/ANALYSIS/AI_COPILOT_3_3_EVALUATION.md for the measured trade-off.
+COPILOT_SEMANTIC_CLAIMS = os.getenv("COPILOT_SEMANTIC_CLAIMS", "off").strip().lower() in ("on", "1", "true")
 
 
 @app.on_event("startup")
@@ -2863,6 +2869,10 @@ async def metadata_extraction_service(input):
 from routes_metadata_intelligence import build_router as build_metadata_router
 app.include_router(build_metadata_router(metadata_extraction_service, lambda: ENABLE_METADATA_INTELLIGENCE_V2))
 
+from routes_book_ocr import build_router as build_book_ocr_router
+# OCR'd ISBNs go through the same lookup (cache, Metadata Intelligence v2 flag) as a typed ISBN.
+app.include_router(build_book_ocr_router(lambda isbn: lookup_book_by_isbn(IsbnLookupRequest(isbn=isbn))))
+
 
 class EnrichBookAfterIsbnRequest(BaseModel):
     isbn: str
@@ -3557,6 +3567,10 @@ class AssistantResponse(BaseModel):
     # UNSUPPORTED / UNVERIFIABLE) with severity, deterministic repairs, and
     # `safe_to_act` (False when the answer was blocked: no action proposed).
     verification: dict | None = None
+    # Phase 6 (optional, additive): structured decision for a reorder decision /
+    # what-if - options, pros / cons, risks, assumptions, conditional
+    # recommendation - built from tool data only (copilot_decision).
+    decision: dict | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3640,6 +3654,20 @@ def _make_temp_action_for_check(planned: dict):
     )
 
 
+async def _legacy_chat_user(auth_header: str | None):
+    """Identity for the legacy /chat and /chat/stream endpoints (Phase 5).
+
+    Without an Authorization header the chat stays anonymous (public FAQ /
+    catalog answers). With one, the token is verified like /assistant does -
+    401 for an invalid, logged-out or locked session, 503 when auth cannot be
+    reached - instead of silently continuing as anonymous: that fallback let a
+    revoked token replay its cached, data-bearing answers (the reply cache is
+    keyed by the token) and let any malformed token reach retrieval."""
+    if not auth_header:
+        return None
+    return await get_user_context(auth_header)
+
+
 @app.post("/chat")
 async def chat(request: Request, req: ChatRequest):
     if not req.message.strip():
@@ -3654,13 +3682,8 @@ async def chat(request: Request, req: ChatRequest):
     auth_header = request.headers.get("authorization")
 
     # Resolve user identity early so persona and personal context can be built
-    # before retrieval. Never fail the chat on auth errors.
-    user_ctx = None
-    if auth_header:
-        try:
-            user_ctx = await get_user_context(auth_header)
-        except Exception:
-            pass
+    # before retrieval (see _legacy_chat_user for the Phase 5 policy).
+    user_ctx = await _legacy_chat_user(auth_header)
 
     intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
 
@@ -4392,6 +4415,7 @@ def _assistant_payload(
         "visualization_notes": extras.get("visualization_notes") or [],
         "faithfulness": extras.get("faithfulness"),
         "verification": extras.get("verification"),
+        "decision": extras.get("decision"),
     }
     if debug is not None:
         payload["debug"] = debug
@@ -4600,12 +4624,20 @@ async def _finalize_assistant_turn(
     # every check below - no business tool is called again.
     sheet = copilot_verification.build_sheet(collected_data, explanation, visualizations[0])
     answer, label_issues = copilot_faithfulness.strip_internal_labels(answer)
+    # Figures a turn without tool data may repeat: the question and the earlier
+    # (already checked) answers. Only assistant messages BEFORE the current
+    # question count - by now `messages` also holds this turn's own draft, and
+    # the retry would add it again; neither may vouch for its own figures.
+    current_question = max((i for i, m in enumerate(messages) if m.get("role") == "user"), default=len(messages))
+    verify_context = "\n".join([message_text] + [
+        m["content"] for m in messages[:current_question]
+        if m.get("role") == "assistant" and isinstance(m.get("content"), str)])
 
     def check(text: str):
         semantic_ = copilot_faithfulness.validate(text, faith_ctx)
         return (_grounding_check(text, collected_data, message_text, grounded_context, grounded_values),
                 copilot_explain.overclaims(text, explanation), semantic_,
-                copilot_verification.verify(text, sheet, semantic_))
+                copilot_verification.verify(text, sheet, semantic_, context=verify_context))
 
     def deterministic_repair(text: str, rep):
         """Fix contradicted numbers whose correct value is certain, without
@@ -4615,12 +4647,49 @@ async def _finalize_assistant_turn(
         fixed_text, fixed_claims = copilot_verification.repair(text, rep)
         return (fixed_text, fixed_claims) if fixed_claims else (text, [])
 
-    grounding_warning, language_flags, semantic, report = check(answer)
+    # Copilot 3.3 Layer 2 + 3 (copilot_claims): one extraction call per model
+    # text - the model only extracts claims, the backend decides them. Off
+    # unless COPILOT_SEMANTIC_CLAIMS=on; any failure leaves Layer 1 alone.
+    semantic_info: dict = {"used": False, "status": "off"}
+    semantic_claims: dict[str, list] = {}
+
+    async def with_semantic(text: str, rep):
+        if not (COPILOT_SEMANTIC_CLAIMS and answered_normally and hasattr(provider, "chat_json")
+                and copilot_claims.worth_extracting(text, collected_data)):
+            return rep
+        if text not in semantic_claims:
+            try:
+                claims_, usage_ = await copilot_claims.extract(text, sheet, collected_data, provider)
+                semantic_claims[text] = claims_
+                call_usage.append(usage_)
+                semantic_info.update(used=True, status="ok", calls=semantic_info.get("calls", 0) + 1)
+            except Exception as exc:  # noqa: BLE001 - Layer 1 still decides the answer
+                logger.warning("semantic claim extraction failed (%s); Layer 1 only", type(exc).__name__)
+                semantic_claims[text] = []
+                semantic_info.update(status="error")
+        extra = copilot_claims.validate(semantic_claims[text], text, sheet, collected_data)
+        return copilot_verification.merge(rep, extra)
+
+    def revalidated(text: str, source: str, rep):
+        """After a deterministic repair: the claims extracted from `source`
+        decided again against the repaired text (no new LLM call)."""
+        if not semantic_claims.get(source):
+            return rep
+        return copilot_verification.merge(rep, copilot_claims.validate(semantic_claims[source], text, sheet,
+                                                                       collected_data))
+
+    async def full_check(text: str):
+        g, lf, sem, rep = check(text)
+        return g, lf, sem, await with_semantic(text, rep)
+
+    grounding_warning, language_flags, semantic, report = await full_check(answer)
+    checked_text = answer
     answer, repairs = deterministic_repair(answer, report)
     if repairs:
         grounding_warning, language_flags, semantic, report = check(answer)
+        report = revalidated(answer, checked_text, report)
     contradicted_before_retry = bool(report.critical)
-    retried = False
+    retried = retry_discarded = False
     if (grounding_warning or language_flags or semantic or report.problems) and answered_normally:
         # One corrective turn covers all of it: numbers with no basis, wording
         # stronger than the evidence, claims the data contradicts (with the
@@ -4630,6 +4699,7 @@ async def _finalize_assistant_turn(
             copilot_verification.retry_instruction(report),
             copilot_faithfulness.retry_instruction(semantic) or copilot_explain.overclaim_warning(language_flags),
         ) if p)
+        before = (answer, grounding_warning, language_flags, semantic, report, list(label_issues), list(repairs))
         answer, retry_usage = await retry_once_if_ungrounded(
             messages, answer, problems, functools.partial(provider.chat, feature="assistant"),
             ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
@@ -4641,32 +4711,60 @@ async def _finalize_assistant_turn(
             answer = RAW_JSON_REFUSAL
         answer, more_labels = copilot_faithfulness.strip_internal_labels(answer)
         label_issues += more_labels
-        grounding_warning, language_flags, semantic, report = check(answer)
+        # the retried text is checked from scratch: every layer, every rule
+        grounding_warning, language_flags, semantic, report = await full_check(answer)
+        checked_text = answer
         answer, more_repairs = deterministic_repair(answer, report)
         if more_repairs:
             repairs += more_repairs
             grounding_warning, language_flags, semantic, report = check(answer)
+            report = revalidated(answer, checked_text, report)
+        if copilot_verification.score(report, grounding_warning) > copilot_verification.score(before[4], before[1]):
+            # the retry made it worse (a contradiction the draft did not have):
+            # keep the checked draft - never trade one error for another
+            answer, grounding_warning, language_flags, semantic, report, label_issues, repairs = before
+            retry_discarded = True
     faith_status = "retried_passed" if retried else ("repaired" if label_issues or repairs else "passed")
     blocked = False
-    if copilot_faithfulness.blocking(semantic) or report.critical:
+    withdrawn: list = []
+    basis = copilot_verification.blocking_basis(report)
+    if basis is None and copilot_faithfulness.blocking(semantic):
+        basis = "partial"  # a 3.1 blocking finding is a lexicon (heuristic) one
+    if basis == "partial":
+        # Only heuristic / semantic contradictions survived: withdraw their
+        # sentences and keep the checked rest instead of replacing the whole
+        # answer. Nothing is proposed for it (safe_to_act is false).
+        critical = report.critical or [c for c in report.claims if c.verdict == copilot_verification.CONTRADICTED]
+        cut = copilot_verification.withdraw(answer, critical)
+        basis = "exact"  # unless the withdrawn text checks clean below
+        if cut is not None:
+            g2, lf2, sem2, rep2 = check(cut[0])
+            if not rep2.critical and not copilot_faithfulness.blocking(sem2):
+                answer, withdrawn, basis = cut[0], critical, "partial"
+                grounding_warning, language_flags, semantic = g2, lf2, sem2
+                report = copilot_verification.Report(rep2.claims + critical, rep2.sheet)
+                faith_status = "warning"
+    if basis == "exact":
         # Still saying what the data contradicts after the repair and the
         # retry: the answer is replaced by a conclusion built from backend
         # data, never left standing - and no action is proposed for it.
         answer, faith_status, blocked = copilot_verification.fallback_answer(explanation, sheet), "fallback", True
         grounding_warning = None
-    elif semantic:
+    elif semantic and not withdrawn:
         faith_status = "warning"
     faithfulness = copilot_faithfulness.summarize(label_issues + semantic, faith_status, retried, faith_started)
     verification_status = copilot_verification.status_of(
-        report, repaired=bool(repairs) or (retried and contradicted_before_retry), fallback=blocked)
-    verification = copilot_verification.summarize(report, verification_status, repaired=repairs, retried=retried,
-                                                  started=faith_started, labels_stripped=bool(label_issues))
+        report, repaired=bool(repairs) or (retried and contradicted_before_retry and not retry_discarded),
+        fallback=blocked, withdrawn=len(withdrawn))
+    verification = copilot_verification.summarize(
+        report, verification_status, repaired=repairs, retried=retried, started=faith_started,
+        labels_stripped=bool(label_issues), withdrawn=withdrawn, retry_discarded=retry_discarded, semantic=semantic_info)
     copilot_verification.log_outcome(verification)
     if explanation is not None:
         explanation["language_flags"] = language_flags
 
     pending_action_data = None
-    if answered_normally and not blocked:
+    if answered_normally and verification["safe_to_act"]:
         pending_action_data = await _build_assistant_pending_action(
             message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
         )
@@ -4675,6 +4773,7 @@ async def _finalize_assistant_turn(
                                            answer=answer, explanation=explanation, visualizations=visualizations)
     extras["faithfulness"] = faithfulness
     extras["verification"] = verification
+    extras["decision"] = copilot_decision.build(plan, collected_data, verification)
     new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
     metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras,
                 "warehouse_ids": sorted(warehouse_scope.warehouse_ids_in(collected_data))}
@@ -4813,9 +4912,13 @@ async def assistant(request: Request, req: AssistantRequest):
     )
     _attach_explanation_brief(messages, plan, collected_data, turn.get("viz_now"))
 
+    deterministic = copilot_response.deterministic_answer(plan, collected_data)
     try:
         provider = _get_assistant_provider()
         for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
+            if deterministic:  # mechanical text built from tool data - no LLM call (Phase 6)
+                answer, answered_normally = deterministic, True
+                break
             result = await provider.chat(
                 messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
                 feature="assistant",
@@ -4918,9 +5021,14 @@ async def assistant_stream(request: Request, req: AssistantRequest):
         )
         _attach_explanation_brief(messages, plan, collected_data, turn.get("viz_now"))
 
+        deterministic = copilot_response.deterministic_answer(plan, collected_data)
         try:
             provider = _get_assistant_provider()
             for _round in range(start_round, ASSISTANT_MAX_TOOL_ROUNDS):
+                if deterministic:  # same as /assistant: no LLM call for mechanical text
+                    answer, answered_normally = deterministic, True
+                    yield _sse("token", {"text": answer})
+                    break
                 final_chunk = None
                 async for chunk in provider.chat_stream(
                     messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
@@ -5004,12 +5112,7 @@ async def chat_stream(request: Request, req: ChatRequest):
         raise HTTPException(status_code=429, detail=reason)
 
     auth_header = request.headers.get("authorization")
-    user_ctx = None
-    if auth_header:
-        try:
-            user_ctx = await get_user_context(auth_header)
-        except Exception:
-            pass
+    user_ctx = await _legacy_chat_user(auth_header)
 
     intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
     personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
@@ -5228,6 +5331,12 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         )
 
     require_can_confirm_action(user_ctx, action)
+    if not user_ctx.revocation_verified:
+        # Phase 5: auth-service could not check whether this token was revoked
+        # (Redis unreachable). Executing a write for a possibly logged-out
+        # session is refused; the action stays pending for a later confirm.
+        raise HTTPException(status_code=503, detail="Chưa xác minh được trạng thái phiên đăng nhập; thao tác tạm thời "
+                                                    "bị từ chối, vui lòng thử lại sau.")
 
     # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload -
     # only the fields the confirm dialog edits (action_guard), then re-check the

@@ -1,0 +1,237 @@
+{
+ "about": "Labels of the FINAL answers of the 3.3 live run A on the TEST split (eval/copilot33_answers_v33_test_runA.json) - the run that exposed the NO_DATA integration bug. Same single annotator; written from the final answer + tool data, without the verifier's claims.",
+ "labels": {
+  "c33-nat-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nat-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-abbr-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-multi-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wh-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bd-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-tr-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-tr-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-wi-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nd-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-08#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-bait-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-09#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-09#1": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-10#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-10#1": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-mt-11#0": {
+   "expected": [],
+   "critical": false
+  },
+  "c33-nat-08#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "no tool data; '13 đầu sách' invented - the NO_DATA rule was disabled by the integration bug fixed after this run"
+  },
+  "c33-nat-10#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": false,
+   "note": "'5 cuốn' then 4 listed"
+  },
+  "c33-multi-09#0": {
+   "expected": [
+    "ENTITY"
+   ],
+   "critical": true,
+   "note": "Dac trung (2 copies) and One Hundred Years (3) called 'đang bị hết hàng'"
+  },
+  "c33-multi-10#0": {
+   "expected": [
+    "TREND",
+    "ENTITY"
+   ],
+   "critical": true,
+   "note": "after withdrawing 2 sentences: top-3 'không ghi nhận sự gia tăng' while each rose (17>16, 14>13, 5>4); 'Tam Cam (tồn 2)' not in data; the withdrawal left a fragment 'và (2) Tồn kho dưới 5 bản.'"
+  },
+  "c33-multi-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "Dac trung 'còn 2 bản' not in this turn's data"
+  },
+  "c33-wh-09#0": {
+   "expected": [
+    "COUNT",
+    "ASSUMPTION"
+   ],
+   "critical": true,
+   "note": "'7 đầu sách khác ... Tổng cộng, 10 đầu sách' (7 include the 3); 'rủi ro thất thoát' not in data"
+  },
+  "c33-wh-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'nguồn cung ứng ... duy trì tốt hơn hẳn'"
+  },
+  "c33-bd-10#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'nhu cầu đầy đủ là 85.791.250 ₫ cho 40 đầu sách' - the full need is 117 titles; 40 are funded. The DRAFT was correct (117); the deterministic repair rewrote 117->40.",
+   "introduced_by_repair": true
+  },
+  "c33-bd-11#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'tiền được dùng để đảm bảo tồn kho cho các đầu sách đã có thẻ đề xuất hiển thị'"
+  },
+  "c33-tr-09#0": {
+   "expected": [
+    "RANKING"
+   ],
+   "critical": true,
+   "note": "'Tháng 9/2026 là tháng có tổng lượt mượn cao nhất trong năm nay' - the data has September only (Aug 1092 and May 1096 are higher elsewhere)"
+  },
+  "c33-tr-10#0": {
+   "expected": [
+    "RANKING"
+   ],
+   "critical": true,
+   "note": "Sắc Lời -71,4% 'giảm mạnh nhất'; Con Đường -80% in the list"
+  },
+  "c33-wi-09#0": {
+   "expected": [
+    "ASSESSMENT"
+   ],
+   "critical": true,
+   "note": "'tồn kho hiện tại còn thấp (3 bản so với ngưỡng 1)'"
+  },
+  "c33-nd-09#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "'tháng 9 (914 lượt)' not in the data (the data has a 30-day daily series and October)"
+  },
+  "c33-bait-11#0": {
+   "expected": [
+    "COUNT"
+   ],
+   "critical": true,
+   "note": "weekly totals 28 (28/09-04/10) and 33 (05/10-11/10) not in the data"
+  },
+  "c33-mt-08#0": {
+   "expected": [
+    "ASSUMPTION"
+   ],
+   "critical": false,
+   "note": "'ngân sách sẽ được dùng để bổ sung tồn kho an toàn'"
+  },
+  "c33-mt-08#1": {
+   "expected": [
+    "MONEY",
+    "COUNT",
+    "BUDGET"
+   ],
+   "critical": true,
+   "note": "data is still the full-need -20% scenario (planner context); '12.000.000 ₫ ... duyệt 11.970.400 ₫ cho 14 đầu sách (83 bản) ... 100%' and Dac trung 250 copies within 12M are invented"
+  },
+  "c33-mt-11#1": {
+   "expected": [
+    "MISSING_DATA"
+   ],
+   "critical": true,
+   "note": "Dế mèn 'không nằm trong danh sách' from a truncated list"
+  }
+ }
+}

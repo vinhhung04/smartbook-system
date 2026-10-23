@@ -78,6 +78,14 @@ class AuthenticationFailsClosedTests(unittest.IsolatedAsyncioTestCase):
             await self._ctx(lambda r: httpx.Response(200, json=locked))
         self.assertEqual(err.exception.status_code, 401)
 
+    async def test_unverifiable_revocation_is_carried_to_the_context(self):
+        # Phase 5: auth-service answers GET /auth/me while Redis is down but marks it
+        body = {"user": {"id": "u", "status": "ACTIVE", "roles": ["WAREHOUSE_MANAGER"]}}
+        ctx = await self._ctx(lambda r: httpx.Response(200, json=body, headers={"X-Token-Revocation-Check": "unverified"}))
+        self.assertFalse(ctx.revocation_verified)
+        ctx = await self._ctx(lambda r: httpx.Response(200, json=body))
+        self.assertTrue(ctx.revocation_verified)
+
     async def test_roles_come_from_the_live_auth_answer(self):
         body = {"user": {"id": "u", "status": "ACTIVE", "roles": ["WAREHOUSE_MANAGER"], "permissions": ["analytics.read"]}}
         ctx = await self._ctx(lambda r: httpx.Response(200, json=body))
@@ -317,6 +325,10 @@ class ActionConfirmationTests(unittest.IsolatedAsyncioTestCase):
         self.writable = warehouse_scope.ScopeUnavailable("auth down")
         await self.refused(503)
 
+    async def test_unverifiable_session_cannot_confirm_and_the_action_stays_pending(self):
+        self.user = self.user.model_copy(update={"revocation_verified": False})
+        await self.refused(503)
+
     async def test_another_users_action_cannot_be_confirmed(self):
         self.user = OTHER
         await self.refused(403)
@@ -334,3 +346,31 @@ class ActionConfirmationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LegacyChatAuthTests(unittest.IsolatedAsyncioTestCase):
+    """Phase 5: /chat and /chat/stream verify a presented token like /assistant
+    instead of silently continuing as anonymous."""
+
+    async def _chat(self, endpoint, auth_error=None, header="Bearer revoked"):
+        classify = AsyncMock(side_effect=AssertionError("must not reach intent / retrieval / cache"))
+        request = SimpleNamespace(headers={"authorization": header} if header else {}, client=SimpleNamespace(host="test"))
+        ctx = AsyncMock(side_effect=auth_error) if auth_error else AsyncMock(return_value=None)
+        with patch("main.rate_limiter.acquire", new=AsyncMock(return_value=(True, None))), \
+                patch("main.get_user_context", new=ctx), patch("main.classify_user_message", new=classify), \
+                patch.object(main.response_cache, "get", side_effect=AssertionError("cache read before auth")):
+            await endpoint(request, main.ChatRequest(message="Tình hình tồn kho thế nào?"))
+
+    async def test_a_revoked_token_gets_401_and_never_its_cached_answer(self):
+        for endpoint in (main.chat, main.chat_stream):
+            with self.assertRaises(HTTPException) as err:
+                await self._chat(endpoint, HTTPException(401, "Token has been revoked"))
+            self.assertEqual(err.exception.status_code, 401)
+
+    async def test_auth_unreachable_is_503_not_anonymous(self):
+        with self.assertRaises(HTTPException) as err:
+            await self._chat(main.chat, HTTPException(503, "auth down"))
+        self.assertEqual(err.exception.status_code, 503)
+
+    async def test_no_header_stays_anonymous(self):
+        self.assertIsNone(await main._legacy_chat_user(None))

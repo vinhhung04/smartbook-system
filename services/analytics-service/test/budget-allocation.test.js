@@ -87,3 +87,85 @@ test('lines with no lead-time shortfall are funded after every line that has one
   const low = { ...safetyOnly, title: 'L', priority: 'LOW', lead_time_demand: 0 };
   assert.ok(compareByShortfallPerCost(high, low) < 0);
 });
+
+// ---- allocateMarginal (budget mode since 3.3) ----
+const { allocateMarginal, poissonTail } = require('../src/utils/budget-allocation');
+
+test('poissonTail is P(D > k)', () => {
+  assert.equal(poissonTail(0, 0), 0);
+  assert.ok(Math.abs(poissonTail(1, 0) - (1 - Math.exp(-1))) < 1e-12);
+  assert.ok(poissonTail(5, 2) > poissonTail(5, 6));
+});
+
+test('marginal allocation never exceeds the budget or a line cap', () => {
+  const lines = [
+    { cap: 4, unitCost: 100000, lambda: 6, position: 0 },
+    { cap: 10, unitCost: 30000, lambda: 2, position: 1 },
+    { cap: 2, unitCost: 250000, lambda: 9, position: 0 },
+  ];
+  const r = allocateMarginal(lines, 500000);
+  r.qty.forEach((q, i) => assert.ok(q >= 0 && q <= lines[i].cap));
+  const spent = r.qty.reduce((s, q, i) => s + q * lines[i].unitCost, 0);
+  assert.equal(r.spent, spent);
+  assert.ok(spent <= 500000);
+  assert.equal(r.remaining, 500000 - spent);
+});
+
+test('the next copy goes where it raises the chance of covering lead-time demand most per VND', () => {
+  // same price: the line whose demand is far above its position gets the first copies
+  const r = allocateMarginal([
+    { cap: 5, unitCost: 100000, lambda: 1, position: 3 },
+    { cap: 5, unitCost: 100000, lambda: 8, position: 0 },
+  ], 200000);
+  assert.deepEqual(r.qty, [0, 2]);
+  // a cheap copy with a smaller gain can beat an expensive one
+  const cheap = allocateMarginal([
+    { cap: 1, unitCost: 1000000, lambda: 5, position: 0 },
+    { cap: 1, unitCost: 50000, lambda: 1, position: 0 },
+  ], 1000000);
+  assert.equal(cheap.qty[1], 1);
+});
+
+test('a line can be funded in part; copies with no modelled gain come last, cheapest first', () => {
+  const r = allocateMarginal([
+    { cap: 6, unitCost: 100000, lambda: 4, position: 0 },
+    { cap: 3, unitCost: 20000, lambda: 0, position: 5 }, // safety stock only
+  ], 340000);
+  assert.ok(r.qty[0] > 0 && r.qty[0] < 6);
+  assert.equal(r.qty[0] * 100000 + r.qty[1] * 20000, 340000 - r.remaining);
+});
+
+test('a zero budget funds nothing; an ample budget funds every cap', () => {
+  const lines = [{ cap: 3, unitCost: 10000, lambda: 2, position: 0 }, { cap: 2, unitCost: 0, lambda: 1, position: 0 }];
+  assert.deepEqual(allocateMarginal(lines, 0).qty, [0, 2]); // free copies are always taken
+  assert.deepEqual(allocateMarginal(lines, 1e9).qty, [3, 2]);
+});
+
+test('the backtest policy calls the same allocation (eval/reorder-policies.js)', () => {
+  const { marginalAllocation } = require('../eval/reorder-policies');
+  const decisions = [
+    { qty: 4, unitCost: 100000, candidate: { lead_time_demand: 6, inventory_position: 0 } },
+    { qty: 10, unitCost: 30000, candidate: { lead_time_demand: 2, inventory_position: 1 } },
+  ];
+  const viaEval = marginalAllocation(decisions, 300000);
+  const direct = allocateMarginal(decisions.map((d) => ({ cap: d.qty, unitCost: d.unitCost, lambda: d.candidate.lead_time_demand, position: d.candidate.inventory_position })), 300000);
+  assert.deepEqual(viaEval.funded.map((d) => d.qty), direct.qty.filter((q) => q > 0));
+  assert.equal(viaEval.spent, direct.spent);
+});
+
+test('trace + serviceCurve: cumulative cost vs share of modelled demand served (Phase 6)', () => {
+  const { serviceCurve } = require('../src/utils/budget-allocation');
+  const lines = [
+    { cap: 3, unitCost: 100, lambda: 2, position: 0 },
+    { cap: 2, unitCost: 50, lambda: 0, position: 4 }, // safety copies only
+  ];
+  const r = allocateMarginal(lines, 1e9, { trace: true });
+  assert.equal(r.trace.length, 5);
+  assert.equal(r.trace.reduce((s, t) => s + t.cost, 0), r.spent);
+  const curve = serviceCurve(r.trace, 4);
+  assert.equal(curve.full_plan_cost, 400);
+  // every modelled gain comes from line 0; the 100 copies of service cost 300, safety copies add 100 more
+  assert.equal(curve.cost_for_service_pct[100], 300);
+  assert.ok(curve.cost_for_service_pct[90] <= curve.cost_for_service_pct[99]);
+  assert.deepEqual(curve.curve.map((c) => c.service_pct), [25, 50, 75, 100]);
+});

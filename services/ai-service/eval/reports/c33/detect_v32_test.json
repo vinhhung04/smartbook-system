@@ -1,0 +1,447 @@
+{
+ "code": "working tree",
+ "semantic": "off",
+ "items": {
+  "c33-nat-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.313
+  },
+  "c33-nat-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.48
+  },
+  "c33-nat-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.511
+  },
+  "c33-nat-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.946
+  },
+  "c33-abbr-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.534
+  },
+  "c33-abbr-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.846
+  },
+  "c33-abbr-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.594
+  },
+  "c33-abbr-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.827
+  },
+  "c33-multi-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 6.854
+  },
+  "c33-multi-09#0:draft": {
+   "found": [
+    "COUNT",
+    "LABEL"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Ngân sách eo hẹp so với nhu cầu thực tế: Tổng nhu cầu nhập đầy đủ lên tới 85.791.250 ₫ cho 117 đầu sách, trong khi ngân sách 8 triệu chỉ đáp ứng được khoảng 9% chi phí này.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 8.000.000 ₫: số đầu sách được duyệt là 10 đầu sách.",
+     "expected": "10 đầu sách",
+     "evidence": [
+      {
+       "label": "Ngân sách 8.000.000 ₫: số đầu sách được duyệt",
+       "value": 10.0,
+       "unit": "đầu sách",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Ví dụ, Norwegian Wood được duyệt 27 bản để lấp đầy khoảng trống lớn từ mức tồn hiện tại, trong khi các đầu sách khác như Dac trung tam ly hoc cua nguoi Viet hay One Hundred Years of Solitude (cũng đan",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 8.000.000 ₫: số bản được duyệt là 56 bản.",
+     "expected": "56 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 8.000.000 ₫: số bản được duyệt",
+       "value": 56.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "available_qty",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Tên trường kỹ thuật trong câu trả lời."
+    }
+   ],
+   "ms": 11.984
+  },
+  "c33-multi-10#0:draft": {
+   "found": [
+    "TREND"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Dựa trên dữ liệu hiện có, không thể xác định chính xác đầu sách nào có lượt mượn tăng so với kỳ trước và tồn kho dưới 5 bản, do thiếu số liệu lượt mượn của kỳ t",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu (các kỳ trọn): lượt mượn giảm 65.4%; câu trả lời nói ngược lại."
+    },
+    {
+     "text": "Do đó, mặc dù chúng ta biết danh sách các sách có tồn kho thấp (như Norwegian Wood, Dac trung tam ly hoc cua nguoi Viet, Kafka on the Shore, v.v.), chúng ta khô",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu (các kỳ trọn): lượt mượn giảm 65.4%; câu trả lời nói ngược lại."
+    }
+   ],
+   "ms": 10.036
+  },
+  "c33-multi-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.545
+  },
+  "c33-wh-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.245
+  },
+  "c33-wh-09#0:draft": {
+   "found": [
+    "LABEL"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ."
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ."
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ."
+    }
+   ],
+   "ms": 10.927
+  },
+  "c33-wh-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.533
+  },
+  "c33-wh-11#0:draft": {
+   "found": [
+    "OPTIMALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Mặc dù tổng số bản tồn khả dụng của Kho Ha Noi (8 bản) thấp hơn so với Kho HCM Chinh (126 bản), nhưng việc không có sách nào bị \"hết hàng\" cho thấy nguồn cung ứng hoặc nhu cầu tại đây đang ở trạng thá",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu."
+    },
+    {
+     "text": "tốt nhất",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "hệ thống không tối ưu hóa, chỉ áp dụng quy tắc xếp hạng/phân bổ"
+    }
+   ],
+   "ms": 3.814
+  },
+  "c33-bd-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.706
+  },
+  "c33-bd-09#0:draft": {
+   "found": [
+    "COVERAGE",
+    "OVERCLAIM"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Điều này cho thấy các dòng sách có nhu cầu cấp bách nhất hiện tại đều cần một khoản vốn lớn hơn phần ngân sách còn lại để đáp ứng đủ.",
+     "type": "decision",
+     "category": "COVERAGE",
+     "label": "nói đáp ứng toàn bộ nhu cầu khi dữ liệu cho thấy chưa đủ",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu cho thấy vẫn còn đầu sách ưu tiên cao chưa được duyệt (tới 89) và nhu cầu đầy đủ cần 85.791.250 đ.",
+     "expected": "chưa đáp ứng toàn bộ nhu cầu"
+    },
+    {
+     "text": "đáp ứng đủ",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính"
+    }
+   ],
+   "ms": 4.975
+  },
+  "c33-bd-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.95
+  },
+  "c33-bd-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.735
+  },
+  "c33-tr-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 6.934
+  },
+  "c33-tr-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.786
+  },
+  "c33-tr-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.668
+  },
+  "c33-tr-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.873
+  },
+  "c33-wi-08#0:draft": {
+   "found": [
+    "MONEY"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Đánh đổi: Tiết kiệm thêm 3.000.000 ₫ so với kịch bản 15 triệu, nhưng rủi ro hết hàng ở 87 đầu sách ưu tiên cao vẫn còn nguyên và chưa bù đắp được bất kỳ thiếu hụt dự kiến nào.",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Chênh lệch chi phí duyệt giữa các phương án là 2.975.000 đ.",
+     "expected": "2.975.000 đ",
+     "evidence": [
+      {
+       "label": "Chênh lệch chi phí duyệt",
+       "value": 2975000.0,
+       "unit": "đ",
+       "derived": true
+      }
+     ]
+    }
+   ],
+   "ms": 7.069
+  },
+  "c33-wi-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.191
+  },
+  "c33-wi-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.727
+  },
+  "c33-wi-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.585
+  },
+  "c33-nd-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.659
+  },
+  "c33-nd-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.179
+  },
+  "c33-nd-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.455
+  },
+  "c33-nd-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.517
+  },
+  "c33-bait-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.684
+  },
+  "c33-bait-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.851
+  },
+  "c33-bait-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.731
+  },
+  "c33-bait-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.289
+  },
+  "c33-mt-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.69
+  },
+  "c33-mt-08#1:draft": {
+   "found": [
+    "OVERCLAIM"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "đáp ứng 100%",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính"
+    }
+   ],
+   "ms": 4.743
+  },
+  "c33-mt-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.092
+  },
+  "c33-mt-09#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.875
+  },
+  "c33-mt-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.035
+  },
+  "c33-mt-10#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 6.569
+  },
+  "c33-mt-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.332
+  },
+  "c33-mt-11#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.9
+  }
+ }
+}

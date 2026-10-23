@@ -10,6 +10,9 @@ class UserContext(BaseModel):
     roles: list[str] = []
     permissions: list[str] = []
     is_superuser: bool = False
+    # False when auth-service could not check token revocation (Redis down):
+    # the session may have been logged out, so state-changing calls refuse it.
+    revocation_verified: bool = True
 
 
 class PendingAction(BaseModel):

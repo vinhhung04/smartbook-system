@@ -1,6 +1,6 @@
 const { inventoryPool, borrowPool, query, queryOne } = require('../lib/db');
 const { BORROW_TRENDS_SQL, borrowTrendsParams } = require('../lib/borrow-trends-query');
-const { inScope } = require('../middlewares/warehouse-scope.middleware');
+const { inScope, canReadWarehouseScope } = require('../middlewares/warehouse-scope.middleware');
 const {
   createHttpError,
   parseDateRange,
@@ -11,8 +11,9 @@ const {
 const { findSeasonalEvent } = require('../config/seasonal-events');
 const { rollingBacktest } = require('../utils/forecast');
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
-const { calculateSuggestion, compareReorderCandidates, compareByShortfallPerCost, seasonalIndexFromCounts } = require('../utils/reorder-suggestion');
-const { allocateBudgetInOrder } = require('../utils/budget-allocation');
+const { calculateSuggestion, compareReorderCandidates, seasonalIndexFromCounts } = require('../utils/reorder-suggestion');
+const { allocateMarginal, serviceCurve } = require('../utils/budget-allocation');
+const { loanSurvival, expectedReturns } = require('../utils/expected-returns');
 const { classifyWeedingCandidate } = require('../utils/weeding');
 const { stockStatus, summarizeWarehouses } = require('../utils/warehouse-stock');
 const { mergeCatalogSignals } = require('../utils/catalog-signals');
@@ -277,7 +278,9 @@ const getTopBooks = asyncHandler(async (req, res) => {
     ORDER BY COUNT(*) DESC
     LIMIT $3
     `,
-    [from, to, limit],
+    // Loans can outlive a title removed from the catalog; over-fetch so the
+    // ranking still has `limit` books that exist once those are dropped.
+    [from, to, limit * 3],
   );
 
   if (!borrowRows.length) {
@@ -302,15 +305,18 @@ const getTopBooks = asyncHandler(async (req, res) => {
   const bookByVariant = new Map(bookRows.map((row) => [row.variant_id, row]));
 
   return res.json({
-    data: borrowRows.map((row) => {
-      const book = bookByVariant.get(row.variant_id) || {};
-      return {
-        variant_id: row.variant_id,
-        book_id: book.book_id || null,
-        title: book.title || `Variant ${row.variant_id.slice(0, 8)}`,
-        borrow_count: number(row.borrow_count),
-      };
-    }),
+    data: borrowRows
+      .filter((row) => bookByVariant.has(row.variant_id))
+      .slice(0, limit)
+      .map((row) => {
+        const book = bookByVariant.get(row.variant_id);
+        return {
+          variant_id: row.variant_id,
+          book_id: book.book_id,
+          title: book.title,
+          borrow_count: number(row.borrow_count),
+        };
+      }),
   });
 });
 
@@ -802,10 +808,74 @@ async function getInventorySnapshot() {
   );
 }
 
+// Budget mode only (?budgetVnd=). Loans for the expected-returns estimate:
+// every loan still out (censored at its age) and the loans returned in the
+// last year (observed durations), pooled over the catalog for one
+// Kaplan-Meier curve (expected-returns.js), as in the backtest.
+async function getLoanReturnView(to) {
+  const rows = await query(
+    borrowPool,
+    `
+    SELECT
+      li.variant_id::text AS variant_id,
+      EXTRACT(EPOCH FROM ($1::timestamptz - lt.borrow_date)) / 86400 AS age_days,
+      CASE WHEN li.return_date IS NULL THEN NULL
+           ELSE EXTRACT(EPOCH FROM (li.return_date - lt.borrow_date)) / 86400 END AS duration_days
+    FROM loan_items li
+    JOIN loan_transactions lt ON lt.id = li.loan_id
+    WHERE lt.borrow_date <= $1::timestamptz
+      AND ((li.return_date IS NULL AND li.status IN ('BORROWED', 'OVERDUE'))
+           OR li.return_date >= $1::timestamptz - INTERVAL '365 days')
+    `,
+    [to],
+  );
+  const openAgesByVariant = new Map();
+  const openAges = [];
+  const returnedDurations = [];
+  for (const row of rows) {
+    if (row.duration_days === null || row.duration_days === undefined) {
+      const age = Math.max(0, number(row.age_days));
+      openAges.push(age);
+      if (!openAgesByVariant.has(row.variant_id)) openAgesByVariant.set(row.variant_id, []);
+      openAgesByVariant.get(row.variant_id).push(age);
+    } else {
+      returnedDurations.push(Math.max(0, number(row.duration_days)));
+    }
+  }
+  return { openAgesByVariant, survival: loanSurvival(returnedDurations, openAges), returned: returnedDurations.length, open: openAges.length };
+}
+
+// Copies ordered and not yet received on purchase orders a supplier is working
+// on. DRAFT / PENDING_APPROVAL are not commitments; SHORTAGE_REPORTED means
+// the rest may never come, so neither counts as incoming.
+const INCOMING_PO_STATUSES = ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED'];
+
+async function getIncomingQtyByVariant() {
+  const rows = await query(
+    inventoryPool,
+    `
+    SELECT poi.variant_id::text AS variant_id, SUM(GREATEST(poi.ordered_qty - poi.received_qty, 0)) AS incoming_qty
+    FROM purchase_order_items poi
+    JOIN purchase_orders po ON po.id = poi.purchase_order_id
+    WHERE po.status = ANY($1::text[])
+    GROUP BY poi.variant_id
+    `,
+    [INCOMING_PO_STATUSES],
+  );
+  return rowsToNumberMap(rows, 'variant_id', 'incoming_qty');
+}
+
 // An explicit ?leadTimeDays= is an instruction, not a hint: it overrides the
 // learned value, and says so in lead_time_source so the answer stays honest
 // about where the number came from.
 function resolveItemLeadTime(variantId, history, ranges) {
+  const resolved = resolveBaseLeadTime(variantId, history, ranges);
+  // ?leadTimeDelayDays= (Phase 6 what-if "nhà cung cấp giao chậm thêm N ngày"):
+  // added to each item's own lead time; the source still says where the base came from.
+  return ranges.leadTimeDelayDays ? { ...resolved, days: resolved.days + ranges.leadTimeDelayDays } : resolved;
+}
+
+function resolveBaseLeadTime(variantId, history, ranges) {
   if (ranges.leadTimeDaysProvided) {
     return { days: ranges.leadTimeDays, source: 'REQUESTED', samples: 0 };
   }
@@ -824,6 +894,19 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   const priority = String(req.query.priority || 'ALL').toUpperCase();
   const includeLowDemand = parseBoolean(req.query.includeLowDemand, false);
   const budgetVnd = parseOptionalBudget(req.query.budgetVnd);
+  // Phase 6 what-ifs (both optional; absent = the endpoint as before)
+  ranges.leadTimeDelayDays = req.query.leadTimeDelayDays === undefined || req.query.leadTimeDelayDays === ''
+    ? 0 : parsePositiveInteger(req.query.leadTimeDelayDays, 0, 180, 'leadTimeDelayDays');
+  const priorityWarehouseId = req.query.priorityWarehouseId ? String(req.query.priorityWarehouseId).trim() : null;
+  if (priorityWarehouseId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(priorityWarehouseId)) {
+    throw createHttpError(400, 'priorityWarehouseId must be a UUID');
+  }
+  if (priorityWarehouseId && budgetVnd === null) {
+    throw createHttpError(400, 'priorityWarehouseId needs budgetVnd');
+  }
+  if (priorityWarehouseId && req.user && !(await canReadWarehouseScope(req.user, priorityWarehouseId))) {
+    throw createHttpError(403, 'You do not have read access to this warehouse');
+  }
 
   if (!REORDER_PRIORITIES.has(priority)) {
     throw createHttpError(400, 'priority must be one of ALL, HIGH, MEDIUM, LOW');
@@ -853,17 +936,19 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
 
   const seasonalEvent = findSeasonalEvent(ranges.to);
 
+  const suggest = (row, options) => calculateSuggestion(row, {
+    borrowCount: borrowByVariant.get(row.variant_id) || 0,
+    previousBorrowCount: previousBorrowByVariant.get(row.variant_id) || 0,
+    reservationCount: reservationByVariant.get(row.variant_id) || 0,
+    wishlistCount: wishlistByBook.get(row.book_id) || 0,
+    availabilityAlertCount: alertsByBook.get(row.book_id) || 0,
+  }, ranges, {
+    index: seasonalIndexByVariant.get(row.variant_id) ?? 1,
+    event: seasonalEvent,
+  }, dailySeriesByVariant.get(row.variant_id) || [], resolveItemLeadTime(row.variant_id, leadTimeHistory, ranges), options);
+
   const candidates = inventoryRows
-    .map((row) => calculateSuggestion(row, {
-      borrowCount: borrowByVariant.get(row.variant_id) || 0,
-      previousBorrowCount: previousBorrowByVariant.get(row.variant_id) || 0,
-      reservationCount: reservationByVariant.get(row.variant_id) || 0,
-      wishlistCount: wishlistByBook.get(row.book_id) || 0,
-      availabilityAlertCount: alertsByBook.get(row.book_id) || 0,
-    }, ranges, {
-      index: seasonalIndexByVariant.get(row.variant_id) ?? 1,
-      event: seasonalEvent,
-    }, dailySeriesByVariant.get(row.variant_id) || [], resolveItemLeadTime(row.variant_id, leadTimeHistory, ranges)))
+    .map((row) => suggest(row))
     .filter((item) => {
       if (priority !== 'ALL' && item.priority !== priority) return false;
       if (includeLowDemand) return true;
@@ -893,21 +978,108 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   });
 
   // Budget is applied over the full candidate set (not just the page being
-  // returned). Lines are funded by expected lead-time shortfall per VND
-  // (compareByShortfallPerCost) - in a held-out backtest this served more
-  // demand at the same spend than funding in priority order
-  // (docs/ANALYSIS/REORDER_CANDIDATES.md) - while the list itself stays in
-  // priority order, so the same page slice is taken as usual.
+  // returned), while the list itself stays in priority order with the same
+  // suggested_reorder_qty as without a budget. With a budget, each line is
+  // re-sized against its inventory position - available + incoming purchase
+  // orders + copies on loan expected back within the lead time - with the
+  // HIGH/MEDIUM minimums only where that position does not cover the
+  // lead-time demand, and the money is spent copy by copy where it most raises
+  // the chance of serving lead-time demand per VND (allocateMarginal). This is
+  // IP_RETURNS+FLOOR+MARGINAL, selected on held-out seeds of the backtest:
+  // docs/ANALYSIS/REORDER_OPTIMIZATION_EVALUATION.md.
   let resultItems = candidates;
   let budget = null;
   if (budgetVnd !== null) {
-    const allocation = allocateBudgetInOrder(candidates, budgetVnd, compareByShortfallPerCost);
-    resultItems = allocation.items;
+    const [loanView, incomingByVariant, priorityStock] = await Promise.all([
+      getLoanReturnView(ranges.to), getIncomingQtyByVariant(),
+      priorityWarehouseId ? getWarehouseVariantStock(priorityWarehouseId) : Promise.resolve(null),
+    ]);
+    // lines out of stock / under their threshold AT the priority warehouse are funded first
+    const shortAtPriority = new Set((priorityStock || [])
+      .filter((row) => row.variant_id && stockStatus(row, LOW_STOCK_THRESHOLD) !== 'OK')
+      .map((row) => row.variant_id));
+    const rowById = new Map(inventoryRows.map((row) => [row.variant_id, row]));
+    const plans = candidates.map((item) => {
+      const row = rowById.get(item.variant_id);
+      const incomingQty = incomingByVariant.get(item.variant_id) || 0;
+      const returns = expectedReturns(loanView.openAgesByVariant.get(item.variant_id) || [], item.lead_time_days, loanView.survival);
+      const plan = suggest({ ...row, available_qty: number(row.available_qty) + incomingQty }, {
+        expectedReturns: returns ?? 0,
+        priorityFloors: 'IF_SHORTFALL',
+      });
+      return {
+        incoming_qty: incomingQty,
+        expected_returns: plan.expected_returns,
+        inventory_position: plan.inventory_position,
+        cap_qty: plan.suggested_reorder_qty,
+        lambda: Math.max(plan.lead_time_demand, plan.avg_daily_demand * plan.lead_time_days),
+      };
+    });
+    const lines = plans.map((plan, i) => ({
+      cap: plan.cap_qty, unitCost: candidates[i].unit_cost, lambda: plan.lambda, position: plan.inventory_position,
+    }));
+    let allocation;
+    let scenarioGain;
+    if (priorityWarehouseId) {
+      const first = lines.map((line, i) => (shortAtPriority.has(candidates[i].variant_id) ? line : { ...line, cap: 0 }));
+      const a1 = allocateMarginal(first, budgetVnd, { trace: true });
+      const rest = lines.map((line, i) => (shortAtPriority.has(candidates[i].variant_id) ? { ...line, cap: 0 } : line));
+      const a2 = allocateMarginal(rest, a1.remaining, { trace: true });
+      allocation = { qty: a1.qty.map((q, i) => q + a2.qty[i]), spent: round(a1.spent + a2.spent, 2), remaining: a2.remaining };
+      scenarioGain = [...a1.trace, ...a2.trace].reduce((sum, step) => sum + step.gain, 0);
+    } else {
+      allocation = allocateMarginal(lines, budgetVnd, { trace: true });
+      scenarioGain = allocation.trace.reduce((sum, step) => sum + step.gain, 0);
+    }
+    // the whole re-sized plan, funded without a budget limit: the cost / service curve
+    const full = serviceCurve(allocateMarginal(lines, lines.reduce((sum, l) => sum + l.cap * l.unitCost, 0), { trace: true }).trace);
+    resultItems = candidates.map((item, i) => {
+      const fundedQty = allocation.qty[i];
+      const { lambda, ...plan } = plans[i];
+      return {
+        ...item,
+        within_budget: fundedQty > 0,
+        funded_qty: fundedQty,
+        funded_cost: round(fundedQty * item.unit_cost, 2),
+        budget_plan: plan,
+      };
+    });
+    const funded = resultItems.filter((item) => item.funded_qty > 0);
     budget = {
       budget_vnd: budgetVnd,
-      funded_cost: allocation.funded_cost,
-      remaining_vnd: allocation.remaining_vnd,
-      funding_order: 'SHORTFALL_PER_COST',
+      funded_cost: allocation.spent,
+      remaining_vnd: allocation.remaining,
+      funded_lines: funded.length,
+      funded_qty: funded.reduce((sum, item) => sum + item.funded_qty, 0),
+      partially_funded_lines: funded.filter((item) => item.funded_qty < item.budget_plan.cap_qty).length,
+      // every re-sized line in full: what this budget mode would need
+      capped_need_cost: round(resultItems.reduce((sum, item) => sum + item.budget_plan.cap_qty * item.unit_cost, 0), 2),
+      funding_order: priorityWarehouseId ? 'PRIORITY_WAREHOUSE_THEN_MARGINAL' : 'MARGINAL_SERVICE_PER_COST',
+      quantity_rule: 'POSITION_WITH_INCOMING_AND_RETURNS',
+      // expected lead-time demand (Poisson model) the funded copies serve, as a share of
+      // what the whole re-sized plan serves - the service level of this budget
+      expected_service_pct: full.expected_demand_served > 0
+        ? Math.round((scenarioGain / full.expected_demand_served) * 1000) / 10 : null,
+      service_curve: full,
+      ...(priorityWarehouseId ? {
+        priority_warehouse_id: priorityWarehouseId,
+        priority_lines: resultItems.filter((item) => shortAtPriority.has(item.variant_id)).length,
+        priority_lines_funded: resultItems.filter((item) => shortAtPriority.has(item.variant_id) && item.funded_qty > 0).length,
+      } : {}),
+      ...(ranges.leadTimeDelayDays ? { lead_time_delay_days: ranges.leadTimeDelayDays } : {}),
+      returns_model: {
+        method: 'KAPLAN_MEIER',
+        available: Boolean(loanView.survival),
+        returned_loans: loanView.returned,
+        open_loans: loanView.open,
+      },
+      assumptions: [
+        'Tồn dùng cho ngân sách = khả dụng + số bản đang về từ phiếu nhập đã duyệt/đã gửi nhà cung cấp + số bản đang mượn dự kiến trả trong thời gian chờ hàng.',
+        loanView.survival
+          ? `Khả năng trả sách ước lượng từ ${loanView.returned} lượt trả trong 365 ngày và ${loanView.open} lượt đang mượn (Kaplan-Meier, gộp toàn thư viện).`
+          : 'Chưa đủ lịch sử trả sách để ước lượng: không tính bản đang mượn sẽ trả.',
+        'Mỗi bản được duyệt cho dòng có mức tăng xác suất đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng cao nhất (nhu cầu giả định phân phối Poisson); một dòng có thể chỉ được duyệt một phần.',
+      ],
     };
   }
 
@@ -919,6 +1091,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         to: formatDateOnly(ranges.to),
         days: ranges.days,
         leadTimeDays: ranges.leadTimeDays,
+        ...(ranges.leadTimeDelayDays ? { leadTimeDelayDays: ranges.leadTimeDelayDays } : {}),
       },
       summary,
       budget,

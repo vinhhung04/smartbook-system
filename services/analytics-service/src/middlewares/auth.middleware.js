@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const { isTokenRevoked } = require('../lib/token-revocation');
+const { revocationGuard } = require('@smartbook/shared/token-revocation');
+const { checkTokenRevocation } = require('../lib/token-revocation');
 
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization || '';
@@ -18,9 +19,8 @@ async function authenticateToken(req, res, next) {
   // A logged-out / locked / re-roled account is refused here too, not only at
   // auth-service and inventory (Copilot 3.2 audit: revoked tokens still read
   // /analytics/* through the gateway).
-  if (await isTokenRevoked(payload)) {
-    return res.status(401).json({ message: 'Token has been revoked' });
-  }
+  // Redis unreachable: reads continue, writes get 503 (shared token-revocation).
+  if (revocationGuard(req, res, await checkTokenRevocation(payload))) return undefined;
   req.user = {
     ...payload,
     id: payload.id || payload.sub,

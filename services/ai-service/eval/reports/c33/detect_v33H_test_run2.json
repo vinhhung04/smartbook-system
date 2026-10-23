@@ -1,0 +1,1206 @@
+{
+ "code": "working tree",
+ "semantic": "on",
+ "items": {
+  "c33-nat-08#0:draft": {
+   "found": [
+    "NO_DATA"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Hôm nay có 13 đầu sách đang dưới mức tồn tối thiểu.",
+     "type": "numeric",
+     "category": "NO_DATA",
+     "label": "đưa ra số liệu khi chưa truy xuất được dữ liệu nào",
+     "verdict": "UNSUPPORTED",
+     "severity": "critical",
+     "detail": "Lượt này chưa truy xuất dữ liệu nào, nên con số này không có căn cứ.",
+     "basis": "exact",
+     "expected": "không đưa số liệu khi chưa có dữ liệu"
+    }
+   ],
+   "ms": 3.602,
+   "blocking_basis": "exact",
+   "llm": {
+    "latency_ms": 2070,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2067.3,
+     "prompt_tokens": 2334,
+     "completion_tokens": 36,
+     "tool_call_count": 0,
+     "costUsd": 2.2476e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nat-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.971,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2830,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2827.6,
+     "prompt_tokens": 2343,
+     "completion_tokens": 67,
+     "tool_call_count": 0,
+     "costUsd": 3.07924e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nat-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.987,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5088,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5086.1,
+     "prompt_tokens": 2406,
+     "completion_tokens": 342,
+     "tool_call_count": 0,
+     "costUsd": 7.40784e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nat-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.853,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 4104,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4102.4,
+     "prompt_tokens": 2397,
+     "completion_tokens": 328,
+     "tool_call_count": 0,
+     "costUsd": 7.16749e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-abbr-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.424,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5076,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5073.5,
+     "prompt_tokens": 2465,
+     "completion_tokens": 442,
+     "tool_call_count": 0,
+     "costUsd": 9.10639e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-abbr-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.384,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 4544,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4541.7,
+     "prompt_tokens": 2445,
+     "completion_tokens": 387,
+     "tool_call_count": 0,
+     "costUsd": 7.1436e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-abbr-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.472,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2555,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2552.5,
+     "prompt_tokens": 2385,
+     "completion_tokens": 142,
+     "tool_call_count": 0,
+     "costUsd": 3.7786e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-abbr-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 8.878,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 7119,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 7097.9,
+     "prompt_tokens": 2546,
+     "completion_tokens": 677,
+     "tool_call_count": 0,
+     "costUsd": 0.000112166,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-multi-08#0:draft": {
+   "found": [
+    "ENTITY"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Có, hiện có 3 đầu sách đang hết hàng tại Kho HCM Chinh nhưng vẫn còn nhu cầu đặt chỗ: Dế Mèn Phiêu Lưu Ký, Tam Cam và One Hundred Years of Solitude.",
+     "type": "entity",
+     "category": "ENTITY",
+     "label": "số liệu gán nhầm kho/đầu sách",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "One Hundred Years of Solitude còn 1 bản khả dụng — không phải hết hàng.",
+     "basis": "semantic",
+     "expected": "còn 1 bản"
+    }
+   ],
+   "ms": 7.474,
+   "blocking_basis": "partial",
+   "llm": {
+    "latency_ms": 6073,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 6070.7,
+     "prompt_tokens": 2643,
+     "completion_tokens": 519,
+     "tool_call_count": 0,
+     "costUsd": 9.4536e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-multi-09#0:draft": {
+   "found": [
+    "COUNT",
+    "LABEL"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Ngân sách eo hẹp so với nhu cầu thực tế: Tổng nhu cầu nhập đầy đủ lên tới 85.791.250 ₫ cho 117 đầu sách, trong khi ngân sách 8 triệu chỉ đáp ứng được khoảng 9% chi phí này.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 8.000.000 ₫: số đầu sách được duyệt là 10 đầu sách.",
+     "basis": "exact",
+     "expected": "10 đầu sách",
+     "evidence": [
+      {
+       "label": "Ngân sách 8.000.000 ₫: số đầu sách được duyệt",
+       "value": 10.0,
+       "unit": "đầu sách",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Ví dụ, Norwegian Wood được duyệt 27 bản để lấp đầy khoảng trống lớn từ mức tồn hiện tại, trong khi các đầu sách khác như Dac trung tam ly hoc cua nguoi Viet hay One Hundred Years of Solitude (cũng đan",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 8.000.000 ₫: số bản được duyệt là 56 bản.",
+     "basis": "exact",
+     "expected": "56 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 8.000.000 ₫: số bản được duyệt",
+       "value": 56.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "available_qty",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Tên trường kỹ thuật trong câu trả lời.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 21.205,
+   "blocking_basis": "exact",
+   "llm": {
+    "latency_ms": 11527,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 11525.0,
+     "prompt_tokens": 2968,
+     "completion_tokens": 1075,
+     "tool_call_count": 0,
+     "costUsd": 0.000161206,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-multi-10#0:draft": {
+   "found": [
+    "TREND"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Dựa trên dữ liệu hiện có, không thể xác định chính xác đầu sách nào có lượt mượn tăng so với kỳ trước và tồn kho dưới 5 bản, do thiếu số liệu lượt mượn của kỳ t",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu (các kỳ trọn): lượt mượn giảm 65.4%; câu trả lời nói ngược lại.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Do đó, mặc dù chúng ta biết danh sách các sách có tồn kho thấp (như Norwegian Wood, Dac trung tam ly hoc cua nguoi Viet, Kafka on the Shore, v.v.), chúng ta khô",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu (các kỳ trọn): lượt mượn giảm 65.4%; câu trả lời nói ngược lại.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 11.884,
+   "blocking_basis": "partial",
+   "llm": {
+    "latency_ms": 8423,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 8421.4,
+     "prompt_tokens": 2746,
+     "completion_tokens": 180,
+     "tool_call_count": 0,
+     "costUsd": 4.434e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-multi-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.988,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5437,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5434.8,
+     "prompt_tokens": 2414,
+     "completion_tokens": 393,
+     "tool_call_count": 0,
+     "costUsd": 8.19789e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wh-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.711,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 3979,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 3977.6,
+     "prompt_tokens": 2398,
+     "completion_tokens": 303,
+     "tool_call_count": 0,
+     "costUsd": 5.9106e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wh-09#0:draft": {
+   "found": [
+    "LABEL"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 12.748,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 7729,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 7726.9,
+     "prompt_tokens": 2761,
+     "completion_tokens": 755,
+     "tool_call_count": 0,
+     "costUsd": 0.0001480694,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wh-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.174,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 3052,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 3049.4,
+     "prompt_tokens": 2411,
+     "completion_tokens": 229,
+     "tool_call_count": 0,
+     "costUsd": 4.9876e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wh-11#0:draft": {
+   "found": [
+    "OPTIMALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Mặc dù tổng số bản tồn khả dụng của Kho Ha Noi (8 bản) thấp hơn so với Kho HCM Chinh (126 bản), nhưng việc không có sách nào bị \"hết hàng\" cho thấy nguồn cung ứng hoặc nhu cầu tại đây đang ở trạng thá",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "tốt nhất",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "hệ thống không tối ưu hóa, chỉ áp dụng quy tắc xếp hạng/phân bổ",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 7.345,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5854,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5852.0,
+     "prompt_tokens": 2525,
+     "completion_tokens": 544,
+     "tool_call_count": 0,
+     "costUsd": 0.0001083829,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bd-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 6.302,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 6119,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 6116.8,
+     "prompt_tokens": 2508,
+     "completion_tokens": 618,
+     "tool_call_count": 0,
+     "costUsd": 0.000103356,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bd-09#0:draft": {
+   "found": [
+    "COVERAGE",
+    "MONEY",
+    "OVERCLAIM"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Điều này cho thấy các dòng sách có nhu cầu cấp bách nhất hiện tại đều cần một khoản vốn lớn hơn phần ngân sách còn lại để đáp ứng đủ.",
+     "type": "decision",
+     "category": "COVERAGE",
+     "label": "nói đáp ứng toàn bộ nhu cầu khi dữ liệu cho thấy chưa đủ",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu cho thấy vẫn còn đầu sách ưu tiên cao chưa được duyệt (tới 89) và nhu cầu đầy đủ cần 85.791.250 đ.",
+     "basis": "exact",
+     "expected": "chưa đáp ứng toàn bộ nhu cầu"
+    },
+    {
+     "text": "đáp ứng đủ",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Cụ thể, với mức chi phí bổ sung là 5.113.000 ₫, thư viện có thể nhập thêm 43 bản nữa.",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "tổng chi phí ước tính để nhập toàn bộ danh sách: 85.791.250 đ.",
+     "basis": "semantic",
+     "expected": "85.791.250 đ",
+     "evidence": [
+      {
+       "label": "tổng chi phí ước tính để nhập toàn bộ danh sách",
+       "value": 85791250,
+       "unit": "đ"
+      }
+     ]
+    }
+   ],
+   "ms": 6.789,
+   "blocking_basis": "exact",
+   "llm": {
+    "latency_ms": 4780,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4776.1,
+     "prompt_tokens": 2632,
+     "completion_tokens": 412,
+     "tool_call_count": 0,
+     "costUsd": 8.0296e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bd-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.92,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5945,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5943.0,
+     "prompt_tokens": 2453,
+     "completion_tokens": 534,
+     "tool_call_count": 0,
+     "costUsd": 9.0786e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bd-11#0:draft": {
+   "found": [
+    "ENTITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Đắc nhân tâm (lỗi chính tả trong dữ liệu gốc: Dac trung tam ly hoc cua nguoi Viet)",
+     "type": "entity",
+     "category": "ENTITY",
+     "label": "số liệu gán nhầm kho/đầu sách",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "\"Đắc nhân tâm\" không có trong dữ liệu đã truy xuất.",
+     "basis": "semantic"
+    }
+   ],
+   "ms": 4.463,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5770,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5768.5,
+     "prompt_tokens": 2539,
+     "completion_tokens": 552,
+     "tool_call_count": 0,
+     "costUsd": 9.5706e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-tr-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.924,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 4879,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4877.2,
+     "prompt_tokens": 2633,
+     "completion_tokens": 367,
+     "tool_call_count": 0,
+     "costUsd": 7.5049e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-tr-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.023,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 3165,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 3162.7,
+     "prompt_tokens": 2452,
+     "completion_tokens": 211,
+     "tool_call_count": 0,
+     "costUsd": 4.8766e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-tr-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.457,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2657,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2654.0,
+     "prompt_tokens": 2469,
+     "completion_tokens": 99,
+     "tool_call_count": 0,
+     "costUsd": 3.4716e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-tr-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.912,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 3190,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 3188.1,
+     "prompt_tokens": 2418,
+     "completion_tokens": 229,
+     "tool_call_count": 0,
+     "costUsd": 5.0086e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wi-08#0:draft": {
+   "found": [
+    "MONEY"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Đánh đổi: Tiết kiệm thêm 3.000.000 ₫ so với kịch bản 15 triệu, nhưng rủi ro hết hàng ở 87 đầu sách ưu tiên cao vẫn còn nguyên và chưa bù đắp được bất kỳ thiếu hụt dự kiến nào.",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Chênh lệch chi phí duyệt giữa các phương án là 2.975.000 đ.",
+     "basis": "exact",
+     "expected": "2.975.000 đ",
+     "evidence": [
+      {
+       "label": "Chênh lệch chi phí duyệt",
+       "value": 2975000.0,
+       "unit": "đ",
+       "derived": true
+      }
+     ]
+    }
+   ],
+   "ms": 17.408,
+   "blocking_basis": "exact",
+   "llm": {
+    "latency_ms": 10682,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 10679.8,
+     "prompt_tokens": 2747,
+     "completion_tokens": 1038,
+     "tool_call_count": 0,
+     "costUsd": 0.00015591,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wi-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.349,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 3525,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 3522.8,
+     "prompt_tokens": 2529,
+     "completion_tokens": 290,
+     "tool_call_count": 0,
+     "costUsd": 6.1346e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wi-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.194,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 3446,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 3443.8,
+     "prompt_tokens": 2490,
+     "completion_tokens": 255,
+     "tool_call_count": 0,
+     "costUsd": 5.5626e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-wi-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 7.481,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5646,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5643.7,
+     "prompt_tokens": 2651,
+     "completion_tokens": 498,
+     "tool_call_count": 0,
+     "costUsd": 8.283e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nd-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.802,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2409,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2407.1,
+     "prompt_tokens": 2368,
+     "completion_tokens": 54,
+     "tool_call_count": 0,
+     "costUsd": 2.97114e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nd-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.959,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 4525,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4521.9,
+     "prompt_tokens": 2546,
+     "completion_tokens": 412,
+     "tool_call_count": 0,
+     "costUsd": 7.7716e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nd-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.405,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 1344,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 1341.5,
+     "prompt_tokens": 2354,
+     "completion_tokens": 5,
+     "tool_call_count": 0,
+     "costUsd": 2.19029e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-nd-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.102,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2363,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2360.8,
+     "prompt_tokens": 2391,
+     "completion_tokens": 63,
+     "tool_call_count": 0,
+     "costUsd": 3.18504e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bait-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.296,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2950,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2947.7,
+     "prompt_tokens": 2373,
+     "completion_tokens": 165,
+     "tool_call_count": 0,
+     "costUsd": 4.64784e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bait-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.118,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 4658,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4655.7,
+     "prompt_tokens": 2475,
+     "completion_tokens": 376,
+     "tool_call_count": 0,
+     "costUsd": 7.0906e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bait-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.41,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 4215,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 4211.8,
+     "prompt_tokens": 2519,
+     "completion_tokens": 349,
+     "tool_call_count": 0,
+     "costUsd": 6.8716e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-bait-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.633,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 1376,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 1373.8,
+     "prompt_tokens": 2333,
+     "completion_tokens": 32,
+     "tool_call_count": 0,
+     "costUsd": 2.1926e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 8.879,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 7250,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 7247.8,
+     "prompt_tokens": 2667,
+     "completion_tokens": 703,
+     "tool_call_count": 0,
+     "costUsd": 0.000119176,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-08#1:draft": {
+   "found": [
+    "OVERCLAIM"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "đáp ứng 100%",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 3.749,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 1824,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 1821.7,
+     "prompt_tokens": 2638,
+     "completion_tokens": 64,
+     "tool_call_count": 0,
+     "costUsd": 3.5236e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.588,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 1959,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 1957.1,
+     "prompt_tokens": 2367,
+     "completion_tokens": 72,
+     "tool_call_count": 0,
+     "costUsd": 2.8146e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-09#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.184,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 2126,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 2124.5,
+     "prompt_tokens": 2377,
+     "completion_tokens": 74,
+     "tool_call_count": 0,
+     "costUsd": 3.30119e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.983,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 6186,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 6183.8,
+     "prompt_tokens": 2586,
+     "completion_tokens": 465,
+     "tool_call_count": 0,
+     "costUsd": 8.80785e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-10#1:draft": {
+   "found": [
+    "CAUSALITY",
+    "TREND"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Đây là đặc điểm thường thấy của hoạt động thư viện khi nhu cầu tập trung vào các giai đoạn cụ thể (như đầu học kỳ hoặc các sự kiện văn hóa), sau đó tự điều chỉnh về mức ổn định thấp hơn.",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu cho thấy thay đổi -71% — không phải ổn định.",
+     "basis": "semantic",
+     "expected": "giảm 71%"
+    },
+    {
+     "text": "Điều này loại trừ khả năng việc giảm lượt mượn do khan hiếm sách hàng loạt.",
+     "type": "decision",
+     "category": "CAUSALITY",
+     "label": "khẳng định nguyên nhân không có trong dữ liệu",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Dữ liệu hệ thống không ghi nhận yếu tố này, nên không thể khẳng định đây là nguyên nhân.",
+     "basis": "semantic"
+    }
+   ],
+   "ms": 10.654,
+   "blocking_basis": "partial",
+   "llm": {
+    "latency_ms": 8264,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 8261.7,
+     "prompt_tokens": 2750,
+     "completion_tokens": 749,
+     "tool_call_count": 0,
+     "costUsd": 0.000127646,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.874,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5109,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5106.8,
+     "prompt_tokens": 2429,
+     "completion_tokens": 458,
+     "tool_call_count": 0,
+     "costUsd": 8.0186e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  },
+  "c33-mt-11#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.885,
+   "blocking_basis": null,
+   "llm": {
+    "latency_ms": 5096,
+    "usage": {
+     "provider": "openrouter",
+     "model": "qwen/qwen3.7-flash",
+     "latency_ms": 5093.7,
+     "prompt_tokens": 2554,
+     "completion_tokens": 493,
+     "tool_call_count": 0,
+     "costUsd": 8.8486e-05,
+     "error": null,
+     "feature": "assistant_claims"
+    }
+   }
+  }
+ }
+}

@@ -21,7 +21,12 @@ import { LookupSearchCard } from "./lookup-search-card";
 import { BookProfileAside } from "./book-profile-aside";
 import { ReviewTab } from "./review-tab";
 import { StickyFooter } from "./sticky-footer";
+import { ImageOcrCard } from "./image-ocr-card";
+import { OcrReviewPanel } from "./ocr-review-panel";
+import { useBookOcr } from "./use-book-ocr";
 import { EMPTY_FORM, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
+import { applySafeProposals, formFromScan, lookupStateFromScan } from "@/lib/book-ocr";
+import type { BookOcrScanResult } from "@/services/book-ocr";
 import {
   buildDuplicateCheckMetadata,
   finalMetadataFromForm,
@@ -36,6 +41,7 @@ import {
 
 const EMPTY_AI_FIELD_CANDIDATES: AiFieldCandidates = { description: null, summaryVi: null, keywords: null, categories: null };
 const EMPTY_AI_FIELD_LOADING: Record<AiFieldKey, boolean> = { description: false, summaryVi: false, keywords: false, categories: false };
+const NO_AI_SUGGESTIONS: PostIsbnAiSuggestions = { description: null, summaryVi: null, keywords: [], categories: [], qualityWarnings: [], provider: 'none', confidence: 0 };
 
 export function AIImportPage() {
   const shouldReduceMotion = useReducedMotion();
@@ -58,6 +64,14 @@ export function AIImportPage() {
   const [duplicateReview, setDuplicateReview] = useState<DuplicateReview | null>(null);
   const [duplicateDecisionResult, setDuplicateDecisionResult] = useState<DuplicateDecisionResult | null>(null);
   const [form, setForm] = useState<EditableBookForm>(EMPTY_FORM);
+  // Fields the user typed into (or explicitly chose a value for): an OCR result that
+  // arrives later never overwrites them. Refs give the async scan handler the latest values.
+  const [userEditedFields, setUserEditedFields] = useState<ReadonlySet<string>>(() => new Set());
+  const formRef = useRef(form);
+  const userEditedRef = useRef(userEditedFields);
+  useEffect(() => { formRef.current = form; }, [form]);
+  useEffect(() => { userEditedRef.current = userEditedFields; }, [userEditedFields]);
+  const ocr = useBookOcr();
 
   const [aiFieldCandidates, setAiFieldCandidates] = useState<AiFieldCandidates>(EMPTY_AI_FIELD_CANDIDATES);
   const [aiFieldLoading, setAiFieldLoading] = useState<Record<AiFieldKey, boolean>>(EMPTY_AI_FIELD_LOADING);
@@ -229,7 +243,7 @@ export function AIImportPage() {
     try {
       const result = pipelineEnabled ? {
         lookup: await metadataIntelligenceService.extract(pasted ? sourceType : 'isbn', pasted ? sourceText : normalized, pasted ? normalized || undefined : undefined),
-        aiSuggestions: { description: null, summaryVi: null, keywords: [], categories: [], qualityWarnings: [], provider: 'none', confidence: 0 } as PostIsbnAiSuggestions,
+        aiSuggestions: NO_AI_SUGGESTIONS,
       } : await aiService.enrichBookAfterIsbn({
         isbn: normalized,
         existingCategories,
@@ -237,6 +251,9 @@ export function AIImportPage() {
       const lookup = result.lookup;
 
       setIsbnInput(normalized);
+      // An explicit ISBN lookup replaces the form (below), so OCR proposals no longer apply.
+      ocr.clearResult();
+      setUserEditedFields(new Set());
       setLookupData(lookup);
       setPostIsbnSuggestions(result.aiSuggestions);
       setAiFieldCandidates({
@@ -248,19 +265,7 @@ export function AIImportPage() {
 
       if (lookup.found) {
         setForm(mapLookupToForm(lookup));
-        try {
-          const draft = await metadataIntelligenceService.createReconciliationDraft(lookup, result.aiSuggestions);
-          setReconciliationDraft(draft);
-          const duplicate = await metadataIntelligenceService.checkDuplicate(buildDuplicateCheckMetadata({ lookup, normalizedMetadata: draft.normalized_metadata, form: mapLookupToForm(lookup) }));
-          setDuplicateReview(duplicate);
-          const draftNeedsReview = draft.decisions.length === 0 || draft.decisions.some((item) => item.status === "PENDING");
-          const duplicateRequiresAction = duplicate.classification !== "NEW_TITLE";
-          setActiveWorkspaceTab(draftNeedsReview || duplicateRequiresAction || Boolean(lookup.conflicts?.length) ? "review" : "book");
-          initializedTabForLookup.current = lookup;
-        } catch {
-          // Catalog intelligence is additive: ISBN lookup remains usable when its review APIs are unavailable.
-          toast.info("Không thể tải review catalog lúc này; bạn vẫn có thể kiểm tra metadata thủ công.");
-        }
+        await startCatalogReview(lookup, result.aiSuggestions, mapLookupToForm(lookup));
         if (result.aiSuggestions.provider && result.aiSuggestions.provider !== "none") {
           toast.success("Đã tìm thấy metadata và AI đã tạo đề xuất hậu xử lý");
         } else {
@@ -282,6 +287,79 @@ export function AIImportPage() {
     }
   }
 
+  /** Reconciliation draft (only for a provider record) + duplicate check, shared by the
+   *  ISBN lookup and the image OCR flows. Catalog intelligence is additive: the import
+   *  stays usable when its review APIs are unavailable. */
+  async function startCatalogReview(lookup: LookupBookByIsbnResponse, aiSuggestions: PostIsbnAiSuggestions, formForCheck: EditableBookForm) {
+    try {
+      let normalizedMetadata: Record<string, unknown> = {};
+      let draftNeedsReview = false;
+      if (lookup.found) {
+        const draft = await metadataIntelligenceService.createReconciliationDraft(lookup, aiSuggestions);
+        setReconciliationDraft(draft);
+        normalizedMetadata = draft.normalized_metadata;
+        draftNeedsReview = draft.decisions.length === 0 || draft.decisions.some((item) => item.status === "PENDING");
+      }
+      const duplicate = await metadataIntelligenceService.checkDuplicate(buildDuplicateCheckMetadata({ lookup, normalizedMetadata, form: formForCheck }));
+      setDuplicateReview(duplicate);
+      const duplicateRequiresAction = duplicate.classification !== "NEW_TITLE";
+      setActiveWorkspaceTab(draftNeedsReview || duplicateRequiresAction || Boolean(lookup.conflicts?.length) ? "review" : "book");
+      initializedTabForLookup.current = lookup;
+    } catch {
+      toast.info("Không thể tải review catalog lúc này; bạn vẫn có thể kiểm tra metadata thủ công.");
+    }
+  }
+
+  function markUserEdited(...fields: string[]) {
+    setUserEditedFields((current) => fields.every((field) => current.has(field)) ? current : new Set([...current, ...fields]));
+  }
+
+  async function handleOcrScan() {
+    const outcome = await ocr.scan();
+    if (!outcome) return;
+    if (outcome.reused) {
+      toast.info("Ảnh chưa thay đổi — đang dùng kết quả quét trước, không gửi lại.");
+      return;
+    }
+    await applyOcrResult(outcome.result);
+  }
+
+  async function applyOcrResult(result: BookOcrScanResult) {
+    // A scan starts a new import session, exactly like a new ISBN lookup does,
+    // except that fields the user typed into are kept.
+    const lookup = lookupStateFromScan(result);
+    const { form: nextForm, applied, keptUserValues } = formFromScan(formRef.current, result.proposals, userEditedRef.current, EMPTY_FORM);
+    setPostIsbnSuggestions(null);
+    setReconciliationDraft(null);
+    setCreateAuthorityEntities({});
+    setDuplicateReview(null);
+    setDuplicateDecisionResult(null);
+    setAiFieldCandidates(EMPTY_AI_FIELD_CANDIDATES);
+    setQualityCheckResult(null);
+    setConfirmDuplicateSave(false);
+    setForm(nextForm);
+    setLookupData(lookup);
+    const conflicts = Object.values(result.proposals).filter((proposal) => proposal.status === "CONFLICTED").length;
+    if (result.status === "NO_DATA") toast.warning("AI không đọc được thông tin sử dụng được từ ảnh. Hãy thử ảnh rõ hơn hoặc nhập tay.");
+    else toast.success(`Đã điền ${applied.length} trường an toàn từ ảnh${conflicts ? `; ${conflicts} trường có xung đột cần bạn chọn` : ""}.`);
+    if (keptUserValues.length) toast.info(`Giữ nguyên ${keptUserValues.length} trường bạn đã nhập.`);
+    if (lookup.found || nextForm.title.trim() || nextForm.isbn.trim()) await startCatalogReview(lookup, NO_AI_SUGGESTIONS, nextForm);
+  }
+
+  function handleOcrApply(fields: Array<keyof EditableBookForm>, value: string, label: string) {
+    setForm((prev) => ({ ...prev, ...Object.fromEntries(fields.map((field) => [field, value])) }));
+    markUserEdited(...fields); // an explicit choice: later safe-applies keep it
+    toast.success(`Đã áp dụng ${label.toLowerCase()}`);
+  }
+
+  function handleOcrApplySafe() {
+    if (!ocr.result) return;
+    const { form: next, applied } = applySafeProposals(form, ocr.result.proposals, userEditedFields);
+    setForm(next);
+    if (applied.length) toast.success(`Đã áp dụng ${applied.length} trường an toàn`);
+    else toast.info("Không có trường an toàn nào cần áp dụng (các trường bạn đã sửa được giữ nguyên).");
+  }
+
   async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED", override?: unknown) {
     if (!reconciliationDraft) return;
     try {
@@ -290,7 +368,10 @@ export function AIImportPage() {
       if (override !== undefined) {
         const formField: Record<string, keyof EditableBookForm> = { authors: 'authorsText', translator: 'translatorText', categories: 'categoriesText', isbn: 'isbn13' };
         const target = formField[field] || field as keyof EditableBookForm;
-        if (target in form || target === 'translatorText') setForm(current => ({ ...current, [target]: Array.isArray(value) ? value.join(', ') : String(value ?? '') }));
+        if (target in form || target === 'translatorText') {
+          setForm(current => ({ ...current, [target]: Array.isArray(value) ? value.join(', ') : String(value ?? '') }));
+          markUserEdited(target);
+        }
       }
       setReconciliationDraft((current) => current ? {
         ...current,
@@ -605,6 +686,8 @@ export function AIImportPage() {
       setForm(EMPTY_FORM);
       setIsbnInput("");
       setConfirmDuplicateSave(false);
+      setUserEditedFields(new Set());
+      ocr.reset();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Lưu thông tin sách thất bại"));
     } finally {
@@ -631,6 +714,8 @@ export function AIImportPage() {
     setQualityCheckResult(null);
     setForm(EMPTY_FORM);
     setIsbnInput("");
+    setUserEditedFields(new Set());
+    ocr.reset();
   }
 
   return (
@@ -661,6 +746,35 @@ export function AIImportPage() {
         />
       </FadeItem>
 
+      {ocr.capabilities?.enabled ? (
+        <FadeItem>
+          <ImageOcrCard
+            slots={ocr.slots}
+            preparing={ocr.preparing}
+            scanning={ocr.scanning}
+            error={ocr.error}
+            maxImages={ocr.capabilities.maxImages}
+            onSelect={(kind, file) => void ocr.selectFile(kind, file)}
+            onRemove={ocr.removeFile}
+            onScan={() => void handleOcrScan()}
+            onCancel={ocr.cancel}
+            hasResult={Boolean(ocr.result)}
+          />
+        </FadeItem>
+      ) : null}
+
+      {ocr.result ? (
+        <OcrReviewPanel
+          result={ocr.result}
+          slots={ocr.slots}
+          form={form}
+          userEdited={userEditedFields}
+          onApply={handleOcrApply}
+          onApplySafe={handleOcrApplySafe}
+          onDismiss={ocr.clearResult}
+        />
+      ) : null}
+
       <AnimatePresence mode="wait" initial={false}>
       {pipelineEnabled && <section className="space-y-2 rounded-xl border bg-card p-4">
         <label htmlFor="metadataSource" className="text-sm font-semibold">Trích xuất từ nội dung sách</label>
@@ -689,8 +803,21 @@ export function AIImportPage() {
                 <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-foreground">Không tìm thấy metadata từ nhà cung cấp</p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">Vui lòng nhập tay thông tin sách — ISBN đã được giữ lại.</p>
+                    {lookupData.reason === "OCR_WITHOUT_PROVIDER_RECORD" || lookupData.reason === "OCR_LOOKUP_MISMATCH" ? (
+                      <>
+                        <p className="text-[13px] font-semibold text-foreground">
+                          {lookupData.reason === "OCR_LOOKUP_MISMATCH"
+                            ? "Bản ghi tra cứu ISBN không khớp sách trong ảnh — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh, hãy kiểm tra lại ISBN"
+                            : "Chưa có metadata từ nhà cung cấp — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh"}
+                        </p>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">{form.isbn.trim() ? "Kiểm tra lại từng trường với sách thật trước khi lưu." : "Ảnh không có ISBN hợp lệ — nhập ISBN in trên sách để lưu (ISBN là bắt buộc)."}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-[13px] font-semibold text-foreground">Không tìm thấy metadata từ nhà cung cấp</p>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">Vui lòng nhập tay thông tin sách — ISBN đã được giữ lại.</p>
+                      </>
+                    )}
                     <button type="button" onClick={() => focusField("title")} className="mt-1.5 inline-flex cursor-pointer items-center text-[12px] font-semibold text-warning underline decoration-warning/50 underline-offset-4 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/30">
                       Chuyển tới ô nhập tay
                     </button>
@@ -713,7 +840,7 @@ export function AIImportPage() {
                   lookup={lookupData}
                   form={form}
                   signals={reviewSignals}
-                  onThumbnailChange={(value) => setForm((prev) => ({ ...prev, thumbnail: value }))}
+                  onThumbnailChange={(value) => { markUserEdited("thumbnail"); setForm((prev) => ({ ...prev, thumbnail: value })); }}
                   onFocusField={focusField}
                 />
 
@@ -763,7 +890,7 @@ export function AIImportPage() {
                     <motion.div initial={shouldReduceMotion ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }} className="min-w-0">
                       <BookInfoTab
                         form={form}
-                        onFieldChange={(field, value) => setForm((prev) => ({ ...prev, [field]: value }))}
+                        onFieldChange={(field, value) => { markUserEdited(field); setForm((prev) => ({ ...prev, [field]: value })); }}
                         aiFieldCandidates={aiFieldCandidates}
                         aiFieldLoading={aiFieldLoading}
                         onRegenerateField={(field) => void regenerateAiField(field)}

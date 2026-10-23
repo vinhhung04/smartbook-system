@@ -1,0 +1,507 @@
+{
+ "code": "working tree",
+ "semantic": "off",
+ "items": {
+  "c33-nat-08#0:draft": {
+   "found": [
+    "NO_DATA"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Hôm nay có 12 đầu sách đang dưới mức tồn tối thiểu.",
+     "type": "numeric",
+     "category": "NO_DATA",
+     "label": "đưa ra số liệu khi chưa truy xuất được dữ liệu nào",
+     "verdict": "UNSUPPORTED",
+     "severity": "critical",
+     "detail": "Lượt này chưa truy xuất dữ liệu nào, nên con số này không có căn cứ.",
+     "basis": "exact",
+     "expected": "không đưa số liệu khi chưa có dữ liệu"
+    }
+   ],
+   "ms": 2.404,
+   "blocking_basis": "exact"
+  },
+  "c33-nat-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.443,
+   "blocking_basis": null
+  },
+  "c33-nat-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.911,
+   "blocking_basis": null
+  },
+  "c33-nat-11#0:draft": {
+   "found": [
+    "NO_DATA"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Hôm nay, thư viện ghi nhận 12 phiếu mượn quá hạn với tổng tiền phạt chưa thu là 3.450.000 ₫.",
+     "type": "numeric",
+     "category": "NO_DATA",
+     "label": "đưa ra số liệu khi chưa truy xuất được dữ liệu nào",
+     "verdict": "UNSUPPORTED",
+     "severity": "critical",
+     "detail": "Lượt này chưa truy xuất dữ liệu nào, nên con số này không có căn cứ.",
+     "basis": "exact",
+     "expected": "không đưa số liệu khi chưa có dữ liệu"
+    }
+   ],
+   "ms": 0.697,
+   "blocking_basis": "exact"
+  },
+  "c33-abbr-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.99,
+   "blocking_basis": null
+  },
+  "c33-abbr-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.214,
+   "blocking_basis": null
+  },
+  "c33-abbr-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.879,
+   "blocking_basis": null
+  },
+  "c33-abbr-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 5.734,
+   "blocking_basis": null
+  },
+  "c33-multi-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.893,
+   "blocking_basis": null
+  },
+  "c33-multi-09#0:draft": {
+   "found": [
+    "COUNT"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Ngoài ra, hệ thống cũng duyệt thêm 7 đầu sách khác có nhu cầu cao nhưng chưa hết hàng (như Cây Cam Ngọt Của Tôi, Cuộc Đời Của Pi) để tối ưu hóa việc giảm thiếu hụt dự kiến trên mỗi đồng chi tiêu.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 8.000.000 ₫: số đầu sách được duyệt là 10 đầu sách.",
+     "basis": "exact",
+     "expected": "10 đầu sách",
+     "evidence": [
+      {
+       "label": "Ngân sách 8.000.000 ₫: số đầu sách được duyệt",
+       "value": 10.0,
+       "unit": "đầu sách",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    }
+   ],
+   "ms": 4.991,
+   "blocking_basis": "exact"
+  },
+  "c33-multi-10#0:draft": {
+   "found": [
+    "TREND"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Dựa trên dữ liệu hiện có, không thể xác định chính xác đầu sách nào thỏa mãn đồng thời cả hai tiêu chí \"lượt mượn tăng so với kỳ trước\" và \"tồn kho dưới 5 bản\".",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu (các kỳ trọn): lượt mượn giảm 60.9%; câu trả lời nói ngược lại.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Các đầu sách khác như \"Norwegian Wood\" hay \"Kafka on the Shore\" tuy tồn kho thấp nhưng không có dữ liệu cụ thể về sự thay đổi lượt mượn tuần này so với tuần trư",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu (các kỳ trọn): lượt mượn giảm 60.9%; câu trả lời nói ngược lại.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 7.119,
+   "blocking_basis": "partial"
+  },
+  "c33-multi-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.403,
+   "blocking_basis": null
+  },
+  "c33-wh-08#0:draft": {
+   "found": [
+    "LABEL"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 2.091,
+   "blocking_basis": null
+  },
+  "c33-wh-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.925,
+   "blocking_basis": null
+  },
+  "c33-wh-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.806,
+   "blocking_basis": null
+  },
+  "c33-wh-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.657,
+   "blocking_basis": null
+  },
+  "c33-bd-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.204,
+   "blocking_basis": null
+  },
+  "c33-bd-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.499,
+   "blocking_basis": null
+  },
+  "c33-bd-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.234,
+   "blocking_basis": null
+  },
+  "c33-bd-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.251,
+   "blocking_basis": null
+  },
+  "c33-tr-08#0:draft": {
+   "found": [
+    "CAUSALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Các yếu tố khác như mùa vụ, thay đổi hành vi bạn đọc hoặc các sự kiện bên ngoài cũng là những khả năng cần xem xét thêm.",
+     "type": "decision",
+     "category": "CAUSALITY",
+     "label": "khẳng định nguyên nhân không có trong dữ liệu",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Dữ liệu hệ thống không có thông tin về yếu tố này, nên không thể khẳng định đây là nguyên nhân.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 5.107,
+   "blocking_basis": null
+  },
+  "c33-tr-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.943,
+   "blocking_basis": null
+  },
+  "c33-tr-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.392,
+   "blocking_basis": null
+  },
+  "c33-tr-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.007,
+   "blocking_basis": null
+  },
+  "c33-wi-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.597,
+   "blocking_basis": null
+  },
+  "c33-wi-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.361,
+   "blocking_basis": null
+  },
+  "c33-wi-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.228,
+   "blocking_basis": null
+  },
+  "c33-wi-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.325,
+   "blocking_basis": null
+  },
+  "c33-nd-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.773,
+   "blocking_basis": null
+  },
+  "c33-nd-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.014,
+   "blocking_basis": null
+  },
+  "c33-nd-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.405,
+   "blocking_basis": null
+  },
+  "c33-nd-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.345,
+   "blocking_basis": null
+  },
+  "c33-bait-08#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.723,
+   "blocking_basis": null
+  },
+  "c33-bait-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.368,
+   "blocking_basis": null
+  },
+  "c33-bait-10#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.454,
+   "blocking_basis": null
+  },
+  "c33-bait-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.974,
+   "blocking_basis": null
+  },
+  "c33-mt-08#0:draft": {
+   "found": [
+    "OPTIMALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Dù đã ưu tiên các đầu sách giảm thiếu hụt hiệu quả nhất trên mỗi đồng, vẫn còn 81 đầu sách ưu tiên cao bị bỏ lại, bao gồm các tựa như Dac trung tam ly hoc cua nguoi Viet, Nghệ Thuật Tư Duy Chiến Lược,",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 3.42,
+   "blocking_basis": null
+  },
+  "c33-mt-08#1:draft": {
+   "found": [
+    "OVERCLAIM"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "đáp ứng 100%",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 3.426,
+   "blocking_basis": null
+  },
+  "c33-mt-09#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.542,
+   "blocking_basis": null
+  },
+  "c33-mt-09#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.599,
+   "blocking_basis": null
+  },
+  "c33-mt-10#0:draft": {
+   "found": [
+    "LABEL",
+    "TREND"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Tổng hoạt động mượn khá ổn định nhưng bị ảnh hưởng bởi ngày cuối chưa đầy đủ.",
+     "type": "comparative",
+     "category": "TREND",
+     "label": "xu hướng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Lượt mượn trong dữ liệu đang giảm (-71%).",
+     "basis": "heuristic",
+     "expected": "giảm"
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "Ý nghĩa:",
+     "type": "decision",
+     "category": "LABEL",
+     "label": "nhãn nội bộ của hệ thống",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "Nhãn nội bộ của khung giải thích, đã được bỏ.",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 3.137,
+   "blocking_basis": "partial"
+  },
+  "c33-mt-10#1:draft": {
+   "found": [
+    "CAUSALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Chúng ta chưa có dữ liệu về các sự kiện bên ngoài (như lịch thi cử, chương trình khuyến mãi) để khẳng định chính xác nguyên nhân gây ra sự sụt giảm này.",
+     "type": "decision",
+     "category": "CAUSALITY",
+     "label": "khẳng định nguyên nhân không có trong dữ liệu",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Dữ liệu chỉ cho thấy các yếu tố đi kèm (tương quan); hệ thống không có dữ liệu chứng minh nguyên nhân.",
+     "basis": "heuristic"
+    },
+    {
+     "text": "gây ra",
+     "type": "decision",
+     "category": "CAUSALITY",
+     "label": "khẳng định nguyên nhân không có trong dữ liệu",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "dữ liệu chỉ cho thấy tương quan, không chứng minh nguyên nhân",
+     "basis": "heuristic"
+    }
+   ],
+   "ms": 5.183,
+   "blocking_basis": null
+  },
+  "c33-mt-11#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.283,
+   "blocking_basis": null
+  },
+  "c33-mt-11#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.664,
+   "blocking_basis": null
+  }
+ }
+}

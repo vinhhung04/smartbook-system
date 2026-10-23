@@ -1,13 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowRight, Sparkles } from 'lucide-react';
-
-// Example phrasings only — they show how to ask, they are not results.
-const EXAMPLES = [
-  'Sách dễ đọc về trí tuệ nhân tạo cho người mới',
-  'Tiểu thuyết nhẹ nhàng để đọc cuối tuần',
-  'Sách kỹ năng giúp quản lý thời gian',
-];
+import { DISCOVERY_EXAMPLES } from '@/lib/discovery-examples';
 
 /** Entry point for "Không biết nên đọc gì?": describe a book, get real books from the catalog. */
 export function DiscoveryBox() {
@@ -55,7 +49,7 @@ export function DiscoveryBox() {
               </button>
             </form>
             <ul className="mt-4 flex flex-wrap justify-center gap-2" aria-label="Ví dụ cách hỏi">
-              {EXAMPLES.map((example) => (
+              {DISCOVERY_EXAMPLES.map((example) => (
                 <li key={example}>
                   <button type="button" onClick={() => go(example)} className="rounded-full border border-border bg-background px-3.5 py-1.5 text-[12.5px] text-foreground/80 transition-colors hover:border-indigo-300 hover:text-foreground">
                     {example}

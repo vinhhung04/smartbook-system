@@ -1,0 +1,45 @@
+{
+ "frozen_at": "2026-10-17T09:29:15+07:00",
+ "about": "sha256 of the 3.3 modules when the test split was opened for labelling; the test numbers in AI_COPILOT_3_3_EVALUATION.md are for exactly this code (claims prompt version below)",
+ "files": {
+  "copilot_verification.py": "d9ca65a7b89b1790c7fc5718e73621aeb158a03b7b0bb3c85dc244d07cc66ae4",
+  "copilot_claims.py": "5a27dfd11a5efcd64049819de106f5fc44db4e19c96512f44c625551ac9d2caf",
+  "copilot_faithfulness.py": "703ecb4802d15f71fcb0fc230f63315bb51e66e78509e084ca25d18c42e0a4e4",
+  "copilot_explain.py": "c47e7a410064c368a9f56a8d1d5397a21b7b6e695396e90ab9dd76993c451ad9",
+  "copilot_plan.py": "4b5aea92474230e52f3a2d05e91d799bfdb06f58ed018ed1a76998fda253644a",
+  "main.py": "9bee34c739c46b932bf6152a341f63c6b1d925ac719cf6233eedc6a06f14d61c",
+  "llm_provider.py": "8689b41ba48282bc7a3c9cbc2fd3e18c9cbc88944b6e0184fbfb731743feb2fd"
+ },
+ "claims_prompt_version": "3.3.2",
+ "post_test_fixes": [
+  {
+   "at": "2026-10-17T09:53:46+07:00",
+   "why": "live test run A: NO_DATA context included the turn draft (main.py) and an error-only tool result disabled the no-data rule (copilot_verification.py); found on the live final answers, fixed, live run repeated (run B)",
+   "files": {
+    "main.py": "805cdb4856471eb7d779762202a013b7daae4107899c6c8ed1e074e37bb25333",
+    "copilot_verification.py": "bdcabfe19fbaf1e25e649477d0d6a04ed840503951c857866cff64023b39f0fd"
+   }
+  },
+  {
+   "at": "2026-10-17T10:06:36+07:00",
+   "why": "after run B was labelled: withdraw() split clauses on ';' and could leave a fragment (now sentence boundaries only); planner routed 'dưới mức tồn tối thiểu' and 'các chỉ số chính' to no tool (test c33-nat-08, c33-nat-11). Not covered by the frozen test numbers.",
+   "files": {
+    "copilot_verification.py": "75720622799ae1545f7b7d3936bab17cd48422ec162c2e60b76c41510326119f",
+    "copilot_plan.py": "cc9d8b233e2693036d7f8fafcf9682c1fa7a1ac769a350f159aaf5ddfee05685"
+   }
+  },
+  {
+   "at": "2026-10-19T09:28:19+07:00",
+   "why": "Phase 4 (partial funding: per-title copies/cost, partial-line claims, position-based need, service-curve costs) and Phase 6 live decision sessions (left-out wording, listed-row counts, comparative sentences, savings, 'nhu cau thuc te cao', 100% shortfall metric; planner what-ifs and follow-ups; deterministic draft answer). Post-fix Layer 1 on the 3.2 drafts: dev 6/15 0/29, val 4/14 0/19, test 4/19 3/25. Not covered by the frozen test numbers.",
+   "files": {
+    "copilot_verification.py": "c4ee1bd5d7b97cae7726cb9d3d64b5d75126c171a0efcaeee1e084a1e85323f8",
+    "copilot_plan.py": "b7e3eabc7a807e5b159b84c764873c70e0a9f77d434a435a276e3be9eda220ff",
+    "copilot_explain.py": "c87df6cff7d71a1f17b41793cb2318d283207b116aa532bfd4446332a7cc4c14",
+    "copilot_tools.py": "5b28dd5b36c2f500d21d10d4ba52108c03366b8584910c81d9374f0572b2d9be",
+    "copilot_response.py": "73b1bf18ae7c043a0da03b9e5c726d20910ef9a92cfdae173796824cb3af75f3",
+    "copilot_decision.py": "733297e7b4af4b8a5bf413374fe188dc03017b750c8e85c217ebb3caa53125ed",
+    "main.py": "a37c9048c3c5f995f9cdcf3495f51951f95d4277c111b96abd2b6ee0a1c3d6ce"
+   }
+  }
+ ]
+}

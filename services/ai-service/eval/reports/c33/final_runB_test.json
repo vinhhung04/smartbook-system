@@ -1,0 +1,28 @@
+{
+ "turns": 44,
+ "labelled": 44,
+ "final_with_errors": "13/44",
+ "final_critical": "9/44",
+ "final_accuracy": 0.705,
+ "statuses": {
+  "BLOCKED": 2,
+  "PASSED": 34,
+  "REPAIRED": 3,
+  "WARNING": 4,
+  "null": 1
+ },
+ "blocked_without_critical_draft": [],
+ "retry_rate": 0.273,
+ "llm_calls_mean": 1.52,
+ "tokens": {
+  "prompt": 401799,
+  "completion": 9485,
+  "per_turn": 9347
+ },
+ "cost_usd": 0.0076,
+ "latency_s": {
+  "p50": 3.27,
+  "p95": 9.36
+ },
+ "pending_actions": 0
+}

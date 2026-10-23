@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import axios from 'axios';
 import { Search, Sparkles } from 'lucide-react';
@@ -22,13 +22,15 @@ interface SearchAutocompleteProps {
   placeholder?: string;
   /** Called after any navigation (e.g. to close the mobile menu). */
   onNavigate?: () => void;
+  /** Hero only: an extra control between the input and the submit button. */
+  addon?: ReactNode;
 }
 
 /**
  * Search box with instant suggestions from the real catalog (ARIA combobox).
  * Enter on a highlighted book opens it; otherwise Enter opens the full results.
  */
-export function SearchAutocomplete({ variant = 'compact', placeholder = 'Tên sách, tác giả hoặc ISBN', onNavigate }: SearchAutocompleteProps) {
+export function SearchAutocomplete({ variant = 'compact', placeholder = 'Tên sách, tác giả hoặc ISBN', onNavigate, addon }: SearchAutocompleteProps) {
   const navigate = useNavigate();
   const listboxId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +127,7 @@ export function SearchAutocomplete({ variant = 'compact', placeholder = 'Tên s�
             hero ? 'h-11 text-[15px]' : 'h-9 pr-3 text-[13px]',
           )}
         />
+        {hero ? addon : null}
         {hero ? (
           <button type="submit" className="h-11 shrink-0 rounded-lg bg-indigo-700 px-5 text-[14px] font-semibold text-white hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400">
             Tìm sách

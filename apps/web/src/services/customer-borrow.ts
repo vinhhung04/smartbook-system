@@ -19,7 +19,7 @@ export const customerBorrowService = {
     return response.data;
   },
 
-  async getMyReservations(params?: { page?: number; pageSize?: number }) {
+  async getMyReservations(params?: { page?: number; pageSize?: number; status?: string }) {
     const response = await gatewayAPI.get('/my/reservations', { params });
     return response.data;
   },
@@ -44,7 +44,7 @@ export const customerBorrowService = {
     return response.data;
   },
 
-  async getMyLoans(params?: { page?: number; pageSize?: number }) {
+  async getMyLoans(params?: { page?: number; pageSize?: number; status?: string }) {
     const response = await gatewayAPI.get('/my/loans', { params });
     return response.data;
   },

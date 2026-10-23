@@ -341,12 +341,36 @@ class MissingDataTests(unittest.TestCase):
 
 class RepairAndStatusTests(unittest.TestCase):
     def test_safe_repair(self):
-        text = "Với ngân sách 10 triệu, hệ thống duyệt 5 đầu sách với chi phí 9.987.000 ₫."
+        text = "Với ngân sách 10 triệu, hệ thống duyệt 7 đầu sách với chi phí 9.987.000 ₫."
         rep = check(text, {"simulate_reorder_budget": SIM})
         fixed, repaired = v.repair(text, rep)
         self.assertIn("duyệt 9 đầu sách", fixed)
         self.assertEqual(len(repaired), 1)
         self.assertEqual(check(fixed, {"simulate_reorder_budget": SIM}).critical, [])
+
+    def test_another_quantity_of_the_data_is_not_rewritten(self):
+        # 5 is the number of HIGH-priority titles approved: the sentence may mean that,
+        # so it is contradicted (retry) but never silently rewritten (3.3)
+        text = "Với ngân sách 10 triệu, hệ thống duyệt 5 đầu sách với chi phí 9.987.000 ₫."
+        rep = check(text, {"simulate_reorder_budget": SIM})
+        self.assertTrue(rep.critical)
+        self.assertEqual(v.repair(text, rep)[1], [])
+
+    def test_full_need_and_left_out_counts_in_a_budget_answer(self):
+        # live test run B (c33-bd-10 / c33-bd-11): the 3.2 repair rewrote these correct drafts
+        sim = {**SIM, "full_need": {**SIM["full_need"], "total_candidates": 117, "estimated_total_cost": 85791250,
+                                    "estimated_total_reorder_qty": 763}}
+        text = ("Ngân sách 10.000.000 ₫ không đủ để nhập hết các sách cần thiết, vì tổng nhu cầu thực tế lên tới "
+                "85.791.250 ₫ cho 117 đầu sách (763 bản).")
+        rep = check(text, {"simulate_reorder_budget": sim})
+        self.assertEqual(rep.problems, [])
+        text = "Với ngân sách 10 triệu, hệ thống sẽ duyệt nhập 5 đầu sách ưu tiên cao và bỏ lại 90 đầu sách khác."
+        rep = check(text, {"simulate_reorder_budget": SIM})
+        self.assertEqual(rep.problems, [])
+        text = "Với ngân sách 10 triệu, hệ thống sẽ duyệt nhập 5 đầu sách ưu tiên cao và bỏ lại 5 đầu sách khác."
+        rep = check(text, {"simulate_reorder_budget": SIM})
+        self.assertTrue(rep.problems)
+        self.assertEqual(v.repair(text, rep)[1], [])
 
     def test_no_blind_substitution(self):
         # "5" also appears in another context: not repaired
@@ -441,7 +465,7 @@ class VerificationEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.action.assert_awaited()
 
     async def test_a_wrong_count_is_repaired_without_an_llm_call(self):
-        body, provider, _ = await self.ask(["Với 10 triệu, hệ thống duyệt 5 đầu sách, chi phí 9.987.000 ₫."], "v2")
+        body, provider, _ = await self.ask(["Với 10 triệu, hệ thống duyệt 7 đầu sách, chi phí 9.987.000 ₫."], "v2")
         self.assertEqual(len(provider.calls), 1)
         self.assertEqual(body["verification"]["status"], "REPAIRED")
         self.assertIn("duyệt 9 đầu sách", body["answer"])
@@ -485,3 +509,116 @@ class VerificationEndpointTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FundedTitleCopiesTests(unittest.TestCase):
+    """3.3: a budget can fund a line in part; the copies stated per title must be
+    the funded ones (live: 'Đắc trung … (68 bản)' when 67 were funded)."""
+
+    SIM_PARTIAL = {**SIM, "scenarios": [{**SIM["scenarios"][0], "funded_lines": 2, "funded_qty": 68,
+                                         "funded_items": [{"title": "Norwegian Wood", "priority": "HIGH", "suggested_reorder_qty": 183,
+                                                           "funded_qty": 67, "estimated_cost": 5963000},
+                                                          {"title": "Tam Cam", "priority": "HIGH", "suggested_reorder_qty": 5,
+                                                           "funded_qty": 1, "estimated_cost": 34000}]}]}
+
+    def test_funded_copies_per_title(self):
+        data = {"simulate_reorder_budget": self.SIM_PARTIAL}
+        ok = check("Với 10 triệu, hệ thống duyệt Norwegian Wood (67 bản) và Tam Cam (1 bản).", data)
+        self.assertEqual(ok.problems, [])
+        bad = check("Với 10 triệu, hệ thống duyệt Norwegian Wood (68 bản) và Tam Cam (68 bản).", data)
+        self.assertTrue([c for c in bad.problems if c.category == "COUNT"])
+        second = check("Với 10 triệu, hệ thống duyệt Norwegian Wood (67 bản) và Tam Cam (68 bản).", data)
+        self.assertEqual([c.expected for c in second.problems if c.category == "COUNT"], ["1 bản"])
+        self.assertEqual(v.repair("Với 10 triệu, hệ thống duyệt Norwegian Wood (68 bản).", bad)[1], [])  # 68 = scenario copies
+
+    def test_the_full_suggestion_is_not_read_as_the_approved_count(self):
+        data = {"simulate_reorder_budget": self.SIM_PARTIAL}
+        rep = check("Norwegian Wood cần 183 bản nhưng với 10 triệu chỉ được duyệt 67 bản.", data)
+        self.assertEqual([c for c in rep.problems if c.category == "COUNT"], [])
+
+
+class FundedTitleCostTests(unittest.TestCase):
+    def test_cost_per_funded_title(self):
+        sim = FundedTitleCopiesTests.SIM_PARTIAL
+        data = {"simulate_reorder_budget": sim}
+        self.assertEqual(check("Với 10 triệu: Norwegian Wood nhập 67 bản (chi phí ~5.963.000 ₫).", data).problems, [])
+        # live: the leftover budget (13.000 here) written as a title's cost
+        bad = check("Với 10 triệu: Tam Cam nhập 1 bản (chi phí ~13.000 ₫).", data)
+        self.assertEqual([c.expected for c in bad.problems if c.category == "MONEY"], ["34.000 đ"])
+
+    def test_a_budget_that_funds_the_whole_position_need_is_full_coverage(self):
+        sim = {**SIM, "items_not_listed": 16,
+               "scenarios": [{**SIM["scenarios"][0], "unfunded_high_priority": 0, "covers_need_with_position": True}]}
+        rep = check("Với 10 triệu, phương án này đáp ứng toàn bộ nhu cầu.", {"simulate_reorder_budget": sim})
+        self.assertEqual([c for c in rep.problems if c.category == "COVERAGE"], [])
+        sim["scenarios"][0]["covers_need_with_position"] = False
+        rep = check("Với 10 triệu, phương án này đáp ứng toàn bộ nhu cầu.", {"simulate_reorder_budget": sim})
+        self.assertTrue([c for c in rep.problems if c.category == "COVERAGE"])
+
+
+class PartialFundingClaimTests(unittest.TestCase):
+    def test_partial_funding_claims(self):
+        sim = {**SIM, "scenarios": [{**SIM["scenarios"][0], "partially_funded_lines": 2}]}
+        data = {"simulate_reorder_budget": sim}
+        bad = check("Với 10 triệu, không có đầu sách nào bị duyệt một phần.", data)
+        self.assertEqual([c.category for c in bad.problems], ["COUNT"])
+        self.assertEqual(check("Với 10 triệu, có 2 đầu sách chỉ được duyệt một phần.", data).problems, [])
+        self.assertTrue(check("Với 10 triệu, có 5 đầu sách chỉ được duyệt một phần.", data).problems)
+        none = {"simulate_reorder_budget": {**SIM, "scenarios": [{**SIM["scenarios"][0], "partially_funded_lines": 0}]}}
+        self.assertEqual(check("Với 10 triệu, không có đầu sách nào bị duyệt một phần.", none).problems, [])
+
+
+class DecisionTurnFalseAlarmTests(unittest.TestCase):
+    """Phase 6 live multi-turn run: correct answers the 3.3 rules blocked."""
+
+    def test_not_approved_high_priority_titles_are_the_unfunded_ones(self):
+        data = {"simulate_reorder_budget": SIM}
+        self.assertEqual(check("Với 10 triệu, có tới 90 đầu sách ưu tiên cao không được nhập trong đợt này.", data).problems, [])
+        self.assertTrue(check("Với 10 triệu, có tới 70 đầu sách ưu tiên cao không được nhập trong đợt này.", data).problems)
+
+    def test_a_cost_on_the_service_curve_is_a_true_figure(self):
+        sim = {**SIM, "service_curve": {"cost_for_service_pct": {"90": 14004530, "95": 17116110}}}
+        text = ("Để cải thiện, bạn cần tăng ngân sách lên mức tối thiểu khoảng 14.004.530 ₫ để đạt mức phục vụ 90%, "
+                "hoặc 20.000.000 ₫ để đáp ứng gần như toàn bộ nhu cầu dự kiến.")
+        self.assertEqual([c for c in check(text, {"simulate_reorder_budget": sim}).problems if c.category == "MONEY"], [])
+
+    def test_quoting_the_100_percent_shortfall_metric_is_not_a_coverage_claim(self):
+        text = "Phương án ngân sách 10.000.000 ₫ ít rủi ro hơn vì nó đáp ứng được 100% thiếu hụt dự kiến."
+        self.assertEqual([c for c in check(text, {"simulate_reorder_budget": SIM}).problems if c.category == "COVERAGE"], [])
+        self.assertTrue([c for c in check("Với 10 triệu, phương án này đáp ứng toàn bộ nhu cầu.",
+                                          {"simulate_reorder_budget": SIM}).problems if c.category == "COVERAGE"])
+
+
+class DecisionRun3FalseAlarmTests(unittest.TestCase):
+    """Phase 6 live run 3: true sentences the rules blocked."""
+
+    def test_listed_and_not_listed_row_counts(self):
+        data = {"simulate_reorder_budget": SIM}  # items_counted 100, items_not_listed 16
+        text = ("Với 10 triệu, bạn sẽ đáp ứng được 100% thiếu hụt dự kiến của các dòng sách trong danh sách tối đa 100 đầu sách "
+                "cần nhập nhất. Vẫn còn 16 đầu sách nằm ngoài phạm vi tính toán này nên chưa thể khẳng định toàn bộ nhu cầu "
+                "đã được đáp ứng.")
+        self.assertEqual([c for c in check(text, data).problems if c.category == "COUNT"], [])
+        self.assertTrue(check("Có 100 đầu sách cần nhập.", data).problems)  # still the full-need figure (116)
+
+    def test_a_comparative_sentence_may_quote_the_other_scenario(self):
+        data = {"simulate_reorder_budget": SIM}
+        # live: "Chỉ còn lại 36 … (so với 69 … ở mức 5 triệu)" - only the OTHER scenario is named
+        text = "Chỉ còn lại 80 đầu sách ưu tiên cao chưa được nhập (so với 90 đầu sách bị bỏ lại ở mức 10 triệu)."
+        self.assertEqual([c for c in check(text, data).problems if c.category == "COUNT"], [])
+        # a figure of neither scenario is still contradicted (a count FOLLOWED by "bị bỏ lại" gets no role - known gap)
+        wrong = "Chỉ còn lại 85 đầu sách ưu tiên cao chưa được nhập (so với 90 đầu sách bị bỏ lại ở mức 10 triệu)."
+        self.assertTrue([c for c in check(wrong, data).problems if c.category == "COUNT"])
+
+    def test_a_from_to_change_quotes_both_scenarios(self):
+        data = {"simulate_reorder_budget": SIM}
+        text = "Số lượng đầu sách ưu tiên cao chưa được duyệt giảm xuống 80 (từ 90 đầu sách ở mức 10 triệu)."
+        self.assertEqual([c for c in check(text, data).problems if c.category == "COUNT"], [])
+
+    def test_savings_between_scenarios_and_demand_wording(self):
+        # live run 5: "tiết kiệm khoảng 3 triệu" (difference of the approved costs) read as the full need
+        data = {"simulate_reorder_budget": SIM}  # approved 9.987.000 vs 19.944.000 -> 9.957.000
+        text = ("Đánh đổi: Việc giảm ngân sách giúp tiết kiệm khoảng 10 triệu đồng nhưng làm tăng đáng kể rủi ro hết hàng "
+                "ở các đầu sách đang có nhu cầu thực tế cao.")
+        self.assertEqual([c for c in check(text, data).problems if c.category == "MONEY"], [])
+        wrong = "Việc giảm ngân sách giúp tiết kiệm khoảng 25 triệu đồng."
+        self.assertTrue([c for c in check(wrong, data).problems if c.category == "MONEY"])

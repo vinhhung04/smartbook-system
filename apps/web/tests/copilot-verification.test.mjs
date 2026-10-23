@@ -48,3 +48,15 @@ test('answers stored before 3.2 keep the 3.1 note', () => {
   assert.deepEqual(n.items, ['mâu thuẫn với xu hướng trong dữ liệu']);
   assert.equal(verificationNotice(null, { status: 'passed', issues: [] }), null);
 });
+
+test('3.3: withdrawn sentences get their own note with reader-facing labels', () => {
+  const n = verificationNotice({
+    status: 'WARNING', safe_to_act: false,
+    claims: [claim('CONTRADICTED', 'TREND', 'xu hướng không khớp dữ liệu')],
+    withdrawn: [{ category: 'TREND', label: 'xu hướng không khớp dữ liệu' }, { category: 'TREND', label: 'xu hướng không khớp dữ liệu' }],
+  });
+  assert.equal(n.tone, 'warning');
+  assert.match(n.title, /đã được lược bỏ/);
+  assert.deepEqual(n.items, ['xu hướng không khớp dữ liệu']);
+  assert.doesNotMatch(JSON.stringify(n), /TREND|basis|semantic/);
+});

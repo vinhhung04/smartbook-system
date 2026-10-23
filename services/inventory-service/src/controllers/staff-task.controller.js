@@ -1,7 +1,51 @@
 const { PrismaClient } = require('@prisma/client');
 const { pushEvents, pushToRooms } = require('../lib/socket-emitter');
 
+const {
+  canReadWarehouse,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  readableWarehouseFilter,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
+
 const prisma = new PrismaClient();
+
+// Phase 5 warehouse scope: a task's warehouse comes from the stored task; a
+// manager sees and changes only tasks of warehouses in their scope (tasks
+// without a warehouse: only the ones they assigned or were assigned), the
+// assignee must have access to the task's warehouse, and a linked record must
+// belong to a warehouse the creator can read.
+const ENTITY_WAREHOUSE = {
+  EXCEPTION_REPORT: (id) => prisma.warehouse_exception_reports.findUnique({ where: { id }, select: { warehouse_id: true } }),
+  PURCHASE_REQUEST: (id) => prisma.purchase_requests.findUnique({ where: { id }, select: { warehouse_id: true } }),
+  OUTBOUND_ORDER: (id) => prisma.outbound_orders.findUnique({ where: { id }, select: { warehouse_id: true } }),
+  TRANSFER_ORDER: (id) => prisma.transfer_orders.findUnique({ where: { id }, select: { from_warehouse_id: true } })
+    .then((r) => (r ? { warehouse_id: r.from_warehouse_id } : null)),
+};
+
+async function managerTaskWhere(user, userId, requestedWarehouseId) {
+  const readable = await readableWarehouseFilter(user);
+  if (readable === null) return requestedWarehouseId ? { warehouse_id: requestedWarehouseId } : {};
+  if (requestedWarehouseId) return scopedWarehouseWhere(user, 'warehouse_id', requestedWarehouseId);
+  return {
+    OR: [
+      { warehouse_id: { in: readable } },
+      { warehouse_id: null, OR: [{ assigned_by_user_id: userId }, { assignee_user_id: userId }] },
+    ],
+  };
+}
+
+/** Manager change of a stored task: write scope on its warehouse, or own warehouse-less task. */
+async function requireTaskManageAccess(req, res, task, userId) {
+  if (req.user?.is_superuser) return true;
+  if (!task.warehouse_id) {
+    if (task.assigned_by_user_id === userId || task.assignee_user_id === userId) return true;
+    res.status(403).json({ message: 'You do not have access to this task', code: 'WAREHOUSE_ACCESS_DENIED' });
+    return false;
+  }
+  return requireWarehouseWriteAccess(req, res, task.warehouse_id);
+}
 
 const VALID_TASK_TYPES = ['GENERAL', 'CHECK_SHELF', 'STOCK_CHECK', 'LOW_STOCK_REVIEW', 'EXCEPTION_FOLLOW_UP', 'REORDER_REVIEW', 'RESERVATION_FOLLOW_UP', 'INVENTORY_AUDIT', 'OTHER'];
 const VALID_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
@@ -28,7 +72,11 @@ async function listStaffTasks(req, res) {
   if (canManage) {
     if (status) where.status = status;
     if (assignee_user_id) where.assignee_user_id = assignee_user_id;
-    if (warehouse_id) where.warehouse_id = warehouse_id;
+    try {
+      Object.assign(where, await managerTaskWhere(req.user, userId, warehouse_id || null));
+    } catch (error) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message });
+    }
   } else {
     where.assignee_user_id = userId;
     if (status) where.status = status;
@@ -134,6 +182,18 @@ async function createStaffTask(req, res) {
       if (!warehouse) {
         return res.status(400).json({ message: 'warehouse_id is invalid' });
       }
+      // the body warehouse_id was write-checked by enforceRequestedWarehouseScope;
+      // the person doing the task must be able to see that warehouse too
+      if (!(await canReadWarehouse({ id: String(assignee_user_id).trim() }, warehouse_id))) {
+        return res.status(400).json({ message: 'Người được giao không có quyền ở kho này', code: 'ASSIGNEE_OUT_OF_SCOPE' });
+      }
+    }
+    if (normalizedEntityType && related_entity_id) {
+      const entity = await ENTITY_WAREHOUSE[normalizedEntityType](String(related_entity_id));
+      if (!entity) return res.status(400).json({ message: 'related_entity_id is invalid' });
+      if (entity.warehouse_id && !(await canReadWarehouse(req.user, entity.warehouse_id))) {
+        return res.status(403).json({ message: 'You do not have read access to this warehouse', code: 'WAREHOUSE_ACCESS_DENIED' });
+      }
     }
 
     const task = await prisma.staff_tasks.create({
@@ -176,6 +236,7 @@ async function createStaffTask(req, res) {
 
     return res.status(201).json({ message: 'Staff task created successfully', data: task });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -198,6 +259,11 @@ async function updateStaffTask(req, res) {
 
     if (!canManage && task.assignee_user_id !== userId) {
       return res.status(403).json({ message: 'Bạn không có quyền cập nhật task này' });
+    }
+    if (canManage && !(await requireTaskManageAccess(req, res, task, userId))) return undefined;
+    if (canManage && req.body.assignee_user_id !== undefined && (req.body.warehouse_id ?? task.warehouse_id)
+        && !(await canReadWarehouse({ id: String(req.body.assignee_user_id).trim() }, req.body.warehouse_id ?? task.warehouse_id))) {
+      return res.status(400).json({ message: 'Người được giao không có quyền ở kho này', code: 'ASSIGNEE_OUT_OF_SCOPE' });
     }
 
     const updateData = { updated_at: new Date() };
@@ -285,6 +351,8 @@ async function updateStaffTaskStatus(req, res) {
     if (!canManage && task.assignee_user_id !== userId) {
       return res.status(403).json({ message: 'Task không được giao cho bạn' });
     }
+    // a manager changing someone else's task needs scope on its warehouse
+    if (canManage && task.assignee_user_id !== userId && !(await requireTaskManageAccess(req, res, task, userId))) return undefined;
 
     if (!canManage && !['IN_PROGRESS', 'DONE'].includes(normalizedStatus)) {
       return res.status(403).json({ message: 'Staff chỉ có thể đổi status sang IN_PROGRESS hoặc DONE' });
@@ -415,7 +483,7 @@ async function getEntityOptions(req, res) {
     let options = [];
     if (entityType === 'EXCEPTION_REPORT') {
       const rows = await prisma.warehouse_exception_reports.findMany({
-        where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, ...(wh ? { warehouse_id: wh } : {}) },
+        where: { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, ...(await scopedWarehouseWhere(req.user, 'warehouse_id', wh)) },
         select: { id: true, report_number: true, status: true, exception_type: true, task_type: true, note: true },
         orderBy: { created_at: 'desc' }, take: LIMIT,
       });
@@ -427,7 +495,7 @@ async function getEntityOptions(req, res) {
       }));
     } else if (entityType === 'PURCHASE_REQUEST') {
       const rows = await prisma.purchase_requests.findMany({
-        where: { status: 'PENDING', ...(wh ? { warehouse_id: wh } : {}) },
+        where: { status: 'PENDING', ...(await scopedWarehouseWhere(req.user, 'warehouse_id', wh)) },
         select: { id: true, request_number: true, status: true, reason: true, quantity_requested: true },
         orderBy: { created_at: 'desc' }, take: LIMIT,
       });
@@ -439,7 +507,7 @@ async function getEntityOptions(req, res) {
       }));
     } else if (entityType === 'OUTBOUND_ORDER') {
       const rows = await prisma.outbound_orders.findMany({
-        where: { status: { in: ['APPROVED', 'PICKING', 'READY_FOR_OUTBOUND'] }, ...(wh ? { warehouse_id: wh } : {}) },
+        where: { status: { in: ['APPROVED', 'PICKING', 'READY_FOR_OUTBOUND'] }, ...(await scopedWarehouseWhere(req.user, 'warehouse_id', wh)) },
         select: { id: true, outbound_number: true, status: true, outbound_type: true },
         orderBy: { requested_at: 'desc' }, take: LIMIT,
       });
@@ -451,7 +519,7 @@ async function getEntityOptions(req, res) {
       }));
     } else if (entityType === 'TRANSFER_ORDER') {
       const rows = await prisma.transfer_orders.findMany({
-        where: { status: { in: ['APPROVED', 'PICKING', 'IN_TRANSIT'] }, ...(wh ? { from_warehouse_id: wh } : {}) },
+        where: { status: { in: ['APPROVED', 'PICKING', 'IN_TRANSIT'] }, ...(await scopedWarehouseWhere(req.user, 'from_warehouse_id', wh)) },
         select: { id: true, transfer_number: true, status: true },
         orderBy: { requested_at: 'desc' }, take: LIMIT,
       });
@@ -464,6 +532,7 @@ async function getEntityOptions(req, res) {
     }
     return res.json({ data: options });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
     return res.status(500).json({ message: 'Internal server error' });
   }

@@ -2,6 +2,17 @@ const { PrismaClient } = require('@prisma/client');
 const { parseId, toInt, normalizeText, normalizeOptionalUserId } = require('../utils/validation');
 const { buildStockBalanceFilter, createAuditWithLines } = require('../services/stock-audit-creation.service');
 const { claimSubmittedAuditForApproval } = require('../services/stock-audit-approval.service');
+const {
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
+
+// Phase 5: an audit's warehouse is read from the stored audit (never from the
+// request) and must be inside the caller's scope - read to see it, write to
+// assign / count / submit / cancel, and re-read without cache to approve
+// (approval posts stock adjustments to that warehouse).
 
 const prisma = new PrismaClient();
 
@@ -78,7 +89,7 @@ async function getStockAudits(req, res) {
 
     const where = {
       ...(status ? { status } : {}),
-      ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+      ...(await scopedWarehouseWhere(req.user, 'warehouse_id', warehouseId)),
       ...(manager ? {} : { assigned_to_user_id: userId }),
     };
 
@@ -95,7 +106,7 @@ async function getStockAudits(req, res) {
     return res.json({ data: audits.map((a) => auditSummary(a)) });
   } catch (error) {
     console.error('getStockAudits error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(scopeErrorStatus(error)).json({ message: scopeErrorStatus(error) === 503 ? error.message : 'Internal server error' });
   }
 }
 
@@ -118,6 +129,7 @@ async function getStockAuditById(req, res) {
     });
 
     if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!(await requireWarehouseReadAccess(req, res, audit.warehouse_id))) return undefined;
 
     const manager = isManager(req);
     const userId = req.user?.id || req.user?.sub;
@@ -175,6 +187,10 @@ async function assignStockAudit(req, res) {
   }
 
   try {
+    const existing = await prisma.stock_audits.findUnique({ where: { id }, select: { warehouse_id: true } });
+    if (!existing) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!(await requireWarehouseWriteAccess(req, res, existing.warehouse_id))) return undefined;
+
     const updated = await prisma.stock_audits.update({
       where: { id },
       data: {
@@ -218,6 +234,7 @@ async function submitLineCount(req, res) {
     const audit = await prisma.stock_audits.findUnique({ where: { id } });
     if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
     if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Forbidden' });
+    if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
     if (!['DRAFT', 'IN_PROGRESS'].includes(audit.status)) {
       return res.status(400).json({ message: 'Phiếu kiểm kê không còn ở trạng thái có thể nhập số lượng' });
     }
@@ -255,6 +272,7 @@ async function submitStockAudit(req, res) {
     });
     if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
     if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Forbidden' });
+    if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
     if (!['DRAFT', 'IN_PROGRESS'].includes(audit.status)) {
       return res.status(400).json({ message: 'Phiếu kiểm kê đã được nộp trước đó' });
     }
@@ -284,6 +302,7 @@ async function approveStockAudit(req, res) {
   try {
     const preCheck = await prisma.stock_audits.findUnique({ where: { id } });
     if (!preCheck) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!(await requireWarehouseWriteAccess(req, res, preCheck.warehouse_id, { fresh: true }))) return undefined;
     if (!['SUBMITTED', 'COMPLETED'].includes(preCheck.status)) {
       return res.status(400).json({ message: 'Chỉ có thể duyệt phiếu kiểm kê đã được nộp' });
     }
@@ -416,6 +435,7 @@ async function cancelStockAudit(req, res) {
   try {
     const audit = await prisma.stock_audits.findUnique({ where: { id } });
     if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
     if (['COMPLETED', 'CANCELLED'].includes(audit.status)) {
       return res.status(400).json({ message: 'Phiếu kiểm kê đã kết thúc, không thể hủy' });
     }

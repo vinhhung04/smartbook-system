@@ -13,6 +13,18 @@ const { normalizeLocationType } = require('../utils/validation');
 const { createMovementNumber } = require('../utils/inventory');
 const { MAX_COMPARTMENT_CAPACITY } = require('../utils/constants');
 const { invalidateCache } = require('../services/storage-suggestion.service');
+const {
+  canReadWarehouse,
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
+
+// Phase 5 warehouse scope: the receipt's stored warehouse decides - read to
+// list / open it, write to claim / assign / confirm (confirm re-reads the scope
+// without cache, it moves stock); allocation locations were already limited
+// to that warehouse.
 
 function getAncestorByType(location, locationMap, targetType) {
   const normalizedTarget = normalizeLocationType(targetType);
@@ -131,7 +143,7 @@ async function resolveOrCreateFallbackReceivingLocation(tx, warehouseId) {
 async function getReadyReceipts(req, res) {
   try {
     const allReceipts = await prisma.goods_receipts.findMany({
-      where: { status: READY_PUTAWAY_STATUS },
+      where: { status: READY_PUTAWAY_STATUS, ...(await scopedWarehouseWhere(req.user, 'warehouse_id', req.query.warehouse_id || null)) },
       orderBy: { created_at: 'desc' },
       include: {
         warehouses: {
@@ -237,6 +249,7 @@ async function getReadyReceipts(req, res) {
 
     return res.json(data);
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error('Error while loading ready receipts:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -287,6 +300,7 @@ async function getReadyReceiptDetail(req, res) {
     if (!receipt) {
       return res.status(404).json({ message: 'Goods receipt not found' });
     }
+    if (!(await requireWarehouseReadAccess(req, res, receipt.warehouse_id))) return undefined;
 
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Only POSTED goods receipts can be put away' });
@@ -398,6 +412,7 @@ async function getPutawayLocations(req, res) {
     if (!receipt) {
       return res.status(404).json({ message: 'Goods receipt not found' });
     }
+    if (!(await requireWarehouseReadAccess(req, res, receipt.warehouse_id))) return undefined;
 
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Only POSTED goods receipts can be put away' });
@@ -538,6 +553,10 @@ async function confirmPutaway(req, res) {
   let committedWarehouseId = null;
 
   try {
+    const scopeCheck = await prisma.goods_receipts.findUnique({ where: { id: receiptId }, select: { warehouse_id: true } });
+    if (!scopeCheck) return res.status(404).json({ message: 'Goods receipt not found' });
+    if (!(await requireWarehouseWriteAccess(req, res, scopeCheck.warehouse_id, { fresh: true }))) return undefined;
+
     const result = await prisma.$transaction(async (tx) => {
       const receipt = await tx.goods_receipts.findUnique({
         where: { id: receiptId },
@@ -1007,12 +1026,13 @@ async function claimPutawayTask(req, res) {
   try {
     const receipt = await prisma.goods_receipts.findUnique({
       where: { id: receiptId },
-      select: { id: true, status: true, putaway_assignee_user_id: true },
+      select: { id: true, status: true, putaway_assignee_user_id: true, warehouse_id: true },
     });
 
     if (!receipt) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu nhập' });
     }
+    if (!(await requireWarehouseWriteAccess(req, res, receipt.warehouse_id))) return undefined;
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Phiếu nhập chưa được duyệt (cần status POSTED)' });
     }
@@ -1046,11 +1066,15 @@ async function assignPutawayTask(req, res) {
   try {
     const receipt = await prisma.goods_receipts.findUnique({
       where: { id: receiptId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, warehouse_id: true },
     });
 
     if (!receipt) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu nhập' });
+    }
+    if (!(await requireWarehouseWriteAccess(req, res, receipt.warehouse_id))) return undefined;
+    if (!(await canReadWarehouse({ id: assigneeUserId }, receipt.warehouse_id))) {
+      return res.status(400).json({ message: 'Người được giao không có quyền ở kho này', code: 'ASSIGNEE_OUT_OF_SCOPE' });
     }
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Phiếu nhập chưa được duyệt (cần status POSTED)' });

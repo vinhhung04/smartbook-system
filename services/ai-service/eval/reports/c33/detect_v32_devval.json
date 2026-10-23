@@ -1,0 +1,895 @@
+{
+ "code": "working tree",
+ "semantic": "off",
+ "items": {
+  "c33-nat-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.416
+  },
+  "c33-nat-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.562
+  },
+  "c33-nat-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.324
+  },
+  "c33-nat-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.327
+  },
+  "c33-nat-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.78
+  },
+  "c33-nat-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.474
+  },
+  "c33-nat-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.244
+  },
+  "c33-abbr-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.862
+  },
+  "c33-abbr-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.675
+  },
+  "c33-abbr-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.386
+  },
+  "c33-abbr-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.378
+  },
+  "c33-abbr-05#0:draft": {
+   "found": [
+    "COUNT"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Cụ thể, kho này có 3 đầu sách bị hết hàng hoàn toàn và 7 đầu sách khác còn dưới ngưỡng tồn tối thiểu (số lượng thấp hơn mức an toàn để duy trì hoạt động mượn).",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Kho HCM Chinh: 7 đầu sách dưới ngưỡng đã gồm 3 đầu sách hết hàng (chỉ 4 đầu sách khác).",
+     "expected": "4 đầu sách khác"
+    }
+   ],
+   "ms": 3.623
+  },
+  "c33-abbr-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.537
+  },
+  "c33-abbr-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.249
+  },
+  "c33-multi-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.224
+  },
+  "c33-multi-02#0:draft": {
+   "found": [
+    "COUNT",
+    "MONEY"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Sắc Lời Đắc Thế: Đề xuất nhập 5 bản với tổng chi phí khoảng 450.000 ₫ (tương đương 90.000 ₫/bản).",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 100.000 ₫: số bản được duyệt là 0 bản.",
+     "expected": "0 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 100.000 ₫: số bản được duyệt",
+       "value": 0.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Sắc Lời Đắc Thế: Đề xuất nhập 5 bản với tổng chi phí khoảng 450.000 ₫ (tương đương 90.000 ₫/bản).",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 100.000 ₫: chi phí được duyệt là 0 đ.",
+     "expected": "0 đ",
+     "evidence": [
+      {
+       "label": "Ngân sách 100.000 ₫: chi phí được duyệt",
+       "value": 0.0,
+       "unit": "đ",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Sắc Lời Đắc Thế: Đề xuất nhập 5 bản với tổng chi phí khoảng 450.000 ₫ (tương đương 90.000 ₫/bản).",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Chi phí ước tính của toàn bộ danh sách đề xuất là 85.161.250 đ.",
+     "expected": "85.161.250 đ",
+     "evidence": [
+      {
+       "label": "Chi phí ước tính toàn bộ",
+       "value": 85161250.0,
+       "unit": "đ"
+      }
+     ]
+    },
+    {
+     "text": "Cây Cam Ngọt Của Tôi (Tái Bản 2026): Đề xuất nhập 5 bản với tổng chi phí khoảng 500.000 ₫ (tương đương 100.000 ₫/bản).",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 100.000 ₫: số bản được duyệt là 0 bản.",
+     "expected": "0 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 100.000 ₫: số bản được duyệt",
+       "value": 0.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Cây Cam Ngọt Của Tôi (Tái Bản 2026): Đề xuất nhập 5 bản với tổng chi phí khoảng 500.000 ₫ (tương đương 100.000 ₫/bản).",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 100.000 ₫: chi phí được duyệt là 0 đ.",
+     "expected": "0 đ",
+     "evidence": [
+      {
+       "label": "Ngân sách 100.000 ₫: chi phí được duyệt",
+       "value": 0.0,
+       "unit": "đ",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Cuộc Đời Của Pi: Đề xuất nhập 6 bản với tổng chi phí khoảng 672.000 ₫ (tương đương 112.000 ₫/bản).",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 100.000 ₫: số bản được duyệt là 0 bản.",
+     "expected": "0 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 100.000 ₫: số bản được duyệt",
+       "value": 0.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Cuộc Đời Của Pi: Đề xuất nhập 6 bản với tổng chi phí khoảng 672.000 ₫ (tương đương 112.000 ₫/bản).",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 100.000 ₫: chi phí được duyệt là 0 đ.",
+     "expected": "0 đ",
+     "evidence": [
+      {
+       "label": "Ngân sách 100.000 ₫: chi phí được duyệt",
+       "value": 0.0,
+       "unit": "đ",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Cuộc Đời Của Pi: Đề xuất nhập 6 bản với tổng chi phí khoảng 672.000 ₫ (tương đương 112.000 ₫/bản).",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Chi phí ước tính của toàn bộ danh sách đề xuất là 85.161.250 đ.",
+     "expected": "85.161.250 đ",
+     "evidence": [
+      {
+       "label": "Chi phí ước tính toàn bộ",
+       "value": 85161250.0,
+       "unit": "đ"
+      }
+     ]
+    }
+   ],
+   "ms": 9.197
+  },
+  "c33-multi-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.295
+  },
+  "c33-multi-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.517
+  },
+  "c33-multi-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 7.575
+  },
+  "c33-multi-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.942
+  },
+  "c33-multi-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.431
+  },
+  "c33-wh-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.097
+  },
+  "c33-wh-02#0:draft": {
+   "found": [
+    "RANKING"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Kho HCM Chinh: Có 3 đầu sách hết hàng và 7 đầu sách dưới ngưỡng tồn tối thiểu (số lượng còn lại thấp hơn mức an toàn quy định).",
+     "type": "comparative",
+     "category": "RANKING",
+     "label": "so sánh/xếp hạng ngược với dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Kho HCM Chinh là kho rủi ro hơn theo quy tắc xếp hạng, không phải thấp hơn."
+    }
+   ],
+   "ms": 2.026
+  },
+  "c33-wh-03#0:draft": {
+   "found": [
+    "SCOPE"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Dưới ngưỡng tồn tối thiểu: Cả hai kho đều có 1 đầu sách ở mức dưới ngưỡng (mức tồn mà dưới đó cần nhập thêm).",
+     "type": "entity",
+     "category": "SCOPE",
+     "label": "nhầm phạm vi (toàn hệ thống và từng kho)",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Cộng 2 kho trong dữ liệu là 2 đầu sách; 1 là số của Chi Nhanh District 1.",
+     "expected": "2 đầu sách",
+     "evidence": [
+      {
+       "label": "Tổng 2 kho",
+       "value": 2,
+       "unit": "đầu sách",
+       "derived": true
+      }
+     ]
+    }
+   ],
+   "ms": 2.693
+  },
+  "c33-wh-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.275
+  },
+  "c33-wh-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.425
+  },
+  "c33-wh-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.121
+  },
+  "c33-wh-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.573
+  },
+  "c33-bd-01#0:draft": {
+   "found": [
+    "COUNT",
+    "MONEY"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Với ngân sách 10.000.000 ₫, hệ thống đề xuất nhập 5 đầu sách (tổng cộng 62 bản) để giảm thiểu tình trạng thiếu sách nhất có thể trong kỳ này.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 10.000.000 ₫: số đầu sách được duyệt là 10 đầu sách; 5 là số đầu sách ưu tiên cao được duyệt.",
+     "expected": "10 đầu sách",
+     "evidence": [
+      {
+       "label": "Ngân sách 10.000.000 ₫: số đầu sách được duyệt",
+       "value": 10.0,
+       "unit": "đầu sách",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Hiệu quả ngân sách thấp: Dù đã ưu tiên các đầu sách hết hàng hoặc dưới ngưỡng tồn tối thiểu, mức ngân sách này chỉ đáp ứng được 0% tổng số lượng thiếu hụt dự kiến (thiếu hụt thực tế cần nhập là 763 bả",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 10.000.000 ₫: chi phí được duyệt là 9.850.000 đ.",
+     "expected": "9.850.000 đ",
+     "evidence": [
+      {
+       "label": "Ngân sách 10.000.000 ₫: chi phí được duyệt",
+       "value": 9850000.0,
+       "unit": "đ",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    }
+   ],
+   "ms": 7.565
+  },
+  "c33-bd-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.196
+  },
+  "c33-bd-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.673
+  },
+  "c33-bd-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.52
+  },
+  "c33-bd-05#0:draft": {
+   "found": [
+    "COUNT"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Đánh đổi: Tiết kiệm chi phí đáng kể so với tổng nhu cầu (85.161.250 ₫), nhưng rủi ro thiếu hụt tồn kho ở 76 đầu sách quan trọng vẫn còn nguyên.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Nhu cầu nhập đầy đủ: 94 đầu sách.",
+     "expected": "94 đầu sách"
+    }
+   ],
+   "ms": 3.98
+  },
+  "c33-bd-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.393
+  },
+  "c33-bd-07#0:draft": {
+   "found": [
+    "COUNT"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Vì sao chọn Kafka on the Shore: Đây là đầu sách được duyệt đầu tiên trong danh mục ưu tiên cao (7 bản).",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 2.000.000 ₫: số bản được duyệt là 18 bản; 7 bản là số đầu sách được duyệt.",
+     "expected": "18 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 2.000.000 ₫: số bản được duyệt",
+       "value": 18.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Các đầu sách khác được duyệt: Sau Kafka on the Shore, hệ thống tiếp tục duyệt các đầu sách như Sắc Lời Đắc Thế (5 bản), Dế mèn phiêu lưu ký (3 bản) và Luy-Xiêng Và Chú Người Tuyết Cô Độc (3 bản).",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Ngân sách 2.000.000 ₫: số bản được duyệt là 18 bản.",
+     "expected": "18 bản",
+     "evidence": [
+      {
+       "label": "Ngân sách 2.000.000 ₫: số bản được duyệt",
+       "value": 18.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    }
+   ],
+   "ms": 3.619
+  },
+  "c33-tr-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.76
+  },
+  "c33-tr-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.11
+  },
+  "c33-tr-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.039
+  },
+  "c33-tr-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.116
+  },
+  "c33-tr-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.473
+  },
+  "c33-tr-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.348
+  },
+  "c33-tr-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.661
+  },
+  "c33-wi-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.179
+  },
+  "c33-wi-02#0:draft": {
+   "found": [
+    "COUNT",
+    "MONEY"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Tăng chi phí ước tính: Tổng chi phí cần thiết tăng từ 64.085.250 ₫ lên 96.915.990 ₫.",
+     "type": "numeric",
+     "category": "MONEY",
+     "label": "số tiền không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Chi phí ước tính của toàn bộ danh sách đề xuất là 85.791.250 đ.",
+     "expected": "85.791.250 đ",
+     "evidence": [
+      {
+       "label": "Chi phí ước tính toàn bộ",
+       "value": 85791250.0,
+       "unit": "đ"
+      }
+     ]
+    },
+    {
+     "text": "Bạn sẽ chỉ duyệt được 21 đầu sách / 604 bản.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "100% nhu cầu (64.085.250 ₫): số đầu sách được duyệt là 100 đầu sách.",
+     "expected": "100 đầu sách",
+     "evidence": [
+      {
+       "label": "100% nhu cầu (64.085.250 ₫): số đầu sách được duyệt",
+       "value": 100.0,
+       "unit": "đầu sách",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Bạn sẽ chỉ duyệt được 21 đầu sách / 604 bản.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "100% nhu cầu (64.085.250 ₫): số bản được duyệt là 549 bản.",
+     "expected": "549 bản",
+     "evidence": [
+      {
+       "label": "100% nhu cầu (64.085.250 ₫): số bản được duyệt",
+       "value": 549.0,
+       "unit": "bản",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    },
+    {
+     "text": "Bạn sẽ duyệt được 55-60 đầu sách / 814-930 bản.",
+     "type": "numeric",
+     "category": "COUNT",
+     "label": "số lượng không khớp dữ liệu",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "100% nhu cầu (64.085.250 ₫): số đầu sách được duyệt là 100 đầu sách.",
+     "expected": "100 đầu sách",
+     "evidence": [
+      {
+       "label": "100% nhu cầu (64.085.250 ₫): số đầu sách được duyệt",
+       "value": 100.0,
+       "unit": "đầu sách",
+       "source": "simulate_reorder_budget"
+      }
+     ]
+    }
+   ],
+   "ms": 13.659
+  },
+  "c33-wi-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 4.997
+  },
+  "c33-wi-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.618
+  },
+  "c33-wi-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.419
+  },
+  "c33-wi-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 8.43
+  },
+  "c33-wi-07#0:draft": {
+   "found": [
+    "COVERAGE",
+    "OVERCLAIM"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Giảm 25% ngân sách (còn 64,3 triệu ₫): Vẫn đáp ứng được 100% nhu cầu thiếu hụt dự kiến của nhóm ưu tiên cao.",
+     "type": "decision",
+     "category": "COVERAGE",
+     "label": "nói đáp ứng toàn bộ nhu cầu khi dữ liệu cho thấy chưa đủ",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Dữ liệu cho thấy vẫn còn đầu sách ưu tiên cao chưa được duyệt (tới 70) và nhu cầu đầy đủ cần 85.791.250 đ.",
+     "expected": "chưa đáp ứng toàn bộ nhu cầu"
+    },
+    {
+     "text": "100% nhu cầu",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính"
+    },
+    {
+     "text": "đáp ứng 100%",
+     "type": "decision",
+     "category": "OVERCLAIM",
+     "label": "diễn đạt chắc chắn hơn mức bằng chứng",
+     "verdict": "UNSUPPORTED",
+     "severity": "minor",
+     "detail": "dữ liệu cho thấy vẫn còn nhu cầu chưa được đáp ứng hoặc chưa được tính"
+    }
+   ],
+   "ms": 10.958
+  },
+  "c33-nd-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.377
+  },
+  "c33-nd-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.862
+  },
+  "c33-nd-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.986
+  },
+  "c33-nd-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.345
+  },
+  "c33-nd-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.495
+  },
+  "c33-nd-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.313
+  },
+  "c33-nd-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.101
+  },
+  "c33-bait-01#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.513
+  },
+  "c33-bait-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.361
+  },
+  "c33-bait-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.44
+  },
+  "c33-bait-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.365
+  },
+  "c33-bait-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.55
+  },
+  "c33-bait-06#0:draft": {
+   "found": [
+    "SCOPE"
+   ],
+   "critical": true,
+   "claims": [
+    {
+     "text": "Lượt mượn của Chi Nhanh District 1 trong tháng 10/2026 (tính đến ngày 17/10) là 96 lượt.",
+     "type": "entity",
+     "category": "SCOPE",
+     "label": "nhầm phạm vi (toàn hệ thống và từng kho)",
+     "verdict": "CONTRADICTED",
+     "severity": "critical",
+     "detail": "Lượt mượn/nhu cầu trong hệ thống được tính trên toàn thư viện, chưa tách theo kho."
+    }
+   ],
+   "ms": 0.71
+  },
+  "c33-bait-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.396
+  },
+  "c33-mt-01#0:draft": {
+   "found": [
+    "OPTIMALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Phương án thay thế nếu cần tối ưu hơn:",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu."
+    }
+   ],
+   "ms": 10.231
+  },
+  "c33-mt-01#1:draft": {
+   "found": [
+    "OPTIMALITY"
+   ],
+   "critical": false,
+   "claims": [
+    {
+     "text": "Phương án thay thế nếu cần tối ưu hơn:",
+     "type": "decision",
+     "category": "OPTIMALITY",
+     "label": "gọi một phương án là tối ưu khi hệ thống không tối ưu hóa",
+     "verdict": "UNSUPPORTED",
+     "severity": "major",
+     "detail": "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ; không có hàm mục tiêu để chứng minh phương án tối ưu."
+    }
+   ],
+   "ms": 5.202
+  },
+  "c33-mt-02#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.903
+  },
+  "c33-mt-02#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.827
+  },
+  "c33-mt-03#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.103
+  },
+  "c33-mt-03#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.426
+  },
+  "c33-mt-04#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.669
+  },
+  "c33-mt-04#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 1.023
+  },
+  "c33-mt-05#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.505
+  },
+  "c33-mt-05#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 3.528
+  },
+  "c33-mt-06#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 2.616
+  },
+  "c33-mt-06#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.862
+  },
+  "c33-mt-07#0:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.364
+  },
+  "c33-mt-07#1:draft": {
+   "found": [],
+   "critical": false,
+   "claims": [],
+   "ms": 0.516
+  }
+ }
+}

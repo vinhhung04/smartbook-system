@@ -458,7 +458,9 @@ export function ReorderSuggestionsPage() {
     () => (urgencyFilter === 'ALL' ? sortedItems : sortedItems.filter((item) => urgencyOf(item, leadDays) === urgencyFilter)),
     [sortedItems, urgencyFilter, leadDays],
   );
-  const qtyFor = (item: ReorderSuggestionItem) => qtyOverrides[item.variant_id] ?? item.suggested_reorder_qty;
+  // With a budget, the default quantity is what the budget funds (a line can be funded in part).
+  const qtyFor = (item: ReorderSuggestionItem) => qtyOverrides[item.variant_id]
+    ?? (data?.budget && item.funded_qty ? item.funded_qty : item.suggested_reorder_qty);
   const setQtyOverride = (variantId: string, value: number) => {
     setQtyOverrides((current) => ({ ...current, [variantId]: Math.max(1, Math.round(value) || 1) }));
   };
@@ -717,7 +719,7 @@ export function ReorderSuggestionsPage() {
                   <p className="font-mono text-[15px] font-semibold tabular-nums text-foreground">{formatVnd(visibleCost)}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {visibleQty.toLocaleString('vi-VN')} cuốn đề xuất
-                    {data?.budget ? <> · ngân sách còn <span className={data.budget.remaining_vnd <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>{formatVnd(data.budget.remaining_vnd)}</span></> : null}
+                    {data?.budget ? <> · ngân sách còn <span title={data.budget.assumptions?.join(' ')} className={data.budget.remaining_vnd <= 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}>{formatVnd(data.budget.remaining_vnd)}</span></> : null}
                   </p>
                 </div>
               </div>
@@ -815,6 +817,11 @@ export function ReorderSuggestionsPage() {
                             <p className="mt-1 text-[11px] text-muted-foreground">{formatVnd(qty * (item.unit_cost || 0))}</p>
                             {data?.budget && item.within_budget === false ? (
                               <p className="mt-0.5 text-[11px] font-medium text-rose-600 dark:text-rose-400">Vượt ngân sách</p>
+                            ) : null}
+                            {data?.budget && item.within_budget && item.funded_qty !== undefined && item.funded_qty < item.suggested_reorder_qty ? (
+                              <p className="mt-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                Ngân sách duyệt {item.funded_qty}/{item.suggested_reorder_qty} cuốn
+                              </p>
                             ) : null}
                           </td>
                         </tr>

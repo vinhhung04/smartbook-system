@@ -36,4 +36,10 @@ function inScope(scope, warehouseId) {
   return scope === null || scope === undefined || scope.has(String(warehouseId || ''));
 }
 
-module.exports = { attachWarehouseScope, inScope, setWarehouseScopeResolver };
+/** For a warehouse a request names (e.g. ?priorityWarehouseId=): read scope or not.
+ * Scope unreadable -> WarehouseScopeUnavailableError (503 via the error handler). */
+async function canReadWarehouseScope(user, warehouseId) {
+  return resolver.canRead(user, warehouseId);
+}
+
+module.exports = { attachWarehouseScope, inScope, canReadWarehouseScope, setWarehouseScopeResolver };

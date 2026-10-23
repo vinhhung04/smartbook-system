@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken');
-const redis = require('../lib/redis');
+const { revocationGuard } = require('@smartbook/shared/token-revocation');
+// Redis unreachable = revocation UNKNOWN, not "not revoked": reads continue,
+// writes get 503 (packages/shared/runtime/token-revocation.cjs). Shared with
+// lib/token-revocation.js so this service's own logouts are known first-hand.
+const { revocationChecker: revocation } = require('../lib/token-revocation');
 
 function getBearerToken(req) {
   const header = req.headers.authorization || req.headers.Authorization;
@@ -22,22 +26,14 @@ async function authenticateToken(req, res, next) {
 
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-    if (payload.jti) {
-      const blacklisted = await redis.get(`blacklist:token:${payload.jti}`);
-      if (blacklisted !== null) {
-        return res.status(401).json({ message: 'Token has been revoked' });
-      }
-    }
-
-    // Bulk revocation: password change / admin status change writes this cutoff (see
-    // auth.controller.js changePassword and iam.controller.js updateUser), invalidating
-    // every token issued before it in one write instead of tracking each jti individually.
-    if (payload.sub && payload.iat) {
-      const validAfter = await redis.get(`user:tokens-valid-after:${payload.sub}`);
-      if (validAfter !== null && payload.iat < Number(validAfter)) {
-        return res.status(401).json({ message: 'Token has been revoked' });
-      }
-    }
+    // Logout blacklists the jti; password change / admin status change writes a
+    // per-user cutoff (auth.controller.js changePassword, iam.controller.js
+    // updateUser) that invalidates every token issued before it.
+    const revocationResult = await revocation.check(payload);
+    // logout is allowed while revocation cannot be checked: it only gives access up
+    const isLogout = /\/logout\/?(\?|$)/.test(req.originalUrl || req.url || '');
+    if (revocationGuard(req, res, revocationResult, { allowWhenUnknown: isLogout })) return undefined;
+    req.revocationState = revocationResult.state;
 
     req.auth = payload;
     return next();
