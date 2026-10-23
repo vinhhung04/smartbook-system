@@ -4,6 +4,7 @@
     {
       "bookId": "example-001",
       "split": "development",
+      "tags": ["translated", "isbn13", "clear"],
       "images": {
         "front_cover": "example-001/front.jpg",
         "back_cover": "example-001/back.jpg",

@@ -16,6 +16,11 @@
         "properties": {
           "bookId": { "type": "string", "minLength": 1 },
           "split": { "enum": ["smoke", "development", "test"] },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Free labels reported separately, e.g. genre (vn-literature, translated, textbook, comic, reprint, multi-author), ISBN situation (isbn13, isbn10, no-isbn) and photo condition (clear, tilted, glare, small-print)"
+          },
           "images": {
             "type": "object",
             "additionalProperties": false,

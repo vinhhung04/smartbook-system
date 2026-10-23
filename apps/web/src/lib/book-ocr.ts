@@ -1,7 +1,8 @@
 // Pure helpers for AI Import's multi-image OCR (no React, no runtime imports) —
 // unit-tested in tests/book-ocr.test.mjs. The form rules live here so they are
 // testable: a scan only ever fills fields the user has not typed into, and only
-// with proposals the server marked safe (no conflict, grounded, not inferred).
+// with proposals the server marked safe (book_ocr/reconcile.py autofill_policy: corroborated
+// by two sources, or a low-risk field read once - never conflicted, inferred or unverified).
 import type { EditableBookForm } from '@/components/pages/ai-import/types';
 import type { LookupBookByIsbnResponse } from '@/services/ai';
 import type { BookOcrScanResult, OcrFieldStatus, OcrImageKind, OcrProposal } from '@/services/book-ocr';
@@ -26,13 +27,26 @@ export function validateOcrFile(file: { type: string; size: number }, maxBytes: 
   return null;
 }
 
-/** Stable identity of the selected files, so pressing "scan" again with nothing
- *  changed re-uses the last result instead of uploading and paying again. */
-export function fingerprintFiles(files: Partial<Record<OcrImageKind, { name: string; size: number; lastModified: number }>>): string {
-  return OCR_SLOTS.map(({ kind }) => {
-    const file = files[kind];
-    return file ? `${kind}:${file.name}:${file.size}:${file.lastModified}` : `${kind}:-`;
-  }).join('|');
+/** Whether image OCR can be offered on AI Import:
+ *  LOADING (asking the server), AVAILABLE, DISABLED (turned off by configuration),
+ *  UNAVAILABLE (the AI service did not answer - retryable). */
+export type OcrAvailability = 'LOADING' | 'AVAILABLE' | 'DISABLED' | 'UNAVAILABLE';
+
+/** Content identity of an (already resized, <= ~1 MB) photo: SHA-256 of its bytes, so a
+ *  re-picked identical photo is recognised and a different photo with the same name/size
+ *  never is. Falls back to name/size/time where Web Crypto is missing (non-secure origin). */
+export async function fileDigest(file: Blob & { name?: string; lastModified?: number }): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) return `meta:${file.name ?? ''}:${file.size}:${file.lastModified ?? 0}`;
+  const hash = new Uint8Array(await subtle.digest('SHA-256', await file.arrayBuffer()));
+  return `sha256:${Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Identity of the selected photo set (digest per slot): pressing "scan" again with nothing
+ *  changed re-uses the last result instead of uploading and paying again, and a result is
+ *  only ever shown/applied for the exact set that produced it. */
+export function fingerprintFiles(digests: Partial<Record<OcrImageKind, string>>): string {
+  return OCR_SLOTS.map(({ kind }) => `${kind}:${digests[kind] ?? '-'}`).join('|');
 }
 
 /** A scan starts a new import: fields the user typed into are kept as they are; every
@@ -86,13 +100,24 @@ export function safeProposalCount(proposals: Record<string, OcrProposal>): numbe
   return Object.values(proposals).filter((proposal) => proposal.safeToApply && proposal.value).length;
 }
 
+/** Values read from ONE photo that the server's policy does not fill on its own
+ *  (title, authors, publisher, year, ISBN, description: reason SINGLE_SOURCE).
+ *  Staff may accept them all with one click after comparing with the book;
+ *  conflicted / review-required / inferred values are never part of this. */
+export function singleSourceProposals(proposals: Record<string, OcrProposal>, userEdited: ReadonlySet<string>): OcrProposal[] {
+  // "isbn13" mirrors "isbn" (the page applies both together), so it is not listed twice.
+  return Object.values(proposals).filter((proposal) => proposal.formField !== 'isbn13' && proposal.status === 'EXTRACTED'
+    && proposal.value && !proposal.safeToApply && proposal.reasons.includes('SINGLE_SOURCE') && !userEdited.has(proposal.formField));
+}
+
 /** The lookup-shaped state AI Import's workspace needs when no provider record exists
  *  (no ISBN on the images, or the ISBN was not found): the same "nothing found, enter
  *  manually" state a typed ISBN produces — it carries no metadata of its own. */
 export function lookupStateFromScan(result: BookOcrScanResult): LookupBookByIsbnResponse {
   // A record whose title or edition does not match the printed book must not seed the
   // reconciliation draft: it would carry another book's authors, publisher and dates.
-  const mismatch = result.warnings.some((code) => code === 'ISBN_LOOKUP_TITLE_MISMATCH' || code === 'ISBN_LOOKUP_DIFFERENT_EDITION');
+  const mismatch = result.warnings.some((code) => code === 'ISBN_LOOKUP_TITLE_MISMATCH' || code === 'ISBN_LOOKUP_DIFFERENT_EDITION'
+    || code === 'ISBN_LOOKUP_IDENTITY_UNVERIFIED');
   if (result.isbnLookup.status === 'FOUND' && result.isbnLookup.lookup && !mismatch) return result.isbnLookup.lookup;
   const isbn13 = result.metadata.isbn13 || '';
   return {
@@ -161,7 +186,12 @@ const CODE_LABELS: Record<string, string> = {
   ISBN_UNLABELLED: 'ISBN không có nhãn "ISBN"',
   SOURCES_DISAGREE: 'các ảnh ghi khác nhau',
   PARTIAL_AGREEMENT: 'các ảnh chỉ khớp một phần',
-  DIACRITICS_DIFFER: 'các ảnh khác nhau về dấu tiếng Việt',
+  DIACRITICS_DIFFER: 'các ảnh khác nhau về dấu tiếng Việt (vd. "tiễn" / "tiến") — hãy so với sách và chọn đúng',
+  SINGLE_SOURCE: 'chỉ đọc được từ một ảnh, chưa có nguồn thứ hai đối chiếu — so với sách rồi bấm áp dụng',
+  BARCODE_UNCONFIRMED: 'chỉ có mã vạch do trình duyệt giải mã; ảnh không cho thấy ISBN này — cần kiểm tra',
+  LOOKUP_DIACRITICS_DIFFER: 'bản ghi tra cứu ISBN ghi khác dấu tiếng Việt',
+  LOOKUP_UNACCENTED: 'bản ghi tra cứu không có dấu tiếng Việt nên không xác nhận được dấu',
+  LOOKUP_IDENTITY_UNVERIFIED: 'chưa xác minh bản ghi tra cứu thuộc đúng cuốn này (không đọc được tên sách để đối chiếu)',
   SOME_READINGS_INVALID: 'một số lần đọc không hợp lệ',
   LOOKUP_MISMATCH: 'khác dữ liệu tra cứu ISBN',
   LOOKUP_AGREES: 'khớp dữ liệu tra cứu ISBN',
@@ -182,6 +212,7 @@ const CODE_LABELS: Record<string, string> = {
   ISBN_LOOKUP_ERROR: 'tra cứu ISBN lỗi',
   ISBN_LOOKUP_NOT_FOUND: 'tra cứu ISBN không tìm thấy sách',
   ISBN_LOOKUP_DIFFERENT_EDITION: 'tra cứu ISBN trả về ấn bản khác',
+  ISBN_LOOKUP_IDENTITY_UNVERIFIED: 'tra cứu ISBN chưa xác minh được đúng cuốn sách (ảnh không có tên sách, ISBN chỉ thấy ở một nơi) — không tự điền dữ liệu từ tra cứu',
   ISBN_LOOKUP_TITLE_MISMATCH: 'tra cứu ISBN trả về sách có tên khác — không tự điền dữ liệu từ tra cứu, hãy kiểm tra lại ISBN',
   FALLBACK_BUDGET_EXHAUSTED: 'đã hết ngân sách model dự phòng hôm nay',
   FALLBACK_USED: 'đã dùng model dự phòng',

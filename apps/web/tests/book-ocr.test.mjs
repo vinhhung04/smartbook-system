@@ -76,12 +76,21 @@ test('file checks happen before upload', () => {
   assert.match(ocr.validateOcrFile({ type: 'image/webp', size: 0 }, 8e6), /rỗng/);
 });
 
-test('unchanged photos produce the same fingerprint (no re-upload), a replaced photo does not', () => {
-  const front = { name: 'front_cover.jpg', size: 10, lastModified: 1 };
+test('unchanged photos produce the same fingerprint (no re-upload), a replaced photo does not', async () => {
+  const photo = (bytes, lastModified = 1) => new File([new Uint8Array(bytes)], 'front_cover.jpg', { type: 'image/jpeg', lastModified });
+  const front = await ocr.fileDigest(photo([1, 2, 3]));
+  assert.match(front, /^sha256:[0-9a-f]{64}$/);
+  // Identity is the content: the same photo picked again (new File, new time) is the same slot...
+  assert.equal(front, await ocr.fileDigest(photo([1, 2, 3], 999)));
+  // ...and a different photo with the same name and size is not.
+  const other = await ocr.fileDigest(photo([1, 2, 4]));
+  assert.notEqual(front, other);
   const a = ocr.fingerprintFiles({ front_cover: front });
-  assert.equal(a, ocr.fingerprintFiles({ front_cover: { ...front } }));
-  assert.notEqual(a, ocr.fingerprintFiles({ front_cover: { ...front, lastModified: 2 } }));
+  assert.equal(a, ocr.fingerprintFiles({ front_cover: front }));
+  assert.notEqual(a, ocr.fingerprintFiles({ front_cover: other }));
   assert.notEqual(a, ocr.fingerprintFiles({ front_cover: front, back_cover: front }));
+  // The same photo in another slot is another set (front vs back is part of the evidence).
+  assert.notEqual(a, ocr.fingerprintFiles({ back_cover: front }));
 });
 
 test('without a provider record the workspace gets an empty "not found" state, never invented metadata', () => {
@@ -112,4 +121,30 @@ test('warning codes become readable Vietnamese', () => {
   assert.equal(ocr.ocrSourceLabel('images:copyright_page'), 'Trang xuất bản');
   assert.equal(ocr.formatUsd(0.000412), '$0.00041');
   assert.equal(ocr.formatUsd(null), 'không rõ');
+});
+
+test('single-photo readings of identity fields are offered for one bulk click, never auto-filled', () => {
+  const single = (formField, value) => proposal(formField, value, 'EXTRACTED', false, { reasons: ['SINGLE_SOURCE'] });
+  const proposals = {
+    title: single('title', 'Số đỏ'), isbn: single('isbn', '9786041234567'), isbn13: single('isbn13', '9786041234567'),
+    publisher: single('publisher', 'NXB Văn Học'), pageCount: proposal('pageCount', '228'),
+    authorsText: proposal('authorsText', 'Vũ Trọng Phụng', 'REVIEW_REQUIRED', false, { reasons: ['DIACRITICS_DIFFER'] }),
+    language: proposal('language', 'vi', 'INFERRED', false),
+  };
+  // A scan alone fills only the safe page count.
+  assert.deepEqual(ocr.formFromScan(EMPTY, proposals, new Set(), EMPTY).applied, ['pageCount']);
+  const offered = ocr.singleSourceProposals(proposals, new Set(['publisher'])).map((p) => p.formField).sort();
+  assert.deepEqual(offered, ['isbn', 'title']); // not the edited publisher, not the isbn13 mirror, not review/inferred
+});
+
+test('a provider record whose identity could not be verified never seeds the workspace', () => {
+  const scan = {
+    metadata: { isbn13: '9786041234567', isbn10: null, title: null },
+    warnings: ['ISBN_LOOKUP_IDENTITY_UNVERIFIED'],
+    isbnLookup: { status: 'FOUND', lookup: { found: true, title: 'Một cuốn khác', authors: ['Ai Đó'] } },
+  };
+  const state = ocr.lookupStateFromScan(scan);
+  assert.equal(state.found, false);
+  assert.equal(state.reason, 'OCR_LOOKUP_MISMATCH');
+  assert.deepEqual(state.authors, []);
 });

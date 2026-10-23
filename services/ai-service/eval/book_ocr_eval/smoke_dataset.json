@@ -4,6 +4,7 @@
     {
       "bookId": "de-men-phieu-luu-ky-kim-dong",
       "split": "smoke",
+      "tags": ["vn-literature", "front-only"],
       "images": { "front_cover": "bia-sach2-9886.jpg" },
       "groundTruth": {
         "title": "Dế Mèn phiêu lưu ký", "subtitle": null, "authors": ["Tô Hoài"], "translators": [],
@@ -14,6 +15,7 @@
     {
       "bookId": "harry-potter-5-tre",
       "split": "smoke",
+      "tags": ["translated", "front-only", "small-image"],
       "images": { "front_cover": "Tài Liệu/8934974184027.webp" },
       "groundTruth": {
         "title": "Harry Potter và Hội Phượng Hoàng", "subtitle": null, "authors": ["J.K. Rowling"], "translators": ["Lý Lan"],
@@ -24,6 +26,7 @@
     {
       "bookId": "frieren-tap-1-kim-dong",
       "split": "smoke",
+      "tags": ["translated", "comic", "front-only"],
       "images": { "front_cover": "Tài Liệu/frieren-phap-su-tien-tang-bia-tap-1.webp" },
       "groundTruth": {
         "title": "Frieren Pháp sư tiễn táng", "subtitle": null, "authors": ["Kanehito Yamada"], "translators": ["Gou"],

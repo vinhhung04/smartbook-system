@@ -23,8 +23,10 @@ _VI_LETTERS = re.compile("[ăâđêôơưàáạảãằắặẳẵầấậẩ
 
 
 def key(value: str) -> str:
-    """Case/whitespace-insensitive, diacritics-SENSITIVE comparison key."""
-    return clean(value).casefold()
+    """Case/whitespace-insensitive, diacritics-SENSITIVE comparison key. NFKC folds
+    compatibility forms an OCR model may emit (full-width letters/digits, ligatures)
+    without touching Vietnamese letters, which stay precomposed."""
+    return unicodedata.normalize("NFKC", clean(value)).casefold()
 
 
 def words(value: str) -> str:
@@ -34,10 +36,51 @@ def words(value: str) -> str:
 
 
 def fold(value: str) -> str:
-    """Case- and diacritics-insensitive key ("Nhà Giả Kim" == "NHA GIA KIM")."""
-    text = clean(value).casefold().replace("đ", "d")
+    """SEARCH / FUZZY key - case- and diacritics-insensitive ("Nhà Giả Kim" == "NHA GIA KIM").
+    Only for finding candidates that may be the same value (grouping readings,
+    "is this lookup record about the same book?"). Never proof that two values
+    are equal: "tiễn" and "tiến", "Ánh" and "Anh", "Trẻ" and "Tre" fold alike."""
+    text = key(value).replace("đ", "d")
     text = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
     return re.sub(r"[^\w]+", " ", text).strip()
+
+
+# "Nhà xuất bản Trẻ" / "NXB Trẻ" / "Nhà XB Trẻ" name the same publisher: the prefix is
+# a role label, not part of the name. Matched on the strict (accented) key.
+_PUBLISHER_PREFIX = re.compile(r"^(?:nhà xuất bản|nhà xb|nxb)\s+")
+
+
+def strict(value) -> str:
+    """VERIFICATION key - NFKC (compatibility forms such as full-width digits or
+    ligatures from OCR), case-, whitespace- and punctuation-insensitive, but every
+    Vietnamese tone/vowel mark and đ/d counts: "MẮT BIẾC" == "Mắt Biếc", while
+    "tiễn" != "tiến" and "Ánh" != "Anh"."""
+    return words(value)
+
+
+def strict_publisher(value) -> str:
+    return _PUBLISHER_PREFIX.sub("", strict(value))
+
+
+def fold_publisher(value) -> str:
+    return re.sub(r"^(?:nha xuat ban|nha xb|nxb)\s+", "", fold(value))
+
+
+def has_marks(value) -> bool:
+    """Whether the text carries any Vietnamese mark at all (an ASCII-folded
+    record such as "Nha Gia Kim" carries none)."""
+    return strict(value) != fold(value)
+
+
+def compare_text(a, b, *, publisher: bool = False) -> str:
+    """Domain comparison of two written values:
+    MATCH              - the same words, marks included (case/spacing/punctuation aside);
+    DIACRITICS_DIFFER  - the same letters, but marks differ, are missing or misplaced;
+    DIFFERENT          - not the same words even without marks."""
+    key, loose = (strict_publisher, fold_publisher) if publisher else (strict, fold)
+    if key(a) == key(b):
+        return "MATCH"
+    return "DIACRITICS_DIFFER" if loose(a) == loose(b) else "DIFFERENT"
 
 
 def vietnamese_letter_count(value: str) -> int:
@@ -100,7 +143,7 @@ def normalize_observation(field: str, value) -> tuple[object, list[str]]:
     if field == "pageCount":
         normalized = mi_normalize("pageCount", value)
         return (normalized, []) if normalized is not None else (None, ["OUT_OF_RANGE"])
-    text = clean(value)
+    text = unicodedata.normalize("NFKC", clean(value))
     if not text or text.casefold() in _HEDGES:
         return None, ["EMPTY"]
     if len(text) > TEXT_LIMITS.get(field, 300):

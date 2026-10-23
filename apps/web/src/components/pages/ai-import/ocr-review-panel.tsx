@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { CheckCheck, Eye, FileSearch, Info, X } from "lucide-react";
+import { AlertTriangle, CheckCheck, Eye, FileSearch, Info, X } from "lucide-react";
 import { StatusBadge } from "@/components/status-badge";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   describeOcrCode, formatUsd, OCR_FIELD_FOR_FORM, OCR_FIELD_LABELS, OCR_READING_LABELS, OCR_SLOTS, OCR_STATUS_META,
-  ocrSourceLabel, safeProposalCount,
+  ocrSourceLabel, safeProposalCount, singleSourceProposals,
 } from "@/lib/book-ocr";
 import type { BookOcrScanResult, OcrImageKind, OcrProposal } from "@/services/book-ocr";
 import type { EditableBookForm } from "./types";
@@ -30,12 +30,13 @@ function fieldsForApply(formField: string): Array<keyof EditableBookForm> {
 }
 
 function ProposalRow({
-  proposal, result, form, edited, onApply,
+  proposal, result, form, edited, disabled, onApply,
 }: {
   proposal: OcrProposal;
   result: BookOcrScanResult;
   form: EditableBookForm;
   edited: boolean;
+  disabled: boolean;
   onApply: (fields: Array<keyof EditableBookForm>, value: string, label: string) => void;
 }) {
   const label = OCR_FIELD_LABELS[proposal.formField] || proposal.formField;
@@ -46,6 +47,10 @@ function ProposalRow({
   const fields = fieldsForApply(proposal.formField);
   const showComparison = proposal.ocrValue && proposal.lookupValue && proposal.ocrValue !== proposal.lookupValue;
   const isConflict = proposal.status === "CONFLICTED";
+  // Readings that differ only in Vietnamese marks: every spelling is a one-click choice, not just the proposed one.
+  const choices = isConflict ? proposal.options
+    : proposal.reasons.some((reason) => reason.endsWith("DIACRITICS_DIFFER"))
+      ? proposal.options.filter((option) => option.value !== proposal.value) : [];
 
   return (
     <li className="rounded-[10px] border border-border/80 p-3" data-testid={`ocr-row-${proposal.formField}`}>
@@ -104,37 +109,43 @@ function ProposalRow({
         {proposal.value && current !== proposal.value ? (
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onApply(fields, proposal.value!, label)}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-[8px] border border-cyan-300 px-3 text-[12px] font-semibold text-cyan-700 hover:bg-cyan-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/10"
+            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-[8px] border border-cyan-300 px-3 text-[12px] font-semibold text-cyan-700 hover:bg-cyan-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/10"
           >
             Áp dụng {label.toLowerCase()}
           </button>
         ) : null}
-        {isConflict ? proposal.options.map((option) => (
+        {choices.map((option) => (
           <button
             key={`${option.source}-${option.value}`}
             type="button"
+            disabled={disabled}
             onClick={() => onApply(fields, option.value, label)}
-            className="inline-flex min-h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-[8px] border border-border px-3 text-left text-[12px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30"
+            className="inline-flex min-h-9 max-w-full cursor-pointer items-center gap-1.5 rounded-[8px] border border-border px-3 text-left text-[12px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="truncate">Dùng “{option.value}”</span>
             <span className="shrink-0 text-muted-foreground">({ocrSourceLabel(option.source)})</span>
           </button>
-        )) : null}
+        ))}
       </div>
     </li>
   );
 }
 
 export function OcrReviewPanel({
-  result, slots, form, userEdited, onApply, onApplySafe, onDismiss,
+  result, stale, slots, form, userEdited, onApply, onApplySafe, onApplySingleSource, onDismiss,
 }: {
   result: BookOcrScanResult;
+  /** The photos changed after this scan: the result is shown for reference only, never applied. */
+  stale: boolean;
   slots: OcrSlots;
   form: EditableBookForm;
   userEdited: ReadonlySet<string>;
   onApply: (fields: Array<keyof EditableBookForm>, value: string, label: string) => void;
   onApplySafe: () => void;
+  /** Accept every single-photo reading at once (staff compared them with the book). */
+  onApplySingleSource: () => void;
   onDismiss: () => void;
 }) {
   const [viewing, setViewing] = useState<OcrImageKind | null>(null);
@@ -143,6 +154,8 @@ export function OcrReviewPanel({
   const missing = rows.filter((proposal) => !shown.includes(proposal)).map((proposal) => OCR_FIELD_LABELS[proposal.formField]);
   const needsDecision = shown.filter((proposal) => ["CONFLICTED", "REVIEW_REQUIRED", "INVALID"].includes(proposal.status)).length;
   const safeCount = safeProposalCount(Object.fromEntries(shown.map((proposal) => [proposal.formField, proposal])));
+  const singleSource = singleSourceProposals(Object.fromEntries(shown.map((proposal) => [proposal.formField, proposal])), userEdited)
+    .filter((proposal) => form[proposal.formField as keyof EditableBookForm] !== proposal.value);
   const extras = EXTRA_READINGS.map((field) => [field, result.metadata[field]] as const).filter(([, value]) => value);
   const { usage } = result;
   const viewingSlot = viewing ? slots[viewing] : undefined;
@@ -170,8 +183,15 @@ export function OcrReviewPanel({
         </div>
       </div>
 
+      {stale ? (
+        <div role="status" className="flex items-start gap-2 rounded-[10px] border border-amber-300/70 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>Ảnh đã thay đổi sau lần quét này — kết quả bên dưới thuộc bộ ảnh trước và không thể áp dụng. Bấm “Quét và trích xuất bằng AI” để đọc bộ ảnh mới.</span>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        {OCR_SLOTS.filter(({ kind }) => slots[kind] && result.images.some((image) => image.kind === kind)).map(({ kind, label }) => (
+        {stale ? null : OCR_SLOTS.filter(({ kind }) => slots[kind] && result.images.some((image) => image.kind === kind)).map(({ kind, label }) => (
           <button key={kind} type="button" onClick={() => setViewing(kind)} className="group flex items-center gap-2 rounded-[10px] border border-border p-1.5 pr-3 text-[12px] hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30">
             <img src={slots[kind]!.url} alt="" className="h-12 w-9 rounded-[6px] object-cover" />
             <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> Xem lại {label.toLowerCase()}</span>
@@ -182,8 +202,9 @@ export function OcrReviewPanel({
       <div className="flex items-start gap-2 rounded-[10px] bg-muted/45 px-3 py-2 text-[12px] text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>
-          “Đọc từ ảnh” nghĩa là AI chép được giá trị kèm đoạn chữ làm bằng chứng — vẫn có thể đọc sai. “Đã đối chiếu” nghĩa là hai nguồn độc lập
-          (hai ảnh, mã vạch, hoặc tra cứu ISBN) khớp nhau. Trường bạn đã tự sửa không bao giờ bị ghi đè tự động.
+          “Đọc từ ảnh” nghĩa là AI chép được giá trị kèm đoạn chữ làm bằng chứng — đó là bản chép của AI, vẫn có thể sai dấu hoặc sai số.
+          “Đã đối chiếu” nghĩa là hai nguồn độc lập (hai ảnh, ảnh + mã vạch, hoặc tra cứu ISBN) khớp nhau, kể cả dấu tiếng Việt.
+          Trường bạn đã tự sửa không bao giờ bị ghi đè tự động.
         </span>
       </div>
 
@@ -199,7 +220,7 @@ export function OcrReviewPanel({
       <ul className="space-y-2">
         {shown.map((proposal) => (
           <ProposalRow key={proposal.formField} proposal={proposal} result={result} form={form}
-            edited={fieldsForApply(proposal.formField).some((field) => userEdited.has(field))} onApply={onApply} />
+            edited={fieldsForApply(proposal.formField).some((field) => userEdited.has(field))} disabled={stale} onApply={onApply} />
         ))}
       </ul>
 
@@ -218,15 +239,30 @@ export function OcrReviewPanel({
       ) : null}
 
       <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[12px] text-muted-foreground">Trường an toàn = không xung đột, có bằng chứng, không phải suy luận. Trường bạn đã sửa được giữ nguyên.</p>
+        <p className="text-[12px] text-muted-foreground">
+          Trường an toàn = đã đối chiếu hai nguồn, hoặc trường ít rủi ro đọc từ một ảnh. Tên sách, tựa phụ, tác giả, NXB, năm, ISBN và mô tả
+          chỉ đọc từ một ảnh cần bạn xác nhận. Trường bạn đã sửa được giữ nguyên.
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+        {singleSource.length ? (
+          <button
+            type="button"
+            onClick={onApplySingleSource}
+            disabled={stale}
+            className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-cyan-300 px-4 text-[13px] font-semibold text-cyan-700 hover:bg-cyan-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-cyan-500/30 dark:text-cyan-300 dark:hover:bg-cyan-500/10"
+          >
+            Đã so với sách — áp dụng {singleSource.length} giá trị đọc từ một ảnh
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onApplySafe}
-          disabled={!safeCount}
+          disabled={!safeCount || stale}
           className="inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[10px] bg-cyan-600 px-4 text-[13px] font-semibold text-white hover:bg-cyan-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-cyan-500 dark:hover:bg-cyan-600"
         >
           <CheckCheck className="h-4 w-4" /> Áp dụng các trường an toàn ({safeCount})
         </button>
+        </div>
       </div>
 
       <Dialog open={viewing !== null} onOpenChange={(open) => { if (!open) setViewing(null); }}>

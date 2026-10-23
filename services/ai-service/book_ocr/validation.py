@@ -5,10 +5,18 @@ well-formed (normalization.py), (3) be grounded - its value must literally
 occur in the text the model says it read - and (4) sit in the right role
 (a translator line is not an author, a print year is not a publication
 year). This does NOT prove the text is in the pixels: `observedText` is the
-model's own transcription. It catches values the model inferred or invented
+model's own transcription (model-generated transcription != independently
+verified image evidence). It catches values the model inferred or invented
 beyond what it transcribed; only agreement between independent sources
-(two images, the decoded barcode, the ISBN lookup) is reported as
+(two images, an image + the decoded barcode, the ISBN lookup) is reported as
 CORROBORATED.
+
+Readings are grouped with the FUZZY key (`fold`: marks ignored) to find the
+ones that talk about the same value, then compared with the STRICT key
+(`strict`: marks count). Same letters with different / missing marks
+("tiễn" vs "tiến", "Trẻ" vs "Tre") is DIACRITICS_DIFFER -> REVIEW_REQUIRED,
+never CORROBORATED. A barcode the browser declares is client input: alone it
+is BARCODE_UNCONFIRMED (review); it corroborates only a matching image reading.
 
 Source preference only picks how an agreeing value is written (e.g. the
 copyright page's "Nhà giả kim" over the cover's "NHÀ GIẢ KIM"); it never
@@ -21,8 +29,9 @@ import re
 from metadata_intelligence.evidence_validation import ROLE_LABELS
 from metadata_intelligence.verification import canonical_isbn
 
-from .normalization import (LIST_FIELDS, YEAR_FIELDS, clean, fold, is_all_caps, isbn_digits, isbn_issue,
-                            key, normalize_observation, vietnamese_letter_count, words)
+from .normalization import (LIST_FIELDS, YEAR_FIELDS, clean, fold, fold_publisher, is_all_caps, isbn_digits,
+                            isbn_issue, key, normalize_observation, strict, strict_publisher,
+                            vietnamese_letter_count, words)
 from .schemas import OCR_FIELDS, FieldResult, ModelImageNote, ModelObservation, ModelOtherCode, Observation
 
 _EDITION = ("copyright_page", "back_cover", "front_cover")
@@ -39,6 +48,8 @@ PRIORITY = {
 }
 
 _TRANSLATOR = re.compile(ROLE_LABELS["translator"] + r"|(?<!\w)dịch(?!\w)", re.I)
+_ILLUSTRATOR = re.compile(r"minh họa|họa sĩ|illustrat", re.I)
+_AUTHOR = re.compile(r"tác giả|nguyên tác|(?<!\w)lời(?!\w)|(?<!\w)truyện(?!\w)|author|written|story", re.I)
 _PUBLISHER = re.compile(r"nhà xuất bản|(?<!\w)nxb(?!\w)|publish", re.I)
 _DISTRIBUTOR = re.compile(r"phát hành|liên kết|distribut", re.I)
 _PUBLICATION = re.compile(r"xuất bản năm|năm xuất bản|xuất bản lần|(?<!\w)xb năm|published|publication", re.I)
@@ -60,6 +71,19 @@ def _segment(observed: str, item: str) -> str:
         if target and target in key(part):
             return part
     return observed
+
+
+def _label_before(observed: str, item: str) -> str | None:
+    """The role label closest BEFORE `item` on its line ("Nguyên tác: A  Minh họa: B"
+    -> author for A, illustrator for B)."""
+    line = clean(_segment(observed, item))
+    at = line.casefold().find(key(item))
+    if at < 0:
+        return None
+    labels = [(m.start(), role) for role, pattern in (("author", _AUTHOR), ("illustrator", _ILLUSTRATOR),
+                                                      ("translator", _TRANSLATOR))
+              for m in pattern.finditer(line[:at])]
+    return max(labels)[1] if labels else None
 
 
 def _grounding_issues(field: str, raw, normalized, observed: str | None) -> list[str]:
@@ -86,7 +110,9 @@ def _role_issues(field: str, normalized, observed: str | None) -> list[str]:
     if not observed:
         return []
     if field == "authors":
-        return ["ROLE_MISMATCH"] if any(_TRANSLATOR.search(_segment(observed, a)) for a in normalized) else []
+        # A translator line, or a name labelled "Minh họa:" / "Họa sĩ:" (illustrators are not authors).
+        return ["ROLE_MISMATCH"] if any(_TRANSLATOR.search(_segment(observed, a)) or _label_before(observed, a) == "illustrator"
+                                        for a in normalized) else []
     if field == "translators":
         return [] if all(_TRANSLATOR.search(_segment(observed, t)) for t in normalized) else ["ROLE_UNCONFIRMED"]
     if field == "publisher":
@@ -118,6 +144,20 @@ def _group_key(field: str, normalized):
     if isinstance(normalized, str):
         return fold(normalized)
     return normalized
+
+
+def _marks_disagree(field: str, observations: list[Observation]) -> bool:
+    """Readings that fold to the same letters but differ in Vietnamese marks
+    (wrong / missing / misplaced tone or vowel marks, đ vs d). Lists are compared
+    name by name, so a cover listing one of two authors is not a mark conflict."""
+    loose, exact = (fold_publisher, strict_publisher) if field in ("publisher", "distributor") else (fold, strict)
+    variants: dict[str, set[str]] = {}
+    for o in observations:
+        items = o.normalizedValue if field in LIST_FIELDS else [o.normalizedValue]
+        for item in items:
+            if isinstance(item, str):
+                variants.setdefault(loose(item), set()).add(exact(item))
+    return any(len(v) > 1 for v in variants.values())
 
 
 def _text(value) -> str:
@@ -213,8 +253,10 @@ def aggregate(field: str, observations: list[Observation]) -> FieldResult:
     else:
         chosen = next(iter(groups.values()))
     best = _representative(field, chosen)
-    if field != "isbn" and len({vietnamese_letter_count(_text(o.normalizedValue)) for o in chosen}) > 1:
-        reasons.append("DIACRITICS_DIFFER")  # same letters, but one reading lost its tone marks
+    if field != "isbn" and _marks_disagree(field, chosen):
+        reasons.append("DIACRITICS_DIFFER")  # same letters, different / missing marks: a person decides
+    if field == "isbn" and {o.source for o in chosen} == {"barcode"}:
+        reasons.append("BARCODE_UNCONFIRMED")  # only the browser's say-so: no image reading backs it
     sources = sorted({o.source for o in valid})
     if len(valid) < len(observations):
         reasons.append("SOME_READINGS_INVALID")

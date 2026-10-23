@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from ocr_scoring import aggregate, autofill_metadata, match, score_fields
+from ocr_scoring import aggregate, autofill_metadata, by_tag, match, raw_metadata, score_fields
 
 TRUTH = {"title": "Dế Mèn phiêu lưu ký", "subtitle": None, "authors": ["Tô Hoài"], "translators": [],
          "publisher": "Nhà xuất bản Kim Đồng", "publishedYear": None, "isbn13": None, "pageCount": None}
@@ -53,11 +53,59 @@ class OcrScoringTests(unittest.TestCase):
         self.assertEqual(report["reading"]["fields"]["title"]["precision"], 0.5)
         self.assertEqual(report["reading"]["hallucinationRate"], 1 / 7)  # isbn13 on a cover-only book
         self.assertEqual(report["invalidIsbnRate"], 0.5)
-        self.assertEqual(report["latencyMs"], {"mean": 10000, "p95": 12000})
+        self.assertEqual(report["latencyMs"], {"mean": 10000, "p50": 8000, "p95": 12000})
         self.assertAlmostEqual(report["costUsd"]["meanPerBook"], 0.0002)
         self.assertEqual(report["malformedObservationsPerScan"], 0.5)
         # good run: publisher not auto-filled (1 of 3 printed fields to fix); wrong run: nothing filled (3 of 3).
         self.assertEqual(report["manualCorrectionRate"], 4 / 6)
+        # Nothing in these responses offers a value to click, so all of it is typing.
+        self.assertEqual((report["oneClickRate"], report["typingRate"]), (0.0, 4 / 6))
+
+    def test_one_click_versus_typing(self):
+        proposals = {"title": {"value": TRUTH["title"], "safeToApply": False},          # offered, one click
+                     "authorsText": {"value": None, "safeToApply": False,                # conflict: right option offered
+                                     "options": [{"value": "Tô Hoài"}, {"value": "Tô Hoai"}]},
+                     "publisher": {"value": "NXB Kim Dong", "safeToApply": False}}       # wrong marks: typing
+        report = aggregate([{"truth": TRUTH, "response": response(dict(TRUTH), proposals)}])
+        self.assertEqual(report["manualCorrectionRate"], 1.0)
+        self.assertEqual((report["oneClickRate"], report["typingRate"]), (2 / 3, 1 / 3))
+
+    def test_three_layers_separate_model_from_post_processing(self):
+        # The model read an illustrator as author and an unprinted ISBN; validation dropped both.
+        fields = {
+            "title": {"observations": [{"source": "front_cover", "value": "Dế Mèn phiêu lưu ký", "normalizedValue": "Dế Mèn phiêu lưu ký"}]},
+            "authors": {"observations": [{"source": "front_cover", "value": ["Tạ Huy Long"], "normalizedValue": ["Tạ Huy Long"]}]},
+            "isbn": {"observations": [{"source": "barcode", "value": "9786041234567"},
+                                      {"source": "front_cover", "value": "978-604-1-23456-7", "normalizedValue": None}]},
+        }
+        resp = {**response({**TRUTH, "authors": [], "isbn13": None}), "fields": fields,
+                "usage": {"costUsd": 0.0001, "promptTokens": 2000, "completionTokens": 300}}
+        raw = raw_metadata(resp)
+        self.assertEqual((raw["authors"], raw["isbn13"]), (["Tạ Huy Long"], "9786041234567"))  # not the barcode reading
+        report = aggregate([{"truth": TRUTH, "response": resp, "tags": ["children", "clear"]}])
+        self.assertEqual(report["raw"]["hallucinationRate"], 1 / 3)       # the ISBN
+        self.assertEqual(report["raw"]["fields"]["authors"]["FP_WRONG"], 1)
+        self.assertEqual(report["reading"]["hallucinationRate"], 0.0)     # validation removed both
+        self.assertEqual(report["tokens"], {"meanInput": 2000, "meanOutput": 300})
+        tags = by_tag([{"truth": TRUTH, "response": resp, "tags": ["children", "clear"]},
+                       {"truth": TRUTH, "response": None, "error": "AI_TIMEOUT", "tags": ["glare"]}])
+        self.assertEqual(set(tags), {"children", "clear", "glare"})
+        self.assertEqual(tags["glare"]["scans"], 1)
+
+    def test_replay_rebuilds_only_the_models_own_readings(self):
+        from run_benchmark import answer_from_response
+        stored = {"fields": {
+            "title": {"observations": [{"source": "front_cover", "value": "Số đỏ", "observedText": "SỐ ĐỎ", "valid": True}]},
+            "isbn": {"observations": [{"source": "barcode", "value": "9786041234567", "observedText": "9786041234567"},
+                                      {"source": "back_cover", "value": "978604123456X", "observedText": "ISBN 978604123456X"}]},
+            "language": {"observations": []}},
+            "otherCodes": [{"source": "barcode", "value": "8934974184027"}, {"source": "back_cover", "value": "8935", "label": "SKU"}],
+            "warnings": ["IMAGE_ILLEGIBLE:back_cover"]}
+        answer = answer_from_response(stored)
+        self.assertEqual(answer["observations"]["title"], [{"source": "front_cover", "value": "Số đỏ", "observedText": "SỐ ĐỎ"}])
+        self.assertEqual([o["source"] for o in answer["observations"]["isbn"]], ["back_cover"])  # invalid readings kept, barcode not
+        self.assertEqual([c["value"] for c in answer["otherCodes"]], ["8935"])
+        self.assertEqual(answer["images"], [{"source": "back_cover", "legible": False}])
 
     def test_shipped_datasets_follow_the_schema_rules(self):
         from run_benchmark import read_dataset

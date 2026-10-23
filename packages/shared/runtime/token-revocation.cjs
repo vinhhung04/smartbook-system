@@ -27,13 +27,17 @@ const VALID = 'VALID';
 const UNKNOWN = 'UNKNOWN';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// The timer is deliberately NOT unref()'d: it is the only thing guaranteed to
+// settle a lookup whose Redis call hangs, so it must keep the event loop alive
+// until it fires. An unref'd timer let the loop drain with the awaited promise
+// still pending (Node 20 then abandons the request / cancels the test). It is
+// always cleared in finally, so it never outlives the lookup by more than `ms`.
 function withTimeout(promise, ms) {
   let timer;
   return Promise.race([
     promise,
     new Promise((_, reject) => {
       timer = setTimeout(() => reject(new Error(`revocation lookup timed out after ${ms} ms`)), ms);
-      timer.unref?.();
     }),
   ]).finally(() => clearTimeout(timer));
 }
