@@ -1,11 +1,15 @@
 // Gateway caps request bodies at 8MB (GATEWAY_MAX_REQUEST_BYTES); an original
 // phone photo can exceed that on its own. Resizing client-side also keeps
 // OCR/CLIP inference fast regardless of the source camera's resolution.
-// Shared by customer/scan-cover.tsx and the staff cover-search modal.
+// Shared by customer/scan-cover.tsx, the staff cover-search modal and AI Import's
+// multi-image OCR (which asks for a larger size so copyright-page print stays legible).
 const MAX_DIMENSION_PX = 1024;
 const JPEG_QUALITY = 0.8;
 
-export function resizeImageFile(file: File): Promise<File> {
+export function resizeImageFile(
+  file: File,
+  { maxDimension = MAX_DIMENSION_PX, quality = JPEG_QUALITY, fileName = 'cover.jpg' }: { maxDimension?: number; quality?: number; fileName?: string } = {},
+): Promise<File> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Không đọc được file ảnh'));
@@ -13,7 +17,7 @@ export function resizeImageFile(file: File): Promise<File> {
       const image = new Image();
       image.onerror = () => reject(new Error('Không đọc được file ảnh'));
       image.onload = () => {
-        const scale = Math.min(1, MAX_DIMENSION_PX / Math.max(image.width, image.height));
+        const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
         const canvas = document.createElement('canvas');
         canvas.width = Math.round(image.width * scale);
         canvas.height = Math.round(image.height * scale);
@@ -29,10 +33,10 @@ export function resizeImageFile(file: File): Promise<File> {
               reject(new Error('Không nén được ảnh'));
               return;
             }
-            resolve(new File([blob], 'cover.jpg', { type: 'image/jpeg' }));
+            resolve(new File([blob], fileName, { type: 'image/jpeg' }));
           },
           'image/jpeg',
-          JPEG_QUALITY,
+          quality,
         );
       };
       image.src = reader.result as string;

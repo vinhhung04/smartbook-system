@@ -1,0 +1,35 @@
+{
+  "description": "SMOKE SET, not a benchmark: 3 front covers only (no back cover / copyright page, so no ISBN, year or page count is printed), labelled by the developer from the images on 2026-10-23. The images are not in the repository (cover art); they sit in the thesis workspace folder - pass it as --images-root. Use it to check that the live pipeline works end to end, never to claim accuracy.",
+  "books": [
+    {
+      "bookId": "de-men-phieu-luu-ky-kim-dong",
+      "split": "smoke",
+      "images": { "front_cover": "bia-sach2-9886.jpg" },
+      "groundTruth": {
+        "title": "Dế Mèn phiêu lưu ký", "subtitle": null, "authors": ["Tô Hoài"], "translators": [],
+        "publisher": "Nhà xuất bản Kim Đồng", "publishedYear": null, "isbn13": null, "pageCount": null
+      },
+      "notes": "'Minh họa: Tạ Huy Long' is an illustrator, not an author."
+    },
+    {
+      "bookId": "harry-potter-5-tre",
+      "split": "smoke",
+      "images": { "front_cover": "Tài Liệu/8934974184027.webp" },
+      "groundTruth": {
+        "title": "Harry Potter và Hội Phượng Hoàng", "subtitle": null, "authors": ["J.K. Rowling"], "translators": ["Lý Lan"],
+        "publisher": "Nhà xuất bản Trẻ", "publishedYear": null, "isbn13": null, "pageCount": null
+      },
+      "notes": "The English original title is not a subtitle; 'In lần thứ 40' is an edition statement (not scored)."
+    },
+    {
+      "bookId": "frieren-tap-1-kim-dong",
+      "split": "smoke",
+      "images": { "front_cover": "Tài Liệu/frieren-phap-su-tien-tang-bia-tap-1.webp" },
+      "groundTruth": {
+        "title": "Frieren Pháp sư tiễn táng", "subtitle": null, "authors": ["Kanehito Yamada"], "translators": ["Gou"],
+        "publisher": "Nhà xuất bản Kim Đồng", "publishedYear": null, "isbn13": null, "pageCount": null
+      },
+      "notes": "'Nguyên tác' = author; 'Minh họa: Tsukasa Abe' is an illustrator; 'Vol. 1' is a volume number, not a subtitle. 'tiễn' has a tilde (ngã)."
+    }
+  ]
+}

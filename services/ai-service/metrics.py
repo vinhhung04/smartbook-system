@@ -20,6 +20,14 @@ ocr_request_duration = Histogram(
     "OCR scan-receipt duration",
 )
 
+# book_ocr/service.py - one count per multi-image scan request; tokens, cost
+# and latency of the model calls are already in ai_llm_* (feature="book_ocr").
+ai_book_ocr_scans_total = Counter(
+    "ai_book_ocr_scans_total",
+    "Book OCR scan requests by outcome (success/partial/no_data/<error code>) and image count",
+    ["outcome", "images"],
+)
+
 isbn_lookup_duration = Histogram(
     "isbn_lookup_duration_seconds",
     "ISBN metadata lookup duration",

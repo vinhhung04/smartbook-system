@@ -7,6 +7,11 @@
 3. Web creates a reconciliation draft, reviews individual fields, then applies only `ACCEPTED` fields.
 4. Web checks duplicate intelligence before creating or linking an edition/variant.
 
+Images instead of an ISBN: `POST /book-metadata/scan-images` (1-3 photos: front cover, back cover, copyright page)
+reads the book with one multimodal OpenRouter call, validates every value, looks up the ISBN it found through the same
+`lookup_book_by_isbn`, and returns per-field proposals for the AI Import form. It writes nothing; steps 3-4 above stay
+the same. See [ANALYSIS/BOOK_OCR_IMPORT.md](ANALYSIS/BOOK_OCR_IMPORT.md).
+
 No endpoint in this flow merges, deletes, or reassigns an existing variant. Stock balances, loans, reservations, purchase orders, invoices, and audit history remain attached to their original variant.
 
 ## Evidence-grounded metadata intelligence v2
@@ -72,6 +77,7 @@ three planned ablations against frozen source snapshots.
 All Inventory APIs require a bearer token. Read operations require `inventory.catalog.read` or `inventory.catalog.write`; review and apply operations also require the manager role and `inventory.catalog.write`.
 
 - `POST /api/metadata-reconciliations` creates a draft from `{ isbn, lookup, aiSuggestions?, bookId? }`.
+- `GET /api/metadata-reconciliations/capabilities/import` answers 200 only for manager + `inventory.catalog.write`; AI Service asks it before a paid OCR scan.
 - `GET /api/metadata-reconciliations/:id` loads a draft and its per-field decisions.
 - `PATCH /api/metadata-reconciliations/:id/fields/:field` accepts `{ status: ACCEPTED|REJECTED, value? }`.
 - `POST /api/metadata-reconciliations/:id/apply` accepts `{ bookId, createEntities? }`. Only accepted fields are applied in one transaction. `createEntities` must explicitly opt in to new `authors`, `publisher`, or `categories`.

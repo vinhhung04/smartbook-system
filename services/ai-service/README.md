@@ -20,4 +20,6 @@ python main.py
 
 - Health check: GET /health
 - ISBN metadata lookup: POST /lookup-book-by-isbn
+- Nhập sách bằng 1–3 ảnh (OCR): POST /book-metadata/scan-images — xem ../../docs/ANALYSIS/BOOK_OCR_IMPORT.md
+  (đánh giá: ../../docs/ANALYSIS/BOOK_OCR_EVALUATION.md)
 

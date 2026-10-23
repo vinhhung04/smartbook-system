@@ -1,0 +1,25 @@
+{
+  "description": "TEMPLATE with fictitious values - copy it, photograph real books (front cover, back cover, copyright page) and label what is printed. Not a dataset; never report results from it.",
+  "books": [
+    {
+      "bookId": "example-001",
+      "split": "development",
+      "images": {
+        "front_cover": "example-001/front.jpg",
+        "back_cover": "example-001/back.jpg",
+        "copyright_page": "example-001/copyright.jpg"
+      },
+      "groundTruth": {
+        "title": "Tên sách như in trên trang xuất bản",
+        "subtitle": null,
+        "authors": ["Tên Tác Giả"],
+        "translators": ["Tên Dịch Giả"],
+        "publisher": "Nhà xuất bản Ví Dụ",
+        "publishedYear": 2024,
+        "isbn13": "9786041234567",
+        "pageCount": 320
+      },
+      "notes": "publishedYear only if the page says the publication year explicitly ('In xong và nộp lưu chiểu năm ...' is a print year -> null)."
+    }
+  ]
+}

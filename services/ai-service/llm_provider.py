@@ -96,9 +96,26 @@ class StreamChunk:
 
 
 class VisionResponseError(RuntimeError):
-    """Raised by analyze_image() when the vision model's response isn't a
-    JSON object - callers (cover OCR, packing verification, receipt scan)
-    catch this and degrade (CLIP-only / HTTP 502) instead of crashing."""
+    """Raised by analyze_image()/analyze_images() when the vision model's
+    response isn't a JSON object - callers (cover OCR, packing verification,
+    receipt scan, book OCR) catch this and degrade (CLIP-only / HTTP 502)
+    instead of crashing. `usage` is the call's usage when the call itself
+    completed (tokens were spent), so a caller can still account for it."""
+
+    def __init__(self, message: str, usage: "ChatUsage | None" = None) -> None:
+        super().__init__(message)
+        self.usage = usage
+
+
+@dataclass(frozen=True)
+class VisionImage:
+    """One image for analyze_images(). `label` is sent as a text part right
+    before the image so the model can attribute what it reads to a source
+    (e.g. "front_cover"); `mime` must already be verified by the caller
+    (decoded, not taken from the upload's Content-Type)."""
+    label: str
+    data: bytes
+    mime: str
 
 
 def _log_call(usage: ChatUsage) -> None:
@@ -224,6 +241,12 @@ def _is_retryable(exc: Exception) -> bool:
         status = exc.response.status_code
         return status == 429 or status >= 500
     return isinstance(exc, (httpx.TimeoutException, httpx.TransportError))
+
+
+def _image_part(image_bytes: bytes, mime: str) -> dict:
+    import base64
+
+    return {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"}}
 
 
 def _sniff_image_mime(image_bytes: bytes) -> str:
@@ -476,19 +499,38 @@ class OpenRouterProvider:
         not advertise `structured_outputs` support, only `response_format`,
         so schema *validation* happens at the call site (Pydantic) instead of
         being enforced upstream."""
-        import base64
+        content = [
+            {"type": "text", "text": prompt},
+            _image_part(image_bytes, _sniff_image_mime(image_bytes)),
+        ]
+        return await self._vision_json(content, max_tokens=max_tokens, timeout=timeout,
+                                       feature=feature, temperature=temperature)
+
+    async def analyze_images(
+        self, images: list[VisionImage], prompt: str, *, max_tokens: int, timeout: float,
+        feature: str = "book_ocr", temperature: float = 0.0,
+    ) -> tuple[dict, ChatUsage]:
+        """Several labelled images + one text prompt in ONE request (one
+        round trip, one prompt overhead), JSON-object response. Each image is
+        preceded by a text part `Image label: <label>` so the model can tell
+        which picture a value came from. Same return/raise contract as
+        analyze_image()."""
+        if not images:
+            raise ValueError("analyze_images needs at least one image")
+        content: list[dict] = [{"type": "text", "text": prompt}]
+        for image in images:
+            content.append({"type": "text", "text": f"Image label: {image.label}"})
+            content.append(_image_part(image.data, image.mime))
+        return await self._vision_json(content, max_tokens=max_tokens, timeout=timeout,
+                                       feature=feature, temperature=temperature)
+
+    async def _vision_json(
+        self, content: list[dict], *, max_tokens: int, timeout: float, feature: str, temperature: float,
+    ) -> tuple[dict, ChatUsage]:
         import json
 
-        mime = _sniff_image_mime(image_bytes)
-        data_url = f"data:{mime};base64,{base64.b64encode(image_bytes).decode('ascii')}"
         payload: dict[str, Any] = {
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": data_url}},
-                ],
-            }],
+            "messages": [{"role": "user", "content": content}],
             "max_tokens": max_tokens,
             "temperature": temperature,
             "reasoning": {"enabled": False},
@@ -507,7 +549,7 @@ class OpenRouterProvider:
             raise
 
         latency_ms = (time.perf_counter() - started) * 1000
-        content = (data["choices"][0]["message"].get("content") or "").strip()
+        text = (data["choices"][0]["message"].get("content") or "").strip()
         usage_data = data.get("usage") or {}
         usage = ChatUsage(
             provider=self.name, model=used_model, latency_ms=latency_ms,
@@ -518,11 +560,11 @@ class OpenRouterProvider:
         _log_call(usage)
 
         try:
-            parsed = json.loads(content)
+            parsed = json.loads(text)
         except (TypeError, ValueError) as exc:
-            raise VisionResponseError(f"vision response is not valid JSON: {content[:200]!r}") from exc
+            raise VisionResponseError(f"vision response is not valid JSON: {text[:200]!r}", usage) from exc
         if not isinstance(parsed, dict):
-            raise VisionResponseError(f"vision response is not a JSON object: {content[:200]!r}")
+            raise VisionResponseError(f"vision response is not a JSON object: {text[:200]!r}", usage)
         return parsed, usage
 
     async def chat_json(
@@ -567,6 +609,16 @@ ASSISTANT_MODEL = os.getenv("OPENROUTER_ASSISTANT_MODEL", TEXT_MODEL)
 VISION_MODEL = os.getenv("OPENROUTER_VISION_MODEL", TEXT_MODEL)
 
 
+def openrouter_connection() -> tuple[str, str]:
+    """(api_key, base_url) from env. Raises ValueError if OPENROUTER_API_KEY
+    isn't set. For call sites that need a provider WITHOUT the global
+    OPENROUTER_FALLBACK_MODEL (book OCR has its own opt-in fallback)."""
+    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY must be set to use OpenRouter.")
+    return api_key, os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+
+
 @functools.lru_cache(maxsize=None)
 def get_openrouter_provider(model: str) -> OpenRouterProvider:
     """Cached OpenRouterProvider for a given model - one HTTP client
@@ -575,9 +627,6 @@ def get_openrouter_provider(model: str) -> OpenRouterProvider:
     OPENROUTER_API_KEY/OPENROUTER_BASE_URL/OPENROUTER_FALLBACK_MODEL.
     Raises ValueError if OPENROUTER_API_KEY isn't set - callers already
     catch and degrade (e.g. main.py's _call_text_llm_messages)."""
-    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if not api_key:
-        raise ValueError("OPENROUTER_API_KEY must be set to use OpenRouter.")
-    base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
+    api_key, base_url = openrouter_connection()
     fallback_model = os.getenv("OPENROUTER_FALLBACK_MODEL", "").strip() or None
     return OpenRouterProvider(api_key=api_key, base_url=base_url, model=model, fallback_model=fallback_model)

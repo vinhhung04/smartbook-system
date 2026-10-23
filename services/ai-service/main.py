@@ -2869,6 +2869,10 @@ async def metadata_extraction_service(input):
 from routes_metadata_intelligence import build_router as build_metadata_router
 app.include_router(build_metadata_router(metadata_extraction_service, lambda: ENABLE_METADATA_INTELLIGENCE_V2))
 
+from routes_book_ocr import build_router as build_book_ocr_router
+# OCR'd ISBNs go through the same lookup (cache, Metadata Intelligence v2 flag) as a typed ISBN.
+app.include_router(build_book_ocr_router(lambda isbn: lookup_book_by_isbn(IsbnLookupRequest(isbn=isbn))))
+
 
 class EnrichBookAfterIsbnRequest(BaseModel):
     isbn: str
