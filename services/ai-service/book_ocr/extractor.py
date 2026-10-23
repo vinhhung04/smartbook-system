@@ -84,9 +84,16 @@ async def call_model(provider, images: list[PreparedImage], prompt: str, *, max_
 
 
 class FallbackBudget:
-    """Process-local daily USD cap for the optional fallback model. A call
-    whose cost OpenRouter did not report is counted at `unknown_cost_usd` so
-    an unreported price can never make the cap unlimited."""
+    """Daily USD cap for the optional fallback model (off unless
+    OPENROUTER_BOOK_OCR_FALLBACK_MODEL is set). A call whose cost OpenRouter did
+    not report is counted at `unknown_cost_usd` so an unreported price can never
+    make the cap unlimited.
+
+    Scope: PROCESS-LOCAL, reset on restart. ai-service runs one uvicorn worker
+    per container (Dockerfile CMD), so this is a per-container cap; with N
+    workers or replicas the effective system-wide cap is N x the setting (set
+    BOOK_OCR_FALLBACK_DAILY_BUDGET_USD = total / N, or move the counter to a
+    shared store such as the stack's Redis before scaling out)."""
 
     def __init__(self, unknown_cost_usd: float = 0.01) -> None:
         self._day: datetime.date | None = None

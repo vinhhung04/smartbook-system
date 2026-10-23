@@ -2,7 +2,7 @@ import { useRef, useState, type DragEvent } from "react";
 import { AlertTriangle, Camera, ImagePlus, Loader2, RefreshCw, ScanText, Trash2, X } from "lucide-react";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/status-badge";
-import { OCR_ACCEPTED_TYPES, OCR_SLOTS } from "@/lib/book-ocr";
+import { OCR_ACCEPTED_TYPES, OCR_SLOTS, type OcrAvailability } from "@/lib/book-ocr";
 import type { OcrImageKind } from "@/services/book-ocr";
 import type { OcrSlots } from "./use-book-ocr";
 
@@ -105,6 +105,43 @@ function OcrSlotTile({
         </label>
       )}
     </div>
+  );
+}
+
+/** OCR is not offered (yet): checking, turned off, or the AI service did not answer.
+ *  Shown instead of the upload card so the rest of AI Import stays usable. */
+export function OcrAvailabilityNotice({ availability, onRetry }: { availability: Exclude<OcrAvailability, "AVAILABLE">; onRetry: () => void }) {
+  const text = {
+    LOADING: "Đang kiểm tra dịch vụ AI OCR…",
+    DISABLED: "Tính năng nhập sách bằng ảnh đang tắt trong cấu hình hệ thống. Bạn vẫn có thể tra cứu ISBN hoặc nhập tay.",
+    UNAVAILABLE: "Dịch vụ AI OCR hiện không phản hồi. Bạn vẫn có thể tra cứu ISBN hoặc nhập tay, hoặc thử lại sau.",
+  }[availability];
+  return (
+    <SectionCard
+      icon={ScanText}
+      title="Nhập sách bằng hình ảnh (AI OCR)"
+      className="border-cyan-200/70 dark:border-cyan-500/20"
+      headerClassName="border-b border-cyan-100/80 dark:border-cyan-500/15"
+      actions={<StatusBadge label={availability === "LOADING" ? "Đang kiểm tra" : availability === "DISABLED" ? "Đang tắt" : "Không khả dụng"}
+        variant={availability === "UNAVAILABLE" ? "warning" : "neutral"} dot />}
+    >
+      <div role="status" aria-live="polite" className="flex flex-col gap-3 text-[13px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <span className="flex items-start gap-2">
+          {availability === "LOADING" ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-cyan-600" aria-hidden="true" />
+            : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />}
+          {text}
+        </span>
+        {availability === "UNAVAILABLE" ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex min-h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-border px-4 text-[13px] font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/30"
+          >
+            <RefreshCw className="h-4 w-4" /> Thử lại
+          </button>
+        ) : null}
+      </div>
+    </SectionCard>
   );
 }
 

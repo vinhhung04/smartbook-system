@@ -2,10 +2,13 @@
 
 Ground truth describes only what is PRINTED in the images given for that book
 (null / [] = not visible), so a prediction for an invisible field is a
-hallucination, never a "bonus". Two predictions are scored per scan:
+hallucination, never a "bonus". Three layers are scored per scan, so an
+improvement can be attributed to the model or to the post-processing:
 
-- `reading`  - response.metadata: everything the OCR read and validated
-               (including values that still need review)
+- `raw`      - the model's own extraction before any validation: per field,
+               its first reading, valid or not (from response.fields[*].observations)
+- `reading`  - response.metadata: what survived validation (including values
+               that still need review)
 - `autofill` - the safe proposals the AI Import form fills on its own
 
 Matching: "exact" = case/whitespace/punctuation-insensitive but diacritics-
@@ -57,6 +60,29 @@ def match(field: str, predicted, truth, normalized: bool = False) -> bool:
     return _key(field, predicted, normalized) == _key(field, truth, normalized)
 
 
+# scored field -> the OCR field whose observations hold the model's raw readings
+_OCR_NAMES = {"publishedYear": "publicationYear", "isbn13": "isbn"}
+
+
+def raw_metadata(response: dict) -> dict:
+    """What the model answered before validation (first reading per field, image
+    readings only - a browser-decoded barcode is not the model's answer)."""
+    fields = response.get("fields") or {}
+    out = {}
+    for field in FIELDS:
+        readings = [o for o in (fields.get(_OCR_NAMES.get(field, field)) or {}).get("observations", [])
+                    if o.get("source") != "barcode"]
+        if not readings:
+            out[field] = [] if field in LIST_FIELDS else None
+            continue
+        first = readings[0]
+        value = first.get("normalizedValue") if first.get("normalizedValue") not in (None, "", []) else first.get("value")
+        if field == "isbn13" and value is not None:
+            value = re.sub(r"[^0-9X]", "", str(value).upper())
+        out[field] = value
+    return out
+
+
 def autofill_metadata(response: dict) -> dict:
     """What the form receives without a human click: safe proposals only."""
     p = {k: v for k, v in (response.get("proposals") or {}).items() if v.get("safeToApply") and v.get("value")}
@@ -69,6 +95,24 @@ def autofill_metadata(response: dict) -> dict:
         "publishedYear": p.get("publishedDate", {}).get("value"), "isbn13": p.get("isbn13", {}).get("value"),
         "pageCount": p.get("pageCount", {}).get("value"),
     }
+
+
+_FORM_FIELDS = {"title": "title", "subtitle": "subtitle", "authors": "authorsText", "translators": "translatorText",
+                "publisher": "publisher", "publishedYear": "publishedDate", "isbn13": "isbn13", "pageCount": "pageCount"}
+
+
+def offered_correct(response: dict, field: str, truth) -> bool:
+    """Whether the review panel offers the right value for one click: the
+    proposal's value or one of its options (a conflict shows every reading)."""
+    proposal = (response.get("proposals") or {}).get(_FORM_FIELDS[field]) or {}
+    candidates = [proposal.get("value")] + [o.get("value") for o in proposal.get("options") or []]
+    for candidate in candidates:
+        if candidate in (None, ""):
+            continue
+        value = [t.strip() for t in candidate.split(",") if t.strip()] if field in LIST_FIELDS else candidate
+        if match(field, value, truth):
+            return True
+    return False
 
 
 def score_fields(predicted: dict, truth: dict) -> dict[str, str]:
@@ -113,10 +157,11 @@ def aggregate(runs: list[dict]) -> dict:
         for r in ok) / len(ok)) if ok else None
     report["errors"] = sorted({r["error"] for r in runs if r.get("error")})
 
-    for view in ("reading", "autofill"):
+    views = {"raw": raw_metadata, "reading": lambda response: response["metadata"], "autofill": autofill_metadata}
+    for view, predict in views.items():
         per_field = {f: {"TP": 0, "FP_WRONG": 0, "FP_HALLUCINATED": 0, "FN": 0, "TN": 0} for f in FIELDS}
         for r in ok:
-            predicted = r["response"]["metadata"] if view == "reading" else autofill_metadata(r["response"])
+            predicted = predict(r["response"])
             for field, result in score_fields(predicted, r["truth"]).items():
                 per_field[field][result] += 1
         fields = {}
@@ -138,6 +183,11 @@ def aggregate(runs: list[dict]) -> dict:
     corrected = sum(1 for r in ok for f, res in score_fields(autofill_metadata(r["response"]), r["truth"]).items()
                     if res in ("FN", "FP_WRONG"))
     report["manualCorrectionRate"] = corrected / printed if printed else None
+    # Of those, how many need only a click (the right value is offered) and how many need typing.
+    needs_click = sum(1 for r in ok for f, res in score_fields(autofill_metadata(r["response"]), r["truth"]).items()
+                      if res in ("FN", "FP_WRONG") and offered_correct(r["response"], f, r["truth"][f]))
+    report["oneClickRate"] = needs_click / printed if printed else None
+    report["typingRate"] = (corrected - needs_click) / printed if printed else None
 
     def accuracy(field: str, normalized: bool = False):
         eligible = [r for r in ok if not _empty(r["truth"].get(field))]
@@ -154,8 +204,28 @@ def aggregate(runs: list[dict]) -> dict:
     bad = sum(1 for o in isbn_obs if {"INVALID_CHECKSUM", "NOT_ISBN_PREFIX", "INVALID_FORMAT"} & set(o.get("issues", [])))
     report["invalidIsbnRate"] = bad / len(isbn_obs) if isbn_obs else None
     latencies = [r["response"]["processingTimeMs"] for r in ok]
-    report["latencyMs"] = {"mean": sum(latencies) / len(latencies) if latencies else None, "p95": _percentile(latencies, 0.95)}
+    report["latencyMs"] = {"mean": sum(latencies) / len(latencies) if latencies else None,
+                           "p50": _percentile(latencies, 0.5), "p95": _percentile(latencies, 0.95)}
+    tokens = [r["response"]["usage"] for r in ok if r["response"]["usage"].get("promptTokens") is not None]
+    report["tokens"] = {
+        "meanInput": sum(u["promptTokens"] for u in tokens) / len(tokens) if tokens else None,
+        "meanOutput": sum(u.get("completionTokens") or 0 for u in tokens) / len(tokens) if tokens else None,
+    }
     costs = [r["response"]["usage"]["costUsd"] for r in ok if r["response"]["usage"].get("costUsd") is not None]
     report["costUsd"] = {"meanPerBook": sum(costs) / len(costs) if costs else None, "total": sum(costs) if costs else None,
                          "reported": len(costs)}
     return report
+
+
+def by_tag(runs: list[dict]) -> dict[str, dict]:
+    """The headline numbers per dataset tag (genre, image condition...), so a weak
+    spot (e.g. glare, small print) is visible instead of averaged away."""
+    tags = sorted({t for r in runs for t in r.get("tags") or []})
+    out = {}
+    for tag in tags:
+        report = aggregate([r for r in runs if tag in (r.get("tags") or [])])
+        out[tag] = {"scans": report["scans"], "titleExact": report["accuracy"]["titleExact"],
+                    "isbnExact": report["accuracy"]["isbnExact"], "readingF1": report["reading"]["micro"]["f1"],
+                    "autofillPrecision": report["autofill"]["micro"]["precision"],
+                    "hallucinationRate": report["reading"]["hallucinationRate"]}
+    return out

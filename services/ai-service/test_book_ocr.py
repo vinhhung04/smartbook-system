@@ -112,7 +112,9 @@ class ExtractionTests(BookOcrTestCase):
         self.assertEqual(result["metadata"]["authors"], ["Nguyễn Nhật Ánh"])
         self.assertEqual(result["fields"]["title"]["status"], "EXTRACTED")
         self.assertEqual(result["proposals"]["title"]["value"], "Mắt Biếc")
-        self.assertTrue(result["proposals"]["title"]["safeToApply"])
+        # One model reading of one photo: proposed (one click), not filled on its own (OCR 2.0 policy).
+        self.assertFalse(result["proposals"]["title"]["safeToApply"])
+        self.assertIn("SINGLE_SOURCE", result["proposals"]["title"]["reasons"])
         self.assertEqual(result["isbnLookup"]["status"], "SKIPPED_NO_VALID_ISBN")
         self.assertEqual(result["usage"]["imageCount"], 1)
         self.assertEqual(result["usage"]["costUsd"], 0.0004)
@@ -324,7 +326,7 @@ class LookupReconciliationTests(BookOcrTestCase):
     )
 
     def lookup(self, **overrides):
-        record = {"found": True, "isbn": ISBN, "isbn13": ISBN, "title": "Nha Gia Kim", "authors": ["Paulo Coelho"],
+        record = {"found": True, "isbn": ISBN, "isbn13": ISBN, "title": "NHÀ GIẢ KIM", "authors": ["Paulo Coelho"],
                   "publisher": "Nhà Xuất Bản Hội Nhà Văn", "pageCount": 227, "description": "Một cuốn sách về ước mơ.",
                   "categories": ["Tiểu thuyết"], "conflictedFields": [], "lowConfidenceFields": []}
         record.update(overrides)
@@ -337,9 +339,9 @@ class LookupReconciliationTests(BookOcrTestCase):
         p = result["proposals"]
         self.assertEqual(result["isbnLookup"]["status"], "FOUND")
         self.assertTrue(result["isbnLookup"]["editionMatches"])
-        # Same title, the printed spelling keeps its tone marks.
-        self.assertEqual((p["title"]["status"], p["title"]["value"], p["title"]["source"]),
-                         ("CORROBORATED", "Nhà giả kim", "images+isbn_lookup"))
+        # Same title, marks included; the printed (not ALL-CAPS) spelling is proposed.
+        self.assertEqual((p["title"]["status"], p["title"]["value"], p["title"]["source"], p["title"]["safeToApply"]),
+                         ("CORROBORATED", "Nhà giả kim", "images+isbn_lookup", True))
         self.assertEqual(p["publisher"]["status"], "CORROBORATED")  # "NXB" == "Nhà Xuất Bản"
         # 228 printed vs 227 from the provider: shown to staff, nothing chosen.
         self.assertEqual((p["pageCount"]["status"], p["pageCount"]["value"]), ("CONFLICTED", None))
@@ -717,6 +719,203 @@ class ValidationUnitTests(unittest.TestCase):
     def test_hedge_values_are_not_observations(self):
         out = validate_extraction(model_answer(title=[obs("front_cover", "Không rõ")]), ["front_cover"])
         self.assertEqual(out["fields"]["title"].status, "MISSING")
+
+
+class VietnameseComparisonTests(unittest.TestCase):
+    """OCR 2.0: fuzzy (search) and strict (verification) comparison are separate."""
+
+    def test_compare_text_examples(self):
+        from book_ocr.normalization import compare_text
+        cases = [
+            ("MẮT BIẾC", "Mắt Biếc", {}, "MATCH"),
+            ("Pháp sư tiễn táng", "Pháp sư tiến táng", {}, "DIACRITICS_DIFFER"),  # ngã vs sắc, same letter count
+            ("Nguyễn Nhật Ánh", "Nguyễn Nhật Anh", {}, "DIACRITICS_DIFFER"),     # missing mark
+            ("Nhà xuất bản Trẻ", "NXB Trẻ", {"publisher": True}, "MATCH"),
+            ("Nhà xuất bản Trẻ", "NXB Tre", {"publisher": True}, "DIACRITICS_DIFFER"),
+            ("Đất rừng phương Nam", "Dat rung phuong Nam", {}, "DIACRITICS_DIFFER"),
+            ("Đồi", "Dồi", {}, "DIACRITICS_DIFFER"),                               # đ vs d
+            ("Bão", "Bảo", {}, "DIACRITICS_DIFFER"),                               # ngã vs hỏi
+            ("Cạn", "Cán", {}, "DIACRITICS_DIFFER"),                               # nặng vs sắc
+            ("Mắt biếc", "Số đỏ", {}, "DIFFERENT"),
+            (unicodedata.normalize("NFD", "Tôi thấy hoa vàng"), "TÔI THẤY HOA VÀNG", {}, "MATCH"),  # decomposed input
+            ("Frieren - Pháp sư", "FRIEREN: PHÁP SƯ", {}, "MATCH"),               # punctuation is not meaning
+            ("ＭẮＴ ＢＩẾＣ", "Mắt Biếc", {}, "MATCH"),                              # full-width OCR forms (NFKC)
+        ]
+        for a, b, options, expected in cases:
+            self.assertEqual(compare_text(a, b, **options), expected, (a, b))
+
+    def readings(self, field, a, b, observed=None):
+        answer = model_answer(**{field: [obs("front_cover", a, observed[0] if observed else None),
+                                         obs("copyright_page", b, observed[1] if observed else None)]})
+        return validate_extraction(answer, ["front_cover", "copyright_page"])["fields"][field]
+
+    def test_two_images_with_different_tone_marks_are_never_corroborated(self):
+        for a, b in (("Pháp sư tiễn táng", "Pháp sư tiến táng"),   # live Frieren error, same mark count
+                     ("Nhà giả kim", "Nhà gia kim"),                # one mark lost
+                     ("Đồi gió hú", "Dồi gió hú"),                  # đ read as d
+                     ("Bão tố", "Bảo tố"), ("Cạn lời", "Cán lời"), ("Tuổi thơ dữ dội", "Tuổi thơ dư dội")):
+            result = self.readings("title", a, b)
+            self.assertEqual(result.status, "REVIEW_REQUIRED", (a, b))
+            self.assertIn("DIACRITICS_DIFFER", result.reasons)
+
+    def test_case_spacing_and_unicode_form_still_corroborate(self):
+        decomposed = unicodedata.normalize("NFD", "Mắt Biếc")
+        for a, b in (("MẮT BIẾC", "Mắt Biếc"), (decomposed, "Mắt biếc"), ("Mắt  Biếc", "Mắt Biếc")):
+            result = self.readings("title", a, b)
+            self.assertEqual((result.status, result.reasons), ("CORROBORATED", []), (a, b))
+
+    def test_authors_and_publishers_are_compared_name_by_name(self):
+        authors = self.readings("authors", ["Nguyễn Nhật Ánh"], ["Nguyễn Nhật Anh"])
+        self.assertEqual(authors.status, "REVIEW_REQUIRED")
+        self.assertIn("DIACRITICS_DIFFER", authors.reasons)
+        same = self.readings("publisher", "Nhà xuất bản Trẻ", "NXB Trẻ", ["NHÀ XUẤT BẢN TRẺ", "NXB TRẺ"])
+        self.assertEqual(same.status, "CORROBORATED")
+        tre = self.readings("publisher", "Nhà xuất bản Trẻ", "NXB Tre", ["NHÀ XUẤT BẢN TRẺ", "NXB TRE"])
+        self.assertEqual(tre.status, "REVIEW_REQUIRED")
+        self.assertIn("DIACRITICS_DIFFER", tre.reasons)
+        # A cover listing one of two authors is partial agreement, not a mark conflict.
+        partial = self.readings("authors", ["Ngô Tất Tố"], ["Ngô Tất Tố", "Phan Văn A"], ["Ngô Tất Tố", "Ngô Tất Tố, Phan Văn A"])
+        self.assertEqual(partial.reasons, ["PARTIAL_AGREEMENT"])
+
+    def test_mark_conflict_offers_every_reading_and_fills_nothing(self):
+        answer = model_answer(title=[obs("front_cover", "Pháp sư tiễn táng"), obs("copyright_page", "Pháp sư tiến táng")])
+        service.extraction_cache.clear()
+        result, _ = scan({"front_cover": jpeg(), "copyright_page": jpeg()}, answer)
+        title = result["proposals"]["title"]
+        self.assertFalse(title["safeToApply"])
+        self.assertEqual({o["value"] for o in title["options"]}, {"Pháp sư tiễn táng", "Pháp sư tiến táng"})
+        self.assertNotIn("IMAGES_MAY_SHOW_DIFFERENT_BOOKS", result["warnings"])  # same book, a mark to check
+
+
+class LookupComparisonTests(BookOcrTestCase):
+    def run_lookup(self, answer, record, images=("front_cover", "copyright_page"), barcode=None):
+        lookup = AsyncMock(return_value={"found": True, "isbn": ISBN, "isbn13": ISBN, "conflictedFields": [], **record})
+        result, _ = scan({kind: jpeg() for kind in images}, answer, lookup=lookup, barcode=barcode)
+        return result, lookup
+
+    def test_record_with_other_marks_needs_review(self):
+        answer = model_answer(title=[obs("front_cover", "Pháp sư tiễn táng")], isbn=[obs("copyright_page", ISBN, "ISBN " + ISBN)])
+        result, _ = self.run_lookup(answer, {"title": "Pháp sư tiến táng", "authors": ["Kanehito Yamada"]})
+        title = result["proposals"]["title"]
+        self.assertEqual((title["status"], title["value"], title["safeToApply"]), ("REVIEW_REQUIRED", "Pháp sư tiễn táng", False))
+        self.assertIn("LOOKUP_DIACRITICS_DIFFER", title["reasons"])
+        # Still the same book (identity is a fuzzy check), so the record's other fields stay usable.
+        self.assertTrue(result["proposals"]["authorsText"]["safeToApply"])
+
+    def test_unaccented_record_confirms_nothing_about_marks(self):
+        answer = model_answer(title=[obs("front_cover", "Nhà giả kim")], isbn=[obs("copyright_page", ISBN, "ISBN " + ISBN)])
+        result, _ = self.run_lookup(answer, {"title": "Nha Gia Kim"})
+        title = result["proposals"]["title"]
+        self.assertEqual((title["status"], title["value"], title["safeToApply"]), ("EXTRACTED", "Nhà giả kim", False))
+        self.assertIn("LOOKUP_UNACCENTED", title["reasons"])
+        self.assertNotIn("ISBN_LOOKUP_TITLE_MISMATCH", result["warnings"])
+
+    def test_isbn_read_once_is_safe_only_when_the_record_carries_the_printed_title(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt biếc")], isbn=[obs("copyright_page", ISBN, "ISBN " + ISBN)])
+        result, _ = self.run_lookup(answer, {"title": "Mắt Biếc"})
+        self.assertTrue(result["proposals"]["isbn13"]["safeToApply"])
+        service.extraction_cache.clear()
+        not_found, _ = scan({"front_cover": jpeg(), "copyright_page": jpeg()}, answer, lookup=AsyncMock(return_value={"found": False}))
+        self.assertFalse(not_found["proposals"]["isbn13"]["safeToApply"])
+        self.assertIn("SINGLE_SOURCE", not_found["proposals"]["isbn13"]["reasons"])
+        self.assertEqual(not_found["proposals"]["isbn13"]["value"], ISBN)  # still offered for one click
+
+    def test_without_a_printed_title_one_isbn_reading_cannot_vouch_for_the_record(self):
+        record = {"title": "Một cuốn khác", "pageCount": 300, "publishedDate": "2019", "authors": ["Ai Đó"]}
+        result, _ = self.run_lookup(model_answer(isbn=[obs("back_cover", ISBN, "ISBN " + ISBN)]), record, images=("back_cover",))
+        self.assertIn("ISBN_LOOKUP_IDENTITY_UNVERIFIED", result["warnings"])
+        for field in ("pageCount", "publishedDate", "authorsText", "title"):
+            self.assertEqual(result["proposals"][field]["status"], "LOOKUP_ONLY", field)
+            self.assertFalse(result["proposals"][field]["safeToApply"], field)
+        # The same ISBN printed on two photos is the book's own identity: the record may fill gaps.
+        service.extraction_cache.clear()
+        twice = model_answer(isbn=[obs("back_cover", ISBN, "ISBN " + ISBN), obs("copyright_page", ISBN, "ISBN: " + ISBN)])
+        result, _ = self.run_lookup(twice, record, images=("back_cover", "copyright_page"))
+        self.assertTrue(result["proposals"]["pageCount"]["safeToApply"])
+        self.assertTrue(result["proposals"]["isbn13"]["safeToApply"])
+
+
+class IsbnTrustTests(BookOcrTestCase):
+    def test_client_barcode_alone_is_not_verified_evidence(self):
+        lookup = AsyncMock(return_value={"found": False})
+        result, _ = scan({"back_cover": jpeg()}, model_answer(), barcode=ISBN, lookup=lookup)
+        isbn = result["fields"]["isbn"]
+        self.assertEqual(isbn["status"], "REVIEW_REQUIRED")
+        self.assertIn("BARCODE_UNCONFIRMED", isbn["reasons"])
+        self.assertFalse(result["proposals"]["isbn13"]["safeToApply"])
+        self.assertEqual(result["proposals"]["isbn13"]["value"], ISBN)
+        lookup.assert_awaited_once_with(ISBN)  # still looked up, so staff sees what it is
+
+    def test_barcode_that_disagrees_with_the_printed_isbn_conflicts(self):
+        result, _ = scan({"back_cover": jpeg()}, model_answer(isbn=[obs("back_cover", ISBN, "ISBN " + ISBN)]),
+                         barcode=ISBN_OTHER, lookup=AsyncMock())
+        self.assertEqual(result["fields"]["isbn"]["status"], "CONFLICTED")
+        self.assertEqual(result["isbnLookup"]["status"], "SKIPPED_ISBN_CONFLICT")
+        self.assertIn("IMAGES_MAY_SHOW_DIFFERENT_BOOKS", result["warnings"])
+
+    def test_set_isbn_and_volume_isbn_on_one_page_conflict(self):
+        answer = model_answer(isbn=[obs("copyright_page", ISBN, "ISBN bộ: " + ISBN), obs("copyright_page", ISBN_OTHER, "ISBN tập 1: " + ISBN_OTHER)])
+        result, _ = scan({"copyright_page": jpeg()}, answer, lookup=AsyncMock())
+        self.assertEqual(result["fields"]["isbn"]["status"], "CONFLICTED")
+        self.assertIsNone(result["proposals"]["isbn13"]["value"])
+
+    def test_wrong_checksum_is_never_repaired(self):
+        result, _ = scan({"back_cover": jpeg()}, model_answer(isbn=[obs("back_cover", "9786041234568", "ISBN 978-604-1-23456-8")]))
+        self.assertIsNone(result["metadata"]["isbn13"])
+        self.assertTrue(all(o["value"] != ISBN for o in result["proposals"]["isbn13"]["options"]))
+
+
+class AutofillPolicyTests(BookOcrTestCase):
+    def test_field_policy_for_single_image_readings(self):
+        answer = model_answer(
+            title=[obs("copyright_page", "Số đỏ")],
+            subtitle=[obs("copyright_page", "Tiểu thuyết")],
+            authors=[obs("copyright_page", ["Vũ Trọng Phụng"], "Tác giả: Vũ Trọng Phụng")],
+            translators=[obs("copyright_page", ["Lê Văn B"], "Người dịch: Lê Văn B")],
+            publisher=[obs("copyright_page", "NXB Văn Học", "NXB VĂN HỌC")],
+            publicationYear=[obs("copyright_page", 2020, "Xuất bản năm 2020")],
+            pageCount=[obs("copyright_page", 228, "Số trang: 228")],
+            description=[{"source": "copyright_page", "value": "Một tiểu thuyết trào phúng.", "observedText": None}],
+        )
+        result, _ = scan({"copyright_page": jpeg()}, answer)
+        p = result["proposals"]
+        for field in ("title", "subtitle", "authorsText", "publisher", "publishedDate", "description"):
+            self.assertEqual((p[field]["status"], p[field]["safeToApply"]), ("EXTRACTED", False), field)
+            self.assertIn("SINGLE_SOURCE", p[field]["reasons"], field)
+        for field in ("translatorText", "pageCount"):
+            self.assertTrue(p[field]["safeToApply"], field)
+        self.assertFalse(p["language"]["safeToApply"])  # INFERRED
+
+    def test_foreign_original_title_read_as_subtitle_is_not_filled(self):
+        # Live (smoke run 2026-10-23, 1 of 9 scans): the English original title of a translated book as "subtitle".
+        answer = model_answer(title=[obs("front_cover", "Harry Potter và Hội Phượng Hoàng")],
+                              subtitle=[obs("front_cover", "Harry Potter and the Order of the Phoenix")])
+        result, _ = scan({"front_cover": jpeg()}, answer)
+        self.assertFalse(result["proposals"]["subtitle"]["safeToApply"])
+        self.assertEqual(result["proposals"]["subtitle"]["value"], "Harry Potter and the Order of the Phoenix")  # still shown
+
+    def test_corroborated_identity_fields_are_filled(self):
+        answer = model_answer(title=[obs("front_cover", "SỐ ĐỎ"), obs("copyright_page", "Số đỏ")],
+                              authors=[obs("front_cover", ["VŨ TRỌNG PHỤNG"]), obs("copyright_page", ["Vũ Trọng Phụng"], "Tác giả: Vũ Trọng Phụng")])
+        result, _ = scan({"front_cover": jpeg(), "copyright_page": jpeg()}, answer)
+        self.assertEqual((result["proposals"]["title"]["value"], result["proposals"]["title"]["safeToApply"]), ("Số đỏ", True))
+        self.assertTrue(result["proposals"]["authorsText"]["safeToApply"])
+
+
+class GroundingTests(unittest.TestCase):
+    def test_illustrator_is_not_an_author(self):
+        observed = "Nguyên tác: Kanehito Yamada  Minh họa: Tsukasa Abe"
+        out = validate_extraction(model_answer(authors=[obs("front_cover", ["Kanehito Yamada"], observed),
+                                                        obs("front_cover", ["Tsukasa Abe"], observed)]), ["front_cover"])
+        issues = [o.issues for o in out["fields"]["authors"].observations]
+        self.assertEqual(issues, [[], ["ROLE_MISMATCH"]])
+        alone = validate_extraction(model_answer(authors=[obs("front_cover", ["Tạ Huy Long"], "Minh họa: Tạ Huy Long")]), ["front_cover"])
+        self.assertEqual(alone["fields"]["authors"].status, "INVALID")
+
+    def test_model_transcription_is_not_image_evidence(self):
+        # A value echoed in its own observedText is only "grounded", never corroborated by itself.
+        out = validate_extraction(model_answer(title=[obs("front_cover", "Harry Potter", "HARRY POTTER")]), ["front_cover"])
+        self.assertEqual(out["fields"]["title"].status, "EXTRACTED")
 
 
 if __name__ == "__main__":

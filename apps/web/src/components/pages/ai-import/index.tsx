@@ -21,11 +21,11 @@ import { LookupSearchCard } from "./lookup-search-card";
 import { BookProfileAside } from "./book-profile-aside";
 import { ReviewTab } from "./review-tab";
 import { StickyFooter } from "./sticky-footer";
-import { ImageOcrCard } from "./image-ocr-card";
+import { ImageOcrCard, OcrAvailabilityNotice } from "./image-ocr-card";
 import { OcrReviewPanel } from "./ocr-review-panel";
 import { useBookOcr } from "./use-book-ocr";
 import { EMPTY_FORM, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
-import { applySafeProposals, formFromScan, lookupStateFromScan } from "@/lib/book-ocr";
+import { applySafeProposals, formFromScan, lookupStateFromScan, singleSourceProposals } from "@/lib/book-ocr";
 import type { BookOcrScanResult } from "@/services/book-ocr";
 import {
   buildDuplicateCheckMetadata,
@@ -347,17 +347,28 @@ export function AIImportPage() {
   }
 
   function handleOcrApply(fields: Array<keyof EditableBookForm>, value: string, label: string) {
+    if (ocr.resultStale) return;
     setForm((prev) => ({ ...prev, ...Object.fromEntries(fields.map((field) => [field, value])) }));
     markUserEdited(...fields); // an explicit choice: later safe-applies keep it
     toast.success(`Đã áp dụng ${label.toLowerCase()}`);
   }
 
   function handleOcrApplySafe() {
-    if (!ocr.result) return;
+    if (!ocr.result || ocr.resultStale) return; // a result for other photos is never applied
     const { form: next, applied } = applySafeProposals(form, ocr.result.proposals, userEditedFields);
     setForm(next);
     if (applied.length) toast.success(`Đã áp dụng ${applied.length} trường an toàn`);
     else toast.info("Không có trường an toàn nào cần áp dụng (các trường bạn đã sửa được giữ nguyên).");
+  }
+
+  function handleOcrApplySingleSource() {
+    if (!ocr.result || ocr.resultStale) return;
+    const chosen = singleSourceProposals(ocr.result.proposals, userEditedFields);
+    const fields = chosen.flatMap((proposal) => (proposal.formField === "isbn" ? ["isbn", "isbn13"] : [proposal.formField]));
+    setForm((prev) => ({ ...prev, ...Object.fromEntries(chosen.flatMap((proposal) => (proposal.formField === "isbn"
+      ? [["isbn", proposal.value], ["isbn13", proposal.value]] : [[proposal.formField, proposal.value]]))) }));
+    markUserEdited(...fields); // an explicit choice, kept like a typed value
+    toast.success(`Đã áp dụng ${chosen.length} giá trị đọc từ một ảnh`);
   }
 
   async function handleAuthorityDecision(field: string, status: "ACCEPTED" | "REJECTED", override?: unknown) {
@@ -746,7 +757,7 @@ export function AIImportPage() {
         />
       </FadeItem>
 
-      {ocr.capabilities?.enabled ? (
+      {ocr.availability === "AVAILABLE" && ocr.capabilities ? (
         <FadeItem>
           <ImageOcrCard
             slots={ocr.slots}
@@ -761,16 +772,22 @@ export function AIImportPage() {
             hasResult={Boolean(ocr.result)}
           />
         </FadeItem>
+      ) : ocr.availability !== "AVAILABLE" ? (
+        <FadeItem>
+          <OcrAvailabilityNotice availability={ocr.availability} onRetry={() => void ocr.retryCapabilities()} />
+        </FadeItem>
       ) : null}
 
       {ocr.result ? (
         <OcrReviewPanel
           result={ocr.result}
+          stale={ocr.resultStale}
           slots={ocr.slots}
           form={form}
           userEdited={userEditedFields}
           onApply={handleOcrApply}
           onApplySafe={handleOcrApplySafe}
+          onApplySingleSource={handleOcrApplySingleSource}
           onDismiss={ocr.clearResult}
         />
       ) : null}

@@ -1,0 +1,5109 @@
+{
+ "meta": {
+  "createdAt": "2026-10-23 09:13 UTC",
+  "dataset": "eval\\book_ocr_eval\\smoke_dataset.json",
+  "books": 3,
+  "runs": 3,
+  "dryRun": false,
+  "promptVersion": "book-ocr-v2",
+  "replayOf": "eval\\reports\\book_ocr_20261023_134306.json",
+  "maxImageEdge": 1600
+ },
+ "reports": {
+  "qwen/qwen3.7-flash": {
+   "scans": 9,
+   "succeeded": 9,
+   "jsonValidityRate": 1.0,
+   "malformedObservationsPerScan": 0.0,
+   "errors": [],
+   "raw": {
+    "fields": {
+     "title": {
+      "tp": 6,
+      "fp": 3,
+      "fn": 0,
+      "precision": 0.6666666666666666,
+      "recall": 1.0,
+      "f1": 0.8,
+      "TP": 6,
+      "FP_WRONG": 3,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "subtitle": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "authors": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 9,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "translators": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 6,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 3
+     },
+     "publisher": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 9,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "publishedYear": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "isbn13": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "pageCount": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     }
+    },
+    "micro": {
+     "tp": 30,
+     "fp": 3,
+     "fn": 0,
+     "precision": 0.9090909090909091,
+     "recall": 1.0,
+     "f1": 0.9523809523809523
+    },
+    "hallucinationRate": 0.0,
+    "fieldCoverage": 1.0
+   },
+   "reading": {
+    "fields": {
+     "title": {
+      "tp": 6,
+      "fp": 3,
+      "fn": 0,
+      "precision": 0.6666666666666666,
+      "recall": 1.0,
+      "f1": 0.8,
+      "TP": 6,
+      "FP_WRONG": 3,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "subtitle": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "authors": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 9,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "translators": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 6,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 3
+     },
+     "publisher": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 9,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "publishedYear": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "isbn13": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "pageCount": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     }
+    },
+    "micro": {
+     "tp": 30,
+     "fp": 3,
+     "fn": 0,
+     "precision": 0.9090909090909091,
+     "recall": 1.0,
+     "f1": 0.9523809523809523
+    },
+    "hallucinationRate": 0.0,
+    "fieldCoverage": 1.0
+   },
+   "autofill": {
+    "fields": {
+     "title": {
+      "tp": 6,
+      "fp": 3,
+      "fn": 0,
+      "precision": 0.6666666666666666,
+      "recall": 1.0,
+      "f1": 0.8,
+      "TP": 6,
+      "FP_WRONG": 3,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "subtitle": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "authors": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 9,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "translators": {
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 6,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 3
+     },
+     "publisher": {
+      "tp": 9,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "TP": 9,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 0
+     },
+     "publishedYear": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "isbn13": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     },
+     "pageCount": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "TP": 0,
+      "FP_WRONG": 0,
+      "FP_HALLUCINATED": 0,
+      "FN": 0,
+      "TN": 9
+     }
+    },
+    "micro": {
+     "tp": 30,
+     "fp": 3,
+     "fn": 0,
+     "precision": 0.9090909090909091,
+     "recall": 1.0,
+     "f1": 0.9523809523809523
+    },
+    "hallucinationRate": 0.0,
+    "fieldCoverage": 1.0
+   },
+   "manualCorrectionRate": 0.09090909090909091,
+   "oneClickRate": 0.0,
+   "typingRate": 0.09090909090909091,
+   "accuracy": {
+    "isbnExact": null,
+    "titleExact": 0.6666666666666666,
+    "titleNormalized": 1.0,
+    "authors": 1.0,
+    "publisher": 1.0,
+    "publishedYear": null
+   },
+   "invalidIsbnRate": null,
+   "latencyMs": {
+    "mean": 8648.222222222223,
+    "p50": 8295,
+    "p95": 11586
+   },
+   "tokens": {
+    "meanInput": 1818.3333333333333,
+    "meanOutput": 392.22222222222223
+   },
+   "costUsd": {
+    "meanPerBook": 0.00011622222222222223,
+    "total": 0.001046,
+    "reported": 9
+   }
+  }
+ },
+ "byTag": {
+  "qwen/qwen3.7-flash": {}
+ },
+ "results": {
+  "qwen/qwen3.7-flash": [
+   {
+    "bookId": "de-men-phieu-luu-ky-kim-dong",
+    "run": 0,
+    "truth": {
+     "title": "Dế Mèn phiêu lưu ký",
+     "subtitle": null,
+     "authors": [
+      "Tô Hoài"
+     ],
+     "translators": [],
+     "publisher": "Nhà xuất bản Kim Đồng",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "JPEG",
+       "originalBytes": 273349,
+       "processedBytes": 491624,
+       "originalSize": [
+        1024,
+        1390
+       ],
+       "size": [
+        1024,
+        1390
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Dế Mèn phiêu lưu ký",
+      "subtitle": null,
+      "authors": [
+       "Tô Hoài"
+      ],
+      "translators": [],
+      "publisher": "Nhà xuất bản Kim Đồng",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": null,
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Dế Mèn phiêu lưu ký",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Dế Mèn phiêu lưu ký",
+         "normalizedValue": "Dế Mèn phiêu lưu ký",
+         "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "Tô Hoài"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Tô Hoài"
+         ],
+         "normalizedValue": [
+          "Tô Hoài"
+         ],
+         "observedText": "TÔ HOÀI",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "Nhà xuất bản Kim Đồng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Nhà xuất bản Kim Đồng",
+         "normalizedValue": "Nhà xuất bản Kim Đồng",
+         "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "TÔ HOÀI"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "translators",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "editionStatement",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Dế Mèn phiêu lưu ký",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Dế Mèn phiêu lưu ký",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Dế Mèn phiêu lưu ký"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "Tô Hoài",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Tô Hoài",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Tô Hoài"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "Nhà xuất bản Kim Đồng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Nhà xuất bản Kim Đồng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Nhà xuất bản Kim Đồng"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 2370,
+      "completionTokens": 355,
+      "costUsd": 0.000117,
+      "latencyMs": 11524,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 11524,
+        "promptTokens": 2370,
+        "completionTokens": 355,
+        "costUsd": 0.000117,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 11586
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Dế Mèn phiêu lưu ký",
+        "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Tô Hoài"
+        ],
+        "observedText": "TÔ HOÀI"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "Nhà xuất bản Kim Đồng",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "de-men-phieu-luu-ky-kim-dong",
+    "run": 1,
+    "truth": {
+     "title": "Dế Mèn phiêu lưu ký",
+     "subtitle": null,
+     "authors": [
+      "Tô Hoài"
+     ],
+     "translators": [],
+     "publisher": "Nhà xuất bản Kim Đồng",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "JPEG",
+       "originalBytes": 273349,
+       "processedBytes": 491624,
+       "originalSize": [
+        1024,
+        1390
+       ],
+       "size": [
+        1024,
+        1390
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Dế Mèn phiêu lưu ký",
+      "subtitle": null,
+      "authors": [
+       "Tô Hoài"
+      ],
+      "translators": [],
+      "publisher": "Nhà xuất bản Kim Đồng",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": null,
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Dế Mèn phiêu lưu ký",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Dế Mèn phiêu lưu ký",
+         "normalizedValue": "Dế Mèn phiêu lưu ký",
+         "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "Tô Hoài"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Tô Hoài"
+         ],
+         "normalizedValue": [
+          "Tô Hoài"
+         ],
+         "observedText": "TÔ HOÀI",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "Nhà xuất bản Kim Đồng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Nhà xuất bản Kim Đồng",
+         "normalizedValue": "Nhà xuất bản Kim Đồng",
+         "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "TÔ HOÀI"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "translators",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "editionStatement",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Dế Mèn phiêu lưu ký",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Dế Mèn phiêu lưu ký",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Dế Mèn phiêu lưu ký"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "Tô Hoài",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Tô Hoài",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Tô Hoài"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "Nhà xuất bản Kim Đồng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Nhà xuất bản Kim Đồng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Nhà xuất bản Kim Đồng"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 2370,
+      "completionTokens": 352,
+      "costUsd": 0.000134,
+      "latencyMs": 7538,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 7538,
+        "promptTokens": 2370,
+        "completionTokens": 352,
+        "costUsd": 0.000134,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 7556
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Dế Mèn phiêu lưu ký",
+        "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Tô Hoài"
+        ],
+        "observedText": "TÔ HOÀI"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "Nhà xuất bản Kim Đồng",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "de-men-phieu-luu-ky-kim-dong",
+    "run": 2,
+    "truth": {
+     "title": "Dế Mèn phiêu lưu ký",
+     "subtitle": null,
+     "authors": [
+      "Tô Hoài"
+     ],
+     "translators": [],
+     "publisher": "Nhà xuất bản Kim Đồng",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "JPEG",
+       "originalBytes": 273349,
+       "processedBytes": 491624,
+       "originalSize": [
+        1024,
+        1390
+       ],
+       "size": [
+        1024,
+        1390
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Dế Mèn phiêu lưu ký",
+      "subtitle": null,
+      "authors": [
+       "Tô Hoài"
+      ],
+      "translators": [],
+      "publisher": "Nhà xuất bản Kim Đồng",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": null,
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Dế Mèn phiêu lưu ký",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Dế Mèn phiêu lưu ký",
+         "normalizedValue": "Dế Mèn phiêu lưu ký",
+         "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "Tô Hoài"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Tô Hoài"
+         ],
+         "normalizedValue": [
+          "Tô Hoài"
+         ],
+         "observedText": "TÔ HOÀI",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "Nhà xuất bản Kim Đồng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Nhà xuất bản Kim Đồng",
+         "normalizedValue": "Nhà xuất bản Kim Đồng",
+         "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "TÔ HOÀI"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "translators",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "editionStatement",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Dế Mèn phiêu lưu ký",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Dế Mèn phiêu lưu ký",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Dế Mèn phiêu lưu ký"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "Tô Hoài",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Tô Hoài",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Tô Hoài"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "Nhà xuất bản Kim Đồng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Nhà xuất bản Kim Đồng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Nhà xuất bản Kim Đồng"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 2370,
+      "completionTokens": 355,
+      "costUsd": 0.000107,
+      "latencyMs": 8707,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 8707,
+        "promptTokens": 2370,
+        "completionTokens": 355,
+        "costUsd": 0.000107,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 8738
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Dế Mèn phiêu lưu ký",
+        "observedText": "TÔ HOÀI Dế Mèn phiêu lưu ký"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Tô Hoài"
+        ],
+        "observedText": "TÔ HOÀI"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "Nhà xuất bản Kim Đồng",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "harry-potter-5-tre",
+    "run": 0,
+    "truth": {
+     "title": "Harry Potter và Hội Phượng Hoàng",
+     "subtitle": null,
+     "authors": [
+      "J.K. Rowling"
+     ],
+     "translators": [
+      "Lý Lan"
+     ],
+     "publisher": "Nhà xuất bản Trẻ",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "WEBP",
+       "originalBytes": 52048,
+       "processedBytes": 72015,
+       "originalSize": [
+        600,
+        600
+       ],
+       "size": [
+        600,
+        600
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Harry Potter và Hội Phượng Hoàng",
+      "subtitle": null,
+      "authors": [
+       "J.K. Rowling"
+      ],
+      "translators": [
+       "Lý Lan"
+      ],
+      "publisher": "Nhà xuất bản Trẻ",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": "In lần thứ 40",
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Harry Potter và Hội Phượng Hoàng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Harry Potter và Hội Phượng Hoàng",
+         "normalizedValue": "Harry Potter và Hội Phượng Hoàng",
+         "observedText": "Harry Potter và Hội Phượng Hoàng",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "J.K. Rowling"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "J.K. Rowling"
+         ],
+         "normalizedValue": [
+          "J.K. Rowling"
+         ],
+         "observedText": "J.K. ROWLING",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "EXTRACTED",
+       "value": [
+        "Lý Lan"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Lý Lan"
+         ],
+         "normalizedValue": [
+          "Lý Lan"
+         ],
+         "observedText": "LÝ LAN dịch",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "Nhà xuất bản Trẻ",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Nhà xuất bản Trẻ",
+         "normalizedValue": "Nhà xuất bản Trẻ",
+         "observedText": "NHÀ XUẤT BẢN TRẺ",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "EXTRACTED",
+       "value": "In lần thứ 40",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "In lần thứ 40",
+         "normalizedValue": "In lần thứ 40",
+         "observedText": "In lần thứ 40",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "Harry Potter và Hội Phượng Hoàng"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "J.K. ROWLING"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "observedText": "LÝ LAN dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN TRẺ"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "observedText": "In lần thứ 40"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Harry Potter và Hội Phượng Hoàng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Harry Potter và Hội Phượng Hoàng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Harry Potter và Hội Phượng Hoàng"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "J.K. Rowling",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "J.K. Rowling",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "J.K. Rowling"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": "Lý Lan",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Lý Lan",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Lý Lan"
+        }
+       ]
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "Nhà xuất bản Trẻ",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Nhà xuất bản Trẻ",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Nhà xuất bản Trẻ"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 1355,
+      "completionTokens": 385,
+      "costUsd": 0.000104,
+      "latencyMs": 7802,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 7802,
+        "promptTokens": 1355,
+        "completionTokens": 385,
+        "costUsd": 0.000104,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 7965
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Harry Potter và Hội Phượng Hoàng",
+        "observedText": "Harry Potter và Hội Phượng Hoàng"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "J.K. Rowling"
+        ],
+        "observedText": "J.K. ROWLING"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Lý Lan"
+        ],
+        "observedText": "LÝ LAN dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "Nhà xuất bản Trẻ",
+        "observedText": "NHÀ XUẤT BẢN TRẺ"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "value": "In lần thứ 40",
+        "observedText": "In lần thứ 40"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "harry-potter-5-tre",
+    "run": 1,
+    "truth": {
+     "title": "Harry Potter và Hội Phượng Hoàng",
+     "subtitle": null,
+     "authors": [
+      "J.K. Rowling"
+     ],
+     "translators": [
+      "Lý Lan"
+     ],
+     "publisher": "Nhà xuất bản Trẻ",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "WEBP",
+       "originalBytes": 52048,
+       "processedBytes": 72015,
+       "originalSize": [
+        600,
+        600
+       ],
+       "size": [
+        600,
+        600
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Harry Potter và Hội Phượng Hoàng",
+      "subtitle": null,
+      "authors": [
+       "J.K. Rowling"
+      ],
+      "translators": [
+       "Lý Lan"
+      ],
+      "publisher": "Nhà xuất bản Trẻ",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": "In lần thứ 40",
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Harry Potter và Hội Phượng Hoàng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Harry Potter và Hội Phượng Hoàng",
+         "normalizedValue": "Harry Potter và Hội Phượng Hoàng",
+         "observedText": "Harry Potter và Hội Phượng Hoàng",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "J.K. Rowling"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "J.K. Rowling"
+         ],
+         "normalizedValue": [
+          "J.K. Rowling"
+         ],
+         "observedText": "J.K. ROWLING",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "EXTRACTED",
+       "value": [
+        "Lý Lan"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Lý Lan"
+         ],
+         "normalizedValue": [
+          "Lý Lan"
+         ],
+         "observedText": "LÝ LAN dịch",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "Nhà xuất bản Trẻ",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Nhà xuất bản Trẻ",
+         "normalizedValue": "Nhà xuất bản Trẻ",
+         "observedText": "NHÀ XUẤT BẢN TRẺ",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "EXTRACTED",
+       "value": "In lần thứ 40",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "In lần thứ 40",
+         "normalizedValue": "In lần thứ 40",
+         "observedText": "In lần thứ 40",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "Harry Potter và Hội Phượng Hoàng"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "J.K. ROWLING"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "observedText": "LÝ LAN dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN TRẺ"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "observedText": "In lần thứ 40"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Harry Potter và Hội Phượng Hoàng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Harry Potter và Hội Phượng Hoàng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Harry Potter và Hội Phượng Hoàng"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "J.K. Rowling",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "J.K. Rowling",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "J.K. Rowling"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": "Lý Lan",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Lý Lan",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Lý Lan"
+        }
+       ]
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "Nhà xuất bản Trẻ",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Nhà xuất bản Trẻ",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Nhà xuất bản Trẻ"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 1355,
+      "completionTokens": 385,
+      "costUsd": 0.000104,
+      "latencyMs": 8283,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 8283,
+        "promptTokens": 1355,
+        "completionTokens": 385,
+        "costUsd": 0.000104,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 8295
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Harry Potter và Hội Phượng Hoàng",
+        "observedText": "Harry Potter và Hội Phượng Hoàng"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "J.K. Rowling"
+        ],
+        "observedText": "J.K. ROWLING"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Lý Lan"
+        ],
+        "observedText": "LÝ LAN dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "Nhà xuất bản Trẻ",
+        "observedText": "NHÀ XUẤT BẢN TRẺ"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "value": "In lần thứ 40",
+        "observedText": "In lần thứ 40"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "harry-potter-5-tre",
+    "run": 2,
+    "truth": {
+     "title": "Harry Potter và Hội Phượng Hoàng",
+     "subtitle": null,
+     "authors": [
+      "J.K. Rowling"
+     ],
+     "translators": [
+      "Lý Lan"
+     ],
+     "publisher": "Nhà xuất bản Trẻ",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "WEBP",
+       "originalBytes": 52048,
+       "processedBytes": 72015,
+       "originalSize": [
+        600,
+        600
+       ],
+       "size": [
+        600,
+        600
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Harry Potter và Hội Phượng Hoàng",
+      "subtitle": null,
+      "authors": [
+       "J.K. ROWLING"
+      ],
+      "translators": [
+       "LÝ LAN"
+      ],
+      "publisher": "NHÀ XUẤT BẢN TRẺ",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": "In lần thứ 40",
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Harry Potter và Hội Phượng Hoàng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Harry Potter và Hội Phượng Hoàng",
+         "normalizedValue": "Harry Potter và Hội Phượng Hoàng",
+         "observedText": "Harry Potter và Hội Phượng Hoàng",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "J.K. ROWLING"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "J.K. ROWLING"
+         ],
+         "normalizedValue": [
+          "J.K. ROWLING"
+         ],
+         "observedText": "J.K. ROWLING",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "EXTRACTED",
+       "value": [
+        "LÝ LAN"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "LÝ LAN"
+         ],
+         "normalizedValue": [
+          "LÝ LAN"
+         ],
+         "observedText": "LÝ LAN dịch",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "NHÀ XUẤT BẢN TRẺ",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "NHÀ XUẤT BẢN TRẺ",
+         "normalizedValue": "NHÀ XUẤT BẢN TRẺ",
+         "observedText": "NHÀ XUẤT BẢN TRẺ",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "EXTRACTED",
+       "value": "In lần thứ 40",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "In lần thứ 40",
+         "normalizedValue": "In lần thứ 40",
+         "observedText": "In lần thứ 40",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "Harry Potter và Hội Phượng Hoàng"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "J.K. ROWLING"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "observedText": "LÝ LAN dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN TRẺ"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "observedText": "In lần thứ 40"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Harry Potter và Hội Phượng Hoàng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Harry Potter và Hội Phượng Hoàng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Harry Potter và Hội Phượng Hoàng"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "J.K. ROWLING",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "J.K. ROWLING",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "J.K. ROWLING"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": "LÝ LAN",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "LÝ LAN",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "LÝ LAN"
+        }
+       ]
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "NHÀ XUẤT BẢN TRẺ",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "NHÀ XUẤT BẢN TRẺ",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "NHÀ XUẤT BẢN TRẺ"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 1355,
+      "completionTokens": 422,
+      "costUsd": 0.00011,
+      "latencyMs": 8024,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 8024,
+        "promptTokens": 1355,
+        "completionTokens": 422,
+        "costUsd": 0.00011,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 8037
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Harry Potter và Hội Phượng Hoàng",
+        "observedText": "Harry Potter và Hội Phượng Hoàng"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "J.K. ROWLING"
+        ],
+        "observedText": "J.K. ROWLING"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "value": [
+         "LÝ LAN"
+        ],
+        "observedText": "LÝ LAN dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "NHÀ XUẤT BẢN TRẺ",
+        "observedText": "NHÀ XUẤT BẢN TRẺ"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "value": "In lần thứ 40",
+        "observedText": "In lần thứ 40"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "frieren-tap-1-kim-dong",
+    "run": 0,
+    "truth": {
+     "title": "Frieren Pháp sư tiễn táng",
+     "subtitle": null,
+     "authors": [
+      "Kanehito Yamada"
+     ],
+     "translators": [
+      "Gou"
+     ],
+     "publisher": "Nhà xuất bản Kim Đồng",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "WEBP",
+       "originalBytes": 437764,
+       "processedBytes": 309481,
+       "originalSize": [
+        743,
+        1024
+       ],
+       "size": [
+        743,
+        1024
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "Frieren Pháp sư tiến táng",
+      "subtitle": null,
+      "authors": [
+       "Kanehito Yamada"
+      ],
+      "translators": [
+       "Gou"
+      ],
+      "publisher": "Nhà xuất bản Kim Đồng",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": null,
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "Frieren Pháp sư tiến táng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Frieren Pháp sư tiến táng",
+         "normalizedValue": "Frieren Pháp sư tiến táng",
+         "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "Kanehito Yamada"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Kanehito Yamada"
+         ],
+         "normalizedValue": [
+          "Kanehito Yamada"
+         ],
+         "observedText": "Nguyên tác: KANEHITO YAMADA",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "EXTRACTED",
+       "value": [
+        "Gou"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Gou"
+         ],
+         "normalizedValue": [
+          "Gou"
+         ],
+         "observedText": "Gou dịch",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "Nhà xuất bản Kim Đồng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Nhà xuất bản Kim Đồng"
+         ],
+         "normalizedValue": "Nhà xuất bản Kim Đồng",
+         "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "Nguyên tác: KANEHITO YAMADA"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "observedText": "Gou dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "editionStatement",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "Frieren Pháp sư tiến táng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Frieren Pháp sư tiến táng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Frieren Pháp sư tiến táng"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "Kanehito Yamada",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Kanehito Yamada",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Kanehito Yamada"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": "Gou",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Gou",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Gou"
+        }
+       ]
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "Nhà xuất bản Kim Đồng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Nhà xuất bản Kim Đồng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Nhà xuất bản Kim Đồng"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 1730,
+      "completionTokens": 400,
+      "costUsd": 0.000119,
+      "latencyMs": 7989,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 7989,
+        "promptTokens": 1730,
+        "completionTokens": 400,
+        "costUsd": 0.000119,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 8031
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "Frieren Pháp sư tiến táng",
+        "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Kanehito Yamada"
+        ],
+        "observedText": "Nguyên tác: KANEHITO YAMADA"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Gou"
+        ],
+        "observedText": "Gou dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Nhà xuất bản Kim Đồng"
+        ],
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "frieren-tap-1-kim-dong",
+    "run": 1,
+    "truth": {
+     "title": "Frieren Pháp sư tiễn táng",
+     "subtitle": null,
+     "authors": [
+      "Kanehito Yamada"
+     ],
+     "translators": [
+      "Gou"
+     ],
+     "publisher": "Nhà xuất bản Kim Đồng",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "WEBP",
+       "originalBytes": 437764,
+       "processedBytes": 309481,
+       "originalSize": [
+        743,
+        1024
+       ],
+       "size": [
+        743,
+        1024
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+      "subtitle": null,
+      "authors": [
+       "KANEHITO YAMADA"
+      ],
+      "translators": [
+       "Gou"
+      ],
+      "publisher": "NHÀ XUẤT BẢN KIM ĐỒNG",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": null,
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "normalizedValue": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "KANEHITO YAMADA"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "KANEHITO YAMADA"
+         ],
+         "normalizedValue": [
+          "KANEHITO YAMADA"
+         ],
+         "observedText": "Nguyên tác: KANEHITO YAMADA",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "EXTRACTED",
+       "value": [
+        "Gou"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Gou"
+         ],
+         "normalizedValue": [
+          "Gou"
+         ],
+         "observedText": "Gou dịch",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "NHÀ XUẤT BẢN KIM ĐỒNG",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "normalizedValue": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "Nguyên tác: KANEHITO YAMADA"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "observedText": "Gou dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "editionStatement",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "KANEHITO YAMADA",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "KANEHITO YAMADA",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "KANEHITO YAMADA"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": "Gou",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Gou",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Gou"
+        }
+       ]
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "NHÀ XUẤT BẢN KIM ĐỒNG",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "NHÀ XUẤT BẢN KIM ĐỒNG",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "NHÀ XUẤT BẢN KIM ĐỒNG"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 1730,
+      "completionTokens": 421,
+      "costUsd": 0.000123,
+      "latencyMs": 8849,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 8849,
+        "promptTokens": 1730,
+        "completionTokens": 421,
+        "costUsd": 0.000123,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 8885
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+        "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "KANEHITO YAMADA"
+        ],
+        "observedText": "Nguyên tác: KANEHITO YAMADA"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Gou"
+        ],
+        "observedText": "Gou dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "NHÀ XUẤT BẢN KIM ĐỒNG",
+        "observedText": "NHÀ XUẤT BẢN KIM ĐỒNG"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   },
+   {
+    "bookId": "frieren-tap-1-kim-dong",
+    "run": 2,
+    "truth": {
+     "title": "Frieren Pháp sư tiễn táng",
+     "subtitle": null,
+     "authors": [
+      "Kanehito Yamada"
+     ],
+     "translators": [
+      "Gou"
+     ],
+     "publisher": "Nhà xuất bản Kim Đồng",
+     "publishedYear": null,
+     "isbn13": null,
+     "pageCount": null
+    },
+    "tags": [],
+    "response": {
+     "schemaVersion": "book-ocr-scan-v1",
+     "promptVersion": "book-ocr-v2",
+     "status": "SUCCESS",
+     "images": [
+      {
+       "kind": "front_cover",
+       "sourceFormat": "WEBP",
+       "originalBytes": 437764,
+       "processedBytes": 309481,
+       "originalSize": [
+        743,
+        1024
+       ],
+       "size": [
+        743,
+        1024
+       ],
+       "resized": false
+      }
+     ],
+     "metadata": {
+      "title": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+      "subtitle": null,
+      "authors": [
+       "KANEHITO YAMADA"
+      ],
+      "translators": [
+       "Gou"
+      ],
+      "publisher": "NXB Kim Đồng",
+      "distributor": null,
+      "isbn13": null,
+      "publishedYear": null,
+      "printYear": null,
+      "copyrightYear": null,
+      "editionStatement": "Vol. 1",
+      "pageCount": null,
+      "coverPrice": null,
+      "description": null,
+      "language": "vi",
+      "isbn10": null
+     },
+     "fields": {
+      "title": {
+       "field": "title",
+       "status": "EXTRACTED",
+       "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "normalizedValue": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "subtitle": {
+       "field": "subtitle",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "authors": {
+       "field": "authors",
+       "status": "EXTRACTED",
+       "value": [
+        "KANEHITO YAMADA"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "KANEHITO YAMADA"
+         ],
+         "normalizedValue": [
+          "KANEHITO YAMADA"
+         ],
+         "observedText": "Nguyên tác: KANEHITO YAMADA",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "translators": {
+       "field": "translators",
+       "status": "EXTRACTED",
+       "value": [
+        "Gou"
+       ],
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": [
+          "Gou"
+         ],
+         "normalizedValue": [
+          "Gou"
+         ],
+         "observedText": "Gou dịch",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "publisher": {
+       "field": "publisher",
+       "status": "EXTRACTED",
+       "value": "NXB Kim Đồng",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "NXB Kim Đồng",
+         "normalizedValue": "NXB Kim Đồng",
+         "observedText": "NXB KIM ĐỒNG",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "distributor": {
+       "field": "distributor",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "isbn": {
+       "field": "isbn",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "publicationYear": {
+       "field": "publicationYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "printYear": {
+       "field": "printYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "copyrightYear": {
+       "field": "copyrightYear",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "editionStatement": {
+       "field": "editionStatement",
+       "status": "EXTRACTED",
+       "value": "Vol. 1",
+       "sources": [
+        "front_cover"
+       ],
+       "observations": [
+        {
+         "source": "front_cover",
+         "value": "Vol. 1",
+         "normalizedValue": "Vol. 1",
+         "observedText": "VOL. 1",
+         "valid": true,
+         "issues": []
+        }
+       ],
+       "reasons": []
+      },
+      "pageCount": {
+       "field": "pageCount",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "coverPrice": {
+       "field": "coverPrice",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "description": {
+       "field": "description",
+       "status": "MISSING",
+       "value": null,
+       "sources": [],
+       "observations": [],
+       "reasons": []
+      },
+      "language": {
+       "field": "language",
+       "status": "INFERRED",
+       "value": "vi",
+       "sources": [
+        "rule"
+       ],
+       "observations": [],
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ]
+      }
+     },
+     "fieldEvidence": {
+      "title": [
+       {
+        "source": "front_cover",
+        "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "observedText": "Nguyên tác: KANEHITO YAMADA"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "observedText": "Gou dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "observedText": "NXB KIM ĐỒNG"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "observedText": "VOL. 1"
+       }
+      ]
+     },
+     "missingFields": [
+      "subtitle",
+      "distributor",
+      "isbn13",
+      "publishedYear",
+      "printYear",
+      "copyrightYear",
+      "pageCount",
+      "coverPrice",
+      "description"
+     ],
+     "conflictedFields": [],
+     "otherCodes": [],
+     "warnings": [],
+     "isbnLookup": {
+      "status": "SKIPPED_NO_VALID_ISBN",
+      "isbn": null,
+      "editionMatches": null,
+      "lookup": null
+     },
+     "proposals": {
+      "isbn": {
+       "formField": "isbn",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn13": {
+       "formField": "isbn13",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "isbn10": {
+       "formField": "isbn10",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "title": {
+       "formField": "title",
+       "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+        }
+       ]
+      },
+      "subtitle": {
+       "formField": "subtitle",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "authorsText": {
+       "formField": "authorsText",
+       "value": "KANEHITO YAMADA",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "KANEHITO YAMADA",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "KANEHITO YAMADA"
+        }
+       ]
+      },
+      "translatorText": {
+       "formField": "translatorText",
+       "value": "Gou",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "Gou",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "Gou"
+        }
+       ]
+      },
+      "publisher": {
+       "formField": "publisher",
+       "value": "NXB Kim Đồng",
+       "status": "EXTRACTED",
+       "source": "images",
+       "safeToApply": true,
+       "reasons": [],
+       "ocrValue": "NXB Kim Đồng",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "NXB Kim Đồng"
+        }
+       ]
+      },
+      "publishedDate": {
+       "formField": "publishedDate",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "pageCount": {
+       "formField": "pageCount",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "description": {
+       "formField": "description",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      },
+      "language": {
+       "formField": "language",
+       "value": "vi",
+       "status": "INFERRED",
+       "source": "rule",
+       "safeToApply": false,
+       "reasons": [
+        "VIETNAMESE_LETTERS_IN_TEXT"
+       ],
+       "ocrValue": "vi",
+       "lookupValue": null,
+       "options": [
+        {
+         "source": "images",
+         "value": "vi"
+        }
+       ]
+      },
+      "categoriesText": {
+       "formField": "categoriesText",
+       "value": null,
+       "status": "MISSING",
+       "source": null,
+       "safeToApply": false,
+       "reasons": [],
+       "ocrValue": null,
+       "lookupValue": null,
+       "options": []
+      }
+     },
+     "usage": {
+      "model": "qwen/qwen3.7-flash",
+      "fallbackUsed": false,
+      "cacheHit": false,
+      "imageCount": 1,
+      "promptTokens": 1730,
+      "completionTokens": 455,
+      "costUsd": 0.000128,
+      "latencyMs": 8705,
+      "calls": [
+       {
+        "model": "qwen/qwen3.7-flash",
+        "trigger": "primary",
+        "status": "OK",
+        "latencyMs": 8705,
+        "promptTokens": 1730,
+        "completionTokens": 455,
+        "costUsd": 0.000128,
+        "error": null
+       }
+      ]
+     },
+     "processingTimeMs": 8741
+    },
+    "modelAnswer": {
+     "images": [],
+     "observations": {
+      "title": [
+       {
+        "source": "front_cover",
+        "value": "FRIEREN PHÁP SƯ TIẾN TÁNG",
+        "observedText": "FRIEREN PHÁP SƯ TIẾN TÁNG"
+       }
+      ],
+      "authors": [
+       {
+        "source": "front_cover",
+        "value": [
+         "KANEHITO YAMADA"
+        ],
+        "observedText": "Nguyên tác: KANEHITO YAMADA"
+       }
+      ],
+      "translators": [
+       {
+        "source": "front_cover",
+        "value": [
+         "Gou"
+        ],
+        "observedText": "Gou dịch"
+       }
+      ],
+      "publisher": [
+       {
+        "source": "front_cover",
+        "value": "NXB Kim Đồng",
+        "observedText": "NXB KIM ĐỒNG"
+       }
+      ],
+      "editionStatement": [
+       {
+        "source": "front_cover",
+        "value": "Vol. 1",
+        "observedText": "VOL. 1"
+       }
+      ]
+     },
+     "otherCodes": []
+    }
+   }
+  ]
+ }
+}

@@ -1,6 +1,7 @@
 # AI Multi-Image OCR Book Import
 
-Ngày: 2026-10-23 · Nhánh: `hungg` · Prompt: `book-ocr-v2` · Model mặc định: `qwen/qwen3.7-flash` (OpenRouter)
+Ngày: 2026-10-23 · Nhánh: `hungg` · **OCR 2.0** (độ tin cậy, so khớp tiếng Việt, chính sách tự điền) · Prompt: `book-ocr-v2`
+(không đổi) · Model mặc định: `qwen/qwen3.7-flash` (OpenRouter, không đổi, không thêm fallback mặc định)
 
 Nhân viên chụp/tải 1–3 ảnh của một cuốn sách (bìa trước, bìa sau, trang thông tin xuất bản) trên trang **AI Import**;
 hệ thống đọc ảnh bằng một lời gọi multimodal, kiểm tra từng giá trị, đối chiếu với **ISBN Lookup** hiện có rồi **đề xuất**
@@ -9,10 +10,23 @@ dữ liệu vào biểu mẫu `EditableBookForm`. OCR không bao giờ tạo hay
 
 Đánh giá định lượng: [BOOK_OCR_EVALUATION.md](BOOK_OCR_EVALUATION.md).
 
+### Mức độ kiểm chứng (OCR 2.0)
+
+| Hạng mục | Đã triển khai | Kiểm thử tự động | Kiểm chứng với API thật | Chưa đánh giá |
+|---|---|---|---|---|
+| Trạng thái OCR (đang kiểm tra / dùng được / tắt / không phản hồi + Thử lại) | ✔ | ✔ E2E (mock) + E2E đường thật qua gateway | ✔ stack local | |
+| Kết quả gắn đúng bộ ảnh (SHA-256 nội dung, hủy quét, phản hồi trễ, ảnh đổi sau khi quét) | ✔ | ✔ unit + E2E | | |
+| So khớp tiếng Việt strict/fuzzy, `DIACRITICS_DIFFER` | ✔ | ✔ 13 cặp ví dụ + hồi quy | ✔ replay câu trả lời thật của model | |
+| Chính sách tự điền theo trường | ✔ | ✔ | ✔ replay + 18 lần quét live | Độ chính xác trên sách 3 ảnh |
+| Ranh giới tin cậy ISBN / mã vạch / định danh lookup | ✔ | ✔ | | Trên ISBN thật của dataset |
+| Benchmark 3 ảnh (schema, runner, 3 lớp chỉ số, replay) | ✔ | ✔ | ✔ smoke 3 bìa trước | **Dataset ≥ 50 cuốn chưa có** |
+| Tiền xử lý thích ứng (2048 px, crop, OCR lại có điều kiện) | ✗ — giữ 1600 px | | Thử 1600/2048: ảnh smoke < 1600 px ⇒ không có kết luận | Cần ảnh trang xuất bản độ phân giải cao |
+
 ## 1. Pipeline
 
 ```
-Ảnh (1–3)  ──>  [web] resize ≤2048px + giải mã mã vạch EAN-13 bìa sau (html5-qrcode, tất định, miễn phí)
+Ảnh (1–3)  ──>  [web] resize ≤2048px + SHA-256 nội dung (định danh ảnh) + giải mã mã vạch EAN-13 bìa sau
+                    (html5-qrcode, tất định, miễn phí). Chỉ hiện ô tải ảnh khi capabilities = dùng được.
                     │  multipart: front_cover / back_cover / copyright_page (+ barcode)
                     v
 API Gateway /ai ──> ai-service POST /book-metadata/scan-images
@@ -23,16 +37,19 @@ API Gateway /ai ──> ai-service POST /book-metadata/scan-images
                     (xóa EXIF/GPS) - toàn bộ trong RAM.
    3. extractor.py: MỘT request OpenRouter chứa cả 3 ảnh, mỗi ảnh có nhãn "Image label: <loại>".
                     Không hỏi lại model chỉ để sửa JSON.
-   4. validation.py: chuẩn hóa (NFC, khoảng trắng, ISBN-10 -> 13, checksum), kiểm tra
+   4. validation.py: chuẩn hóa (NFC/NFKC, khoảng trắng, ISBN-10 -> 13, checksum), kiểm tra
                     nguồn ảnh có thật, giá trị phải nằm trong đoạn chữ model chép (grounding),
-                    đúng vai trò (dịch giả ≠ tác giả, NXB ≠ nhà phát hành, năm in ≠ năm xuất bản),
-                    gộp theo trường và phát hiện xung đột giữa các ảnh.
+                    đúng vai trò (dịch giả / họa sĩ minh họa ≠ tác giả, NXB ≠ nhà phát hành, năm in ≠ năm xuất bản),
+                    gộp theo khóa FUZZY (bỏ dấu) rồi so bằng khóa STRICT (giữ dấu): khác dấu ⇒ DIACRITICS_DIFFER;
+                    mã vạch do trình duyệt gửi mà ảnh không xác nhận ⇒ BARCODE_UNCONFIRMED.
    5. ISBN Lookup : chỉ khi có đúng một ISBN hợp lệ -> lookup_book_by_isbn() hiện có
                     (cache + Metadata Intelligence v2 nếu bật), có timeout riêng.
-   6. reconcile.py: đối chiếu từng trường ảnh ↔ lookup -> proposals cho từng ô của form.
+   6. reconcile.py: kiểm tra định danh bản ghi lookup, đối chiếu từng trường ảnh ↔ lookup (strict)
+                    -> proposals cho từng ô của form -> autofill_policy() quyết định safeToApply.
                     v
 [web] Panel "Kết quả đọc ảnh": giá trị, trạng thái, bằng chứng, so sánh ảnh/lookup, xem lại ảnh,
-      áp dụng từng trường / áp dụng các trường an toàn.
+      áp dụng từng trường / áp dụng các trường an toàn / "Đã so với sách — áp dụng N giá trị đọc từ một ảnh".
+      Ảnh đổi sau khi quét ⇒ kết quả bị đánh dấu "thuộc bộ ảnh trước", mọi nút áp dụng bị khóa.
       Có bản ghi ISBN -> tạo reconciliation draft như tra cứu ISBN; luôn chạy duplicate check.
       -> nhân viên sửa, xử lý trùng lặp, bấm Lưu (luồng hiện có).
 ```
@@ -52,16 +69,67 @@ phải tạo locator giả hoặc coi model là một "nguồn" ngang hàng vớ
 
 ## 2. Trạng thái và quy tắc
 
-| Trạng thái | Ý nghĩa | Tự điền? |
+| Trạng thái | Ý nghĩa | Tự điền? (OCR 2.0) |
 |---|---|---|
-| `EXTRACTED` | Một ảnh có giá trị hợp lệ, có bằng chứng, đúng vai trò | Có |
-| `CORROBORATED` | Hai nguồn độc lập khớp: 2 ảnh, ảnh + mã vạch, hoặc ảnh + ISBN lookup | Có |
-| `LOOKUP_ONLY` | Ảnh không có, ISBN lookup (cùng ISBN in trên sách) có | Có, trừ khi nguồn lookup tự đánh dấu xung đột/độ tin thấp hoặc lookup trả ấn bản khác |
-| `REVIEW_REQUIRED` | Có giá trị nhưng cần người xem (ví dụ thiếu nhãn vai trò, ảnh khác nhau về dấu, khớp một phần) | Không |
+| `EXTRACTED` | Một ảnh có giá trị hợp lệ, có bằng chứng, đúng vai trò | **Theo trường**: có với dịch giả, số trang; **không** với ISBN, tên sách, tựa phụ, tác giả, NXB, năm xuất bản, mô tả (lý do `SINGLE_SOURCE`, vẫn áp dụng được bằng 1 thao tác). ISBN đọc một lần chỉ tự điền khi lookup xác nhận đúng cuốn |
+| `CORROBORATED` | Hai nguồn độc lập khớp **kể cả dấu**: 2 ảnh, ảnh + mã vạch, hoặc ảnh + ISBN lookup | Có |
+| `LOOKUP_ONLY` | Ảnh không có, ISBN lookup có | Chỉ khi định danh bản ghi đã xác minh, cùng ấn bản và nguồn lookup không tự đánh dấu trường đó |
+| `REVIEW_REQUIRED` | Có giá trị nhưng cần người xem (thiếu nhãn vai trò, khác dấu, khớp một phần, mã vạch chưa được ảnh xác nhận) | Không |
 | `CONFLICTED` | Các nguồn khác nhau — không chọn giá trị nào, hiển thị mọi lựa chọn | Không |
 | `INVALID` | Có đọc nhưng mọi lần đọc đều sai (checksum, ngoài khoảng, không có bằng chứng, sai vai trò) | Không |
 | `INFERRED` | Suy ra bằng quy tắc, không đọc (chỉ `language`: chữ tiếng Việt có dấu ⇒ `vi`) | Không |
 | `MISSING` | Không thấy | — |
+
+Không dùng điểm tin cậy do LLM tự khai báo ở bất kỳ bước nào. Chính sách nằm ở `reconcile.autofill_policy()`.
+
+### 2.1. So khớp tiếng Việt (OCR 2.0)
+
+Hai loại so sánh tách bạch (`book_ocr/normalization.py`):
+
+| Loại | Hàm | Quy tắc | Dùng cho |
+|---|---|---|---|
+| Fuzzy / tìm kiếm | `fold()` | NFKC, không phân biệt hoa/thường, bỏ dấu, `đ`→`d`, dấu câu → khoảng trắng | Gom các lần đọc *có thể* cùng giá trị; kiểm tra "bản ghi lookup có phải cùng cuốn?" |
+| Strict / xác minh | `strict()`, `compare_text()` | NFKC, không phân biệt hoa/thường, khoảng trắng, dấu câu; **giữ mọi dấu thanh, dấu mũ, `đ`** | Quyết định `CORROBORATED`; đối chiếu ảnh ↔ lookup |
+
+| Ví dụ | Kết quả |
+|---|---|
+| "MẮT BIẾC" ↔ "Mắt Biếc" | MATCH |
+| "Pháp sư tiễn táng" ↔ "Pháp sư tiến táng" | DIACRITICS_DIFFER ⇒ `REVIEW_REQUIRED` |
+| "Nguyễn Nhật Ánh" ↔ "Nguyễn Nhật Anh" | DIACRITICS_DIFFER ⇒ `REVIEW_REQUIRED` |
+| "Nhà xuất bản Trẻ" ↔ "NXB Trẻ" | MATCH (tiền tố NXB là nhãn vai trò) |
+| "Nhà xuất bản Trẻ" ↔ "NXB Tre" | DIACRITICS_DIFFER ⇒ `REVIEW_REQUIRED` |
+| Unicode tổ hợp (NFD) ↔ dựng sẵn (NFC); chữ full-width ↔ thường | MATCH |
+
+Quy tắc theo trường: tên sách/tựa phụ/mô tả so theo chuỗi từ; tác giả/dịch giả so **từng tên** (bìa chỉ ghi 1/2 tác giả
+là `PARTIAL_AGREEMENT`, không phải lỗi dấu); NXB bỏ tiền tố "Nhà xuất bản / Nhà XB / NXB" trên khóa strict; ISBN theo
+dạng chuẩn ISBN-13; năm và số trang theo số. Phát hiện khác dấu không còn đếm số chữ có dấu (OCR 1.0 bỏ sót
+"tiễn"/"tiến" vì cùng số dấu) mà so khóa strict trong cùng nhóm fuzzy, nên bắt cả sai loại dấu
+(sắc/huyền/hỏi/ngã/nặng), thiếu dấu, `đ`/`d`.
+
+Đối chiếu với lookup: khác dấu (cả hai có dấu) ⇒ `REVIEW_REQUIRED` + `LOOKUP_DIACRITICS_DIFFER`; bản ghi lookup
+**không dấu** ("Nha Gia Kim") không xác nhận được dấu ⇒ giá trị ảnh giữ trạng thái của nó + `LOOKUP_UNACCENTED`
+(không nâng lên `CORROBORATED`, cũng không coi là xung đột).
+
+### 2.2. Ranh giới tin cậy ISBN / mã vạch / định danh
+
+- Checksum chỉ chứng minh *cấu trúc* hợp lệ, không chứng minh mã nằm trên cuốn đã chụp. Không bao giờ tự sửa ISBN sai
+  checksum.
+- Mã vạch là **dữ liệu client gửi lên**: chỉ được tính là nguồn thứ hai khi khớp một lần đọc ISBN từ ảnh. Đứng một mình
+  ⇒ `REVIEW_REQUIRED` + `BARCODE_UNCONFIRMED` (vẫn tra cứu để nhân viên thấy). Mã vạch khác ISBN in ⇒ `CONFLICTED`.
+- Bản ghi lookup chỉ đại diện cho cuốn đã chụp khi tên sách in khớp (fuzzy) tên bản ghi, hoặc — không đọc được tên —
+  khi cùng ISBN in ở **hai ảnh**. Ngược lại: `LOOKUP_TITLE_MISMATCH`, `LOOKUP_DIFFERENT_EDITION` hoặc
+  `LOOKUP_IDENTITY_UNVERIFIED` ⇒ không trường nào từ lookup được tự điền, và web không dùng bản ghi đó để tạo
+  reconciliation draft.
+- ISBN bộ và ISBN tập trên cùng trang, hoặc hai ảnh ghi hai ISBN ⇒ `CONFLICTED`.
+
+### 2.3. Chống hallucination
+
+`observedText` là **bản chép do model tạo**, không phải bằng chứng ảnh độc lập. Grounding chỉ loại giá trị không khớp
+chính bản chép đó; vì vậy một lần đọc duy nhất của trường định danh không bao giờ tự vào form. Theo từng trường: năm
+in/©/ĐKXB không thành năm xuất bản; nhà phát hành không thành NXB; dịch giả và **họa sĩ minh họa** (nhãn "Minh họa:" /
+"Họa sĩ:" ngay trước tên) không thành tác giả; tên gốc tiếng nước ngoài trong tựa phụ không được tự điền (đã gặp live);
+mô tả (không có `observedText`) không tự điền; số trang phải có số trong bản chép. Thiếu bằng chứng ⇒ review, không ép
+model đoán.
 
 Quy tắc quan trọng:
 
@@ -171,12 +239,12 @@ Endpoint chỉ đọc: không ghi catalog, không tạo draft (draft và duplica
 | `BOOK_OCR_ENABLED` | `true` | |
 | `OPENROUTER_BOOK_OCR_MODEL` | `qwen/qwen3.7-flash` | Không ảnh hưởng chatbot/vision chung |
 | `OPENROUTER_BOOK_OCR_FALLBACK_MODEL` | *(rỗng)* | Rỗng = không bao giờ gọi model khác. **Không** dùng `OPENROUTER_FALLBACK_MODEL` chung |
-| `BOOK_OCR_FALLBACK_DAILY_BUDGET_USD` | `0.5` | Trần chi phí fallback/ngày (trong process); cost không báo được tính 0,01 USD |
+| `BOOK_OCR_FALLBACK_DAILY_BUDGET_USD` | `0.5` | Trần chi phí fallback/ngày **theo process**: ai-service chạy 1 worker/container ⇒ theo container; N bản sao ⇒ trần thực N× (đặt = tổng/N, hoặc chuyển bộ đếm sang Redis trước khi scale). Cost không báo được tính 0,01 USD |
 | `BOOK_OCR_MAX_IMAGES` | `3` | |
 | `BOOK_OCR_MAX_TOKENS` | `1800` | Đủ cho JSON 3 ảnh kèm đoạn giới thiệu; đo thực tế 352–455 token output cho 1 ảnh bìa |
 | `BOOK_OCR_TIMEOUT_SECONDS` | `45` | Retry cùng model chỉ khi 429/5xx trả nhanh |
 | `BOOK_OCR_MAX_FILE_MB` / `BOOK_OCR_MAX_TOTAL_MB` | `8` / `8` | Tổng = trần 8 MB của gateway; web resize trước khi gửi |
-| `BOOK_OCR_MAX_IMAGE_EDGE` | `1600` | Đủ đọc chữ 6–7pt trang xuất bản khổ A5 chụp điện thoại |
+| `BOOK_OCR_MAX_IMAGE_EDGE` | `1600` | Đủ đọc chữ 6–7pt trang xuất bản khổ A5 chụp điện thoại. OCR 2.0 **giữ nguyên**: lần thử 1600/2048 px không có kết luận (ảnh smoke đều < 1600 px); đo lại bằng `--max-edge 1600,2048` khi có ảnh trang xuất bản thật |
 | `BOOK_OCR_LOOKUP_TIMEOUT_SECONDS` | `35` | Quá hạn ⇒ vẫn trả kết quả OCR, cảnh báo `ISBN_LOOKUP_TIMEOUT` |
 | `BOOK_OCR_MAX_CONCURRENCY` | `2` | Vượt ⇒ 429 `OCR_BUSY` ngay (không xếp hàng, bảo vệ RAM VPS) |
 | `BOOK_OCR_MAX_PIXELS` | `40000000` | Chặn ảnh khổng lồ trước khi decode |
@@ -195,15 +263,24 @@ Endpoint chỉ đọc: không ghi catalog, không tạo draft (draft và duplica
 
 Số đo thật (smoke 2026-10-23, 9 lần quét 1 ảnh bìa, báo cáo `eval/reports/book_ocr_20261023_134306.*`):
 1.355–2.370 token input, 352–455 token output, **0,000104–0,000134 USD/lần quét (trung bình 0,000116)**,
-model 7,5–11,5 s. Chưa có số đo cho 3 ảnh/lần (cần dataset ảnh bìa sau và trang xuất bản).
+model 7,5–11,5 s. Lần 2 (18 lần quét live, `book_ocr_20261023_091159.*`): 0,000098–0,000135 USD/lần, trung bình
+1.818 token input / ~380 output, latency trung bình 8,1 s (P50 7,9–8,1 s, P95 8,9–9,3 s).
+Chưa có số đo cho 3 ảnh/lần (cần dataset ảnh bìa sau và trang xuất bản).
+
+OCR 2.0 không thêm lời gọi model nào: vẫn đúng 1 request/scan, fallback vẫn tắt mặc định; mọi cải tiến là hậu xử lý
+tất định trên server và trạng thái phía web.
 
 ## 5. Hướng dẫn cho nhân viên
 
-1. Mở **Nhập sách qua AI** → khối **Nhập sách bằng hình ảnh (AI OCR)**.
+1. Mở **Nhập sách qua AI** → khối **Nhập sách bằng hình ảnh (AI OCR)**. Nếu khối báo *Dịch vụ AI OCR hiện không phản
+   hồi*, bấm **Thử lại** hoặc tra cứu ISBN / nhập tay như bình thường; *đang tắt trong cấu hình* nghĩa là quản trị đã tắt.
 2. Chọn hoặc kéo thả ảnh vào 1–3 ô: *Bìa trước*, *Bìa sau*, *Trang thông tin xuất bản*. Trên điện thoại, ô chọn ảnh
    cho phép chụp trực tiếp. Có thể *Thay ảnh* hoặc *Xóa*.
 3. Bấm **Quét và trích xuất bằng AI** (thường 5–30 giây; có thể *Hủy quét*; trang không bị khóa).
 4. Các trường **an toàn** được điền sẵn vào ô còn trống. Trường bạn đã gõ **không bao giờ** bị ghi đè tự động.
+   Tên sách, tựa phụ, tác giả, NXB, năm, ISBN, mô tả chỉ đọc từ **một** ảnh không tự điền: so với sách rồi bấm
+   *Áp dụng* từng trường, hoặc **Đã so với sách — áp dụng N giá trị đọc từ một ảnh**.
+   Thay/xóa ảnh sau khi quét ⇒ kết quả cũ bị đánh dấu *thuộc bộ ảnh trước*, không áp dụng được — hãy quét lại.
 5. Trong **Kết quả đọc ảnh**: xem trạng thái từng trường, mở *Bằng chứng từ ảnh* để đối chiếu đoạn chữ AI đọc được,
    *Xem lại* ảnh gốc. Trường **Xung đột** phải tự chọn một giá trị (hoặc gõ tay). **Cần kiểm tra** nghĩa là có giá trị
    nhưng chưa tự điền.
@@ -216,9 +293,10 @@ xuất bản để tên sách được đối chiếu hai nguồn.
 
 ## 6. Khi nào OCR có thể sai
 
-- **Sai dấu tiếng Việt từ một ảnh duy nhất** — ví dụ thật: "Pháp sư *tiễn* táng" được đọc thành "*tiến*" cả 3 lần;
-  một ảnh không có gì để đối chiếu nên giá trị vẫn là `EXTRACTED` và được tự điền. Thêm trang xuất bản để có
-  `CORROBORATED`, và luôn so với sách thật.
+- **Sai dấu tiếng Việt từ một ảnh duy nhất** — ví dụ thật: "Pháp sư *tiễn* táng" được đọc thành "*tiến*" ở 9/9 lần
+  quét live (hai đợt). Một ảnh không có gì để đối chiếu nên lỗi không phát hiện được; OCR 1.0 tự điền giá trị sai này, OCR 2.0
+  **không tự điền** tên sách đọc một lần (chỉ đề xuất). Hai ảnh ghi khác dấu ⇒ `REVIEW_REQUIRED` kèm cả hai cách viết.
+  Lỗi chỉ bị loại hẳn khi nhân viên so với sách thật.
 - **Kết quả dao động giữa các lần gọi**: cùng một ảnh, "NHÀ XUẤT BẢN TRẺ" có lần đọc thành "NHA XUẤT BẢN TRẺ" hoặc mất
   hết dấu (khi đó thiếu nhãn NXB ⇒ `REVIEW_REQUIRED`, không tự điền).
 - Chữ cách điệu, chữ trên nền ảnh, ảnh lóa/nghiêng; bìa chỉ in chữ hoa (giữ nguyên, không tự đổi hoa thường).
@@ -236,4 +314,4 @@ xuất bản để tên sách được đối chiếu hai nguồn.
 | API | `services/ai-service/routes_book_ocr.py`, `catalog_access.py` (cổng quyền dùng chung với MI) |
 | Quyền | `services/inventory-service/src/routes/metadata-reconciliation.routes.js` (`GET /capabilities/import`) |
 | Web | `apps/web/src/components/pages/ai-import/{image-ocr-card,ocr-review-panel,use-book-ocr,index}.tsx`, `src/lib/book-ocr.ts`, `src/lib/decode-barcode-file.ts`, `src/services/book-ocr.ts` |
-| Test | `services/ai-service/test_book_ocr.py` (55), `eval/book_ocr_eval/test_ocr_scoring.py` (5), `apps/web/tests/book-ocr.test.mjs` (8), `apps/web/e2e/ai-import-ocr.spec.ts` (3), `services/inventory-service/test/metadata-intelligence-routes.test.js` |
+| Test | `services/ai-service/test_book_ocr.py` (73), `eval/book_ocr_eval/test_ocr_scoring.py` (8), `apps/web/tests/book-ocr.test.mjs` (10), `apps/web/e2e/ai-import-ocr.spec.ts` (10: 8 UI có mock cả capabilities lẫn scan, 2 đường thật browser → gateway → ai-service), `services/inventory-service/test/metadata-intelligence-routes.test.js` |

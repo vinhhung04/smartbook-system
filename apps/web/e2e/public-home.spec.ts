@@ -1,10 +1,32 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { loginCustomer } from './helpers';
 
 /**
  * Public home page: the two-mode hero search, cover search entry, ranking tabs,
  * branches, and the signed-in reader's "Sách của tôi" panel.
  */
+
+/**
+ * The ranking band only exists when loan / rating signals point at real catalog books.
+ * A fresh CI stack has none (the demo borrow seed's loans and reviews use placeholder
+ * book ids, and the band rightly hides empty rankings), so ranking UI tests serve the
+ * real /public/catalog/home answer with deterministic rankings built from its real books.
+ */
+async function withRankings(page: Page, { borrowed, rated }: { borrowed: boolean; rated: boolean }) {
+  await page.route('**/public/catalog/home', async (route) => {
+    const response = await route.fetch();
+    const home = await response.json();
+    const seen = new Set<string>();
+    const books = [...home.new_arrivals, ...home.available_now]
+      .filter((book: { id: string }) => !seen.has(book.id) && seen.add(book.id)).slice(0, 4);
+    expect(books.length, 'the seeded catalog has books').toBeGreaterThan(1);
+    const ranked = (signals: (index: number) => Record<string, number>) =>
+      books.map((book: { signals?: object }, index: number) => ({ ...book, signals: { ...book.signals, ...signals(index) } }));
+    home.most_borrowed = borrowed ? ranked((i) => ({ borrow_count: 20 - i })) : [];
+    home.top_rated = rated ? ranked((i) => ({ rating_avg: 5 - i * 0.25, rating_count: 3 })) : [];
+    await route.fulfill({ response, json: home });
+  });
+}
 
 test.describe('Home (anonymous)', () => {
   test('hero search switches to AI mode and asks /discover', async ({ page }) => {
@@ -24,6 +46,7 @@ test.describe('Home (anonymous)', () => {
   });
 
   test('ranking band tabs follow the arrow keys', async ({ page }) => {
+    await withRankings(page, { borrowed: true, rated: true });
     await page.goto('/');
     const borrowed = page.getByRole('tab', { name: 'Mượn nhiều' });
     await borrowed.focus();
@@ -32,6 +55,14 @@ test.describe('Home (anonymous)', () => {
     await expect(rated).toBeFocused();
     await expect(rated).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('heading', { name: 'Bạn đọc đánh giá cao' })).toBeVisible();
+  });
+
+  test('with only one ranking there are no tabs, just that ranking', async ({ page }) => {
+    await withRankings(page, { borrowed: true, rated: false });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Được mượn nhiều nhất' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Mượn nhiều' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Bạn đọc đánh giá cao' })).toHaveCount(0);
   });
 
   test('"Sách mới về" loops: left of the first book is the last one, and it settles back on the middle copy', async ({ page }) => {
