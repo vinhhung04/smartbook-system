@@ -357,6 +357,10 @@ services:
       - OPENROUTER_VISION_MODEL=${OPENROUTER_VISION_MODEL:-qwen/qwen3.7-flash}
       - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-}
       - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
+      # Copilot Phase 1 hybrid semantic planner (copilot_semantic_planner.py) - off by default,
+      # see docs/ANALYSIS/AI_COPILOT_SEMANTIC_UNDERSTANDING.md for the acceptance results.
+      - COPILOT_SEMANTIC_PLANNER=${COPILOT_SEMANTIC_PLANNER:-off}
+      - COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS=${COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS:-5}
       # Embedding model for semantic search (book search, internal-doc FAQ retrieval).
       # dimensions is always sent to cut the vector down to match the database's
       # fixed vector(768) column (schema.sql) - qwen3-embedding-8b defaults to 4096.

@@ -357,6 +357,8 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói, quét hóa đơn |
 | OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt. Phải là model OpenRouter — không có fallback provider khác |
 | ASSISTANT_TOOL_CONTEXT_CHARS | 2000 | Số ký tự tối đa một tool result đóng góp vào prompt `/assistant` |
+| COPILOT_SEMANTIC_PLANNER | off | Phase 1: khi kế hoạch của planner luật có dấu hiệu thiếu (diễn đạt gián tiếp, câu nhiều ý), hỏi LLM một bản đọc có cấu trúc rồi backend kiểm tra và lập kế hoạch lại (`copilot_semantic_planner.py`). Mặc định tắt — xem `docs/ANALYSIS/AI_COPILOT_SEMANTIC_UNDERSTANDING.md` |
+| COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS | 5 | Thời gian chờ tối đa cho lần gọi LLM lập kế hoạch; quá hạn thì dùng kế hoạch của luật |
 | OPENROUTER_EMBED_MODEL | qwen/qwen3-embedding-8b | Model embedding cho semantic FAQ + book search |
 | OPENROUTER_EMBED_DIMENSIONS | 768 | Số chiều gửi kèm trong request OpenRouter để khớp cột `vector(768)` trong `ai_document_chunks` — model này mặc định trả 4096 chiều, không được bỏ |
 | OPENROUTER_EMBED_TIMEOUT_SECONDS | 30 | Timeout tối đa cho một lần gọi embedding; quá hạn thì coi như không có tín hiệu ngữ nghĩa |

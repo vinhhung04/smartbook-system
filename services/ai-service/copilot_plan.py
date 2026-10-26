@@ -82,7 +82,8 @@ CAP_KEYWORDS: dict[str, list] = {
     # "biểu đồ" alone is a presentation request (detect_visualization), not a
     # metric: "biểu đồ tồn kho" must not become a borrow-trend question.
     BORROW_TREND: ["xu huong", "trend", "luot muon", "muon tra", "so luot", "thong ke muon",
-                   "muon theo thang", "muon theo ngay", _R(r"\bmuon (nhieu|it) hon\b"), _R(r"\bmuon (giam|tang)\b"),
+                   "muon theo thang", "muon theo ngay", _R(r"\bmuon (nhieu|it) hon\b"),
+                   _R(r"\bmuon (co |dang |co dang |lai )?(giam|tang)\b"),
                    _R(r"\bluot tra\b"), _R(r"\b(hoan tra|tra sach) (\d+ ngay|tuan|thang|quy|nam|gan day|qua)\b"),
                    _R(r"\b(tinh hinh|so lieu|du lieu) muon( sach| tra)?\b")],
     TOP_BORROWED: [_R(r"\btop\b"), _R(r"\bhot\b"), "pho bien", _R(r"\bmuon nhieu(?! hon)"), "duoc muon nhieu",
@@ -96,7 +97,9 @@ CAP_KEYWORDS: dict[str, list] = {
                      "thieu sach", "thieu hang", "duoi nguong", "nguong ton", "canh bao ton", "low stock",
                      _R(r"\b(duoi )?muc ton (toi thieu|an toan)\b"), "ton toi thieu",
                      "out of stock", "con nhieu sach hon", "con it sach", _R(r"\bkho nao\b"),
-                     _R(r"\b(cac|tung|moi) kho\b"), _R(r"\b(tinh hinh|bieu do|so sanh|thong ke|so lieu) ton kho\b")],
+                     _R(r"\b(cac|tung|moi) kho\b"), _R(r"\b(tinh hinh|bieu do|so sanh|thong ke|so lieu) ton kho\b"),
+                     _R(r"\bcon (bao nhieu|it|du) (ban|cuon|quyen)\b"),
+                     _R(r"\bthieu (nhung |cac |may )?(sach|dau sach|cuon|hang)\b")],
     REORDER: ["nhap them", "nhap gi", "nen nhap", "nhap sach", "nhap hang", "bo sung", "de xuat nhap",
               "goi y nhap", "mua them", "reorder", "can nhap", "ngan sach", "dat mua", "nhap bao nhieu",
               "luong nhap", "de xuat nhap", "nhap uu tien", _R(r"\bnhap (du|het|toan bo)\b"),
@@ -214,11 +217,15 @@ _TOKEN_EXPANSIONS = {
     "ds": "danh sach", "j": "gi", "z": "vay", "r": "roi", "ntn": "nhu the nao", "tn": "the nao",
     "sao r": "sao roi", "ns": "ngan sach", "nsach": "ngan sach", "tl": "thanh ly", "sp": "san pham",
     "hn": "ha noi", "hni": "ha noi", "sg": "hcm", "tphcm": "hcm", "dashbord": "dashboard",
+    "trc": "truoc", "hnay": "hom nay", "hqua": "hom qua", "thg": "thang", "nhiu": "nhieu", "bnhieu": "bao nhieu",
+    "ktra": "kiem tra",
 }
 _PHRASE_EXPANSIONS = [
     (_R(r"\btp\.? ?hcm\b"), "hcm"), (_R(r"\bsai gon\b"), "hcm"), (_R(r"\bho chi minh\b"), "hcm"),
     (_R(r"\btonkho\b"), "ton kho"), (_R(r"\bquahan\b"), "qua han"), (_R(r"\btienphat\b"), "tien phat"),
     (_R(r"\bnhapthem\b"), "nhap them"),
+    # City codes only right after "kho / chi nhánh" ("dn" alone may mean "doanh nghiệp").
+    (_R(r"\b(kho|chi nhanh) dn\b"), r"\1 da nang"), (_R(r"\b(kho|chi nhanh) ct\b"), r"\1 can tho"),
 ]
 # English / domain words that must never be "corrected" into Vietnamese.
 _PROTECTED = {
@@ -458,11 +465,30 @@ def _num(text: str) -> float:
 _PRICE_CONTEXT = re.compile(r"\b(gia|don gia|gia tien|gia ban|gia moi ban|re hon|dat hon)\s*(duoi|tren|tu|khoang|hon|toi|"
                             r"chua|khong qua|it hon|nhieu hon|cao hon|thap hon)?\s*$")
 _PER_COPY = re.compile(r"\s*(trieu|tr|nghin|ngan|k|ty|d|dong)?\s*(/|mot|moi|1)\s*(ban|cuon|quyen)\b")
+_SHARED_UNIT = re.compile(r"((?:\b\d+(?:[.,]\d+)?\s*(?:,\s|\s(?:va|hoac)\s)\s*)+\d+(?:[.,]\d+)?\s*)(trieu|ty|ti|nghin|ngan)\b")
+_MONEY_UNIT = {"trieu": 1e6, "tr": 1e6, "cu": 1e6, "ty": 1e9, "ti": 1e9, "nghin": 1e3, "ngan": 1e3, "k": 1e3}
+_BUDGET_DELTA = re.compile(r"\b(tang|cong|them|giam|bot|cat)\s*(?:them|bot|di|ngan sach|ns)?\s*(?:them\s*)?"
+                           r"(\d+(?:[.,]\d+)?)\s*(trieu|tr|cu|ty|ti|nghin|ngan|k)\b")
+
+
+def parse_budget_delta(text: str) -> float | None:
+    """Signed amount added to the PREVIOUS budget: "tăng thêm 5 triệu" (+5M),
+    "giảm bớt 2 triệu" (-2M). "tăng lên 15 triệu" / "giảm xuống 8 triệu" name
+    the new budget itself and are not deltas."""
+    m = _BUDGET_DELTA.search(text)
+    if not m:
+        return None
+    amount = _num(m.group(2)) * _MONEY_UNIT[m.group(3)]
+    return -amount if m.group(1) in ("giam", "bot", "cat") else amount
 
 
 def parse_budgets(text: str) -> list[float]:
     """Budget amounts in a normalized message. An amount that is a price
-    ("giá dưới 100 nghìn một bản") is a filter, never a budget."""
+    ("giá dưới 100 nghìn một bản") is a filter, never a budget.
+    A list that names its unit once ("5, 15 và 30 triệu") gives it to every
+    number in the list; "1,5 tỷ" (no space after the comma) is one number."""
+    text = _SHARED_UNIT.sub(lambda m: re.sub(r"(\d+(?:[.,]\d+)?)(?=\s*(?:,\s|\s(?:va|hoac)\s))",
+                                             rf"\1 {m.group(2)}", m.group(1)) + m.group(2), text)
     budgets: list[tuple[int, float]] = []
     for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*(ty|ti)\b", text):
         budgets.append((m.start(), _num(m.group(1)) * 1e9))
@@ -553,7 +579,12 @@ def parse_threshold_days(text: str) -> int | None:
 
 # ── warehouses ───────────────────────────────────────────────────────────────
 
-_DEICTIC_WAREHOUSE = _R(r"\bkho (nay|do|kia|ay|vua roi|tren)\b|\bhai kho\b|\b2 kho\b")
+# "nằm kho trên 90 ngày" is a duration, not "kho trên" (the warehouse above).
+_DEICTIC_WAREHOUSE = _R(r"\bkho (nay|do|kia|ay|vua roi|tren(?! \d))\b|\bhai kho\b|\b2 kho\b")
+_TWO_WAREHOUSES = _R(r"\b(hai|2) kho( nay| do| tren| vua roi| ay)?\b")
+_REMAINING_WAREHOUSE = _R(r"\b(kho|chi nhanh) con lai\b")
+# "Kho nào đáng lo hơn?" right after two warehouses were discussed compares those two.
+_WHICH_MORE = _R(r"\b(kho|chi nhanh) nao\b.*\bhon\b")
 _TITLE_DEMAND = _R(r"\b(nhu cau|luot muon|ton kho|xu huong|duoc muon|it muon|muon it|muon nhieu|it duoc muon|nhap them)\b")
 _TREND_QUESTION = _R(r"\b(tang hay giam|giam hay tang|co (dang )?(tang|giam)( khong| ko)?|dang (tang|giam) (khong|ko|ha))\b")
 _DEICTIC_BOOK = _R(r"\b(cuon|quyen|sach|dau sach|tua) (do|nay|kia|ay|vua roi|tren)\b")
@@ -611,7 +642,8 @@ def resolve_warehouses(text: str, warehouses: list[dict]) -> dict:
         covered.append((pos, pos + len(alias)))
         resolved.append((pos, w))
 
-    for m in re.finditer(r"\bkho ([a-z0-9]+(?: [a-z0-9]+)?)", text):
+    # Lookahead, so "tồn kho kho HCM" still sees "kho hcm" after "kho kho".
+    for m in re.finditer(r"\bkho (?=([a-z0-9]+(?: [a-z0-9]+)?))", text):
         if any(s <= m.start() < e for s, e in covered):
             continue
         hint_words = m.group(1).split()
@@ -624,7 +656,7 @@ def resolve_warehouses(text: str, warehouses: list[dict]) -> dict:
         if len(candidates) == 1:
             w = candidates[0]
             taken.add(w["id"])
-            covered.append((m.start(), m.end()))
+            covered.append((m.start(), m.end(1)))
             resolved.append((m.start(), w))
             others = [x for x in warehouses if x is not w and hint in _wh_norm(x.get("code", ""))]
             note = f"Đã hiểu \"kho {hint.upper() if len(hint) <= 3 else hint}\" là {w.get('name')}"
@@ -682,6 +714,13 @@ class QueryPlan:
     # the chart just shown, `mode`: "retype" / "render" / "explain" - those
     # reuse the previous turn's data snapshot instead of new tool calls.
     visualization: dict = field(default_factory=dict)
+    # Phase 1: the question split into business sub-questions (one per
+    # capability), each with the planned tool(s) that answer it - so a
+    # multi-part question is answered part by part (see decompose()).
+    sub_questions: list[dict] = field(default_factory=list)
+    # Phase 1: how the plan was made - rules only, or rules plus a validated
+    # semantic reading (copilot_semantic_planner); never model-chosen tools.
+    semantic: dict = field(default_factory=dict)
     normalized: str = ""
 
     def to_dict(self) -> dict:
@@ -722,6 +761,28 @@ def _warehouse_names(warehouses: list[dict]) -> str:
     return ", ".join(w.get("name") or w.get("code") or "?" for w in warehouses)
 
 
+def _still_visible(carried: list | None, warehouses: list[dict]) -> list[dict]:
+    """Warehouses from an earlier turn that this user can still see now (by id)."""
+    visible = {w.get("id") for w in warehouses}
+    return [w for w in carried or [] if isinstance(w, dict) and w.get("id") in visible]
+
+
+def _remaining_warehouses(previous: list[dict], focus: dict | None, warehouses: list[dict]) -> list[dict]:
+    """ "Kho còn lại": the compared warehouse that was not singled out, or the
+    only other visible warehouse. Anything else is ambiguous (several or none)."""
+    if focus and len(previous) >= 2:
+        return [w for w in previous if w.get("id") != focus.get("id")]
+    if len(previous) == 1:
+        return [w for w in warehouses if w.get("id") != previous[0].get("id")]
+    return []
+
+
+def _money(value: float) -> str:
+    if value >= 1e6 and value % 1e5 == 0:
+        return f"{value / 1e6:g} triệu".replace(".", ",")
+    return f"{int(value):,} ₫".replace(",", ".")
+
+
 def _book_title_in(text: str, original: str) -> str | None:
     """A book title quoted or named after "cuốn/quyển/sách" in the ORIGINAL
     message (accents kept, so catalog matching stays exact)."""
@@ -743,11 +804,27 @@ def _book_title_in(text: str, original: str) -> str | None:
     return None
 
 
-def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, now: datetime | None = None) -> QueryPlan:
+@dataclass
+class SemanticHint:
+    """A validated semantic reading of the question (copilot_semantic_planner):
+    registered capabilities, a registered analysis type, warehouses resolved
+    against the user's visible list, parsed periods. Only build_plan turns it
+    into tools and arguments."""
+    capabilities: list[str] = field(default_factory=list)
+    analysis: str | None = None
+    warehouses: list[dict] = field(default_factory=list)
+    periods: list[Period] = field(default_factory=list)
+    references_previous: bool = False
+
+
+def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, now: datetime | None = None,
+               hint: SemanticHint | None = None) -> QueryPlan:
     """The deterministic plan for one turn. `state` is the previous turn's
     conversation state (see next_state), `warehouses` the active warehouse list
     visible to this user (may be empty - then warehouse names stay unresolved
-    and the plan falls back to all-warehouse tools)."""
+    and the plan falls back to all-warehouse tools). `hint` (Phase 1) adds a
+    validated semantic reading on top of the rules - None keeps the purely
+    rule-based plan."""
     now = (now or datetime.now(VN_TZ)).astimezone(VN_TZ)
     today = now.date()
     state = state or {}
@@ -778,6 +855,23 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     book_title = _book_title_in(text, message)
     style = detect_style(text)
     viz = detect_visualization(text)
+    budget_delta = parse_budget_delta(text)
+    book_ref = _DEICTIC_BOOK.search(text)
+    if book_ref and detect_capabilities(text[:book_ref.start()]):
+        # "Nhập sách gì với 15 triệu, và những sách đó có được mượn nhiều không?":
+        # "đó" points back inside this question, not at the previous turn.
+        deictic_book = False
+    if hint is not None:
+        # Phase 1: a validated semantic reading (copilot_semantic_planner) adds
+        # what the keyword rules missed; it never replaces what they found in
+        # the user's own words. Entities only fill slots the rules left empty.
+        caps += [c for c in hint.capabilities if c not in caps]
+        if analysis == LOOKUP and hint.analysis:
+            analysis = hint.analysis
+        if not named_warehouses and hint.warehouses:
+            named_warehouses = list(hint.warehouses)
+        if not periods and hint.periods:
+            periods = list(hint.periods)
     # "Giải thích kỹ hơn", "nói ngắn gọn", "vì sao không chọn phương án khác":
     # a request about HOW to say the previous answer, not a new data question.
     no_new_scope = not caps and not periods and not named_warehouses and not budgets \
@@ -821,6 +915,10 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         # "So sánh các phương án 5, 10 và 20 triệu": comparing budget
         # scenarios is a what-if - no scenario may be called optimal.
         analysis = WHAT_IF
+    if len(budgets) >= 2 and WAREHOUSE_RISK in caps and not named_warehouses and not re.search(r"\bkho\b", text):
+        # "Mức nào giảm rủi ro thiếu sách nhất trong 5, 15, 30 triệu?": the risk of
+        # a budget scenario (simulate_reorder_budget ranks it), not the warehouse metric
+        caps.remove(WAREHOUSE_RISK)
     if named_warehouses and not caps and re.search(r"\b(kho|chi nhanh|chuyen sach|ton)\b", text):
         # "Có nên chuyển sách từ kho A sang kho B?" names warehouses but no metric.
         # A bare city ("Thời tiết Hà Nội") is not a warehouse question.
@@ -840,9 +938,19 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
                                   and bool(budget_pct is not None or lead_time_delay or keep_service or least_risk))
     referential = deictic_warehouse or deictic_book or deictic_generic or bool(ordinal_book) or "trong so do" in text
     bare_why = text.strip(" ?") in ("tai sao", "vi sao", "ly do", "tai sao vay", "vi sao vay", "sao vay")
+    # Warehouses carried from earlier turns must still be visible to this user
+    # NOW (scope may have been revoked since): the previous state is a pointer,
+    # never a permission.
+    prev_whs = _still_visible(state.get("warehouses"), warehouses)
+    recent_whs = _still_visible(state.get("recent_warehouses") or state.get("warehouses"), warehouses)
+    two_back = not named_warehouses and bool(_TWO_WAREHOUSES.search(text)) and len(recent_whs) >= 2
+    remaining = not named_warehouses and bool(_REMAINING_WAREHOUSE.search(text))
+    which_more = not named_warehouses and bool(_WHICH_MORE.search(text)) and len(prev_whs) >= 2 \
+        and set(caps) <= WAREHOUSE_AWARE
     is_followup = has_state and (looks_followup or entity_only or referential or bare_why or style_only or viz_only
                                  or (not caps and analysis in (CAUSAL, COMPARISON, WHAT_IF, DECISION))
-                                 or (least_risk and not caps))
+                                 or (least_risk and not caps) or two_back or remaining or which_more
+                                 or bool(hint and hint.references_previous))
     plan.is_followup = is_followup
     restyle = style_only and is_followup
     prev_viz = state.get("viz") or {}
@@ -853,7 +961,7 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         caps = list(state.get("capabilities") or [])
         if state.get("analysis") not in (None, CLARIFICATION, "out_of_scope"):
             analysis = state["analysis"]
-        named_warehouses = list(state.get("warehouses") or [])
+        named_warehouses = prev_whs
         periods = [Period(**p) for p in (state.get("time_range"), state.get("comparison_period")) if p]
         budgets = list(state.get("budgets") or [])
         priority = state.get("priority")
@@ -869,7 +977,17 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         if analysis == LOOKUP and state.get("analysis") in (DECISION, WHAT_IF, RANKING) and (budgets or limit):
             analysis = state["analysis"]
     if is_followup and REORDER in caps and REORDER in (state.get("capabilities") or []):
-        if budgets and state.get("budgets") and not budget_pct:
+        if budget_delta is not None and state.get("budgets") and not budget_pct \
+                and state["budgets"][0] + budget_delta > 0:
+            # "Nếu tăng thêm 5 triệu?" is the previous budget plus 5 million, not a
+            # new 5-million scenario ("tăng lên 15 triệu" names the new budget itself).
+            base = state["budgets"][0]
+            budgets = [round(base + budget_delta)]
+            carried.append("budget_vnd(phương án trước)")
+            assumptions.append(f"Hiểu “{'tăng' if budget_delta > 0 else 'giảm'} {_money(abs(budget_delta))}” là "
+                               f"ngân sách mới = {_money(base)} {'+' if budget_delta > 0 else '−'} "
+                               f"{_money(abs(budget_delta))} = {_money(budgets[0])}")
+        elif budgets and state.get("budgets") and not budget_pct:
             budgets = budgets + [b for b in state["budgets"] if b not in budgets][:1]
             carried.append("budget_vnd(phương án trước)")
         elif not budgets and state.get("budgets") and not least_risk and (
@@ -887,11 +1005,32 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
 
     if is_followup and analysis == LOOKUP and state.get("analysis") in (DECISION, WHAT_IF) and (budgets or limit):
         analysis = WHAT_IF if budgets else state["analysis"]
+    remaining_unresolved: list[dict] = []
+    if is_followup and not named_warehouses:
+        if two_back:
+            # "So sánh hai kho này": the last two warehouses discussed, even when
+            # the previous turn was about only one of them.
+            named_warehouses = recent_whs[:2]
+            carried.append("warehouses(2 kho vừa nhắc)")
+        elif remaining:
+            rest = _remaining_warehouses(prev_whs, state.get("focus_warehouse"), warehouses)
+            if len(rest) == 1:
+                named_warehouses = rest
+                carried.append("warehouses(kho còn lại)")
+                assumptions.append(f"Hiểu “kho còn lại” là {rest[0].get('name')}")
+            else:
+                remaining_unresolved = rest or [w for w in warehouses if w not in prev_whs]
+        elif which_more:
+            # "Kho nào đáng lo hơn?" right after comparing two warehouses: between those two.
+            named_warehouses = prev_whs
+            carried.append("warehouses")
+            if analysis in (LOOKUP, RANKING):
+                analysis = COMPARISON
     if is_followup and (set(caps) & WAREHOUSE_AWARE or (REORDER in caps and deictic_warehouse)):
-        if not named_warehouses and state.get("warehouses") and (deictic_warehouse or bare_why or entity_only
-                                                                 or analysis in (CAUSAL, COMPARISON)
-                                                                 or not set(caps) - WAREHOUSE_AWARE - {REORDER}):
-            named_warehouses = list(state["warehouses"])
+        if not named_warehouses and prev_whs and not remaining and (deictic_warehouse or bare_why or entity_only
+                                                  or analysis in (CAUSAL, COMPARISON)
+                                                  or not set(caps) - WAREHOUSE_AWARE - {REORDER}):
+            named_warehouses = prev_whs
             carried.append("warehouses")
 
     if is_followup and set(caps) & TIME_AWARE:
@@ -926,6 +1065,11 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         question = (f"Có nhiều kho khớp với tên bạn nêu: {_warehouse_names(wh['ambiguous'])}. "
                     "Bạn muốn xem kho nào?")
         options = [w["name"] for w in wh["ambiguous"]]
+    elif remaining and not named_warehouses:
+        question = "Bạn muốn xem kho nào trong số các kho còn lại?"
+        if remaining_unresolved:
+            question += f" Các kho: {_warehouse_names(remaining_unresolved[:6])}."
+            options = [f"{w['name']} thì sao?" for w in remaining_unresolved[:4]]
     elif deictic_warehouse and not named_warehouses:
         if "hai kho" in text or "2 kho" in text:
             question = "Bạn muốn so sánh hai kho nào?"
@@ -1140,6 +1284,9 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
                   if isinstance(c, dict) and c.get("name") in PLANNABLE_TOOLS]
         if replay:
             tools = replay
+    # A bounded turn: however many sub-questions, at most this many tool calls
+    # (they run concurrently and none of them feeds back into planning).
+    tools = tools[:MAX_PLANNED_TOOLS]
 
     if sensitive:
         # Phone numbers, home addresses, credentials: no tool returns them and
@@ -1196,7 +1343,64 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     plan.required_tools = tools
     plan.carried_over = carried
     plan.assumptions = assumptions
+    plan.sub_questions = decompose(caps, tools, named_warehouses, current, comparison)
     return plan
+
+
+# ── multi-intent decomposition ───────────────────────────────────────────────
+
+MAX_PLANNED_TOOLS = 6
+
+# What each planned tool answers (a composite tool answers several parts).
+TOOL_CAPABILITIES: dict[str, set[str]] = {
+    "get_dashboard_kpis": {KPI}, "get_borrow_trends": {BORROW_TREND}, "compare_borrow_periods": {BORROW_TREND},
+    "get_top_books": {TOP_BORROWED}, "compare_top_books": {TOP_BORROWED}, "get_overdue_summary": {OVERDUE},
+    "get_fine_summary": {FINES}, "get_reservation_funnel": {RESERVATION},
+    "get_warehouse_stock_risk": {WAREHOUSE_RISK, LOW_STOCK_ITEMS}, "compare_warehouses": {WAREHOUSE_RISK},
+    "get_warehouse_low_stock_items": {LOW_STOCK_ITEMS, WAREHOUSE_RISK},
+    "explain_warehouse_shortage": {WAREHOUSE_RISK, LOW_STOCK_ITEMS},
+    "get_reorder_suggestions": {REORDER}, "simulate_reorder_budget": {REORDER}, "explain_reorder_item": {REORDER},
+    "analyze_demand_vs_stock": {TOP_BORROWED, WAREHOUSE_RISK, LOW_STOCK_ITEMS, REORDER},
+    "get_aging_inventory": {AGING}, "get_weeding_suggestions": {WEEDING}, "search_books": {BOOK_SEARCH},
+    "rank_priority_tasks": {PRIORITY},
+}
+_CAP_GOAL = {
+    KPI: "Tổng quan các chỉ số chính", BORROW_TREND: "Lượt mượn theo thời gian (tăng hay giảm)",
+    TOP_BORROWED: "Sách được mượn nhiều nhất", OVERDUE: "Tình hình phiếu quá hạn", FINES: "Tiền phạt",
+    RESERVATION: "Đặt chỗ / giữ sách", WAREHOUSE_RISK: "Tồn kho thấp, rủi ro thiếu sách",
+    LOW_STOCK_ITEMS: "Đầu sách dưới ngưỡng tồn", REORDER: "Đề xuất nhập (số lượng, chi phí)",
+    AGING: "Sách tồn lâu, ít được mượn", WEEDING: "Đề xuất thanh lý / điều chuyển", BOOK_SEARCH: "Tìm sách trong danh mục",
+    PRIORITY: "Việc cần ưu tiên xử lý",
+}
+# (part, the part it builds on): "sắp hết" / "cần nhập bao nhiêu" asked about
+# the most-borrowed books are answered for THOSE books.
+_BUILDS_ON = {(WAREHOUSE_RISK, TOP_BORROWED), (LOW_STOCK_ITEMS, TOP_BORROWED), (REORDER, TOP_BORROWED),
+              (REORDER, WAREHOUSE_RISK), (REORDER, LOW_STOCK_ITEMS), (WEEDING, AGING)}
+
+
+def decompose(caps: list[str], tools: list[dict], warehouses: list[dict], current: Period | None,
+              comparison: Period | None) -> list[dict]:
+    """One sub-question per capability, in the order asked, with the planned
+    tool(s) that answer it, the data it builds on and whether it can be
+    answered. Built from the plan, never from model output; tools are already
+    deduplicated (a composite tool appears once and answers several parts)."""
+    parts: list[dict] = []
+    for cap in caps:
+        if cap == LOW_STOCK_ITEMS and WAREHOUSE_RISK in caps:
+            continue
+        answered_by = [t["name"] for t in tools if cap in TOOL_CAPABILITIES.get(t["name"], set())]
+        part = {"id": len(parts) + 1, "goal": _CAP_GOAL.get(cap, cap), "capability": cap, "tools": answered_by,
+                "status": "planned" if answered_by else "unsupported"}
+        if cap in WAREHOUSE_AWARE and warehouses:
+            part["warehouses"] = [w.get("name") for w in warehouses]
+        if cap in TIME_AWARE and current:
+            part["period"] = current.label + (f" so với {comparison.label}" if comparison else "")
+        if cap == BORROW_TREND and warehouses:
+            part["status"] = "partial"
+            part["note"] = "Số liệu mượn là toàn hệ thống, chưa tách theo kho/chi nhánh."
+        part["depends_on"] = [p["id"] for p in parts if (cap, p["capability"]) in _BUILDS_ON]
+        parts.append(part)
+    return parts
 
 
 # ── conversation state ───────────────────────────────────────────────────────
@@ -1249,11 +1453,27 @@ def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = No
         if last_items:
             break
     caps = plan.capabilities or previous.get("capabilities") or []
+    warehouses = plan.entities.get("warehouses") or previous.get("warehouses") or []
+    # Most recent first, distinct: "so sánh hai kho này" after two single-warehouse turns.
+    recent: list[dict] = []
+    for w in list(plan.entities.get("warehouses") or []) + list(previous.get("recent_warehouses") or []):
+        if isinstance(w, dict) and w.get("id") and all(w["id"] != r["id"] for r in recent):
+            recent.append(w)
+    # The warehouse the comparison singled out ("kho nào đáng lo hơn" -> X), so
+    # "kho còn lại" can mean the other one; kept only while the same warehouses
+    # stay in focus.
+    compared = collected_data.get("compare_warehouses")
+    riskier = ((compared.get("comparison") or {}).get("riskier") if isinstance(compared, dict) else None)
+    focus = next((w for w in warehouses if riskier and w.get("name") == riskier), None)
+    if focus is None and warehouses == previous.get("warehouses"):
+        focus = previous.get("focus_warehouse")
     return {
         "capabilities": caps,
         "intent": plan.intent,
         "analysis": plan.requested_analysis,
-        "warehouses": plan.entities.get("warehouses") or previous.get("warehouses") or [],
+        "warehouses": warehouses,
+        "recent_warehouses": recent[:4],
+        "focus_warehouse": focus,
         "time_range": plan.time_range or (previous.get("time_range") if set(caps) & TIME_AWARE else None),
         "comparison_period": plan.comparison_period,
         # a turn that only re-ranked the previous scenarios keeps their budgets

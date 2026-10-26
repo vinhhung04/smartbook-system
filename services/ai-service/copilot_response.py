@@ -242,9 +242,36 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
                      + ". Chỉ phần người dùng vừa đổi là khác.")
     for note in plan.assumptions:
         lines.append(f"- Giả định đã áp dụng: {note}. Nêu giả định này trong câu trả lời.")
+    parts = getattr(plan, "sub_questions", None) or []
+    if len(parts) >= 2:
+        lines.append("- Câu hỏi gồm " + str(len(parts)) + " ý; trả lời đủ từng ý, theo thứ tự: "
+                     + "; ".join(f"({p['id']}) {p['goal']}" + (" [hệ thống chưa có dữ liệu cho ý này]"
+                                                                if p.get("status") == "unsupported" else "")
+                                 for p in parts)
+                     + ". Ý nào không có dữ liệu thì nói rõ là chưa trả lời được, không suy đoán.")
     if plan.required_tools:
         lines.append("- Dữ liệu cần thiết đã được truy xuất sẵn ở các kết quả tool bên dưới; chỉ gọi thêm tool nếu thật sự thiếu.")
     return "\n".join(lines)
+
+
+def coverage_note(plan, collected: dict) -> str:
+    """Partial results of a multi-part question: the parts whose every planned
+    tool failed (or that no tool covers). The answer must say these parts are
+    unanswered instead of filling them in."""
+    missing = []
+    for p in getattr(plan, "sub_questions", None) or []:
+        results = [collected.get(t) for t in p.get("tools") or []]
+        failed = not results or all(not isinstance(r, (dict, list)) or (isinstance(r, dict) and r.get("error"))
+                                    for r in results)
+        if failed:
+            missing.append(f"- ({p['id']}) {p['goal']}: " + ("hệ thống chưa hỗ trợ" if not p.get("tools")
+                                                           else "không truy xuất được dữ liệu"))
+        elif p.get("note"):
+            missing.append(f"- ({p['id']}) {p['goal']}: {p['note']}")
+    if not missing or len(getattr(plan, "sub_questions", None) or []) < 2:
+        return ""
+    return ("## Phần chưa trả lời được bằng dữ liệu\n" + "\n".join(missing)
+            + "\nTrả lời các ý còn lại bằng dữ liệu đã có và nói rõ những phần trên chưa có căn cứ.")
 
 
 # ── prompt rendering of tool results ─────────────────────────────────────────
