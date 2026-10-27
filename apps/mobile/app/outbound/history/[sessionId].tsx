@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 
+import { useAuth } from '../../../src/auth/auth-context';
 import { getSessionById, successCount, SESSION_SCAN_CAP, type OutboundSession } from '../../../src/lib/outboundSession';
 import { colors, radius, spacing, typography } from '../../../src/theme/tokens';
 
@@ -11,6 +12,8 @@ function formatDateTime(iso: string): string {
 
 export default function OutboundSessionHistoryScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
+  const { user } = useAuth();
+  const userId = user?.id ?? 'anonymous';
   const [session, setSession] = useState<OutboundSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,16 +21,18 @@ export default function OutboundSessionHistoryScreen() {
     useCallback(() => {
       let cancelled = false;
       setIsLoading(true);
-      getSessionById(sessionId).then((data) => {
-        if (!cancelled) {
-          setSession(data);
-          setIsLoading(false);
-        }
-      });
+      getSessionById(userId, sessionId)
+        .then((data) => {
+          if (!cancelled) setSession(data);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
       return () => {
         cancelled = true;
       };
-    }, [sessionId]),
+    }, [userId, sessionId]),
   );
 
   if (isLoading) {
@@ -53,7 +58,9 @@ export default function OutboundSessionHistoryScreen() {
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>
             Bắt đầu {formatDateTime(session.started_at)}
-            {session.ended_at ? ` · Kết thúc ${formatDateTime(session.ended_at)}` : ' · Đang thực hiện'}
+            {session.ended_at
+              ? ` · ${session.interrupted ? 'Gián đoạn' : 'Kết thúc'} ${formatDateTime(session.ended_at)}`
+              : ' · Đang thực hiện'}
           </Text>
           <Text style={styles.summarySubtitle}>
             {successCount(session)}/{SESSION_SCAN_CAP} kiện thành công · {session.attempts.length} lượt quét

@@ -465,3 +465,29 @@ test('receipt-scoped transfer validates the receipt: unknown, other warehouse, n
 test.after(() => {
   delete require.cache[prismaClientPath];
 });
+
+test('transfer re-sent with the same idempotency_key is answered as already applied, not moved twice', async () => {
+  const controller = withFreshController(null, null, { stubCache: true });
+  const body = {
+    warehouse_id: 'wh-1',
+    source_receiving_location_id: 'loc-recv',
+    variant_id: 'variant-x',
+    idempotency_key: 'm-putaway-abc123',
+    allocations: [{ target_location_id: 'compartment-1', quantity: 5, reason: 'mobile putaway' }],
+  };
+
+  const first = createFakeRes();
+  await controller.transferReceivingToShelf({ body, user: { id: 'user-1' } }, first);
+  assert.equal(first.statusCode, 201, JSON.stringify(first.body));
+
+  const replay = createFakeRes();
+  await controller.transferReceivingToShelf({ body, user: { id: 'user-1' } }, replay);
+  assert.equal(replay.statusCode, 200, JSON.stringify(replay.body));
+  assert.equal(replay.body.data.idempotent, true);
+  assert.equal(replay.body.data.moved_quantity, 5);
+
+  // A different key is a new putaway and moves stock again.
+  const next = createFakeRes();
+  await controller.transferReceivingToShelf({ body: { ...body, idempotency_key: 'm-putaway-def456' }, user: { id: 'user-1' } }, next);
+  assert.equal(next.statusCode, 201, JSON.stringify(next.body));
+});

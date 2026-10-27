@@ -31,6 +31,8 @@ export type PutawayReceiptDetail = {
   id: string;
   receipt_number: string;
   warehouse_id: string;
+  /** Present on inventory-service builds that expose the assignee on the detail endpoint. */
+  putaway_assignee_user_id?: string | null;
   warehouse_code: string | null;
   warehouse_name: string | null;
   status: string;

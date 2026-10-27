@@ -6,6 +6,7 @@ import { MotiView } from 'moti';
 
 import * as coverSearchApi from '../../src/api/coverSearch';
 import type { CoverSearchCandidate } from '../../src/api/coverSearch';
+import { isAbortError } from '../../src/api/client';
 import { ApiError } from '../../src/auth/auth-context';
 import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
 import { PosterCard } from '../../src/components/customer/PosterCard';
@@ -17,12 +18,9 @@ function confidenceTone(confidence: number) {
   return colors.neutral;
 }
 
-// Visual matching (CLIP) is fast in practice (~2s/image against the real
-// gallery) — this timer just gives that checklist row a legible "done"
-// moment. OCR (OpenRouter vision) has no progress signal from the server,
-// so its row stays "in progress" until the actual response arrives — never
-// faked past that point.
-const VISUAL_STEP_MS = 3000;
+// The server runs visual matching and OCR in parallel and answers once, with no
+// progress signal — so both rows stay "in progress" until that answer arrives.
+// Neither is ever shown as done on a timer.
 const SLOW_HINT_AFTER_MS = 12000;
 const SCAN_PREVIEW_HEIGHT = 220;
 
@@ -57,6 +55,17 @@ function ScanSweep({ reducedMotion }: { reducedMotion: boolean }) {
   );
 }
 
+function describeSearchError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.kind === 'timeout') return 'Hệ thống nhận diện phản hồi quá lâu. Bạn có thể thử lại hoặc chụp ảnh khác.';
+    if (err.kind === 'network') return 'Mất kết nối mạng khi gửi ảnh. Kiểm tra Internet rồi thử lại.';
+    if (err.status === 429) return 'Bạn đã tìm quá nhiều lần trong thời gian ngắn. Vui lòng đợi một lát rồi thử lại.';
+    if (err.status >= 500) return 'Dịch vụ nhận diện ảnh đang tạm thời gián đoạn. Vui lòng thử lại sau.';
+    return err.message;
+  }
+  return 'Không thể tìm sách từ ảnh này';
+}
+
 export default function CustomerScanCoverScreen() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -65,11 +74,13 @@ export default function CustomerScanCoverScreen() {
   const [searched, setSearched] = useState(false);
   const [candidates, setCandidates] = useState<CoverSearchCandidate[]>([]);
   const [ocrTitle, setOcrTitle] = useState<string | null>(null);
-  const [visualStepDone, setVisualStepDone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
-  const visualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Each search gets an id + AbortController: retaking the photo or leaving the screen
+  // cancels the old request, and a late answer for an old id is ignored.
+  const requestRef = useRef<{ id: number; controller: AbortController | null }>({ id: 0, controller: null });
+  const lastPhotoRef = useRef<string | null>(null);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled?.().then(setReducedMotion).catch(() => {});
@@ -78,35 +89,66 @@ export default function CustomerScanCoverScreen() {
   }, []);
 
   const clearTimers = useCallback(() => {
-    if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
     if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = null;
   }, []);
 
-  useEffect(() => clearTimers, [clearTimers]);
+  useEffect(
+    () => () => {
+      clearTimers();
+      requestRef.current.controller?.abort();
+    },
+    [clearTimers],
+  );
 
   async function handleCaptured(photoDataUrl: string) {
     setCameraOpen(false);
+    lastPhotoRef.current = photoDataUrl;
+    requestRef.current.controller?.abort();
+    const controller = new AbortController();
+    const requestId = requestRef.current.id + 1;
+    requestRef.current = { id: requestId, controller };
+    const isCurrent = () => requestRef.current.id === requestId;
+
     setPhotoPreview(photoDataUrl);
     setIsSearching(true);
     setError(null);
-    setVisualStepDone(false);
     setElapsedMs(0);
     clearTimers();
     const startedAt = Date.now();
-    visualTimerRef.current = setTimeout(() => setVisualStepDone(true), VISUAL_STEP_MS);
     elapsedTimerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
 
     try {
-      const result = await coverSearchApi.findBookByCover(photoDataUrl);
+      const result = await coverSearchApi.findBookByCover(photoDataUrl, controller.signal);
+      if (!isCurrent()) return;
       setCandidates(result.candidates);
       setOcrTitle(result.signals.ocr_extracted?.title ?? null);
       setSearched(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Không thể tìm sách từ ảnh này');
+      if (!isCurrent() || isAbortError(err)) return;
+      setCandidates([]);
+      setSearched(true);
+      setError(describeSearchError(err));
     } finally {
-      clearTimers();
-      setIsSearching(false);
+      if (isCurrent()) {
+        clearTimers();
+        setIsSearching(false);
+        requestRef.current.controller = null;
+      }
     }
+  }
+
+  function handleCancel() {
+    requestRef.current.controller?.abort();
+    requestRef.current = { id: requestRef.current.id + 1, controller: null };
+    clearTimers();
+    setIsSearching(false);
+    setSearched(false);
+    setError(null);
+  }
+
+  function handleRetry() {
+    if (lastPhotoRef.current) void handleCaptured(lastPhotoRef.current);
   }
 
   const showEmptyHero = !isSearching && !searched && !error;
@@ -142,13 +184,16 @@ export default function CustomerScanCoverScreen() {
             </View>
 
             <View style={styles.checklist}>
-              <ChecklistRow label="So khớp hình ảnh bìa" done={visualStepDone} />
+              <ChecklistRow label="So khớp hình ảnh bìa" done={false} />
               <ChecklistRow
                 label="Đọc chữ trên bìa sách"
                 done={false}
                 hint={elapsedMs >= SLOW_HINT_AFTER_MS ? 'có thể mất đến 1–2 phút' : undefined}
               />
             </View>
+            <Pressable style={styles.cancelButton} onPress={handleCancel} accessibilityRole="button">
+              <Text style={styles.retakeText}>Hủy tìm kiếm</Text>
+            </Pressable>
           </View>
         ) : (
           <>
@@ -166,7 +211,14 @@ export default function CustomerScanCoverScreen() {
               </View>
             </View>
 
-            {error && <Text style={styles.error}>{error}</Text>}
+            {error && (
+              <View style={styles.errorBox}>
+                <Text style={styles.error}>{error}</Text>
+                <Pressable style={styles.cancelButton} onPress={handleRetry} accessibilityRole="button">
+                  <Text style={styles.retakeText}>Thử lại với ảnh này</Text>
+                </Pressable>
+              </View>
+            )}
 
             {!error && (
               <FlatList
@@ -345,6 +397,17 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary,
     fontFamily: typography.bodyBold.fontFamily,
+  },
+  errorBox: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.lg,
+  },
+  cancelButton: {
+    alignSelf: 'center',
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
   },
   list: {
     gap: spacing.md,

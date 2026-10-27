@@ -23,6 +23,50 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// ?scope=active|history lets the app page "what I have now" and "what I had" separately
+// instead of mixing both into one capped list. An explicit ?status still wins.
+const RESERVATION_SCOPES = {
+  active: ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'],
+  history: ['CANCELLED', 'EXPIRED', 'CONVERTED_TO_LOAN'],
+};
+const LOAN_SCOPES = {
+  active: ['RESERVED', 'BORROWED', 'OVERDUE'],
+  history: ['RETURNED', 'LOST', 'CANCELLED', 'DAMAGED'],
+};
+
+function statusFilter(query, scopes) {
+  const status = String(query?.status || '').trim();
+  if (status) return { status };
+  const scope = scopes[String(query?.scope || '').trim().toLowerCase()];
+  return scope ? { status: { in: scope } } : {};
+}
+
+// Renewal requests are customer_notifications rows (template LOAN_RENEWAL_REQUEST,
+// reference_id = loan id) that stay PENDING until staff review them (loan.controller
+// reviewLoanRenewal) — expose that state so the app can say "đang chờ duyệt".
+async function loadRenewalState(customerId, loanIds) {
+  const state = new Map();
+  if (loanIds.length === 0) return state;
+  const requests = await prisma.customer_notifications.findMany({
+    where: { customer_id: customerId, template_code: 'LOAN_RENEWAL_REQUEST', reference_id: { in: loanIds } },
+    orderBy: [{ scheduled_at: 'desc' }],
+    select: { reference_id: true, status: true, scheduled_at: true, metadata: true },
+  });
+  for (const request of requests) {
+    const current = state.get(request.reference_id) || { pending: false, requested_at: null, request_count: 0, last_decision: null };
+    current.request_count += 1;
+    if (!current.requested_at) {
+      current.requested_at = request.scheduled_at;
+      current.last_decision = request.metadata?.review_decision || null;
+    }
+    if (request.status === 'PENDING') current.pending = true;
+    state.set(request.reference_id, current);
+  }
+  return state;
+}
+
+const EMPTY_RENEWAL = { pending: false, requested_at: null, request_count: 0, last_decision: null };
+
 async function getMyReservations(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
@@ -31,11 +75,10 @@ async function getMyReservations(req, res) {
     }
 
     const pagination = parsePagination(req.query);
-    const status = String(req.query?.status || '').trim();
 
     const where = {
       customer_id: customer.id,
-      ...(status ? { status } : {}),
+      ...statusFilter(req.query, RESERVATION_SCOPES),
     };
 
     const [items, total] = await Promise.all([
@@ -78,6 +121,51 @@ async function getMyReservations(req, res) {
     });
   } catch (error) {
     console.error('getMyReservations error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+// GET /my/reservations/:id — one reservation of the signed-in reader, however old
+// (the list is paged, so "find it in page 1" missed older tickets).
+async function getMyReservationById(req, res) {
+  try {
+    const customer = await ensureCurrentCustomer(req);
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer profile not found' });
+    }
+
+    const reservationId = String(req.params.id || '').trim();
+    if (!parseUuid(reservationId)) {
+      return res.status(400).json({ message: 'Invalid reservation id' });
+    }
+
+    const reservation = await prisma.loan_reservations.findUnique({ where: { id: reservationId } });
+    if (!reservation || reservation.customer_id !== customer.id) {
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    let variant = null;
+    try {
+      const variants = await getVariantDetails({
+        variantIds: [reservation.variant_id],
+        authHeader: req.headers.authorization,
+        requestId: req.requestId,
+      });
+      variant = variants.find((v) => v.id === reservation.variant_id) || null;
+    } catch (enrichError) {
+      console.error('getMyReservationById: failed to enrich book title:', enrichError);
+    }
+
+    return res.json({
+      data: {
+        ...reservation,
+        book_title: variant?.title || null,
+        book_author: variant?.author || null,
+        book_cover_url: variant?.cover_image_url || null,
+      },
+    });
+  } catch (error) {
+    console.error('getMyReservationById error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -137,11 +225,10 @@ async function getMyLoans(req, res) {
     }
 
     const pagination = parsePagination(req.query);
-    const status = String(req.query?.status || '').trim();
 
     const where = {
       customer_id: customer.id,
-      ...(status ? { status } : {}),
+      ...statusFilter(req.query, LOAN_SCOPES),
     };
 
     const [items, total] = await Promise.all([
@@ -164,17 +251,22 @@ async function getMyLoans(req, res) {
       console.error('getMyLoans: failed to enrich book titles:', enrichError);
     }
 
+    const renewalByLoan = await loadRenewalState(customer.id, items.map((loan) => loan.id));
+
     const enrichedItems = items.map((loan) => {
       const enrichedLoanItems = loan.loan_items.map((li) => ({
         ...li,
         book_title: variantById.get(li.variant_id)?.title || null,
+        book_author: variantById.get(li.variant_id)?.author || null,
         book_cover_url: variantById.get(li.variant_id)?.cover_image_url || null,
       }));
       return {
         ...loan,
         loan_items: enrichedLoanItems,
         primary_book_title: enrichedLoanItems[0]?.book_title || null,
+        primary_book_cover_url: enrichedLoanItems[0]?.book_cover_url || null,
         extra_item_count: Math.max(0, enrichedLoanItems.length - 1),
+        renewal: renewalByLoan.get(loan.id) || EMPTY_RENEWAL,
       };
     });
 
@@ -223,13 +315,16 @@ async function getMyLoanById(req, res) {
       console.error('getMyLoanById: failed to enrich book titles:', enrichError);
     }
 
+    const renewalByLoan = await loadRenewalState(customer.id, [loan.id]);
     const enrichedLoan = {
       ...loan,
       loan_items: loan.loan_items.map((li) => ({
         ...li,
         book_title: variantById.get(li.variant_id)?.title || null,
+        book_author: variantById.get(li.variant_id)?.author || null,
         book_cover_url: variantById.get(li.variant_id)?.cover_image_url || null,
       })),
+      renewal: renewalByLoan.get(loan.id) || EMPTY_RENEWAL,
     };
 
     return res.json({ data: enrichedLoan });
@@ -263,6 +358,25 @@ async function requestMyLoanRenewal(req, res) {
     const membershipInfo = await resolveActiveMembership(prisma, customer.id);
     if (!membershipInfo) {
       return res.status(409).json({ message: 'Customer does not have active membership' });
+    }
+
+    const pendingRequest = await prisma.customer_notifications.findFirst({
+      where: {
+        customer_id: customer.id,
+        template_code: 'LOAN_RENEWAL_REQUEST',
+        reference_id: loan.id,
+        status: 'PENDING',
+      },
+      select: { id: true, scheduled_at: true },
+    });
+    if (pendingRequest) {
+      // A second tap (or a retried request) must not file another request — and use up
+      // another of the membership's renewals — while the first is still under review.
+      return res.status(409).json({
+        message: 'Đã có yêu cầu gia hạn đang chờ thư viện duyệt',
+        code: 'RENEWAL_PENDING',
+        detail: { requested_at: pendingRequest.scheduled_at },
+      });
     }
 
     const existingRequests = await prisma.customer_notifications.count({
@@ -339,16 +453,38 @@ async function getMyFines(req, res) {
         fine_payments: {
           orderBy: [{ paid_at: 'desc' }],
         },
+        fine_payment_intents: {
+          where: { status: { in: ['PENDING', 'PROCESSING'] }, expires_at: { gt: new Date() } },
+          orderBy: [{ created_at: 'desc' }],
+          take: 1,
+          select: { txn_ref: true, status: true, amount: true, expires_at: true },
+        },
       },
     });
 
-    const finePayments = fines.flatMap((fine) => fine.fine_payments);
+    // Money fields are Prisma Decimals (JSON strings). The remaining balance is computed
+    // here, the same way createVnpayFinePayment does, so clients never add strings.
+    const withBalances = fines.map(({ fine_payment_intents: intents, ...fine }) => {
+      const paid = fine.fine_payments.reduce((sum, payment) => sum + toNumber(payment.amount), 0);
+      const due = Math.max(0, toNumber(fine.amount) - toNumber(fine.waived_amount));
+      const pending = intents[0] || null;
+      return {
+        ...fine,
+        paid_amount: Number(paid.toFixed(2)),
+        remaining_amount: Number(Math.max(0, due - paid).toFixed(2)),
+        pending_payment: pending
+          ? { txn_ref: pending.txn_ref, status: pending.status, amount: toNumber(pending.amount), expires_at: pending.expires_at }
+          : null,
+      };
+    });
+
+    const finePayments = withBalances.flatMap((fine) => fine.fine_payments);
 
     return res.json({
       data: {
         customer_id: customer.id,
         total_fine_balance: toNumber(customer.total_fine_balance),
-        fines,
+        fines: withBalances,
         fine_payments: finePayments,
       },
     });
@@ -636,6 +772,7 @@ async function getMyAccountLedger(req, res) {
 
 module.exports = {
   getMyReservations,
+  getMyReservationById,
   createMyReservation,
   cancelMyReservation,
   getMyLoans,

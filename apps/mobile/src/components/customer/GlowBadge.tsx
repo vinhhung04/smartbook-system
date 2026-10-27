@@ -1,5 +1,6 @@
 import { StyleSheet, Text } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { colors, fonts, radius, spacing } from '../../theme/customerTokens';
 
@@ -34,12 +35,13 @@ type Props = {
 export function GlowBadge({ text, tone = 'primary' }: Props) {
   const color = TONE_COLOR[tone];
   const soft = TONE_SOFT[tone];
+  const reducedMotion = useReducedMotion();
 
   return (
     <MotiView
-      from={{ opacity: 0, scale: 0.8 }}
+      from={reducedMotion ? undefined : { opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: 'spring', damping: 14, mass: 0.6 }}
+      transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', damping: 14, mass: 0.6 }}
       style={[
         styles.badge,
         {

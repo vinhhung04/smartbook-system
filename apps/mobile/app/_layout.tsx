@@ -3,6 +3,7 @@ import 'react-native-gesture-handler';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts as useSora, Sora_600SemiBold, Sora_700Bold } from '@expo-google-fonts/sora';
 import {
@@ -18,7 +19,9 @@ import {
 } from '@expo-google-fonts/roboto-mono';
 
 import { AuthProvider, useAuth } from '../src/auth/auth-context';
+import { resolveAppArea } from '../src/auth/access';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
+import { OfflineBanner } from '../src/components/OfflineBanner';
 import { colors } from '../src/theme/tokens';
 import { colors as loginColors } from '../src/theme/loginTokens';
 
@@ -29,20 +32,31 @@ function RootNavigation() {
 
   useEffect(() => {
     if (isLoading) return;
-    const onLoginScreen = segments[0] === 'login';
-    const isCustomer = user?.roles.includes('CUSTOMER') ?? false;
-    const inCustomerArea = segments[0] === 'customer';
+    const top = segments[0] as string | undefined;
+    const onLoginScreen = top === 'login';
 
-    if (!user && !onLoginScreen) {
-      router.replace('/login');
-    } else if (user && onLoginScreen) {
-      router.replace(isCustomer ? '/customer' : '/');
-    } else if (user && isCustomer && !inCustomerArea) {
+    if (!user) {
+      if (!onLoginScreen) router.replace('/login');
+      return;
+    }
+
+    // Area comes from real roles/permissions (auth/access.ts), not "CUSTOMER vs anyone
+    // else": a supplier account used to land on the staff dashboard where every call 403s.
+    const area = resolveAppArea(user);
+    const home = area === 'customer' ? '/customer' : area === 'staff' ? '/' : '/unsupported';
+    const inCustomerArea = top === 'customer';
+    const onUnsupported = top === 'unsupported';
+
+    if (onLoginScreen) {
+      router.replace(home);
+    } else if (area === 'customer' && !inCustomerArea) {
       // Warehouse-staff routes assume staff permissions a customer JWT doesn't
       // have — keep customer sessions confined to /customer even on a deep link.
       router.replace('/customer');
-    } else if (user && !isCustomer && inCustomerArea) {
+    } else if (area === 'staff' && (inCustomerArea || onUnsupported)) {
       router.replace('/');
+    } else if (area === 'unsupported' && !onUnsupported) {
+      router.replace('/unsupported');
     }
   }, [isLoading, user, segments, router]);
 
@@ -57,6 +71,9 @@ function RootNavigation() {
   }
 
   return (
+    <>
+    {/* Staff and login screens are light; the customer area overrides this (customer/_layout). */}
+    <StatusBar style="dark" />
     <Stack
       screenOptions={{
         headerShown: false,
@@ -67,6 +84,7 @@ function RootNavigation() {
         contentStyle: { backgroundColor: colors.bg },
       }}
     />
+    </>
   );
 }
 
@@ -88,6 +106,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <AuthProvider>
           <RootNavigation />
+          <OfflineBanner />
         </AuthProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

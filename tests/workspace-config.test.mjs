@@ -177,3 +177,11 @@ test("the unfinished mock messaging page is not reachable from any route or navi
   const readme = readFileSync(resolve(repositoryRoot, "README.md"), "utf8");
   assert.doesNotMatch(readme, /\/messages\b/);
 });
+
+test("verification also covers the mobile app (types, unit tests, Expo config)", () => {
+  const manifest = readJson("package.json");
+  assert.match(manifest.scripts.typecheck, /@smartbook\/mobile typecheck/);
+  assert.match(manifest.scripts.verify, /test:mobile/);
+  assert.match(manifest.scripts.verify, /check:mobile-config/);
+  assert.match(manifest.scripts["check:mobile-config"], /expo config/);
+});

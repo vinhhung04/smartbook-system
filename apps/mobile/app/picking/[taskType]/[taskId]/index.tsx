@@ -14,6 +14,7 @@ import * as pickingApi from '../../../../src/api/picking';
 import { ApiError, useAuth } from '../../../../src/auth/auth-context';
 import { notifyScanError, notifyScanSuccess } from '../../../../src/scanner/haptics';
 import { ScanField } from '../../../../src/scanner/ScanField';
+import { useSubmitLock } from '../../../../src/lib/submitLock';
 import type { PickingTaskDetail, PickingTaskType } from '../../../../src/types/picking';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
 
@@ -33,6 +34,7 @@ export default function TaskDetailScreen() {
   const [presenceMessage, setPresenceMessage] = useState<string | null>(null);
   const [isConfirmingPresence, setIsConfirmingPresence] = useState(false);
   const [isDeclaringShortage, setIsDeclaringShortage] = useState(false);
+  const actionLock = useSubmitLock();
 
   const load = useCallback(async () => {
     setError(null);
@@ -73,41 +75,45 @@ export default function TaskDetailScreen() {
   async function handleConfirmPresence(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return;
-    setIsConfirmingPresence(true);
-    setPresenceMessage(null);
-    try {
-      // Claiming happens here, not when the row was tapped — confirming a position
-      // is what logically assigns the task to this picker.
-      await pickingApi.claimSelf(taskType, taskId);
-      const result = await pickingApi.confirmPresence(taskType, taskId, trimmed);
-      notifyScanSuccess();
-      setPresenceMessage(`Đã xác nhận vị trí: ${result.data.location_code}`);
-      setLocationInput('');
-      await load();
-    } catch (err) {
-      notifyScanError();
-      setPresenceMessage(err instanceof ApiError ? err.message : 'Xác nhận vị trí thất bại');
-    } finally {
-      setIsConfirmingPresence(false);
-    }
+    await actionLock.run(async () => {
+      setIsConfirmingPresence(true);
+      setPresenceMessage(null);
+      try {
+        // Claiming happens here, not when the row was tapped — confirming a position
+        // is what logically assigns the task to this picker.
+        await pickingApi.claimSelf(taskType, taskId);
+        const result = await pickingApi.confirmPresence(taskType, taskId, trimmed);
+        notifyScanSuccess();
+        setPresenceMessage(`Đã xác nhận vị trí: ${result.data.location_code}`);
+        setLocationInput('');
+        await load();
+      } catch (err) {
+        notifyScanError();
+        setPresenceMessage(err instanceof ApiError ? err.message : 'Xác nhận vị trí thất bại');
+      } finally {
+        setIsConfirmingPresence(false);
+      }
+    });
   }
 
   async function declareShortage() {
-    setIsDeclaringShortage(true);
-    try {
-      const result = await pickingApi.declareShortage(taskType, taskId);
-      Alert.alert(
-        'Đã khai báo thiếu hàng',
-        result.data?.order_number
-          ? `Đã tạo REPICK ${result.data.order_number} — nhân viên khác có thể nhận và lấy bù.`
-          : 'Đã tạo REPICK để lấy bù phần còn thiếu.',
-        [{ text: 'OK', onPress: () => router.replace('/picking') }],
-      );
-    } catch (err) {
-      Alert.alert('Khai báo thiếu hàng thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');
-    } finally {
-      setIsDeclaringShortage(false);
-    }
+    await actionLock.run(async () => {
+      setIsDeclaringShortage(true);
+      try {
+        const result = await pickingApi.declareShortage(taskType, taskId);
+        Alert.alert(
+          'Đã khai báo thiếu hàng',
+          result.data?.order_number
+            ? `Đã tạo REPICK ${result.data.order_number} — nhân viên khác có thể nhận và lấy bù.`
+            : 'Đã tạo REPICK để lấy bù phần còn thiếu.',
+          [{ text: 'OK', onPress: () => router.replace('/picking') }],
+        );
+      } catch (err) {
+        Alert.alert('Khai báo thiếu hàng thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');
+      } finally {
+        setIsDeclaringShortage(false);
+      }
+    });
   }
 
   function handleDeclareShortage() {

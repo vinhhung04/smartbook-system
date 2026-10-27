@@ -14,8 +14,10 @@ export function getAvailableTasks() {
   return apiFetch<{ data: AvailableOutboundTask[] }>('/api/my-warehouse-tasks/available');
 }
 
-export function claimSelf(claimEndpoint: string) {
-  return apiFetch(claimEndpoint, { method: 'PATCH' });
+// Built from type + id rather than calling the `claim_endpoint` string the task list
+// carries: the app only ever claims the outbound step it is about to confirm.
+export function claimSelf(taskType: 'outbound' | 'transfer', taskId: string) {
+  return apiFetch(`/api/outbound/orders/${taskType}/${encodeURIComponent(taskId)}/claim-self`, { method: 'PATCH' });
 }
 
 export function confirmOutbound(taskType: 'outbound' | 'transfer', taskId: string, scanCode: string) {

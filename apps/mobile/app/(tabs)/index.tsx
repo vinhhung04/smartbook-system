@@ -1,134 +1,126 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../src/auth/auth-context';
+import { canUseStaffFeature, type StaffFeature } from '../../src/auth/access';
 import { FeatureCard } from '../../src/components/FeatureCard';
-import { SpineChart, type SpineSegment } from '../../src/components/SpineChart';
-import { useCountUp } from '../../src/hooks/useCountUp';
-import { useDashboardTasks } from '../../src/hooks/useDashboardTasks';
-import { colors, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { TaskCard } from '../../src/components/TaskCard';
+import { useDashboardTasks, type FeatureCounts, type TaskEntry } from '../../src/hooks/useDashboardTasks';
+import { describeRoles, greetingFor } from '../../src/lib/roles';
+import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
 
 type Feature = {
-  key: 'picking' | 'lookup' | 'putaway' | 'audit' | 'outbound' | 'exceptions';
+  key: StaffFeature;
+  countKey?: keyof FeatureCounts;
   title: string;
   subtitle: string;
   tag: string;
   tint: string;
   tintSoft: string;
-  href: '/picking' | '/lookup' | '/putaway' | '/audit' | '/outbound' | '/exceptions';
+  href: string;
 };
 
 const FEATURES: Feature[] = [
-  {
-    key: 'picking',
-    title: 'Picking',
-    subtitle: 'Xem và nhận phiếu lấy hàng',
-    tag: 'PK',
-    tint: colors.primary,
-    tintSoft: colors.primarySoft,
-    href: '/picking',
-  },
-  {
-    key: 'lookup',
-    title: 'Tra cứu nhanh',
-    subtitle: 'Quét mã để xem sách, tồn kho, vị trí',
-    tag: 'TC',
-    tint: colors.warning,
-    tintSoft: colors.warningSoft,
-    href: '/lookup',
-  },
-  {
-    key: 'putaway',
-    title: 'Putaway',
-    subtitle: 'Cất sách từ khu chờ vào kệ',
-    tag: 'PA',
-    tint: colors.success,
-    tintSoft: colors.successSoft,
-    href: '/putaway',
-  },
-  {
-    key: 'audit',
-    title: 'Stock Audit',
-    subtitle: 'Kiểm kê, đối chiếu tồn kho thực tế',
-    tag: 'KK',
-    tint: colors.neutral,
-    tintSoft: colors.neutralSoft,
-    href: '/audit',
-  },
-  {
-    key: 'outbound',
-    title: 'Xuất kho',
-    subtitle: 'Quét mã đơn trên kiện hàng để xác nhận xuất kho',
-    tag: 'XK',
-    tint: colors.danger,
-    tintSoft: colors.dangerSoft,
-    href: '/outbound',
-  },
-  {
-    key: 'exceptions',
-    title: 'Báo cáo sự cố',
-    subtitle: 'Thiếu/dư/hư hỏng — kèm ảnh bằng chứng',
-    tag: 'BC',
-    tint: colors.danger,
-    tintSoft: colors.dangerSoft,
-    href: '/exceptions',
-  },
+  { key: 'picking', countKey: 'picking', title: 'Lấy hàng (Picking)', subtitle: 'Nhận và lấy hàng theo phiếu', tag: 'PK', tint: colors.primary, tintSoft: colors.primarySoft, href: '/picking' },
+  { key: 'putaway', countKey: 'putaway', title: 'Cất hàng (Putaway)', subtitle: 'Cất sách từ khu chờ lên kệ', tag: 'PA', tint: colors.success, tintSoft: colors.successSoft, href: '/putaway' },
+  { key: 'outbound', countKey: 'outbound', title: 'Xuất kho', subtitle: 'Quét mã đơn trên kiện để xác nhận xuất', tag: 'XK', tint: colors.danger, tintSoft: colors.dangerSoft, href: '/outbound' },
+  { key: 'transferReceiving', countKey: 'transferReceiving', title: 'Nhận điều chuyển', subtitle: 'Xác nhận hàng điều chuyển đã tới kho', tag: 'NĐ', tint: colors.primary, tintSoft: colors.primarySoft, href: '/transfer-receiving' },
+  { key: 'audit', countKey: 'audit', title: 'Kiểm kê', subtitle: 'Đếm và đối chiếu tồn kho thực tế', tag: 'KK', tint: colors.neutral, tintSoft: colors.neutralSoft, href: '/audit' },
+  { key: 'exceptions', countKey: 'exceptions', title: 'Báo cáo sự cố', subtitle: 'Thiếu/dư/hư hỏng — kèm ảnh bằng chứng', tag: 'BC', tint: colors.warning, tintSoft: colors.warningSoft, href: '/exceptions' },
+  { key: 'lookup', title: 'Tra cứu nhanh', subtitle: 'Quét mã để xem sách, tồn kho, vị trí', tag: 'TC', tint: colors.warning, tintSoft: colors.warningSoft, href: '/lookup' },
 ];
+
+function SummaryTile({ label, value, icon, tone }: { label: string; value: number; icon: keyof typeof Ionicons.glyphMap; tone: string }) {
+  return (
+    <View style={styles.tile} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Ionicons name={icon} size={16} color={tone} />
+      <Text style={[styles.tileValue, { color: tone }]}>{value}</Text>
+      <Text style={styles.tileLabel} numberOfLines={2}>{label}</Text>
+    </View>
+  );
+}
 
 export default function HomeDashboardScreen() {
   const { user } = useAuth();
-  const { data, isLoading, error, refetch } = useDashboardTasks();
-  const total = useCountUp(data.total);
+  const { data, isLoading, isRefreshing, error, refetch } = useDashboardTasks();
+  const features = FEATURES.filter((feature) => canUseStaffFeature(user, feature.key));
+  const name = user?.full_name || user?.username || '';
 
-  const tileCounts: Record<Feature['key'], number | undefined> = {
-    picking: data.counts.picking,
-    lookup: undefined,
-    putaway: data.counts.putaway,
-    audit: data.counts.audit,
-    outbound: data.counts.outbound,
-    exceptions: data.counts.exceptions,
-  };
-
-  const segments: SpineSegment[] = [
-    { key: 'picking', label: 'Lấy hàng', count: data.counts.picking, tone: 'primary' },
-    { key: 'putaway', label: 'Cất hàng', count: data.counts.putaway, tone: 'primary' },
-    { key: 'outbound', label: 'Xuất kho', count: data.counts.outbound, tone: 'primary' },
-    { key: 'audit', label: 'Kiểm kê', count: data.counts.audit, tone: 'primary' },
-    { key: 'exceptions', label: 'Sự cố', count: data.counts.exceptions, tone: 'warning' },
-  ];
+  function openTask(entry: TaskEntry) {
+    if (entry.route.kind === 'screen') router.push(entry.route.href as never);
+    else Alert.alert(entry.task.title, entry.route.reason);
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
       >
-        <Text style={styles.greeting}>Xin chào, {user?.username}</Text>
-        <Text style={styles.role}>Vai trò: {user?.roles.join(', ')}</Text>
+        <View style={styles.header}>
+          <Text style={styles.greeting}>{greetingFor(new Date())},</Text>
+          <Text style={styles.name} numberOfLines={1} accessibilityRole="header">{name}</Text>
+          <Text style={styles.role}>{describeRoles(user?.roles ?? [])}</Text>
+        </View>
 
-        <MotiView
-          key={data.total}
-          from={{ opacity: 0, translateY: 8 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 300 }}
-          style={styles.hero}
-        >
-          <Text style={styles.heroLabel}>VIỆC ĐANG CHỜ CA NÀY</Text>
-          <Text style={styles.heroNumber}>{total}</Text>
+        <View style={styles.summary}>
+          <Text style={styles.sectionLabel}>Ca làm việc</Text>
           {error ? (
-            <Text style={styles.heroError}>{error}</Text>
+            <View style={styles.errorRow}>
+              <Text style={styles.error}>{error}</Text>
+              <Pressable onPress={() => void refetch()} style={styles.retry} accessibilityRole="button">
+                <Text style={styles.retryText}>Thử lại</Text>
+              </Pressable>
+            </View>
           ) : (
-            <SpineChart key={`spines-${data.total}`} segments={segments} />
+            <View style={styles.tiles}>
+              <SummaryTile label="Cần làm" value={data.counts.todo} icon="ellipse-outline" tone={colors.primary} />
+              <SummaryTile label="Đang xử lý" value={data.counts.in_progress} icon="time-outline" tone={colors.warning} />
+              <SummaryTile label="Hoàn thành gần đây" value={data.counts.done} icon="checkmark-circle" tone={colors.neutral} />
+            </View>
           )}
-        </MotiView>
+          {!error && data.counts.waiting > 0 ? (
+            <Text style={styles.waiting}>+ {data.counts.waiting} việc đang chờ quản lý duyệt/xử lý</Text>
+          ) : null}
+          {data.warnings.map((warning) => (
+            <Text key={warning} style={styles.warning}>{warning}</Text>
+          ))}
+        </View>
 
-        <Text style={styles.sectionLabel}>Chức năng</Text>
+        <Text style={styles.sectionLabel}>Việc tiếp theo</Text>
+        {isLoading && data.entries.length === 0 ? (
+          <ActivityIndicator color={colors.primary} style={styles.spinner} />
+        ) : data.next ? (
+          <TaskCard entry={data.next} onOpen={openTask} />
+        ) : !error ? (
+          <View style={styles.nextEmpty}>
+            <Ionicons name="checkmark-done-outline" size={22} color={colors.success} />
+            <Text style={styles.nextEmptyText}>Không có việc nào đang chờ bạn trên ứng dụng.</Text>
+          </View>
+        ) : null}
 
+        {canUseStaffFeature(user, 'lookup') ? (
+          <Pressable
+            style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}
+            onPress={() => router.push('/scan')}
+            accessibilityRole="button"
+            accessibilityLabel="Quét nhanh mã sách hoặc vị trí"
+          >
+            <Ionicons name="scan" size={22} color={colors.onPrimary} />
+            <View style={styles.scanBody}>
+              <Text style={styles.scanTitle}>Quét nhanh</Text>
+              <Text style={styles.scanSubtitle}>Mã sách, ISBN hoặc mã vị trí kệ</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.onPrimary} />
+          </Pressable>
+        ) : null}
+
+        <Text style={styles.sectionLabel}>Nghiệp vụ</Text>
         <View style={styles.list}>
-          {FEATURES.map((feature) => (
+          {features.map((feature) => (
             <FeatureCard
               key={feature.key}
               title={feature.title}
@@ -136,13 +128,14 @@ export default function HomeDashboardScreen() {
               tag={feature.tag}
               tint={feature.tint}
               tintSoft={feature.tintSoft}
-              count={tileCounts[feature.key]}
-              onPress={() => router.push(feature.href)}
+              count={feature.countKey ? data.features[feature.countKey] : undefined}
+              onPress={() => router.push(feature.href as never)}
             />
           ))}
+          {features.length === 0 ? (
+            <Text style={styles.warning}>Tài khoản chưa được cấp quyền nghiệp vụ kho nào trên ứng dụng.</Text>
+          ) : null}
         </View>
-
-        {isLoading ? <ActivityIndicator color={colors.primary} style={styles.spinner} /> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -160,43 +153,120 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
+    gap: spacing.md,
+  },
+  header: {
+    gap: 2,
   },
   greeting: {
+    ...typography.caption,
+  },
+  name: {
     ...typography.h2,
   },
   role: {
-    ...typography.caption,
-    marginTop: 2,
+    ...typography.label,
+    color: colors.primary,
   },
-  hero: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
+  summary: {
     padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
+    gap: spacing.sm,
     ...shadow.card,
-  },
-  heroLabel: {
-    ...typography.label,
-  },
-  heroNumber: {
-    ...typography.h1,
-    fontSize: 52,
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-  },
-  heroError: {
-    color: colors.danger,
-    fontSize: 13,
   },
   sectionLabel: {
     ...typography.label,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  tiles: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  tile: {
+    flex: 1,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg,
+    gap: 2,
+  },
+  tileValue: {
+    fontFamily: fonts.displayBold,
+    fontSize: 28,
+  },
+  tileLabel: {
+    ...typography.caption,
+    fontSize: 12,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  error: {
+    flex: 1,
+    color: colors.danger,
+    fontSize: 13,
+  },
+  retry: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  retryText: {
+    color: colors.primary,
+    fontFamily: fonts.bodySemibold,
+  },
+  warning: {
+    ...typography.caption,
+    color: colors.warning,
+  },
+  waiting: {
+    ...typography.caption,
+  },
+  spinner: {
+    marginVertical: spacing.lg,
+  },
+  nextEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.successSoft,
+  },
+  nextEmptyText: {
+    ...typography.caption,
+    flex: 1,
+    color: colors.textPrimary,
+  },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 64,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  scanBody: {
+    flex: 1,
+  },
+  scanTitle: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    color: colors.onPrimary,
+  },
+  scanSubtitle: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.onPrimary,
+    opacity: 0.85,
   },
   list: {
     gap: spacing.md,
-  },
-  spinner: {
-    marginTop: spacing.lg,
   },
 });

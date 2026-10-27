@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getMyReservations,
+  getMyReservationById,
   createMyReservation,
   cancelMyReservation,
   getMyLoans,
@@ -43,6 +44,7 @@ router.get('/membership', require('../controllers/customer.controller').getMyMem
 
 router.get('/reservations', getMyReservations);
 router.post('/reservations', createMyReservation);
+router.get('/reservations/:id', getMyReservationById);
 router.patch('/reservations/:id/cancel', cancelMyReservation);
 
 router.get('/loans', getMyLoans);

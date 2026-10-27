@@ -1,10 +1,11 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Alert } from 'react-native';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Alert, AppState } from 'react-native';
 
 import * as authApi from '../api/auth';
-import { ApiError, setUnauthorizedHandler } from '../api/client';
+import { ApiError, setRefreshHandler, setUnauthorizedHandler } from '../api/client';
 import type { User } from '../types/auth';
-import { clearToken, getToken, setToken } from './token-storage';
+import { createSingleFlight, decodeJwtPayload, msUntilExpiry, userFromClaims, type RefreshResult } from './session';
+import { clearToken, getRefreshToken, getToken, setSessionTokens } from './token-storage';
 
 type AuthContextValue = {
   user: User | null;
@@ -15,33 +16,10 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-type JwtClaims = {
-  sub: string;
-  username: string;
-  email: string;
-  roles?: string[];
-  permissions?: string[];
-  exp?: number;
-};
-
-function decodeJwtPayload(token: string): JwtClaims | null {
-  try {
-    const payloadSegment = token.split('.')[1];
-    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
-    const json = decodeURIComponent(
-      atob(padded)
-        .split('')
-        .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
-        .join('')
-    );
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
 const SESSION_CHECK_INTERVAL_MS = 60_000;
+// With a refresh token the access token is renewed this long before it expires, so a
+// long scan session never hits "Token expired" mid-task.
+const PROACTIVE_REFRESH_MS = 5 * 60_000;
 const EXPIRY_WARNING_THRESHOLD_MS = 5 * 60_000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -49,58 +27,112 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const hasWarnedExpiryRef = useRef(false);
 
+  const userRef = useRef<User | null>(null);
   useEffect(() => {
-    setUnauthorizedHandler(() => {
-      clearToken().catch(() => {});
-      setUser(null);
-    });
-    return () => setUnauthorizedHandler(null);
+    userRef.current = user;
+  }, [user]);
+
+  const endSession = useCallback(async (message?: string) => {
+    // Parallel requests can all fail at once; tell the user only once.
+    const wasSignedIn = userRef.current !== null;
+    userRef.current = null;
+    await clearToken().catch(() => {});
+    setUser(null);
+    if (message && wasSignedIn) Alert.alert('Phiên đăng nhập đã kết thúc', message);
   }, []);
 
+  // One shared, single-flight refresh for every caller (api client, startup, timer).
+  const [refresh] = useState(() =>
+    createSingleFlight(async (): Promise<RefreshResult> => {
+      const refreshToken = await getRefreshToken();
+      if (!refreshToken) return { kind: 'invalid' };
+      try {
+        const result = await authApi.refreshSession(refreshToken);
+        await setSessionTokens(result.token, result.refresh_token);
+        setUser(result.user);
+        return { kind: 'ok', token: result.token };
+      } catch (err) {
+        // 401 = the refresh token is expired, revoked or was reused: the session is over.
+        if (err instanceof ApiError && err.kind === 'http' && err.status === 401) return { kind: 'invalid' };
+        return { kind: 'transient' };
+      }
+    }),
+  );
+
   useEffect(() => {
-    // No refresh/verify endpoint exists, so we restore the session by decoding
-    // the JWT payload locally and trusting it until its own `exp` claim expires.
-    getToken()
-      .then((token) => {
-        if (!token) return;
-        const claims = decodeJwtPayload(token);
-        if (!claims || !claims.exp || claims.exp * 1000 <= Date.now()) {
-          clearToken().catch(() => {});
-          return;
-        }
-        setUser({
-          id: claims.sub,
-          username: claims.username,
-          email: claims.email,
-          roles: claims.roles ?? [],
-          permissions: claims.permissions ?? [],
-        });
-      })
+    setUnauthorizedHandler(() => {
+      void endSession('Vui lòng đăng nhập lại để tiếp tục.');
+    });
+    setRefreshHandler(async () => {
+      const result = await refresh();
+      if (result.kind === 'ok') return { token: result.token };
+      return { failed: result.kind };
+    });
+    return () => {
+      setUnauthorizedHandler(null);
+      setRefreshHandler(null);
+    };
+  }, [endSession, refresh]);
+
+  useEffect(() => {
+    // Restore: a still-valid access token is trusted until its exp; an expired one is
+    // renewed with the refresh token. Offline at launch keeps the session (the refresh
+    // is retried on the next request) instead of logging the user out.
+    (async () => {
+      const token = await getToken();
+      if (!token) return;
+      const claims = decodeJwtPayload(token);
+      if (!claims) {
+        await clearToken();
+        return;
+      }
+      const remaining = msUntilExpiry(token);
+      if (remaining !== null && remaining > 30_000) {
+        setUser(userFromClaims(claims));
+        // Then the server's current view (full name, permissions changed since login).
+        authApi
+          .getMe()
+          .then((result) => {
+            if (userRef.current?.id === result.user.id) setUser(result.user);
+          })
+          .catch(() => {});
+        return;
+      }
+      const result = await refresh();
+      if (result.kind === 'transient' && (await getRefreshToken())) {
+        setUser(userFromClaims(claims));
+      } else if (result.kind !== 'ok') {
+        await clearToken();
+      }
+    })()
+      .catch(() => {})
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [refresh]);
 
   useEffect(() => {
     if (!user) return;
     hasWarnedExpiryRef.current = false;
 
-    // No refresh endpoint exists (see above), so the best we can do is warn before the
-    // JWT's own exp claim runs out and log the user out cleanly instead of letting them
-    // hit a confusing "Token expired" failure on their next action mid-task.
-    const interval = setInterval(async () => {
+    const check = async () => {
       const token = await getToken();
       if (!token) return;
-      const claims = decodeJwtPayload(token);
-      if (!claims?.exp) return;
+      const remainingMs = msUntilExpiry(token);
+      if (remainingMs === null) return;
+      const hasRefresh = Boolean(await getRefreshToken());
 
-      const remainingMs = claims.exp * 1000 - Date.now();
-
-      if (remainingMs <= 0) {
-        await clearToken();
-        setUser(null);
-        Alert.alert('Phiên đăng nhập đã hết hạn', 'Vui lòng đăng nhập lại để tiếp tục.');
+      if (hasRefresh) {
+        if (remainingMs <= PROACTIVE_REFRESH_MS) {
+          const result = await refresh();
+          if (result.kind === 'invalid') await endSession('Vui lòng đăng nhập lại để tiếp tục.');
+        }
         return;
       }
 
+      // Session from an older login without a refresh token: warn, then end cleanly.
+      if (remainingMs <= 0) {
+        await endSession('Vui lòng đăng nhập lại để tiếp tục.');
+        return;
+      }
       if (remainingMs <= EXPIRY_WARNING_THRESHOLD_MS && !hasWarnedExpiryRef.current) {
         hasWarnedExpiryRef.current = true;
         const minutesLeft = Math.max(1, Math.ceil(remainingMs / 60_000));
@@ -109,21 +141,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           `Còn khoảng ${minutesLeft} phút. Vui lòng lưu công việc đang làm và đăng nhập lại sớm.`,
         );
       }
-    }, SESSION_CHECK_INTERVAL_MS);
+    };
 
-    return () => clearInterval(interval);
-  }, [user]);
+    const interval = setInterval(() => void check(), SESSION_CHECK_INTERVAL_MS);
+    // Timers do not run while the app is in the background; check as soon as it is back.
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void check();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [user, refresh, endSession]);
 
-  async function login(username: string, password: string) {
+  const login = useCallback(async (username: string, password: string) => {
     const response = await authApi.login(username, password);
-    await setToken(response.token);
+    await setSessionTokens(response.token, response.refresh_token);
     setUser(response.user);
-  }
+  }, []);
 
-  async function logout() {
+  const logout = useCallback(async () => {
+    const [token, refreshToken] = await Promise.all([getToken(), getRefreshToken()]);
     await clearToken();
     setUser(null);
-  }
+    // After local sign-out, so a slow or offline network never keeps the user waiting.
+    void authApi.logoutRemote(token, refreshToken);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout }}>

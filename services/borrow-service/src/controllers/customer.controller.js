@@ -492,6 +492,30 @@ async function updateMyProfile(req, res) {
 
     const { full_name, phone, birth_date, address } = req.body || {};
 
+    // Column limits (customers: full_name VarChar(150), phone VarChar(30)) and a real
+    // past date — an invalid birth_date used to reach Prisma and come back as a 500.
+    if (full_name !== undefined) {
+      const name = String(full_name ?? '').trim();
+      if (!name || name.length > 150) {
+        return res.status(400).json({ message: 'Họ tên không được để trống và tối đa 150 ký tự' });
+      }
+    }
+    if (phone !== undefined && phone !== null && phone !== '') {
+      const value = String(phone).trim();
+      if (!/^\+?[0-9][0-9 .-]{6,28}$/.test(value)) {
+        return res.status(400).json({ message: 'Số điện thoại không hợp lệ' });
+      }
+    }
+    if (birth_date !== undefined && birth_date !== null && birth_date !== '') {
+      const date = new Date(birth_date);
+      if (Number.isNaN(date.getTime()) || date.getTime() > Date.now() || date.getUTCFullYear() < 1900) {
+        return res.status(400).json({ message: 'Ngày sinh không hợp lệ' });
+      }
+    }
+    if (address !== undefined && address !== null && String(address).length > 500) {
+      return res.status(400).json({ message: 'Địa chỉ tối đa 500 ký tự' });
+    }
+
     const updated = await prisma.customers.update({
       where: { id: customer.id },
       data: {

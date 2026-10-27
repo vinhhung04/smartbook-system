@@ -20,7 +20,7 @@ export default function CustomerReservationDetailScreen() {
     setError(null);
     try {
       const result = await customerBorrowApi.getMyReservationById(id);
-      setReservation(result);
+      setReservation(result.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Không tải được phiếu đặt');
     }
@@ -32,7 +32,8 @@ export default function CustomerReservationDetailScreen() {
   }, [load]);
 
   function handleCancel() {
-    Alert.alert('Hủy phiếu đặt', 'Bạn có chắc muốn hủy phiếu đặt này?', [
+    if (isCancelling) return;
+    Alert.alert('Hủy phiếu đặt', 'Bạn có chắc muốn hủy phiếu đặt này? Sách sẽ được nhường cho bạn đọc khác.', [
       { text: 'Không', style: 'cancel' },
       {
         text: 'Hủy phiếu',
@@ -65,6 +66,12 @@ export default function CustomerReservationDetailScreen() {
         </View>
       ) : (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          {reservation.book_title ? (
+            <View style={styles.bookHeader}>
+              <Text style={styles.bookTitle} numberOfLines={2}>{reservation.book_title}</Text>
+              {reservation.book_author ? <Text style={styles.bookAuthor}>{reservation.book_author}</Text> : null}
+            </View>
+          ) : null}
           <CustomerPickupTicket
             reservationNumber={reservation.reservation_number}
             pickupCode={reservation.pickup_code}
@@ -126,6 +133,15 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontWeight: '600',
+  },
+  bookHeader: {
+    gap: 2,
+  },
+  bookTitle: {
+    ...typography.h3,
+  },
+  bookAuthor: {
+    ...typography.caption,
   },
   metaGrid: {
     backgroundColor: colors.surface,

@@ -1,83 +1,158 @@
+import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
+import { Ionicons } from '@expo/vector-icons';
 
-import { useDashboardTasks } from '../../src/hooks/useDashboardTasks';
-import type { MyWarehouseTask } from '../../src/types/myWarehouseTasks';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { TaskCard } from '../../src/components/TaskCard';
+import { useDashboardTasks, type TaskEntry } from '../../src/hooks/useDashboardTasks';
+import { normalizeSearchText } from '../../src/lib/optionSearch';
+import { TASK_TYPE_LABEL, type TaskPhase } from '../../src/lib/taskRoutes';
+import { colors, fonts, radius, spacing, typography } from '../../src/theme/tokens';
 
-const TYPE_LABEL: Record<string, string> = {
-  RECEIVING: 'Tiếp nhận hàng',
-  PUTAWAY: 'Cất hàng',
-  PICKING: 'Lấy hàng',
-  OUTBOUND: 'Xuất kho',
-  TRANSFER_RECEIVING: 'Nhận điều chuyển',
-  PURCHASE_REQUEST: 'Yêu cầu mua hàng',
-  EXCEPTION_REPORT: 'Báo cáo sự cố',
-  STAFF_TASK: 'Việc được giao',
+type Filter = 'open' | TaskPhase;
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'open', label: 'Đang mở' },
+  { key: 'todo', label: 'Cần làm' },
+  { key: 'in_progress', label: 'Đang làm' },
+  { key: 'done', label: 'Đã xong' },
+];
+
+const SECTION_TITLE: Record<TaskPhase, string> = {
+  in_progress: 'Đang thực hiện',
+  todo: 'Cần làm',
+  waiting: 'Chờ quản lý xử lý',
+  done: 'Hoàn thành gần đây',
 };
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '-';
-  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+const EMPTY_TEXT: Record<Filter, string> = {
+  open: 'Không còn việc nào đang mở. Kéo xuống để làm mới.',
+  todo: 'Không có việc mới cần làm.',
+  in_progress: 'Không có việc nào đang dở dang.',
+  waiting: 'Không có yêu cầu nào đang chờ duyệt.',
+  done: 'Chưa có việc nào hoàn thành gần đây.',
+};
+
+function matchesQuery(entry: TaskEntry, query: string): boolean {
+  if (!query) return true;
+  const haystack = normalizeSearchText(
+    [entry.task.title, entry.task.warehouse, TASK_TYPE_LABEL[entry.task.type], entry.statusLabel, entry.task.description].filter(Boolean).join(' '),
+  );
+  return normalizeSearchText(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((term) => haystack.includes(term));
 }
 
 export default function TasksScreen() {
-  const { data, isLoading, error, refetch } = useDashboardTasks();
+  const { data, isLoading, isRefreshing, error, refetch } = useDashboardTasks();
+  const [filter, setFilter] = useState<Filter>('open');
+  const [query, setQuery] = useState('');
 
-  function handlePress(task: MyWarehouseTask) {
-    if (task.action_path) {
-      router.push(task.action_path);
+  const sections = useMemo(() => {
+    const phases: TaskPhase[] = filter === 'open' ? ['in_progress', 'todo', 'waiting'] : [filter];
+    return phases
+      .map((phase) => ({
+        phase,
+        title: SECTION_TITLE[phase],
+        data: data.entries.filter((entry) => entry.phase === phase && matchesQuery(entry, query)),
+      }))
+      .filter((section) => section.data.length > 0);
+  }, [data.entries, filter, query]);
+
+  function handleOpen(entry: TaskEntry) {
+    if (entry.route.kind === 'screen') {
+      router.push(entry.route.href as never);
+      return;
     }
+    Alert.alert(entry.task.title, entry.route.reason);
   }
+
+  const countFor = (key: Filter) => (key === 'open' ? data.counts.todo + data.counts.in_progress + data.counts.waiting : data.counts[key]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Việc của tôi</Text>
-        <Text style={styles.subtitle}>{data.tasks.length} việc đang theo dõi</Text>
+        <Text style={styles.title} accessibilityRole="header">Việc của tôi</Text>
+        <Text style={styles.subtitle}>
+          {data.counts.todo} cần làm · {data.counts.in_progress} đang làm · {data.counts.waiting} chờ duyệt · {data.counts.done} xong gần đây
+        </Text>
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.search}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Tìm mã phiếu, kho, loại việc"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Tìm công việc"
+          />
+          {query ? (
+            <Pressable onPress={() => setQuery('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Xóa tìm kiếm">
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+        <View style={styles.filters} accessibilityRole="tablist">
+          {FILTERS.map((item) => {
+            const active = filter === item.key;
+            return (
+              <Pressable
+                key={item.key}
+                style={[styles.filter, active && styles.filterActive]}
+                onPress={() => setFilter(item.key)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.filterText, active && styles.filterTextActive]} numberOfLines={1}>
+                  {item.label} {countFor(item.key)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {error ? (
         <View style={styles.errorBox}>
           <Text style={styles.error}>{error}</Text>
+          <Pressable onPress={() => void refetch()} style={styles.retry} accessibilityRole="button">
+            <Text style={styles.retryText}>Thử lại</Text>
+          </Pressable>
         </View>
       ) : null}
+      {data.warnings.map((warning) => (
+        <Text key={warning} style={styles.warning}>{warning}</Text>
+      ))}
 
-      {isLoading && data.tasks.length === 0 ? (
+      {isLoading && data.entries.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
-        <FlatList
-          data={data.tasks}
-          keyExtractor={(item, index) => `${item.type}-${item.id}-${index}`}
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.key}
           contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />}
-          ListEmptyComponent={<Text style={styles.empty}>Không có việc nào đang theo dõi</Text>}
-          renderItem={({ item, index }) => (
-            <MotiView
-              from={{ opacity: 0, translateY: 6 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 220, delay: Math.min(index, 8) * 40 }}
-            >
-              <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                onPress={() => handlePress(item)}
-              >
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSubtitle}>
-                    {TYPE_LABEL[item.type] ?? item.type} · {item.warehouse ?? '-'} · {formatDate(item.created_at)}
-                  </Text>
-                </View>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusBadgeText}>{item.status}</Text>
-                </View>
-              </Pressable>
-            </MotiView>
-          )}
+          stickySectionHeadersEnabled={false}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
+          renderSectionHeader={({ section }) =>
+            filter === 'open' ? <Text style={styles.sectionTitle}>{section.title} ({section.data.length})</Text> : null
+          }
+          ListEmptyComponent={
+            error ? null : (
+              <View style={styles.empty}>
+                <Ionicons name={query ? 'search-outline' : 'checkmark-done-outline'} size={28} color={colors.textMuted} />
+                <Text style={styles.emptyText}>{query ? 'Không có việc nào khớp từ khóa.' : EMPTY_TEXT[filter]}</Text>
+              </View>
+            )
+          }
+          renderItem={({ item }) => <TaskCard entry={item} onOpen={handleOpen} />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       )}
     </SafeAreaView>
@@ -92,13 +167,58 @@ const styles = StyleSheet.create({
   header: {
     padding: spacing.lg,
     paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
   title: {
     ...typography.h2,
   },
   subtitle: {
     ...typography.caption,
-    marginTop: 2,
+    marginTop: -spacing.xs,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  search: {
+    flex: 1,
+    minHeight: 44,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  filters: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  filter: {
+    flex: 1,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 4,
+  },
+  filterActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterText: {
+    fontFamily: fonts.bodySemibold,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  filterTextActive: {
+    color: colors.onPrimary,
   },
   center: {
     flex: 1,
@@ -114,53 +234,50 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   error: {
+    flex: 1,
     color: colors.danger,
     fontSize: 13,
   },
+  retry: {
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  retryText: {
+    color: colors.danger,
+    fontFamily: fonts.bodySemibold,
+  },
+  warning: {
+    ...typography.caption,
+    color: colors.warning,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+  },
   list: {
     padding: spacing.lg,
-    paddingTop: 0,
-    gap: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxl,
+  },
+  sectionTitle: {
+    ...typography.label,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  separator: {
+    height: spacing.sm,
   },
   empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  card: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadow.card,
+    gap: spacing.sm,
+    padding: spacing.xl,
   },
-  cardPressed: {
-    opacity: 0.85,
-  },
-  cardBody: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  cardTitle: {
-    ...typography.h3,
-  },
-  cardSubtitle: {
+  emptyText: {
     ...typography.caption,
-    marginTop: 2,
-  },
-  statusBadge: {
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
-    backgroundColor: colors.primarySoft,
-  },
-  statusBadgeText: {
-    fontFamily: fonts.monoSemibold,
-    fontSize: 10,
-    color: colors.primary,
-    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });

@@ -36,6 +36,10 @@ export type Reservation = {
   notes: string | null;
   created_at?: string;
   updated_at: string;
+  // Enriched by borrow-service from inventory (null when that lookup failed).
+  book_title?: string | null;
+  book_author?: string | null;
+  book_cover_url?: string | null;
 };
 
 export type CreateReservationPayload = {
@@ -59,6 +63,17 @@ export type LoanItem = {
   fine_amount: number;
   lost_fee_amount: number;
   notes: string | null;
+  book_title?: string | null;
+  book_author?: string | null;
+  book_cover_url?: string | null;
+};
+
+/** Renewal requests the reader filed for a loan (borrow-service my.controller loadRenewalState). */
+export type LoanRenewalState = {
+  pending: boolean;
+  requested_at: string | null;
+  request_count: number;
+  last_decision: 'APPROVE' | 'REJECT' | null;
 };
 
 export type Loan = {
@@ -76,7 +91,13 @@ export type Loan = {
   created_at: string;
   updated_at: string;
   loan_items?: LoanItem[];
+  primary_book_title?: string | null;
+  primary_book_cover_url?: string | null;
+  extra_item_count?: number;
+  renewal?: LoanRenewalState;
 };
+
+export type BorrowListScope = 'active' | 'history';
 
 export type RenewLoanResult = {
   request_id: string;
@@ -84,11 +105,14 @@ export type RenewLoanResult = {
   requested_at: string;
 };
 
+/** Prisma Decimal columns are serialised as strings ("5000.00") — read them with lib/money.ts. */
+export type Money = number | string;
+
 export type FinePayment = {
   id: string;
   fine_id: string;
   payment_method: FinePaymentMethod | string;
-  amount: number;
+  amount: Money;
   transaction_reference: string | null;
   paid_at: string;
   note: string | null;
@@ -99,13 +123,17 @@ export type Fine = {
   customer_id: string;
   loan_item_id: string | null;
   fine_type: string;
-  amount: number;
-  waived_amount: number;
+  amount: Money;
+  waived_amount: Money;
   status: FineStatus;
   issued_at: string;
   paid_at: string | null;
   note: string | null;
   fine_payments?: FinePayment[];
+  // Computed server-side (money fields arrive as Decimal strings).
+  paid_amount?: number;
+  remaining_amount?: number;
+  pending_payment?: { txn_ref: string; status: string; amount: number; expires_at: string } | null;
 };
 
 export type FinesResponse = {

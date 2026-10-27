@@ -101,6 +101,8 @@ async function getBookRatingStats(req, res) {
   }
 }
 
+const MAX_COMMENT_LENGTH = 2000;
+
 async function createOrUpdateMyReview(req, res) {
   try {
     // The JWT carries the auth user id, not the customer id (see getMyReviews).
@@ -119,6 +121,13 @@ async function createOrUpdateMyReview(req, res) {
     const numRating = Number(rating);
     if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
       return res.status(400).json({ message: 'rating must be an integer between 1 and 5' });
+    }
+    if (comment !== undefined && comment !== null && typeof comment !== 'string') {
+      return res.status(400).json({ message: 'comment must be a string' });
+    }
+    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
+    if (normalizedComment.length > MAX_COMMENT_LENGTH) {
+      return res.status(400).json({ message: `Nhận xét tối đa ${MAX_COMMENT_LENGTH} ký tự` });
     }
 
     let eligible;
@@ -141,14 +150,14 @@ async function createOrUpdateMyReview(req, res) {
       },
       update: {
         rating: numRating,
-        comment: comment || null,
+        comment: normalizedComment || null,
         updated_at: new Date(),
       },
       create: {
         customer_id: customerId,
         book_id,
         rating: numRating,
-        comment: comment || null,
+        comment: normalizedComment || null,
       },
       include: {
         customers: {

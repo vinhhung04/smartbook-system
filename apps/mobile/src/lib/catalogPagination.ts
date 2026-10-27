@@ -11,17 +11,19 @@ import type { CustomerCatalogBook, CustomerCatalogSearchParams } from '../types/
 //    page can never overwrite or mix into the results of a newer search
 //  - nothing is fetched past the last page the API reports
 
-export type CatalogPage = {
-  items: CustomerCatalogBook[];
+// The same rules serve any paged /my list (reservations, loans, notifications), so the
+// loader is generic over the item (anything with an id) and the query params.
+export type Page<T> = {
+  items: T[];
   page: number;
   totalPages: number;
   total: number;
 };
 
-export type CatalogPageFetcher = (params: CustomerCatalogSearchParams, page: number) => Promise<CatalogPage>;
+export type PageFetcher<T, P> = (params: P, page: number) => Promise<Page<T>>;
 
-export type CatalogState = {
-  items: CustomerCatalogBook[];
+export type PagedState<T> = {
+  items: T[];
   /** Last page loaded (0 = none yet). */
   page: number;
   total: number;
@@ -32,7 +34,11 @@ export type CatalogState = {
   error: string | null;
 };
 
-export const EMPTY_CATALOG_STATE: CatalogState = {
+export type CatalogPage = Page<CustomerCatalogBook>;
+export type CatalogPageFetcher = PageFetcher<CustomerCatalogBook, CustomerCatalogSearchParams>;
+export type CatalogState = PagedState<CustomerCatalogBook>;
+
+export const EMPTY_PAGED_STATE: PagedState<never> = {
   items: [],
   page: 0,
   total: 0,
@@ -43,9 +49,11 @@ export const EMPTY_CATALOG_STATE: CatalogState = {
   error: null,
 };
 
-/** Appends `incoming` to `current`, skipping books already listed (the catalog
+export const EMPTY_CATALOG_STATE: CatalogState = EMPTY_PAGED_STATE;
+
+/** Appends `incoming` to `current`, skipping items already listed (the list
  *  can shift between pages while the reader scrolls). */
-export function mergeById(current: CustomerCatalogBook[], incoming: CustomerCatalogBook[]): CustomerCatalogBook[] {
+export function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
   const seen = new Set(current.map((book) => book.id));
   const merged = [...current];
   for (const book of incoming) {
@@ -56,7 +64,7 @@ export function mergeById(current: CustomerCatalogBook[], incoming: CustomerCata
   return merged;
 }
 
-export function isBusy(state: CatalogState): boolean {
+export function isBusy(state: PagedState<unknown>): boolean {
   return state.loadingInitial || state.loadingMore || state.refreshing;
 }
 
@@ -66,25 +74,25 @@ type LoadKind = 'initial' | 'more' | 'refresh';
  *  page 1 must not turn into "load page N+1"). */
 type FailedLoad = { page: number; kind: LoadKind };
 
-const LOADING_FLAG: Record<LoadKind, Partial<CatalogState>> = {
+const LOADING_FLAG: Record<LoadKind, Partial<PagedState<never>>> = {
   initial: { loadingInitial: true },
   more: { loadingMore: true },
   refresh: { refreshing: true },
 };
 
-const IDLE: Partial<CatalogState> = { loadingInitial: false, loadingMore: false, refreshing: false };
+const IDLE: Partial<PagedState<never>> = { loadingInitial: false, loadingMore: false, refreshing: false };
 
-export function createCatalogLoader(
-  fetchPage: CatalogPageFetcher,
-  onChange: (state: CatalogState) => void,
+export function createPagedLoader<T extends { id: string }, P>(
+  fetchPage: PageFetcher<T, P>,
+  onChange: (state: PagedState<T>) => void,
   describeError: (error: unknown) => string,
 ) {
-  let state: CatalogState = EMPTY_CATALOG_STATE;
-  let params: CustomerCatalogSearchParams | null = null;
+  let state: PagedState<T> = EMPTY_PAGED_STATE;
+  let params: P | null = null;
   let generation = 0;
   let failedLoad: FailedLoad | null = null;
 
-  function emit(patch: Partial<CatalogState>) {
+  function emit(patch: Partial<PagedState<T>>) {
     state = { ...state, ...patch };
     onChange(state);
   }
@@ -116,11 +124,11 @@ export function createCatalogLoader(
     getState: () => state,
 
     /** New search/filter (null = nothing to show): reset and load page 1. */
-    setQuery(next: CustomerCatalogSearchParams | null) {
+    setQuery(next: P | null) {
       generation += 1;
       params = next;
       failedLoad = null;
-      state = { ...EMPTY_CATALOG_STATE };
+      state = { ...EMPTY_PAGED_STATE };
       if (!next) {
         onChange(state);
         return Promise.resolve();
@@ -149,4 +157,12 @@ export function createCatalogLoader(
       return load(page, kind);
     },
   };
+}
+
+export function createCatalogLoader(
+  fetchPage: CatalogPageFetcher,
+  onChange: (state: CatalogState) => void,
+  describeError: (error: unknown) => string,
+) {
+  return createPagedLoader(fetchPage, onChange, describeError);
 }

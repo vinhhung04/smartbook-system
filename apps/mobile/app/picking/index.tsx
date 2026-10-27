@@ -12,13 +12,12 @@ import {
 } from 'react-native';
 
 import * as pickingApi from '../../src/api/picking';
-import * as authApi from '../../src/api/auth';
 import { ApiError, useAuth } from '../../src/auth/auth-context';
+import { isWarehouseManager } from '../../src/auth/access';
+import { SelectionSheet } from '../../src/components/SelectionSheet';
+import { useWarehouseStaff, type StaffOption } from '../../src/hooks/useWarehouseStaff';
 import type { AvailableTask, PickingTaskListItem } from '../../src/types/picking';
-import type { WarehouseStaffOption } from '../../src/types/auth';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
-
-const MANAGER_ROLES = ['ADMIN', 'WAREHOUSE_MANAGER'];
 
 type Row =
   | { kind: 'mine'; item: PickingTaskListItem }
@@ -36,18 +35,18 @@ export default function PickingListScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [assigningKey, setAssigningKey] = useState<string | null>(null);
-  const [staffOptions, setStaffOptions] = useState<WarehouseStaffOption[]>([]);
+  const [assignTarget, setAssignTarget] = useState<{ taskType: PickingTaskListItem['task_type']; taskId: string; orderNumber: string; currentAssigneeId: string | null } | null>(null);
+  const staff = useWarehouseStaff();
   const [error, setError] = useState<string | null>(null);
 
-  const canManage = (user?.roles ?? []).some((role) => MANAGER_ROLES.includes(role));
+  const canManage = isWarehouseManager(user);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [mine, available, staff] = await Promise.all([
+      const [mine, available] = await Promise.all([
         pickingApi.getMyTasks(),
         pickingApi.getAvailableTasks(),
-        canManage ? authApi.getWarehouseStaff() : Promise.resolve({ data: [] }),
       ]);
       // /api/picking/tasks returns every order eligible for picking in the warehouse
       // to a manager/admin, not just the current picker's — a task claimed by a
@@ -58,11 +57,10 @@ export default function PickingListScreen() {
         mine.data.filter((t) => t.assigned_picker_user_id && t.assigned_picker_user_id !== user?.id),
       );
       setAvailableTasks(available.data.filter((t) => t.type === 'PICKING'));
-      setStaffOptions(staff.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Không tải được danh sách');
     }
-  }, [user?.id, canManage]);
+  }, [user?.id]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -75,12 +73,15 @@ export default function PickingListScreen() {
     setIsRefreshing(false);
   }
 
-  async function handleAssign(taskType: PickingTaskListItem['task_type'], taskId: string, staffId: string) {
-    const key = `${taskType}-${taskId}`;
+  async function handleAssign(option: StaffOption) {
+    const target = assignTarget;
+    if (!target || assigningKey) return;
+    setAssignTarget(null);
+    const key = `${target.taskType}-${target.taskId}`;
     setAssigningKey(key);
     try {
-      await pickingApi.assignTask(taskType, taskId, staffId);
-      load();
+      await pickingApi.assignTask(target.taskType, target.taskId, option.userId);
+      await load();
     } catch (err) {
       Alert.alert('Giao task thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');
     } finally {
@@ -88,22 +89,9 @@ export default function PickingListScreen() {
     }
   }
 
-  function handleAssignPress(taskType: PickingTaskListItem['task_type'], taskId: string, orderNumber: string) {
-    if (staffOptions.length === 0) {
-      Alert.alert('Không có nhân viên', 'Không tải được danh sách nhân viên kho.');
-      return;
-    }
-    Alert.alert(
-      `Giao đơn ${orderNumber}`,
-      'Chọn nhân viên để giao việc lấy hàng',
-      [
-        ...staffOptions.map((staff) => ({
-          text: staff.full_name,
-          onPress: () => handleAssign(taskType, taskId, staff.id),
-        })),
-        { text: 'Hủy', style: 'cancel' as const },
-      ],
-    );
+  function handleAssignPress(taskType: PickingTaskListItem['task_type'], taskId: string, orderNumber: string, currentAssigneeId: string | null = null) {
+    staff.ensureLoaded();
+    setAssignTarget({ taskType, taskId, orderNumber, currentAssigneeId });
   }
 
   const sections =
@@ -198,7 +186,9 @@ export default function PickingListScreen() {
                       {canManage ? (
                         <Pressable
                           style={({ pressed }) => [styles.giaoButton, pressed && styles.cardPressed]}
-                          onPress={() => handleAssignPress(task.task_type, task.task_id, task.order_number)}
+                          onPress={() => handleAssignPress(task.task_type, task.task_id, task.order_number, task.assigned_picker_user_id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Giao đơn ${task.order_number} cho nhân viên khác`}
                           disabled={assigningKey === key}
                         >
                           <Text style={styles.giaoButtonText}>
@@ -237,6 +227,8 @@ export default function PickingListScreen() {
                       <Pressable
                         style={({ pressed }) => [styles.giaoButton, pressed && styles.cardPressed]}
                         onPress={() => handleAssignPress(task.task_type, task.id, task.title)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Giao đơn ${task.title} cho nhân viên`}
                         disabled={assigningKey === key}
                       >
                         <Text style={styles.giaoButtonText}>
@@ -251,6 +243,20 @@ export default function PickingListScreen() {
           />
         )}
       </View>
+
+      <SelectionSheet
+        visible={assignTarget !== null}
+        title={assignTarget ? `Giao đơn ${assignTarget.orderNumber}` : ''}
+        options={staff.options}
+        selectedId={assignTarget?.currentAssigneeId}
+        loading={staff.loading}
+        error={staff.error}
+        onRetry={staff.reload}
+        onSelect={handleAssign}
+        onClose={() => setAssignTarget(null)}
+        searchPlaceholder="Tìm nhân viên theo tên, tài khoản, email"
+        emptyText="Không có nhân viên kho nào trong phạm vi kho của bạn"
+      />
     </>
   );
 }
@@ -401,6 +407,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   giaoButton: {
+    minHeight: 32,
+    justifyContent: 'center',
     borderRadius: radius.pill,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm + 2,

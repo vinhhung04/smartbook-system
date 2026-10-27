@@ -30,7 +30,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Ứng dụng cần quyền camera để quét mã vạch/QR khi lấy hàng."
+          "cameraPermission": "SmartBook dùng camera để quét mã vạch/QR, chụp ảnh bìa sách và ảnh bằng chứng sự cố.",
+          "recordAudioAndroid": false
         }
       ],
       "expo-status-bar"

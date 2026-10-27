@@ -4,6 +4,38 @@ const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const { sendEmail } = require('../lib/email-sender');
 const { revokeUserTokensIssuedBefore, blacklistToken } = require('../lib/token-revocation');
+const redis = require('../lib/redis');
+const { createRefreshTokenService, RefreshTokenError } = require('../lib/refresh-tokens');
+
+const refreshTokens = createRefreshTokenService({
+  get: (key) => redis.getStrict(key),
+  set: (key, value, ttl) => redis.setStrict(key, value, ttl),
+  getDel: (key) => redis.getDelStrict(key),
+  del: (key) => redis.delStrict(key),
+});
+
+// Refresh tokens are only issued to clients that ask (the mobile app sends
+// client: "mobile"); the web keeps its existing access-token-only session.
+function wantsRefreshToken(req) {
+  return String(req.body?.client || '').toLowerCase() === 'mobile';
+}
+
+function signAccessToken(user, roles, permissions) {
+  return jwt.sign(
+    {
+      sub: user.id,
+      username: user.username,
+      email: user.email,
+      status: user.status,
+      is_superuser: user.is_superuser,
+      roles,
+      permissions,
+      jti: crypto.randomUUID(),
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '2h' }
+  );
+}
 
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -369,9 +401,87 @@ async function logout(req, res) {
     recorded = false;
     console.error('logout revoke error:', error);
   }
+  if (req.body?.refresh_token) {
+    try {
+      await refreshTokens.revoke(String(req.body.refresh_token));
+    } catch (error) {
+      recorded = false;
+      console.error('logout refresh revoke error:', error);
+    }
+  }
   // PENDING: Redis was unreachable; the revocation is retried until it lands
   // (lib/token-revocation.js). The client must discard the token either way.
   return res.json({ message: 'Logout successful', token_revocation: recorded ? 'RECORDED' : 'PENDING' });
+}
+
+// POST /auth/refresh/revoke { refresh_token } — ends a mobile session even when the
+// access token has already expired (so /auth/logout would be refused). Holding the
+// refresh token is the proof; this can only take access away.
+async function revokeRefresh(req, res) {
+  const presented = req.body?.refresh_token;
+  if (!presented || typeof presented !== 'string') {
+    return res.status(400).json({ message: 'refresh_token is required' });
+  }
+  try {
+    await refreshTokens.revoke(presented);
+    return res.json({ message: 'Refresh token revoked' });
+  } catch (error) {
+    console.error('revokeRefresh error:', error.message);
+    return res.status(503).json({ message: 'Token store unavailable', code: 'REFRESH_UNAVAILABLE' });
+  }
+}
+
+// POST /auth/refresh { refresh_token } -> a new access token and a rotated refresh
+// token. The user is re-read from the database, so a locked/deleted account or
+// changed roles take effect here rather than being copied from the old token.
+async function refresh(req, res) {
+  const presented = req.body?.refresh_token;
+  if (!presented || typeof presented !== 'string') {
+    return res.status(400).json({ message: 'refresh_token is required' });
+  }
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ message: 'JWT_SECRET is not configured' });
+  }
+
+  let record;
+  try {
+    record = await refreshTokens.consume(presented);
+  } catch (error) {
+    if (error instanceof RefreshTokenError) {
+      return res.status(401).json({ message: 'Invalid refresh token', code: error.code === 'REUSED' ? 'REFRESH_TOKEN_REUSED' : 'REFRESH_TOKEN_INVALID' });
+    }
+    console.error('refresh: token store unavailable:', error.message);
+    return res.status(503).json({ message: 'Không làm mới được phiên đăng nhập lúc này, vui lòng thử lại.', code: 'REFRESH_UNAVAILABLE' });
+  }
+
+  try {
+    const cutoff = Number(await redis.getStrict(`user:tokens-valid-after:${record.user_id}`));
+    if (Number.isFinite(cutoff) && cutoff > 0 && record.issued_at < cutoff) {
+      await refreshTokens.revokeFamily(record.family_id);
+      return res.status(401).json({ message: 'Invalid refresh token', code: 'REFRESH_TOKEN_REVOKED' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: record.user_id } });
+    if (!user || user.deleted_at || user.status !== 'ACTIVE') {
+      await refreshTokens.revokeFamily(record.family_id);
+      return res.status(401).json({ message: 'Invalid refresh token', code: 'REFRESH_TOKEN_REVOKED' });
+    }
+
+    const { roles, permissions } = await getUserRolesAndPermissions(user.id);
+    const token = signAccessToken(user, roles, permissions);
+    const next = await refreshTokens.issue(user.id, record.family_id);
+
+    return res.json({
+      message: 'Token refreshed',
+      token,
+      refresh_token: next.token,
+      refresh_expires_at: next.expiresAt,
+      user: { ...sanitizeUser(user), roles, permissions },
+    });
+  } catch (error) {
+    console.error('refresh error:', error);
+    return res.status(503).json({ message: 'Không làm mới được phiên đăng nhập lúc này, vui lòng thử lại.', code: 'REFRESH_UNAVAILABLE' });
+  }
 }
 
 async function login(req, res) {
@@ -435,24 +545,23 @@ async function login(req, res) {
 
     const { roles, permissions } = await getUserRolesAndPermissions(user.id);
 
-    const token = jwt.sign(
-      {
-        sub: user.id,
-        username: user.username,
-        email: user.email,
-        status: user.status,
-        is_superuser: user.is_superuser,
-        roles,
-        permissions,
-        jti: crypto.randomUUID(),
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '2h' }
-    );
+    const token = signAccessToken(user, roles, permissions);
+
+    let refresh = null;
+    if (wantsRefreshToken(req)) {
+      try {
+        refresh = await refreshTokens.issue(user.id);
+      } catch (error) {
+        // Redis down: the login still works, the app just has no refresh token and
+        // asks for the password again when the access token expires.
+        console.warn('login: refresh token not issued:', error.message);
+      }
+    }
 
     return res.json({
       message: 'Login successful',
       token,
+      ...(refresh ? { refresh_token: refresh.token, refresh_expires_at: refresh.expiresAt } : {}),
       user: {
         ...sanitizeUser(user),
         roles,
@@ -633,6 +742,8 @@ async function resendVerification(req, res) {
 module.exports = {
   register,
   login,
+  refresh,
+  revokeRefresh,
   me,
   listWarehouseStaff,
   updateMe,

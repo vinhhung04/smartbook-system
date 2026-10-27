@@ -46,6 +46,27 @@ async function createVnpayFinePayment(req, res) {
       return res.status(409).json({ message: 'Fine is already fully settled' });
     }
 
+    // One live payment per fine. If the reader already paid an earlier link that VNPay
+    // has not confirmed yet, a second link would be paid too and then rejected as
+    // STALE_INTENT by finalizeVnpayPayment — money taken, nothing recorded. Make them
+    // wait for the first link to be confirmed or to expire (INTENT_TTL_MS) instead.
+    const pendingIntent = await prisma.fine_payment_intents.findFirst({
+      where: { fine_id: fine.id, status: { in: ['PENDING', 'PROCESSING'] }, expires_at: { gt: new Date() } },
+      orderBy: { created_at: 'desc' },
+      select: { txn_ref: true, expires_at: true, amount: true, status: true },
+    });
+    if (pendingIntent) {
+      return res.status(409).json({
+        message: 'Khoản phạt này đang có một giao dịch VNPay chờ xác nhận. Nếu bạn đã thanh toán, vui lòng đợi hệ thống xác nhận; nếu chưa, hãy thử lại sau khi giao dịch cũ hết hạn.',
+        code: 'PAYMENT_PENDING',
+        data: {
+          txn_ref: pendingIntent.txn_ref,
+          expires_at: pendingIntent.expires_at,
+          amount: normalizeMoney(pendingIntent.amount),
+        },
+      });
+    }
+
     const txnRef = generateTxnRef();
     const orderInfo = `Thanh toan phi phat ${fine.id}`;
     const { paymentUrl, expiresAt } = vnpayService.buildPaymentUrl({

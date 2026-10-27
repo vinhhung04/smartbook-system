@@ -22,3 +22,14 @@ const AUDIT_STATUS_LABELS: Record<string, string> = {
 export function getAuditStatusLabel(status: string): string {
   return AUDIT_STATUS_LABELS[status] ?? status;
 }
+
+// The same book can sit on several shelf locations of one audit (one line per
+// variant + location). A scan alone cannot say which shelf it came from, so every
+// matching line is returned and the screen asks when there is more than one.
+export function findAuditLinesByCode(items: StockAuditLine[], rawCode: string): StockAuditLine[] {
+  const code = rawCode.trim().toLowerCase();
+  if (!code) return [];
+  return items.filter((line) =>
+    [line.sku, line.isbn13, line.isbn10, line.barcode].some((value) => value && value.toLowerCase() === code),
+  );
+}

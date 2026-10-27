@@ -1,11 +1,14 @@
 import { StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CustomerTabBarIcon } from '../../../src/components/customer/CustomerTabBarIcon';
 import { colors, fonts } from '../../../src/theme/customerTokens';
 
 export default function CustomerTabsLayout() {
+  // Float above the Android gesture/nav bar (edge-to-edge) instead of a fixed 20pt.
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -18,7 +21,7 @@ export default function CustomerTabsLayout() {
           position: 'absolute',
           left: 16,
           right: 16,
-          bottom: 20,
+          bottom: Math.max(insets.bottom, 12) + 8,
           height: 68,
           borderRadius: 28,
           borderTopWidth: 0,
@@ -36,6 +39,7 @@ export default function CustomerTabsLayout() {
           fontFamily: fonts.bodyMedium,
           fontSize: 11,
         },
+        tabBarAllowFontScaling: false,
       }}
     >
       <Tabs.Screen

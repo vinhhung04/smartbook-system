@@ -12,7 +12,8 @@ type Props = {
   coverImageUrl: string | null;
   width?: number;
   height?: number;
-  onPress: () => void;
+  /** Omit when the poster sits inside another pressable (a list row) — nested buttons confuse screen readers. */
+  onPress?: () => void;
 };
 
 /**
@@ -35,8 +36,13 @@ export function PosterCard({ title, category, coverImageUrl, width = 120, height
       <Pressable
         style={[styles.card, { width, height }]}
         onPress={onPress}
+        disabled={!onPress}
         onPressIn={() => setPressed(true)}
         onPressOut={() => setPressed(false)}
+        accessible={Boolean(onPress)}
+        accessibilityRole={onPress ? 'button' : undefined}
+        accessibilityLabel={onPress ? title : undefined}
+        tabIndex={onPress ? undefined : -1}
       >
         {showImage ? (
           <Image

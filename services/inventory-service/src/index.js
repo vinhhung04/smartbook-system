@@ -246,6 +246,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           status: true,
           task_type: true,
           priority: true,
+          description: true,
           warehouse_id: true,
           due_date: true,
           completed_at: true,
@@ -275,6 +276,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.created_at,
         completed_at: task.received_at,
         action_path: task.status === 'POSTED' ? `/putaway` : `/orders/${task.id}`,
+        source_type: 'GOODS_RECEIPT',
       })),
       ...outboundOrders.map((task) => {
         const isOutboundPhase = ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'].includes(task.status);
@@ -293,6 +295,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           created_at: task.requested_at,
           completed_at: task.completed_at,
           action_path: isOutboundPhase ? '/outbound' : '/picking',
+          source_type: 'OUTBOUND_ORDER',
         };
       }),
       ...transferOrders.map((task) => ({
@@ -307,6 +310,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.requested_at,
         completed_at: task.received_at || task.shipped_at,
         action_path: task.status === 'READY_FOR_OUTBOUND' ? '/outbound' : '/picking',
+        source_type: 'TRANSFER_ORDER',
       })),
       ...transferReceivingOrders.map((task) => ({
         id: task.id,
@@ -320,6 +324,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.requested_at,
         completed_at: task.received_at,
         action_path: '/transfer-receiving',
+        source_type: 'TRANSFER_ORDER',
       })),
       ...purchaseRequests.map((task) => ({
         id: task.id,
@@ -330,6 +335,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.created_at,
         completed_at: task.approved_at || task.rejected_at,
         action_path: `/my-purchase-requests`,
+        source_type: 'PURCHASE_REQUEST',
       })),
       ...dedupedExceptionReports.map((task) => ({
         id: task.id,
@@ -340,6 +346,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.created_at,
         completed_at: task.resolved_at,
         action_path: `/my-exception-reports`,
+        source_type: 'EXCEPTION_REPORT',
       })),
       ...staffTasks.map((task) => ({
         id: task.id,
@@ -350,6 +357,10 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         created_at: task.created_at,
         completed_at: task.completed_at,
         action_path: `/staff-tasks`,
+        source_type: 'STAFF_TASK',
+        priority: task.priority || null,
+        due_date: task.due_date || null,
+        description: task.description || null,
       })),
     ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 

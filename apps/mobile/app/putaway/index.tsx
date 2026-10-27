@@ -12,13 +12,12 @@ import {
 } from 'react-native';
 
 import * as putawayApi from '../../src/api/putaway';
-import * as authApi from '../../src/api/auth';
 import { ApiError, useAuth } from '../../src/auth/auth-context';
+import { isWarehouseManager } from '../../src/auth/access';
+import { SelectionSheet } from '../../src/components/SelectionSheet';
+import { useWarehouseStaff, type StaffOption } from '../../src/hooks/useWarehouseStaff';
 import type { PutawayReceiptSummary } from '../../src/types/putaway';
-import type { WarehouseStaffOption } from '../../src/types/auth';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
-
-const MANAGER_ROLES = ['ADMIN', 'WAREHOUSE_MANAGER'];
 
 type Row = { kind: 'mine' | 'other' | 'available'; item: PutawayReceiptSummary };
 type Filter = 'all' | 'mine';
@@ -33,10 +32,11 @@ export default function PutawayListScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
-  const [staffOptions, setStaffOptions] = useState<WarehouseStaffOption[]>([]);
+  const [assignTarget, setAssignTarget] = useState<PutawayReceiptSummary | null>(null);
+  const staff = useWarehouseStaff();
   const [error, setError] = useState<string | null>(null);
 
-  const canManage = (user?.roles ?? []).some((role) => MANAGER_ROLES.includes(role));
+  const canManage = isWarehouseManager(user);
 
   const load = useCallback(async () => {
     setError(null);
@@ -46,20 +46,16 @@ export default function PutawayListScreen() {
       // by the current user — so a receipt claimed by a different staff member must
       // still be shown here (as read-only), otherwise it silently vanishes from the
       // list and a manager can't step in if that staff member goes offline mid-task.
-      const [receipts, staff] = await Promise.all([
-        putawayApi.getReadyReceipts(),
-        canManage ? authApi.getWarehouseStaff() : Promise.resolve({ data: [] }),
-      ]);
+      const receipts = await putawayApi.getReadyReceipts();
       setMyReceipts(receipts.filter((r) => r.putaway_assignee_user_id === user?.id));
       setOtherReceipts(
         receipts.filter((r) => r.putaway_assignee_user_id && r.putaway_assignee_user_id !== user?.id),
       );
       setAvailableReceipts(receipts.filter((r) => !r.putaway_assignee_user_id));
-      setStaffOptions(staff.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Không tải được danh sách');
     }
-  }, [user?.id, canManage]);
+  }, [user?.id]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -77,6 +73,7 @@ export default function PutawayListScreen() {
   }
 
   async function handleClaim(receipt: PutawayReceiptSummary) {
+    if (claimingId) return;
     setClaimingId(receipt.id);
     try {
       await putawayApi.claimReceipt(receipt.id);
@@ -89,11 +86,14 @@ export default function PutawayListScreen() {
     }
   }
 
-  async function handleAssign(receipt: PutawayReceiptSummary, staffId: string) {
+  async function handleAssign(option: StaffOption) {
+    const receipt = assignTarget;
+    if (!receipt || assigningId) return;
+    setAssignTarget(null);
     setAssigningId(receipt.id);
     try {
-      await putawayApi.assignReceipt(receipt.id, staffId);
-      load();
+      await putawayApi.assignReceipt(receipt.id, option.userId);
+      await load();
     } catch (err) {
       Alert.alert('Giao phiếu thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');
     } finally {
@@ -102,21 +102,8 @@ export default function PutawayListScreen() {
   }
 
   function handleAssignPress(receipt: PutawayReceiptSummary) {
-    if (staffOptions.length === 0) {
-      Alert.alert('Không có nhân viên', 'Không tải được danh sách nhân viên kho.');
-      return;
-    }
-    Alert.alert(
-      `Giao phiếu ${receipt.receipt_number}`,
-      'Chọn nhân viên để giao việc cất hàng',
-      [
-        ...staffOptions.map((staff) => ({
-          text: staff.full_name,
-          onPress: () => handleAssign(receipt, staff.id),
-        })),
-        { text: 'Hủy', style: 'cancel' as const },
-      ],
-    );
+    staff.ensureLoaded();
+    setAssignTarget(receipt);
   }
 
   const sections =
@@ -181,6 +168,8 @@ export default function PutawayListScreen() {
                   style={({ pressed }) => [styles.giaoButton, pressed && styles.cardPressed]}
                   onPress={() => handleAssignPress(receipt)}
                   disabled={assigningId === receipt.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Giao phiếu ${receipt.receipt_number} cho nhân viên`}
                 >
                   <Text style={styles.giaoButtonText}>
                     {assigningId === receipt.id ? 'Đang giao...' : 'Giao'}
@@ -261,6 +250,20 @@ export default function PutawayListScreen() {
           />
         )}
       </View>
+
+      <SelectionSheet
+        visible={assignTarget !== null}
+        title={assignTarget ? `Giao phiếu ${assignTarget.receipt_number}` : ''}
+        options={staff.options}
+        selectedId={assignTarget?.putaway_assignee_user_id}
+        loading={staff.loading}
+        error={staff.error}
+        onRetry={staff.reload}
+        onSelect={handleAssign}
+        onClose={() => setAssignTarget(null)}
+        searchPlaceholder="Tìm nhân viên theo tên, tài khoản, email"
+        emptyText="Không có nhân viên kho nào trong phạm vi kho của bạn"
+      />
     </>
   );
 }
@@ -395,6 +398,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   giaoButton: {
+    minHeight: 32,
+    justifyContent: 'center',
     borderRadius: radius.pill,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm + 2,

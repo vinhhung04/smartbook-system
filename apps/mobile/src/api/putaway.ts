@@ -45,6 +45,14 @@ export function getWarehouseReceivings(warehouseId: string) {
   );
 }
 
+// What each RECEIVING/STAGING bin physically holds right now — used to pick the bin that
+// really contains this edition as the putaway source.
+export function getReceivingItems(receivingId: string) {
+  return apiFetch<{ warehouse_id: string; items: { variant_id: string; on_hand_qty: number; available_qty: number }[] }>(
+    `/api/receiving-putaway/receivings/${receivingId}/items`,
+  );
+}
+
 export function getCandidates(receivingId: string, variantId: string) {
   return apiFetch<{
     warehouse_id: string;
@@ -70,6 +78,9 @@ export function transferToShelf(body: {
   // putaway.controller.js's getReadyReceipts/getReadyReceiptDetail, which total up
   // "PUTAWAY"-bucket movements by reference_id).
   goods_receipt_id?: string;
+  // Stamped on the stock movement (unique): re-sending the same key after an
+  // unknown outcome cannot move the stock a second time.
+  idempotency_key?: string;
   allocations: {
     target_location_id: string;
     quantity: number;

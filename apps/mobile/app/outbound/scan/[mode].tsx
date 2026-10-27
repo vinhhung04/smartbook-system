@@ -3,9 +3,11 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import * as outboundApi from '../../../src/api/outbound';
-import { ApiError } from '../../../src/auth/auth-context';
+import { isOutcomeUnknown } from '../../../src/api/client';
+import { ApiError, useAuth } from '../../../src/auth/auth-context';
 import {
   SESSION_SCAN_CAP,
+  alreadyConfirmedInSession,
   createSession,
   saveSession,
   successCount,
@@ -27,6 +29,10 @@ const MODE_LABEL: Record<OutboundMode, string> = {
 export default function OutboundScanSessionScreen() {
   const { mode: rawMode } = useLocalSearchParams<{ mode: string }>();
   const mode: OutboundMode = rawMode === 'transfer' ? 'transfer' : 'outbound';
+  const { user } = useAuth();
+  const userId = user?.id ?? 'anonymous';
+  // Synchronous guard: the scanner's Enter can fire twice before isProcessing re-renders.
+  const processingRef = useRef(false);
 
   const [session, setSession] = useState<OutboundSession>(() => createSession(mode));
   const sessionRef = useRef(session);
@@ -43,29 +49,31 @@ export default function OutboundScanSessionScreen() {
   // app is killed mid-session, then finalize (set ended_at) on unmount if the
   // user backs out instead of tapping "Kết thúc phiên" or hitting the 50 cap.
   useEffect(() => {
-    saveSession(sessionRef.current).catch(() => {});
+    saveSession(userId, sessionRef.current).catch(() => {});
     return () => {
       if (!finalizedRef.current) {
-        saveSession({ ...sessionRef.current, ended_at: new Date().toISOString() }).catch(() => {});
+        saveSession(userId, { ...sessionRef.current, ended_at: new Date().toISOString() }).catch(() => {});
       }
     };
-  }, []);
+  }, [userId]);
 
   const finishSession = useCallback((finalSession: OutboundSession, message: string) => {
     finalizedRef.current = true;
-    saveSession(finalSession)
+    saveSession(userId, finalSession)
       .catch(() => {})
       .finally(() => {
         Alert.alert('Đã kết thúc phiên', message, [{ text: 'OK', onPress: () => router.replace('/outbound') }]);
       });
-  }, []);
+  }, [userId]);
 
   async function handleScanSubmit(value: string) {
     const code = value.trim();
-    if (!code || isProcessing) return;
+    if (!code || processingRef.current) return;
 
+    processingRef.current = true;
     setIsProcessing(true);
     let attempt: ScanAttempt;
+    let pending: { taskType: OutboundMode; taskId: string; orderNumber: string } | null = null;
     try {
       const [available, mine] = await Promise.all([outboundApi.getAvailableTasks(), outboundApi.getMyTasks()]);
       const resolved = resolveScannedCode(code, mode, available.data, mine.data);
@@ -78,6 +86,14 @@ export default function OutboundScanSessionScreen() {
           success: false,
           message: `Mã này thuộc "${MODE_LABEL[resolved.correctMode]}" — chuyển chế độ để quét`,
           order_number: null,
+          timestamp: new Date().toISOString(),
+        };
+      } else if (alreadyConfirmedInSession(sessionRef.current, resolved.orderNumber)) {
+        attempt = {
+          code,
+          success: false,
+          message: `Đơn ${resolved.orderNumber} đã được xác nhận trong phiên này — không xác nhận lại.`,
+          order_number: resolved.orderNumber,
           timestamp: new Date().toISOString(),
         };
       } else {
@@ -105,8 +121,9 @@ export default function OutboundScanSessionScreen() {
           };
         } else {
           if (resolved.kind === 'claim-then-confirm') {
-            await outboundApi.claimSelf(resolved.claimEndpoint);
+            await outboundApi.claimSelf(resolved.taskType, resolved.taskId);
           }
+          pending = { taskType: resolved.taskType, taskId: resolved.taskId, orderNumber: resolved.orderNumber };
           const result = await outboundApi.confirmOutbound(resolved.taskType, resolved.taskId, code);
           attempt = {
             code,
@@ -118,22 +135,30 @@ export default function OutboundScanSessionScreen() {
         }
       }
     } catch (err) {
-      attempt = {
-        code,
-        success: false,
-        message: err instanceof ApiError ? err.message : 'Xử lý thất bại, vui lòng thử lại',
-        order_number: null,
-        timestamp: new Date().toISOString(),
-      };
+      if (pending && isOutcomeUnknown(err)) {
+        // The confirm may have gone through. Ask the server instead of reporting a
+        // failure (which invites a second confirm) or a success it never confirmed.
+        attempt = await recheckAfterUnknown(code, pending);
+      } else {
+        attempt = {
+          code,
+          success: false,
+          message: err instanceof ApiError ? err.message : 'Xử lý thất bại, vui lòng thử lại',
+          order_number: pending?.orderNumber ?? null,
+          timestamp: new Date().toISOString(),
+        };
+      }
     }
 
     if (attempt.success) notifyScanSuccess();
     else notifyScanError();
 
     const nextSession: OutboundSession = { ...sessionRef.current, attempts: [...sessionRef.current.attempts, attempt] };
+    sessionRef.current = nextSession;
     setSession(nextSession);
-    saveSession(nextSession).catch(() => {});
+    saveSession(userId, nextSession).catch(() => {});
     setScanInput('');
+    processingRef.current = false;
     setIsProcessing(false);
 
     if (successCount(nextSession) >= SESSION_SCAN_CAP) {
@@ -141,6 +166,26 @@ export default function OutboundScanSessionScreen() {
         { ...nextSession, ended_at: new Date().toISOString() },
         `Đã quét đủ ${SESSION_SCAN_CAP} kiện hàng. Bắt đầu phiên mới để tiếp tục.`,
       );
+    }
+  }
+
+  async function recheckAfterUnknown(code: string, task: { taskType: OutboundMode; taskId: string; orderNumber: string }): Promise<ScanAttempt> {
+    const timestamp = new Date().toISOString();
+    try {
+      const detail = await outboundApi.getOrderStatusDetail(task.taskType, task.taskId);
+      const done = ['COMPLETED', 'SHIPPED', 'IN_TRANSIT', 'RECEIVED'].includes(detail.status);
+      return done
+        ? { code, success: true, uncertain: true, message: `Mất kết nối nhưng máy chủ đã ghi nhận: ${task.orderNumber} (${detail.status}).`, order_number: task.orderNumber, timestamp }
+        : { code, success: false, uncertain: true, message: `Mất kết nối — đơn ${task.orderNumber} chưa được xác nhận (trạng thái ${detail.status}). Có thể quét lại.`, order_number: task.orderNumber, timestamp };
+    } catch {
+      return {
+        code,
+        success: false,
+        uncertain: true,
+        message: `Chưa rõ đơn ${task.orderNumber} đã xuất kho chưa (mất kết nối). Kiểm tra lại trước khi quét lại.`,
+        order_number: task.orderNumber,
+        timestamp,
+      };
     }
   }
 
@@ -187,7 +232,10 @@ export default function OutboundScanSessionScreen() {
           ListEmptyComponent={<Text style={styles.empty}>Chưa quét kiện nào trong phiên này</Text>}
           renderItem={({ item }) => (
             <View style={styles.row}>
-              <Text style={item.success ? styles.rowTitleOk : styles.rowTitleFail}>{item.code}</Text>
+              <Text style={item.success ? styles.rowTitleOk : styles.rowTitleFail}>
+                {item.success ? '✓ ' : item.uncertain ? '? ' : '✗ '}
+                {item.code}
+              </Text>
               <Text style={item.success ? styles.rowMessageOk : styles.rowMessageFail}>{item.message}</Text>
             </View>
           )}

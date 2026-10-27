@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Stack, router } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,11 @@ import {
 
 import * as exceptionReportApi from '../../src/api/exceptionReport';
 import { ApiError } from '../../src/auth/auth-context';
+import { isOutcomeUnknown } from '../../src/api/client';
+import { SelectionSheet } from '../../src/components/SelectionSheet';
+import type { SelectOption } from '../../src/lib/optionSearch';
+import { parseOptionalQuantity, sanitizeQuantityInput } from '../../src/lib/quantity';
+import { useSubmitLock } from '../../src/lib/submitLock';
 import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
 import type { MyWarehouseTaskOption, WarehouseOption } from '../../src/types/exceptionReport';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
@@ -52,58 +59,57 @@ export default function NewExceptionReportScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([exceptionReportApi.getMyOperationalTasks(), exceptionReportApi.getWarehouses()])
-      .then(([taskList, warehouseResult]) => {
-        setTasks(taskList);
-        setWarehouses(warehouseResult.data);
-      })
-      .catch((err) => {
-        setLoadError(err instanceof ApiError ? err.message : 'Không tải được dữ liệu task/kho');
-      })
-      .finally(() => setIsLoadingContext(false));
+  const [picker, setPicker] = useState<'task' | 'warehouse' | null>(null);
+  const submitLock = useSubmitLock();
+
+  const loadContext = useCallback(async () => {
+    setIsLoadingContext(true);
+    setLoadError(null);
+    try {
+      const [taskList, warehouseResult] = await Promise.all([
+        exceptionReportApi.getMyOperationalTasks(),
+        exceptionReportApi.getWarehouses(),
+      ]);
+      setTasks(taskList);
+      setWarehouses(warehouseResult.data);
+    } catch (err) {
+      setLoadError(err instanceof ApiError ? err.message : 'Không tải được dữ liệu task/kho');
+    } finally {
+      setIsLoadingContext(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadContext();
+  }, [loadContext]);
+
+  const taskOptions = useMemo<(SelectOption & { task: MyWarehouseTaskOption })[]>(
+    () =>
+      tasks.map((task) => ({
+        id: `${task.type}-${task.id}`,
+        title: task.title,
+        subtitle: [TASK_TYPE_LABEL[task.type] ?? task.type, task.warehouse].filter(Boolean).join(' · '),
+        keywords: task.status,
+        task,
+      })),
+    [tasks],
+  );
+
+  const warehouseOptions = useMemo<SelectOption[]>(
+    () => warehouses.map((wh) => ({ id: wh.id, title: wh.name, subtitle: wh.code, keywords: wh.code })),
+    [warehouses],
+  );
 
   function warehouseLabel(id: string | null) {
     const wh = warehouses.find((w) => w.id === id);
     return wh ? `${wh.code} — ${wh.name}` : null;
   }
 
-  function handlePickTask() {
-    if (tasks.length === 0) {
-      Alert.alert('Không có task', 'Bạn không có task đang hoạt động (tiếp nhận/cất hàng/lấy hàng/xuất kho).');
-      return;
-    }
-    Alert.alert(
-      'Chọn task liên quan',
-      undefined,
-      [
-        ...tasks.map((task) => ({
-          text: `[${TASK_TYPE_LABEL[task.type] ?? task.type}] ${task.title}${task.warehouse ? ` — ${task.warehouse}` : ''}`,
-          onPress: () => {
-            setSelectedTask(task);
-            const matched = warehouses.find((w) => w.code === task.warehouse || w.name === task.warehouse);
-            if (matched) setWarehouseId(matched.id);
-          },
-        })),
-        { text: 'Hủy', style: 'cancel' as const },
-      ],
-    );
-  }
-
-  function handlePickWarehouse() {
-    if (warehouses.length === 0) return;
-    Alert.alert(
-      'Chọn kho',
-      undefined,
-      [
-        ...warehouses.map((wh) => ({
-          text: `${wh.code} — ${wh.name}`,
-          onPress: () => setWarehouseId(wh.id),
-        })),
-        { text: 'Hủy', style: 'cancel' as const },
-      ],
-    );
+  function handleSelectTask(option: SelectOption & { task: MyWarehouseTaskOption }) {
+    setPicker(null);
+    setSelectedTask(option.task);
+    const matched = warehouses.find((w) => w.code === option.task.warehouse || w.name === option.task.warehouse);
+    if (matched) setWarehouseId(matched.id);
   }
 
   async function handleSubmit() {
@@ -115,32 +121,56 @@ export default function NewExceptionReportScreen() {
       setSubmitError('Vui lòng chọn kho');
       return;
     }
+    const expected = parseOptionalQuantity(expectedQty);
+    if (!expected.ok) {
+      setSubmitError(`SL dự kiến: ${expected.error}`);
+      return;
+    }
+    const actual = parseOptionalQuantity(actualQty);
+    if (!actual.ok) {
+      setSubmitError(`SL thực tế: ${actual.error}`);
+      return;
+    }
     if (!note.trim()) {
       setSubmitError('Vui lòng mô tả sự cố');
       return;
     }
 
-    setIsSubmitting(true);
-    setSubmitError(null);
-    try {
-      await exceptionReportApi.createReport({
-        warehouse_id: warehouseId,
-        task_type: selectedTask.type,
-        task_id: selectedTask.id,
-        exception_type: exceptionType,
-        expected_qty: expectedQty ? Number(expectedQty) : undefined,
-        actual_qty: actualQty ? Number(actualQty) : undefined,
-        note: note.trim(),
-        evidence_photo_url: photoDataUrl ?? undefined,
-      });
-      Alert.alert('Đã gửi báo cáo', 'Quản lý sẽ xem xét và xử lý sự cố này.', [
-        { text: 'OK', onPress: () => router.replace('/exceptions') },
-      ]);
-    } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : 'Gửi báo cáo thất bại');
-    } finally {
-      setIsSubmitting(false);
-    }
+    await submitLock.run(async () => {
+      setIsSubmitting(true);
+      setSubmitError(null);
+      try {
+        await exceptionReportApi.createReport({
+          warehouse_id: warehouseId,
+          task_type: selectedTask.type,
+          task_id: selectedTask.id,
+          exception_type: exceptionType,
+          expected_qty: expected.value,
+          actual_qty: actual.value,
+          note: note.trim(),
+          evidence_photo_url: photoDataUrl ?? undefined,
+        });
+        Alert.alert('Đã gửi báo cáo', 'Quản lý sẽ xem xét và xử lý sự cố này.', [
+          { text: 'OK', onPress: () => router.replace('/exceptions') },
+        ]);
+      } catch (err) {
+        if (isOutcomeUnknown(err)) {
+          // The report may already exist — re-sending blindly would file it twice.
+          Alert.alert(
+            'Chưa rõ báo cáo đã được gửi hay chưa',
+            'Kết nối bị gián đoạn khi đang gửi. Hãy mở danh sách báo cáo để kiểm tra trước khi gửi lại.',
+            [
+              { text: 'Ở lại', style: 'cancel' },
+              { text: 'Xem danh sách', onPress: () => router.replace('/exceptions') },
+            ],
+          );
+        } else {
+          setSubmitError(err instanceof ApiError ? err.message : 'Gửi báo cáo thất bại');
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+    });
   }
 
   if (isLoadingContext) {
@@ -155,6 +185,9 @@ export default function NewExceptionReportScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.error}>{loadError}</Text>
+        <Pressable style={styles.retryButton} onPress={() => void loadContext()} accessibilityRole="button">
+          <Text style={styles.retryText}>Thử lại</Text>
+        </Pressable>
       </View>
     );
   }
@@ -162,10 +195,11 @@ export default function NewExceptionReportScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: 'Báo cáo sự cố mới' }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Task liên quan *</Text>
-          <Pressable style={styles.picker} onPress={handlePickTask}>
+          <Pressable style={styles.picker} onPress={() => setPicker('task')} accessibilityRole="button" accessibilityLabel="Chọn task liên quan">
             <Text style={selectedTask ? styles.pickerValue : styles.pickerPlaceholder}>
               {selectedTask
                 ? `[${TASK_TYPE_LABEL[selectedTask.type] ?? selectedTask.type}] ${selectedTask.title}`
@@ -176,7 +210,7 @@ export default function NewExceptionReportScreen() {
 
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Kho *</Text>
-          <Pressable style={styles.picker} onPress={handlePickWarehouse}>
+          <Pressable style={styles.picker} onPress={() => setPicker('warehouse')} accessibilityRole="button" accessibilityLabel="Chọn kho">
             <Text style={warehouseId ? styles.pickerValue : styles.pickerPlaceholder}>
               {warehouseLabel(warehouseId) ?? '-- Chọn kho --'}
             </Text>
@@ -207,7 +241,8 @@ export default function NewExceptionReportScreen() {
               style={styles.input}
               keyboardType="number-pad"
               value={expectedQty}
-              onChangeText={setExpectedQty}
+              onChangeText={(text) => setExpectedQty(sanitizeQuantityInput(text))}
+              accessibilityLabel="Số lượng dự kiến"
               placeholder="-"
               placeholderTextColor={colors.textMuted}
             />
@@ -218,7 +253,8 @@ export default function NewExceptionReportScreen() {
               style={styles.input}
               keyboardType="number-pad"
               value={actualQty}
-              onChangeText={setActualQty}
+              onChangeText={(text) => setActualQty(sanitizeQuantityInput(text))}
+              accessibilityLabel="Số lượng thực tế"
               placeholder="-"
               placeholderTextColor={colors.textMuted}
             />
@@ -277,6 +313,31 @@ export default function NewExceptionReportScreen() {
           )}
         </Pressable>
       </ScrollView>
+      </KeyboardAvoidingView>
+
+      <SelectionSheet
+        visible={picker === 'task'}
+        title="Chọn task liên quan"
+        options={taskOptions}
+        selectedId={selectedTask ? `${selectedTask.type}-${selectedTask.id}` : null}
+        onSelect={handleSelectTask}
+        onClose={() => setPicker(null)}
+        searchPlaceholder="Tìm theo mã phiếu, loại, kho"
+        emptyText="Bạn không có task đang hoạt động (tiếp nhận/cất hàng/lấy hàng/xuất kho)."
+      />
+      <SelectionSheet
+        visible={picker === 'warehouse'}
+        title="Chọn kho"
+        options={warehouseOptions}
+        selectedId={warehouseId}
+        onSelect={(option) => {
+          setPicker(null);
+          setWarehouseId(option.id);
+        }}
+        onClose={() => setPicker(null)}
+        searchPlaceholder="Tìm theo tên hoặc mã kho"
+        emptyText="Không có kho nào đang hoạt động"
+      />
 
       <PhotoCaptureModal
         visible={cameraOpen}
@@ -291,6 +352,23 @@ export default function NewExceptionReportScreen() {
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
+  retryButton: {
+    marginTop: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  retryText: {
+    color: colors.primary,
+    fontFamily: fonts.bodySemibold,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.bg,

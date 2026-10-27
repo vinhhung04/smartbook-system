@@ -71,6 +71,17 @@ class RedisClient {
     await this.client.setEx(key, ttlSeconds, value);
   }
 
+  // Atomic read-and-delete (refresh-token rotation: a token can be consumed once).
+  async getDelStrict(key) {
+    if (!this.client || !this.client.isReady) throw new Error('Redis is not connected');
+    return this.client.getDel(key);
+  }
+
+  async delStrict(key) {
+    if (!this.client || !this.client.isReady) throw new Error('Redis is not connected');
+    await this.client.del(key);
+  }
+
   async disconnect() {
     if (this.client) {
       await this.client.quit();

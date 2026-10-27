@@ -10,6 +10,10 @@ type Props = {
   author: string | null;
   category: string | null;
   coverImageUrl: string | null;
+  /** Why this book is on top — a real label ("Mượn nhiều nhất", "Gợi ý cho bạn"), never a fake "AI pick". */
+  eyebrow: string;
+  /** Optional one-line reason (e.g. the recommendation's server-written explanation). */
+  reason?: string | null;
   onPress: () => void;
 };
 
@@ -21,7 +25,7 @@ const BANNER_HEIGHT = 340;
  * foreground so the featured book still looks like it belongs to the same
  * poster system as the shelves below it.
  */
-export function HeroBanner({ title, author, category, coverImageUrl, onPress }: Props) {
+export function HeroBanner({ title, author, category, coverImageUrl, eyebrow, reason, onPress }: Props) {
   const [gradientStart, gradientEnd] = getCategoryGradient(category);
 
   return (
@@ -55,7 +59,7 @@ export function HeroBanner({ title, author, category, coverImageUrl, onPress }: 
         </View>
 
         <View style={styles.info}>
-          <Text style={styles.eyebrow}>NỔI BẬT</Text>
+          <Text style={styles.eyebrow}>{eyebrow}</Text>
           <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>
@@ -64,8 +68,13 @@ export function HeroBanner({ title, author, category, coverImageUrl, onPress }: 
               {author}
             </Text>
           ) : null}
+          {reason ? (
+            <Text style={styles.caption} numberOfLines={3}>
+              {reason}
+            </Text>
+          ) : null}
 
-          <Pressable style={styles.cta} onPress={onPress}>
+          <Pressable style={styles.cta} onPress={onPress} accessibilityRole="button" accessibilityLabel={`Xem chi tiết ${title}`}>
             <LinearGradient
               colors={[colors.accentGradientStart, colors.accentGradientEnd]}
               start={{ x: 0, y: 0 }}

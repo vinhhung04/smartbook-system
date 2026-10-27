@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Stack, router, useFocusEffect } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useAuth } from '../../src/auth/auth-context';
 import { SESSION_SCAN_CAP, loadSessions, successCount, type OutboundSession } from '../../src/lib/outboundSession';
 import { colors, radius, shadow, spacing, typography } from '../../src/theme/tokens';
 
@@ -12,10 +13,13 @@ function formatDateTime(iso: string): string {
 
 function sessionStatusLabel(session: OutboundSession): string {
   if (!session.ended_at) return 'Đang thực hiện';
+  if (session.interrupted) return 'Bị gián đoạn';
   return successCount(session) >= SESSION_SCAN_CAP ? 'Hoàn tất (đủ 50)' : 'Đã kết thúc';
 }
 
 export default function OutboundHomeScreen() {
+  const { user } = useAuth();
+  const userId = user?.id ?? 'anonymous';
   const [sessions, setSessions] = useState<OutboundSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -23,16 +27,18 @@ export default function OutboundHomeScreen() {
     useCallback(() => {
       let cancelled = false;
       setIsLoading(true);
-      loadSessions().then((data) => {
-        if (!cancelled) {
-          setSessions(data);
-          setIsLoading(false);
-        }
-      });
+      loadSessions(userId)
+        .then((data) => {
+          if (!cancelled) setSessions(data);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
       return () => {
         cancelled = true;
       };
-    }, []),
+    }, [userId]),
   );
 
   return (
@@ -56,7 +62,10 @@ export default function OutboundHomeScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.sectionLabel}>Lịch sử phiên</Text>
+        <Text style={styles.sectionLabel}>Lịch sử phiên quét trên thiết bị này</Text>
+        <Text style={styles.sectionHint}>
+          Chỉ là nhật ký quét của bạn trên máy này. Trạng thái xuất kho chính thức của từng đơn nằm trên hệ thống.
+        </Text>
 
         {isLoading ? (
           <View style={styles.center}>
@@ -134,6 +143,11 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     ...typography.label,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
+  },
+  sectionHint: {
+    ...typography.caption,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.xs,
   },

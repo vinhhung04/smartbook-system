@@ -2,8 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as customerBorrowApi from '../../../src/api/customerBorrow';
+import { isOutcomeUnknown } from '../../../src/api/client';
+import { BookReviews } from '../../../src/components/customer/BookReviews';
+import { useBookEngagement } from '../../../src/hooks/useBookEngagement';
+import { useSubmitLock } from '../../../src/lib/submitLock';
 import * as customerCatalogApi from '../../../src/api/customerCatalog';
 import { ApiError } from '../../../src/auth/auth-context';
 import { getCategoryGradient, getMonogramLetter } from '../../../src/lib/posterArt';
@@ -24,6 +29,8 @@ export default function CustomerBookDetailScreen() {
   const [isReserving, setIsReserving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
+  const engagement = useBookEngagement(id);
+  const reserveLock = useSubmitLock();
 
   const load = useCallback(async () => {
     setError(null);
@@ -47,23 +54,35 @@ export default function CustomerBookDetailScreen() {
 
   async function handleReserve() {
     if (!payload) return;
-    setIsReserving(true);
-    try {
-      await customerBorrowApi.createMyReservation(payload);
-      Alert.alert('Đặt trước thành công', `Nhận sách tại ${chosenBranch?.warehouse_name ?? 'chi nhánh đã chọn'}. Xem phiếu đặt ở tab "Sách của tôi".`, [
-        { text: 'Xem phiếu đặt', onPress: () => router.replace('/customer/my-books') },
-        { text: 'Đóng', style: 'cancel' },
-      ]);
-    } catch (err) {
-      const failure = err instanceof ApiError
-        ? describeReservationError(err.status, err.message)
-        : { message: 'Không đặt trước được. Vui lòng thử lại sau.', refresh: false };
-      Alert.alert('Không đặt trước được', failure.message);
-      if (failure.refresh) void load();
-    } finally {
-      setIsReserving(false);
-    }
+    await reserveLock.run(async () => {
+      setIsReserving(true);
+      try {
+        await customerBorrowApi.createMyReservation(payload);
+        Alert.alert('Đặt trước thành công', `Nhận sách tại ${chosenBranch?.warehouse_name ?? 'chi nhánh đã chọn'}. Xem phiếu đặt ở tab "Sách của tôi".`, [
+          { text: 'Xem phiếu đặt', onPress: () => router.replace('/customer/my-books') },
+          { text: 'Đóng', style: 'cancel' },
+        ]);
+      } catch (err) {
+        if (isOutcomeUnknown(err)) {
+          // Re-sending could reserve a second copy: send the reader to check first.
+          Alert.alert('Chưa rõ đã đặt trước được chưa', 'Kết nối bị gián đoạn khi gửi. Hãy kiểm tra tab "Sách của tôi" trước khi đặt lại.', [
+            { text: 'Kiểm tra', onPress: () => router.replace('/customer/my-books') },
+            { text: 'Đóng', style: 'cancel' },
+          ]);
+          return;
+        }
+        const failure = err instanceof ApiError
+          ? describeReservationError(err.status, err.message)
+          : { message: 'Không đặt trước được. Vui lòng thử lại sau.', refresh: false };
+        Alert.alert('Không đặt trước được', failure.message);
+        if (failure.refresh) void load();
+      } finally {
+        setIsReserving(false);
+      }
+    });
   }
+
+  const outOfStock = book ? book.available_quantity <= 0 || !book.reservable : false;
 
   const isReservable = Boolean(book?.reservable && book.variant_id);
   let buttonLabel = 'Hiện không thể đặt trước';
@@ -85,6 +104,41 @@ export default function CustomerBookDetailScreen() {
           <HeroArt book={book} />
 
           <View style={styles.body}>
+            <View style={styles.actionRow}>
+              <Pressable
+                style={[styles.actionChip, engagement.saved && styles.actionChipActive]}
+                onPress={() => void engagement.toggleWishlist()}
+                disabled={engagement.saved === null || engagement.busy !== null}
+                accessibilityRole="button"
+                accessibilityState={{ selected: Boolean(engagement.saved), disabled: engagement.saved === null }}
+                accessibilityLabel={engagement.saved ? 'Bỏ khỏi danh sách yêu thích' : 'Thêm vào danh sách yêu thích'}
+              >
+                {engagement.busy === 'wishlist' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name={engagement.saved ? 'heart' : 'heart-outline'} size={18} color={engagement.saved ? colors.danger : colors.textPrimary} />
+                )}
+                <Text style={styles.actionChipText}>{engagement.saved ? 'Đã lưu' : 'Yêu thích'}</Text>
+              </Pressable>
+              {outOfStock ? (
+                <Pressable
+                  style={[styles.actionChip, engagement.alertActive && styles.actionChipActive]}
+                  onPress={() => void engagement.toggleAlert()}
+                  disabled={engagement.alertActive === null || engagement.busy !== null}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: Boolean(engagement.alertActive) }}
+                  accessibilityLabel={engagement.alertActive ? 'Hủy báo khi có sách' : 'Báo cho tôi khi có sách'}
+                >
+                  {engagement.busy === 'alert' ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name={engagement.alertActive ? 'notifications' : 'notifications-outline'} size={18} color={engagement.alertActive ? colors.primary : colors.textPrimary} />
+                  )}
+                  <Text style={styles.actionChipText}>{engagement.alertActive ? 'Sẽ báo khi có sách' : 'Báo khi có sách'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
             <View style={styles.metaGrid}>
               <MetaRow label="Tác giả" value={book.author ?? '—'} />
               <MetaRow label="Thể loại" value={book.category ?? '—'} />
@@ -156,6 +210,8 @@ export default function CustomerBookDetailScreen() {
                 <Text style={styles.buttonText}>{buttonLabel}</Text>
               )}
             </Pressable>
+
+            <BookReviews bookId={book.id} />
           </View>
         </ScrollView>
       )}
@@ -207,6 +263,31 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  actionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  actionChipActive: {
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.primarySoft,
+  },
+  actionChipText: {
+    fontFamily: fonts.bodySemibold,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.bg,

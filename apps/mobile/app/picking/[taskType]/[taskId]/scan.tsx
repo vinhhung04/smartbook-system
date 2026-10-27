@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import {
   ActivityIndicator,
@@ -13,6 +13,9 @@ import {
 
 import * as pickingApi from '../../../../src/api/picking';
 import { ApiError } from '../../../../src/auth/auth-context';
+import { isOutcomeUnknown } from '../../../../src/api/client';
+import { parseWholeQuantity, sanitizeQuantityInput } from '../../../../src/lib/quantity';
+import { useSubmitLock } from '../../../../src/lib/submitLock';
 import { notifyScanError, notifyScanSuccess } from '../../../../src/scanner/haptics';
 import { matchesCode } from '../../../../src/scanner/matching';
 import { ScanField } from '../../../../src/scanner/ScanField';
@@ -40,11 +43,13 @@ export default function ScanScreen() {
   const [isLookingUpProduct, setIsLookingUpProduct] = useState(false);
   const [ambiguousMatches, setAmbiguousMatches] = useState<VariantMatch[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
+  const productLookupRef = useRef(0);
 
   // Step 3: quantity + submit.
   const [quantity, setQuantity] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitLock = useSubmitLock();
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -119,11 +124,14 @@ export default function ScanScreen() {
     const barcode = value.trim();
     if (!line || !barcode) return;
 
+    const requestId = ++productLookupRef.current;
     setIsLookingUpProduct(true);
     setProductMessage(null);
     setAmbiguousMatches([]);
     try {
       const result = await pickingApi.lookupVariantByBarcode(barcode);
+      // A newer scan was submitted while this lookup was in flight — its answer wins.
+      if (requestId !== productLookupRef.current) return;
 
       if (result.ambiguous) {
         setAmbiguousMatches(result.matches);
@@ -143,11 +151,12 @@ export default function ScanScreen() {
         setProductMessage({ text: 'Sai sản phẩm cho dòng hiện tại.', ok: false });
       }
     } catch (err) {
+      if (requestId !== productLookupRef.current) return;
       notifyScanError();
       setProductVerified(false);
       setProductMessage({ text: err instanceof ApiError ? err.message : 'Không tra được mã sản phẩm', ok: false });
     } finally {
-      setIsLookingUpProduct(false);
+      if (requestId === productLookupRef.current) setIsLookingUpProduct(false);
     }
   }
 
@@ -170,40 +179,49 @@ export default function ScanScreen() {
   async function handleConfirm() {
     const line = task?.current_line;
     if (!line) return;
-    const qty = Number(quantity);
-    if (!qty || qty <= 0) {
-      setSubmitError('Số lượng phải lớn hơn 0');
-      return;
-    }
-    if (qty > line.remaining_qty) {
-      setSubmitError(`Số lượng không được vượt quá ${line.remaining_qty}`);
+    const parsed = parseWholeQuantity(quantity, { max: line.remaining_qty, maxLabel: 'số còn cần lấy' });
+    if (!parsed.ok) {
+      setSubmitError(parsed.error);
       return;
     }
 
-    setIsSubmitting(true);
-    setSubmitError(null);
-    try {
-      const result = await pickingApi.confirmLine(taskType, taskId, line.line_id, {
-        quantity: qty,
-        scanned_location_input: locationInput.trim(),
-        scanned_product_barcode: productInput.trim() || undefined,
-        scanned_variant_id: selectedVariantId ?? undefined,
-      });
+    await submitLock.run(async () => {
+      setIsSubmitting(true);
+      setSubmitError(null);
+      try {
+        const result = await pickingApi.confirmLine(taskType, taskId, line.line_id, {
+          quantity: parsed.value,
+          scanned_location_input: locationInput.trim(),
+          scanned_product_barcode: productInput.trim() || undefined,
+          scanned_variant_id: selectedVariantId ?? undefined,
+        });
 
-      if (result.data.task_completed) {
-        Alert.alert('Hoàn tất!', 'Đã lấy đủ toàn bộ sản phẩm trong phiếu này.', [
-          { text: 'OK', onPress: () => router.replace('/picking') },
-        ]);
-        return;
+        if (result.data.task_completed) {
+          Alert.alert('Hoàn tất!', 'Đã lấy đủ toàn bộ sản phẩm trong phiếu này.', [
+            { text: 'OK', onPress: () => router.replace('/picking') },
+          ]);
+          return;
+        }
+
+        await load();
+        resetAll(null);
+      } catch (err) {
+        if (isOutcomeUnknown(err)) {
+          // confirm-line adds to picked_qty, so a blind retry could pick the line twice.
+          // Reload the task: if the line moved on, the pick was recorded.
+          const before = line.picked_qty;
+          await load();
+          setSubmitError(
+            `Chưa rõ lần xác nhận vừa rồi đã được ghi nhận chưa (trước đó đã lấy ${before}/${line.requested_qty}). ` +
+              'Đã tải lại phiếu — kiểm tra số "đã lấy" trước khi xác nhận lại.',
+          );
+        } else {
+          setSubmitError(err instanceof ApiError ? err.message : 'Xác nhận thất bại');
+        }
+      } finally {
+        setIsSubmitting(false);
       }
-
-      await load();
-      resetAll(null);
-    } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : 'Xác nhận thất bại');
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   }
 
   if (isLoading) {
@@ -324,7 +342,9 @@ export default function ScanScreen() {
               style={styles.input}
               keyboardType="number-pad"
               value={quantity}
-              onChangeText={setQuantity}
+              onChangeText={(text) => setQuantity(sanitizeQuantityInput(text))}
+              accessibilityLabel="Số lượng đã lấy"
+              maxLength={6}
             />
             {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
             <Pressable

@@ -26,7 +26,9 @@ export function resolveScannedCode(
   available: AvailableOutboundTask[],
   mine: OutboundTaskListItem[],
 ): ResolvedTask {
-  const availableMatch = available.find((t) => t.task_type === mode && matchesCode([t.title], code));
+  // /api/my-warehouse-tasks/available also lists PICKING-step tasks; only the outbound step counts here.
+  const claimable = available.filter((t) => t.type === 'OUTBOUND');
+  const availableMatch = claimable.find((t) => t.task_type === mode && matchesCode([t.title], code));
   if (availableMatch) {
     return {
       kind: 'claim-then-confirm',
@@ -51,7 +53,7 @@ export function resolveScannedCode(
 
   const otherMode: OutboundMode = mode === 'outbound' ? 'transfer' : 'outbound';
   const inOtherMode =
-    available.some((t) => t.task_type === otherMode && matchesCode([t.title], code)) ||
+    claimable.some((t) => t.task_type === otherMode && matchesCode([t.title], code)) ||
     mine.some((t) => t.task_type === otherMode && matchesCode([t.order_number], code));
   if (inOtherMode) {
     return { kind: 'wrong-mode', correctMode: otherMode };

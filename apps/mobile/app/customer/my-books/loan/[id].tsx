@@ -6,7 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as customerBorrowApi from '../../../../src/api/customerBorrow';
 import { ApiError } from '../../../../src/auth/auth-context';
 import { GlowBadge } from '../../../../src/components/customer/GlowBadge';
-import { canRequestRenewal, getLoanStatusDisplay } from '../../../../src/lib/loanStatus';
+import { getDueState, getLoanStatusDisplay, getRenewalView } from '../../../../src/lib/loanStatus';
+import { useSubmitLock } from '../../../../src/lib/submitLock';
 import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/customerTokens';
 import type { Loan } from '../../../../src/types/borrow';
 
@@ -16,6 +17,7 @@ export default function CustomerLoanDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRenewing, setIsRenewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const renewLock = useSubmitLock();
 
   const load = useCallback(async () => {
     setError(null);
@@ -33,19 +35,27 @@ export default function CustomerLoanDetailScreen() {
   }, [load]);
 
   async function handleRenewRequest() {
-    setIsRenewing(true);
-    try {
-      const result = await customerBorrowApi.requestMyLoanRenewal(id);
-      Alert.alert(
-        'Đã gửi yêu cầu gia hạn',
-        `Thư viện sẽ xem xét gia hạn thêm ${result.data.requested_extension_days} ngày.`,
-      );
-    } catch (err) {
-      Alert.alert('Không gửi được yêu cầu', err instanceof ApiError ? err.message : 'Vui lòng thử lại sau.');
-    } finally {
-      setIsRenewing(false);
-    }
+    await renewLock.run(async () => {
+      setIsRenewing(true);
+      try {
+        const result = await customerBorrowApi.requestMyLoanRenewal(id);
+        Alert.alert(
+          'Đã gửi yêu cầu gia hạn',
+          `Thư viện sẽ xem xét gia hạn thêm ${result.data.requested_extension_days} ngày.`,
+        );
+      } catch (err) {
+        Alert.alert('Không gửi được yêu cầu', err instanceof ApiError ? err.message : 'Vui lòng thử lại sau.');
+      } finally {
+        // Either way, show the server's view: a request that did land (lost response)
+        // turns the button into "đang chờ duyệt" instead of inviting a second one.
+        await load();
+        setIsRenewing(false);
+      }
+    });
   }
+
+  const due = loan ? getDueState(loan.due_date, loan.status) : null;
+  const renewal = loan ? getRenewalView(loan.status, loan.renewal) : null;
 
   return (
     <>
@@ -62,7 +72,13 @@ export default function CustomerLoanDetailScreen() {
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
           <View style={styles.statusRow}>
             <GlowBadge text={getLoanStatusDisplay(loan.status).label} tone={getLoanStatusDisplay(loan.status).tone} />
+            {due && (due.kind === 'overdue' || due.kind === 'soon') ? (
+              <GlowBadge text={due.label} tone={due.kind === 'overdue' ? 'danger' : 'warning'} />
+            ) : null}
           </View>
+          {due?.kind === 'overdue' ? (
+            <Text style={styles.notice}>Sách đã quá hạn trả — phí phạt trả trễ có thể phát sinh theo quy định của thư viện.</Text>
+          ) : null}
 
           <View style={styles.metaGrid}>
             <MetaRow label="Ngày mượn" value={new Date(loan.borrow_date).toLocaleDateString('vi-VN')} />
@@ -75,14 +91,20 @@ export default function CustomerLoanDetailScreen() {
               <Text style={styles.sectionLabel}>Đầu sách trong lượt mượn</Text>
               {loan.loan_items.map((item) => (
                 <View key={item.id} style={styles.itemRow}>
-                  <Text style={styles.itemBarcode}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
-                  <Text style={styles.itemStatus}>{item.status}</Text>
+                  <View style={styles.itemBody}>
+                    <Text style={styles.itemTitle} numberOfLines={2}>{item.book_title ?? 'Sách chưa có tên'}</Text>
+                    {item.book_author ? <Text style={styles.itemStatus}>{item.book_author}</Text> : null}
+                    <Text style={styles.itemBarcode}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
+                  </View>
+                  <Text style={styles.itemStatus}>{getLoanStatusDisplay(item.status as Loan['status'])?.label ?? item.status}</Text>
                 </View>
               ))}
             </View>
           ) : null}
 
-          {canRequestRenewal(loan.status) ? (
+          {renewal?.note ? <Text style={styles.notice}>{renewal.note}</Text> : null}
+
+          {renewal?.canRequest ? (
             <Pressable
               style={({ pressed }) => [styles.button, isRenewing && styles.buttonDisabled, pressed && styles.buttonPressed]}
               onPress={handleRenewRequest}
@@ -138,7 +160,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusRow: {
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  notice: {
+    ...typography.caption,
+    color: colors.warning,
+  },
+  itemBody: {
+    flex: 1,
+    gap: 2,
+  },
+  itemTitle: {
+    ...typography.bodyBold,
+    fontSize: 15,
   },
   metaGrid: {
     backgroundColor: colors.surface,
@@ -165,6 +201,8 @@ const styles = StyleSheet.create({
   },
   itemRow: {
     flexDirection: 'row',
+    gap: spacing.md,
+    alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surface,
     borderRadius: radius.md,
@@ -179,6 +217,8 @@ const styles = StyleSheet.create({
   },
   button: {
     borderRadius: radius.pill,
+    minHeight: 52,
+    justifyContent: 'center',
     paddingVertical: spacing.md + 4,
     alignItems: 'center',
     overflow: 'hidden',

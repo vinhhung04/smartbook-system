@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,26 @@ import { MotiView } from 'moti';
 import Svg, { Line, Path, Rect } from 'react-native-svg';
 
 import { ApiError, useAuth } from '../src/auth/auth-context';
+import { getApiConfigError } from '../src/api/config';
 import { colors, fonts, radius, spacing } from '../src/theme/loginTokens';
+
+// auth-service answers in English; the people holding the phone read Vietnamese.
+const LOGIN_ERRORS: Record<string, string> = {
+  'Invalid credentials': 'Sai tài khoản hoặc mật khẩu.',
+  'User is not active': 'Tài khoản đang bị khóa hoặc chưa được kích hoạt. Liên hệ quản trị viên.',
+  'Account locked due to too many failed login attempts. Contact an administrator.':
+    'Tài khoản đã bị khóa do nhập sai mật khẩu quá nhiều lần. Liên hệ quản trị viên.',
+  'Identifier and password are required': 'Vui lòng nhập tài khoản và mật khẩu.',
+};
+
+function describeLoginError(err: unknown): string {
+  if (!(err instanceof ApiError)) return 'Đăng nhập thất bại';
+  if (err.kind === 'network' || err.kind === 'timeout') {
+    return 'Không kết nối được máy chủ SmartBook. Kiểm tra mạng (hoặc địa chỉ máy chủ) rồi thử lại.';
+  }
+  if (err.status === 429) return 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng đợi ít phút rồi thử lại.';
+  return LOGIN_ERRORS[err.message] ?? err.message;
+}
 
 // Role is unknown until the JWT comes back, so this screen deliberately has
 // its own neutral token set (loginTokens) rather than the staff-green or
@@ -18,14 +37,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const passwordRef = useRef<TextInput>(null);
+  const configError = getApiConfigError();
 
   async function handleSubmit() {
+    if (isSubmitting || !username.trim() || !password) return;
     setError(null);
     setIsSubmitting(true);
     try {
       await login(username.trim(), password);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Đăng nhập thất bại');
+      setError(describeLoginError(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -36,6 +58,8 @@ export default function LoginScreen() {
       <LinearGradient colors={[colors.paperTop, colors.paperBottom]} style={StyleSheet.absoluteFill} />
 
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" bounces={false}>
         <MotiView
           from={{ opacity: 0, translateY: 10 }}
           animate={{ opacity: 1, translateY: 0 }}
@@ -68,8 +92,13 @@ export default function LoginScreen() {
                   placeholderTextColor={colors.inkMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  autoComplete="username"
+                  textContentType="username"
+                  returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
                   value={username}
                   onChangeText={setUsername}
+                  accessibilityLabel="Tài khoản"
                 />
               </View>
             </View>
@@ -79,18 +108,30 @@ export default function LoginScreen() {
               <View style={styles.underlineRow}>
                 <Ionicons name="lock-closed-outline" size={18} color={colors.inkMuted} />
                 <TextInput
+                  ref={passwordRef}
                   style={styles.input}
                   placeholder="Nhập mật khẩu"
                   placeholderTextColor={colors.inkMuted}
                   secureTextEntry
+                  autoComplete="password"
+                  textContentType="password"
+                  returnKeyType="go"
+                  onSubmitEditing={handleSubmit}
                   value={password}
                   onChangeText={setPassword}
+                  accessibilityLabel="Mật khẩu"
                 />
               </View>
             </View>
 
-            {error ? (
+            {configError ? (
               <View style={styles.errorBox}>
+                <Text style={styles.error}>Bản cài đặt này chưa được cấu hình máy chủ: {configError}</Text>
+              </View>
+            ) : null}
+
+            {error ? (
+              <View style={styles.errorBox} accessibilityLiveRegion="polite">
                 <Text style={styles.error}>{error}</Text>
               </View>
             ) : null}
@@ -103,6 +144,8 @@ export default function LoginScreen() {
               ]}
               onPress={handleSubmit}
               disabled={isSubmitting || !username || !password}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: isSubmitting || !username || !password, busy: isSubmitting }}
             >
               <LinearGradient
                 colors={[colors.accent, colors.accentDeep]}
@@ -118,6 +161,8 @@ export default function LoginScreen() {
             </Pressable>
           </View>
         </MotiView>
+        </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
@@ -193,6 +238,12 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  keyboard: {
+    flex: 1,
+  },
+  scroll: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: spacing.xl,
   },

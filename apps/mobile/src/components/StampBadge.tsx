@@ -1,5 +1,6 @@
 import { StyleSheet, Text } from 'react-native';
 import { MotiView } from 'moti';
+import { useReducedMotion } from 'react-native-reanimated';
 
 import { colors, fonts, radius, spacing } from '../theme/tokens';
 
@@ -25,11 +26,14 @@ type Props = {
  */
 export function StampBadge({ text, tone = 'primary', rotate = -3 }: Props) {
   const color = TONE_COLOR[tone];
+  // Shown after every scan in continuous scanning; with Reduce Motion it just appears.
+  const reducedMotion = useReducedMotion();
   return (
     <MotiView
-      from={{ opacity: 0, scale: 0.7, rotate: '0deg' }}
+      accessibilityLiveRegion="polite"
+      from={reducedMotion ? undefined : { opacity: 0, scale: 0.7, rotate: '0deg' }}
       animate={{ opacity: 1, scale: 1, rotate: `${rotate}deg` }}
-      transition={{ type: 'spring', damping: 12, mass: 0.6 }}
+      transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', damping: 12, mass: 0.6 }}
       style={[styles.stamp, { borderColor: color }]}
     >
       <Text style={[styles.text, { color }]}>{text}</Text>

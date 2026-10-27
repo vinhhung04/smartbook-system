@@ -2,6 +2,8 @@ const express = require('express');
 const {
   register,
   login,
+  refresh,
+  revokeRefresh,
   me,
   listWarehouseStaff,
   updateMe,
@@ -27,10 +29,15 @@ const authRateLimit = createRateLimiter({
   trustedProxyHops: 2,
 });
 const resetRateLimit = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
+const refreshRateLimit = createRateLimiter({ max: Number(process.env.AUTH_REFRESH_RATE_LIMIT_MAX) || 30, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
 
 // Public endpoints
 router.post('/register', authRateLimit, register);
 router.post('/login', authRateLimit, login);
+// Mobile session renewal. Separate budget from login: a refresh is not a password
+// guess, but it is still bounded so a stolen token cannot be hammered.
+router.post('/refresh', refreshRateLimit, refresh);
+router.post('/refresh/revoke', refreshRateLimit, revokeRefresh);
 router.post('/logout', authenticateToken, logout);
 router.get('/me', authenticateToken, me);
 router.get('/warehouse-staff', authenticateToken, listWarehouseStaff);

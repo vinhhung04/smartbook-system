@@ -1,12 +1,20 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MotiView } from 'moti';
 
 import { useAuth } from '../../src/auth/auth-context';
+import { describeRoles } from '../../src/lib/roles';
 import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+
+  function confirmLogout() {
+    Alert.alert('Đăng xuất?', 'Phiên quét đang mở (nếu có) sẽ được lưu vào lịch sử trên máy này.', [
+      { text: 'Ở lại', style: 'cancel' },
+      { text: 'Đăng xuất', style: 'destructive', onPress: () => void logout() },
+    ]);
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -23,12 +31,13 @@ export default function ProfileScreen() {
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{user?.username?.slice(0, 2).toUpperCase()}</Text>
         </View>
-        <Text style={styles.username}>{user?.username}</Text>
-        <Text style={styles.roles}>{user?.roles.join(', ')}</Text>
+        <Text style={styles.username}>{user?.full_name || user?.username}</Text>
+        {user?.full_name ? <Text style={styles.email}>@{user.username}</Text> : null}
+        <Text style={styles.roles}>{describeRoles(user?.roles ?? [])}</Text>
         <Text style={styles.email}>{user?.email}</Text>
       </MotiView>
 
-      <Pressable style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutPressed]} onPress={logout}>
+      <Pressable style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutPressed]} onPress={confirmLogout} accessibilityRole="button">
         <Text style={styles.logoutText}>Đăng xuất</Text>
       </Pressable>
     </SafeAreaView>

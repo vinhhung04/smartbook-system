@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,6 +10,12 @@ import { useCatalogPages } from '../../src/hooks/useCatalogPages';
 const SEARCH_DEBOUNCE_MS = 400;
 
 export default function CustomerSearchScreen() {
+  // Opened from a home "Danh mục" tile: browse that category without typing.
+  const params = useLocalSearchParams<{ category?: string; categoryName?: string }>();
+  const [category, setCategory] = useState<{ slug: string; name: string } | null>(
+    params.category ? { slug: String(params.category), name: String(params.categoryName ?? params.category) } : null,
+  );
+  const [availableOnly, setAvailableOnly] = useState(false);
   const [search, setSearch] = useState('');
   // The term actually queried: updated after the debounce, so each keystroke
   // does not start a request. Empty → nothing to load.
@@ -20,7 +26,11 @@ export default function CustomerSearchScreen() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const catalog = useCatalogPages(term ? { search: term } : null);
+  const catalog = useCatalogPages(
+    term || category
+      ? { ...(term ? { search: term } : {}), ...(category ? { category: category.slug } : {}), ...(availableOnly ? { availability: 'available' as const } : {}) }
+      : null,
+  );
   const isTyping = search.trim() !== term;
 
   return (
@@ -49,10 +59,32 @@ export default function CustomerSearchScreen() {
           onChangeText={setSearch}
           autoCapitalize="none"
           autoCorrect={false}
-          autoFocus
+          autoFocus={!category}
+          returnKeyType="search"
+          accessibilityLabel="Tìm sách"
         />
+        <View style={styles.filters}>
+          {category ? (
+            <Pressable style={[styles.filterChip, styles.filterChipActive]} onPress={() => setCategory(null)} accessibilityRole="button" accessibilityLabel={`Bỏ lọc danh mục ${category.name}`}>
+              <Text style={styles.filterChipTextActive}>{category.name}</Text>
+              <Ionicons name="close" size={14} color={colors.primary} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={[styles.filterChip, availableOnly && styles.filterChipActive]}
+            onPress={() => setAvailableOnly((value) => !value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: availableOnly }}
+          >
+            <Text style={availableOnly ? styles.filterChipTextActive : styles.filterChipText}>Chỉ sách còn</Text>
+          </Pressable>
+          <Pressable style={styles.filterChip} onPress={() => router.push('/customer/assistant')} accessibilityRole="button">
+            <Ionicons name="sparkles-outline" size={14} color={colors.textSecondary} />
+            <Text style={styles.filterChipText}>Mô tả bằng lời</Text>
+          </Pressable>
+        </View>
 
-        {(catalog.loadingInitial || (isTyping && catalog.items.length === 0)) && search.trim() ? (
+        {(catalog.loadingInitial || (isTyping && catalog.items.length === 0)) && (search.trim() || category) ? (
           <ActivityIndicator color={colors.primary} style={styles.spinner} />
         ) : catalog.error && catalog.items.length === 0 ? (
           <Pressable onPress={catalog.retry} accessibilityRole="button">
@@ -67,7 +99,7 @@ export default function CustomerSearchScreen() {
             onEndReached={catalog.loadMore}
             onEndReachedThreshold={0.5}
             ListHeaderComponent={
-              term && catalog.total > 0 ? <Text style={styles.count}>{catalog.total} kết quả</Text> : null
+              (term || category) && catalog.total > 0 ? <Text style={styles.count}>{catalog.total} kết quả</Text> : null
             }
             ListFooterComponent={
               catalog.loadingMore ? (
@@ -127,7 +159,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
     backgroundColor: colors.surface,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  filters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  filterChipActive: {
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.primarySoft,
+  },
+  filterChipText: {
+    ...typography.caption,
+  },
+  filterChipTextActive: {
+    ...typography.caption,
+    color: colors.primary,
   },
   spinner: {
     marginTop: spacing.xl,

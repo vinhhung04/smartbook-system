@@ -105,3 +105,10 @@ describe('resolveScannedCode', () => {
     expect(result.kind).toBe('claim-then-confirm');
   });
 });
+
+describe('resolveScannedCode — picking-step tasks', () => {
+  it('ignores an available PICKING-step task with the same order number', () => {
+    const picking = makeAvailable({ type: 'PICKING', status: 'APPROVED', claim_endpoint: '/api/picking/tasks/outbound/task-1/claim-self' });
+    expect(resolveScannedCode('OUT-001', 'outbound', [picking], [])).toEqual({ kind: 'not-found' });
+  });
+});
