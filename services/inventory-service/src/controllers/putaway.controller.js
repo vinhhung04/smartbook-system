@@ -14,7 +14,7 @@ const { createMovementNumber } = require('../utils/inventory');
 const { MAX_COMPARTMENT_CAPACITY } = require('../utils/constants');
 const { invalidateCache } = require('../services/storage-suggestion.service');
 const {
-  canReadWarehouse,
+  requireAssignableUser,
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
   scopedWarehouseWhere,
@@ -378,6 +378,7 @@ async function getReadyReceiptDetail(req, res) {
       warehouse_name: receipt.warehouses?.name || null,
       status: receipt.status,
       approved_by_user_id: receipt.received_by_user_id || null,
+      putaway_assignee_user_id: receipt.putaway_assignee_user_id || null,
       received_at: receipt.received_at,
       created_at: receipt.created_at,
       note: receipt.note,
@@ -1073,9 +1074,7 @@ async function assignPutawayTask(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu nhập' });
     }
     if (!(await requireWarehouseWriteAccess(req, res, receipt.warehouse_id))) return undefined;
-    if (!(await canReadWarehouse({ id: assigneeUserId }, receipt.warehouse_id))) {
-      return res.status(400).json({ message: 'Người được giao không có quyền ở kho này', code: 'ASSIGNEE_OUT_OF_SCOPE' });
-    }
+    if (!(await requireAssignableUser(res, assigneeUserId, receipt.warehouse_id))) return undefined;
     if (receipt.status !== READY_PUTAWAY_STATUS) {
       return res.status(400).json({ message: 'Phiếu nhập chưa được duyệt (cần status POSTED)' });
     }

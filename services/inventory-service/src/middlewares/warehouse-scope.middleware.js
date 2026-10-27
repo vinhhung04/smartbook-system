@@ -66,4 +66,36 @@ function enforceRequestedWarehouseScope() {
   };
 }
 
-module.exports = { enforceRequestedWarehouseScope, EXEMPT_PREFIXES };
+/**
+ * Route guard for endpoints that act on ONE stored record (claim, assign,
+ * scan, confirm...). The warehouse is read from the record, never from the
+ * client: `load(req)` returns the record's warehouse id, null when the record
+ * carries none (then only a superuser passes), or undefined when the record
+ * does not exist (the controller answers 404 itself). READ scope never lets a
+ * caller claim or change anything - `access` defaults to 'write'.
+ * `fresh` re-reads the scope (no cache) for claims and final confirmations.
+ */
+function requireRecordWarehouse(load, { access = 'write', fresh = false } = {}) {
+  const check = access === 'read' ? canReadWarehouse : canWriteWarehouse;
+  return async (req, res, next) => {
+    if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+    try {
+      const warehouseId = await load(req);
+      if (warehouseId === undefined) return next();
+      if (!(await check(req.user, warehouseId, { fresh }))) {
+        return res.status(403).json({
+          message: `You do not have ${access} access to this warehouse`,
+          code: 'WAREHOUSE_ACCESS_DENIED',
+        });
+      }
+    } catch (error) {
+      if (error instanceof WarehouseScopeUnavailableError) {
+        return res.status(503).json({ message: error.message, code: error.code });
+      }
+      return next(error);
+    }
+    return next();
+  };
+}
+
+module.exports = { enforceRequestedWarehouseScope, requireRecordWarehouse, EXEMPT_PREFIXES };

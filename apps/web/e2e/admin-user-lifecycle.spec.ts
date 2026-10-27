@@ -30,6 +30,8 @@ test('admin creates, assigns a role to, and locks a user', async ({ page }) => {
   // Lock the user just created.
   const userRow = page.locator('tr', { hasText: username });
   await userRow.getByTestId('toggle-lock-user-button').click();
+  // locking asks first (it ends the user's sessions and warehouse access)
+  await page.getByTestId('confirm-dialog-action').click();
   await expect(page.getByText('Đã khóa người dùng')).toBeVisible();
 
   await logout(page);

@@ -12,6 +12,8 @@ const {
 } = require('./middlewares/auth.middleware');
 const { enforceRequestedWarehouseScope } = require('./middlewares/warehouse-scope.middleware');
 const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
+const { createInternalWarehousesRouter } = require('./routes/internal-warehouses.routes');
+const { clearScopeCache } = require('./utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
@@ -91,6 +93,7 @@ app.use('/api/supplier-portal', rejectInvalidUuidParams(supplierPortalRoutes));
 app.use('/internal/authority', internalAuthorityRoutes);
 app.use('/internal/covers', internalCatalogRoutes);
 app.use('/internal/catalog/books', internalBookCorpusRoutes);
+app.use('/internal', createInternalWarehousesRouter({ prisma, onScopeChanged: clearScopeCache }));
 // Read-only anonymous catalog for the public website (see routes/public-catalog.routes.js).
 app.use('/public/catalog', publicCatalogRoutes);
 

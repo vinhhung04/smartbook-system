@@ -2,6 +2,19 @@ const bcrypt = require('bcryptjs');
 const BCRYPT_ROUNDS = 12;
 const prisma = require('../lib/prisma');
 const { revokeUserTokensIssuedBefore } = require('../lib/token-revocation');
+const { createWarehouseDirectory, WarehouseDirectoryUnavailableError } = require('../lib/warehouse-directory');
+const { AssignmentError, normalizeScopeInput, normalizePrimaryInput, normalizeRoleCodes } = require('../lib/warehouse-assignment');
+
+const warehouseDirectory = createWarehouseDirectory();
+
+// The user's warehouse scope rows, as one JSON array column (a subquery, so the
+// role join does not multiply them).
+const WAREHOUSE_SCOPES_COLUMN = `
+        COALESCE(
+          (SELECT json_agg(json_build_object('warehouse_id', s.warehouse_id, 'access_level', s.access_level) ORDER BY s.created_at)
+             FROM user_warehouse_scopes s WHERE s.user_id = u.id),
+          '[]'::json
+        ) AS warehouse_scopes`;
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -96,7 +109,7 @@ async function getUserWithRoles(tx, userId) {
           json_agg(DISTINCT jsonb_build_object('id', r.id, 'code', r.code, 'name', r.name))
           FILTER (WHERE r.id IS NOT NULL),
           '[]'::json
-        ) AS roles
+        ) AS roles,${WAREHOUSE_SCOPES_COLUMN}
       FROM users u
       LEFT JOIN user_roles ur ON ur.user_id = u.id AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
       LEFT JOIN roles r ON r.id = ur.role_id
@@ -144,6 +157,24 @@ async function listUsers(req, res) {
       conditions.push(`u.status = $${params.length}`);
     }
 
+    const role = normalizeText(req.query.role).toUpperCase();
+    if (role) {
+      params.push(role);
+      conditions.push(`EXISTS (
+        SELECT 1 FROM user_roles fr JOIN roles frr ON frr.id = fr.role_id
+         WHERE fr.user_id = u.id AND frr.code = $${params.length}
+           AND (fr.expires_at IS NULL OR fr.expires_at > NOW()))`);
+    }
+
+    const warehouseId = normalizeText(req.query.warehouse_id).toLowerCase();
+    if (warehouseId) {
+      if (!isValidUuid(warehouseId)) {
+        return res.status(400).json({ message: 'warehouse_id must be a UUID' });
+      }
+      params.push(warehouseId);
+      conditions.push(`EXISTS (SELECT 1 FROM user_warehouse_scopes fs WHERE fs.user_id = u.id AND fs.warehouse_id = $${params.length}::uuid)`);
+    }
+
     const query = `
       SELECT
         u.id,
@@ -160,7 +191,7 @@ async function listUsers(req, res) {
           json_agg(DISTINCT jsonb_build_object('id', r.id, 'code', r.code, 'name', r.name))
           FILTER (WHERE r.id IS NOT NULL),
           '[]'::json
-        ) AS roles
+        ) AS roles,${WAREHOUSE_SCOPES_COLUMN}
       FROM users u
       LEFT JOIN user_roles ur ON ur.user_id = u.id AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
       LEFT JOIN roles r ON r.id = ur.role_id
@@ -188,7 +219,6 @@ async function createUser(req, res) {
     // Only an existing superuser may mint another one — otherwise any account holding
     // auth.users.write could self-escalate by setting this flag on a new user.
     const isSuperuser = req.user?.is_superuser === true ? Boolean(req.body?.is_superuser) : false;
-    const primaryWarehouseId = normalizeText(req.body?.primary_warehouse_id) || null;
 
     if (!username) {
       return res.status(400).json({ message: 'username is required' });
@@ -218,6 +248,23 @@ async function createUser(req, res) {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
+    // Warehouse assignment at creation (same rules as PUT /iam/users/:id/warehouse-scopes):
+    // known access levels, no duplicate, warehouses that exist and are active,
+    // and the primary warehouse - a preference, never a grant - among them.
+    const warehouseScopes = req.body?.warehouse_scopes === undefined ? [] : normalizeScopeInput(req.body.warehouse_scopes);
+    const primaryWarehouseId = normalizePrimaryInput(req.body?.primary_warehouse_id) || null;
+    if (primaryWarehouseId && !warehouseScopes.some((row) => row.warehouse_id === primaryWarehouseId)) {
+      throw new AssignmentError(400, 'PRIMARY_NOT_IN_SCOPE', 'Kho chính phải là một trong các kho được phân công');
+    }
+    if (warehouseScopes.length) {
+      const known = await warehouseDirectory.lookup(warehouseScopes.map((row) => row.warehouse_id));
+      for (const row of warehouseScopes) {
+        const warehouse = known.get(row.warehouse_id);
+        if (!warehouse) throw new AssignmentError(404, 'WAREHOUSE_NOT_FOUND', 'Kho không tồn tại', { warehouse_id: row.warehouse_id });
+        if (!warehouse.is_active) throw new AssignmentError(400, 'WAREHOUSE_INACTIVE', 'Không thể phân công vào kho đã ngừng hoạt động', { warehouse_id: row.warehouse_id });
+      }
+    }
+
     const user = await prisma.$transaction(async (tx) => {
       const existed = await tx.$queryRawUnsafe(
         `
@@ -236,6 +283,14 @@ async function createUser(req, res) {
       }
 
       const roleIds = await resolveRoleIds(tx, req.body?.role_ids, req.body?.role_codes);
+      if (warehouseScopes.length) {
+        const roleRows = roleIds.length
+          ? await tx.$queryRawUnsafe(`SELECT code FROM roles WHERE id = ANY($1::uuid[])`, roleIds)
+          : [];
+        const internal = normalizeRoleCodes(roleRows.map((r) => r.code))
+          .some((code) => ['ADMIN', 'WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF', 'LIBRARIAN'].includes(code));
+        if (!internal) throw new AssignmentError(400, 'TARGET_NOT_INTERNAL', 'Chỉ tài khoản nội bộ mới được phân công kho');
+      }
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
       const inserted = await tx.$queryRawUnsafe(
@@ -243,7 +298,7 @@ async function createUser(req, res) {
         INSERT INTO users (
           username, email, password_hash, full_name, phone, status, is_superuser, primary_warehouse_id, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::uuid, NOW())
         RETURNING id, username, email, full_name, phone, status, is_superuser, primary_warehouse_id, created_at, updated_at
       `,
         username,
@@ -278,11 +333,37 @@ async function createUser(req, res) {
         await writeAuditLog(tx, req, 'USER_ROLES_ASSIGNED', inserted[0].id, { role_ids: roleIds });
       }
 
+      for (const row of warehouseScopes) {
+        await tx.$executeRawUnsafe(
+          `INSERT INTO user_warehouse_scopes (user_id, warehouse_id, access_level, assigned_by_user_id)
+           VALUES ($1::uuid, $2::uuid, $3, $4::uuid)`,
+          inserted[0].id,
+          row.warehouse_id,
+          row.access_level,
+          req.auth?.sub || null,
+        );
+      }
+      if (warehouseScopes.length) {
+        await writeAuditLog(tx, req, 'USER_WAREHOUSE_SCOPES_UPDATED', inserted[0].id, {
+          added: warehouseScopes,
+          removed: [],
+          changed: [],
+          primary_before: null,
+          primary_after: primaryWarehouseId,
+        });
+      }
+
       return getUserWithRoles(tx, inserted[0].id);
     });
 
     return res.status(201).json({ message: 'User created', data: user });
   } catch (error) {
+    if (error instanceof AssignmentError) {
+      return res.status(error.status).json({ message: error.message, code: error.code, ...(error.details ? { details: error.details } : {}) });
+    }
+    if (error instanceof WarehouseDirectoryUnavailableError) {
+      return res.status(503).json({ message: error.message, code: error.code });
+    }
     if (error.message === 'CONFLICT_USER') {
       return res.status(409).json({ message: 'Email or username already exists' });
     }
@@ -346,9 +427,18 @@ async function updateUser(req, res) {
       updates.push(`email = $${params.length}`);
     }
 
+    let nextPrimaryWarehouseId;
     if (payload.primary_warehouse_id !== undefined) {
-      params.push(normalizeText(payload.primary_warehouse_id) || null);
-      updates.push(`primary_warehouse_id = $${params.length}`);
+      if (!isValidUuid(userId)) {
+        return res.status(400).json({ message: 'User id must be a UUID' });
+      }
+      try {
+        nextPrimaryWarehouseId = normalizePrimaryInput(payload.primary_warehouse_id);
+      } catch (error) {
+        return res.status(error.status || 400).json({ message: error.message, code: error.code });
+      }
+      params.push(nextPrimaryWarehouseId);
+      updates.push(`primary_warehouse_id = $${params.length}::uuid`);
     }
 
     const roleIdsInput = payload.role_ids !== undefined || payload.role_codes !== undefined;
@@ -378,6 +468,15 @@ async function updateUser(req, res) {
       }
 
       const roleIds = roleIdsInput ? await resolveRoleIds(tx, payload.role_ids, payload.role_codes) : null;
+
+      if (nextPrimaryWarehouseId) {
+        const scoped = await tx.$queryRawUnsafe(
+          `SELECT 1 FROM user_warehouse_scopes WHERE user_id = $1::uuid AND warehouse_id = $2::uuid`,
+          userId,
+          nextPrimaryWarehouseId
+        );
+        if (!scoped.length) throw new Error('PRIMARY_NOT_IN_SCOPE');
+      }
 
       let user = null;
 
@@ -435,11 +534,17 @@ async function updateUser(req, res) {
     if ((nextStatus && nextStatus !== 'ACTIVE') || roleIdsInput) {
       await revokeUserTokensIssuedBefore(userId);
     }
+    // a locked / deactivated account loses its warehouse access at once in
+    // inventory too (the scope check there refuses non-ACTIVE users)
+    if (nextStatus) await warehouseDirectory.notifyScopeChanged(userId);
 
     return res.json({ message: 'User updated', data: updatedUser });
   } catch (error) {
     if (error.message === 'USER_NOT_FOUND') {
       return res.status(404).json({ message: 'User not found' });
+    }
+    if (error.message === 'PRIMARY_NOT_IN_SCOPE') {
+      return res.status(400).json({ message: 'Kho chính phải là một trong các kho được phân công', code: 'PRIMARY_NOT_IN_SCOPE' });
     }
     if (error.message === 'CONFLICT_USER') {
       return res.status(409).json({ message: 'Email or username already exists' });

@@ -5,6 +5,7 @@ const { claimSubmittedAuditForApproval } = require('../services/stock-audit-appr
 const {
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
+  requireAssignableUser,
   scopedWarehouseWhere,
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
@@ -190,6 +191,7 @@ async function assignStockAudit(req, res) {
     const existing = await prisma.stock_audits.findUnique({ where: { id }, select: { warehouse_id: true } });
     if (!existing) return res.status(404).json({ message: 'Stock audit not found' });
     if (!(await requireWarehouseWriteAccess(req, res, existing.warehouse_id))) return undefined;
+    if (!(await requireAssignableUser(res, assignedToUserId, existing.warehouse_id))) return undefined;
 
     const updated = await prisma.stock_audits.update({
       where: { id },

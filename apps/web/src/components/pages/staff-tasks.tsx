@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ClipboardList, Link2, Plus, RefreshCw, X, CheckCircle, PlayCircle } from "lucide-react";
+import { ClipboardList, Link2, Plus, RefreshCw, X, CheckCircle, PlayCircle, UserRoundCog, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { NavLink } from "react-router";
 import { PageWrapper, FadeItem } from "../motion-utils";
@@ -25,10 +25,14 @@ import {
   type EntityOption,
   type StaffTask,
   type StaffTaskCreateInput,
+  type StaffWorkloadRow,
 } from "@/services/staff-tasks";
 import { userService, type WarehouseStaffOption } from "@/services/user";
+import { warehouseService, type Warehouse } from "@/services/warehouse";
 import { authService } from "@/services/auth";
 import { canManageReceiving } from "@/lib/rbac";
+import { useAssignableStaff } from "@/hooks/useAssignableStaff";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const TASK_TYPE_OPTIONS = [
   { value: "GENERAL", label: "Tổng hợp" },
@@ -124,6 +128,140 @@ function formatDate(value: string | null | undefined) {
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+const ALL_WAREHOUSES = "ALL";
+const OPEN_STATUSES = ["OPEN", "IN_PROGRESS"];
+
+function ReassignDialog({ task, staffName, onClose, onDone }: {
+  task: StaffTask | null;
+  staffName: (id: string) => string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { staff, loading, error } = useAssignableStaff(task?.warehouse_id ?? null);
+  // remounted per task (key), so the choice never carries over to another task
+  const [assigneeId, setAssigneeId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const candidates = staff.filter((s) => s.id !== task?.assignee_user_id);
+  const submit = async () => {
+    if (!task || !assigneeId) return;
+    setSaving(true);
+    try {
+      await staffTaskService.update(task.id, { assignee_user_id: assigneeId });
+      toast.success("Đã giao lại task");
+      onDone();
+      onClose();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Giao lại task thất bại"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={Boolean(task)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Giao lại task</DialogTitle>
+          <DialogDescription>
+            {task ? `"${task.title}" đang giao cho ${staffName(task.assignee_user_id)}${task.warehouses ? ` tại ${task.warehouses.code}` : ""}.` : null}
+          </DialogDescription>
+        </DialogHeader>
+        {!task?.warehouse_id ? (
+          <p className="text-[13px] text-muted-foreground">Task cũ không gắn kho, không thể giao lại an toàn. Hãy hủy và tạo task mới có chọn kho.</p>
+        ) : (
+          <div className="space-y-2">
+            <label htmlFor="reassign-assignee" className="block text-[11px] font-semibold text-muted-foreground">Nhân viên mới *</label>
+            <select
+              id="reassign-assignee"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              disabled={loading || candidates.length === 0}
+            >
+              <option value="">{loading ? "Đang tải nhân viên..." : candidates.length === 0 ? "Không có nhân viên khác nhận được việc ở kho này" : "Chọn nhân viên"}</option>
+              {candidates.map((s) => (
+                <option key={s.id} value={s.id}>{s.full_name} ({s.username})</option>
+              ))}
+            </select>
+            {error ? <p role="alert" className="text-[12px] text-red-600 dark:text-red-400">{error}</p> : null}
+            {task.status === "IN_PROGRESS" ? (
+              <p className="text-[12px] text-muted-foreground">Task đang làm sẽ quay về trạng thái Mới cho người được giao lại.</p>
+            ) : null}
+          </div>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>Hủy</Button>
+          <Button type="button" disabled={!assigneeId || saving} onClick={() => void submit()} className="bg-violet-600 hover:bg-violet-700">
+            {saving ? "Đang lưu..." : "Giao lại"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function WorkloadPanel({ warehouse, staffName, refreshKey }: { warehouse: Warehouse; staffName: (id: string) => string; refreshKey: number }) {
+  const requestKey = `${warehouse.id}:${refreshKey}`;
+  const [result, setResult] = useState<{ key: string; rows: StaffWorkloadRow[]; error: string | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    staffTaskService.getWorkload(warehouse.id)
+      .then((res) => { if (!cancelled) setResult({ key: requestKey, rows: Array.isArray(res.data) ? res.data : [], error: null }); })
+      .catch((err) => { if (!cancelled) setResult({ key: requestKey, rows: [], error: getApiErrorMessage(err, "Không tải được khối lượng việc") }); });
+    return () => { cancelled = true; };
+  }, [warehouse.id, requestKey]);
+
+  const current = result?.key === requestKey ? result : null;
+  const rows = current?.rows ?? [];
+  const error = current?.error ?? null;
+  const loading = !current;
+
+  const sorted = [...rows].sort((a, b) => (b.open + b.in_progress) - (a.open + a.in_progress));
+
+  return (
+    <SectionCard noPadding>
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="text-[15px] font-semibold">Khối lượng việc tại {warehouse.code}</h2>
+        <p className="text-[12px] text-muted-foreground">
+          Đếm trực tiếp từ task giao việc của kho này, mỗi task tính một lần theo trạng thái hiện tại. Quá hạn nằm trong số Mới và Đang làm.
+        </p>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/30 hover:bg-muted/30">
+            {["Nhân viên", "Mới", "Đang làm", "Quá hạn", "Hoàn thành 7 ngày"].map((h) => (
+              <TableHead key={h} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            <SkeletonTableRow columns={5} rows={3} />
+          ) : error ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={5} className="px-5 py-6 text-center text-[13px] text-red-600 dark:text-red-400">{error}</TableCell>
+            </TableRow>
+          ) : sorted.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={5} className="px-5 py-6 text-center text-[13px] text-muted-foreground">Không có task đang mở hay vừa hoàn thành ở kho này.</TableCell>
+            </TableRow>
+          ) : sorted.map((row) => (
+            <TableRow key={row.assignee_user_id}>
+              <TableCell className="text-[13px] font-medium">{staffName(row.assignee_user_id)}</TableCell>
+              <TableCell className="tabular-nums">{row.open}</TableCell>
+              <TableCell className="tabular-nums">{row.in_progress}</TableCell>
+              <TableCell className={cn("tabular-nums", row.overdue > 0 && "font-semibold text-red-600 dark:text-red-400")}>{row.overdue}</TableCell>
+              <TableCell className="tabular-nums">{row.done_last_7_days}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </SectionCard>
+  );
+}
+
 const BLANK_FORM: StaffTaskCreateInput & { related_entity_type: string | null; related_entity_id: string | null } = {
   title: "",
   description: "",
@@ -151,13 +289,22 @@ export function StaffTasksPage() {
   const [entityOptions, setEntityOptions] = useState<EntityOption[]>([]);
   const [loadingEntityOptions, setLoadingEntityOptions] = useState(false);
   const [page, setPage] = useState(1);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseFilter, setWarehouseFilter] = useState(ALL_WAREHOUSES);
+  const [reassignTask, setReassignTask] = useState<StaffTask | null>(null);
+  const [workloadKey, setWorkloadKey] = useState(0);
+  const { staff: formStaff, loading: formStaffLoading, error: formStaffError } = useAssignableStaff(showForm ? form.warehouse_id : null);
 
   const load = useCallback(async (status?: string) => {
     setLoading(true);
     try {
       if (isManager) {
-        const res = await staffTaskService.getAll(status && status !== "ALL" ? { status } : {});
+        const res = await staffTaskService.getAll({
+          ...(status && status !== "ALL" ? { status } : {}),
+          ...(warehouseFilter !== ALL_WAREHOUSES ? { warehouse_id: warehouseFilter } : {}),
+        });
         setTasks(Array.isArray(res.data) ? res.data : []);
+        setWorkloadKey((v) => v + 1);
       } else {
         const res = await staffTaskService.getMy(status && status !== "ALL" ? { status } : {});
         setTasks(Array.isArray(res.data) ? res.data : []);
@@ -167,26 +314,39 @@ export function StaffTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [isManager]);
+  }, [isManager, warehouseFilter]);
 
   useEffect(() => { void load(statusFilter); }, [load, statusFilter]);
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, warehouseFilter]);
 
   useEffect(() => {
     if (!isManager) return;
     void userService.getWarehouseStaff().then((res) => {
       setWarehouseStaff(Array.isArray(res.data) ? res.data : []);
     }).catch(() => {});
+    // the manager's own readable warehouses (inventory scopes the list)
+    void warehouseService.getAll().then((rows) => {
+      setWarehouses((Array.isArray(rows) ? rows : []).filter((w) => w.is_active !== false));
+    }).catch(() => setWarehouses([]));
   }, [isManager]);
 
   const staffById = useMemo(() => {
     const map: Record<string, string> = {};
     for (const s of warehouseStaff) map[s.id] = s.full_name;
+    for (const s of formStaff) map[s.id] = s.full_name;
     return map;
-  }, [warehouseStaff]);
+  }, [warehouseStaff, formStaff]);
+  const staffName = useCallback((id: string) => staffById[id] || id.slice(0, 8), [staffById]);
+  const selectedWarehouse = warehouses.find((w) => w.id === warehouseFilter) || null;
+
+  // choosing (or changing) the warehouse resets everything that depended on it
+  const handleFormWarehouseChange = (warehouseId: string) => {
+    setForm((f) => ({ ...f, warehouse_id: warehouseId || null, assignee_user_id: "", related_entity_type: null, related_entity_id: null }));
+    setEntityOptions([]);
+  };
 
   const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE));
 
@@ -225,6 +385,7 @@ export function StaffTasksPage() {
   };
 
   const handleCreate = async () => {
+    if (!form.warehouse_id) { toast.error("Chọn kho trước khi giao việc"); return; }
     if (!form.title.trim()) { toast.error("Tiêu đề không được để trống"); return; }
     if (!form.assignee_user_id) { toast.error("Chọn nhân viên được giao"); return; }
     setSubmitting(true);
@@ -262,7 +423,7 @@ export function StaffTasksPage() {
     }
   };
 
-  const colSpan = isManager ? 10 : 9;
+  const colSpan = isManager ? 11 : 9;
 
   return (
     <PageWrapper className="space-y-6">
@@ -307,7 +468,50 @@ export function StaffTasksPage() {
               </button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="lg:col-span-2">
+              <div>
+                <label htmlFor="task-warehouse" className="block text-[11px] font-semibold text-muted-foreground mb-1">Kho *</label>
+                <select
+                  id="task-warehouse"
+                  data-testid="staff-task-warehouse"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
+                  value={form.warehouse_id ?? ""}
+                  onChange={(e) => handleFormWarehouseChange(e.target.value)}
+                >
+                  <option value="">{warehouses.length ? "Chọn kho trước" : "Bạn chưa được phân công kho nào"}</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.code} · {w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="task-assignee" className="block text-[11px] font-semibold text-muted-foreground mb-1">Nhân viên được giao *</label>
+                <select
+                  id="task-assignee"
+                  data-testid="staff-task-assignee"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px] disabled:opacity-60"
+                  value={form.assignee_user_id}
+                  onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))}
+                  disabled={!form.warehouse_id || formStaffLoading || formStaff.length === 0}
+                  aria-describedby="task-assignee-hint"
+                >
+                  <option value="">
+                    {!form.warehouse_id
+                      ? "Chọn kho để xem nhân viên"
+                      : formStaffLoading
+                        ? "Đang tải nhân viên..."
+                        : formStaff.length === 0
+                          ? "Kho này chưa có nhân viên nhận được việc"
+                          : "Chọn nhân viên"}
+                  </option>
+                  {formStaff.map((s) => (
+                    <option key={s.id} value={s.id}>{s.full_name} ({s.username})</option>
+                  ))}
+                </select>
+                <p id="task-assignee-hint" className={cn("mt-1 text-[11px]", formStaffError ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                  {formStaffError || "Chỉ nhân viên đang hoạt động có quyền thao tác ở kho này."}
+                </p>
+              </div>
+              <div>
                 <label className="block text-[11px] font-semibold text-muted-foreground mb-1">Tiêu đề *</label>
                 <input
                   type="text"
@@ -316,19 +520,6 @@ export function StaffTasksPage() {
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold text-muted-foreground mb-1">Nhân viên được giao *</label>
-                <select
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                  value={form.assignee_user_id}
-                  onChange={(e) => setForm((f) => ({ ...f, assignee_user_id: e.target.value }))}
-                >
-                  <option value="">Chọn nhân viên</option>
-                  {warehouseStaff.map((s) => (
-                    <option key={s.id} value={s.id}>{s.full_name}</option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label className="block text-[11px] font-semibold text-muted-foreground mb-1">Loại task</label>
@@ -382,9 +573,11 @@ export function StaffTasksPage() {
                 </label>
                 <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                   <select
-                    className="rounded-md border border-border bg-background px-3 py-2 text-[13px] w-full sm:w-[210px] shrink-0"
+                    className="rounded-md border border-border bg-background px-3 py-2 text-[13px] w-full sm:w-[210px] shrink-0 disabled:opacity-60"
                     value={form.related_entity_type ?? ""}
                     onChange={(e) => void handleEntityTypeChange(e.target.value)}
+                    disabled={!form.warehouse_id}
+                    title={form.warehouse_id ? undefined : "Chọn kho trước"}
                   >
                     <option value="">Không liên kết</option>
                     {ENTITY_TYPE_OPTIONS.map((o) => (
@@ -435,16 +628,31 @@ export function StaffTasksPage() {
             <FilterBar
               className="sm:w-auto"
               filters={(
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[170px]" size="sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUS_FILTERS.map((s) => (
-                      <SelectItem key={s} value={s}>{STATUS_FILTER_LABELS[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isManager && (
+                    <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                      <SelectTrigger className="w-[200px]" size="sm" aria-label="Lọc theo kho">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL_WAREHOUSES}>Mọi kho của tôi</SelectItem>
+                        {warehouses.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>{w.code} · {w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[170px]" size="sm" aria-label="Lọc theo trạng thái">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUS_FILTERS.map((s) => (
+                        <SelectItem key={s} value={s}>{STATUS_FILTER_LABELS[s]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
             />
           </div>
@@ -457,7 +665,7 @@ export function StaffTasksPage() {
                     "Liên kết",
                     "Loại",
                     "Độ ưu tiên",
-                    ...(isManager ? ["Nhân viên"] : []),
+                    ...(isManager ? ["Kho", "Nhân viên"] : []),
                     "Trạng thái",
                     "Hạn",
                     "Tạo lúc",
@@ -517,8 +725,21 @@ export function StaffTasksPage() {
                       <StatusBadge label={PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label || task.priority} variant={priorityVariant(task.priority)} dot />
                     </TableCell>
                     {isManager && (
-                      <TableCell className="text-[12px] text-muted-foreground">
-                        {staffById[task.assignee_user_id] || task.assignee_user_id.slice(0, 8)}
+                      <TableCell className="text-[12px] text-muted-foreground" title={task.warehouses?.name}>
+                        {task.warehouses?.code || "—"}
+                      </TableCell>
+                    )}
+                    {isManager && (
+                      <TableCell className="whitespace-normal text-[12px] text-muted-foreground">
+                        <span className="block">{staffName(task.assignee_user_id)}</span>
+                        {task.assignee_can_work === false && OPEN_STATUSES.includes(task.status) ? (
+                          <span
+                            className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+                            title="Nhân viên không còn quyền thao tác ở kho này hoặc đã bị khóa"
+                          >
+                            <AlertTriangle className="h-3 w-3" aria-hidden="true" /> Cần giao lại
+                          </span>
+                        ) : null}
                       </TableCell>
                     )}
                     <TableCell>
@@ -542,7 +763,15 @@ export function StaffTasksPage() {
                           <CheckCircle className="h-3 w-3" /> Hoàn thành
                         </Button>
                       )}
-                      {(isManager || task.status === "DONE" || task.status === "CANCELLED") && (
+                      {isManager && OPEN_STATUSES.includes(task.status) && (
+                        <Button type="button" size="sm" variant="outline"
+                          onClick={() => setReassignTask(task)}
+                          className="h-7 px-2 text-[11px]"
+                          aria-label={`Giao lại task ${task.title}`}>
+                          <UserRoundCog className="h-3 w-3" /> Giao lại
+                        </Button>
+                      )}
+                      {(task.status === "DONE" || task.status === "CANCELLED") && (
                         <span className="text-[11px] text-muted-foreground">-</span>
                       )}
                     </TableCell>
@@ -603,6 +832,22 @@ export function StaffTasksPage() {
           )}
         </SectionCard>
       </FadeItem>
+
+      {isManager && selectedWarehouse ? (
+        <FadeItem>
+          <WorkloadPanel warehouse={selectedWarehouse} staffName={staffName} refreshKey={workloadKey} />
+        </FadeItem>
+      ) : null}
+
+      {isManager ? (
+        <ReassignDialog
+          key={reassignTask?.id ?? "none"}
+          task={reassignTask}
+          staffName={staffName}
+          onClose={() => setReassignTask(null)}
+          onDone={() => void load(statusFilter)}
+        />
+      ) : null}
     </PageWrapper>
   );
 }

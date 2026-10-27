@@ -110,3 +110,31 @@ test('fresh: a confirmation step re-reads the scope instead of the 30 s cache (P
   assert.equal(await resolver.canWrite(user, 'w1', { fresh: true }), false, 'approval sees the removal at once');
   assert.equal(calls, 2);
 });
+
+test('checkAssignee: active staff with WRITE scope passes; READ, inactive, wrong role and unknown are refused with a reason', async () => {
+  const profiles = {
+    staff: { status: 'ACTIVE', is_superuser: false, roles: ['WAREHOUSE_STAFF'], scopes: [{ warehouse_id: HN, access_level: 'OPERATOR' }, { warehouse_id: HCM, access_level: 'READ' }] },
+    locked: { status: 'LOCKED', is_superuser: false, roles: ['WAREHOUSE_STAFF'], scopes: [{ warehouse_id: HN, access_level: 'FULL' }] },
+    librarian: { status: 'ACTIVE', is_superuser: false, roles: ['LIBRARIAN'], scopes: [{ warehouse_id: HN, access_level: 'FULL' }] },
+  };
+  const auth = fakeAuth((url) => {
+    const id = url.split('/users/')[1].split('/')[0];
+    return profiles[id] ? json(200, { data: { user_id: id, ...profiles[id] } }) : json(404, {});
+  });
+  const r = resolver(auth.fetchImpl);
+  const roles = ['WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER'];
+  assert.deepEqual(await r.checkAssignee('staff', HN, { roles }), { ok: true });
+  assert.deepEqual(await r.checkAssignee('staff', HCM, { roles }), { ok: false, reason: 'NO_WRITE_SCOPE' });
+  assert.deepEqual(await r.checkAssignee('locked', HN, { roles }), { ok: false, reason: 'INACTIVE' });
+  assert.deepEqual(await r.checkAssignee('librarian', HN, { roles }), { ok: false, reason: 'ROLE_NOT_ALLOWED' });
+  assert.deepEqual(await r.checkAssignee('ghost', HN, { roles }), { ok: false, reason: 'NOT_FOUND' });
+  // always a fresh read: an assignment never relies on the 30 s cache
+  const before = auth.calls.length;
+  await r.checkAssignee('staff', HN, { roles });
+  assert.equal(auth.calls.length, before + 1);
+});
+
+test('checkAssignee fails closed when auth-service is unreachable', async () => {
+  const auth = fakeAuth(() => { throw new Error('ECONNREFUSED'); });
+  await assert.rejects(() => resolver(auth.fetchImpl).checkAssignee('x', HN), WarehouseScopeUnavailableError);
+});

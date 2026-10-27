@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Plus, X, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, X, Pencil, Trash2, Users, Star } from "lucide-react";
 import { Lock, Unlock } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from "morphicons/react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
-import { userService } from "@/services/user";
+import { userService, type WarehouseScope } from "@/services/user";
 import { roleService } from "@/services/role";
+import { warehouseService, type Warehouse } from "@/services/warehouse";
+import { staffTaskService, type OpenTaskSummaryRow } from "@/services/staff-tasks";
 import { getApiErrorMessage } from "@/services/api";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,6 +18,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
   PaginationNext, PaginationPrevious,
@@ -23,6 +27,9 @@ import {
 import { cn } from "@/components/ui/utils";
 import { getPaginationRange } from "@/lib/pagination";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
+import { WarehouseAssignmentFields } from "./user-management/warehouse-assignment-fields";
+import { WarehouseStaffPanel } from "./user-management/warehouse-staff-panel";
+import { ACCESS_LEVEL_LABELS, diffScopes, hasScopeChanges, toScopes, type ScopeDiff, type ScopeDraft } from "./user-management/warehouse-access";
 
 interface RoleItem {
   id: string;
@@ -39,6 +46,8 @@ interface UserRow {
   status: "ACTIVE" | "INACTIVE" | "LOCKED" | "PENDING";
   created_at: string;
   roles: RoleItem[];
+  primary_warehouse_id?: string | null;
+  warehouse_scopes?: WarehouseScope[];
 }
 
 interface CreateUserForm {
@@ -49,6 +58,8 @@ interface CreateUserForm {
   password: string;
   status: "ACTIVE" | "INACTIVE" | "LOCKED" | "PENDING";
   role_ids: string[];
+  scopes: ScopeDraft[];
+  primary_warehouse_id: string | null;
 }
 
 const EMPTY_FORM: CreateUserForm = {
@@ -59,6 +70,25 @@ const EMPTY_FORM: CreateUserForm = {
   password: "",
   status: "ACTIVE",
   role_ids: [],
+  scopes: [],
+  primary_warehouse_id: null,
+};
+
+/** A saved edit whose assignment change needs a confirmation first. */
+interface PendingAssignment {
+  user: UserRow;
+  diff: ScopeDiff;
+  primaryBefore: string | null;
+  primaryAfter: string | null;
+  openTasks: OpenTaskSummaryRow[] | null;
+}
+
+const ALL = "ALL";
+const STATUS_LABELS: Record<UserRow["status"], string> = {
+  ACTIVE: "Đang hoạt động",
+  PENDING: "Chờ kích hoạt",
+  LOCKED: "Đã khóa",
+  INACTIVE: "Ngừng hoạt động",
 };
 
 function formatDate(value: string) {
@@ -105,19 +135,71 @@ function RoleChips({ roles }: { roles: RoleItem[] }) {
   );
 }
 
+function ScopeSummary({ scopes, warehouseById }: { scopes: WarehouseScope[]; warehouseById: Map<string, Warehouse> }) {
+  if (scopes.length === 0) return <span className="whitespace-nowrap text-[12px] text-muted-foreground">Chưa phân công</span>;
+  const detail = scopes
+    .map((s) => `${warehouseById.get(s.warehouse_id)?.code || s.warehouse_id.slice(0, 8)}: ${ACCESS_LEVEL_LABELS[s.access_level] || s.access_level}`)
+    .join("\n");
+  return (
+    <span className="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-[12px] font-medium tabular-nums" title={detail}>
+      {scopes.length} kho
+    </span>
+  );
+}
+
+function warehouseLabel(id: string | null | undefined, warehouseById: Map<string, Warehouse>) {
+  if (!id) return null;
+  const warehouse = warehouseById.get(id);
+  return warehouse ? `${warehouse.code} · ${warehouse.name}` : id.slice(0, 8);
+}
+
+function OpenTaskNotice({ rows, warehouseIds, warehouseById }: { rows: OpenTaskSummaryRow[] | null; warehouseIds: string[] | null; warehouseById: Map<string, Warehouse> }) {
+  if (rows === null) {
+    return <p className="text-[12px] text-muted-foreground">Không kiểm tra được việc đang mở của người này.</p>;
+  }
+  const relevant = rows.filter((row) => (warehouseIds ? row.warehouse_id !== null && warehouseIds.includes(row.warehouse_id) : true));
+  const total = relevant.reduce((sum, row) => sum + row.open + row.in_progress, 0);
+  if (total === 0) return <p className="text-[12px] text-muted-foreground">Không có task đang mở bị ảnh hưởng.</p>;
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      <p className="font-semibold">{total} task đang mở sẽ không thể tiếp tục:</p>
+      <ul className="mt-1 space-y-0.5">
+        {relevant.map((row) => (
+          <li key={row.warehouse_id || "none"}>
+            {warehouseLabel(row.warehouse_id, warehouseById) || "Không gắn kho"}: {row.open} mới, {row.in_progress} đang làm
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1">Giao lại các task này ở trang Giao việc nhân viên.</p>
+    </div>
+  );
+}
+
 export function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseError, setWarehouseError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState(ALL);
+  const [warehouseFilter, setWarehouseFilter] = useState(ALL);
+  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [view, setView] = useState<"users" | "by-warehouse">("users");
+  const [staffWarehouseId, setStaffWarehouseId] = useState("");
+  const [staffRefreshKey, setStaffRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserRow | null>(null);
+  const [pendingLockUser, setPendingLockUser] = useState<{ user: UserRow; openTasks: OpenTaskSummaryRow[] | null } | null>(null);
+  const [pendingAssignment, setPendingAssignment] = useState<PendingAssignment | null>(null);
   const [form, setForm] = useState<CreateUserForm>(EMPTY_FORM);
   const [editingUser, setEditingUser] = useState<UserRow | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  const warehouseById = useMemo(() => new Map(warehouses.map((w) => [w.id, w])), [warehouses]);
 
   const loadData = async () => {
     try {
@@ -134,24 +216,35 @@ export function UsersPage() {
 
   useEffect(() => {
     void loadData();
+    warehouseService.getAll()
+      .then((rows) => {
+        const list = Array.isArray(rows) ? rows : [];
+        setWarehouses(list);
+        setStaffWarehouseId((current) => current || list[0]?.id || "");
+      })
+      .catch((error) => setWarehouseError(getApiErrorMessage(error, "Không tải được danh sách kho")));
   }, []);
 
   const filteredUsers = useMemo(() => {
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return users;
-
     return users.filter((user) => {
-      return (
+      if (keyword && !(
         user.username.toLowerCase().includes(keyword)
         || user.full_name.toLowerCase().includes(keyword)
         || String(user.email || "").toLowerCase().includes(keyword)
-      );
+      )) return false;
+      if (roleFilter !== ALL && !(user.roles || []).some((role) => role.code === roleFilter)) return false;
+      if (warehouseFilter !== ALL && !(user.warehouse_scopes || []).some((s) => s.warehouse_id === warehouseFilter)) return false;
+      if (statusFilter !== ALL && user.status !== statusFilter) return false;
+      return true;
     });
-  }, [search, users]);
+  }, [search, users, roleFilter, warehouseFilter, statusFilter]);
+
+  const hasFilters = Boolean(search.trim()) || roleFilter !== ALL || warehouseFilter !== ALL || statusFilter !== ALL;
 
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, roleFilter, warehouseFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -163,7 +256,9 @@ export function UsersPage() {
     setForm(EMPTY_FORM);
   };
 
-  useDialogA11y(showCreateModal, closeUserModal, modalRef);
+  // the user form steps aside while its own confirmation is open (state kept)
+  const modalVisible = showCreateModal && !pendingAssignment;
+  useDialogA11y(modalVisible, closeUserModal, modalRef);
 
   const validateUserForm = (isEdit: boolean) => {
     const email = form.email.trim().toLowerCase();
@@ -203,6 +298,11 @@ export function UsersPage() {
       return false;
     }
 
+    if (form.scopes.some((row) => !row.warehouse_id)) {
+      toast.error("Chọn kho cho mọi dòng phân công, hoặc xóa dòng trống");
+      return false;
+    }
+
     return true;
   };
 
@@ -231,10 +331,12 @@ export function UsersPage() {
         password: form.password,
         status: form.status,
         role_ids: form.role_ids,
+        ...(form.scopes.length ? { warehouse_scopes: toScopes(form.scopes), primary_warehouse_id: form.primary_warehouse_id } : {}),
       });
 
       toast.success("Đã tạo người dùng mới");
       closeUserModal();
+      setStaffRefreshKey((v) => v + 1);
       await loadData();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Tạo người dùng thất bại"));
@@ -253,29 +355,77 @@ export function UsersPage() {
       password: "",
       status: user.status,
       role_ids: (user.roles || []).map((r) => r.id),
+      scopes: (user.warehouse_scopes || []).map((s) => ({ warehouse_id: s.warehouse_id, access_level: s.access_level })),
+      primary_warehouse_id: user.primary_warehouse_id || null,
     });
     setShowCreateModal(true);
   };
 
-  const handleEditUser = async () => {
-    if (!editingUser) return;
-    if (!validateUserForm(true)) return;
+  const openEditUserById = (userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    if (user) openEditUser(user);
+    else toast.error("Không tìm thấy người dùng trong danh sách, hãy tải lại trang");
+  };
 
+  const loadOpenTasks = async (userId: string) => {
+    try {
+      const response = await staffTaskService.getOpenSummary(userId);
+      return Array.isArray(response.data) ? response.data : [];
+    } catch {
+      return null;
+    }
+  };
+
+  /** Saves profile fields, then the assignment when it changed. */
+  const saveEdit = async (user: UserRow) => {
     try {
       setCreating(true);
-      await userService.update(editingUser.id, {
+      await userService.update(user.id, {
         full_name: form.full_name.trim(),
         email: form.email.trim().toLowerCase(),
         phone: form.phone.trim() || undefined,
         status: form.status,
         role_ids: form.role_ids,
       });
+      const before = user.warehouse_scopes || [];
+      const after = toScopes(form.scopes);
+      const primaryChanged = (user.primary_warehouse_id || null) !== form.primary_warehouse_id;
+      if (hasScopeChanges(diffScopes(before, after)) || primaryChanged) {
+        try {
+          await userService.updateWarehouseScopes(user.id, after, form.primary_warehouse_id);
+        } catch (error) {
+          toast.error(getApiErrorMessage(error, "Đã lưu thông tin, nhưng cập nhật phân công kho thất bại"));
+          await loadData();
+          return;
+        }
+      }
       toast.success("Đã cập nhật người dùng");
       closeUserModal();
+      setStaffRefreshKey((v) => v + 1);
       await loadData();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Cập nhật người dùng thất bại"));
-    } finally { setCreating(false); }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleEditUser = async () => {
+    if (!editingUser) return;
+    if (!validateUserForm(true)) return;
+
+    const diff = diffScopes(editingUser.warehouse_scopes || [], toScopes(form.scopes));
+    const primaryBefore = editingUser.primary_warehouse_id || null;
+    const primaryAfter = form.primary_warehouse_id;
+    // revoking a warehouse or moving the primary one: confirm, showing the open work it affects
+    if (diff.removed.length > 0 || (primaryBefore && primaryBefore !== primaryAfter)) {
+      setCreating(true);
+      const openTasks = diff.removed.length > 0 ? await loadOpenTasks(editingUser.id) : [];
+      setCreating(false);
+      setPendingAssignment({ user: editingUser, diff, primaryBefore, primaryAfter, openTasks });
+      return;
+    }
+    await saveEdit(editingUser);
   };
 
   const handleToggleLock = async (user: UserRow) => {
@@ -287,6 +437,15 @@ export function UsersPage() {
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Cập nhật trạng thái thất bại"));
     }
+  };
+
+  const requestToggleLock = async (user: UserRow) => {
+    if (user.status === "LOCKED") {
+      await handleToggleLock(user);
+      return;
+    }
+    const openTasks = (user.warehouse_scopes || []).length ? await loadOpenTasks(user.id) : [];
+    setPendingLockUser({ user, openTasks });
   };
 
   const handleDeleteUser = async (user: UserRow) => {
@@ -303,13 +462,23 @@ export function UsersPage() {
     }
   };
 
+  const columns = [
+    { label: "Người dùng", className: "" },
+    { label: "Vai trò", className: "hidden w-[200px] md:table-cell" },
+    { label: "Kho chính", className: "hidden w-[190px] lg:table-cell" },
+    { label: "Phạm vi kho", className: "hidden w-[130px] sm:table-cell" },
+    { label: "Trạng thái", className: "hidden w-[120px] sm:table-cell" },
+    { label: "Ngày tạo", className: "hidden w-[110px] 2xl:table-cell" },
+    { label: "Hành động", className: "w-[124px] text-right" },
+  ];
+
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={Users}
           title="Người dùng"
-          description="Quản lý tài khoản người dùng trong hệ thống"
+          description="Quản lý tài khoản, vai trò và kho làm việc của nhân sự"
           iconBg="bg-gradient-to-br from-slate-500 to-indigo-600 shadow-lg shadow-slate-500/25"
           iconColor="text-white"
           actions={
@@ -321,11 +490,73 @@ export function UsersPage() {
       </FadeItem>
 
       <FadeItem>
+        <SegmentedControl
+          layoutId="users-view"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "users", label: "Danh sách người dùng" },
+            { value: "by-warehouse", label: "Nhân sự theo kho" },
+          ]}
+          className="w-fit"
+        />
+      </FadeItem>
+
+      {view === "by-warehouse" ? (
+        <FadeItem>
+          <WarehouseStaffPanel
+            warehouses={warehouses}
+            warehouseId={staffWarehouseId}
+            onWarehouseChange={setStaffWarehouseId}
+            onEditUser={openEditUserById}
+            refreshKey={staffRefreshKey}
+          />
+        </FadeItem>
+      ) : (
+      <>
+      <FadeItem>
         <FilterBar
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Tìm theo tên đăng nhập, họ tên, email..."
           showSearchClear
+          filters={(
+            <div className="flex flex-wrap items-center gap-2">
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-[170px]" size="sm" aria-label="Lọc theo vai trò">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Mọi vai trò</SelectItem>
+                  {roles.map((role) => (
+                    <SelectItem key={role.id} value={role.code}>{role.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                <SelectTrigger className="w-[190px]" size="sm" aria-label="Lọc theo kho">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Mọi kho</SelectItem>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>{w.code} · {w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[170px]" size="sm" aria-label="Lọc theo trạng thái">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
+                  {(Object.keys(STATUS_LABELS) as UserRow["status"][]).map((status) => (
+                    <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         />
       </FadeItem>
 
@@ -335,13 +566,7 @@ export function UsersPage() {
           <table className="w-full table-fixed">
             <thead>
               <tr className="border-b border-border bg-muted/40">
-                {[
-                  { label: "Người dùng", className: "" },
-                  { label: "Vai trò", className: "hidden w-[220px] md:table-cell" },
-                  { label: "Trạng thái", className: "hidden w-[120px] sm:table-cell" },
-                  { label: "Ngày tạo", className: "hidden w-[110px] xl:table-cell" },
-                  { label: "Hành động", className: "w-[124px] text-right" },
-                ].map((header) => (
+                {columns.map((header) => (
                   <th key={header.label} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", header.className)}>
                     {header.label}
                   </th>
@@ -350,20 +575,23 @@ export function UsersPage() {
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonTableRow columns={5} rows={5} />
+                <SkeletonTableRow columns={columns.length} rows={5} />
               ) : filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={columns.length}>
                     <EmptyState
                       variant="no-data"
-                      title={search.trim() ? "Không tìm thấy người dùng phù hợp" : "Không có người dùng nào"}
-                      description={search.trim() ? "Thử từ khóa khác hoặc xóa bộ lọc tìm kiếm" : "Tạo người dùng mới để bắt đầu"}
+                      title={hasFilters ? "Không tìm thấy người dùng phù hợp" : "Không có người dùng nào"}
+                      description={hasFilters ? "Thử từ khóa khác hoặc bỏ bớt bộ lọc" : "Tạo người dùng mới để bắt đầu"}
                       className="py-12"
                     />
                   </td>
                 </tr>
               ) : (
-                paginatedUsers.map((user) => (
+                paginatedUsers.map((user) => {
+                  const scopes = user.warehouse_scopes || [];
+                  const primary = warehouseLabel(user.primary_warehouse_id, warehouseById);
+                  return (
                   <motion.tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-3">
@@ -386,6 +614,7 @@ export function UsersPage() {
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
                             <RoleChips roles={user.roles || []} />
                             <span className="sm:hidden"><StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} /></span>
+                            <span className="sm:hidden"><ScopeSummary scopes={scopes} warehouseById={warehouseById} /></span>
                           </div>
                         </div>
                       </div>
@@ -393,10 +622,23 @@ export function UsersPage() {
                     <td className="hidden px-4 py-3 md:table-cell">
                       <RoleChips roles={user.roles || []} />
                     </td>
+                    <td className="hidden px-4 py-3 lg:table-cell">
+                      {primary ? (
+                        <span className="flex min-w-0 items-center gap-1.5 text-[12px]" title={primary}>
+                          <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" aria-hidden="true" />
+                          <span className="truncate">{primary}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[12px] text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="hidden px-4 py-3 sm:table-cell">
+                      <ScopeSummary scopes={scopes} warehouseById={warehouseById} />
+                    </td>
                     <td className="hidden px-4 py-3 sm:table-cell">
                       <StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} />
                     </td>
-                    <td className="hidden px-4 py-3 text-[12px] text-muted-foreground xl:table-cell">{formatDate(user.created_at)}</td>
+                    <td className="hidden px-4 py-3 text-[12px] text-muted-foreground 2xl:table-cell">{formatDate(user.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
@@ -408,7 +650,7 @@ export function UsersPage() {
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          onClick={() => void handleToggleLock(user)}
+                          onClick={() => void requestToggleLock(user)}
                           data-testid="toggle-lock-user-button"
                           aria-label={`${user.status === "LOCKED" ? "Mở khóa" : "Khóa"} ${user.username}`}
                           title={user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
@@ -428,7 +670,8 @@ export function UsersPage() {
                       </div>
                     </td>
                   </motion.tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -480,31 +723,33 @@ export function UsersPage() {
           </div>
         </SectionCard>
       </FadeItem>
+      </>
+      )}
 
-      {showCreateModal ? (
+      {modalVisible ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
-          <motion.div ref={modalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full max-w-lg rounded-xl bg-card p-6 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
+          <motion.div ref={modalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col rounded-xl bg-card shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <h3 id="user-modal-title" className="text-[16px] font-semibold">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
               <button onClick={closeUserModal} aria-label="Đóng" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" data-testid="new-user-username" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
-                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" data-testid="new-user-full-name" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`} />
+            <div className="space-y-4 overflow-y-auto px-6 py-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {!editingUser && <input value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} placeholder="Tên đăng nhập *" aria-label="Tên đăng nhập" data-testid="new-user-username" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <input value={form.full_name} onChange={(event) => setForm((prev) => ({ ...prev, full_name: event.target.value }))} placeholder="Họ tên *" aria-label="Họ tên" data-testid="new-user-full-name" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'sm:col-span-2' : ''}`} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" data-testid="new-user-email" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
-                <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <input value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email *" aria-label="Email" data-testid="new-user-email" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
+                <input value={form.phone} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" aria-label="Số điện thoại" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" data-testid="new-user-password" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
-                <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'col-span-2' : ''}`}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" aria-label="Mật khẩu" data-testid="new-user-password" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
+                <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} aria-label="Trạng thái" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'sm:col-span-2' : ''}`}>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="PENDING">PENDING</option>
                   <option value="LOCKED">LOCKED</option>
@@ -514,13 +759,13 @@ export function UsersPage() {
 
               <div>
                 <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gán vai trò *</p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {loading ? (
-                    <div className="col-span-2 rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
+                    <div className="col-span-full rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
                       Đang tải vai trò...
                     </div>
                   ) : roles.length === 0 ? (
-                    <div className="col-span-2 rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
+                    <div className="col-span-full rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
                       Chưa có vai trò nào
                     </div>
                   ) : (
@@ -533,9 +778,21 @@ export function UsersPage() {
                   )}
                 </div>
               </div>
+
+              <div className="border-t border-border pt-4">
+                <WarehouseAssignmentFields
+                  warehouses={warehouses}
+                  rows={form.scopes}
+                  onRowsChange={(scopes) => setForm((prev) => ({ ...prev, scopes }))}
+                  primaryWarehouseId={form.primary_warehouse_id}
+                  onPrimaryChange={(primary_warehouse_id) => setForm((prev) => ({ ...prev, primary_warehouse_id }))}
+                  loading={!warehouses.length && !warehouseError}
+                  error={warehouseError}
+                />
+              </div>
             </div>
 
-            <div className="mt-5 flex items-center gap-3">
+            <div className="flex items-center gap-3 border-t border-border px-6 py-4">
               <Button variant="outline" className="flex-1" onClick={closeUserModal}>
                 Hủy
               </Button>
@@ -546,6 +803,65 @@ export function UsersPage() {
           </motion.div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={!!pendingAssignment}
+        onOpenChange={(open) => { if (!open) setPendingAssignment(null); }}
+        title="Xác nhận thay đổi kho làm việc?"
+        description={pendingAssignment ? `Áp dụng cho ${pendingAssignment.user.full_name || pendingAssignment.user.username}.` : undefined}
+        variant={pendingAssignment?.diff.removed.length ? "destructive" : "default"}
+        confirmLabel="Lưu thay đổi"
+        onConfirm={async () => {
+          const pending = pendingAssignment;
+          setPendingAssignment(null);
+          if (pending) await saveEdit(pending.user);
+        }}
+      >
+        {pendingAssignment ? (
+          <div className="space-y-2 text-[13px]">
+            {pendingAssignment.diff.removed.length ? (
+              <p>
+                Thu hồi quyền ở:{" "}
+                <span className="font-semibold">
+                  {pendingAssignment.diff.removed.map((row) => warehouseLabel(row.warehouse_id, warehouseById)).join(", ")}
+                </span>
+              </p>
+            ) : null}
+            {pendingAssignment.primaryBefore !== pendingAssignment.primaryAfter ? (
+              <p>
+                Kho chính: <span className="font-semibold">{warehouseLabel(pendingAssignment.primaryBefore, warehouseById) || "—"}</span>
+                {" → "}
+                <span className="font-semibold">{warehouseLabel(pendingAssignment.primaryAfter, warehouseById) || "không có"}</span>
+              </p>
+            ) : null}
+            {pendingAssignment.diff.removed.length ? (
+              <OpenTaskNotice
+                rows={pendingAssignment.openTasks}
+                warehouseIds={pendingAssignment.diff.removed.map((row) => row.warehouse_id)}
+                warehouseById={warehouseById}
+              />
+            ) : null}
+          </div>
+        ) : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={!!pendingLockUser}
+        onOpenChange={(open) => { if (!open) setPendingLockUser(null); }}
+        title="Khóa tài khoản?"
+        description={pendingLockUser ? `${pendingLockUser.user.username} sẽ bị đăng xuất và mất quyền truy cập mọi kho ngay lập tức.` : undefined}
+        variant="destructive"
+        confirmLabel="Khóa"
+        onConfirm={async () => {
+          const pending = pendingLockUser;
+          setPendingLockUser(null);
+          if (pending) await handleToggleLock(pending.user);
+        }}
+      >
+        {pendingLockUser && (pendingLockUser.user.warehouse_scopes || []).length ? (
+          <OpenTaskNotice rows={pendingLockUser.openTasks} warehouseIds={null} warehouseById={warehouseById} />
+        ) : null}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={!!pendingDeleteUser}

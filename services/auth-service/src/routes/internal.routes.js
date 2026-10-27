@@ -43,6 +43,10 @@ function createInternalRouter({ prisma, internalKey = process.env.INTERNAL_SERVI
           is_superuser: true,
           deleted_at: true,
           user_warehouse_scopes: { select: { warehouse_id: true, access_level: true } },
+          user_roles: {
+            where: { OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }] },
+            select: { role: { select: { code: true } } },
+          },
         },
       });
       if (!user) return res.status(404).json({ message: 'User not found' });
@@ -53,6 +57,8 @@ function createInternalRouter({ prisma, internalKey = process.env.INTERNAL_SERVI
           deleted: Boolean(user.deleted_at),
           is_superuser: user.is_superuser === true,
           scopes: user.user_warehouse_scopes.map((s) => ({ warehouse_id: s.warehouse_id, access_level: s.access_level })),
+          // role codes let other services check that an assignee is warehouse staff
+          roles: (user.user_roles || []).map((ur) => ur.role?.code).filter(Boolean),
         },
       });
     } catch (_error) {

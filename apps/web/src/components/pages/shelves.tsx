@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AIRecommendationNotice, DecisionSection } from "@/components/ai/decision-card";
 import { hasPermission } from "@/services/http-clients";
 import { staffTaskService } from "@/services/staff-tasks";
-import { userService, type WarehouseStaffOption } from "@/services/user";
+import { useAssignableStaff } from "@/hooks/useAssignableStaff";
 
 function formatQty(value: number | null | undefined): string {
   if (value == null) return "-";
@@ -189,17 +189,12 @@ function MoveTaskDialog({
   warehouseId: string;
   onClose: () => void;
 }) {
-  const [staff, setStaff] = useState<WarehouseStaffOption[] | null>(null);
-  const [staffError, setStaffError] = useState(false);
+  // only staff who can act in this warehouse (the backend checks the same rule)
+  const assignable = useAssignableStaff(item ? warehouseId : null);
+  const staff = assignable.loading ? null : assignable.staff;
+  const staffError = Boolean(assignable.error);
   const [assigneeId, setAssigneeId] = useState("");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!item || staff) return;
-    userService.getWarehouseStaff()
-      .then((resp) => setStaff(resp.data || []))
-      .catch(() => { setStaffError(true); setStaff([]); });
-  }, [item, staff]);
 
   useEffect(() => { if (!item) setAssigneeId(""); }, [item]);
 
@@ -248,7 +243,7 @@ function MoveTaskDialog({
               ) : staff === null ? (
                 <p className="text-[12px] text-muted-foreground">Đang tải danh sách nhân viên…</p>
               ) : staff.length === 0 ? (
-                <p className="text-[12px] text-muted-foreground">Chưa có nhân viên kho nào để giao.</p>
+                <p className="text-[12px] text-muted-foreground">Kho này chưa có nhân viên nào nhận được việc.</p>
               ) : (
                 <Select value={assigneeId} onValueChange={setAssigneeId}>
                   <SelectTrigger id="move-task-assignee" className="w-full"><SelectValue placeholder="Chọn nhân viên" /></SelectTrigger>
