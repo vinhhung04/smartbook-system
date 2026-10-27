@@ -13,7 +13,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   // 1. Staff creates a purchase request.
   await loginAs(page, { identifier: 'staff01', password: '123456' });
   await page.goto('/my-purchase-requests');
-  await page.getByRole('tab', { name: 'Tạo yêu cầu mới' }).click();
+  await page.getByRole('button', { name: 'Tạo yêu cầu' }).first().click();
   await page.getByTestId('new-pr-warehouse-select').click();
   // WH-HCM-01 is the seeded warehouse with shelf compartments, so the putaway step at the end has somewhere to go.
   await page.getByRole('option', { name: /WH-HCM-01/ }).click();

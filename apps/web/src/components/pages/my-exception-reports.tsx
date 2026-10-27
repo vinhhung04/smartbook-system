@@ -1,32 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
-import { AlertTriangle, ImagePlus, Plus, RefreshCw, X } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { NavLink, useNavigate, useSearchParams } from "react-router";
+import { AlertTriangle, ArrowLeft, Camera, ImagePlus, Info, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
-import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FilterBar } from "@/components/ui/filter-bar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
-  PaginationNext, PaginationPrevious,
-} from "@/components/ui/pagination";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { BlockError } from "@/components/pages/dashboard/panel";
+import { ChoiceChips, Field, FormGroup, FormSheet, ListFooter, QueueTabs, RefCode, RowsSkeleton } from "@/components/ops/ops-kit";
+import { fieldAria, formatDateTime, nativeSelectClass, timeAgo, darkFieldClass } from "@/components/ops/ops-utils";
 import { cn } from "@/components/ui/utils";
-import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
 import { exceptionReportService, type ExceptionReport, type ExceptionReportCreateInput } from "@/services/exception-reports";
 import { warehouseService } from "@/services/warehouse";
 import { myWarehouseTaskService, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
-import { getStatusVariant } from "@/lib/status-registry";
+import { authService } from "@/services/auth";
+import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
+import { getStatusVariant, getWarehouseTaskStatusLabel } from "@/lib/status-registry";
 
+// The task types the exception-report API accepts (VALID_TASK_TYPES in the controller).
 const TASK_TYPES = [
   { value: "RECEIVING", label: "Tiếp nhận hàng" },
   { value: "PUTAWAY", label: "Cất hàng vào kho" },
@@ -43,46 +40,59 @@ const EXCEPTION_TYPES = [
   { value: "OTHER", label: "Khác" },
 ];
 
-const STATUS_FILTERS = [
-  { value: "all", label: "Mọi trạng thái" },
-  { value: "OPEN", label: "Mở" },
-  { value: "ACKNOWLEDGED", label: "Đã ghi nhận" },
-  { value: "RESOLVED", label: "Đã xử lý" },
-  { value: "DISMISSED", label: "Đã hủy" },
-];
+const STATUS_FILTERS = ["ALL", "OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+const STATUS_LABELS: Record<string, string> = {
+  ALL: "Tất cả",
+  OPEN: "Đang mở",
+  ACKNOWLEDGED: "Đã ghi nhận",
+  RESOLVED: "Đã xử lý",
+  DISMISSED: "Đã hủy",
+};
 
 const PAGE_SIZE = 10;
+const PANEL_ID = "exception-report-list";
 
-type PageTab = "queue" | "compose";
+function taskTypeLabel(type: string) {
+  return TASK_TYPES.find((t) => t.value === type)?.label || type;
+}
 
-function statusVariant(status: string) {
-  return getStatusVariant("exceptionReport", status);
+function exceptionLabel(type: string) {
+  return EXCEPTION_TYPES.find((t) => t.value === type)?.label || type;
 }
 
 function statusLabel(status: string) {
-  return STATUS_FILTERS.find((entry) => entry.value === status)?.label ?? status;
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString("vi-VN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return STATUS_LABELS[status] ?? status;
 }
 
 interface Warehouse { id: string; code: string; name: string }
 
-const emptyForm: ExceptionReportCreateInput = {
+interface FormState {
+  warehouse_id: string;
+  task_type: string;
+  task_id: string;
+  exception_type: string;
+  note: string;
+  /** Kept as typed so an empty field stays "not given" and a typed 0 stays 0. */
+  expected_qty: string;
+  actual_qty: string;
+  evidence_notes: string;
+  evidence_photo_url?: string;
+}
+
+type FormErrors = Partial<Record<"task" | "warehouse" | "note" | "expected" | "actual", string>>;
+
+const emptyForm: FormState = {
   warehouse_id: "",
-  task_type: "RECEIVING",
+  task_type: "",
   task_id: "",
   exception_type: "SHORT",
   note: "",
-  expected_qty: undefined,
-  actual_qty: undefined,
+  expected_qty: "",
+  actual_qty: "",
   evidence_notes: "",
   evidence_photo_url: undefined,
-  goods_receipt_id: undefined,
 };
 
 const MAX_EVIDENCE_PHOTO_BYTES = 4 * 1024 * 1024; // keep base64 payload comfortably under the gateway's JSON body limit
@@ -99,23 +109,83 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function quantityError(value: string) {
+  if (!value.trim()) return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 ? undefined : "Nhập số nguyên từ 0 trở lên, hoặc để trống.";
+}
+
+function formatBytes(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function validate(form: FormState): FormErrors {
+  const errors: FormErrors = {};
+  if (!form.task_id.trim()) errors.task = "Chọn task đang gặp sự cố.";
+  else if (!TASK_TYPES.some((t) => t.value === form.task_type)) errors.task = "Loại công việc này chưa hỗ trợ báo cáo sự cố. Chọn một task tiếp nhận, cất hàng, lấy hàng hoặc xuất kho.";
+  if (!form.warehouse_id) errors.warehouse = "Chọn kho xảy ra sự cố.";
+  if (!form.note.trim()) errors.note = "Mô tả ngắn gọn điều bạn thấy.";
+  errors.expected = quantityError(form.expected_qty);
+  errors.actual = quantityError(form.actual_qty);
+  return errors;
+}
+
+/** Expected → actual, with the signed gap; a dash where a figure was not given. */
+function QuantityCell({ report }: { report: ExceptionReport }) {
+  const { expected_qty: expected, actual_qty: actual } = report;
+  if (expected == null && actual == null) return <span className="text-muted-foreground">—</span>;
+  const gap = expected != null && actual != null ? actual - expected : null;
+  return (
+    <span className="whitespace-nowrap tabular-nums">
+      <span className="text-muted-foreground">{expected ?? "—"}</span>
+      <span className="px-1 text-muted-foreground" aria-hidden="true">→</span>
+      <span className="font-medium text-foreground">{actual ?? "—"}</span>
+      {gap !== null && gap !== 0 ? <span className="ml-1.5 text-[12px] text-muted-foreground">({gap > 0 ? "+" : "−"}{Math.abs(gap)})</span> : null}
+      <span className="sr-only"> (dự kiến {expected ?? "không ghi"}, thực tế {actual ?? "không ghi"})</span>
+    </span>
+  );
+}
+
+function ResolutionNote({ report }: { report: ExceptionReport }) {
+  if (!report.resolution_notes) return null;
+  return (
+    <p className="mt-1.5 max-w-prose rounded-md bg-muted/60 px-2.5 py-1.5 text-[12px] leading-5 text-foreground">
+      <span className="font-medium">Quản lý{report.resolved_at ? ` (${formatDateTime(report.resolved_at)})` : ""}:</span> {report.resolution_notes}
+    </p>
+  );
+}
+
 export function MyExceptionReportsPage() {
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<PageTab>("queue");
+  const navigate = useNavigate();
+  const currentUser = authService.getCurrentUser();
+  const canOpenWarehouseTasks = canAccess(currentUser, ROUTE_ACCESS.staffTasks);
+  const ids = useId();
+  const fieldId = (name: string) => `${ids}-${name}`;
+
+  const [composeOpen, setComposeOpen] = useState(false);
   const [reports, setReports] = useState<ExceptionReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [taskList, setTaskList] = useState<MyWarehouseTask[]>([]);
-  const [form, setForm] = useState<ExceptionReportCreateInput>(emptyForm);
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [photo, setPhoto] = useState<{ name: string; size: number } | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [fromTask, setFromTask] = useState(false);
+  const [photoReport, setPhotoReport] = useState<ExceptionReport | null>(null);
   const prefillApplied = useRef(false);
+  const photoInput = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [page, setPage] = useState(1);
 
-  const load = async () => {
-    setLoading(true);
+  const load = useCallback(async (mode: "initial" | "refresh" = "refresh") => {
+    if (mode === "initial") setLoading(true); else setRefreshing(true);
     try {
       const [res, wRes, taskRes] = await Promise.all([
         exceptionReportService.getMyReports(),
@@ -125,10 +195,9 @@ export function MyExceptionReportsPage() {
       setReports(Array.isArray(res.data) ? res.data : []);
       const wList = Array.isArray(wRes) ? wRes : [];
       setWarehouses(wList);
-      const opTasks = (taskRes.data || []).filter((t) =>
-        ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND"].includes(t.type)
-      );
+      const opTasks = (taskRes.data || []).filter((t) => TASK_TYPES.some((type) => type.value === t.type));
       setTaskList(opTasks);
+      setLoadError(null);
 
       // Apply URL query-param pre-fill once after first load
       if (!prefillApplied.current) {
@@ -147,30 +216,36 @@ export function MyExceptionReportsPage() {
             task_type: preTaskType,
             warehouse_id: matchedWH?.id ?? f.warehouse_id,
           }));
-          setActiveTab("compose");
+          setFromTask(true);
+          setComposeOpen(true);
         }
       }
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Không tải được báo cáo sự cố"));
+      const message = getApiErrorMessage(err, "Không tải được báo cáo sự cố");
+      setLoadError(message);
+      if (mode === "refresh") toast.error(message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [searchParams]);
 
-  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load("initial"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter]);
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
+  const counts = useMemo(() => {
+    const map: Record<string, number> = { ALL: reports.length };
+    for (const r of reports) map[r.status] = (map[r.status] ?? 0) + 1;
+    return map;
+  }, [reports]);
 
   const filteredReports = useMemo(() => {
     const query = search.trim().toLowerCase();
     return reports.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (statusFilter !== "ALL" && r.status !== statusFilter) return false;
       if (query) {
-        const exceptionLabel = EXCEPTION_TYPES.find((t) => t.value === r.exception_type)?.label || r.exception_type;
-        const taskLabel = TASK_TYPES.find((t) => t.value === r.task_type)?.label || r.task_type;
-        const haystack = `${r.report_number} ${r.note} ${r.warehouses?.code || ""} ${r.warehouses?.name || ""} ${exceptionLabel} ${taskLabel}`.toLowerCase();
+        const haystack = `${r.report_number} ${r.note} ${r.warehouses?.code || ""} ${r.warehouses?.name || ""} ${exceptionLabel(r.exception_type)} ${taskTypeLabel(r.task_type)}`.toLowerCase();
         if (!haystack.includes(query)) return false;
       }
       return true;
@@ -178,19 +253,23 @@ export function MyExceptionReportsPage() {
   }, [reports, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
+  const pagedReports = filteredReports.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
 
-  const pagedReports = useMemo(
-    () => filteredReports.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filteredReports, page],
-  );
+  const selectedTask = taskList.find((t) => t.id === form.task_id) ?? null;
+  const selectedWarehouse = warehouses.find((w) => w.id === form.warehouse_id) ?? null;
+  // A deep link can name a task that has since left the user's feed.
+  const prefillMissing = Boolean(form.task_id) && !loading && !selectedTask;
 
-  useEffect(() => {
-    setPage((current) => Math.min(current, totalPages));
-  }, [totalPages]);
+  const updateForm = (patch: Partial<FormState>, clears?: keyof FormErrors) => {
+    setForm((f) => ({ ...f, ...patch }));
+    if (clears) setErrors((e) => ({ ...e, [clears]: undefined }));
+  };
 
   const handleTaskSelect = (taskId: string) => {
+    setErrors((e) => ({ ...e, task: undefined }));
     if (!taskId) {
-      setForm((f) => ({ ...f, task_id: "", task_type: "RECEIVING" }));
+      setForm((f) => ({ ...f, task_id: "", task_type: "" }));
       return;
     }
     const task = taskList.find((t) => t.id === taskId);
@@ -204,6 +283,14 @@ export function MyExceptionReportsPage() {
       task_type: task.type,
       warehouse_id: matched?.id ?? f.warehouse_id,
     }));
+    if (matched) setErrors((e) => ({ ...e, warehouse: undefined }));
+  };
+
+  const clearPhoto = () => {
+    updateForm({ evidence_photo_url: undefined });
+    setPhoto(null);
+    setPhotoError(null);
+    if (photoInput.current) photoInput.current.value = "";
   };
 
   const handlePhotoSelect = async (file: File | undefined) => {
@@ -211,26 +298,44 @@ export function MyExceptionReportsPage() {
     if (!ALLOWED_EVIDENCE_PHOTO_TYPES.includes(file.type)) {
       // Reject SVG (and any other non-raster type) client-side: an inline SVG can carry
       // executable script and would run when later rendered via <img src>.
-      toast.error("Vui lòng chọn ảnh PNG, JPEG, WEBP hoặc GIF");
+      setPhotoError(`“${file.name}” không phải ảnh PNG, JPEG, WEBP hoặc GIF.`);
+      if (photoInput.current) photoInput.current.value = "";
       return;
     }
     if (file.size > MAX_EVIDENCE_PHOTO_BYTES) {
-      toast.error("Ảnh quá lớn (tối đa 4MB). Vui lòng chọn ảnh nhỏ hơn hoặc nén ảnh trước khi tải lên.");
+      setPhotoError(`Ảnh nặng ${formatBytes(file.size)}, vượt giới hạn 4 MB. Chọn ảnh nhỏ hơn hoặc nén ảnh trước.`);
+      if (photoInput.current) photoInput.current.value = "";
       return;
     }
     try {
       const dataUrl = await readFileAsDataUrl(file);
-      setForm((f) => ({ ...f, evidence_photo_url: dataUrl }));
+      updateForm({ evidence_photo_url: dataUrl });
+      setPhoto({ name: file.name, size: file.size });
+      setPhotoError(null);
     } catch {
-      toast.error("Không đọc được tệp ảnh, vui lòng thử lại");
+      setPhotoError("Không đọc được tệp ảnh, hãy thử lại.");
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setForm(emptyForm);
+    setErrors({});
+    setPhoto(null);
+    setPhotoError(null);
+    setFromTask(false);
+    prefillApplied.current = true;
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!form.warehouse_id) { toast.error("Vui lòng chọn kho"); return; }
-    if (!form.task_id.trim()) { toast.error("Vui lòng chọn task liên quan"); return; }
-    if (!form.note.trim()) { toast.error("Vui lòng nhập mô tả sự cố"); return; }
+    if (submitting) return;
+    const found = validate(form);
+    setErrors(found);
+    const firstInvalid = (["task", "warehouse", "note", "expected", "actual"] as const).find((key) => found[key]);
+    if (firstInvalid) {
+      document.getElementById(fieldId(firstInvalid))?.focus();
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -240,18 +345,21 @@ export function MyExceptionReportsPage() {
         task_id: form.task_id.trim(),
         exception_type: form.exception_type,
         note: form.note.trim(),
-        expected_qty: form.expected_qty !== undefined && form.expected_qty !== null ? Number(form.expected_qty) : undefined,
-        actual_qty: form.actual_qty !== undefined && form.actual_qty !== null ? Number(form.actual_qty) : undefined,
+        expected_qty: form.expected_qty.trim() ? Number(form.expected_qty) : undefined,
+        actual_qty: form.actual_qty.trim() ? Number(form.actual_qty) : undefined,
         evidence_notes: form.evidence_notes || undefined,
         evidence_photo_url: form.evidence_photo_url || undefined,
-        goods_receipt_id: form.goods_receipt_id || undefined,
       };
       await exceptionReportService.createReport(payload);
-      toast.success("Đã gửi báo cáo sự cố");
-      setForm(emptyForm);
-      prefillApplied.current = true;
+      const cameFromTask = fromTask;
+      toast.success("Đã gửi báo cáo sự cố", {
+        description: "Báo cáo ở mục Đang mở cho đến khi quản lý ghi nhận.",
+        action: cameFromTask && canOpenWarehouseTasks ? { label: "Quay lại công việc", onClick: () => { void navigate("/my-warehouse-tasks"); } } : undefined,
+      });
+      resetForm();
+      setComposeOpen(false);
+      setStatusFilter("ALL");
       await load();
-      setActiveTab("queue");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Gửi báo cáo thất bại"));
     } finally {
@@ -259,28 +367,50 @@ export function MyExceptionReportsPage() {
     }
   };
 
-  const closeForm = () => {
-    setForm(emptyForm);
-    prefillApplied.current = true;
-    setActiveTab("queue");
-  };
+  const statusTabs = STATUS_FILTERS.map((key) => ({ key, label: STATUS_LABELS[key], count: counts[key] ?? 0 }));
+  const expectedNumber = form.expected_qty.trim() && !quantityError(form.expected_qty) ? Number(form.expected_qty) : null;
+  const actualNumber = form.actual_qty.trim() && !quantityError(form.actual_qty) ? Number(form.actual_qty) : null;
+  const gap = expectedNumber !== null && actualNumber !== null ? actualNumber - expectedNumber : null;
+
+  const photoButton = (report: ExceptionReport) => report.evidence_photo_url ? (
+    <button
+      type="button"
+      onClick={() => setPhotoReport(report)}
+      className="inline-flex items-center gap-1 rounded text-[12px] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+      aria-label={`Xem ảnh bằng chứng của ${report.report_number}`}
+    >
+      <Camera className="h-3.5 w-3.5" aria-hidden="true" />Ảnh
+    </button>
+  ) : null;
+
+  const emptyState = reports.length === 0 ? (
+    <EmptyState
+      icon={AlertTriangle}
+      title="Chưa có báo cáo sự cố"
+      description="Khi gặp hàng thiếu, dư, hư hỏng hay sai sản phẩm lúc làm việc, báo cáo để quản lý xử lý."
+      action={<Button type="button" size="sm" onClick={() => setComposeOpen(true)}><Plus className="h-3.5 w-3.5" />Báo cáo sự cố</Button>}
+      className="py-0"
+    />
+  ) : (
+    <EmptyState icon={Search} variant="no-results" title="Không có báo cáo phù hợp" description="Thử trạng thái khác hoặc từ khóa khác." className="py-0" />
+  );
 
   return (
-    <PageWrapper className="space-y-6">
+    <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={AlertTriangle}
           title="Báo cáo sự cố của tôi"
-          description="Ghi nhận sự cố thiếu/dư/hư hỏng trong quá trình làm việc để quản lý xử lý"
+          description="Báo thiếu, dư, hư hỏng hoặc sai hàng gặp khi làm việc và theo dõi quản lý xử lý"
           iconBg="bg-red-100 dark:bg-red-500/15"
           iconColor="text-red-700 dark:text-red-400"
           actions={
             <>
-              <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading || refreshing}>
+                <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin motion-reduce:animate-none")} />
                 Làm mới
               </Button>
-              <Button type="button" size="sm" onClick={() => setActiveTab("compose")} disabled={activeTab === "compose"}>
+              <Button type="button" size="sm" onClick={() => setComposeOpen(true)}>
                 <Plus className="h-3.5 w-3.5" />
                 Báo cáo sự cố
               </Button>
@@ -290,301 +420,287 @@ export function MyExceptionReportsPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-800 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
-          Báo cáo sự cố không tự động điều chỉnh tồn kho. Quản lý sẽ xem xét và quyết định xử lý phù hợp.
-        </div>
-      </FadeItem>
+        <section aria-label="Báo cáo của tôi" className="min-w-0 rounded-xl border border-border bg-card">
+          <QueueTabs label="Lọc theo trạng thái" tabs={statusTabs} value={statusFilter} onChange={setStatusFilter} panelId={PANEL_ID} loading={loading} />
 
-      <FadeItem>
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PageTab)}>
-          <TabsList className="w-full sm:w-fit">
-            <TabsTrigger value="queue">Báo cáo của tôi</TabsTrigger>
-            <TabsTrigger value="compose">Tạo báo cáo mới</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="queue" className="mt-4">
-            <SectionCard title="Danh sách báo cáo sự cố">
-              <FilterBar
-                searchValue={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Tìm theo mã báo cáo, mô tả hoặc kho..."
-                className="mb-4"
-                filters={(
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[160px]" size="sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_FILTERS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+          <div className="border-b border-border px-4 py-3 sm:px-5">
+            <div className="relative min-w-0 sm:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Tìm mã báo cáo, mô tả, kho…"
+                aria-label="Tìm báo cáo"
+                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9 sm:text-[13px]"
               />
+            </div>
+          </div>
 
-              <div className="overflow-hidden rounded-xl border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Mã báo cáo</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Kho</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Task</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Loại sự cố</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">SL dự kiến</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">SL thực tế</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Trạng thái</TableHead>
-                      <TableHead className="text-[11px] uppercase tracking-wider text-muted-foreground">Tạo lúc</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pagedReports.length === 0 ? (
+          <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${statusFilter}`} aria-busy={loading || refreshing}>
+            {loading ? (
+              <RowsSkeleton rows={4} />
+            ) : loadError && reports.length === 0 ? (
+              <div className="p-4 sm:p-5"><BlockError what="báo cáo sự cố của bạn" onRetry={() => void load("initial")} /></div>
+            ) : pagedReports.length === 0 ? (
+              <div className="px-5 py-8">{emptyState}</div>
+            ) : (
+              <>
+                <div className="hidden lg:block">
+                  <Table className="table-fixed">
+                    <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={8} className="whitespace-normal py-10 text-center">
-                          <EmptyState
-                            icon={AlertTriangle}
-                            variant={reports.length === 0 ? "no-data" : "no-results"}
-                            title={reports.length === 0 ? "Chưa có báo cáo sự cố" : "Không tìm thấy báo cáo phù hợp"}
-                            description={
-                              reports.length === 0
-                                ? "Khi phát hiện sự cố trong quá trình làm việc, hãy báo cáo để quản lý xử lý kịp thời."
-                                : "Thử điều chỉnh từ khóa tìm kiếm hoặc bộ lọc."
-                            }
-                            action={reports.length === 0 ? (
-                              <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
-                                <Plus className="h-3.5 w-3.5" />
-                                Báo cáo sự cố
-                              </Button>
-                            ) : undefined}
-                            className="py-0"
-                          />
-                        </TableCell>
+                        <TableHead className="h-10 w-[200px] pl-5 text-[12px] font-normal text-muted-foreground">Mã báo cáo</TableHead>
+                        <TableHead className="h-10 w-auto text-[12px] font-normal text-muted-foreground">Sự cố</TableHead>
+                        <TableHead className="h-10 w-[170px] text-[12px] font-normal text-muted-foreground">Công việc</TableHead>
+                        <TableHead className="h-10 w-[130px] text-right text-[12px] font-normal text-muted-foreground">Dự kiến → thực tế</TableHead>
+                        <TableHead className="h-10 w-[130px] text-[12px] font-normal text-muted-foreground">Trạng thái</TableHead>
+                        <TableHead className="h-10 w-[120px] pr-5 text-right text-[12px] font-normal text-muted-foreground">Gửi lúc</TableHead>
                       </TableRow>
-                    ) : pagedReports.map((r) => (
-                      <TableRow key={r.id} className="hover:bg-muted/30">
-                        <TableCell className="font-mono text-[12px] text-muted-foreground">{r.report_number}</TableCell>
-                        <TableCell className="text-[13px]">{r.warehouses?.code || "-"}</TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">
-                          {TASK_TYPES.find((t) => t.value === r.task_type)?.label || r.task_type}
-                        </TableCell>
-                        <TableCell className="text-[13px]">
-                          {EXCEPTION_TYPES.find((t) => t.value === r.exception_type)?.label || r.exception_type}
-                        </TableCell>
-                        <TableCell className="text-[13px]">{r.expected_qty ?? "-"}</TableCell>
-                        <TableCell className="text-[13px]">{r.actual_qty ?? "-"}</TableCell>
-                        <TableCell>
-                          <StatusBadge label={statusLabel(r.status)} variant={statusVariant(r.status)} dot />
-                        </TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{formatDate(r.created_at)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {filteredReports.length > 0 && (
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[12px] text-muted-foreground">
-                    Hiển thị <span className="font-medium text-foreground">{pagedReports.length}</span> / {filteredReports.length} báo cáo
-                  </p>
-                  {totalPages > 1 && (
-                    <Pagination className="mx-0 w-auto justify-end">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.max(1, current - 1));
-                            }}
-                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                        {getPaginationRange(page, totalPages).map((item) => (
-                          <PaginationItem key={item}>
-                            {typeof item === "number" ? (
-                              <PaginationLink
-                                isActive={item === page}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  setPage(item);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                {item}
-                              </PaginationLink>
-                            ) : (
-                              <PaginationEllipsis />
-                            )}
-                          </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.min(totalPages, current + 1));
-                            }}
-                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  )}
-                </div>
-              )}
-            </SectionCard>
-          </TabsContent>
-
-          <TabsContent value="compose" className="mt-4">
-            <SectionCard>
-              <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
-                <h2 className="text-[14px] font-semibold">Báo cáo sự cố mới</h2>
-                <button type="button" onClick={closeForm} aria-label="Đóng biểu mẫu" className="text-muted-foreground hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {/* Task dropdown */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-[12px] font-medium mb-1">Task liên quan *</label>
-                    {taskList.length > 0 ? (
-                      <select
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                        value={form.task_id}
-                        onChange={(e) => handleTaskSelect(e.target.value)}
-                        required
-                      >
-                        <option value="">-- Chọn task liên quan --</option>
-                        {taskList.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            [{t.type}] {t.title}{t.warehouse ? ` — ${t.warehouse}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
-                        Không tìm thấy task đang hoạt động. Kiểm tra lại "Công việc kho của tôi" hoặc liên hệ quản lý.
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-[12px] font-medium mb-1">Kho *</label>
-                    <select
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                      value={form.warehouse_id}
-                      onChange={(e) => setForm((f) => ({ ...f, warehouse_id: e.target.value }))}
-                      required
-                    >
-                      <option value="">-- Chọn kho --</option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedReports.map((r) => (
+                        <TableRow key={r.id} className="align-top hover:bg-muted/30">
+                          <TableCell className="py-3 pl-5"><RefCode value={r.report_number} /></TableCell>
+                          <TableCell className="whitespace-normal py-3">
+                            <p className="flex items-center gap-2 text-[13px] font-semibold text-foreground">{exceptionLabel(r.exception_type)}{photoButton(r)}</p>
+                            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground" title={r.note}>{r.note}</p>
+                            <ResolutionNote report={r} />
+                          </TableCell>
+                          <TableCell className="whitespace-normal py-3 text-[13px]">
+                            <span className="block text-foreground">{taskTypeLabel(r.task_type)}</span>
+                            <span className="block text-[12px] text-muted-foreground" title={r.warehouses?.name}>{r.warehouses?.code || "Chưa rõ kho"}</span>
+                          </TableCell>
+                          <TableCell className="py-3 text-right text-[13px]"><QuantityCell report={r} /></TableCell>
+                          <TableCell className="py-3"><StatusBadge label={statusLabel(r.status)} variant={getStatusVariant("exceptionReport", r.status)} dot /></TableCell>
+                          <TableCell className="py-3 pr-5 text-right text-[12px] tabular-nums text-muted-foreground" title={formatDateTime(r.created_at) ?? undefined}>{timeAgo(r.created_at)}</TableCell>
+                        </TableRow>
                       ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium mb-1">Loại task</label>
-                    <select
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                      value={form.task_type}
-                      onChange={(e) => setForm((f) => ({ ...f, task_type: e.target.value }))}
-                    >
-                      {TASK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium mb-1">Loại sự cố *</label>
-                    <select
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px]"
-                      value={form.exception_type}
-                      onChange={(e) => setForm((f) => ({ ...f, exception_type: e.target.value }))}
-                    >
-                      {EXCEPTION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium mb-1">Số lượng dự kiến</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="Số lượng theo chứng từ"
-                      value={form.expected_qty ?? ""}
-                      onChange={(e) => setForm((f) => ({ ...f, expected_qty: e.target.value ? Number(e.target.value) : undefined }))}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium mb-1">Số lượng thực tế</label>
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="Số lượng thực nhận/kiểm"
-                      value={form.actual_qty ?? ""}
-                      onChange={(e) => setForm((f) => ({ ...f, actual_qty: e.target.value ? Number(e.target.value) : undefined }))}
-                    />
-                  </div>
+                    </TableBody>
+                  </Table>
                 </div>
-                <div>
-                  <label className="block text-[12px] font-medium mb-1">Mô tả sự cố *</label>
-                  <Textarea
-                    rows={3}
-                    placeholder="Mô tả chi tiết sự cố phát hiện..."
-                    value={form.note}
-                    onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-medium mb-1">Ghi chú bằng chứng</label>
-                  <Textarea
-                    rows={2}
-                    placeholder="Ghi chú số serial, vị trí, hình ảnh (nếu có)..."
-                    value={form.evidence_notes || ""}
-                    onChange={(e) => setForm((f) => ({ ...f, evidence_notes: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-medium mb-1">Ảnh bằng chứng</label>
-                  {form.evidence_photo_url ? (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={form.evidence_photo_url}
-                        alt="Ảnh bằng chứng"
-                        className="h-20 w-20 rounded-md border border-border object-cover"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setForm((f) => ({ ...f, evidence_photo_url: undefined }))}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                        Xóa ảnh
-                      </Button>
-                    </div>
-                  ) : (
-                    <label className="flex w-fit cursor-pointer items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground hover:border-primary/40 hover:text-foreground">
-                      <ImagePlus className="h-3.5 w-3.5" />
-                      Chọn ảnh (tối đa 4MB)
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        className="hidden"
-                        onChange={(e) => void handlePhotoSelect(e.target.files?.[0])}
-                      />
-                    </label>
-                  )}
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={closeForm}>Hủy</Button>
-                  <Button type="submit" size="sm" disabled={submitting}>
-                    {submitting ? "Đang gửi..." : "Gửi báo cáo"}
-                  </Button>
-                </div>
-              </form>
-            </SectionCard>
-          </TabsContent>
-        </Tabs>
+
+                <ul className="divide-y divide-border lg:hidden">
+                  {pagedReports.map((r) => (
+                    <li key={r.id} className="px-4 py-3.5 sm:px-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 text-[14px] font-semibold text-foreground">{exceptionLabel(r.exception_type)}</p>
+                        <StatusBadge label={statusLabel(r.status)} variant={getStatusVariant("exceptionReport", r.status)} dot />
+                      </div>
+                      <p className="mt-1 text-[12px] text-muted-foreground">
+                        {taskTypeLabel(r.task_type)} · {r.warehouses?.code || "Chưa rõ kho"} · {timeAgo(r.created_at)}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[13px] text-foreground">{r.note}</p>
+                      <ResolutionNote report={r} />
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                        <RefCode value={r.report_number} />
+                        {r.expected_qty != null || r.actual_qty != null ? <QuantityCell report={r} /> : null}
+                        <span className="ml-auto">{photoButton(r)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+
+          {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={filteredReports.length} noun="báo cáo" onPageChange={setPage} /> : null}
+        </section>
       </FadeItem>
+
+      <FormSheet
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        title="Báo cáo sự cố"
+        description={fromTask && canOpenWarehouseTasks ? (
+          <NavLink to="/my-warehouse-tasks" className="inline-flex items-center gap-1 font-medium text-primary underline-offset-4 hover:underline">
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />Quay lại công việc kho
+          </NavLink>
+        ) : "Ghi lại điều bạn thấy để quản lý xử lý. Nội dung đang nhập được giữ lại nếu bạn đóng bảng này."}
+        onSubmit={(e) => void handleSubmit(e)}
+        footer={(
+          <>
+            <Button type="button" variant="ghost" className="mr-auto px-2 sm:px-3" onClick={resetForm}>Xóa nội dung</Button>
+            <Button type="button" variant="outline" onClick={() => setComposeOpen(false)}>Đóng</Button>
+            <Button type="submit" loading={submitting}>{submitting ? "Đang gửi…" : "Gửi báo cáo"}</Button>
+          </>
+        )}
+      >
+        <FormGroup title="Công việc liên quan">
+          <Field
+            id={fieldId("task")}
+            label="Task đang gặp sự cố"
+            required
+            error={errors.task}
+            hint={prefillMissing ? undefined : taskList.length === 0 && !loading ? "Bạn chưa có task kho nào. Kiểm tra mục Công việc kho của tôi hoặc liên hệ quản lý." : undefined}
+          >
+            <select
+              {...fieldAria(fieldId("task"), errors.task, taskList.length === 0)}
+              className={nativeSelectClass}
+              value={selectedTask ? form.task_id : ""}
+              onChange={(e) => handleTaskSelect(e.target.value)}
+              disabled={loading}
+            >
+              <option value="">{loading ? "Đang tải task…" : prefillMissing ? "Chọn lại task" : "Chọn task"}</option>
+              {TASK_TYPES.map((type) => {
+                const group = taskList.filter((t) => t.type === type.value);
+                return group.length ? (
+                  <optgroup key={type.value} label={type.label}>
+                    {group.map((t) => <option key={t.id} value={t.id}>{t.title}{t.warehouse ? ` · ${t.warehouse}` : ""}</option>)}
+                  </optgroup>
+                ) : null;
+              })}
+            </select>
+            {prefillMissing && !errors.task ? (
+              <p className="mt-1.5 text-[12px] text-amber-700 dark:text-amber-400">
+                Task được chuyển từ trang công việc ({form.task_type ? taskTypeLabel(form.task_type) : "không rõ loại"}) không còn trong danh sách của bạn. Hãy chọn lại task.
+              </p>
+            ) : null}
+          </Field>
+          {selectedTask || form.task_type ? (
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-md bg-muted/60 px-3 py-2.5 text-[13px]">
+              <dt className="text-muted-foreground">Loại nghiệp vụ</dt>
+              <dd className="text-foreground">{taskTypeLabel(selectedTask?.type ?? form.task_type)}</dd>
+              {selectedTask?.status ? (<><dt className="text-muted-foreground">Trạng thái task</dt><dd className="text-foreground">{getWarehouseTaskStatusLabel(selectedTask.status)}</dd></>) : null}
+            </dl>
+          ) : null}
+          <Field id={fieldId("warehouse")} label="Kho" required error={errors.warehouse} hint={selectedTask && selectedWarehouse ? "Điền theo task đã chọn." : undefined}>
+            <select
+              {...fieldAria(fieldId("warehouse"), errors.warehouse, Boolean(selectedTask && selectedWarehouse))}
+              className={nativeSelectClass}
+              value={form.warehouse_id}
+              onChange={(e) => updateForm({ warehouse_id: e.target.value }, "warehouse")}
+            >
+              <option value="">Chọn kho</option>
+              {warehouses.map((w) => (
+                <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
+              ))}
+            </select>
+          </Field>
+        </FormGroup>
+
+        <FormGroup title="Thông tin sự cố">
+          <div>
+            <p id={fieldId("type-label")} className="mb-1.5 text-[13px] font-medium text-foreground">
+              Loại sự cố<span className="text-red-600 dark:text-red-400" aria-hidden="true"> *</span>
+            </p>
+            <ChoiceChips labelledBy={fieldId("type-label")} options={EXCEPTION_TYPES} value={form.exception_type} onChange={(value) => updateForm({ exception_type: value })} />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field id={fieldId("expected")} label="Số lượng dự kiến" error={errors.expected} hint="Theo chứng từ, đơn vị cuốn. Để trống nếu không áp dụng.">
+              <Input
+                {...fieldAria(fieldId("expected"), errors.expected, true)}
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                className={cn("h-10", darkFieldClass)}
+                value={form.expected_qty}
+                onChange={(e) => updateForm({ expected_qty: e.target.value }, "expected")}
+              />
+            </Field>
+            <Field id={fieldId("actual")} label="Số lượng thực tế" error={errors.actual} hint="Bạn đếm được, đơn vị cuốn. 0 nghĩa là không có cuốn nào.">
+              <Input
+                {...fieldAria(fieldId("actual"), errors.actual, true)}
+                type="number"
+                min={0}
+                step={1}
+                inputMode="numeric"
+                className={cn("h-10", darkFieldClass)}
+                value={form.actual_qty}
+                onChange={(e) => updateForm({ actual_qty: e.target.value }, "actual")}
+              />
+            </Field>
+          </div>
+          {gap !== null ? (
+            <p className="text-[12px] text-muted-foreground" aria-live="polite">
+              Chênh lệch tham khảo: <span className="font-medium tabular-nums text-foreground">{gap > 0 ? "+" : gap < 0 ? "−" : ""}{Math.abs(gap)} cuốn</span>
+              {gap < 0 ? " (thực tế ít hơn dự kiến)" : gap > 0 ? " (thực tế nhiều hơn dự kiến)" : " (khớp)"}. Chỉ để quản lý tham khảo, không tự điều chỉnh tồn kho.
+            </p>
+          ) : null}
+          <Field id={fieldId("note")} label="Mô tả sự cố" required error={errors.note} hint="Bạn thấy gì, ở đâu, ảnh hưởng tới cuốn nào.">
+            <Textarea className={darkFieldClass}
+              {...fieldAria(fieldId("note"), errors.note, true)}
+              rows={3}
+              placeholder="Ví dụ: thùng số 2 thiếu 3 cuốn Nhà Giả Kim, vỏ thùng bị rách"
+              value={form.note}
+              onChange={(e) => updateForm({ note: e.target.value }, "note")}
+            />
+          </Field>
+        </FormGroup>
+
+        <FormGroup title="Bằng chứng" description="Không bắt buộc, nhưng giúp quản lý xử lý nhanh hơn.">
+          <div>
+            <p id={fieldId("photo-label")} className="mb-1.5 text-[13px] font-medium text-foreground">Ảnh bằng chứng</p>
+            <input
+              ref={photoInput}
+              id={fieldId("photo")}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              className="peer sr-only"
+              aria-labelledby={fieldId("photo-label")}
+              aria-describedby={fieldId(photoError ? "photo-error" : "photo-hint")}
+              onChange={(e) => void handlePhotoSelect(e.target.files?.[0])}
+            />
+            {form.evidence_photo_url ? (
+              <div className="flex items-center gap-3 rounded-lg border border-border p-2.5">
+                <img src={form.evidence_photo_url} alt="Ảnh bằng chứng đã chọn" className="h-20 w-20 shrink-0 rounded-md border border-border object-cover" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-foreground">{photo?.name ?? "Ảnh đã chọn"}</p>
+                  {photo ? <p className="text-[12px] tabular-nums text-muted-foreground">{formatBytes(photo.size)}</p> : null}
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <Button type="button" variant="outline" size="sm" className="h-9 sm:h-8" onClick={() => photoInput.current?.click()}>Đổi ảnh</Button>
+                    <Button type="button" variant="ghost" size="sm" className="h-9 text-muted-foreground sm:h-8" onClick={clearPhoto}><Trash2 className="h-3.5 w-3.5" />Xóa ảnh</Button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <label
+                htmlFor={fieldId("photo")}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors hover:bg-muted/50",
+                  "peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50",
+                  photoError ? "border-destructive/60" : "border-border",
+                )}
+              >
+                <ImagePlus className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                <span className="text-[13px] font-medium text-foreground">Chọn hoặc chụp ảnh</span>
+              </label>
+            )}
+            {photoError ? (
+              <p id={fieldId("photo-error")} role="alert" className="mt-1.5 text-[12px] text-red-600 dark:text-red-400">{photoError}</p>
+            ) : (
+              <p id={fieldId("photo-hint")} className="mt-1.5 text-[12px] text-muted-foreground">PNG, JPEG, WEBP hoặc GIF, tối đa 4 MB. Không nhận SVG.</p>
+            )}
+          </div>
+          <Field id={fieldId("evidence")} label="Ghi chú bằng chứng" hint="Ví dụ: số serial, vị trí kệ, số thùng.">
+            <Textarea className={darkFieldClass}
+              {...fieldAria(fieldId("evidence"), null, true)}
+              rows={2}
+              value={form.evidence_notes}
+              onChange={(e) => updateForm({ evidence_notes: e.target.value })}
+            />
+          </Field>
+        </FormGroup>
+
+        <p className="flex gap-2 rounded-md bg-muted/60 px-3 py-2.5 text-[12px] leading-5 text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Báo cáo sự cố không tự động điều chỉnh tồn kho. Quản lý sẽ xem xét và quyết định cách xử lý.
+        </p>
+      </FormSheet>
+
+      <Dialog open={Boolean(photoReport)} onOpenChange={(open) => { if (!open) setPhotoReport(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Ảnh bằng chứng {photoReport?.report_number}</DialogTitle>
+            <DialogDescription>{photoReport ? `${exceptionLabel(photoReport.exception_type)} · ${photoReport.warehouses?.code ?? ""}` : null}</DialogDescription>
+          </DialogHeader>
+          {photoReport?.evidence_photo_url ? (
+            <img src={photoReport.evidence_photo_url} alt={`Ảnh bằng chứng của ${photoReport.report_number}`} className="max-h-[70vh] w-full rounded-md object-contain" />
+          ) : null}
+          {photoReport?.evidence_notes ? <p className="text-[13px] text-muted-foreground">{photoReport.evidence_notes}</p> : null}
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }
