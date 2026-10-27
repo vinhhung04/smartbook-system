@@ -27,3 +27,10 @@ ollama_data/
 
 # Offline eval query-embedding cache (services/ai-service/eval/embed_cache.py)
 services/ai-service/eval/.cache/
+
+# Local CodeGraph index (rebuilt per machine)
+.codegraph/
+# Agent skill engine binaries, downloaded on first run
+.github/skills/*/scripts/bin/
+# Scratch scripts in the web app
+apps/web/*.tmp.*
