@@ -1,0 +1,5366 @@
+{
+ "meta": {
+  "generated_at": "2026-10-26T08:15:52.042800+00:00",
+  "code_dir": "/code",
+  "cases": 69,
+  "wall_s": 827.0,
+  "note": "one turn at a time (flag is module state); latency includes tool calls to the live stack"
+ },
+ "summary": {
+  "off": {
+   "turns": 82,
+   "errors": 0,
+   "latency_s": {
+    "p50": 3.8,
+    "p95": 8.7
+   },
+   "latency_s_on_routed_turns": {
+    "p50": 6.7,
+    "p95": 10.1,
+    "n": 16
+   },
+   "llm_calls_per_turn": 1.54,
+   "cost_usd_per_turn": 0.000277,
+   "tokens_per_turn": 9023,
+   "tool_capability_coverage_mean": 0.86,
+   "full_coverage": "69/82",
+   "grounding_warnings": 4,
+   "routed_turns": 0
+  },
+  "on": {
+   "turns": 82,
+   "errors": 0,
+   "latency_s": {
+    "p50": 3.9,
+    "p95": 11.1
+   },
+   "latency_s_on_routed_turns": {
+    "p50": 6.9,
+    "p95": 18.4,
+    "n": 16
+   },
+   "llm_calls_per_turn": 1.62,
+   "cost_usd_per_turn": 0.000277,
+   "tokens_per_turn": 9063,
+   "tool_capability_coverage_mean": 0.957,
+   "full_coverage": "77/82",
+   "grounding_warnings": 6,
+   "routed_turns": 16
+  }
+ },
+ "rows": [
+  {
+   "case": "simple-003",
+   "group": "simple",
+   "turn": 0,
+   "q": "Top 10 sách được mượn nhiều nhất tháng này",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.27,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016772,
+   "tokens": 5434,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top 10 sách được mượn nhiều nhất tháng này chỉ có 2 đầu sách: **Norwegian Wood** (31 lượt) và **Luy-Xiêng Và Chú Người Tuyết Cô Độc** (10 lượt)."
+  },
+  {
+   "case": "simple-003",
+   "group": "simple",
+   "turn": 0,
+   "q": "Top 10 sách được mượn nhiều nhất tháng này",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.53,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 4.419e-05,
+   "tokens": 5429,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top 10 sách được mượn nhiều nhất tháng này chỉ có 2 đầu sách: Norwegian Wood (31 lượt) và Luy-Xiêng Và Chú Người Tuyết Cô Độc (10 lượt)."
+  },
+  {
+   "case": "simple-004",
+   "group": "simple",
+   "turn": 0,
+   "q": "Lượt mượn 30 ngày qua thế nào?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.13,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0002044,
+   "tokens": 6170,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượt mượn trong 30 ngày qua có xu hướng giảm, với tổng cộng 178 lượt được ghi nhận.\n\nDưới đây là các số liệu chi tiết:\n* **Tổng lượt trả:** Trong cùng khoảng thời gian này, hệ thống ghi nhận 337 lượt trả sách, cho thấy lượng sách lưu thông đang quay vòng trở lại kho nhiều hơn so với tốc độ mượn ra.\n* **Ngày cao điểm:** Đỉnh điểm của hoạt động mượn sách diễn ra vào ngày 26/09/2026 với 40 lượt.\n* **Xu hướng:** Dữ liệu cho thấy sự sụt giảm mạnh về nhu cầu mượn trong những ngày gần cuối kỳ phân tích.\n\nLưu ý rằng dữ liệu hiện tại chưa bao gồm trọn vẹn ngày hôm nay (26/10), nên con số 178 lượt có th"
+  },
+  {
+   "case": "simple-004",
+   "group": "simple",
+   "turn": 0,
+   "q": "Lượt mượn 30 ngày qua thế nào?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.61,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020479,
+   "tokens": 6173,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượt mượn trong 30 ngày qua có xu hướng giảm mạnh, từ đỉnh điểm 40 lượt vào ngày 26/09 xuống mức thấp nhất là 0 lượt vào ngày 25/10.\n\nCụ thể, tổng số lượt mượn ghi nhận được trong kỳ là **178 lượt** (trên 31 ngày). Trong đó:\n* Ngày cao điểm nhất là **26/09 với 40 lượt**.\n* Ngày thấp nhất trong các ngày trọn kỳ là **29/09 với 0 lượt**.\n* Tổng số lượt trả trong cùng khoảng thời gian là **337 lượt**, cho thấy lượng sách đang được hoàn trả nhiều hơn lượng sách mới được mượn.\n\nLưu ý: Dữ liệu của ngày hôm nay (26/10) chưa đầy đủ vì chưa kết thúc ngày, nên không dùng để xác định xu hướng cuối cùng."
+  },
+  {
+   "case": "simple-006",
+   "group": "simple",
+   "turn": 0,
+   "q": "Danh sách sách nên nhập thêm",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.73,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00024075,
+   "tokens": 6995,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nên xem xét nhập **Babel Hay Sự Cần Thiết Của Bạo Lực** trước.\n\n**Vì sao chọn:**\n* Đầu sách này đang có mức ưu tiên MEDIUM với 3 lượt mượn trong kỳ gần đây, dù đã giảm so với kỳ trước.\n* Tồn kho hiện tại là 6 bản (dưới ngưỡng tối thiểu), dự kiến sẽ hết hàng sau khoảng 352 ngày nếu không được bổ sung.\n* Đề xuất nhập thêm 3 bản với chi phí ước tính khoảng 807.000 ₫.\n\n**Rủi ro chính:**\n* Thời gian chờ hàng hiện tại đang dựa trên giá trị mặc định (14 ngày) chứ chưa được học từ lịch sử giao hàng thực tế của nhà cung cấp.\n\n**Phương án thay thế:**\n* **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** "
+  },
+  {
+   "case": "simple-006",
+   "group": "simple",
+   "turn": 0,
+   "q": "Danh sách sách nên nhập thêm",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.98,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00036433,
+   "tokens": 14911,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "REPAIRED",
+   "grounding_warning": false,
+   "answer": "Nên xem xét nhập **Babel Hay Sự Cần Thiết Của Bạo Lực** trước.\n\n**Vì sao chọn:**\n* Đầu sách này đứng đầu danh sách đề xuất với mức ưu tiên MEDIUM, tồn kho hiện tại là 6 bản (ngưỡng an toàn là 0 bản).\n* Hệ thống dự báo nhu cầu và đề xuất nhập 3 bản để đáp ứng, với tổng chi phí ước tính khoảng 807.000 ₫.\n* Thời gian chờ hàng được tính toán là 14 ngày (giá trị mặc định), giúp quản lý chủ động lên kế hoạch nhập sớm.\n\n**Rủi ro chính:**\n* Thời gian chờ hàng hiện tại là giá trị mặc định (14 ngày), chưa được học từ lịch sử giao hàng thực tế của nhà cung cấp, nên có thể chênh lệch so với thời gian thực"
+  },
+  {
+   "case": "simple-008",
+   "group": "simple",
+   "turn": 0,
+   "q": "Sách nào tồn kho lâu không ai mượn?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.17,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015753,
+   "tokens": 5071,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào trong kho bị tồn lâu 90 ngày mà không có hoạt động xuất/nhập. Điều này cho thấy toàn bộ danh mục sách đang được luân chuyển đều đặn, không có tình trạng hàng ế hoặc tồn kho chết."
+  },
+  {
+   "case": "simple-008",
+   "group": "simple",
+   "turn": 0,
+   "q": "Sách nào tồn kho lâu không ai mượn?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.03,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015701,
+   "tokens": 5067,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào trong kho bị tồn lâu trên 90 ngày mà không có hoạt động xuất/nhập. Điều này cho thấy lượng hàng ế hoặc tồn đọng hiện tại rất thấp, hệ thống đang lưu chuyển tốt."
+  },
+  {
+   "case": "simple-009",
+   "group": "simple",
+   "turn": 0,
+   "q": "Gợi ý sách cần thanh lý",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.56,
+   "tools": [
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 4.7196e-05,
+   "tokens": 5272,
+   "gold": [
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào cần xem xét thanh lý hoặc chuyển kho, với tổng giá trị tồn đọng là 0 ₫."
+  },
+  {
+   "case": "simple-009",
+   "group": "simple",
+   "turn": 0,
+   "q": "Gợi ý sách cần thanh lý",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.47,
+   "tools": [
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016541,
+   "tokens": 5307,
+   "gold": [
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào đủ điều kiện để thanh lý hoặc chuyển kho. Tổng giá trị tồn đọng của nhóm hàng ế là 0 ₫, nghĩa là toàn bộ vốn tồn kho hiện đang được sử dụng hiệu quả và không có sách nào bị chôn vốn do không còn nhu cầu mượn."
+  },
+  {
+   "case": "simple-010",
+   "group": "simple",
+   "turn": 0,
+   "q": "Cho tôi xem các chỉ số chính của thư viện",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.5,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 5.3376e-05,
+   "tokens": 5398,
+   "gold": [
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại, thư viện có 134 đầu sách; 460 phiếu mượn đang mở và 409 phiếu đã quá hạn. Tổng số tiền phạt chưa thu là 56.472.000 ₫."
+  },
+  {
+   "case": "simple-010",
+   "group": "simple",
+   "turn": 0,
+   "q": "Cho tôi xem các chỉ số chính của thư viện",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.59,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 8.5916e-05,
+   "tokens": 5412,
+   "gold": [
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Các chỉ số chính của thư viện hiện tại là: Tổng đầu sách: 134 đầu sách; Phiếu mượn đang mở: 460 phiếu; Phiếu mượn quá hạn: 409 phiếu; Tổng tiền phạt chưa thu: 56.472.000 ₫."
+  },
+  {
+   "case": "simple-012",
+   "group": "simple",
+   "turn": 0,
+   "q": "Hôm nay nên ưu tiên xử lý việc gì trước?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.27,
+   "tools": [
+    "rank_priority_tasks"
+   ],
+   "planned": [
+    "rank_priority_tasks"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020162,
+   "tokens": 5954,
+   "gold": [
+    "priority"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nên xử lý trước: **Thu hồi khoản phạt chưa thu**.\n\nDựa trên mức độ ảnh hưởng đến hoạt động thư viện, thứ tự ưu tiên hôm nay là:\n\n1. **Thu hồi khoản phạt chưa thu**: Tổng số tiền tồn đọng là **56.472.000 ₫**. Đây là rủi ro tài chính trực tiếp cần được ưu tiên giải quyết bằng cách rà soát và nhắc thanh toán các khoản phạt lớn nhất.\n2. **Xử lý phiếu mượn quá hạn**: Có **409 phiếu** đang quá hạn (trung bình 18.2 ngày, lâu nhất 58 ngày). Việc này cần được thực hiện song song để đảm bảo tuân thủ quy định và hoàn tất vòng đời phiếu mượn.\n3. **Kiểm tra kho có nhiều đầu sách dưới ngưỡng**: Hiện có **30"
+  },
+  {
+   "case": "simple-012",
+   "group": "simple",
+   "turn": 0,
+   "q": "Hôm nay nên ưu tiên xử lý việc gì trước?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.3,
+   "tools": [
+    "rank_priority_tasks"
+   ],
+   "planned": [
+    "rank_priority_tasks"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 8.1586e-05,
+   "tokens": 5905,
+   "gold": [
+    "priority"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nên xử lý trước: Thu hồi khoản phạt chưa thu.\n\n- **Thu hồi khoản phạt chưa thu:** 56.472.000 ₫. Công nợ phạt tồn đọng, ảnh hưởng trực tiếp đến dòng tiền và tuân thủ quy định. Bước tiếp theo là rà soát các khoản phạt lớn nhất và nhắc thanh toán.\n- **Xử lý phiếu mượn quá hạn:** 409 phiếu (trung bình quá hạn 18.2 ngày, lâu nhất 58 ngày). Quy mô lớn nhưng thuộc nhóm rủi ro tài chính/tuân thủ nên xếp sau nhóm thu hồi công nợ.\n- **Kiểm tra kho có nhiều đầu sách dưới ngưỡng:** 301 đầu sách, trong đó Kho Chi Nhanh District 1 là điểm nóng. Đây là nhóm phòng ngừa, cần đối chiếu tồn thực tế và điều chuyể"
+  },
+  {
+   "case": "simple-018",
+   "group": "simple",
+   "turn": 0,
+   "q": "Top 5 đầu sách hút khách nhất tuần này",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.23,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0001599,
+   "tokens": 5130,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tuần này (26/10/2026) chưa có lượt mượn nào được ghi nhận, nên hiện tại không có top sách hút khách. Bạn có thể kiểm tra lại vào cuối ngày hoặc xem xu hướng mượn/trả của các ngày trước đó để tham khảo nhé."
+  },
+  {
+   "case": "simple-018",
+   "group": "simple",
+   "turn": 0,
+   "q": "Top 5 đầu sách hút khách nhất tuần này",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.0,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015899,
+   "tokens": 5123,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tuần này (26/10/2026) chưa có lượt mượn nào, nên hiện tại không có top sách hút khách. Bạn đọc có thể kiểm tra lại vào cuối ngày hoặc xem số liệu của các tuần trước để tham khảo."
+  },
+  {
+   "case": "simple-019",
+   "group": "simple",
+   "turn": 0,
+   "q": "Tình hình đặt chỗ sách tháng này",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.95,
+   "tools": [
+    "get_reservation_funnel"
+   ],
+   "planned": [
+    "get_reservation_funnel"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018247,
+   "tokens": 5669,
+   "gold": [
+    "reservation"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tháng 10/2026, tổng số lượt đặt chỗ (reservation) là **8.259**, trong đó đã có **5.243** chuyển thành phiếu mượn với tỷ lệ chuyển đổi đạt **63,5%**.\n\nCon số này cho thấy nhu cầu đọc sách của bạn đọc đang rất cao, và hơn một nửa số yêu cầu đặt trước đã được hệ thống đáp ứng kịp thời để xuất bản cho mượn. Tỷ lệ chuyển đổi 63,5% phản ánh hiệu quả quản lý tồn kho và quy trình xử lý đặt chỗ hiện tại."
+  },
+  {
+   "case": "simple-019",
+   "group": "simple",
+   "turn": 0,
+   "q": "Tình hình đặt chỗ sách tháng này",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.32,
+   "tools": [
+    "get_reservation_funnel"
+   ],
+   "planned": [
+    "get_reservation_funnel"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.000147512,
+   "tokens": 12052,
+   "gold": [
+    "reservation"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Tháng 10/2026, tổng số lượt đặt chỗ (reservation) là **8.259**, trong đó đã có **5.243** chuyển thành phiếu mượn, tương đương tỷ lệ chuyển đổi đạt **63,5%**.\n\n- Tổng số reservation: 8.259 — cho thấy nhu cầu tìm kiếm và giữ sách của bạn đọc vẫn ở mức cao.\n- Đã chuyển thành phiếu mượn: 5.243 — phản ánh khả năng đáp ứng tốt khi hơn 60% yêu cầu được xử lý thành giao dịch thực tế.\n- Tỷ lệ chuyển đổi: 63,5% — mức ổn định, cho thấy quy trình từ lúc đặt đến lúc nhận sách đang hoạt động hiệu quả.\n\nCần lưu ý rằng khoảng 36,5% còn lại đang ở trạng thái chờ hoặc chưa hoàn tất, bao gồm các trường hợp hủy h"
+  },
+  {
+   "case": "simple-020",
+   "group": "simple",
+   "turn": 0,
+   "q": "Kho Cần Thơ còn nhiều sách không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.23,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018029,
+   "tokens": 5813,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Cần Thơ hiện có 103 bản sách tồn kho khả dụng, không có đầu sách nào hết hàng hay dưới ngưỡng tồn tối thiểu. Điều này cho thấy nguồn cung ứng tại kho đang ở mức ổn định và đáp ứng tốt nhu cầu mượn/trả trong thời gian gần đây."
+  },
+  {
+   "case": "simple-020",
+   "group": "simple",
+   "turn": 0,
+   "q": "Kho Cần Thơ còn nhiều sách không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.83,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017639,
+   "tokens": 5783,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Cần Thơ hiện có 103 bản sách tồn khả dụng, không có đầu sách nào dưới ngưỡng tồn tối thiểu hay hết hàng."
+  },
+  {
+   "case": "simple-021",
+   "group": "simple",
+   "turn": 0,
+   "q": "Chi nhánh Đà Nẵng có đầu sách nào hết hàng không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.94,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019536,
+   "tokens": 6362,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Chi nhánh Đà Nẵng hiện không có đầu sách nào hết hàng. Tuy nhiên, kho này đang có 77 đầu sách ở mức dưới ngưỡng tồn tối thiểu (mức tồn mà hệ thống coi là cần nhập thêm)."
+  },
+  {
+   "case": "simple-021",
+   "group": "simple",
+   "turn": 0,
+   "q": "Chi nhánh Đà Nẵng có đầu sách nào hết hàng không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.23,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019692,
+   "tokens": 6374,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Chi nhánh Đà Nẵng hiện không có đầu sách nào hết hàng. Tuy nhiên, kho này đang có 77 đầu sách ở mức dưới ngưỡng tồn tối thiểu (mức tồn mà hệ thống coi là cần bổ sung), với tổng cộng 248 bản tồn khả dụng."
+  },
+  {
+   "case": "simple-023",
+   "group": "simple",
+   "turn": 0,
+   "q": "Có sách Nhà Giả Kim không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.06,
+   "tools": [
+    "search_books"
+   ],
+   "planned": [
+    "search_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016493,
+   "tokens": 5391,
+   "gold": [
+    "book_search"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Có sách \"Nhà Giả Kim (Tái Bản 2025)\" của tác giả Paulo Coelho với số lượng tồn kho là 95 bản."
+  },
+  {
+   "case": "simple-023",
+   "group": "simple",
+   "turn": 0,
+   "q": "Có sách Nhà Giả Kim không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.74,
+   "tools": [
+    "search_books"
+   ],
+   "planned": [
+    "search_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016636,
+   "tokens": 5402,
+   "gold": [
+    "book_search"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Có sách Nhà Giả Kim. Dữ liệu cho thấy có tựa \"Nhà Giả Kim (Tái Bản 2025)\" của tác giả Paulo Coelho với số lượng tồn kho là 95 bản."
+  },
+  {
+   "case": "simple-025",
+   "group": "simple",
+   "turn": 0,
+   "q": "Những đầu sách nằm kho lâu hơn 180 ngày",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.52,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015545,
+   "tokens": 5095,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào tồn kho lâu hơn 180 ngày mà không có hoạt động xuất/nhập."
+  },
+  {
+   "case": "simple-025",
+   "group": "simple",
+   "turn": 0,
+   "q": "Những đầu sách nằm kho lâu hơn 180 ngày",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.4,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015545,
+   "tokens": 5095,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào tồn kho lâu hơn 180 ngày mà chưa có hoạt động xuất/nhập."
+  },
+  {
+   "case": "simple-026",
+   "group": "simple",
+   "turn": 0,
+   "q": "Tổng quan dashboard hôm nay",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.2,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.000167172,
+   "tokens": 12332,
+   "gold": [
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tổng quan hôm nay cho thấy hệ thống đang có tình trạng quá hạn nghiêm trọng: trong 460 phiếu mượn đang mở, có tới 409 phiếu đã bị quá hạn, kéo theo tổng tiền phạt chưa thu lên tới 56.472.000 ₫.\n\n- **Tồn kho thấp:** Có 34 đầu sách đang ở mức tồn kho thấp hoặc hết hàng, cần được rà soát để nhập bổ sung kịp thời.\n- **Hiệu quả đặt chỗ:** Tỷ lệ chuyển đổi từ đặt chỗ (reservation) sang phiếu mượn thực tế là 63,5%, cho thấy nhu cầu đọc vẫn khá cao nhưng cần tối ưu hóa quy trình giao nhận.\n\n**Điều cần chú ý:** Với tỷ lệ quá hạn rất cao, quản lý nên ưu tiên liên hệ các bạn đọc có phiếu trễ lâu nhất để "
+  },
+  {
+   "case": "simple-026",
+   "group": "simple",
+   "turn": 0,
+   "q": "Tổng quan dashboard hôm nay",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.52,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00041478999999999995,
+   "tokens": 12393,
+   "gold": [
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tổng quan hôm nay cho thấy tình hình quá hạn đang rất nghiêm trọng: trong 460 phiếu mượn đang mở, có tới 409 phiếu đã quá hạn.\n\n- **Tồn kho thấp:** Có 34 đầu sách đang ở mức tồn kho thấp hoặc sắp hết hàng, cần được theo dõi sát để tránh gián đoạn phục vụ.\n- **Tiền phạt chưa thu:** Tổng số tiền phạt còn nợ là 56.472.000 ₫, đây là một khoản doanh thu tiềm năng bị chậm trễ và cần có biện pháp thu hồi.\n- **Hiệu quả đặt chỗ:** Tỷ lệ chuyển đổi từ đặt chỗ (reservation) sang phiếu mượn thực tế là 63,5%, cho thấy hơn một nửa số lượt đặt cuối cùng đã trở thành lượt mượn.\n\n**Điều cần chú ý:** Với tỷ lệ "
+  },
+  {
+   "case": "paraphrase-032",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Tôi nên quan tâm điều gì nhất hôm nay?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.48,
+   "tools": [
+    "rank_priority_tasks"
+   ],
+   "planned": [
+    "rank_priority_tasks"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[priority]",
+   "planner_ms": 1932.5,
+   "llm_calls": 2,
+   "cost_usd": 0.00024228,
+   "tokens": 6936,
+   "gold": [
+    "priority"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nên xử lý trước: Thu hồi khoản phạt chưa thu.\n\nDựa trên mức độ ảnh hưởng, đây là thứ tự các việc cần ưu tiên hôm nay:\n\n1. **Thu hồi khoản phạt chưa thu**: Tổng số tiền tồn đọng là 56.472.000 ₫. Đây là rủi ro tài chính lớn nhất cần giải quyết ngay.\n2. **Xử lý phiếu mượn quá hạn**: Có 409 phiếu đang quá hạn (trung bình 18.2 ngày). Cần liên hệ nhắc nhở các bạn đọc có thời gian quá hạn lâu nhất trước.\n3. **Kiểm tra kho có nhiều đầu sách dưới ngưỡng**: Hiện có 301 đầu sách đang ở mức tồn thấp, trong đó kho \"Chi Nhanh District 1\" là điểm nóng nhất. Cần đối chiếu tồn thực tế và cân nhắc điều chuyển h"
+  },
+  {
+   "case": "paraphrase-032",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Tôi nên quan tâm điều gì nhất hôm nay?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.47,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019226,
+   "tokens": 5272,
+   "gold": [
+    "priority"
+   ],
+   "coverage": 0.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hôm nay bạn nên ưu tiên xử lý **danh sách các đầu sách hết hàng hoặc dưới ngưỡng tồn kho tại từng kho**, vì đây là nhóm việc có tác động trực tiếp nhất đến khả năng phục vụ bạn đọc và doanh thu tiềm năng.\n\nDưới đây là 3 căn cứ chính:\n* **Rủi ro tồn kho:** Hệ thống cảnh báo nhiều đầu sách đang ở mức \"tồn thấp\" hoặc \"hết hàng\", gây gián đoạn ngay lập tức khi có nhu cầu mượn.\n* **Mất cơ hội phục vụ:** Các sách này thường nằm trong nhóm được yêu cầu đặt (reservation) hoặc có xu hướng mượn tăng cao gần đây; việc thiếu hụt sẽ làm giảm tỷ lệ chuyển đổi từ đặt sang mượn thành công.\n* **Chi phí ẩn:** T"
+  },
+  {
+   "case": "paraphrase-036",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Sách nào đang hot nhất?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.1,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019363,
+   "tokens": 5811,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Sách hot nhất hiện nay là **Norwegian Wood** với 35 lượt mượn trong 30 ngày gần nhất.\n\nDanh sách top 10 sách được yêu thích nhất bao gồm:\n* **Luy-Xiêng Và Chú Người Tuyết Cô Độc**: 10 lượt\n* **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)**: 4 lượt\n* **Babel Hay Sự Cần Thiết Của Bạo Lực**: 3 lượt\n* **Nghệ Thuật Giao Tiếp Đỉnh Cao**, **Kafka on the Shore**, **One Hundred Years of Solitude**, và **Project Hail Mary**: mỗi cuốn 2 lượt\n* **Nghĩ Giàu & Làm Giàu (Tái Bản 2020)** và **Bà Ngoại Tôi Gửi Lời Xin Lỗi (Tái Bản 2023)**: mỗi cuốn 1 lượt"
+  },
+  {
+   "case": "paraphrase-036",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Sách nào đang hot nhất?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.55,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018752,
+   "tokens": 5764,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Sách đang hot nhất hiện nay là **Norwegian Wood** với 35 lượt mượn trong 30 ngày gần nhất.\n\nDanh sách top 10 sách được quan tâm nhiều nhất bao gồm:\n* **Luy-Xiêng Và Chú Người Tuyết Cô Độc**: 10 lượt\n* **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)**: 4 lượt\n* **Babel Hay Sự Cần Thiết Của Bạo Lực**: 3 lượt\n* **Nghệ Thuật Giao Tiếp Đỉnh Cao**, **Kafka on the Shore**, **One Hundred Years of Solitude**, và **Project Hail Mary**: mỗi cuốn 2 lượt"
+  },
+  {
+   "case": "paraphrase-037",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Độc giả có hay trả sách muộn không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.38,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00030535,
+   "tokens": 9905,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện có 409 phiếu mượn quá hạn với số ngày quá hạn trung bình là 18,2 ngày."
+  },
+  {
+   "case": "paraphrase-037",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Độc giả có hay trả sách muộn không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.92,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[overdue]",
+   "planner_ms": 2402.5,
+   "llm_calls": 2,
+   "cost_usd": 0.00021454,
+   "tokens": 6344,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện có 409 phiếu mượn quá hạn; trung bình mỗi phiếu đã trễ 18,2 ngày."
+  },
+  {
+   "case": "paraphrase-040",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Có đầu sách nào nằm im lâu quá không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.35,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00034265,
+   "tokens": 10555,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 0.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tôi chưa truy xuất được dữ liệu cho câu hỏi này nên không đưa ra số liệu, để tránh thông tin sai. Bạn có thể hỏi lại cụ thể hơn (ví dụ: chỉ rõ kỳ thời gian, kho hoặc đầu sách cần xem)."
+  },
+  {
+   "case": "paraphrase-040",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Có đầu sách nào nằm im lâu quá không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.01,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[aging]",
+   "planner_ms": 2851.8,
+   "llm_calls": 2,
+   "cost_usd": 0.000206001,
+   "tokens": 6064,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào nằm im (không có hoạt động xuất/nhập) quá 90 ngày."
+  },
+  {
+   "case": "paraphrase-041",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Sách nào nên đem đi thanh lý bớt?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.23,
+   "tools": [
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00035399,
+   "tokens": 11033,
+   "gold": [
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Hiện tại không có đầu sách nào trong hệ thống đủ điều kiện để thanh lý hoặc chuyển kho. Tổng giá trị vốn đang bị chôn vào hàng tồn đọng là 0 ₫, nghĩa là toàn bộ số lượng sách hiện có đều đang phục vụ nhu cầu mượn/đặt hoặc đã được cân nhắc phân bổ hợp lý.\n\nNếu bạn muốn xem xét các đầu sách **tồn kho lâu ngày** (ví dụ: trên 90 ngày không xuất/nhập) để đánh giá lại, tôi có thể lấy danh sách đó để bạn tham khảo thêm."
+  },
+  {
+   "case": "paraphrase-041",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Sách nào nên đem đi thanh lý bớt?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.07,
+   "tools": [
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0001733,
+   "tokens": 5370,
+   "gold": [
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào đủ điều kiện để thanh lý hoặc chuyển kho. Dữ liệu cho thấy **0 đầu sách** nằm trong nhóm tồn đọng và tổng giá trị vốn đang bị chôn là **0 ₫**.\n\nĐiều này có nghĩa là toàn bộ số lượng sách hiện có trong kho đều đang có hoạt động xuất/nhập (mượn/trả) hoặc chưa đạt ngưỡng thời gian được coi là \"ế\" (thường là 180 ngày không có hoạt động). Bạn không cần thực hiện thao tác thanh lý hay di chuyển hàng hóa nào ở thời điểm này."
+  },
+  {
+   "case": "paraphrase-042",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Mọi người dạo này có mượn sách nhiều hơn không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 0.23,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 0,
+   "cost_usd": 0,
+   "tokens": 0,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 0.0,
+   "verification": null,
+   "grounding_warning": false,
+   "answer": "Bạn muốn so sánh chỉ số nào với kỳ trước? Ví dụ: lượt mượn, top sách được mượn, hay tình hình quá hạn."
+  },
+  {
+   "case": "paraphrase-042",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Mọi người dạo này có mượn sách nhiều hơn không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 0.1,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 0,
+   "cost_usd": 0,
+   "tokens": 0,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 0.0,
+   "verification": null,
+   "grounding_warning": false,
+   "answer": "Bạn muốn so sánh chỉ số nào với kỳ trước? Ví dụ: lượt mượn, top sách được mượn, hay tình hình quá hạn."
+  },
+  {
+   "case": "paraphrase-043",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Độc giả thích đọc cuốn nào nhất?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.5,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00014942,
+   "tokens": 4904,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 0.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Cuốn được độc giả mượn nhiều nhất là \"Tuổi trẻ đáng giá bao nhiêu\" của tác giả Robin."
+  },
+  {
+   "case": "paraphrase-043",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Độc giả thích đọc cuốn nào nhất?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.27,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[top_borrowed]",
+   "planner_ms": 1691.9,
+   "llm_calls": 2,
+   "cost_usd": 0.00024427,
+   "tokens": 6869,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top sách được mượn nhiều nhất trong 30 ngày qua cho thấy độc giả đang quan tâm đặc biệt đến **Norwegian Wood** với 35 lượt mượn, dẫn xa các đầu sách còn lại.\n\nDanh sách top 10 sách được mượn nhiều nhất bao gồm:\n1. Norwegian Wood — 35 lượt\n2. Luy-Xiêng Và Chú Người Tuyết Cô Độc — 10 lượt\n3. 48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản) — 4 lượt\n4. Babel Hay Sự Cần Thiết Của Bạo Lực — 3 lượt\n5. Nghệ Thuật Giao Tiếp Đỉnh Cao — 2 lượt\n6. Kafka on the Shore — 2 lượt\n7. One Hundred Years of Solitude — 2 lượt\n8. Project Hail Mary — 2 lượt\n9. Nghĩ Giàu & Làm Giàu (Tái Bản 2020) — 1 lượt\n10. Bà Ngoại "
+  },
+  {
+   "case": "paraphrase-048",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Kho có đủ sách để phục vụ tháng tới không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.55,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions"
+   ],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 4,
+   "cost_usd": 0.0005963100000000001,
+   "tokens": 23133,
+   "gold": [
+    "reorder",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "WARNING",
+   "grounding_warning": true,
+   "answer": "Kho hiện tại có đủ sách để phục vụ tháng tới. Tổng cộng chỉ có 1 đầu sách hết hàng và 251 đầu sách dưới ngưỡng tồn tối thiểu trên toàn hệ thống, với tổng số lượng đề xuất nhập là 10 bản (chi phí ước tính 2.149.000 ₫). Tuy nhiên, một số đầu sách như \"Norwegian Wood\" đang có nguy cơ hết hàng sau khoảng 10,5 ngày nếu không được bổ sung kịp thời."
+  },
+  {
+   "case": "paraphrase-048",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Kho có đủ sách để phục vụ tháng tới không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 10.49,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[warehouse_risk,reorder]",
+   "planner_ms": 2727.4,
+   "llm_calls": 2,
+   "cost_usd": 0.00035889,
+   "tokens": 9143,
+   "gold": [
+    "reorder",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho hiện tại có đủ sách để phục vụ tháng tới, nhưng cần lưu ý một số điểm nhỏ về tồn kho thấp và nguy cơ thiếu hụt cục bộ.\n\n**Tồn kho thấp và rủi ro thiếu sách:**\n- **Chi nhánh Đà Nẵng**: 0 đầu sách hết hàng, 77 dưới ngưỡng; tồn khả dụng 248 bản.\n- **Chi nhánh Thủ Đức**: 0 đầu sách hết hàng, 71 dưới ngưỡng; tồn khả dụng 215 bản.\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: 0 đầu sách hết hàng, 61 dưới ngưỡng; tồn khả dụng 185 bản.\n- **Chi nhánh Hà Nội – Cầu Giấy**: 0 đầu sách hết hàng, 59 dưới ngưỡng; tồn khả dụng 196 bản.\n- **Chi Nhanh District 3**: 0 đầu sách hết hàng, 15 dưới ngưỡng; tồn khả dụng 14"
+  },
+  {
+   "case": "paraphrase-049",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Lượng sách đang cho mượn có tăng lên so với tháng trước không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.72,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00046027000000000004,
+   "tokens": 13989,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn giảm 12,9% (30,7 so với 35,23 lượt/ngày).\n- Lượt mượn: 921 trong kỳ hiện tại (30 ngày) so với 1.092 kỳ trước (31 ngày).\n- lượt trả: 1.110 so với 1.180; lượt đặt chỗ: 334 so với 399.\n- Ngày cao điểm kỳ hiện tại: 07/09/2026 với 51 lượt mượn.\nChưa biết: Dữ liệu không cho biết lý do thay đổi (mùa vụ, sự kiện, tình trạng tồn kho...).\n(Không kiểm chứng được một nhận định an toàn từ bản trả lời tự động, nên câu trả lời được thay bằng kết luận tính trực tiếp từ dữ liệu.)"
+  },
+  {
+   "case": "paraphrase-049",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Lượng sách đang cho mượn có tăng lên so với tháng trước không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.79,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021624,
+   "tokens": 6668,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượng sách đang cho mượn không tăng mà giảm so với tháng trước.\n\n- Tổng lượt mượn tháng 9/2026 là 921, thấp hơn 171 lượt so với 1.092 của tháng 8/2026 (giảm 15,7%).\n- Khi điều chỉnh theo trung bình mỗi ngày để so sánh công bằng giữa hai kỳ có số ngày khác nhau, lượt mượn tháng 9 đạt 30,7 lượt/ngày, giảm 12,9% so với 35,23 lượt/ngày của tháng 8.\n\nDữ liệu chưa cho biết lý do thay đổi; có thể xem top sách hoặc xu hướng chi tiết theo ngày/tháng để tìm nguyên nhân cụ thể."
+  },
+  {
+   "case": "paraphrase-050",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Sách nào có nguy cơ hết trước khi kịp nhập về?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 9.56,
+   "tools": [
+    "get_reorder_suggestions",
+    "analyze_demand_vs_stock",
+    "get_warehouse_low_stock_items",
+    "get_warehouse_low_stock_items"
+   ],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 5,
+   "cost_usd": 0.00066528,
+   "tokens": 25854,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dựa trên dữ liệu tồn kho và nhu cầu mượn, **One Hundred Years of Solitude** là đầu sách có nguy cơ hết hàng cao nhất hiện nay.\n\nSách này đang trong tình trạng dưới ngưỡng tồn tối thiểu tại Kho HCM Chinh (tồn khả dụng chỉ còn 1 bản so với ngưỡng an toàn là 15 bản). Mặc dù lượt mượn trong kỳ gần đây thấp (2 lượt), hệ thống đã đề xuất nhập bổ sung 4 bản để bù đắp khoảng trống; nếu không được xử lý kịp thời, số lượng tồn kho rất mỏng này sẽ không đủ đáp ứng ngay cả những nhu cầu đặt chỗ nhỏ lẻ."
+  },
+  {
+   "case": "paraphrase-050",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Sách nào có nguy cơ hết trước khi kịp nhập về?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.57,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk",
+    "get_reorder_suggestions"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[reorder,warehouse_risk]",
+   "planner_ms": 2542.5,
+   "llm_calls": 2,
+   "cost_usd": 0.0003179605,
+   "tokens": 8700,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "**Norwegian Wood là đầu sách có nguy cơ hết hàng trước khi kịp nhập về.**\n\nDựa trên dữ liệu tồn kho và nhu cầu mượn trong 30 ngày qua, đây là những căn cứ chính:\n\n* **Thời gian cạn kiệt ngắn nhất:** Tồn kho hiện tại của *Norwegian Wood* (12 bản) chỉ đủ đáp ứng nhu cầu trung bình khoảng **10,5 ngày**.\n* **Thời gian chờ hàng dài hơn thời gian tồn kho:** Thời gian chờ hàng (lead time) được hệ thống học từ lịch sử giao thực tế là **1 ngày**. Tuy nhiên, với mức độ ưu tiên LOW, số lượng đề xuất nhập là **0 bản**, nghĩa là chưa có kế hoạch bổ sung ngay lập tức.\n* **Xu hướng giảm mạnh nhưng vẫn còn nh"
+  },
+  {
+   "case": "paraphrase-052",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Nhu cầu đọc sách của độc giả đang đi lên hay đi xuống?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 16.62,
+   "tools": [
+    "get_borrow_trends",
+    "get_borrow_trends",
+    "get_borrow_trends",
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[borrow_trend]",
+   "planner_ms": 1855.8,
+   "llm_calls": 6,
+   "cost_usd": 0.0008575799999999999,
+   "tokens": 29994,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Dựa trên dữ liệu đã truy xuất, nhu cầu đọc sách (đo qua lượt mượn) trong tháng 10/2026 thấp hơn rõ rệt so với tháng 9/2026.\n\nCụ thể:\n* **Tháng 9/2026:** Tổng lượt mượn là **914 lượt**.\n* **Tháng 10/2026 (tính đến ngày 25/10):** Tổng lượt mượn là **109 lượt**.\n\nMặc dù tháng 10 chưa kết thúc (chỉ mới qua 25 ngày), nhưng con số 109 lượt cho thấy tốc độ mượn sách hiện tại chậm hơn nhiều so với mức trung bình của tháng trước (khi đó tổng là 914 lượt trong 30 ngày). Điều này gợi ý rằng nhu cầu đang có xu hướng giảm trong giai đoạn gần đây.\n\nTuy nhiên, cần lưu ý rằng dữ liệu hiện tại chưa đầy đủ để k"
+  },
+  {
+   "case": "paraphrase-052",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Nhu cầu đọc sách của độc giả đang đi lên hay đi xuống?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.64,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.000225976,
+   "tokens": 10408,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 0.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tôi chưa truy xuất được dữ liệu cho câu hỏi này nên không đưa ra số liệu, để tránh thông tin sai. Bạn có thể hỏi lại cụ thể hơn (ví dụ: chỉ rõ kỳ thời gian, kho hoặc đầu sách cần xem)."
+  },
+  {
+   "case": "paraphrase-053",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Có cuốn nào bị giữ chỗ mà không ai đến lấy không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 9.24,
+   "tools": [
+    "get_reservation_funnel",
+    "get_reservation_funnel",
+    "get_reservation_funnel",
+    "get_reservation_funnel"
+   ],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 6,
+   "cost_usd": 0.0008566600000000001,
+   "tokens": 27572,
+   "gold": [
+    "reservation"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu hiện có chưa cho biết cụ thể số lượng hay tên các cuốn sách bị giữ chỗ mà không ai đến lấy.\n\nSố liệu chỉ ghi nhận tổng số 8.259 phiếu đặt, trong đó 5.243 phiếu đã chuyển thành phiếu mượn (tỷ lệ chuyển đổi 63,5%). Phần còn lại của các trạng thái reservation (như pending, expired, cancelled) chưa được cung cấp chi tiết để xác định chính xác những đầu sách nào rơi vào trường hợp \"không ai đến lấy\"."
+  },
+  {
+   "case": "paraphrase-053",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Có cuốn nào bị giữ chỗ mà không ai đến lấy không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.59,
+   "tools": [
+    "get_reservation_funnel",
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_reservation_funnel"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[reservation]",
+   "planner_ms": 2288.8,
+   "llm_calls": 3,
+   "cost_usd": 0.000381253,
+   "tokens": 11750,
+   "gold": [
+    "reservation"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu hiện tại chưa có thông tin chi tiết về các phiếu giữ chỗ (reservation) bị bỏ quên hoặc không ai đến lấy. Bạn cần kiểm tra thêm trong hệ thống quản lý thư viện để xác định số lượng và danh sách các trường hợp này."
+  },
+  {
+   "case": "paraphrase-054",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Bức tranh chung về kho sách hiện giờ thế nào?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.58,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00036077,
+   "tokens": 10839,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 0.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tôi chưa truy xuất được dữ liệu cho câu hỏi này nên không đưa ra số liệu, để tránh thông tin sai. Bạn có thể hỏi lại cụ thể hơn (ví dụ: chỉ rõ kỳ thời gian, kho hoặc đầu sách cần xem)."
+  },
+  {
+   "case": "paraphrase-054",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Bức tranh chung về kho sách hiện giờ thế nào?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.58,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk",
+    "get_dashboard_kpis"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[kpi,warehouse_risk]",
+   "planner_ms": 1958.6,
+   "llm_calls": 2,
+   "cost_usd": 0.00029419,
+   "tokens": 7903,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho sách hiện tại có tổng thể ổn định, nhưng đang tồn tại rủi ro thiếu hụt cục bộ và áp lực lớn từ tình trạng quá hạn.\n\n**1. Rủi ro tồn kho theo kho**\n* **Chi Nhanh District 1** là điểm nóng nhất: Có **1 đầu sách hết hàng**, 14 đầu sách dưới ngưỡng tồn tối thiểu (số lượng còn lại thấp hơn mức an toàn quy định) và chỉ còn **47 bản tồn khả dụng**. Điều này cho thấy khả năng đáp ứng nhu cầu mượn ngay lập tức của chi nhánh này đang rất thấp.\n* Các chi nhánh lớn như Đà Nẵng, Thủ Đức, Hà Nội – Hoàn Kiếm và Cầu Giấy đều có số lượng đầu sách dưới ngưỡng khá cao (từ 59 đến 77 đầu sách), tuy nhiên chưa "
+  },
+  {
+   "case": "paraphrase-056",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Những cuốn nào ít ai đụng tới?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.69,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00036056,
+   "tokens": 10802,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 0.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tôi chưa truy xuất được dữ liệu cho câu hỏi này nên không đưa ra số liệu, để tránh thông tin sai. Bạn có thể hỏi lại cụ thể hơn (ví dụ: chỉ rõ kỳ thời gian, kho hoặc đầu sách cần xem)."
+  },
+  {
+   "case": "paraphrase-056",
+   "group": "paraphrase",
+   "turn": 0,
+   "q": "Những cuốn nào ít ai đụng tới?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.37,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[aging]",
+   "planner_ms": 2374.6,
+   "llm_calls": 2,
+   "cost_usd": 0.0002091175,
+   "tokens": 6086,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có cuốn sách nào trong kho bị coi là \"ít ai đụng tới\" (tức là không có hoạt động xuất/nhập trong 90 ngày trở lại). Dữ liệu tồn kho hiện tại đều đang có sự luân chuyển."
+  },
+  {
+   "case": "multi_intent-062",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Cho tôi số phiếu quá hạn và tổng tiền phạt chưa thu",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.98,
+   "tools": [
+    "get_overdue_summary",
+    "get_fine_summary"
+   ],
+   "planned": [
+    "get_overdue_summary",
+    "get_fine_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018763,
+   "tokens": 5951,
+   "gold": [
+    "fines",
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện có **409 phiếu mượn quá hạn**, với mức trễ trung bình là **18,2 ngày**. Tổng tiền phạt chưa thu hiện tại là **56.472.000 ₫**, trong đó loại phạt quá hạn (OVERDUE) chiếm khối lượng lớn nhất với 8.058 khoản phạt và tổng giá trị ghi nhận là 619.466.000 ₫."
+  },
+  {
+   "case": "multi_intent-062",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Cho tôi số phiếu quá hạn và tổng tiền phạt chưa thu",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.29,
+   "tools": [
+    "get_overdue_summary",
+    "get_fine_summary"
+   ],
+   "planned": [
+    "get_overdue_summary",
+    "get_fine_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018581,
+   "tokens": 5937,
+   "gold": [
+    "fines",
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện có 409 phiếu mượn quá hạn, với mức trễ trung bình là 18,2 ngày. Tổng tiền phạt chưa thu là 56.472.000 ₫ (trong đó loại phạt quá hạn chiếm khối lượng lớn nhất với 619.466.000 ₫ trên 8.058 khoản)."
+  },
+  {
+   "case": "multi_intent-064",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Sách nào tồn lâu không ai mượn, có nên thanh lý hay chuyển kho không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.57,
+   "tools": [
+    "get_aging_inventory",
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_aging_inventory",
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017791,
+   "tokens": 5527,
+   "gold": [
+    "aging",
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào tồn kho lâu ngày (trên 90 ngày) không có hoạt động xuất/nhập, nên chưa có sách nào cần xem xét thanh lý hay điều chuyển.\n\n**Căn cứ:**\n* **Số lượng sách tồn lâu:** 0 đầu sách (dưới ngưỡng 90 ngày không hoạt động).\n* **Giá trị tồn đọng:** 0 ₫.\n\nDo đó, hệ thống không đưa ra đề xuất thanh lý (LIQUIDATE) hay điều chuyển kho (REDISTRIBUTE) nào cho danh mục này."
+  },
+  {
+   "case": "multi_intent-064",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Sách nào tồn lâu không ai mượn, có nên thanh lý hay chuyển kho không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.2,
+   "tools": [
+    "get_aging_inventory",
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_aging_inventory",
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019026,
+   "tokens": 5622,
+   "gold": [
+    "aging",
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào tồn kho lâu ngày (trên 90 ngày) không có hoạt động xuất/nhập, nên chưa có sách nào cần xem xét thanh lý hay điều chuyển.\n\n**Căn cứ:**\n* **Số lượng sách tồn lâu:** 0 đầu sách (không có sách nào vượt ngưỡng 90 ngày không hoạt động).\n* **Giá trị tồn đọng:** 0 ₫ (không có vốn bị chôn vào hàng ế).\n\n**Ý nghĩa với quản lý:**\n* Tồn kho hiện tại đang được luân chuyển tốt, không có rủi ro \"tàng trữ\" hoặc lãng phí không gian lưu trữ do sách không ai quan tâm.\n* Không cần thực hiện các thao tác thanh lý (liquidate) hay điều chuyển kho (redistribute) ngay lúc này.\n\nNếu bạn mu"
+  },
+  {
+   "case": "multi_intent-065",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Lượt mượn tuần này so với tuần trước ra sao, và top 5 sách tuần này?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.6,
+   "tools": [
+    "compare_borrow_periods",
+    "compare_top_books"
+   ],
+   "planned": [
+    "compare_borrow_periods",
+    "compare_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021513,
+   "tokens": 6831,
+   "gold": [
+    "borrow_trend",
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn tuần này giảm 100% (0 so với 1,86 lượt/ngày).\n\n- Tổng lượt mượn kỳ hiện tại chỉ là 0 so với 13 của tuần trước.\n- Ngày cao điểm hôm nay cũng ghi nhận 0 lượt mượn.\n\nVề top sách: dữ liệu chưa có đủ để xác định top 5 của tuần này vì chưa xuất hiện lượt mượn nào trong ngày 26/10."
+  },
+  {
+   "case": "multi_intent-065",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Lượt mượn tuần này so với tuần trước ra sao, và top 5 sách tuần này?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.61,
+   "tools": [
+    "compare_borrow_periods",
+    "compare_top_books",
+    "get_top_books"
+   ],
+   "planned": [
+    "compare_borrow_periods",
+    "compare_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00043891000000000004,
+   "tokens": 13827,
+   "gold": [
+    "borrow_trend",
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn tuần này giảm 100% so với tuần trước (0 so với 1,86 lượt/ngày).\n\n- Tổng lượt mượn tuần này chỉ là 0 trong khi tuần trước đạt 13; tuy nhiên hai kỳ có độ dài khác nhau (1 ngày so với 7 ngày), nên so sánh tổng chưa phản ánh đúng thực tế.\n- Ngày cao điểm của tuần này (26/10) vẫn chưa ghi nhận bất kỳ lượt mượn nào.\n- Do chưa có lượt mượn nào trong ngày hôm nay, hệ thống không thể xác định top 5 sách được mượn nhiều nhất trong kỳ hiện tại."
+  },
+  {
+   "case": "multi_intent-069",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Với 20 triệu thì nhập được những sách nào, và kho nào đang thiếu nhiều nhất?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.73,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk",
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00024239,
+   "tokens": 7433,
+   "gold": [
+    "reorder",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho **Chi Nhanh District 1** đang thiếu sách nhiều nhất với **1 đầu sách hết hàng** và **14 đầu sách dưới ngưỡng tồn tối thiểu**, chỉ còn **47 bản** tồn khả dụng. Xếp sau là **Chi nhánh Đà Nẵng** (0 hết hàng, nhưng 77 đầu sách dưới ngưỡng).\n\nVới ngân sách **20.000.000 ₫**, hệ thống sẽ duyệt **0 ₫ cho 0 đầu sách / 0 bản**. Điều này có nghĩa là bạn không cần phải nhập thêm sách ngay trong khoảng thời gian chờ hàng dự kiến.\n\nLý do là vì khi tính đến các bản sách đang về từ các phiếu nhập đã gửi nhà cung cấp và số lượng bản dự kiến được trả lại trong thời gian chờ hàng, nhu cầu thực tế để duy trì "
+  },
+  {
+   "case": "multi_intent-069",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Với 20 triệu thì nhập được những sách nào, và kho nào đang thiếu nhiều nhất?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.23,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk",
+    "simulate_reorder_budget"
+   ],
+   "routed": true,
+   "decision": "keep_rules:no_new_information",
+   "planner_ms": 2756.8,
+   "llm_calls": 2,
+   "cost_usd": 0.00032582199999999997,
+   "tokens": 8673,
+   "gold": [
+    "reorder",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "### 1. Kho nào đang thiếu nhiều nhất?\n\n**Chi Nhanh District 1** là kho có rủi ro thiếu sách cao nhất hệ thống, xếp sau là **Chi nhánh Đà Nẵng**.\n\nDựa trên dữ liệu tồn kho hiện tại:\n* **Chi Nhanh District 1:** Đang có **1 đầu sách hết hàng** và 14 đầu sách dưới ngưỡng tồn tối thiểu; tổng số bản còn khả dụng cho mượn chỉ là 47 bản.\n* **Chi nhánh Đà Nẵng:** Có 0 đầu sách hết hàng nhưng 77 đầu sách dưới ngưỡng tồn tối thiểu; tồn khả dụng là 248 bản.\n\n*Lưu ý: Việc hết hàng được ưu tiên đánh giá rủi ro cao hơn vì bạn đọc không thể mượn ngay lập tức.*\n\n### 2. Với ngân sách 20.000.000 ₫ thì nhập được "
+  },
+  {
+   "case": "multi_intent-076",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Cho tôi biết sách tồn đọng lâu và những sách đang thiếu",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.78,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk",
+    "get_aging_inventory"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[aging,warehouse_risk]",
+   "planner_ms": 2288.3,
+   "llm_calls": 2,
+   "cost_usd": 0.00026007,
+   "tokens": 7409,
+   "gold": [
+    "aging",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Chi Nhanh District 1 đang có rủi ro thiếu sách cao nhất với 1 đầu sách hết hàng và 47 bản tồn khả dụng; các kho còn lại đều chưa hết hàng nhưng nhiều nơi vẫn dưới ngưỡng tồn tối thiểu.\n\n* **Sách tồn đọng lâu:** Hiện không có dữ liệu về sách nào tồn kho trên 90 ngày mà không có hoạt động xuất/nhập (sách ế).\n* **Sách đang thiếu:** Chi Nhanh District 1 là kho duy hiện tình trạng hết hàng, đi kèm với 14 đầu sách khác đang ở mức dưới ngưỡng tồn tối thiểu. Trong khi đó, các kho lớn như Chi nhánh Đà Nẵng (77 đầu sách dưới ngưỡng) hay Thủ Đức (71 đầu sách dưới ngưỡng) tuy chưa hết hàng nhưng số lượng "
+  },
+  {
+   "case": "multi_intent-076",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Cho tôi biết sách tồn đọng lâu và những sách đang thiếu",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.66,
+   "tools": [
+    "get_aging_inventory",
+    "get_warehouse_stock_risk",
+    "get_warehouse_low_stock_items",
+    "get_aging_inventory"
+   ],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 5,
+   "cost_usd": 0.000646436,
+   "tokens": 24330,
+   "gold": [
+    "aging",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có sách nào được xác định là tồn đọng lâu (trên 90 ngày) trong hệ thống.\n\nVề tình trạng thiếu hụt, hiện có **1 đầu sách hết hàng** và **14 đầu sách dưới ngưỡng tồn** tại Chi nhánh District 1:\n* **Hết hàng:** Nhà Giả Kim (Tái Bản 2025).\n* **Dưới ngưỡng:** The Lean Startup, Giết Con Chim Nhại (Tái Bản), The Godfather, Nỗi Buồn Chiến Tranh, Nineteen Eighty-Four, How to Win Friends and Influence People, The Intelligent Investor, The Hobbit, Atomic Habits, Ông Già Và Biển Cả, Harry Potter and the Philosopher's Stone."
+  },
+  {
+   "case": "multi_intent-077",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Chi nhánh Đà Nẵng đang thiếu gì, và lượt mượn ở đó có tăng không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 11.12,
+   "tools": [
+    "compare_borrow_periods",
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 3,
+   "cost_usd": 0.0006862699999999999,
+   "tokens": 21219,
+   "gold": [
+    "borrow_trend",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "REPAIRED",
+   "grounding_warning": false,
+   "answer": "Chi nhánh Đà Nẵng hiện có 77 đầu sách ở mức dưới ngưỡng tồn tối thiểu (không có cuốn nào hết hàng hoàn toàn). Trong đó, 14 tựa vẫn đang có nhu cầu mượn trên toàn hệ thống, ví dụ như *Norwegian Wood* (35 lượt), *Nghệ Thuật Giao Tiếp Đỉnh Cao* (2 lượt) và *Những Kẻ Xuất Chúng (Tái Bản 2021)* (1 lượt).\n\nVề xu hướng hoạt động trong 30 ngày qua (so với 30 ngày trước đó), số liệu ghi nhận:\n- Lượt mượn giảm 83,5% (từ 1.076 xuống còn 178 lượt); trung bình mỗi ngày giảm từ 34,71 xuống 5,74 lượt.\n- Lượt trả giảm 73,4% (từ 1.267 xuống còn 337 lượt); trung bình mỗi ngày giảm từ 40,87 xuống 10,87 lượt.\n- L"
+  },
+  {
+   "case": "multi_intent-077",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Chi nhánh Đà Nẵng đang thiếu gì, và lượt mượn ở đó có tăng không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.67,
+   "tools": [
+    "compare_borrow_periods",
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 3,
+   "cost_usd": 0.00065546,
+   "tokens": 20842,
+   "gold": [
+    "borrow_trend",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "REPAIRED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu hiện tại cho thấy 77 đầu sách tại Chi nhánh Đà Nẵng đang ở mức tồn kho dưới ngưỡng tối thiểu. Trong số đó, có 14 tựa sách vẫn ghi nhận nhu cầu mượn gần đây (ví dụ: *Norwegian Wood* với 35 lượt mượn, *Nghệ Thuật Giao Tiếp Đỉnh Cao* với 2 lượt mượn).\n\nVề xu hướng hoạt động chung của hệ thống trong 30 ngày qua so với kỳ trước, tổng lượt mượn giảm 83,5% (từ 1.076 xuống còn 178 lượt), lượt trả giảm 73,4% và lượt đặt chỗ giảm 57,7%. Các yếu tố liên quan đến tình trạng thiếu sách tại chi nhánh bao gồm việc nhiều đầu sách có nhu cầu nhưng tồn kho thấp, đi kèm với xu hướng nhu cầu chung đang gi"
+  },
+  {
+   "case": "multi_intent-085",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Cho tôi tổng quan thư viện và xu hướng mượn 30 ngày qua",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.63,
+   "tools": [
+    "get_borrow_trends",
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_borrow_trends",
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00048938,
+   "tokens": 14226,
+   "gold": [
+    "borrow_trend",
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tổng quan thư viện cho thấy tình trạng quá hạn đang rất nghiêm trọng: trong 460 phiếu mượn đang mở, có tới 409 phiếu đã quá hạn.\n\n- **Tồn kho và hoạt động:** Hệ thống hiện có 134 đầu sách với tổng lượt mượn trong 30 ngày qua là 178 lượt.\n- **Áp lực thu hồi sách:** Số lượng phiếu quá hạn (409) chiếm tỷ lệ lớn so với tổng số phiếu đang mở, cho thấy khả năng bạn đọc trả sách đúng hạn đang giảm mạnh.\n- **Rủi ro tài chính:** Tổng tiền phạt chưa thu lên đến 56.472.000 ₫, đi kèm với nhóm phiếu tồn đọng này.\n\nVề xu hướng mượn trong 30 ngày qua (từ 26/09 đến 26/10), dữ liệu cho thấy một sự sụt giảm đán"
+  },
+  {
+   "case": "multi_intent-085",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Cho tôi tổng quan thư viện và xu hướng mượn 30 ngày qua",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.01,
+   "tools": [
+    "get_borrow_trends",
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_borrow_trends",
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0002123,
+   "tokens": 6520,
+   "gold": [
+    "borrow_trend",
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tổng quan thư viện hiện tại cho thấy 134 đầu sách đang được quản lý, với 460 phiếu mượn đang mở và 409 phiếu trong tình trạng quá hạn. Tổng tiền phạt chưa thu là 56.472.000 ₫.\n\nVề xu hướng mượn trong 30 ngày qua (từ 26/09 đến 26/10), dữ liệu cho thấy:\n- Tổng lượt mượn đạt 178 lượt, cao điểm nhất vào ngày 26/09 với 40 lượt.\n- Xu hướng chung có dấu hiệu giảm dần theo thời gian.\n\nLưu ý: Dữ liệu của ngày 26/10 chưa trọn kỳ nên không thể dùng để xác định chính xác xu hướng cuối cùng."
+  },
+  {
+   "case": "multi_intent-087",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Phiếu quá hạn nhiều không và cần nhắc trả những phiếu nào trước?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.4,
+   "tools": [
+    "get_overdue_summary",
+    "rank_priority_tasks"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00033688,
+   "tokens": 10956,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện có 409 phiếu mượn quá hạn, trung bình mỗi phiếu đã trễ 18,2 ngày (phiếu lâu nhất là 58 ngày). Theo thứ tự ưu tiên xử lý hôm nay, bạn cần liên hệ nhắc trả các phiếu quá hạn lâu nhất trước để giảm rủi ro tài chính và tuân thủ."
+  },
+  {
+   "case": "multi_intent-087",
+   "group": "multi_intent",
+   "turn": 0,
+   "q": "Phiếu quá hạn nhiều không và cần nhắc trả những phiếu nào trước?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.69,
+   "tools": [
+    "rank_priority_tasks",
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "rank_priority_tasks",
+    "get_overdue_summary"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[priority]",
+   "planner_ms": 5093.4,
+   "llm_calls": 2,
+   "cost_usd": 0.0002520575,
+   "tokens": 7226,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Phiếu quá hạn hiện có 409 phiếu, trung bình trễ 18,2 ngày (lâu nhất 58 ngày), đây là nhóm cần ưu tiên xử lý ngay sau các vấn đề tài chính. Để xác định thứ tự nhắc trả, bạn nên liên hệ trước những phiếu đã quá hạn lâu nhất (đạt mốc 58 ngày) để giảm thiểu rủi ro mất sách và thu hồi bản sao nhanh nhất."
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 0,
+   "q": "So sánh tình hình tồn kho của Hà Nội và Hồ Chí Minh.",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 3.22,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020372,
+   "tokens": 6224,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"Hồ Chí Minh\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n- **Dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm): Kho HCM Chinh có 4 đầu sách, trong khi Kho Ha Noi không có đầu sách nào.\n- **Hết hàng**: Cả hai kho đều chưa có đầu sách nào hết hàng hoàn toàn.\n- **Tồn khả dụng** (số bản có thể cho mượn/đặt ngay): Kho HCM Chinh có tổng cộng 181 bản, cao hơn nhiều so với 93 bản của Kho Ha Noi. Tuy nhiên, tổng số lượng lớn không che lấp được việc một số đầu sách cụ thể tại kho này đang ở mức thấp và cần được bổ sung."
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 1,
+   "q": "Kho nào đáng lo hơn?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.74,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020567,
+   "tokens": 6399,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh đáng lo hơn Kho Ha Noi.\n\nTheo quy tắc xếp hạng rủi ro, điểm khác biệt quyết định là số đầu sách **dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm):\n- **Kho HCM Chinh**: 4 đầu sách đang ở mức thấp này.\n- **Kho Ha Noi**: Không có đầu sách nào dưới ngưỡng.\n\nMặc dù tổng số bản tồn khả dụng của kho HCM Chinh cao hơn (181 so với 93), nhưng việc có nhiều đầu sách đơn lẻ bị thiếu hụt khiến nguy cơ không đáp ứng được nhu cầu cụ thể của bạn đọc tại đây cao hơn."
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 2,
+   "q": "Tại sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.17,
+   "tools": [
+    "compare_warehouses",
+    "explain_warehouse_shortage",
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "compare_warehouses",
+    "explain_warehouse_shortage",
+    "explain_warehouse_shortage"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.0005131199999999999,
+   "tokens": 15384,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm các yếu tố liên quan, nhưng chưa đủ để khẳng định nguyên nhân cụ thể.\n\n- **Nhu cầu mượn vẫn còn tại các đầu sách đang thiếu**: 3/4 đầu sách dưới ngưỡng tồn tối thiểu của kho này vẫn có lượt mượn gần đây (toàn hệ thống). Ví dụ:\n - *Norwegian Wood*: 2 bản tồn khả dụng, 35 lượt mượn.\n - *One Hundred Years of Solitude*: 1 bản tồn khả dụng, 2 lượt mượn.\n - *Project Hail Mary*: 6 bản tồn khả dụng, 2 lượt mượn.\n- **Số lượng bản đang giữ cho đặt chỗ**: Có 2 bản đang được giữ lại cho nhu cầu đặt trước, làm giảm số lượng sẵn sàng cho bạn đọc "
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 3,
+   "q": "Nếu chỉ ưu tiên những sách được mượn nhiều thì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.62,
+   "tools": [
+    "get_top_books",
+    "get_warehouse_low_stock_items",
+    "get_warehouse_low_stock_items",
+    "analyze_demand_vs_stock"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 4,
+   "cost_usd": 0.00042847199999999995,
+   "tokens": 22818,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nếu chỉ ưu tiên những sách được mượn nhiều, tình hình tồn kho của cả hai kho sẽ trở nên **ổn định hơn**, vì các đầu sách có nhu cầu cao nhất hiện tại đều đã có đủ số lượng.\n\n- **Top 3 sách được mượn nhất** (*Norwegian Wood*, *Luy-Xiêng Và Chú Người Tuyết Cô Độc*, *48 Nguyên Tắc Chủ Chốt Của Quyền Lực*) không nằm trong danh sách cần nhập hàng khẩn cấp.\n- **Dữ liệu chi tiết**: Trong khi *Norwegian Wood* (top 1) và *Luy-Xiêng Và Chú Người Tuyết Cô Độc* (top 2) vẫn còn tồn khả dụng tốt, thì *One Hundred Years of Solitude* (hạng 7 về lượt mượn) là đầu sách duy nhất trong nhóm \"mượn nhiều\" bị xếp dư"
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 4,
+   "q": "Giải thích ngắn gọn hơn.",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.22,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021273,
+   "tokens": 6771,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 0.5,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Ưu tiên sách mượn nhiều giúp giảm rủi ro tồn kho vì các đầu sách có nhu cầu cao nhất đều chưa bị thiếu hụt nghiêm trọng.\n\nCăn cứ: Top 3 sách được mượn nhất (*Norwegian Wood*, *Luy-Xiêng Và Chú Người Tuyết Cô Độc*, *48 Nguyên Tắc Chủ Chốt Của Quyền Lực*) không nằm trong danh sách cần nhập hàng khẩn cấp, đảm bảo nguồn cung cho những tựa sách hot nhất hiện nay."
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 0,
+   "q": "So sánh tình hình tồn kho của Hà Nội và Hồ Chí Minh.",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 3.23,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020255,
+   "tokens": 6215,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"Hồ Chí Minh\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n* **Dưới ngưỡng tồn tối thiểu:** Kho HCM Chinh có 4 đầu sách cần được xem xét nhập thêm, trong khi Kho Ha Noi không có đầu sách nào ở mức này.\n* **Hết hàng:** Cả hai kho đều chưa có đầu sách nào bị hết hàng hoàn toàn.\n* **Tồn khả dụng:** Mặc dù tổng số bản sẵn sàng cho mượn tại Kho HCM Chinh lớn hơn (181 so với 93 bản), nhưng việc có nhiều đầu sách dưới ngưỡng cho thấy nguồn cung tại đây đang phân bố mỏng và dễ gặp tình trạng thiếu hụt cục bộ hơn so với Kho Ha Noi."
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 1,
+   "q": "Kho nào đáng lo hơn?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.2,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020544,
+   "tokens": 6388,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh đáng lo hơn.\n\n* **Số đầu sách dưới ngưỡng tồn tối thiểu:** Kho HCM Chinh có 4 đầu sách cần được xem xét nhập thêm, trong khi Kho Ha Noi không có đầu sách nào ở mức này.\n* **Hết hàng:** Cả hai kho đều chưa có đầu sách nào bị hết hàng hoàn toàn.\n* **Tồn khả dụng:** Mặc dù tổng số bản sẵn sàng cho mượn tại Kho HCM Chinh lớn hơn (181 so với 93 bản), nhưng việc có nhiều đầu sách dưới ngưỡng cho thấy nguồn cung tại đây đang phân bố mỏng và dễ gặp tình trạng thiếu hụt cục bộ hơn so với Kho Ha Noi."
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 2,
+   "q": "Tại sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.02,
+   "tools": [
+    "compare_warehouses",
+    "explain_warehouse_shortage",
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "compare_warehouses",
+    "explain_warehouse_shortage",
+    "explain_warehouse_shortage"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00024939,
+   "tokens": 7403,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm các yếu tố liên quan sau, nhưng chưa đủ để khẳng định nguyên nhân:\n\n* **Số đầu sách dưới ngưỡng tồn tối thiểu cao hơn:** Kho HCM Chinh có 4 đầu sách cần được xem xét nhập thêm, trong khi Kho Ha Noi không có đầu sách nào ở mức này.\n* **Nhu cầu mượn vẫn còn tại các đầu sách đang thiếu:** Trong số 4 đầu sách dưới ngưỡng của Kho HCM Chinh, có 3 đầu sách vẫn có lượt mượn gần đây (ví dụ: *Norwegian Wood* với 35 lượt mượn). Điều này cho thấy nhu cầu thực tế vẫn tồn tại, khiến việc tồn kho thấp trở nên đáng lo ngại hơn so với các đầu sách k"
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 3,
+   "q": "Nếu chỉ ưu tiên những sách được mượn nhiều thì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 12.21,
+   "tools": [
+    "get_top_books",
+    "analyze_demand_vs_stock",
+    "get_warehouse_low_stock_items",
+    "get_warehouse_low_stock_items"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 5,
+   "cost_usd": 0.0008474259999999999,
+   "tokens": 30837,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "REPAIRED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu hiện tại chưa thể xác định chính xác mức độ rủi ro thiếu hụt cụ thể cho từng kho dựa trên lượt mượn, vì số liệu lượt mượn được tính trên toàn hệ thống và chưa tách riêng theo địa điểm.\n\nTuy nhiên, có thể nhận thấy các yếu tố đi kèm sau:\n* **Kho HCM Chinh có nhiều đầu sách dưới ngưỡng tồn tối thiểu:** Kho này có 4 đầu sách cần xem xét nhập thêm (trong đó có *Norwegian Wood* và *Project Hail Mary*), trong khi Kho Ha Noi không có đầu sách nào ở mức này.\n* **Sự chồng chéo giữa nhu cầu và tồn kho:** Trong danh sách top sách được mượn nhiều nhất, có những tựa sách như *Norwegian Wood* (35 lư"
+  },
+  {
+   "case": "context-089",
+   "group": "context",
+   "turn": 4,
+   "q": "Giải thích ngắn gọn hơn.",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.0,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020821,
+   "tokens": 6777,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 0.5,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh đáng lo hơn vì có 4 đầu sách dưới ngưỡng tồn tối thiểu, bao gồm cả những tựa được mượn nhiều như *Norwegian Wood*. Trong khi đó, Kho Ha Noi hiện không có đầu sách nào ở mức này."
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 0,
+   "q": "Tôi nên nhập sách nào trước?",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 9.62,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00052599,
+   "tokens": 15023,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "REPAIRED",
+   "grounding_warning": false,
+   "answer": "Nên xem xét nhập **Babel Hay Sự Cần Thiết Của Bạo Lực** trước.\n\n**Vì sao chọn đầu sách này:**\n* **Mức độ ưu tiên cao nhất hiện có:** Hệ thống xếp mức ưu tiên MEDIUM cho đầu sách này, trong khi các đầu sách khác còn lại đều ở mức LOW.\n* **Có nhu cầu mượn thực tế:** Đầu sách vẫn có 3 lượt mượn trong kỳ gần nhất (2026-09-26 → 2026-10-26).\n* **Chi phí hợp lý:** Đề xuất nhập 3 bản với tổng chi phí ước tính khoảng 807.000 ₫.\n\n**Rủi ro cần lưu ý:**\n* Thời gian chờ hàng hiện tại đang dựa trên giá trị mặc định (14 ngày), chưa được học từ lịch sử giao hàng thực tế của nhà cung cấp cho tựa sách này.\n* Số"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 1,
+   "q": "Còn cuốn thứ hai?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.31,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "planned": [
+    "explain_reorder_item"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.000218,
+   "tokens": 6450,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Cuốn thứ hai là **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)**.\n\n**Lý do nên xem xét:**\n* **Mức độ ưu tiên cao:** Hệ thống xếp mức MEDIUM, đứng thứ 2/105 trong danh sách đề xuất nhập.\n* **Chi phí thấp và dễ duyệt:** Đề xuất nhập 3 bản với tổng chi phí khoảng 462.000 ₫.\n* **Nhu cầu thực tế:** Dù số lượt mượn đã giảm mạnh (-73,3% so với kỳ trước), đầu sách vẫn có 4 lượt mượn trong tháng gần nhất và đang có 59 người dùng thêm vào danh sách chờ (wishlist).\n\n**Rủi ro cần lưu ý:**\n* **Dữ liệu chưa chắc chắn:** Số lượng mượn chỉ dựa trên 4 mẫu nhỏ trong 30 ngày qua.\n* **Thời gian chờ hàng:** Đang"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 2,
+   "q": "Tại sao lại chọn cuốn đó?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.84,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00024965,
+   "tokens": 7285,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "WARNING",
+   "grounding_warning": false,
+   "answer": "Việc chọn **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** làm ưu tiên thứ hai dựa trên các yếu tố sau:\n\n* **Mức độ ưu tiên cao nhất còn lại:** Trong danh sách 105 đầu sách cần xem xét nhập, chỉ có duy nhất 2 cuốn được xếp mức MEDIUM. Sau khi đã xử lý cuốn đầu tiên (*Babel...*), đây là cuốn có mức độ quan trọng cao nhất để tiếp tục.\n* **Chi phí thấp và dễ duyệt:** Với tổng chi phí ước tính khoảng 462.000 ₫ cho 3 bản, đây là một khoản đầu tư nhỏ nhưng giúp duy trì nguồn cung cho một tựa sách vẫn đang có nhu cầu.\n* **Nhu cầu thực tế:** Dù số lượt mượn đã giảm mạnh (-73,3% so với kỳ trước), đầu"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 3,
+   "q": "Giải thích kỹ hơn.",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.18,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00026581,
+   "tokens": 7747,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "WARNING",
+   "grounding_warning": false,
+   "answer": "Việc chọn **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** làm ưu tiên thứ hai dựa trên sự kết hợp giữa mức độ quan trọng của hệ thống và các yếu tố rủi ro cụ thể. Dưới đây là phân tích chi tiết:\n\n* **Mức độ ưu tiên cao nhất còn lại:** Trong danh sách 105 đầu sách cần xem xét nhập, chỉ có duy nhất 2 cuốn được xếp mức MEDIUM. Sau khi đã xử lý cuốn đầu tiên (*Babel...*), đây là cuốn có mức độ quan trọng cao nhất để tiếp tục.\n* **Chi phí thấp và dễ duyệt:** Với tổng chi phí ước tính khoảng 462.000 ₫ cho 3 bản, đây là một khoản đầu tư nhỏ nhưng giúp duy trì nguồn cung cho một tựa sách vẫn đang c"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 4,
+   "q": "Tóm tắt trong 3 câu.",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.22,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.000132716,
+   "tokens": 7846,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "WARNING",
+   "grounding_warning": false,
+   "answer": "Nên chọn **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** vì đây là cuốn duy nhất còn lại có mức ưu tiên MEDIUM trong danh sách đề xuất nhập.\n\nCuốn này vẫn ghi nhận 4 lượt mượn trong tháng gần nhất, chứng tỏ nhu cầu thực tế dù đã giảm mạnh so với kỳ trước.\n\nChi phí đề xuất chỉ khoảng 462.000 ₫ cho 3 bản, giúp tối ưu ngân sách để duy trì nguồn cung cho đầu sách quan trọng này."
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 0,
+   "q": "Tôi nên nhập sách nào trước?",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 10.27,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.000320272,
+   "tokens": 15300,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "WARNING",
+   "grounding_warning": false,
+   "answer": "Nên xem xét nhập **Babel Hay Sự Cần Thiết Của Bạo Lực** trước.\n\n**Vì sao chọn:**\n* **Mức độ ưu tiên cao nhất trong nhóm cần hành động:** Đây là đầu sách đứng đầu danh sách đề xuất với mức ưu tiên MEDIUM, trong khi các đầu sách khác có nhu cầu thực tế thấp hơn hoặc không nằm trong ngân sách hiện tại.\n* **Ngân sách khả thi:** Với chi phí ước tính khoảng 807.000 ₫ cho 3 bản, đây là khoản đầu tư nhỏ nhưng giúp đáp ứng ngay nhu cầu mượn sách đang tồn tại (3 lượt mượn trong kỳ gần nhất).\n* **Rủi ro tồn kho thấp:** Mặc dù tồn khả dụng hiện tại là 6 bản, việc bổ sung sớm sẽ đảm bảo nguồn cung ổn định "
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 1,
+   "q": "Còn cuốn thứ hai?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.06,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "planned": [
+    "explain_reorder_item"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0002272,
+   "tokens": 6560,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Cuốn thứ hai là **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)**.\n\n**Lý do nên xem xét:**\n* **Đề xuất nhập 3 bản với chi phí khoảng 462.000 ₫.** Đây là mức đầu tư nhỏ để duy trì nguồn cung cho một tựa sách từng có nhu cầu cao.\n* **Tồn kho hiện tại còn 7 bản**, thấp hơn nhiều so với ngưỡng an toàn dự kiến dựa trên lịch sử mượn trước đó.\n* **Nhu cầu đang giảm mạnh:** Số lượt mượn trong kỳ gần nhất chỉ còn 4 (giảm 73,3% so với kỳ trước). Điều này cho thấy nhu cầu thực tế hiện tại không còn quá lớn, nhưng việc bổ sung sớm sẽ giúp tránh tình trạng hết hàng nếu nhu cầu bất ngờ tăng trở lại.\n\n**Rủi"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 2,
+   "q": "Tại sao lại chọn cuốn đó?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.1,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00026242,
+   "tokens": 7464,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Việc chọn **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** làm lựa chọn thứ hai dựa trên các yếu tố sau:\n\n* **Mức độ ưu tiên cao nhất còn lại:** Trong danh sách 105 đầu sách cần xem xét nhập, chỉ có 2 cuốn thuộc mức ưu tiên MEDIUM. Sau khi đã xác định *Babel Hay Sự Cần Thiết Của Bạo Lực* là ưu tiên số một, thì đây chính là cuốn tiếp theo cần được cân nhắc.\n* **Ngân sách khả thi và hiệu quả:** Với chi phí đề xuất khoảng **462.000 ₫** cho 3 bản, đây là một khoản đầu tư nhỏ nhưng giúp duy trì nguồn cung cho một tựa sách từng có nhu cầu cao.\n* **Tình trạng tồn kho thấp:** Hiện tại kho chỉ còn **"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 3,
+   "q": "Giải thích kỹ hơn.",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.09,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00029884,
+   "tokens": 8138,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Việc chọn **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** làm ưu tiên thứ hai dựa trên sự kết hợp giữa mức độ hiếm của nhóm sách cần hành động và tính khả thi về ngân sách. Dưới đây là phân tích chi tiết:\n\n* **Yếu tố \"Hiếm\" trong danh sách đề xuất:** Trong tổng số 105 đầu sách cần xem xét, chỉ có đúng 2 cuốn thuộc mức ưu tiên MEDIUM. Sau khi xác định *Babel Hay Sự Cần Thiết Của Bạo Lực* là lựa chọn hàng đầu, thì cuốn này chính là ứng viên duy nhất còn lại trong nhóm ưu tiên cao nhất. Các cuốn khác đều ở mức LOW hoặc không được đề xuất nhập do tồn kho hiện tại vẫn đủ đáp ứng nhu cầu dự báo.\n"
+  },
+  {
+   "case": "context-090",
+   "group": "context",
+   "turn": 4,
+   "q": "Tóm tắt trong 3 câu.",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.63,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00025852,
+   "tokens": 8244,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nên chọn **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** vì đây là cuốn duy nhất còn lại trong nhóm ưu tiên MEDIUM sau khi đã xác định *Babel Hay Sự Cần Thiết Của Bạo Lực* là lựa chọn hàng đầu.\n\nViệc bổ sung 3 bản với chi phí khoảng 462.000 ₫ giúp duy trì nguồn cung cho một tựa sách từng có nhu cầu cao, dù hiện tại tồn kho chỉ còn 7 bản và số lượt mượn đang giảm mạnh."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 0,
+   "q": "Lượt mượn tháng này thế nào?",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 3.24,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020352,
+   "tokens": 6184,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượt mượn tháng 10/2026 có xu hướng giảm rõ rệt, từ 18 lượt vào ngày đầu tháng xuống còn 0 lượt vào ngày cuối cùng đã trọn kỳ (25/10), tương ứng mức giảm -100%.\n\nCụ thể:\n- Tổng lượt mượn trong khoảng thời gian là 109 lượt qua 26 ngày.\n- Ngày cao điểm nhất là 06/10 với 33 lượt mượn.\n- Ngày thấp nhất trong các ngày trọn kỳ là 03/10 với 0 lượt mượn.\n\nLưu ý: Dữ liệu của ngày 26/10 chưa trọn kỳ nên không được dùng để xác định xu hướng. Cần theo dõi thêm diễn biến những ngày còn lại của tháng để đánh giá chính xác hơn về tình hình mượn sách hiện tại."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 1,
+   "q": "Vậy còn tháng trước?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.88,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018602,
+   "tokens": 6064,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượt mượn tháng 9/2026 đạt tổng cộng 921 lượt, với ngày cao điểm nhất là 07/09 ghi nhận 51 lượt mượn."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 2,
+   "q": "So với cùng kỳ năm ngoái thì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.54,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00022697,
+   "tokens": 6949,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn tháng 9/2026 tăng nhẹ 0,7% so với mức trung bình của năm 2025 (30,7 so với 30,48 lượt/ngày).\n\nTuy nhiên, xét về tổng số:\n- Tổng lượt mượn tháng 9 mới chỉ là 921 lượt, thấp hơn nhiều so với 11.126 lượt của cả năm 2025.\n- Tương tự, lượt trả và đặt chỗ cũng có xu hướng tương đối ổn định khi tính trên trung bình ngày, dù tổng số giảm mạnh do khác biệt về độ dài kỳ.\n\nĐiều này cho thấy hoạt động mượn/trả/đặt sách trong tháng 9 duy trì được nhịp độ quen thuộc, nhưng chưa phản ánh đầy đủ nhu cầu thực tế nếu so sánh với một năm trọn vẹn."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 3,
+   "q": "Đổi sang biểu đồ cột.",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 0.07,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 0,
+   "cost_usd": 0,
+   "tokens": 0,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": null,
+   "grounding_warning": false,
+   "answer": "Đã chuyển \"Trung bình mỗi ngày: kỳ hiện tại so với kỳ trước\" sang biểu đồ cột. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 15:09 26/10/2026); số liệu không thay đổi."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 0,
+   "q": "Lượt mượn tháng này thế nào?",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 2.7,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020066,
+   "tokens": 6162,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượt mượn tháng 10/2026 có xu hướng giảm, từ 18 lượt (ngày 01/10) xuống còn 0 lượt (ngày 25/10), tương ứng mức giảm -100%.\n\n- Tổng số lượt mượn trong kỳ là 109 lượt trên 26 ngày.\n- Điểm cao nhất ghi nhận vào ngày 06/10 với 33 lượt mượn.\n- Ngày thấp nhất trong các ngày trọn kỳ là ngày 03/10 với 0 lượt mượn.\n\nLưu ý: Dữ liệu chưa đầy đủ cho ngày hôm nay (26/10) vì chưa trọn kỳ nên không được dùng để xác định xu hướng cuối cùng."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 1,
+   "q": "Vậy còn tháng trước?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.55,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018523,
+   "tokens": 6041,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Lượt mượn tháng 9/2026 đạt tổng cộng 921 lượt, với cao điểm là ngày 07/09 ghi nhận 51 lượt mượn."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 2,
+   "q": "So với cùng kỳ năm ngoái thì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.24,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00022797,
+   "tokens": 6939,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn tháng 9/2026 tăng nhẹ 0,7% so với năm 2025 (30,7 so với 30,48 lượt/ngày).\n\n- Tổng lượt mượn tháng này là 921 so với 11.126 của năm trước, nhưng do hai kỳ dài khác nhau nên tổng số không phản ánh chính xác xu hướng thực tế.\n- Lượt trả cũng có mức chênh lệch tương tự: trung bình mỗi ngày giảm 0,6% (37 so với 37,22 lượt/ngày).\n- Lượt đặt chỗ tăng mạnh hơn cả về tổng số và trung bình mỗi ngày (+6,3%, từ 10,47 lên 11,13 lượt/ngày).\n\nDữ liệu chưa cho biết lý do thay đổi; có thể xem top sách để biết nhóm sách nào tăng/giảm."
+  },
+  {
+   "case": "context-092",
+   "group": "context",
+   "turn": 3,
+   "q": "Đổi sang biểu đồ cột.",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 0.07,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 0,
+   "cost_usd": 0,
+   "tokens": 0,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": null,
+   "grounding_warning": false,
+   "answer": "Đã chuyển \"Trung bình mỗi ngày: kỳ hiện tại so với kỳ trước\" sang biểu đồ cột. Dùng đúng dữ liệu của lượt trước (truy xuất lúc 15:10 26/10/2026); số liệu không thay đổi."
+  },
+  {
+   "case": "context-094",
+   "group": "context",
+   "turn": 0,
+   "q": "So sánh kho Hà Nội và kho HCM",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 3.25,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020162,
+   "tokens": 6194,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"kho HCM\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n* **Dưới ngưỡng tồn tối thiểu:** Kho HCM Chinh có 4 đầu sách đang ở mức thấp cần được chú ý, trong khi Kho Ha Noi không có đầu sách nào dưới ngưỡng này.\n* **Hết hàng:** Cả hai kho hiện tại đều chưa có đầu sách nào bị hết hàng hoàn toàn.\n* **Tồn khả dụng:** Mặc dù tổng số bản sách sẵn sàng cho mượn của Kho HCM Chinh lớn hơn (181 so với 93 bản), nhưng việc có nhiều đầu sách nằm dưới ngưỡng an toàn khiến rủi ro thiếu hụt cục bộ cao hơn so với Kho Ha Noi."
+  },
+  {
+   "case": "context-094",
+   "group": "context",
+   "turn": 1,
+   "q": "Kho nào thiếu nhiều hơn?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.41,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020491,
+   "tokens": 6377,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh đang thiếu nhiều hơn Kho Ha Noi.\n\n* **Số đầu sách dưới ngưỡng tồn tối thiểu:** Kho HCM Chinh có 4 đầu sách cần được nhập thêm ngay, trong khi Kho Ha Noi không có đầu sách nào ở mức thấp này.\n* **Hết hàng:** Cả hai kho hiện tại đều chưa có đầu sách nào bị hết sạch (0 so với 0).\n\nMặc dù tổng số bản sách sẵn sàng cho mượn của Kho HCM Chinh lớn hơn (181 so với 93 bản), nhưng việc có nhiều đầu sách nằm dưới ngưỡng an toàn khiến rủi ro thiếu hụt cục bộ cao hơn so với Kho Ha Noi."
+  },
+  {
+   "case": "context-094",
+   "group": "context",
+   "turn": 2,
+   "q": "Kho còn lại thì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.15,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020578,
+   "tokens": 6536,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Ha Noi hiện tại không có đầu sách nào dưới ngưỡng tồn tối thiểu.\n\n* **Số lượng:** 0 đầu sách dưới ngưỡng, trong đó 0 đầu sách đã hết hàng.\n* **Tồn kho:** Kho có 93 bản sách sẵn sàng cho mượn (tồn khả dụng).\n\nSo với các chi nhánh khác như Chi Nhanh District 1 hay Chi nhánh Đà Nẵng, Kho Ha Noi đang ở trạng thái ổn định nhất về mặt nguồn cung."
+  },
+  {
+   "case": "context-094",
+   "group": "context",
+   "turn": 0,
+   "q": "So sánh kho Hà Nội và kho HCM",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 5.27,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": true,
+   "decision": "keep_rules:no_new_information",
+   "planner_ms": 1803.8,
+   "llm_calls": 2,
+   "cost_usd": 0.00025054,
+   "tokens": 7218,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"kho HCM\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n- **Dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm): Kho HCM Chinh có 4 đầu sách, trong khi Kho Ha Noi không có đầu sách nào.\n- **Hết hàng**: Cả hai kho đều không có đầu sách nào hết hàng hoàn toàn.\n- **Tồn khả dụng** (số bản đang có thể cho mượn/đặt): Kho HCM Chinh có tổng số lượng lớn hơn (181 bản so với 93 bản của Kho Ha Noi). Tuy nhiên, tổng tồn nhiều không đồng nghĩa với việc từng đầu sách đều đủ hàng, nên chỉ được xét làm tiêu chí phụ khi các tiêu chí về hết hàng và dưới ngưỡng bằ"
+  },
+  {
+   "case": "context-094",
+   "group": "context",
+   "turn": 1,
+   "q": "Kho nào thiếu nhiều hơn?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.41,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.000214,
+   "tokens": 6490,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh thiếu nhiều hơn Kho Ha Noi.\n\n- **Dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm): Kho HCM Chinh có 4 đầu sách, trong khi Kho Ha Noi không có đầu sách nào.\n- **Hết hàng**: Cả hai kho đều không có đầu sách nào hết hàng hoàn toàn.\n- **Tồn khả dụng** (số bản đang có thể cho mượn/đặt): Kho HCM Chinh có tổng số lượng lớn hơn (181 bản so với 93 bản của Kho Ha Noi). Tuy nhiên, tổng tồn nhiều không đồng nghĩa với việc từng đầu sách đều đủ hàng, nên chỉ được xét làm tiêu chí phụ khi các tiêu chí về hết hàng và dưới ngưỡng bằng nhau.\n\nChưa có dữ liệu nhu cầu mượn tách theo từ"
+  },
+  {
+   "case": "context-094",
+   "group": "context",
+   "turn": 2,
+   "q": "Kho còn lại thì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.85,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021593,
+   "tokens": 6701,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Ha Noi không có đầu sách nào dưới ngưỡng tồn tối thiểu (gồm cả hết hàng), tức là kho này đang duy trì mức tồn an toàn.\n\nTrong khi đó, các kho còn lại đều có tình trạng thiếu hụt ở mức độ khác nhau:\n- **Chi nhánh Đà Nẵng** và **Chi nhánh Thủ Đức** có số lượng đầu sách dưới ngưỡng cao nhất (77 và 71 đầu sách).\n- **Chi nhánh Hà Nội – Hoàn Kiếm** và **Chi nhánh Hà Nội – Cầu Giấy** cũng có số lượng đáng kể (61 và 59 đầu sách).\n- **Chi Nhanh District 1** là kho duy nhất có 1 đầu sách đã hết hàng hoàn toàn."
+  },
+  {
+   "case": "context-097",
+   "group": "context",
+   "turn": 0,
+   "q": "Sách nào được mượn nhiều nhưng tồn thấp?",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 4.55,
+   "tools": [
+    "analyze_demand_vs_stock"
+   ],
+   "planned": [
+    "analyze_demand_vs_stock"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019133,
+   "tokens": 5721,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "One Hundred Years of Solitude là đầu sách được mượn nhiều nhưng tồn kho thấp, cần xem xét nhập thêm.\n\nCụ thể:\n- Sách này đang ở hạng 7 về lượt mượn với 2 lượt trong kỳ, nhưng số bản còn lại chỉ là 11, thấp hơn ngưỡng an toàn là 15. Điều này cho thấy nhu cầu thực tế có thể cao hơn mức hiện tại hệ thống ghi nhận, và nếu không bổ sung sớm, khả năng phục vụ bạn đọc sẽ bị ảnh hưởng.\n- Hệ thống đề xuất nhập 4 bản với chi phí ước tính khoảng 880.000 ₫, tuy nhiên mức độ tin cậy của dữ liệu hiện ở mức THẤP do số lượng mẫu nhỏ (chỉ 2 lượt mượn).\n\nNgoài ra, Luy-Xiêng Và Chú Người Tuyết Cô Độc dù có 10 lư"
+  },
+  {
+   "case": "context-097",
+   "group": "context",
+   "turn": 1,
+   "q": "Cuốn đầu tiên nên nhập bao nhiêu?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.58,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "planned": [
+    "explain_reorder_item"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0002102,
+   "tokens": 6600,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hệ thống đề xuất nhập **4 bản** cho cuốn *One Hundred Years of Solitude*.\n\nMức đề xuất này được tính dựa trên nhu cầu dự kiến trong thời gian chờ hàng 14 ngày (tính theo giá trị mặc định). Tuy nhiên, độ tin cậy của dữ liệu hiện ở mức **THẤP** vì chỉ có 2 lượt mượn trong kỳ gần đây và xu hướng nhu cầu đang giảm mạnh (-93,3% so với kỳ trước). \n\nNếu bạn muốn điều chỉnh số lượng nhập cho phù hợp hơn với thực tế hoặc ngân sách, hãy cho tôi biết."
+  },
+  {
+   "case": "context-097",
+   "group": "context",
+   "turn": 2,
+   "q": "Sao sách này vẫn được đề xuất nhập dù còn tồn?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.5,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.0004813,
+   "tokens": 15000,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dựa trên dữ liệu hiện có, *One Hundred Years of Solitude* xuất hiện trong danh sách đề xuất nhập với số lượng 4 bản. Các yếu tố đi kèm bao gồm:\n\n- **Tồn kho:** 11 bản (thấp hơn ngưỡng an toàn là 15 bản).\n- **Nhu cầu:** 2 lượt mượn trong kỳ gần đây.\n- **Chi phí ước tính:** khoảng 880.000 ₫.\n\nMức độ tin cậy của dữ liệu này ở mức **THẤP** do chỉ có 2 lượt mượn trong kỳ và xu hướng nhu cầu đang giảm mạnh (-93,3% so với kỳ trước)."
+  },
+  {
+   "case": "context-097",
+   "group": "context",
+   "turn": 0,
+   "q": "Sách nào được mượn nhiều nhưng tồn thấp?",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 2.85,
+   "tools": [
+    "analyze_demand_vs_stock"
+   ],
+   "planned": [
+    "analyze_demand_vs_stock"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018522,
+   "tokens": 5674,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Sách được mượn nhiều nhưng tồn kho thấp cần xem xét nhập thêm là **One Hundred Years of Solitude**.\n\nCụ thể, cuốn sách này đang ở vị trí hạng 7 về lượt mượn (2 lượt trong kỳ), nhưng số bản khả dụng chỉ còn 11, thấp hơn ngưỡng an toàn là 15. Hệ thống đề xuất nhập bổ sung khoảng 4 bản với chi phí ước tính 880.000 ₫ để đảm bảo nguồn cung cho nhu cầu hiện tại.\n\nLưu ý: Mức độ tin cậy của dữ liệu cho trường hợp này là THẤP, có thể do số lượng mẫu mượn ít hoặc thời gian chờ hàng chưa được cập nhật chính xác từ lịch sử giao dịch thực tế."
+  },
+  {
+   "case": "context-097",
+   "group": "context",
+   "turn": 1,
+   "q": "Cuốn đầu tiên nên nhập bao nhiêu?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.17,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "planned": [
+    "explain_reorder_item"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021009,
+   "tokens": 6563,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hệ thống đề xuất nhập **4 bản** cho cuốn *One Hundred Years of Solitude*.\n\nMức đề xuất này được tính dựa trên nhu cầu mượn trong 30 ngày gần đây (2 lượt) và thời gian chờ hàng dự kiến là 14 ngày. Tuy nhiên, độ tin cậy của dữ liệu ở mức **THẤP**, vì số lượng mẫu mượn rất ít và thời gian chờ hàng hiện tại chỉ là giá trị mặc định chưa được kiểm chứng qua lịch sử giao thực tế.\n\nNếu bạn muốn điều chỉnh con số này hoặc xem xét các đầu sách khác có mức độ ưu tiên cao hơn, hãy cho tôi biết."
+  },
+  {
+   "case": "context-097",
+   "group": "context",
+   "turn": 2,
+   "q": "Sao sách này vẫn được đề xuất nhập dù còn tồn?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.61,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00047032,
+   "tokens": 14774,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dựa trên dữ liệu hiện có, *One Hundred Years of Solitude* nằm trong danh sách đề xuất nhập với số lượng 4 bản. Các yếu tố đi kèm bao gồm:\n\n- **Tồn kho**: Số bản khả dụng là 11, thấp hơn ngưỡng an toàn là 15.\n- **Nhu cầu**: Có 2 lượt mượn trong kỳ gần nhất (giảm mạnh so với 30 lượt của kỳ trước).\n- **Chi phí ước tính**: Khoảng 880.000 ₫.\n\nLưu ý rằng mức độ tin cậy của dữ liệu cho trường hợp này ở mức **THẤP**, do thời gian chờ hàng đang sử dụng là giá trị mặc định và số lượng mẫu mượn rất ít."
+  },
+  {
+   "case": "context-098",
+   "group": "context",
+   "turn": 0,
+   "q": "Kho Cần Thơ có ổn không?",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 2.55,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017909,
+   "tokens": 5803,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Cần Thơ hiện đang ổn định, không có đầu sách nào bị hết hàng hay dưới ngưỡng tồn tối thiểu. Kho này cũng đang duy trì 103 bản sẵn sàng cho mượn và không có bản nào đang bị giữ hoặc cho mượn."
+  },
+  {
+   "case": "context-098",
+   "group": "context",
+   "turn": 1,
+   "q": "Tại sao kho đó thiếu sách?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.13,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "explain_warehouse_shortage"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019914,
+   "tokens": 6118,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho Cần Thơ đi kèm các yếu tố, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n- **Quy mô thiếu hàng bằng 0**: Kho hiện không có đầu sách nào dưới ngưỡng tồn tối thiểu hoặc hết hàng.\n- **Không có nhu cầu mượn tăng cao**: 0 đầu sách trong số các mục tiêu đề xuất nhập đang có xu hướng nhu cầu tăng.\n- **Tồn kho khả dụng ổn định**: Kho đang duy trì 103 bản sẵn sàng cho mượn và không có bản nào đang bị giữ hay cho mượn.\n\nGiới hạn: Số liệu nhu cầu được tính trên toàn hệ thống, nên chưa thể tách riêng hoạt động mượn trả chỉ tại Kho Cần Thơ."
+  },
+  {
+   "case": "context-098",
+   "group": "context",
+   "turn": 2,
+   "q": "Cần làm gì để cải thiện?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.47,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0002242,
+   "tokens": 6760,
+   "gold": [
+    "reorder",
+    "warehouse_risk"
+   ],
+   "coverage": 0.5,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Cần Thơ hiện đang ổn định, không có đầu sách nào bị hết hàng hay dưới ngưỡng tồn tối thiểu. Tuy nhiên, để duy trì sự chủ động và cải thiện khả năng phục vụ, bạn nên thực hiện các bước sau:\n\n1. **Theo dõi sát xu hướng nhu cầu**: Mặc dù hiện tại không có sách nào dưới ngưỡng, nhưng việc theo dõi liên tục các đầu sách có nhu cầu tăng cao sẽ giúp kho kịp thời đề xuất nhập thêm trước khi xảy ra tình trạng thiếu hụt.\n2. **Tối ưu hóa quy trình đặt hàng**: Đảm bảo quy trình nhập hàng được thực hiện nhanh chóng ngay khi hệ thống cảnh báo, đặc biệt là đối với các đầu sách thuộc nhóm ưu tiên cao.\n3. "
+  },
+  {
+   "case": "context-098",
+   "group": "context",
+   "turn": 0,
+   "q": "Kho Cần Thơ có ổn không?",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 1.46,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017532,
+   "tokens": 5774,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Cần Thơ đang ổn, hiện không có đầu sách nào hết hàng hay dưới ngưỡng tồn tối thiểu."
+  },
+  {
+   "case": "context-098",
+   "group": "context",
+   "turn": 1,
+   "q": "Tại sao kho đó thiếu sách?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.85,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "explain_warehouse_shortage"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019918,
+   "tokens": 6096,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho Cần Thơ đi kèm các yếu tố sau, nhưng chưa đủ để khẳng định đâu là nguyên nhân:\n\n- **Quy mô tồn kho hiện tại**: Kho có 103 bản tồn khả dụng và không có bản nào đang giữ hay cho mượn.\n- **Không có đầu sách dưới ngưỡng**: Hiện tại không có đầu sách nào hết hàng hoặc dưới mức tồn tối thiểu tại kho này.\n- **Nhu cầu toàn hệ thống**: Các số liệu nhu cầu được tính trên phạm vi toàn hệ thống, nên chưa thể tách riêng nhu cầu cụ thể của từng đầu sách tại Kho Cần Thơ.\n\nGiới hạn: Dữ liệu chỉ phản ánh tương quan quan sát được trong hệ thống, chưa phải là nguyên n"
+  },
+  {
+   "case": "context-098",
+   "group": "context",
+   "turn": 2,
+   "q": "Cần làm gì để cải thiện?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.24,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00047259,
+   "tokens": 14113,
+   "gold": [
+    "reorder",
+    "warehouse_risk"
+   ],
+   "coverage": 0.5,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Kho Cần Thơ hiện không có đầu sách nào hết hàng hay dưới ngưỡng tồn tối thiểu, nên chưa cần can thiệp ngay. Tuy nhiên, để duy trì sự ổn định và chủ động phòng ngừa thiếu hụt, bạn có thể cân nhắc các bước sau:\n\n- **Theo dõi xu hướng nhu cầu**: Theo dõi sát số lượt mượn/trả trong 30 ngày qua để phát hiện sớm các tựa sách có dấu hiệu tăng đột biến.\n- **Đề xuất nhập trước (Pre-order)**: Nếu có thông tin về các đợt ra mắt sách hoặc chiến dịch khuyến mãi sắp tới, hãy đặt hàng trước để tránh gián đoạn nguồn cung.\n- **Điều phối nội bộ**: Với 103 bản tồn khả dụng, kho đang ở mức an toàn, nhưng nếu một "
+  },
+  {
+   "case": "context-099",
+   "group": "context",
+   "turn": 0,
+   "q": "Top 5 sách được mượn nhiều nhất tháng trước",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 1.79,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017879,
+   "tokens": 5703,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top 5 sách được mượn nhiều nhất tháng trước là: **Norwegian Wood** (103 lượt), **Kafka on the Shore** (54 lượt), **Project Hail Mary** (51 lượt), **Babel Hay Sự Cần Thiết Của Bạo Lực** (42 lượt) và **One Hundred Years of Solitude** (27 lượt)."
+  },
+  {
+   "case": "context-099",
+   "group": "context",
+   "turn": 1,
+   "q": "Trong số đó cuốn nào sắp hết?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.78,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_warehouse_low_stock_items"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 3,
+   "cost_usd": 0.00060049,
+   "tokens": 19093,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 0.5,
+   "verification": "REPAIRED",
+   "grounding_warning": false,
+   "answer": "Trong Top 5 sách được mượn nhiều nhất tháng trước, không có cuốn nào trong danh sách này đang ở tình trạng hết hàng hoặc dưới ngưỡng tồn tại tại Chi Nhanh District 1. Tuy nhiên, chi nhánh này hiện có **14 đầu sách dưới ngưỡng** (bao gồm cả 1 đầu sách hết hàng là \"Nhà Giả Kim (Tái Bản 2025)\"). Các top sách còn lại như \"Norwegian Wood\", \"Kafka on the Shore\", v.v. không xuất hiện trong danh sách cảnh báo tồn kho thấp của chi nhánh này."
+  },
+  {
+   "case": "context-099",
+   "group": "context",
+   "turn": 2,
+   "q": "Cuốn thứ ba thì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.8,
+   "tools": [
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018795,
+   "tokens": 6005,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 0.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Cuốn thứ ba trong danh sách là **Project Hail Mary**. Theo dữ liệu tồn kho hiện tại, cuốn sách này không nằm trong nhóm các đầu sách bị hết hàng hoặc dưới ngưỡng tồn tối thiểu tại bất kỳ kho nào của hệ thống. Do đó, tình trạng tồn kho của \"Project Hail Mary\" đang ở mức an toàn và sẵn sàng cho việc mượn/trả."
+  },
+  {
+   "case": "context-099",
+   "group": "context",
+   "turn": 0,
+   "q": "Top 5 sách được mượn nhiều nhất tháng trước",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 2.13,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018113,
+   "tokens": 5721,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top 5 sách được mượn nhiều nhất tháng trước (01/09–30/09/2026) là: **Norwegian Wood** (103 lượt), **Kafka on the Shore** (54 lượt), **Project Hail Mary** (51 lượt), **Babel Hay Sự Cần Thiết Của Bạo Lực** (42 lượt), và **One Hundred Years of Solitude** (27 lượt)."
+  },
+  {
+   "case": "context-099",
+   "group": "context",
+   "turn": 1,
+   "q": "Trong số đó cuốn nào sắp hết?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.01,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "get_warehouse_low_stock_items"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00038369,
+   "tokens": 12283,
+   "gold": [
+    "top_borrowed",
+    "warehouse_risk"
+   ],
+   "coverage": 0.5,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Trong Top 5 sách được mượn nhiều nhất tháng trước, không có cuốn nào trong danh sách này đang ở tình trạng hết hàng hoặc dưới ngưỡng tồn tối thiểu tại Chi Nhanh District 1 (đơn vị duy nhất hiện có sách hết hàng).\n\nTuy nhiên, nếu xét trên toàn hệ thống, **Nhà Giả Kim (Tái Bản 2025)** là đầu sách duy nhất hiện đang **hết hàng** (tồn khả dụng: 0 bản) và cần được ưu tiên nhập thêm."
+  },
+  {
+   "case": "context-099",
+   "group": "context",
+   "turn": 2,
+   "q": "Cuốn thứ ba thì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.67,
+   "tools": [
+    "get_warehouse_stock_risk",
+    "search_books"
+   ],
+   "planned": [
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00037431,
+   "tokens": 12087,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 0.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Cuốn thứ ba trong Top 5 là **Project Hail Mary** (Andy Weir).\n\nHiện tại, cuốn sách này đang có tổng cộng **18 bản** tồn kho trên toàn hệ thống (bao gồm 7 bản tại Chi nhánh Thủ Đức và 11 bản tại Kho HCM Chinh). Số lượng này hiện vẫn ở mức an toàn, chưa nằm trong danh sách các đầu sách hết hàng hoặc dưới ngưỡng tồn tối thiểu."
+  },
+  {
+   "case": "context-102",
+   "group": "context",
+   "turn": 0,
+   "q": "Tình hình quá hạn tuần này",
+   "flag": false,
+   "setup": true,
+   "status": 200,
+   "latency_s": 2.41,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018011,
+   "tokens": 5727,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tuần này, số phiếu quá hạn đang là điểm cần chú ý: có 409 phiếu mượn quá hạn.\n\n- Trung bình mỗi phiếu đã trễ 18,2 ngày — tức là tình trạng quá hạn không chỉ ở mức vài ngày mà đã kéo dài, đòi hỏi các biện pháp nhắc nhở hoặc xử lý kịp thời để tránh tăng thêm phạt và giảm tỷ lệ hoàn trả đúng hạn."
+  },
+  {
+   "case": "context-102",
+   "group": "context",
+   "turn": 1,
+   "q": "Nói đơn giản hơn được không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.96,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018636,
+   "tokens": 6012,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tuần này có 409 phiếu mượn chưa trả đúng hạn. Trung bình mỗi phiếu đã trễ khoảng 18 ngày, tức là bạn đọc đang giữ sách lâu hơn thời gian quy định khá nhiều. Cần nhắc nhở các trường hợp này sớm để tránh tình trạng quá hạn kéo dài."
+  },
+  {
+   "case": "context-102",
+   "group": "context",
+   "turn": 2,
+   "q": "Hiển thị dưới dạng bảng",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 0.06,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 0,
+   "cost_usd": 0,
+   "tokens": 0,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": null,
+   "grounding_warning": false,
+   "answer": "Đây là thẻ chỉ số \"Tình hình quá hạn\". Dùng đúng dữ liệu của lượt trước (truy xuất lúc 15:11 26/10/2026); số liệu không thay đổi. Không có biểu đồ nào để chuyển sang dạng bảng."
+  },
+  {
+   "case": "context-102",
+   "group": "context",
+   "turn": 0,
+   "q": "Tình hình quá hạn tuần này",
+   "flag": true,
+   "setup": true,
+   "status": 200,
+   "latency_s": 2.33,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017829,
+   "tokens": 5713,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tuần này có 409 phiếu mượn quá hạn, với mức trễ trung bình là 18,2 ngày. Con số này cho thấy một lượng lớn bạn đọc chưa hoàn trả đúng hạn, và tình trạng tồn đọng khá lâu (trên 2 tuần) cần được theo dõi sát để đảm bảo nguồn sách luân chuyển."
+  },
+  {
+   "case": "context-102",
+   "group": "context",
+   "turn": 1,
+   "q": "Nói đơn giản hơn được không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.74,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018646,
+   "tokens": 6002,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tuần này có 409 phiếu mượn chưa trả đúng hạn. Trung bình mỗi phiếu đã trễ khoảng 18 ngày, tức là hơn hai tuần. Điều này cho thấy nhiều bạn đọc đang giữ sách lâu hơn quy định và cần được nhắc nhở để sách nhanh chóng quay về kho phục vụ người khác."
+  },
+  {
+   "case": "context-102",
+   "group": "context",
+   "turn": 2,
+   "q": "Hiển thị dưới dạng bảng",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 0.06,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 0,
+   "cost_usd": 0,
+   "tokens": 0,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": null,
+   "grounding_warning": false,
+   "answer": "Đây là thẻ chỉ số \"Tình hình quá hạn\". Dùng đúng dữ liệu của lượt trước (truy xuất lúc 15:11 26/10/2026); số liệu không thay đổi. Không có biểu đồ nào để chuyển sang dạng bảng."
+  },
+  {
+   "case": "informal-105",
+   "group": "informal",
+   "turn": 0,
+   "q": "top 5 sach muon nhieu nhat",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.83,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017756,
+   "tokens": 5632,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top 5 sách được mượn nhiều nhất trong 30 ngày qua là: Norwegian Wood (35 lượt), Luy-Xiêng Và Chú Người Tuyết Cô Độc (10 lượt), 48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản) (4 lượt), Babel Hay Sự Cần Thiết Của Bạo Lực (3 lượt), và Nghệ Thuật Giao Tiếp Đỉnh Cao (2 lượt)."
+  },
+  {
+   "case": "informal-105",
+   "group": "informal",
+   "turn": 0,
+   "q": "top 5 sach muon nhieu nhat",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.81,
+   "tools": [
+    "get_top_books"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017886,
+   "tokens": 5642,
+   "gold": [
+    "top_borrowed"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Top 5 sách được mượn nhiều nhất trong 30 ngày qua là: **Norwegian Wood** (35 lượt), **Luy-Xiêng Và Chú Người Tuyết Cô Độc** (10 lượt), **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** (4 lượt), **Babel Hay Sự Cần Thiết Của Bạo Lực** (3 lượt) và **Nghệ Thuật Giao Tiếp Đỉnh Cao** (2 lượt)."
+  },
+  {
+   "case": "informal-107",
+   "group": "informal",
+   "turn": 0,
+   "q": "nhap them sach gi voi 10tr",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.26,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00022856,
+   "tokens": 6732,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với ngân sách 10.000.000 ₫, hệ thống không duyệt nhập thêm đầu sách nào (0 bản, chi phí duyệt 0 ₫) vì tồn kho thực tế (bao gồm cả số bản đang về và dự kiến trả trong thời gian chờ hàng) đã đủ đáp ứng nhu cầu hiện tại.\n\n**Các căn cứ:**\n* **Nhu cầu thực tế:** Tổng chi phí cần thiết để nhập đủ các đầu sách còn thiếu (sau khi trừ đi lượng tồn dự kiến) là **0 ₫**.\n* **Trạng thái tồn kho:** Có **3 dòng** sách được xác định là không cần nhập thêm ngay vì lượng bản đang về hoặc bạn đọc dự kiến trả trong thời gian chờ hàng đã đủ để lấp đầy khoảng trống.\n* **Chi phí tối thiểu:** Để duy trì mức phục vụ t"
+  },
+  {
+   "case": "informal-107",
+   "group": "informal",
+   "turn": 0,
+   "q": "nhap them sach gi voi 10tr",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.39,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020802,
+   "tokens": 6574,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với ngân sách 10.000.000 ₫, hệ thống không duyệt nhập thêm đầu sách nào (0 đầu sách / 0 bản).\n\nLý do là nhu cầu thực tế cần chi trả khi đã tính đến các bản đang về và dự kiến trả trong thời gian chờ hàng chỉ là **0 ₫**. Điều này có nghĩa là toàn bộ 105 đầu sách được đề xuất ban đầu đều đã có đủ tồn kho dự kiến để đáp ứng nhu cầu tương lai mà không cần mua thêm."
+  },
+  {
+   "case": "informal-108",
+   "group": "informal",
+   "turn": 0,
+   "q": "hn vs hcm kho nao thieu nhieu",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.02,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020601,
+   "tokens": 6217,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"HCM\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n- **Dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm): Kho HCM Chinh có 4 đầu sách, trong khi Kho Ha Noi không có đầu sách nào.\n- **Hết hàng**: Cả hai kho đều chưa có đầu sách nào hết hàng.\n- **Tồn khả dụng** (số bản có thể cho mượn/đặt ngay): Kho HCM Chinh có 181 bản, nhiều hơn Kho Ha Noi (93 bản). Tuy nhiên, tổng số lượng lớn không đảm bảo rằng từng đầu sách cụ thể đều đủ hàng, nên chỉ tiêu này chỉ được dùng để phân định khi hai tiêu chí trên bằng nhau.\n\nNhư vậy, điểm khác biệt quyết định k"
+  },
+  {
+   "case": "informal-108",
+   "group": "informal",
+   "turn": 0,
+   "q": "hn vs hcm kho nao thieu nhieu",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.83,
+   "tools": [
+    "compare_warehouses"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0002051,
+   "tokens": 6210,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"HCM\" là Kho HCM Chinh) có rủi ro thiếu sách cao hơn Kho Ha Noi.\n\n- **Dưới ngưỡng tồn tối thiểu** (mức tồn mà dưới đó cần nhập thêm): Kho HCM Chinh 4 đầu sách, Kho Ha Noi không có đầu sách nào.\n- **Hết hàng**: Cả hai kho đều không có đầu sách nào hết hàng.\n- **Tồn khả dụng** (số bản có thể cho mượn/đặt ngay): Kho HCM Chinh 181 bản, cao hơn Kho Ha Noi (93 bản). Tuy nhiên, tổng số lượng lớn không đồng nghĩa với việc từng đầu sách đều đủ hàng, nên chỉ được xét khi hai tiêu chí trên bằng nhau.\n\nChưa có dữ liệu nhu cầu mượn tách theo từng kho, nên chưa đánh giá được mức độ ả"
+  },
+  {
+   "case": "informal-111",
+   "group": "informal",
+   "turn": 0,
+   "q": "can uu tien gi trc",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 11.84,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00043382999999999996,
+   "tokens": 11811,
+   "gold": [
+    "priority"
+   ],
+   "coverage": 0.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tôi chưa truy xuất được dữ liệu cho câu hỏi này nên không đưa ra số liệu, để tránh thông tin sai. Bạn có thể hỏi lại cụ thể hơn (ví dụ: chỉ rõ kỳ thời gian, kho hoặc đầu sách cần xem)."
+  },
+  {
+   "case": "informal-111",
+   "group": "informal",
+   "turn": 0,
+   "q": "can uu tien gi trc",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.67,
+   "tools": [
+    "rank_priority_tasks"
+   ],
+   "planned": [
+    "rank_priority_tasks"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[priority]",
+   "planner_ms": 2612.7,
+   "llm_calls": 2,
+   "cost_usd": 0.000257376,
+   "tokens": 6995,
+   "gold": [
+    "priority"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Nên xử lý trước: **Thu hồi khoản phạt chưa thu**.\n\nTheo quy tắc ưu tiên cố định dựa trên mức độ ảnh hưởng, thứ tự các việc cần làm ngay hôm nay là:\n\n1. **Thu hồi khoản phạt chưa thu**: Tổng số tiền tồn đọng là **56.472.000 ₫**. Đây là rủi ro tài chính trực tiếp cần giải quyết sớm nhất.\n * *Hành động tiếp theo*: Rà soát các khoản phạt lớn nhất và gửi nhắc thanh toán.\n2. **Xử lý phiếu mượn quá hạn**: Có **409 phiếu** đang quá hạn (trung bình 18.2 ngày, lâu nhất 58 ngày).\n * *Hành động tiếp theo*: Liên hệ các phiếu quá hạn lâu nhất trước để yêu cầu trả sách hoặc gia hạn.\n3. **Kiểm tra kho có nhiề"
+  },
+  {
+   "case": "informal-115",
+   "group": "informal",
+   "turn": 0,
+   "q": "kho dn con it sach ko",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.21,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017984,
+   "tokens": 5808,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Đà Nẵng hiện không có đầu sách nào dưới ngưỡng tồn tối thiểu hay hết hàng. Tuy nhiên, so với các kho khác, số lượng bản sách khả dụng của kho này (94 bản) là khá thấp, chỉ đứng sau Kho Hà Nội (93 bản)."
+  },
+  {
+   "case": "informal-115",
+   "group": "informal",
+   "turn": 0,
+   "q": "kho dn con it sach ko",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.45,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0001827,
+   "tokens": 5830,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho Đà Nẵng hiện không có đầu sách nào dưới ngưỡng tồn tối thiểu hay hết hàng, với 94 bản tồn khả dụng. Tuy nhiên, so với các chi nhánh khác như Chi nhánh Đà Nẵng (248 bản) hoặc Chi nhánh Thủ Đức (215 bản), số lượng này thấp hơn đáng kể, cho thấy kho này đang ở mức dự trữ ít hơn."
+  },
+  {
+   "case": "informal-116",
+   "group": "informal",
+   "turn": 0,
+   "q": "sach e nhieu ko",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.97,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015559,
+   "tokens": 5053,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có sách nào tồn kho lâu ngày (trên 90 ngày) không có hoạt động xuất/nhập, nên thư viện không có sách ế hay hàng tồn đọng."
+  },
+  {
+   "case": "informal-116",
+   "group": "informal",
+   "turn": 0,
+   "q": "sach e nhieu ko",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.75,
+   "tools": [
+    "get_aging_inventory"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0001552,
+   "tokens": 5050,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Theo dữ liệu hiện tại, không có đầu sách nào trong kho bị ế (tồn lâu ngày không có hoạt động xuất/nhập từ 90 ngày trở lên)."
+  },
+  {
+   "case": "informal-120",
+   "group": "informal",
+   "turn": 0,
+   "q": "co sach harry potter ko",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.5,
+   "tools": [
+    "search_books"
+   ],
+   "planned": [
+    "search_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.0001642,
+   "tokens": 5360,
+   "gold": [
+    "book_search"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Có sách Harry Potter. Cụ thể, \"Harry Potter and the Philosopher's Stone\" của J. K. Rowling đang có 30 bản trong hệ thống."
+  },
+  {
+   "case": "informal-120",
+   "group": "informal",
+   "turn": 0,
+   "q": "co sach harry potter ko",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.46,
+   "tools": [
+    "search_books"
+   ],
+   "planned": [
+    "search_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016511,
+   "tokens": 5367,
+   "gold": [
+    "book_search"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Có sách Harry Potter trong hệ thống. Cụ thể, bạn có thể tìm thấy \"Harry Potter and the Philosopher's Stone\" của tác giả J.K. Rowling với số lượng 30 bản."
+  },
+  {
+   "case": "informal-121",
+   "group": "informal",
+   "turn": 0,
+   "q": "ns 30tr nhap dc j",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.92,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020942,
+   "tokens": 6584,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với ngân sách 30.000.000 ₫, hệ thống duyệt **0 đầu sách** và chi phí được duyệt là **0 ₫**.\n\nĐiều này xảy ra vì khi tính toán nhu cầu thực tế (đã trừ đi số bản đang về từ nhà cung cấp và số bản dự kiến bạn đọc sẽ trả trong thời gian chờ hàng), toàn bộ 105 đầu sách trong danh sách đề xuất hiện tại đều đã có đủ tồn kho để đáp ứng nhu cầu tương lai. Do đó, không có dòng nào cần chi tiền nhập thêm ngay lúc này."
+  },
+  {
+   "case": "informal-121",
+   "group": "informal",
+   "turn": 0,
+   "q": "ns 30tr nhap dc j",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.8,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020838,
+   "tokens": 6576,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với ngân sách 30.000.000 ₫, hệ thống duyệt **0 đầu sách** và chi phí được duyệt là **0 ₫**.\n\nLý do là nhu cầu thực tế cần vốn khi đã tính đến các bản đang về từ nhà cung cấp và số bản dự kiến bạn đọc sẽ trả trong thời gian chờ hàng là **0 ₫**. Do đó, toàn bộ 30.000.000 ₫ vẫn còn dư mà không cần chi cho việc nhập thêm sách nào tại thời điểm này."
+  },
+  {
+   "case": "informal-123",
+   "group": "informal",
+   "turn": 0,
+   "q": "sach nao nen tl",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.41,
+   "tools": [
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016795,
+   "tokens": 5325,
+   "gold": [
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào trong hệ thống đủ điều kiện để xem xét thanh lý hoặc chuyển kho. Dữ liệu cho thấy tổng số sách cần xử lý là 0 và tổng giá trị tồn đọng là 0 ₫, nghĩa là toàn bộ vốn tồn kho hiện tại đều đang có hoạt động xuất/nhập (mượn/trả) hoặc chưa đạt ngưỡng thời gian \"ế\" hàng."
+  },
+  {
+   "case": "informal-123",
+   "group": "informal",
+   "turn": 0,
+   "q": "sach nao nen tl",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.12,
+   "tools": [
+    "get_weeding_suggestions"
+   ],
+   "planned": [
+    "get_weeding_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016496,
+   "tokens": 5302,
+   "gold": [
+    "weeding"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hiện tại không có đầu sách nào cần xem xét thanh lý hoặc chuyển kho. Dữ liệu cho thấy tổng giá trị tồn đọng là 0 ₫, nghĩa là toàn bộ số lượng sách trong kho đều đang có hoạt động xuất/nhập và đáp ứng nhu cầu mượn/đặt."
+  },
+  {
+   "case": "informal-124",
+   "group": "informal",
+   "turn": 0,
+   "q": "tinh hinh muon tra 7 ngay qua the nao",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.75,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020823,
+   "tokens": 6191,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Trong 7 ngày qua (19/10–26/10), tổng lượt mượn là 13 và tổng lượt trả là 168.\n\nCác căn cứ chính:\n- **Tổng lượt mượn:** 13 lượt, cao điểm vào ngày 23/10 với 7 lượt. Hoạt động mượn sách trong kỳ này khá thấp, chỉ tập trung ở một vài ngày.\n- **Tổng lượt trả:** 168 lượt. Số lượng bản sách được hoàn trả lại kho nhiều hơn hẳn số lượng mượn mới, cho thấy nguồn cung dự trữ đang được bổ sung liên tục.\n- **Xu hướng:** Dữ liệu cho thấy xu hướng giảm của các lượt mượn từ đầu đến cuối kỳ trọn vẹn. Cần theo dõi xem đây có phải là biến động tạm thời hay không.\n\nĐiều cần chú ý: Dữ liệu chưa đầy đủ cho ngày 26"
+  },
+  {
+   "case": "informal-124",
+   "group": "informal",
+   "turn": 0,
+   "q": "tinh hinh muon tra 7 ngay qua the nao",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.89,
+   "tools": [
+    "get_borrow_trends"
+   ],
+   "planned": [
+    "get_borrow_trends"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00019913,
+   "tokens": 6121,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Trong 7 ngày qua, tổng số lượt trả (168) cao hơn nhiều so với lượt mượn (13), cho thấy lượng sách đang được hoàn trả về kho rất lớn.\n\nCụ thể:\n* **Tổng lượt trả:** 168 lượt trong khoảng thời gian từ 19/10 đến 26/10.\n* **Tổng lượt mượn:** 13 lượt trong cùng kỳ.\n* **Ngày có hoạt động mượn cao nhất:** 23/10 với 7 lượt.\n\nSự chênh lệch lớn giữa số lượng trả và mượn cho thấy hệ thống đang trong giai đoạn tích tụ lại sách về kho, hoặc nhu cầu mượn sách hiện tại đang ở mức thấp."
+  },
+  {
+   "case": "informal-125",
+   "group": "informal",
+   "turn": 0,
+   "q": "kpi hnay",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.03,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00016766,
+   "tokens": 5422,
+   "gold": [
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hôm nay, thư viện có 134 đầu sách; 460 phiếu mượn đang mở và 409 phiếu quá hạn. Tổng tiền phạt chưa thu là 56.472.000 ₫."
+  },
+  {
+   "case": "informal-125",
+   "group": "informal",
+   "turn": 0,
+   "q": "kpi hnay",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.9,
+   "tools": [
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_dashboard_kpis"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00017,
+   "tokens": 5440,
+   "gold": [
+    "kpi"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hôm nay (26/10/2026), thư viện có 134 đầu sách đang được quản lý, với 460 phiếu mượn đang mở và 409 phiếu đã quá hạn; tổng số tiền phạt chưa thu là 56.472.000 ₫."
+  },
+  {
+   "case": "informal-127",
+   "group": "informal",
+   "turn": 0,
+   "q": "kho hcm co van de gi ko",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.1,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00020215,
+   "tokens": 6135,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Giả sử \"kho HCM\" là Kho HCM Chinh, kho này hiện có 4 đầu sách đang dưới ngưỡng tồn tối thiểu (mức tồn mà hệ thống coi là cần nhập thêm), trong đó không có cuốn nào đã hết hàng.\n\nCác đầu sách dưới ngưỡng bao gồm:\n- **One Hundred Years of Solitude**: Chỉ còn 1 bản khả dụng (ngưỡng an toàn là 15).\n- **Norwegian Wood**: Còn 2 bản khả dụng (ngưỡng là 10).\n- **Tư Duy Như Kinh Tế Gia**: Còn 4 bản (ngưỡng là 0).\n- **Project Hail Mary**: Còn 6 bản (ngưỡng là 6).\n\nNgoài ra, tổng thể kho này vẫn khá ổn định với 181 bản sách khả dụng và chỉ có 2 bản đang được bạn đọc mượn."
+  },
+  {
+   "case": "informal-127",
+   "group": "informal",
+   "turn": 0,
+   "q": "kho hcm co van de gi ko",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.05,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "get_warehouse_stock_risk"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 7.6006e-05,
+   "tokens": 6039,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh (giả định \"kho hcm\" là Kho HCM Chinh) hiện có 4 đầu sách dưới ngưỡng tồn tối thiểu, trong đó không có cuốn nào đã hết hàng. Các đầu sách này gồm: One Hundred Years of Solitude (tồn khả dụng 1 bản), Norwegian Wood (2 bản), Tư Duy Như Kinh Tế Gia (4 bản), và Project Hail Mary (6 bản)."
+  },
+  {
+   "case": "informal-128",
+   "group": "informal",
+   "turn": 0,
+   "q": "thg nay phat dc bn tien",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 1.56,
+   "tools": [],
+   "planned": [],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00015331,
+   "tokens": 4967,
+   "gold": [
+    "fines"
+   ],
+   "coverage": 0.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Hôm nay chưa có số liệu tổng tiền phạt đã thu trong ngày; nếu bạn cần, tôi sẽ lấy báo cáo tổng hợp phạt (chưa thu/đã thu/đã miễn) để trả lại ngay."
+  },
+  {
+   "case": "informal-128",
+   "group": "informal",
+   "turn": 0,
+   "q": "thg nay phat dc bn tien",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.18,
+   "tools": [
+    "get_fine_summary"
+   ],
+   "planned": [
+    "get_fine_summary"
+   ],
+   "routed": true,
+   "decision": "merged:+caps[fines]",
+   "planner_ms": 2805.6,
+   "llm_calls": 3,
+   "cost_usd": 0.0004131755,
+   "tokens": 12382,
+   "gold": [
+    "fines"
+   ],
+   "coverage": 1.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Tổng tiền phạt chưa thu: 56.472.000 ₫; Tổng tiền phạt đã thu: 96.619.000 ₫; Loại phạt lớn nhất: OVERDUE: 619.466.000 ₫.\n(Không kiểm chứng được một nhận định an toàn từ bản trả lời tự động, nên câu trả lời được thay bằng kết luận tính trực tiếp từ dữ liệu.)"
+  },
+  {
+   "case": "cwi-131",
+   "group": "cwi",
+   "turn": 0,
+   "q": "So sánh lượt mượn quý này với quý trước",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.15,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00023046,
+   "tokens": 6742,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn quý này giảm 86,8% so với quý trước (4,19 so với 31,75 lượt/ngày).\n\n- Tổng lượt mượn quý này mới là 109 so với 2.921, nhưng kỳ hiện tại chỉ mới qua 26 ngày nên so sánh tổng chưa công bằng; trung bình mỗi ngày cho thấy mức độ hoạt động thực tế thấp hơn đáng kể.\n- Lượt trả cũng giảm mạnh: trung bình 10,19 lượt/ngày trong quý này so với 36,82 (-72,3%), phản ánh số lượng sách đang lưu hành ít hơn hoặc thời gian mượn dài hơn.\n- Lượt đặt chỗ giảm 54,9% theo trung bình/ngày (5,35 so với 11,86), cho thấy nhu cầu dự báo từ bạn đọc cũng suy giảm, dù không nghiêm "
+  },
+  {
+   "case": "cwi-131",
+   "group": "cwi",
+   "turn": 0,
+   "q": "So sánh lượt mượn quý này với quý trước",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 2.03,
+   "tools": [
+    "compare_borrow_periods"
+   ],
+   "planned": [
+    "compare_borrow_periods"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021018,
+   "tokens": 6586,
+   "gold": [
+    "borrow_trend"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Tính theo trung bình mỗi ngày, lượt mượn quý này giảm 86,8% so với quý trước (4,19 so với 31,75 lượt/ngày).\n\n- Tổng lượt mượn quý này mới là 109 so với 2.921, nhưng kỳ hiện tại chỉ qua 26 ngày nên so sánh tổng chưa công bằng.\n- Ngày cao điểm của quý này là 06/10 với 33 lượt mượn.\n\nDữ liệu chưa cho biết lý do thay đổi; có thể xem top sách để biết nhóm sách nào giảm."
+  },
+  {
+   "case": "cwi-132",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Tại sao kho HCM thiếu sách nhiều vậy?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.36,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "explain_warehouse_shortage"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00021734,
+   "tokens": 6468,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách tại Kho HCM Chinh (giả định \"kho HCM\" là Kho HCM Chinh) đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định nguyên nhân.\n\n- **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 3/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn trong kỳ gần đây. Ví dụ, *Norwegian Wood* có 35 lượt mượn dù chỉ còn 2 bản tồn khả dụng; *One Hundred Years of Solitude* và *Project Hail Mary* mỗi cuốn cũng có 2 lượt mượn. Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; đầu sách không có lượt mượn ít cấp bách hơn. (Tương quan quan sát được; lượt mượn tính trên toàn"
+  },
+  {
+   "case": "cwi-132",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Tại sao kho HCM thiếu sách nhiều vậy?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.11,
+   "tools": [
+    "explain_warehouse_shortage"
+   ],
+   "planned": [
+    "explain_warehouse_shortage"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00023034,
+   "tokens": 6568,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh (giả định \"kho HCM\" là Kho HCM Chinh) đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định nguyên nhân.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 3/4 đầu sách dưới ngưỡng vẫn có lượt mượn trong kỳ, ví dụ *Norwegian Wood* đạt 35 lượt mượn. Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; đầu sách không có lượt mượn ít cấp bách hơn. (Tương quan quan sát được; lượt mượn tính trên toàn hệ thống, chưa tách theo kho.)\n\n**Bản giải thích có cấu trúc:**\n- Thiếu hàng đi kèm nhu cầu mượn thực: 3/4 đầu sách đang thiếu vẫn có lượt"
+  },
+  {
+   "case": "cwi-137",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Giả sử thời gian chờ hàng là 21 ngày thì cần nhập bao nhiêu?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.51,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00023197,
+   "tokens": 6909,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với thời gian chờ hàng 21 ngày, hệ thống đề xuất nhập tổng cộng **37 bản** cho **105 đầu sách** cần xem xét, với chi phí ước tính **6.941.000 ₫**.\n\nTrong đó:\n- **Norwegian Wood** (ưu tiên cao): đề xuất 26 bản ≈ 4.680.000 ₫. Đây là đầu sách duy nhất có mức ưu tiên HIGH, dù lượt mượn trong kỳ đã giảm mạnh so với trước đó.\n- **Babel Hay Sự Cần Thiết Của Bạo Lực** và **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)**: mỗi đầu đề xuất 3 bản, cùng mức ưu tiên MEDIUM.\n- Các đầu sách còn lại chủ yếu ở mức ưu tiên LOW, nhiều đầu không được đề xuất số lượng nhập (0 bản) do tồn kho hiện tại vẫn đủ đáp ứn"
+  },
+  {
+   "case": "cwi-137",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Giả sử thời gian chờ hàng là 21 ngày thì cần nhập bao nhiêu?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.49,
+   "tools": [
+    "get_reorder_suggestions"
+   ],
+   "planned": [
+    "get_reorder_suggestions"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00049341,
+   "tokens": 14627,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với thời gian chờ hàng 21 ngày, hệ thống đề xuất nhập tổng cộng **37 bản** cho **105 đầu sách** cần xem xét, với chi phí ước tính **6.941.000 ₫**.\n\nCác số liệu chính đi kèm:\n- **Norwegian Wood** (ưu tiên cao): đề xuất 26 bản ≈ 4.680.000 ₫. Đây là đầu sách có mức ưu tiên cao nhất và số lượng đề xuất lớn nhất trong danh sách.\n- **Babel Hay Sự Cần Thiết Của Bạo Lực** (ưu tiên trung bình): đề xuất 3 bản ≈ 807.000 ₫.\n- **48 Nguyên Tắc Chủ Chốt Của Quyền Lực (Tái Bản)** (ưu tiên trung bình): đề xuất 3 bản ≈ 462.000 ₫.\n- Các đầu sách còn lại chủ yếu thuộc nhóm ưu tiên thấp, nhiều đầu không có đề xuất"
+  },
+  {
+   "case": "cwi-138",
+   "group": "cwi",
+   "turn": 0,
+   "q": "So sánh các phương án ngân sách 10 triệu, 20 triệu và 40 triệu",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.81,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00031747,
+   "tokens": 8249,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Không có kịch bản nào tối ưu tuyệt đối: ngân sách lớn hơn nhập được nhiều đầu sách ưu tiên cao hơn, đổi lại chi phí cao hơn.\n\n**** Không có kịch bản nào tối ưu tuyệt đối: ngân sách lớn hơn nhập được nhiều đầu sách ưu tiên cao hơn, đổi lại chi phí cao hơn. Chọn mức nào phụ thuộc vào việc chấp nhận để lại bao nhiêu đầu sách ưu tiên cao chưa được nhập. (Mô phỏng chỉ áp dụng quy tắc phân bổ; không có hàm mục tiêu để tối ưu.)\n- **** Nhu cầu nhập đầy đủ: 105 đầu sách (0 ưu tiên cao), 10 bản, ước tính 2.149.000 ₫.\n- **** Tính cả bản đang về và bản đang mượn dự kiến trả trong thời gian chờ hàng, các d"
+  },
+  {
+   "case": "cwi-138",
+   "group": "cwi",
+   "turn": 0,
+   "q": "So sánh các phương án ngân sách 10 triệu, 20 triệu và 40 triệu",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 10.45,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00061225,
+   "tokens": 17135,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Không có kịch bản nào tối ưu tuyệt đối: ngân sách lớn hơn nhập được nhiều đầu sách ưu tiên cao hơn, đổi lại chi phí cao hơn. Chọn mức nào phụ thuộc vào việc chấp nhận để lại bao nhiêu đầu sách ưu tiên cao chưa được nhập.\n\nDữ liệu cho thấy nhu cầu nhập đầy đủ (chưa trừ các bản đang về và dự kiến trả) là 2.149.000 ₫ cho 105 đầu sách. Tuy nhiên, khi tính cả số lượng bản đang về từ phiếu nhập đã duyệt và số bản đang mượn dự kiến trả trong thời gian chờ hàng, tổng vốn bị chôn thực tế cần dùng để duy trì dịch vụ chỉ là 0 ₫.\n\nKết quả mô phỏng cho ba phương án như sau:\n- **Ngân sách 10.000.000 ₫**: Du"
+  },
+  {
+   "case": "cwi-139",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Lý do nào khiến nhiều phiếu bị quá hạn?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.25,
+   "tools": [
+    "get_overdue_summary",
+    "get_aging_inventory",
+    "get_reservation_funnel"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 3,
+   "cost_usd": 0.00053815,
+   "tokens": 16985,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu hiện tại cho thấy 409 phiếu mượn đang quá hạn, với mức trễ trung bình là 18,2 ngày. Tuy nhiên, hệ thống chưa cung cấp các thông tin chi tiết về nguyên nhân cụ thể (như lý do từ phía bạn đọc, lỗi quy trình hay thiếu sách) để giải thích đầy đủ tại sao nhiều phiếu bị quá hạn.\n\nCác yếu tố có thể liên quan đến tình trạng này bao gồm:\n- **Xu hướng mượn/trả:** Cần xem xét số lượng phiếu trả trong cùng kỳ trước đó để so sánh.\n- **Tồn kho và nhu cầu:** Việc thiếu hụt bản sao của các đầu sách phổ biến có thể khiến bạn đọc không thể trả đúng hạn hoặc phải chờ đợi.\n- **Quy trình nhắc nhở:** Có thể"
+  },
+  {
+   "case": "cwi-139",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Lý do nào khiến nhiều phiếu bị quá hạn?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.86,
+   "tools": [
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_overdue_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00038109,
+   "tokens": 11653,
+   "gold": [
+    "overdue"
+   ],
+   "coverage": 1.0,
+   "verification": "WARNING",
+   "grounding_warning": false,
+   "answer": "Dữ liệu hiện tại cho thấy 409 phiếu mượn đang trong trạng thái quá hạn, với mức trễ trung bình là 18,2 ngày.\n\nCác yếu tố đi kèm quan sát được bao gồm:\n* **Số lượng phiếu nợ lớn:** Hệ thống ghi nhận 409 phiếu mượn bị quá hạn.\n* **Mức độ trễ trung bình cao:** Số ngày quá hạn trung bình lên tới 18,2 ngày, cho thấy nhiều bạn đọc đã giữ sách lâu hơn thời gian quy định đáng kể.\n\n*Lưu ý: Dữ liệu trên phản ánh mức độ nghiêm trọng của tình trạng quá hạn tại thời điểm truy xuất; các nguyên nhân sâu xa (như thay đổi chính sách mượn, sự cố hệ thống nhắc nhở) cần được kiểm tra thêm để có kết luận chắc chắn"
+  },
+  {
+   "case": "cwi-143",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Tại sao cuốn Đắc Nhân Tâm lại được đề xuất nhập?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 3.8,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "planned": [
+    "explain_reorder_item"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00018531,
+   "tokens": 5567,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dựa trên dữ liệu hiện tại, cuốn \"Đắc Nhân Tâm lại\" **không nằm trong danh sách đề xuất nhập** của hệ thống.\n\nCác yếu tố liên quan đến việc cuốn sách này không được ưu tiên bổ sung tồn kho bao gồm:\n* **Tồn kho còn đủ:** Số lượng bản đang có khả dụng (bao gồm cả hàng đã về và dự kiến trả) đáp ứng được nhu cầu mượn dự báo trong thời gian chờ hàng.\n* **Không có tín hiệu nhu cầu cao:** Dữ liệu lượt mượn gần đây không cho thấy sự gia tăng đột biến để xếp vào nhóm ưu tiên HIGH/MEDIUM.\n\n*Lưu ý: Đây là kết quả dựa trên quy tắc tự động của hệ thống; nếu bạn cần xem xét lại mức tồn kho cụ thể hoặc xu hướ"
+  },
+  {
+   "case": "cwi-143",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Tại sao cuốn Đắc Nhân Tâm lại được đề xuất nhập?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.57,
+   "tools": [
+    "explain_reorder_item"
+   ],
+   "planned": [
+    "explain_reorder_item"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00039066000000000003,
+   "tokens": 11662,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Cuốn \"Đắc Nhân Tâm lại\" hiện không nằm trong danh sách đề xuất nhập. Các yếu tố liên quan đến việc cuốn sách này không được đề xuất bao gồm:\n\n* **Không có tín hiệu nhu cầu gần đây:** Dữ liệu cho thấy đầu sách này không có dấu hiệu tăng đột biến về lượt mượn hoặc đặt chỗ trong thời gian dự báo ngắn hạn (7-30 ngày tới).\n* **Tồn kho còn đủ:** Số lượng bản đang có sẵn tại kho (tồn khả dụng) hiện tại vẫn đáp ứng được nhu cầu dự kiến, chưa chạm xuống mức ngưỡng cần kích hoạt đơn nhập bổ sung.\n\n*Lưu ý: Đây là kết luận dựa trên dữ liệu tồn kho và xu hướng mượn/trả thực tế của hệ thống; nếu có một đợt "
+  },
+  {
+   "case": "cwi-147",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Có nên chuyển sách từ kho HCM sang kho Hà Nội không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 23.9,
+   "tools": [
+    "compare_warehouses",
+    "get_warehouse_low_stock_items",
+    "get_warehouse_low_stock_items",
+    "search_books"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": true,
+   "decision": "keep_rules:no_new_information",
+   "planner_ms": 2024.1,
+   "llm_calls": 6,
+   "cost_usd": 0.0010115525000000002,
+   "tokens": 30231,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "BLOCKED",
+   "grounding_warning": false,
+   "answer": "Kho HCM Chinh rủi ro thiếu sách cao hơn Kho Ha Noi.\n- Kho HCM Chinh: 0 đầu sách hết hàng, 4 đầu sách dưới ngưỡng tồn tối thiểu, tồn khả dụng 181 bản.\n- Kho Ha Noi: 0 đầu sách hết hàng, 0 đầu sách dưới ngưỡng tồn tối thiểu, tồn khả dụng 93 bản.\n- Kho HCM Chinh: 4 đầu sách dưới ngưỡng tồn tối thiểu, trong đó 0 đầu sách đã hết hàng.\nChưa biết: Chưa có nhu cầu mượn tách theo từng kho, nên chưa đánh giá được mức ảnh hưởng tới bạn đọc của mỗi kho.\n(Không kiểm chứng được một nhận định an toàn từ bản trả lời tự động, nên câu trả lời được thay bằng kết luận tính trực tiếp từ dữ liệu.)"
+  },
+  {
+   "case": "cwi-147",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Có nên chuyển sách từ kho HCM sang kho Hà Nội không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.62,
+   "tools": [
+    "compare_warehouses",
+    "get_warehouse_low_stock_items"
+   ],
+   "planned": [
+    "compare_warehouses"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00039767000000000003,
+   "tokens": 12329,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Không nên chuyển sách từ kho HCM sang kho Hà Nội.\n\nDữ liệu hiện tại cho thấy **Kho Ha Noi** đang có tình trạng tồn kho tốt hơn và ít rủi ro thiếu sách hơn so với **Kho HCM Chinh**. Cụ thể:\n\n* **Rủi ro thấp hơn:** Kho Ha Noi không có đầu sách nào dưới ngưỡng tồn tối thiểu (0 đầu), trong khi Kho HCM Chinh đang có 4 đầu sách ở mức này.\n* **Tồn kho ổn định:** Tổng số bản tồn khả dụng của Kho Ha Noi là 93 bản, đáp ứng đủ nhu cầu dự kiến mà không cần điều chỉnh.\n\nViệc chuyển sách đi sẽ làm giảm lượng tồn kho của Kho HCM Chinh – nơi đang có nguy cơ thiếu hụt cao hơn – mà không mang lại lợi ích rõ rệt"
+  },
+  {
+   "case": "cwi-148",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Giảm 10% chi phí nhập mà vẫn giữ mức phục vụ thì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 4.14,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00024332,
+   "tokens": 7374,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với mức giảm 10% chi phí nhập nhưng vẫn giữ nguyên mức phục vụ, hệ thống cho thấy không có sự thay đổi về số lượng sách được duyệt.\n\n- **Kết quả tài chính**: Chi phí duyệt vẫn là **0 ₫** (còn dư ngân sách 1.934.100 ₫ so với nhu cầu thực tế cần chi).\n- **Số lượng sách**: Duyệt được **0 đầu sách** và **0 bản**.\n- **Mức phục vụ**: Hệ thống xác định chi phí tối thiểu để duy trì các mức phục vụ 90%, 95%, 99% và 100% đều là **0 ₫**.\n\n**Lý do**: Trong tổng thể tồn kho hiện tại, có **3 dòng sách** không cần nhập thêm vì số bản đang về từ nhà cung cấp hoặc dự kiến trả trong thời gian chờ hàng đã đủ đáp"
+  },
+  {
+   "case": "cwi-148",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Giảm 10% chi phí nhập mà vẫn giữ mức phục vụ thì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 10.09,
+   "tools": [
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.0005534800000000001,
+   "tokens": 15896,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với kịch bản giảm 10% chi phí nhập nhưng vẫn giữ mức phục vụ, dữ liệu cho thấy các yếu tố đi kèm như sau:\n\n* **Kết quả duyệt:** Chi phí được duyệt là **0 ₫** (còn dư ngân sách 1.934.100 ₫). Số đầu sách được duyệt là **0**, số bản sách là **0**.\n* **Yếu tố liên quan:** Dữ liệu hiện tại ghi nhận nhu cầu cần tiền khi tính cả bản đang về và bản đang mượn dự kiến trả là **0 ₫**. Điều này đi kèm với việc có **3 dòng** không cần nhập thêm vì bản đang về/dự kiến trả đã đủ.\n* **Mức phục vụ:** Chi phí tối thiểu theo mức phục vụ của toàn bộ kế hoạch ở các ngưỡng 90%, 95%, 99% và 100% đều là **0 ₫**.\n\n**Đ"
+  },
+  {
+   "case": "cwi-149",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Tiền phạt tăng hay giảm so với tháng trước?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 8.79,
+   "tools": [
+    "get_fine_summary",
+    "get_borrow_trends",
+    "compare_borrow_periods",
+    "get_overdue_summary"
+   ],
+   "planned": [
+    "get_fine_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 4,
+   "cost_usd": 0.0006712879999999999,
+   "tokens": 20680,
+   "gold": [
+    "fines"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu về tiền phạt chưa thu được và đã thu được trong tháng 9/2026 không có sẵn thông số so sánh trực tiếp với tháng trước, nên không thể xác định xu hướng tăng hay giảm.\n\nTuy nhiên, dữ liệu hoạt động cho thấy nhu cầu mượn sách và đặt chỗ đang giảm nhẹ so với tháng 8/2026 (giảm trung bình 10,9% lượt mượn/ngày và 11,3% lượt đặt chỗ/ngày). Trong bối cảnh đó, tổng số phiếu quá hạn hiện tại là 409 phiếu với mức quá hạn trung bình 18,2 ngày, góp phần tạo ra khoản tiền phạt chưa thu là 56.472.000 ₫."
+  },
+  {
+   "case": "cwi-149",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Tiền phạt tăng hay giảm so với tháng trước?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.98,
+   "tools": [
+    "get_fine_summary",
+    "get_fine_summary",
+    "compare_borrow_periods",
+    "get_fine_summary"
+   ],
+   "planned": [
+    "get_fine_summary"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 4,
+   "cost_usd": 0.00065099,
+   "tokens": 20593,
+   "gold": [
+    "fines"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Dữ liệu chi tiết về biến động tiền phạt theo tháng không có sẵn trong hệ thống hiện tại, nên chưa thể xác định chính xác mức tăng hay giảm so với tháng trước.\n\nCác số liệu phạt đang hiển thị là tổng tích lũy toàn bộ lịch sử phạt của thư viện:\n* **Tổng tiền phạt đã thu:** 96.619.000 ₫\n* **Tổng tiền phạt chưa thu:** 56.472.000 ₫\n* **Loại phạt lớn nhất:** Phạt quá hạn (OVERDUE) với tổng giá trị 619.466.000 ₫ trên 8.058 khoản phạt.\n\nĐể phân tích xu hướng tăng/giảm cụ thể cho tháng 9/2026 so với tháng 8/2026, cần thêm công cụ hoặc dữ liệu báo cáo chi tiết theo từng kỳ thời gian."
+  },
+  {
+   "case": "cwi-151",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Nếu ưu tiên kho Hà Nội với ngân sách 20 triệu thì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 6.08,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00028337,
+   "tokens": 7869,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với ngân sách 20.000.000 ₫ và ưu tiên kho Hà Nội, hệ thống duyệt 0 ₫ cho 0 đầu sách / 0 bản; không có đầu sách nào ưu tiên cao bị bỏ lại.\n\n- **Kho Hà Nội hiện tại**: 0 đầu sách dưới ngưỡng tồn tối thiểu (gồm hết hàng). Kho này không còn khoảng trống tồn kho cần lấp ngay.\n- **Nhu cầu nhập đầy đủ toàn hệ thống**: 105 đầu sách (0 ưu tiên cao), ước tính 2.149.000 ₫. Tuy nhiên, khi tính cả số bản đang về từ phiếu nhập đã duyệt và số bản đang mượn dự kiến trả trong thời gian chờ hàng, nhu cầu thực tế cần tiền để duyệt đủ là 0 ₫. Tồn dự kiến (có sẵn + đang về + đang mượn sắp trả) đã đủ đáp ứng nhu cầ"
+  },
+  {
+   "case": "cwi-151",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Nếu ưu tiên kho Hà Nội với ngân sách 20 triệu thì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.34,
+   "tools": [
+    "get_warehouse_low_stock_items",
+    "simulate_reorder_budget"
+   ],
+   "planned": [
+    "get_warehouse_low_stock_items",
+    "simulate_reorder_budget"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 1,
+   "cost_usd": 0.00026439,
+   "tokens": 7723,
+   "gold": [
+    "reorder"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Với ngân sách 20.000.000 ₫ và ưu tiên kho Hà Nội, hệ thống duyệt **0 ₫ cho 0 đầu sách / 0 bản**; toàn bộ ngân sách còn dư.\n\n- **Kho Hà Nội hiện tại**: 0 đầu sách dưới ngưỡng tồn tối thiểu (gồm hết hàng). Kho này không có đầu sách nào cần nhập gấp theo tiêu chí tồn thấp.\n- **Nhu cầu nhập đầy đủ của hệ thống**: 105 đầu sách (0 ưu tiên cao), ước tính 2.149.000 ₫. Tuy nhiên, khi tính cả các bản đang về từ nhà cung cấp và số bản dự kiến trả trong thời gian chờ hàng, nhu cầu thực tế cần chi tiền để bổ sung là **0 ₫**. Tồn kho dự kiến (bao gồm hàng đang về và hàng sắp trả) đã đủ đáp ứng nhu cầu trong"
+  },
+  {
+   "case": "cwi-154",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Sách tồn lâu tăng lên vì sao?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 10.88,
+   "tools": [
+    "get_aging_inventory",
+    "get_aging_inventory",
+    "get_aging_inventory",
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 5,
+   "cost_usd": 0.000658736,
+   "tokens": 23920,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Dữ liệu tồn kho lâu hạn (90, 180 và 365 ngày) hiện tại đang trống, nên không thể xác định chính xác nguyên nhân khiến sách tồn lâu tăng lên.\n\nCác yếu tố liên quan có thể quan sát được từ dữ liệu tổng quan khác bao gồm:\n* **Lượng phiếu mượn quá hạn cao:** Có tới 409/460 phiếu mượn đang mở bị quá hạn. Điều này cho thấy tỷ lệ hoàn trả chậm, khiến sách nằm ngoài kho lâu hơn bình thường và khó quay vòng.\n* **Áp lực tài chính từ phạt:** Tổng tiền phạt chưa thu đạt 56.472.000 ₫, phản ánh quy mô vi phạm lớn, thường đi kèm với việc bạn đọc trì hoãn hoặc bỏ qua thời hạn hoàn trả.\n\nTuy nhiên, đây chỉ là "
+  },
+  {
+   "case": "cwi-154",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Sách tồn lâu tăng lên vì sao?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 13.27,
+   "tools": [
+    "get_aging_inventory",
+    "get_aging_inventory",
+    "get_aging_inventory",
+    "get_dashboard_kpis"
+   ],
+   "planned": [
+    "get_aging_inventory"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 5,
+   "cost_usd": 0.000417652,
+   "tokens": 23902,
+   "gold": [
+    "aging"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Dựa trên dữ liệu hệ thống hiện có, **không thể xác định nguyên nhân sách tồn lâu tăng lên** vì kết quả truy xuất cho thấy hiện tại **không có bất kỳ đầu sách nào** được xếp vào nhóm tồn kho lâu ngày (tồn tại 90, 180 hoặc 365 ngày không hoạt động đều bằng 0).\n\nDo đó, các yếu tố góp phần khiến sách tồn lâu tăng lên **chưa thể phân tích** dựa trên số liệu thực tế từ công cụ. Dữ liệu hiện tại chỉ phản ánh tình trạng tồn kho \"sạch\" (không có hàng ế) trong khoảng thời gian quan sát, nên không có cơ sở để giải thích sự gia tăng của nhóm này."
+  },
+  {
+   "case": "cwi-155",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Nếu độc giả mượn nhiều gấp đôi thì kho có đủ không?",
+   "flag": false,
+   "setup": false,
+   "status": 200,
+   "latency_s": 7.71,
+   "tools": [
+    "get_top_books",
+    "analyze_demand_vs_stock"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 3,
+   "cost_usd": 0.00057873,
+   "tokens": 18091,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": true,
+   "answer": "Kho hiện tại **không đủ** nếu nhu cầu mượn tăng gấp đôi.\n\nCụ thể, trong 30 ngày qua, đầu sách được mượn nhiều nhất là **\"Norwegian Wood\"** với 35 lượt (tương đương trung bình hơn một lượt mỗi ngày). Nếu con số này tăng lên khoảng 70 lượt, kho sẽ không thể đáp ứng kịp vì lượng xuất hiện đã vượt xa mức tồn kho thực tế và thời gian chờ hàng từ nhà cung cấp.\n\nNgoài ra, hệ thống cũng ghi nhận tình trạng thiếu hụt tiềm năng ở **\"One Hundred Years of Solitude\"**: dù chỉ có 2 lượt mượn, tồn kho khả dụng còn lại (11 bản) đã thấp hơn ngưỡng an toàn (15 bản), khiến đề xuất nhập thêm 4 bản được đưa ra để "
+  },
+  {
+   "case": "cwi-155",
+   "group": "cwi",
+   "turn": 0,
+   "q": "Nếu độc giả mượn nhiều gấp đôi thì kho có đủ không?",
+   "flag": true,
+   "setup": false,
+   "status": 200,
+   "latency_s": 5.66,
+   "tools": [
+    "get_top_books",
+    "analyze_demand_vs_stock"
+   ],
+   "planned": [
+    "get_top_books"
+   ],
+   "routed": false,
+   "decision": "rules",
+   "planner_ms": null,
+   "llm_calls": 2,
+   "cost_usd": 0.00037481,
+   "tokens": 11717,
+   "gold": [
+    "warehouse_risk"
+   ],
+   "coverage": 1.0,
+   "verification": "PASSED",
+   "grounding_warning": false,
+   "answer": "Kho hiện tại **không đủ** nếu nhu cầu mượn tăng gấp đôi.\n\nDữ liệu cho thấy các yếu tố liên quan đến rủi ro thiếu hụt như sau:\n* **Top sách được mượn cao nhất:** *Norwegian Wood* với 35 lượt và *Luy-Xiêng Và Chú Người Tuyết Cô Độc* với 10 lượt trong 30 ngày qua. Nếu số lượng này tăng gấp đôi, áp lực lên nguồn cung sẽ rất lớn.\n* **Sách có nguy cơ hết hàng:** Hệ thống chỉ ra một đầu sách cần bổ sung ngay là *One Hundred Years of Solitude* (tồn khả dụng 11 bản, thấp hơn ngưỡng tối thiểu 15).\n* **Rủi ro tiềm ẩn:** Mặc dù *Luy-Xiêng Và Chú Người Tuyết Cô Độc* đang có lượt mượn cao thứ hai nhưng chưa"
+  }
+ ]
+}

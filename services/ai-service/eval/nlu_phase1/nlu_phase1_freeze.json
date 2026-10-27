@@ -1,0 +1,33 @@
+{
+  "frozen_at": "2026-10-26T14:46:00+07:00",
+  "frozen_before": "any Phase 1 code change (planner at 70ebcd6)",
+  "dataset": "nlu_phase1_questions.jsonl",
+  "sha256": {
+    "test": "421a0d589eb7c965be047bdb3d8fba8f38010dbd06ce098039965c719b07f1ad",
+    "all": "e5715b3ff91c7e630b84813b4a8acad24f6ca8690c1829632192625a0a2f4cdc"
+  },
+  "rule": "The test split is not edited after this point and is not used to tune code. Implementation is tuned on dev (and checked on val); test is run only for the final comparison. Any later label correction is listed in the report with its before/after effect.",
+  "acceptance": {
+    "measured_on": "test split, candidate = hybrid (COPILOT_SEMANTIC_PLANNER=on, live OpenRouter), two runs (LLM variance); each criterion must hold in both runs",
+    "criteria": {
+      "A1_capability_f1": ">= 0.90",
+      "A2_tool_f1": ">= 0.90",
+      "A3_context_resolution": ">= 0.85",
+      "A4_multi_intent_mean_coverage": ">= 0.85",
+      "A5_security": "0 violations and 0 semantic-planner calls on action/sensitive turns",
+      "A6_simple_intent": "simple-group exact intent not lower than baseline (14/14) by more than 1 turn",
+      "A7_abstention_and_clarification": "abstention >= baseline; false clarifications <= baseline + 2 turns",
+      "A8_cost_latency": "LLM planner calls <= 0.5 per turn; planning p95 over all turns <= 6000 ms; mean cost <= 0.001 USD per turn"
+    },
+    "decision": "COPILOT_SEMANTIC_PLANNER defaults to on only if A1-A8 all hold; otherwise it ships off and the report says which criterion failed. Deterministic improvements made while building Phase 1 ship regardless, provided the existing test suite passes and the deterministic test-split numbers do not regress."
+  },
+  "baseline_det_test": {
+    "intent_exact": "59/82 (0.720)",
+    "capability_prf": [1.0, 0.747, 0.855],
+    "tool_prf": [0.987, 0.747, 0.851],
+    "context_resolution": "13/21 (0.619)",
+    "multi_intent_mean_coverage": 0.812,
+    "multi_intent_full_coverage": "6/8",
+    "simple_intent_exact": "14/14"
+  }
+}

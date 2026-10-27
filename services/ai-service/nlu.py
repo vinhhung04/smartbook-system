@@ -9,6 +9,7 @@ Security: Never sends auth tokens, user profiles, or business data to any LLM.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -362,7 +363,11 @@ async def classify_user_message(
         roles = getattr(user_context, "roles", [])
         if roles:
             role_hint = roles[0]
-    cache_key = f"nlu:{role_hint}:{message[:200]}"
+    # The LLM path reads the conversation history, so its result depends on
+    # it: the history snippet is part of the key ("Còn tháng trước?" after two
+    # different questions must not share one cached classification).
+    history_key = hashlib.sha256(_history_snippet(conversation_history).encode()).hexdigest()[:16]
+    cache_key = f"nlu:{role_hint}:{history_key}:{message[:200]}"
 
     cached = _nlu_cache.get(cache_key)
     if cached:

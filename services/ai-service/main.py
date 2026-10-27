@@ -108,6 +108,7 @@ import action_guard
 import copilot_visualization
 import warehouse_scope
 from copilot_plan import QueryPlan as CopilotPlan, build_plan as build_copilot_plan, next_state as copilot_next_state
+import copilot_semantic_planner
 from copilot_plan import VN_TZ as COPILOT_TZ
 from copilot_visualization import Visualization
 from copilot_response import COPILOT_SYSTEM_PROMPT
@@ -4096,14 +4097,30 @@ async def _run_fast_path_tool(message: str, auth_header: str | None) -> list[dic
     return [result for result in results if result is not None]
 
 
-def _assistant_cache_key(conversation_id: str, message: str, partition: str = "") -> str:
+def _assistant_cache_key(conversation_id: str, message: str, partition: str = "", state: dict | None = None) -> str:
     # Keyed by conversation, not just message text — /assistant now injects each
     # conversation's own history into the prompt, so the same literal question can need a
     # different, context-dependent answer in different conversations. Without conversation_id
     # in the key, a hit here would serve one conversation's cached answer to another.
     # `partition` (Copilot 3.2) is the reader's access fingerprint: an answer cached before
     # their roles, permissions or warehouse scope changed is not served after the change.
-    return f"assistant:{conversation_id}:{partition}:{normalize_text(message.strip())[:200]}"
+    # `state` (Phase 1), for answers to follow-ups only: inside ONE conversation "Tại sao?"
+    # or "Nếu tăng thêm 5 triệu?" mean different things after different turns; keyed
+    # without it, the second "Tại sao?" was served the first one's answer. Answers that did
+    # not depend on the previous turn keep the context-free key (see _cache_lookup).
+    if state is None:
+        return f"assistant:{conversation_id}:{partition}:{normalize_text(message.strip())[:200]}"
+    context = hashlib.sha256(json.dumps(state, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    return f"assistant:{conversation_id}:{partition}:ctx-{context}:{normalize_text(message.strip())[:200]}"
+
+
+def _cache_lookup(free_key: str | None, context_key: str | None) -> dict | None:
+    """A context-free entry answers the question whatever came before; any
+    other entry only for the exact previous-turn state it was made after."""
+    cached = assistant_response_cache.get(free_key) if free_key else None
+    if cached is not None and cached.get("context_free", True):
+        return cached
+    return assistant_response_cache.get(context_key) if context_key else None
 
 
 async def _access_fingerprint(user_ctx) -> str | None:
@@ -4327,16 +4344,29 @@ async def _resolve_owned_conversation(conversation_id: str | None, user_ctx, mes
         raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập hội thoại này.")
 
 
+def _semantic_planner_provider():
+    """The provider the Phase 1 semantic planner asks, or None (no key):
+    then the plan is the rule plan, exactly as before Phase 1."""
+    try:
+        return _get_assistant_provider()
+    except ValueError:
+        return None
+
+
 async def _plan_assistant_turn(message_text: str, state: dict | None, auth_header: str | None):
-    """The copilot's deterministic plan for this turn (copilot_plan.build_plan),
-    with the warehouses this user can see. A planner failure degrades to the
-    pre-copilot behaviour (empty plan -> rule fast path / LLM tool choice),
-    never to a failed request."""
+    """The copilot's plan for this turn, with the warehouses this user can see:
+    the deterministic plan (copilot_plan.build_plan), plus - when
+    COPILOT_SEMANTIC_PLANNER=on and the rules look incomplete - a validated
+    semantic reading (copilot_semantic_planner). Both endpoints plan here. A
+    planner failure degrades to the pre-copilot behaviour (empty plan -> rule
+    fast path / LLM tool choice), never to a failed request."""
     warehouses = await copilot_tools._warehouses(auth_header)
     if not isinstance(warehouses, list):
         warehouses = []
     try:
-        plan = build_copilot_plan(message_text, state, warehouses)
+        plan, _info = await copilot_semantic_planner.plan_turn(
+            message_text, state, warehouses,
+            provider=_semantic_planner_provider() if copilot_semantic_planner.ENABLED else None)
     except Exception:
         logger.exception("copilot planning failed; falling back to the rule fast path")
         plan = CopilotPlan(intent=GENERAL_QUERY)
@@ -4449,7 +4479,7 @@ async def _cached_turn(cached: dict, conversation, conversation_id_str: str, mes
         grounding_warning=cached.get("grounding_warning"),
         metadata=cached.get("metadata"),
     )
-    payload = {key: value for key, value in cached.items() if key != "metadata"}
+    payload = {key: value for key, value in cached.items() if key not in ("metadata", "context_free")}
     payload.update({"conversation_id": conversation_id_str, "pending_action": None,
                     "tools_used": _tool_call_dicts(cached["tools_used"])})
     payload.setdefault("evidence", _collect_evidence(cached["data"]))
@@ -4590,7 +4620,7 @@ async def _finalize_assistant_turn(
     *, message_text: str, answer: str, answered_normally: bool, tools_used: list, collected_data: dict,
     messages: list[dict], provider, call_usage: list[dict], plan, state: dict | None, warehouses: list[dict],
     user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str | None,
-    plan_note_text: str = "", viz_now: datetime | None = None,
+    plan_note_text: str = "", viz_now: datetime | None = None, context_cache_key: str | None = None,
 ) -> dict:
     """Everything after the tool loop, shared by both endpoints: one grounding
     retry, the reorder pending action (still confirmation-gated), the
@@ -4786,10 +4816,14 @@ async def _finalize_assistant_turn(
 
     # A chart follow-up depends on the previous turn's snapshot, not only on
     # its own text - never served from the per-message cache.
-    if cache_key and answered_normally and not pending_action_data and not (plan.visualization or {}).get("mode"):
-        assistant_response_cache.set(cache_key, {
+    # An answer that used the previous turn (follow-up, carried entities) is
+    # cached under the previous-turn state only (Phase 1, see _cache_lookup).
+    context_free = not (plan is not None and (plan.is_followup or plan.carried_over))
+    key = cache_key if context_free else context_cache_key
+    if key and answered_normally and not pending_action_data and not (plan.visualization or {}).get("mode"):
+        assistant_response_cache.set(key, {
             **{k: v for k, v in payload.items() if k not in ("conversation_id", "pending_action", "debug")},
-            "metadata": metadata,
+            "metadata": metadata, "context_free": context_free,
         })
 
     await conversation_store.append_message(
@@ -4828,12 +4862,15 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     conversation_id_str = str(conversation.conversation_id)
     partition = await _access_fingerprint(user_ctx)
     copilot_tools.CACHE_PARTITION.set(partition)
+    history, state = await _load_conversation_context(conversation)
     cache_key = _assistant_cache_key(conversation_id_str, message_text, partition) if partition else None
+    context_cache_key = (_assistant_cache_key(conversation_id_str, message_text, partition, state or {})
+                         if partition else None)
     turn = {
         "auth_header": auth_header, "user_ctx": user_ctx, "message_text": message_text,
         "conversation": conversation, "conversation_id_str": conversation_id_str, "cache_key": cache_key,
-        "cache_partition": partition,
-        "cached": assistant_response_cache.get(cache_key) if cache_key else None,
+        "context_cache_key": context_cache_key, "cache_partition": partition,
+        "cached": _cache_lookup(cache_key, context_cache_key),
     }
     cached = turn["cached"]
     if cached is not None and not await warehouse_scope.can_view(
@@ -4842,7 +4879,6 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if turn["cached"] is not None:
         return turn
 
-    history, state = await _load_conversation_context(conversation)
     plan, warehouses = await _plan_assistant_turn(message_text, state, auth_header)
     turn.update({"history": history, "state": state, "plan": plan, "warehouses": warehouses})
     if plan.clarification_needed:
@@ -4885,6 +4921,9 @@ def _attach_explanation_brief(messages: list[dict], plan, collected_data: dict, 
         # tools the model picks): an answer now could only be invented.
         brief = ("## Chưa có dữ liệu cho câu hỏi này\nChưa có kết quả tool nào. Gọi tool phù hợp trước khi trả lời; "
                  "không trả lời bằng kiến thức chung hay suy đoán (tên sách, số liệu, mức ưu tiên, lý do).")
+    coverage = copilot_response.coverage_note(plan, collected_data)
+    if coverage:
+        brief = f"{brief}\n\n{coverage}" if brief else coverage
     if brief and messages and messages[0].get("role") == "system":
         messages[0] = {**messages[0], "content": f"{messages[0]['content']}\n\n{brief}"}
 
@@ -4956,6 +4995,7 @@ async def assistant(request: Request, req: AssistantRequest):
         collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
         state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
         conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
+        context_cache_key=turn.get("context_cache_key"),
         plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
     )
     return AssistantResponse(**payload)
@@ -5084,6 +5124,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             collected_data=collected_data, messages=messages, provider=provider, call_usage=call_usage, plan=plan,
             state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
             conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
+            context_cache_key=turn.get("context_cache_key"),
             plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
         )
         yield _sse("done", _validated_payload(payload))

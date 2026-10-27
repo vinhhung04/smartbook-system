@@ -7,6 +7,7 @@ README này được tối giản để tránh trùng lặp tài liệu.
 - Chi tiết service-level: ../../docs/SERVICES/AI_SERVICE.md
 - Tổng quan hệ thống: ../../README.md
 - Docker runbook: ../../docs/RUN_WITH_DOCKER.md
+- AI Copilot hiểu câu hỏi (Phase 1, cờ `COPILOT_SEMANTIC_PLANNER`): ../../docs/ANALYSIS/AI_COPILOT_SEMANTIC_UNDERSTANDING.md
 
 ## Chạy nhanh local
 
