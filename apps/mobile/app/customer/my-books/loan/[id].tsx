@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
+import { Alert, Text, View } from 'react-native';
 
 import * as customerBorrowApi from '../../../../src/api/customerBorrow';
 import { ApiError } from '../../../../src/auth/auth-context';
-import { GlowBadge } from '../../../../src/components/customer/GlowBadge';
 import { getDueState, getLoanStatusDisplay, getRenewalView } from '../../../../src/lib/loanStatus';
 import { useSubmitLock } from '../../../../src/lib/submitLock';
-import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/customerTokens';
+import { Button, Card, ErrorState, InfoRow, InlineAlert, LoadingState, Screen, ScreenHeader, SectionHeader, StatusBadge, fontFamily, space, useTheme } from '../../../../src/design-system';
 import type { Loan } from '../../../../src/types/borrow';
 
 export default function CustomerLoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors, type } = useTheme();
   const [loan, setLoan] = useState<Loan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRenewing, setIsRenewing] = useState(false);
@@ -57,181 +56,72 @@ export default function CustomerLoanDetailScreen() {
   const due = loan ? getDueState(loan.due_date, loan.status) : null;
   const renewal = loan ? getRenewalView(loan.status, loan.renewal) : null;
 
+  const title = loan ? `Phiếu ${loan.loan_number}` : 'Chi tiết mượn sách';
+  if (isLoading) {
+    return (<><ScreenHeader title={title} /><Screen scroll={false}><LoadingState /></Screen></>);
+  }
+  if (error || !loan) {
+    return (<><ScreenHeader title={title} /><Screen scroll={false}><ErrorState message={error ?? 'Không tìm thấy lượt mượn'} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} /></Screen></>);
+  }
+
+  const status = getLoanStatusDisplay(loan.status);
+  const daysText = due && due.kind !== 'closed' ? due.label : null;
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: loan?.loan_number ?? 'Chi tiết mượn sách' }} />
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : error || !loan ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error ?? 'Không tìm thấy'}</Text>
-        </View>
-      ) : (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-          <View style={styles.statusRow}>
-            <GlowBadge text={getLoanStatusDisplay(loan.status).label} tone={getLoanStatusDisplay(loan.status).tone} />
-            {due && (due.kind === 'overdue' || due.kind === 'soon') ? (
-              <GlowBadge text={due.label} tone={due.kind === 'overdue' ? 'danger' : 'warning'} />
-            ) : null}
+      <ScreenHeader title={title} />
+      <Screen
+        onRefresh={() => void load()}
+        footer={renewal?.canRequest ? (
+          <Button label="Yêu cầu gia hạn" icon="refresh" loading={isRenewing} loadingLabel="Đang gửi yêu cầu…" onPress={handleRenewRequest} />
+        ) : undefined}
+      >
+        {/* The date that matters, first and large; the rest follows. */}
+        <View style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {status ? <StatusBadge tone={status.tone} label={status.label} /> : null}
+            {due && (due.kind === 'overdue' || due.kind === 'soon') ? <StatusBadge tone={due.kind === 'overdue' ? 'danger' : 'warning'} label={due.label} icon="alarm" /> : null}
           </View>
-          {due?.kind === 'overdue' ? (
-            <Text style={styles.notice}>Sách đã quá hạn trả — phí phạt trả trễ có thể phát sinh theo quy định của thư viện.</Text>
-          ) : null}
+          <Text style={type.caption}>Hạn trả</Text>
+          <Text style={{ fontFamily: fontFamily.serif, fontSize: 34, lineHeight: 40, color: due?.kind === 'overdue' ? colors.danger : colors.textPrimary }}>
+            {new Date(loan.due_date).toLocaleDateString('vi-VN')}
+          </Text>
+          {daysText && due?.kind !== 'overdue' ? <Text style={type.callout}>{daysText}</Text> : null}
+        </View>
 
-          <View style={styles.metaGrid}>
-            <MetaRow label="Ngày mượn" value={new Date(loan.borrow_date).toLocaleDateString('vi-VN')} />
-            <MetaRow label="Hạn trả" value={new Date(loan.due_date).toLocaleDateString('vi-VN')} />
-            <MetaRow label="Số đầu sách" value={String(loan.total_items)} />
-          </View>
+        {due?.kind === 'overdue' ? (
+          <InlineAlert tone="danger" title="Sách đã quá hạn trả" message="Phí phạt trả trễ có thể phát sinh theo quy định của thư viện. Hãy trả sách hoặc gửi yêu cầu gia hạn." />
+        ) : null}
+        {renewal?.note ? <InlineAlert tone="info" message={renewal.note} /> : null}
 
-          {loan.loan_items && loan.loan_items.length > 0 ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Đầu sách trong lượt mượn</Text>
-              {loan.loan_items.map((item) => (
-                <View key={item.id} style={styles.itemRow}>
-                  <View style={styles.itemBody}>
-                    <Text style={styles.itemTitle} numberOfLines={2}>{item.book_title ?? 'Sách chưa có tên'}</Text>
-                    {item.book_author ? <Text style={styles.itemStatus}>{item.book_author}</Text> : null}
-                    <Text style={styles.itemBarcode}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
+        <Card>
+          <InfoRow label="Ngày mượn" value={new Date(loan.borrow_date).toLocaleDateString('vi-VN')} />
+          <InfoRow label="Hạn trả" value={new Date(loan.due_date).toLocaleDateString('vi-VN')} />
+          <InfoRow label="Số đầu sách" value={String(loan.total_items)} />
+          <InfoRow label="Mã phiếu" value={loan.loan_number} mono />
+        </Card>
+
+        {loan.loan_items && loan.loan_items.length > 0 ? (
+          <View style={{ gap: space.md }}>
+            <SectionHeader title="Sách trong lượt mượn" />
+            <Card>
+              {loan.loan_items.map((item, index) => {
+                const itemStatus = getLoanStatusDisplay(item.status as Loan['status']);
+                return (
+                  <View key={item.id} style={{ gap: 4, paddingTop: index > 0 ? space.md : 0, borderTopWidth: index > 0 ? 1 : 0, borderTopColor: colors.border }}>
+                    <Text style={{ fontFamily: fontFamily.serif, fontSize: 17, lineHeight: 22, color: colors.textPrimary }} numberOfLines={2}>{item.book_title ?? 'Sách chưa có tên'}</Text>
+                    {item.book_author ? <Text style={type.caption}>{item.book_author}</Text> : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+                      <Text selectable style={{ fontFamily: fontFamily.mono, fontSize: 13.5, color: colors.textSecondary }}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
+                      {itemStatus ? <StatusBadge tone={itemStatus.tone} label={itemStatus.label} /> : <Text style={type.caption}>{item.status}</Text>}
+                    </View>
                   </View>
-                  <Text style={styles.itemStatus}>{getLoanStatusDisplay(item.status as Loan['status'])?.label ?? item.status}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {renewal?.note ? <Text style={styles.notice}>{renewal.note}</Text> : null}
-
-          {renewal?.canRequest ? (
-            <Pressable
-              style={({ pressed }) => [styles.button, isRenewing && styles.buttonDisabled, pressed && styles.buttonPressed]}
-              onPress={handleRenewRequest}
-              disabled={isRenewing}
-            >
-              <LinearGradient
-                colors={[colors.accentGradientStart, colors.accentGradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-              {isRenewing ? (
-                <ActivityIndicator color={colors.onPrimary} />
-              ) : (
-                <Text style={styles.buttonText}>Yêu cầu gia hạn</Text>
-              )}
-            </Pressable>
-          ) : null}
-        </ScrollView>
-      )}
+                );
+              })}
+            </Card>
+          </View>
+        ) : null}
+      </Screen>
     </>
   );
 }
-
-function MetaRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metaRow}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.bg,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  notice: {
-    ...typography.caption,
-    color: colors.warning,
-  },
-  itemBody: {
-    flex: 1,
-    gap: 2,
-  },
-  itemTitle: {
-    ...typography.bodyBold,
-    fontSize: 15,
-  },
-  metaGrid: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    ...shadow.card,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metaLabel: {
-    ...typography.caption,
-  },
-  metaValue: {
-    ...typography.bodyBold,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionLabel: {
-    ...typography.label,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  itemBarcode: {
-    ...typography.code,
-    fontSize: 13,
-  },
-  itemStatus: {
-    ...typography.caption,
-  },
-  button: {
-    borderRadius: radius.pill,
-    minHeight: 52,
-    justifyContent: 'center',
-    paddingVertical: spacing.md + 4,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  buttonPressed: {
-    opacity: 0.9,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    fontFamily: typography.h3.fontFamily,
-    color: colors.onPrimary,
-    fontSize: 16,
-  },
-});

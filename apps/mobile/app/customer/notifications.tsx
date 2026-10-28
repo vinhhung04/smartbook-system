@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import * as engagementApi from '../../src/api/customerEngagement';
@@ -9,7 +9,7 @@ import { ApiError } from '../../src/auth/auth-context';
 import { usePagedList } from '../../src/hooks/usePagedList';
 import { setUnreadCount, useUnreadNotifications } from '../../src/hooks/useUnreadNotifications';
 import { notificationTarget } from '../../src/lib/notificationTarget';
-import { colors, fonts, radius, spacing, typography } from '../../src/theme/customerTokens';
+import { EmptyState, ErrorState, FilterChips, InlineAlert, PressableScale, ScreenHeader, Skeleton, fontFamily, radii, space, useTheme } from '../../src/design-system';
 
 type Filter = 'all' | 'unread';
 const PAGE_SIZE = 20;
@@ -30,6 +30,7 @@ function timeLabel(iso: string): string {
 }
 
 export default function CustomerNotificationsScreen() {
+  const { colors, type } = useTheme();
   const [filter, setFilter] = useState<Filter>('all');
   // Rows read on this screen, so they turn "read" immediately without refetching the page.
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
@@ -76,86 +77,79 @@ export default function CustomerNotificationsScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Thông báo',
-          headerRight: () =>
-            unread.count > 0 ? (
-              <Pressable onPress={handleMarkAll} hitSlop={10} disabled={markingAll} accessibilityRole="button" accessibilityLabel="Đánh dấu tất cả đã đọc">
-                {markingAll ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={styles.headerAction}>Đọc tất cả</Text>}
-              </Pressable>
-            ) : null,
-        }}
+      <ScreenHeader
+        title="Thông báo"
+        right={unread.count > 0 ? (
+          <Pressable
+            onPress={handleMarkAll}
+            disabled={markingAll}
+            accessibilityRole="button"
+            accessibilityLabel="Đánh dấu tất cả đã đọc"
+            style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: space.xs }}
+          >
+            {markingAll ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={{ fontFamily: fontFamily.semibold, fontSize: 15, color: colors.primary }}>Đọc tất cả</Text>}
+          </Pressable>
+        ) : undefined}
       />
-      <View style={styles.container}>
-        <View style={styles.filters}>
-          {(['all', 'unread'] as const).map((key) => (
-            <Pressable
-              key={key}
-              style={[styles.chip, filter === key && styles.chipActive]}
-              onPress={() => setFilter(key)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: filter === key }}
-            >
-              <Text style={[styles.chipText, filter === key && styles.chipTextActive]}>
-                {key === 'all' ? 'Tất cả' : `Chưa đọc${unread.count > 0 ? ` (${unread.count})` : ''}`}
-              </Text>
-            </Pressable>
-          ))}
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm }}>
+          <FilterChips
+            accessibilityLabel="Lọc thông báo"
+            value={filter}
+            onChange={setFilter}
+            options={[{ value: 'all', label: 'Tất cả' }, { value: 'unread', label: 'Chưa đọc', count: unread.count > 0 ? unread.count : undefined }]}
+          />
         </View>
 
         {list.loadingInitial && list.items.length === 0 ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
+          <View style={{ padding: space.lg, gap: space.md }} accessibilityLabel="Đang tải">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} height={82} radius={radii.md} />)}
           </View>
         ) : list.error && list.items.length === 0 ? (
-          <View style={styles.center}>
-            <Text style={styles.error}>{list.error}</Text>
-            <Pressable style={styles.retry} onPress={list.retry} accessibilityRole="button">
-              <Text style={styles.headerAction}>Thử lại</Text>
-            </Pressable>
-          </View>
+          <ErrorState message={list.error} onRetry={list.retry} />
         ) : (
           <FlatList
             data={list.items}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={{ padding: space.lg, paddingTop: space.sm, paddingBottom: space.xxl, gap: space.sm, flexGrow: 1 }}
             refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={() => void list.refresh()} tintColor={colors.primary} colors={[colors.primary]} />}
             onEndReached={list.loadMore}
             onEndReachedThreshold={0.4}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
             ListEmptyComponent={
-              <View style={styles.center}>
-                <Ionicons name="notifications-off-outline" size={28} color={colors.textMuted} />
-                <Text style={styles.empty}>{filter === 'unread' ? 'Bạn đã đọc hết thông báo.' : 'Chưa có thông báo nào.'}</Text>
-              </View>
+              <EmptyState icon="notifications-off-outline" title={filter === 'unread' ? 'Bạn đã đọc hết thông báo' : 'Chưa có thông báo nào'} message="Thư viện sẽ báo ở đây khi sách sẵn sàng, sắp đến hạn trả hoặc có sách bạn chờ." />
             }
             ListFooterComponent={
-              list.loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footer} /> : list.error ? (
-                <Pressable onPress={list.retry} style={styles.footer} accessibilityRole="button">
-                  <Text style={styles.error}>Không tải thêm được · Thử lại</Text>
-                </Pressable>
+              list.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginVertical: space.lg }} /> : list.error ? (
+                <InlineAlert message="Không tải thêm được thông báo." actionLabel="Thử lại" onAction={list.retry} />
               ) : null
             }
             renderItem={({ item }) => {
               const read = isRead(item);
               const target = notificationTarget(item);
               return (
-                <Pressable
-                  style={({ pressed }) => [styles.row, !read && styles.rowUnread, pressed && styles.pressed]}
+                <PressableScale
                   onPress={() => void handleOpen(item)}
+                  scale={false}
                   accessibilityRole="button"
                   accessibilityLabel={`${read ? '' : 'Chưa đọc. '}${item.subject ?? ''} ${item.body}`}
+                  style={{
+                    flexDirection: 'row', gap: space.md, padding: space.lg, borderRadius: radii.md,
+                    backgroundColor: read ? colors.surface : colors.primarySoft, borderWidth: 1, borderColor: read ? colors.border : 'transparent',
+                  }}
+                  pressedStyle={{ backgroundColor: colors.surfaceRaised }}
                 >
-                  <View style={[styles.dot, read && styles.dotRead]} />
-                  <View style={styles.body}>
-                    {item.subject ? <Text style={[styles.subject, !read && styles.subjectUnread]} numberOfLines={2}>{item.subject}</Text> : null}
-                    <Text style={styles.text} numberOfLines={3}>{item.body}</Text>
-                    <Text style={styles.time}>{timeLabel(item.scheduled_at)}</Text>
+                  <View style={{ width: 10, paddingTop: 6 }}>
+                    {!read ? <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors.primary }} /> : null}
                   </View>
-                  {target ? <Ionicons name="chevron-forward" size={18} color={colors.textMuted} /> : null}
-                </Pressable>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    {item.subject ? (
+                      <Text style={{ fontFamily: read ? fontFamily.medium : fontFamily.bold, fontSize: 15.5, lineHeight: 21, color: colors.textPrimary }} numberOfLines={2}>{item.subject}</Text>
+                    ) : null}
+                    <Text style={[type.caption, { color: colors.textSecondary }]} numberOfLines={3}>{item.body}</Text>
+                    <Text style={{ fontFamily: fontFamily.medium, fontSize: 12.5, color: colors.textMuted }}>{timeLabel(item.scheduled_at)}</Text>
+                  </View>
+                  {target ? <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={{ alignSelf: 'center' }} /> : null}
+                </PressableScale>
               );
             }}
           />
@@ -164,118 +158,3 @@ export default function CustomerNotificationsScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  headerAction: {
-    fontFamily: fonts.bodySemibold,
-    color: colors.primary,
-    fontSize: 14,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  chip: {
-    minHeight: 34,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.primarySoft,
-  },
-  chipText: {
-    ...typography.caption,
-  },
-  chipTextActive: {
-    color: colors.primary,
-    fontFamily: fonts.bodySemibold,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.sm,
-  },
-  error: {
-    color: colors.danger,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  retry: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  list: {
-    padding: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xxl,
-    flexGrow: 1,
-  },
-  separator: {
-    height: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  rowUnread: {
-    backgroundColor: colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
-  },
-  dotRead: {
-    backgroundColor: 'transparent',
-  },
-  body: {
-    flex: 1,
-    gap: 2,
-  },
-  subject: {
-    ...typography.bodyBold,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  subjectUnread: {
-    color: colors.textPrimary,
-  },
-  text: {
-    ...typography.caption,
-  },
-  time: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  empty: {
-    ...typography.caption,
-    textAlign: 'center',
-  },
-  footer: {
-    padding: spacing.lg,
-  },
-});

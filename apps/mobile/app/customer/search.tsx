@@ -1,16 +1,39 @@
 import { useEffect, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { PosterCard } from '../../src/components/customer/PosterCard';
-import { colors, radius, spacing, typography } from '../../src/theme/customerTokens';
+import { BookCover } from '../../src/components/customer/BookCover';
 import { useCatalogPages } from '../../src/hooks/useCatalogPages';
+import {
+  EmptyState, ErrorState, IconButton, InlineAlert, PressableScale, ScreenHeader, SearchField, Skeleton, StatusBadge, fontFamily, radii, space, useTheme,
+} from '../../src/design-system';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
+function Chip({ label, active, icon, onPress, accessibilityLabel }: { label: string; active?: boolean; icon?: 'close' | 'sparkles-outline' | 'checkmark'; onPress: () => void; accessibilityLabel?: string }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: Boolean(active) }}
+      accessibilityLabel={accessibilityLabel ?? label}
+      style={{
+        minHeight: 40, paddingHorizontal: space.md, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: radii.pill,
+        backgroundColor: active ? colors.textPrimary : colors.surface, borderWidth: 1, borderColor: active ? colors.textPrimary : colors.border,
+      }}
+    >
+      {icon && icon !== 'close' ? <Ionicons name={icon} size={15} color={active ? colors.surface : colors.primary} /> : null}
+      <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: active ? colors.surface : colors.textPrimary }}>{label}</Text>
+      {icon === 'close' ? <Ionicons name="close" size={15} color={active ? colors.surface : colors.textPrimary} /> : null}
+    </PressableScale>
+  );
+}
+
 export default function CustomerSearchScreen() {
-  // Opened from a home "Danh mục" tile: browse that category without typing.
+  const { colors, type } = useTheme();
+  // Opened from a home "Thể loại" tile: browse that category without typing.
   const params = useLocalSearchParams<{ category?: string; categoryName?: string }>();
   const [category, setCategory] = useState<{ slug: string; name: string } | null>(
     params.category ? { slug: String(params.category), name: String(params.categoryName ?? params.category) } : null,
@@ -32,202 +55,108 @@ export default function CustomerSearchScreen() {
       : null,
   );
   const isTyping = search.trim() !== term;
+  const querying = Boolean(search.trim() || category);
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Tìm kiếm',
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push('/customer/scan-cover')}
-              hitSlop={8}
-              accessibilityLabel="Tìm sách bằng ảnh bìa"
-            >
-              <Ionicons name="camera-outline" size={22} color={colors.textPrimary} />
-            </Pressable>
-          ),
-        }}
+      <ScreenHeader
+        title="Tìm sách"
+        right={<IconButton icon="camera-outline" accessibilityLabel="Tìm sách bằng ảnh bìa" onPress={() => router.push('/customer/scan-cover')} />}
       />
-      <View style={styles.container}>
-        <TextInput
-          style={styles.search}
-          placeholder="Tìm theo tên sách, tác giả..."
-          placeholderTextColor={colors.textMuted}
-          value={search}
-          onChangeText={setSearch}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus={!category}
-          returnKeyType="search"
-          accessibilityLabel="Tìm sách"
-        />
-        <View style={styles.filters}>
-          {category ? (
-            <Pressable style={[styles.filterChip, styles.filterChipActive]} onPress={() => setCategory(null)} accessibilityRole="button" accessibilityLabel={`Bỏ lọc danh mục ${category.name}`}>
-              <Text style={styles.filterChipTextActive}>{category.name}</Text>
-              <Ionicons name="close" size={14} color={colors.primary} />
-            </Pressable>
-          ) : null}
-          <Pressable
-            style={[styles.filterChip, availableOnly && styles.filterChipActive]}
-            onPress={() => setAvailableOnly((value) => !value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: availableOnly }}
-          >
-            <Text style={availableOnly ? styles.filterChipTextActive : styles.filterChipText}>Chỉ sách còn</Text>
-          </Pressable>
-          <Pressable style={styles.filterChip} onPress={() => router.push('/customer/assistant')} accessibilityRole="button">
-            <Ionicons name="sparkles-outline" size={14} color={colors.textSecondary} />
-            <Text style={styles.filterChipText}>Mô tả bằng lời</Text>
-          </Pressable>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.md, gap: space.md }}>
+          <SearchField
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Tên sách, tác giả…"
+            autoCapitalize="none"
+            autoFocus={!category}
+            accessibilityLabel="Tìm sách"
+          />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            {category ? <Chip label={category.name} active icon="close" onPress={() => setCategory(null)} accessibilityLabel={`Bỏ lọc thể loại ${category.name}`} /> : null}
+            <Chip label="Chỉ sách còn" active={availableOnly} icon={availableOnly ? 'checkmark' : undefined} onPress={() => setAvailableOnly((value) => !value)} />
+            <Chip label="Mô tả bằng lời" icon="sparkles-outline" onPress={() => router.push('/customer/assistant')} accessibilityLabel="Mô tả cuốn sách bằng lời cho trợ lý" />
+          </View>
         </View>
 
-        {(catalog.loadingInitial || (isTyping && catalog.items.length === 0)) && (search.trim() || category) ? (
-          <ActivityIndicator color={colors.primary} style={styles.spinner} />
+        {!querying ? (
+          <EmptyState
+            icon="search-outline"
+            title="Tìm trong thư viện"
+            message="Gõ tên sách hoặc tác giả. Không nhớ tên? Hãy mô tả nội dung, hoặc chụp ảnh bìa."
+            actionLabel="Tìm bằng ảnh bìa"
+            onAction={() => router.push('/customer/scan-cover')}
+          />
+        ) : (catalog.loadingInitial || (isTyping && catalog.items.length === 0)) ? (
+          <View style={{ paddingHorizontal: space.lg, gap: space.md }} accessibilityLabel="Đang tìm">
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={{ flexDirection: 'row', gap: space.md }}>
+                <Skeleton width={64} height={96} />
+                <View style={{ flex: 1, gap: space.sm, paddingTop: space.sm }}>
+                  <Skeleton width="80%" height={16} />
+                  <Skeleton width="50%" height={13} />
+                </View>
+              </View>
+            ))}
+          </View>
         ) : catalog.error && catalog.items.length === 0 ? (
-          <Pressable onPress={catalog.retry} accessibilityRole="button">
-            <Text style={styles.error}>{catalog.error} · Thử lại</Text>
-          </Pressable>
+          <ErrorState message={catalog.error} onRetry={catalog.retry} />
         ) : (
           <FlatList
             data={catalog.items}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl, gap: space.sm }}
             // Guarded in the loader: ignored while a page is loading or after the last page.
             onEndReached={catalog.loadMore}
             onEndReachedThreshold={0.5}
-            ListHeaderComponent={
-              (term || category) && catalog.total > 0 ? <Text style={styles.count}>{catalog.total} kết quả</Text> : null
-            }
+            ListHeaderComponent={(term || category) && catalog.total > 0 ? <Text style={[type.caption, { marginBottom: space.xs }]}>{catalog.total} kết quả</Text> : null}
             ListFooterComponent={
               catalog.loadingMore ? (
-                <ActivityIndicator color={colors.primary} style={styles.footer} />
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: space.lg }} />
               ) : catalog.error ? (
-                <Pressable onPress={catalog.retry} accessibilityRole="button" style={styles.footer}>
-                  <Text style={styles.error}>Không tải thêm được · Thử lại</Text>
-                </Pressable>
+                <InlineAlert message="Không tải thêm được kết quả." actionLabel="Thử lại" onAction={catalog.retry} />
               ) : null
             }
             ListEmptyComponent={
-              term && !isTyping ? <Text style={styles.empty}>Không tìm thấy sách phù hợp</Text> : null
-            }
-            renderItem={({ item }) => (
-              <View style={styles.row}>
-                <PosterCard
-                  title={item.title}
-                  category={item.category}
-                  coverImageUrl={item.cover_image_url}
-                  width={80}
-                  height={120}
-                  onPress={() => router.push(`/customer/book/${item.id}`)}
+              term && !isTyping ? (
+                <EmptyState
+                  icon="book-outline"
+                  title="Không có sách khớp với từ khoá"
+                  message="Thử từ khoá ngắn hơn, bỏ bớt bộ lọc, hoặc mô tả nội dung để trợ lý tìm giúp."
+                  actionLabel="Mô tả bằng lời"
+                  onAction={() => router.push('/customer/assistant')}
                 />
-                <View style={styles.rowBody}>
-                  <Text style={styles.rowTitle} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.rowMeta} numberOfLines={1}>
-                    {item.author ?? 'Chưa rõ tác giả'}
-                    {item.category ? ` · ${item.category}` : ''}
-                  </Text>
-                  <Text style={styles.rowAvailability}>
-                    {item.available_quantity > 0 ? `Còn ${item.available_quantity} cuốn` : 'Hết sách'}
-                  </Text>
-                </View>
-              </View>
-            )}
+              ) : null
+            }
+            renderItem={({ item }) => {
+              const available = item.available_quantity > 0;
+              return (
+                <PressableScale
+                  onPress={() => router.push(`/customer/book/${item.id}`)}
+                  scale={false}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.title}, ${item.author ?? 'chưa rõ tác giả'}, ${available ? `còn ${item.available_quantity} cuốn` : 'hết sách'}`}
+                  style={{ flexDirection: 'row', gap: space.md, padding: space.sm, borderRadius: radii.md }}
+                  pressedStyle={{ backgroundColor: colors.surfaceRaised }}
+                >
+                  <BookCover title={item.title} author={item.author} category={item.category} coverImageUrl={item.cover_image_url} width={64} />
+                  <View style={{ flex: 1, justifyContent: 'center', gap: 4 }}>
+                    <Text style={{ fontFamily: fontFamily.serif, fontSize: 17, lineHeight: 22, color: colors.textPrimary }} numberOfLines={2}>{item.title}</Text>
+                    <Text style={type.caption} numberOfLines={1}>
+                      {item.author ?? 'Chưa rõ tác giả'}{item.category ? `, ${item.category}` : ''}
+                    </Text>
+                    <StatusBadge tone={available ? 'success' : 'neutral'} label={available ? `Còn ${item.available_quantity} cuốn` : 'Hết sách'} icon={available ? 'checkmark-circle' : null} />
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={{ alignSelf: 'center' }} />
+                </PressableScale>
+              );
+            }}
           />
         )}
       </View>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    padding: spacing.lg,
-  },
-  search: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    fontSize: 15,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
-  },
-  filters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    minHeight: 34,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  filterChipActive: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.primarySoft,
-  },
-  filterChipText: {
-    ...typography.caption,
-  },
-  filterChipTextActive: {
-    ...typography.caption,
-    color: colors.primary,
-  },
-  spinner: {
-    marginTop: spacing.xl,
-  },
-  error: {
-    color: colors.danger,
-    textAlign: 'center',
-    marginTop: spacing.xl,
-  },
-  count: {
-    ...typography.caption,
-  },
-  footer: {
-    paddingVertical: spacing.lg,
-  },
-  list: {
-    gap: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    marginTop: spacing.xl,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  rowBody: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  rowTitle: {
-    ...typography.bodyBold,
-  },
-  rowMeta: {
-    ...typography.caption,
-  },
-  rowAvailability: {
-    ...typography.caption,
-    color: colors.primary,
-  },
-});

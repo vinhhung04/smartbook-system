@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, Alert, FlatList, RefreshControl, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import * as customerBorrowApi from '../../../src/api/customerBorrow';
 import { ApiError } from '../../../src/auth/auth-context';
@@ -11,8 +10,9 @@ import { usePagedList } from '../../../src/hooks/usePagedList';
 import { getDueState, getLoanStatusDisplay, getRenewalView } from '../../../src/lib/loanStatus';
 import { getReservationStatusDisplay } from '../../../src/lib/reservationStatus';
 import { useSubmitLock } from '../../../src/lib/submitLock';
-import { useCustomerTabBarSpace } from '../../../src/hooks/useCustomerTabBarSpace';
-import { colors, fonts, radius, spacing, typography } from '../../../src/theme/customerTokens';
+import {
+  Button, EmptyState, ErrorState, FilterChips, InlineAlert, PageTitle, SegmentedControl, Skeleton, radii, space, useTheme,
+} from '../../../src/design-system';
 import type { BorrowListScope, Loan, Reservation } from '../../../src/types/borrow';
 
 type Segment = 'loans' | 'reservations';
@@ -33,7 +33,8 @@ const fetchReservations = async (params: { scope: BorrowListScope }, page: numbe
 };
 
 export default function CustomerMyBooksScreen() {
-  const tabBarSpace = useCustomerTabBarSpace();
+  const { colors, type } = useTheme();
+  const insets = useSafeAreaInsets();
   const [segment, setSegment] = useState<Segment>('loans');
   const [scope, setScope] = useState<BorrowListScope>('active');
   const [renewingId, setRenewingId] = useState<string | null>(null);
@@ -103,15 +104,18 @@ export default function CustomerMyBooksScreen() {
         accessibilityLabel={`${title ?? 'Sách'}, ${status?.label ?? loan.status}, hạn trả ${formatDate(loan.due_date)}${due.label ? `, ${due.label}` : ''}`}
         actions={
           renewal.canRequest ? (
-            <Pressable
-              style={styles.action}
-              onPress={() => void handleRenew(loan)}
+            <Button
+              label="Gia hạn"
+              icon="refresh"
+              variant="secondary"
+              size="md"
+              fullWidth={false}
+              loading={renewingId === loan.id}
+              loadingLabel="Đang gửi…"
               disabled={renewingId !== null}
-              accessibilityRole="button"
+              onPress={() => void handleRenew(loan)}
               accessibilityLabel={`Yêu cầu gia hạn ${title ?? ''}`}
-            >
-              {renewingId === loan.id ? <ActivityIndicator size="small" color={colors.primary} /> : <Text style={styles.actionText}>Gia hạn</Text>}
-            </Pressable>
+            />
           ) : null
         }
       />
@@ -139,14 +143,13 @@ export default function CustomerMyBooksScreen() {
         accessibilityLabel={`${reservation.book_title ?? 'Sách'}, ${status?.label ?? reservation.status}`}
         actions={
           ready && reservation.pickup_code ? (
-            <Pressable
-              style={styles.action}
+            <Button
+              label="Xem mã QR nhận sách"
+              icon="qr-code-outline"
+              size="md"
+              fullWidth={false}
               onPress={() => router.push(`/customer/my-books/reservation/${reservation.id}`)}
-              accessibilityRole="button"
-            >
-              <Ionicons name="qr-code-outline" size={14} color={colors.primary} />
-              <Text style={styles.actionText}>Xem mã QR nhận sách</Text>
-            </Pressable>
+            />
           ) : null
         }
       />
@@ -159,223 +162,59 @@ export default function CustomerMyBooksScreen() {
       : scope === 'active' ? 'Bạn không có phiếu đặt trước nào đang chờ.' : 'Chưa có lịch sử đặt trước.';
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">Sách của tôi</Text>
-        <View style={styles.segmentControl} accessibilityRole="tablist">
-          <SegmentButton label="Đang mượn" active={segment === 'loans'} onPress={() => setSegment('loans')} />
-          <SegmentButton label="Đặt trước" active={segment === 'reservations'} onPress={() => setSegment('reservations')} />
-        </View>
-        <View style={styles.scopeRow}>
-          <ScopeChip label="Hiện tại" active={scope === 'active'} onPress={() => setScope('active')} />
-          <ScopeChip label="Lịch sử" active={scope === 'history'} onPress={() => setScope('history')} />
-          {list.total > 0 ? <Text style={styles.total}>{list.total} mục</Text> : null}
-        </View>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.lg }}>
+        <PageTitle title="Sách của tôi" subtitle={list.total > 0 ? `${list.total} ${segment === 'loans' ? 'lượt mượn' : 'phiếu đặt'} ${scope === 'active' ? 'hiện tại' : 'trong lịch sử'}` : undefined} />
+        <SegmentedControl
+          accessibilityLabel="Loại sách"
+          value={segment}
+          onChange={setSegment}
+          options={[{ value: 'loans', label: 'Đang mượn' }, { value: 'reservations', label: 'Đặt trước' }]}
+        />
+        <FilterChips
+          accessibilityLabel="Thời gian"
+          value={scope}
+          onChange={setScope}
+          options={[{ value: 'active', label: 'Hiện tại' }, { value: 'history', label: 'Lịch sử' }]}
+        />
       </View>
 
       {list.loadingInitial && list.items.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+        <View style={{ paddingHorizontal: space.lg, gap: space.md }} accessibilityLabel="Đang tải">
+          {[0, 1, 2].map((i) => <Skeleton key={i} height={128} radius={radii.lg} />)}
         </View>
       ) : list.error && list.items.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{list.error}</Text>
-          <Pressable style={styles.retry} onPress={list.retry} accessibilityRole="button">
-            <Text style={styles.actionText}>Thử lại</Text>
-          </Pressable>
-        </View>
+        <ErrorState message={list.error} onRetry={list.retry} />
       ) : (
         <FlatList<Loan | Reservation>
           data={list.items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.list, { paddingBottom: tabBarSpace }]}
+          contentContainerStyle={{ paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xxl, gap: space.md }}
           refreshControl={<RefreshControl refreshing={list.refreshing} onRefresh={() => void list.refresh()} tintColor={colors.primary} colors={[colors.primary]} />}
           onEndReached={list.loadMore}
           onEndReachedThreshold={0.4}
           removeClippedSubviews
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <Ionicons name={segment === 'loans' ? 'book-outline' : 'bookmark-outline'} size={28} color={colors.textMuted} />
-              <Text style={styles.empty}>{emptyText}</Text>
-              {scope === 'active' ? (
-                <Pressable style={styles.retry} onPress={() => router.push('/customer')} accessibilityRole="button">
-                  <Text style={styles.actionText}>Khám phá sách</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            <EmptyState
+              icon={segment === 'loans' ? 'book-outline' : 'bookmark-outline'}
+              title={emptyText}
+              message={scope === 'active' ? 'Tìm một cuốn sách và đặt trước, thư viện sẽ giữ sách cho bạn.' : undefined}
+              actionLabel={scope === 'active' ? 'Khám phá sách' : undefined}
+              onAction={scope === 'active' ? () => router.push('/customer') : undefined}
+            />
           }
           ListFooterComponent={
             list.loadingMore ? (
-              <ActivityIndicator color={colors.primary} style={styles.footer} />
+              <ActivityIndicator color={colors.primary} style={{ marginVertical: space.lg }} />
             ) : list.error ? (
-              <Pressable style={styles.footerRetry} onPress={list.retry} accessibilityRole="button">
-                <Text style={styles.error}>{list.error} — chạm để thử lại</Text>
-              </Pressable>
+              <InlineAlert message={list.error} actionLabel="Thử lại" onAction={list.retry} />
             ) : list.items.length > 0 && !list.hasNextPage ? (
-              <Text style={styles.footerText}>Đã hiển thị tất cả {list.total} mục</Text>
+              <Text style={[type.caption, { textAlign: 'center', marginTop: space.sm }]}>Đã hiển thị tất cả {list.total} mục</Text>
             ) : null
           }
           renderItem={({ item }) => (segment === 'loans' ? renderLoan(item as Loan) : renderReservation(item as Reservation))}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
-
-function SegmentButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      style={[styles.segmentButton, active && styles.segmentButtonActive]}
-      onPress={onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
-    >
-      <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function ScopeChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      style={[styles.chip, active && styles.chipActive]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-    gap: spacing.md,
-  },
-  title: {
-    ...typography.h2,
-  },
-  segmentControl: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.sm,
-    padding: 4,
-  },
-  segmentButton: {
-    flex: 1,
-    minHeight: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: radius.sm - 2,
-  },
-  segmentButtonActive: {
-    backgroundColor: colors.surface,
-  },
-  segmentButtonText: {
-    ...typography.caption,
-    fontFamily: fonts.bodySemibold,
-  },
-  segmentButtonTextActive: {
-    color: colors.primary,
-  },
-  scopeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  chip: {
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.primarySoft,
-  },
-  chipText: {
-    ...typography.caption,
-  },
-  chipTextActive: {
-    color: colors.primary,
-    fontFamily: fonts.bodySemibold,
-  },
-  total: {
-    ...typography.caption,
-    marginLeft: 'auto',
-    color: colors.textMuted,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 120,
-  },
-  separator: {
-    height: spacing.sm,
-  },
-  emptyBox: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.xl,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-  },
-  actionText: {
-    fontFamily: fonts.bodySemibold,
-    fontSize: 13,
-    color: colors.primary,
-  },
-  retry: {
-    minHeight: 44,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    justifyContent: 'center',
-  },
-  footer: {
-    marginVertical: spacing.lg,
-  },
-  footerRetry: {
-    padding: spacing.lg,
-  },
-  footerText: {
-    ...typography.caption,
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-});

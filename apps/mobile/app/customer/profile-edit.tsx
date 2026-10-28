@@ -1,21 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 
 import * as customerProfileApi from '../../src/api/customerProfile';
 import { ApiError } from '../../src/auth/auth-context';
 import { draftFromProfile, validateProfileDraft, type ProfileDraft } from '../../src/lib/profileForm';
 import { useSubmitLock } from '../../src/lib/submitLock';
-import { colors, fonts, radius, spacing, typography } from '../../src/theme/customerTokens';
+import { Button, ErrorState, InlineAlert, LoadingState, ScreenHeader, TextField, space, useTheme, type IconName } from '../../src/design-system';
 
-const FIELDS: { key: keyof ProfileDraft; label: string; placeholder: string; keyboard?: 'phone-pad' | 'numbers-and-punctuation'; multiline?: boolean }[] = [
-  { key: 'full_name', label: 'Họ và tên *', placeholder: 'Nguyễn Văn An' },
-  { key: 'phone', label: 'Số điện thoại', placeholder: '0901 234 567', keyboard: 'phone-pad' },
-  { key: 'birth_date', label: 'Ngày sinh (YYYY-MM-DD)', placeholder: '2000-05-01', keyboard: 'numbers-and-punctuation' },
-  { key: 'address', label: 'Địa chỉ', placeholder: 'Số nhà, đường, quận/huyện, tỉnh/thành', multiline: true },
+const FIELDS: {
+  key: keyof ProfileDraft; label: string; placeholder: string; icon: IconName; hint?: string;
+  keyboard?: 'phone-pad' | 'numbers-and-punctuation'; multiline?: boolean; autoComplete?: 'name' | 'tel' | 'birthdate-full' | 'street-address';
+}[] = [
+  { key: 'full_name', label: 'Họ và tên', placeholder: 'Nguyễn Văn An', icon: 'person-outline', autoComplete: 'name' },
+  { key: 'phone', label: 'Số điện thoại', placeholder: '0901 234 567', icon: 'call-outline', keyboard: 'phone-pad', autoComplete: 'tel' },
+  { key: 'birth_date', label: 'Ngày sinh', placeholder: '2000-05-01', icon: 'calendar-outline', hint: 'Năm-tháng-ngày, ví dụ 2000-05-01.', keyboard: 'numbers-and-punctuation', autoComplete: 'birthdate-full' },
+  { key: 'address', label: 'Địa chỉ', placeholder: 'Số nhà, đường, quận/huyện, tỉnh/thành', icon: 'home-outline', multiline: true, autoComplete: 'street-address' },
 ];
 
 export default function CustomerProfileEditScreen() {
+  const { colors, type } = useTheme();
   const [original, setOriginal] = useState<ProfileDraft | null>(null);
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -62,66 +66,45 @@ export default function CustomerProfileEditScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Sửa thông tin' }} />
+      <ScreenHeader title="Sửa thông tin" />
       {!draft ? (
-        <View style={styles.center}>
-          {loadError ? <Text style={styles.error}>{loadError}</Text> : <ActivityIndicator color={colors.primary} />}
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+          {loadError ? <ErrorState title="Không mở được thông tin" message={loadError} onRetry={() => router.replace('/customer/profile-edit')} /> : <LoadingState />}
         </View>
       ) : (
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
+            keyboardShouldPersistTaps="handled"
+            contentInsetAdjustmentBehavior="automatic"
+          >
             {FIELDS.map((field) => (
-              <View key={field.key} style={styles.field}>
-                <Text style={styles.label}>{field.label}</Text>
-                <TextInput
-                  style={[styles.input, field.multiline && styles.multiline, fieldError?.field === field.key && styles.inputError]}
-                  value={draft[field.key]}
-                  onChangeText={(text) => setDraft((current) => (current ? { ...current, [field.key]: text } : current))}
-                  placeholder={field.placeholder}
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType={field.keyboard}
-                  multiline={field.multiline}
-                  editable={!saving}
-                  autoCapitalize={field.key === 'full_name' ? 'words' : 'none'}
-                  accessibilityLabel={field.label}
-                />
-                {fieldError?.field === field.key ? <Text style={styles.error}>{fieldError.message}</Text> : null}
-              </View>
+              <TextField
+                key={field.key}
+                label={field.label}
+                icon={field.icon}
+                hint={field.hint}
+                value={draft[field.key]}
+                onChangeText={(text) => {
+                  setDraft((current) => (current ? { ...current, [field.key]: text } : current));
+                  if (fieldError?.field === field.key) setFieldError(null);
+                }}
+                placeholder={field.placeholder}
+                keyboardType={field.keyboard}
+                multiline={field.multiline}
+                autoComplete={field.autoComplete}
+                editable={!saving}
+                autoCapitalize={field.key === 'full_name' ? 'words' : 'none'}
+                error={fieldError?.field === field.key ? fieldError.message : null}
+              />
             ))}
-            <Text style={styles.hint}>Email đăng nhập và mã thẻ thư viện chỉ thư viện mới thay đổi được.</Text>
-            {fieldError && !fieldError.field ? <Text style={styles.error}>{fieldError.message}</Text> : null}
-            <Pressable style={[styles.button, saving && styles.disabled]} onPress={handleSave} disabled={saving} accessibilityRole="button">
-              {saving ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.buttonText}>Lưu thay đổi</Text>}
-            </Pressable>
+            <Text style={type.caption}>Email đăng nhập và mã thẻ thư viện chỉ thư viện mới thay đổi được.</Text>
+            {fieldError && !fieldError.field ? <InlineAlert message={fieldError.message} /> : null}
+            <Button label="Lưu thay đổi" icon="checkmark" loading={saving} loadingLabel="Đang lưu…" onPress={handleSave} />
           </ScrollView>
         </KeyboardAvoidingView>
       )}
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, padding: spacing.lg },
-  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
-  field: { gap: spacing.xs },
-  label: { ...typography.label },
-  input: {
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    color: colors.textPrimary,
-    fontFamily: fonts.body,
-    fontSize: 16,
-  },
-  multiline: { minHeight: 88, paddingTop: spacing.md, textAlignVertical: 'top' },
-  inputError: { borderColor: colors.dangerBorder },
-  error: { color: colors.danger, fontWeight: '600' },
-  hint: { ...typography.caption },
-  button: { minHeight: 52, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  buttonText: { fontFamily: fonts.bodySemibold, color: colors.onPrimary, fontSize: 16 },
-  disabled: { opacity: 0.6 },
-});

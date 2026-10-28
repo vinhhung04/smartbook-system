@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { cubicBezier, useReducedMotion } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,6 +9,23 @@ import { fontFamily, motion, radii, size, space } from '../tokens';
 export type IconName = keyof typeof Ionicons.glyphMap;
 
 const PRESS_EASE = cubicBezier(0.23, 1, 0.32, 1);
+
+/** Keys that size or place the control among its siblings: they belong on the outer Pressable. */
+const OUTER_KEYS = ['flex', 'flexGrow', 'flexShrink', 'flexBasis', 'alignSelf', 'width', 'minWidth', 'maxWidth', 'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical', 'position', 'top', 'bottom', 'left', 'right', 'zIndex'] as const;
+
+function splitStyle(style: StyleProp<ViewStyle>): { outer: ViewStyle; inner: ViewStyle } {
+  const flat = { ...(StyleSheet.flatten(style) ?? {}) } as Record<string, unknown>;
+  const outer: Record<string, unknown> = {};
+  for (const key of OUTER_KEYS) {
+    if (key in flat) {
+      outer[key] = flat[key];
+      delete flat[key];
+    }
+  }
+  // The inner surface fills whatever box the outer one was given.
+  if ('flex' in outer || 'flexGrow' in outer || 'flexBasis' in outer || 'width' in outer) flat.flexGrow = 1;
+  return { outer: outer as ViewStyle, inner: flat as ViewStyle };
+}
 
 interface PressableScaleProps extends Omit<PressableProps, 'style' | 'children'> {
   children: ReactNode;
@@ -26,16 +43,18 @@ interface PressableScaleProps extends Omit<PressableProps, 'style' | 'children'>
 export function PressableScale({ children, style, scale = true, pressedStyle, onPressIn, onPressOut, ...props }: PressableScaleProps) {
   const [pressed, setPressed] = useState(false);
   const reduced = useReducedMotion();
+  const { outer, inner } = splitStyle(style);
   return (
     <Pressable
       {...props}
+      style={outer}
       pressRetentionOffset={{ top: 16, bottom: 16, left: 16, right: 16 }}
       onPressIn={(event) => { setPressed(true); onPressIn?.(event); }}
       onPressOut={(event) => { setPressed(false); onPressOut?.(event); }}
     >
       <Animated.View
         style={[
-          style,
+          inner,
           pressed && pressedStyle,
           {
             transform: [{ scale: pressed && scale && !reduced ? motion.pressScale : 1 }],

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import * as engagementApi from '../../api/customerEngagement';
@@ -7,13 +7,15 @@ import type { MyReview, PublicReview, PublicReviewPage } from '../../api/custome
 import { ApiError } from '../../api/client';
 import { MAX_REVIEW_COMMENT, reviewMode, validateReview } from '../../lib/reviewForm';
 import { useSubmitLock } from '../../lib/submitLock';
-import { colors, fonts, radius, spacing, typography } from '../../theme/customerTokens';
+import { Button, Card, InlineAlert, SectionHeader, TextField, fontFamily, radii, space, useTheme } from '../../design-system';
+
+const STAR = '#C98A0B';
 
 function Stars({ value, size = 14 }: { value: number; size?: number }) {
   return (
-    <View style={styles.stars} accessible accessibilityLabel={`${value} trên 5 sao`}>
+    <View style={{ flexDirection: 'row', gap: 2, alignItems: 'center' }} accessible accessibilityLabel={`${value} trên 5 sao`}>
       {[1, 2, 3, 4, 5].map((n) => (
-        <Ionicons key={n} name={value >= n ? 'star' : value >= n - 0.5 ? 'star-half' : 'star-outline'} size={size} color={colors.warning} />
+        <Ionicons key={n} name={value >= n ? 'star' : value >= n - 0.5 ? 'star-half' : 'star-outline'} size={size} color={STAR} />
       ))}
     </View>
   );
@@ -21,10 +23,18 @@ function Stars({ value, size = 14 }: { value: number; size?: number }) {
 
 function StarPicker({ value, onChange, disabled }: { value: number | null; onChange: (n: number) => void; disabled: boolean }) {
   return (
-    <View style={styles.stars} accessibilityRole="adjustable" accessibilityLabel={`Chọn số sao, hiện ${value ?? 0}`}>
+    <View style={{ flexDirection: 'row', gap: 2 }} accessibilityRole="adjustable" accessibilityLabel={`Chọn số sao, hiện ${value ?? 0}`}>
       {[1, 2, 3, 4, 5].map((n) => (
-        <Pressable key={n} onPress={() => onChange(n)} disabled={disabled} hitSlop={6} style={styles.starButton} accessibilityRole="button" accessibilityLabel={`${n} sao`}>
-          <Ionicons name={(value ?? 0) >= n ? 'star' : 'star-outline'} size={30} color={colors.warning} />
+        <Pressable
+          key={n}
+          onPress={() => onChange(n)}
+          disabled={disabled}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          accessibilityRole="button"
+          accessibilityState={{ selected: (value ?? 0) >= n }}
+          accessibilityLabel={`${n} sao`}
+        >
+          <Ionicons name={(value ?? 0) >= n ? 'star' : 'star-outline'} size={30} color={STAR} />
         </Pressable>
       ))}
     </View>
@@ -32,6 +42,7 @@ function StarPicker({ value, onChange, disabled }: { value: number | null; onCha
 }
 
 export function BookReviews({ bookId }: { bookId: string }) {
+  const { colors, type } = useTheme();
   const [page, setPage] = useState<PublicReviewPage | null>(null);
   const [reviews, setReviews] = useState<PublicReview[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -133,134 +144,70 @@ export function BookReviews({ bookId }: { bookId: string }) {
   const stats = page?.stats;
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>Đánh giá của bạn đọc</Text>
+    <View style={{ gap: space.md }}>
+      <SectionHeader title="Đánh giá của bạn đọc" />
       {stats && stats.totalReviews > 0 ? (
-        <View style={styles.summary}>
-          <Text style={styles.average}>{stats.averageRating.toFixed(1)}</Text>
-          <View>
-            <Stars value={stats.averageRating} />
-            <Text style={styles.caption}>{stats.totalReviews} đánh giá</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <Text style={{ fontFamily: fontFamily.serif, fontSize: 40, lineHeight: 44, color: colors.textPrimary }}>{stats.averageRating.toFixed(1)}</Text>
+          <View style={{ gap: 2 }}>
+            <Stars value={stats.averageRating} size={16} />
+            <Text style={type.caption}>{stats.totalReviews} đánh giá</Text>
           </View>
         </View>
       ) : !error ? (
-        <Text style={styles.caption}>Chưa có đánh giá nào cho cuốn sách này.</Text>
+        <Text style={type.caption}>Chưa có đánh giá nào cho cuốn sách này.</Text>
       ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <InlineAlert message={error} actionLabel="Thử lại" onAction={() => void load()} /> : null}
 
       {editing ? (
-        <View style={styles.form}>
+        <Card>
+          <Text style={type.bodyStrong}>Bạn chấm cuốn này mấy sao?</Text>
           <StarPicker value={rating} onChange={setRating} disabled={saving} />
-          <TextInput
-            style={styles.input}
+          <TextField
+            label="Nhận xét"
             value={comment}
             onChangeText={setComment}
-            placeholder="Cảm nhận của bạn về cuốn sách (không bắt buộc)"
-            placeholderTextColor={colors.textMuted}
+            placeholder="Cảm nhận của bạn (không bắt buộc)"
             multiline
             maxLength={MAX_REVIEW_COMMENT}
             editable={!saving}
-            accessibilityLabel="Nhận xét"
+            hint={`${comment.trim().length}/${MAX_REVIEW_COMMENT} ký tự`}
+            error={formError}
           />
-          <Text style={styles.counter}>{comment.trim().length}/{MAX_REVIEW_COMMENT}</Text>
-          {formError ? <Text style={styles.error}>{formError}</Text> : null}
-          <View style={styles.formActions}>
-            <Pressable style={styles.secondary} onPress={() => setEditing(false)} disabled={saving} accessibilityRole="button">
-              <Text style={styles.secondaryText}>Hủy</Text>
-            </Pressable>
-            <Pressable style={[styles.primary, saving && styles.disabled]} onPress={handleSave} disabled={saving} accessibilityRole="button">
-              {saving ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.primaryText}>Lưu đánh giá</Text>}
-            </Pressable>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flex: 1 }}><Button label="Hủy" variant="secondary" size="md" onPress={() => setEditing(false)} disabled={saving} /></View>
+            <View style={{ flex: 1 }}><Button label="Lưu đánh giá" size="md" loading={saving} onPress={handleSave} /></View>
           </View>
-        </View>
+        </Card>
       ) : mode === 'edit' && mine ? (
-        <View style={styles.mine}>
-          <Text style={styles.mineLabel}>Đánh giá của bạn</Text>
-          <Stars value={mine.rating} />
-          {mine.comment ? <Text style={styles.comment}>{mine.comment}</Text> : null}
-          <View style={styles.formActions}>
-            <Pressable style={styles.secondary} onPress={handleDelete} disabled={saving} accessibilityRole="button">
-              <Text style={[styles.secondaryText, { color: colors.danger }]}>Xóa</Text>
-            </Pressable>
-            <Pressable style={styles.primary} onPress={startEditing} accessibilityRole="button">
-              <Text style={styles.primaryText}>Sửa đánh giá</Text>
-            </Pressable>
+        <Card>
+          <Text style={type.bodyStrong}>Đánh giá của bạn</Text>
+          <Stars value={mine.rating} size={16} />
+          {mine.comment ? <Text style={type.body}>{mine.comment}</Text> : null}
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flex: 1 }}><Button label="Xóa" icon="trash-outline" variant="secondary" size="md" onPress={handleDelete} disabled={saving} /></View>
+            <View style={{ flex: 1 }}><Button label="Sửa đánh giá" icon="create-outline" size="md" onPress={startEditing} /></View>
           </View>
-        </View>
+        </Card>
       ) : mode === 'write' ? (
-        <Pressable style={styles.primary} onPress={startEditing} accessibilityRole="button">
-          <Text style={styles.primaryText}>Viết đánh giá</Text>
-        </Pressable>
+        <Button label="Viết đánh giá" icon="create-outline" variant="secondary" onPress={startEditing} />
       ) : mode === 'not-eligible' ? (
-        <Text style={styles.caption}>Bạn có thể đánh giá sau khi đã mượn và trả cuốn sách này.</Text>
+        <Text style={type.caption}>Bạn có thể đánh giá sau khi đã mượn và trả cuốn sách này.</Text>
       ) : null}
 
       {reviews.map((review) => (
-        <View key={review.id} style={styles.review}>
-          <View style={styles.reviewHeader}>
-            <Text style={styles.reviewer}>{review.reviewer_name}</Text>
-            <Stars value={review.rating} size={12} />
+        <View key={review.id} style={{ gap: space.xs, padding: space.lg, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+            <Text style={type.bodyStrong} numberOfLines={1}>{review.reviewer_name}</Text>
+            <Stars value={review.rating} size={13} />
           </View>
-          {review.comment ? <Text style={styles.comment}>{review.comment}</Text> : null}
-          <Text style={styles.caption}>{new Date(review.created_at).toLocaleDateString('vi-VN')}</Text>
+          {review.comment ? <Text style={type.body}>{review.comment}</Text> : null}
+          <Text style={type.caption}>{new Date(review.created_at).toLocaleDateString('vi-VN')}</Text>
         </View>
       ))}
       {page && page.meta.page < page.meta.totalPages ? (
-        <Pressable style={styles.secondary} onPress={loadMore} disabled={loadingMore} accessibilityRole="button">
-          {loadingMore ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.secondaryText}>Xem thêm đánh giá</Text>}
-        </Pressable>
+        <Button label="Xem thêm đánh giá" variant="ghost" loading={loadingMore} onPress={loadMore} />
       ) : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  section: { gap: spacing.sm },
-  sectionLabel: { ...typography.label },
-  summary: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  average: { ...typography.h1, fontSize: 36 },
-  stars: { flexDirection: 'row', gap: 2, alignItems: 'center' },
-  starButton: { padding: 2 },
-  caption: { ...typography.caption },
-  error: { color: colors.danger, fontWeight: '600' },
-  form: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface },
-  input: {
-    minHeight: 96,
-    textAlignVertical: 'top',
-    padding: spacing.md,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    color: colors.textPrimary,
-    fontFamily: fonts.body,
-    fontSize: 15,
-  },
-  counter: { ...typography.caption, fontSize: 11, textAlign: 'right' },
-  formActions: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
-  primary: {
-    minHeight: 44,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryText: { fontFamily: fonts.bodySemibold, color: colors.onPrimary },
-  secondary: {
-    minHeight: 44,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryText: { fontFamily: fonts.bodySemibold, color: colors.textSecondary },
-  disabled: { opacity: 0.6 },
-  mine: { gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primaryBorder },
-  mineLabel: { ...typography.label, color: colors.primary },
-  review: { gap: 4, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
-  reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  reviewer: { ...typography.bodyBold, fontSize: 14 },
-  comment: { ...typography.body, fontSize: 14, lineHeight: 20 },
-});

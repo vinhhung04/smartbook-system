@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Alert, Text, View } from 'react-native';
 
 import * as customerBorrowApi from '../../../src/api/customerBorrow';
 import { isOutcomeUnknown } from '../../../src/api/client';
@@ -11,19 +9,20 @@ import { useBookEngagement } from '../../../src/hooks/useBookEngagement';
 import { useSubmitLock } from '../../../src/lib/submitLock';
 import * as customerCatalogApi from '../../../src/api/customerCatalog';
 import { ApiError } from '../../../src/auth/auth-context';
-import { getCategoryGradient, getMonogramLetter } from '../../../src/lib/posterArt';
+import { BookCover } from '../../../src/components/customer/BookCover';
 import {
   buildReservationPayload,
   describeReservationError,
   initialPickupBranchId,
 } from '../../../src/lib/publicCatalog';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../../src/theme/customerTokens';
+import {
+  Button, Card, ErrorState, InfoRow, LoadingState, PressableScale, Screen, ScreenHeader, SectionHeader, StatusBadge, fontFamily, radii, space, useTheme,
+} from '../../../src/design-system';
 import type { CustomerCatalogBook } from '../../../src/types/customerCatalog';
-
-const HERO_HEIGHT = 320;
 
 export default function CustomerBookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors, type } = useTheme();
   const [book, setBook] = useState<CustomerCatalogBook | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReserving, setIsReserving] = useState(false);
@@ -88,353 +87,142 @@ export default function CustomerBookDetailScreen() {
   let buttonLabel = 'Hiện không thể đặt trước';
   if (isReservable) buttonLabel = chosenBranch && payload ? `Đặt trước tại ${chosenBranch.warehouse_name}` : 'Chọn chi nhánh nhận sách';
 
+  const branchesWithStock = book ? book.locations.filter((location) => location.available_quantity > 0).length : 0;
+
+  if (isLoading) {
+    return (
+      <>
+        <ScreenHeader title="Chi tiết sách" />
+        <Screen scroll={false}><LoadingState label="Đang mở sách…" /></Screen>
+      </>
+    );
+  }
+  if (error || !book) {
+    return (
+      <>
+        <ScreenHeader title="Chi tiết sách" />
+        <Screen scroll={false}><ErrorState title="Không mở được sách" message={error ?? 'Không tìm thấy sách'} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} /></Screen>
+      </>
+    );
+  }
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: '', headerTransparent: true }} />
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : error || !book ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error ?? 'Không tìm thấy sách'}</Text>
-        </View>
-      ) : (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-          <HeroArt book={book} />
-
-          <View style={styles.body}>
-            <View style={styles.actionRow}>
-              <Pressable
-                style={[styles.actionChip, engagement.saved && styles.actionChipActive]}
-                onPress={() => void engagement.toggleWishlist()}
-                disabled={engagement.saved === null || engagement.busy !== null}
-                accessibilityRole="button"
-                accessibilityState={{ selected: Boolean(engagement.saved), disabled: engagement.saved === null }}
-                accessibilityLabel={engagement.saved ? 'Bỏ khỏi danh sách yêu thích' : 'Thêm vào danh sách yêu thích'}
-              >
-                {engagement.busy === 'wishlist' ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
-                ) : (
-                  <Ionicons name={engagement.saved ? 'heart' : 'heart-outline'} size={18} color={engagement.saved ? colors.danger : colors.textPrimary} />
-                )}
-                <Text style={styles.actionChipText}>{engagement.saved ? 'Đã lưu' : 'Yêu thích'}</Text>
-              </Pressable>
-              {outOfStock ? (
-                <Pressable
-                  style={[styles.actionChip, engagement.alertActive && styles.actionChipActive]}
-                  onPress={() => void engagement.toggleAlert()}
-                  disabled={engagement.alertActive === null || engagement.busy !== null}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: Boolean(engagement.alertActive) }}
-                  accessibilityLabel={engagement.alertActive ? 'Hủy báo khi có sách' : 'Báo cho tôi khi có sách'}
-                >
-                  {engagement.busy === 'alert' ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
-                  ) : (
-                    <Ionicons name={engagement.alertActive ? 'notifications' : 'notifications-outline'} size={18} color={engagement.alertActive ? colors.primary : colors.textPrimary} />
-                  )}
-                  <Text style={styles.actionChipText}>{engagement.alertActive ? 'Sẽ báo khi có sách' : 'Báo khi có sách'}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            <View style={styles.metaGrid}>
-              <MetaRow label="Tác giả" value={book.author ?? '—'} />
-              <MetaRow label="Thể loại" value={book.category ?? '—'} />
-              <MetaRow label="Nhà xuất bản" value={book.publisher ?? '—'} />
-              <MetaRow label="ISBN" value={book.isbn ?? '—'} />
-              <MetaRow label="Còn lại" value={`${book.available_quantity} cuốn`} />
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Nhận sách tại</Text>
-              {book.locations.length === 0 ? (
-                <Text style={styles.branchEmpty}>Chưa chi nhánh nào còn sách để đặt trước.</Text>
-              ) : (
-                <View accessibilityRole="radiogroup" style={styles.branchList}>
-                  {book.locations.map((location) => {
-                    const hasStock = location.available_quantity > 0;
-                    const selected = location.warehouse_id === branchId;
-                    return (
-                      <Pressable
-                        key={location.warehouse_id}
-                        testID={`pickup-branch-${location.warehouse_id}`}
-                        accessibilityRole="radio"
-                        accessibilityState={{ checked: selected, disabled: !hasStock }}
-                        accessibilityLabel={`${location.warehouse_name}, ${hasStock ? `còn ${location.available_quantity} cuốn` : 'hết sách'}`}
-                        disabled={!hasStock || isReserving}
-                        onPress={() => setBranchId(location.warehouse_id)}
-                        style={[styles.branchRow, selected && styles.branchRowSelected, !hasStock && styles.branchRowDisabled]}
-                      >
-                        <View style={[styles.radio, selected && styles.radioSelected]}>
-                          {selected ? <View style={styles.radioDot} /> : null}
-                        </View>
-                        <Text style={styles.branchName}>{location.warehouse_name}</Text>
-                        <Text style={styles.branchStock}>{hasStock ? `còn ${location.available_quantity} cuốn` : 'hết sách'}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            {book.description ? (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Mô tả</Text>
-                <Text style={styles.description}>{book.description}</Text>
-              </View>
-            ) : null}
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.button,
-                (!payload || isReserving) && styles.buttonDisabled,
-                pressed && payload && styles.buttonPressed,
-              ]}
-              onPress={handleReserve}
-              disabled={!payload || isReserving}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !payload || isReserving }}
-            >
-              <LinearGradient
-                colors={[colors.accentGradientStart, colors.accentGradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.buttonGloss} />
-              {isReserving ? (
-                <ActivityIndicator color={colors.onPrimary} />
-              ) : (
-                <Text style={styles.buttonText}>{buttonLabel}</Text>
-              )}
-            </Pressable>
-
-            <BookReviews bookId={book.id} />
+      <ScreenHeader title="Chi tiết sách" />
+      <Screen
+        bleed
+        footer={
+          <Button
+            label={buttonLabel}
+            icon="bookmark-outline"
+            loading={isReserving}
+            loadingLabel="Đang đặt trước…"
+            disabled={!payload}
+            onPress={handleReserve}
+          />
+        }
+      >
+        {/* The book on its own lit field: the cover is the content. */}
+        <View style={{ marginHorizontal: space.lg, padding: space.xl, gap: space.lg, alignItems: 'center', borderRadius: radii.xl, borderCurve: 'continuous', backgroundColor: colors.inkField }}>
+          <BookCover title={book.title} author={book.author} category={book.category} coverImageUrl={book.cover_image_url} width={150} />
+          <View style={{ alignItems: 'center', gap: space.xs }}>
+            <Text style={{ fontFamily: fontFamily.serif, fontSize: 26, lineHeight: 31, color: colors.onInk, textAlign: 'center' }} accessibilityRole="header">{book.title}</Text>
+            {book.subtitle ? <Text style={{ fontFamily: fontFamily.regular, fontSize: 15, color: colors.onInkMuted, textAlign: 'center' }}>{book.subtitle}</Text> : null}
+            <Text style={{ fontFamily: fontFamily.medium, fontSize: 15, color: colors.onInkMuted }}>{book.author ?? 'Chưa rõ tác giả'}</Text>
           </View>
-        </ScrollView>
-      )}
+          <View style={{ paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: 'rgba(255,255,255,0.1)' }}>
+            <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: outOfStock ? colors.onInkMuted : '#B8F0D2' }}>
+              {outOfStock ? 'Đã được mượn hết' : `Còn ${book.available_quantity} cuốn ở ${branchesWithStock} chi nhánh`}
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: space.lg, gap: space.xl }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            <Button
+              label={engagement.saved ? 'Đã lưu' : 'Yêu thích'}
+              icon={engagement.saved ? 'heart' : 'heart-outline'}
+              variant="secondary"
+              size="md"
+              fullWidth={false}
+              loading={engagement.busy === 'wishlist'}
+              disabled={engagement.saved === null || engagement.busy !== null}
+              onPress={() => void engagement.toggleWishlist()}
+              accessibilityLabel={engagement.saved ? 'Bỏ khỏi danh sách yêu thích' : 'Thêm vào danh sách yêu thích'}
+            />
+            {outOfStock ? (
+              <Button
+                label={engagement.alertActive ? 'Sẽ báo khi có sách' : 'Báo khi có sách'}
+                icon={engagement.alertActive ? 'notifications' : 'notifications-outline'}
+                variant="secondary"
+                size="md"
+                fullWidth={false}
+                loading={engagement.busy === 'alert'}
+                disabled={engagement.alertActive === null || engagement.busy !== null}
+                onPress={() => void engagement.toggleAlert()}
+                accessibilityLabel={engagement.alertActive ? 'Hủy báo khi có sách' : 'Báo cho tôi khi có sách'}
+              />
+            ) : null}
+          </View>
+
+          <View style={{ gap: space.md }}>
+            <SectionHeader title="Nhận sách tại" caption={book.locations.length > 0 ? 'Chọn chi nhánh bạn sẽ đến lấy sách.' : undefined} />
+            {book.locations.length === 0 ? (
+              <Text style={type.caption}>Chưa chi nhánh nào còn sách để đặt trước.</Text>
+            ) : (
+              <View accessibilityRole="radiogroup" style={{ gap: space.sm }}>
+                {book.locations.map((location) => {
+                  const hasStock = location.available_quantity > 0;
+                  const selected = location.warehouse_id === branchId;
+                  return (
+                    <PressableScale
+                      key={location.warehouse_id}
+                      testID={`pickup-branch-${location.warehouse_id}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected, disabled: !hasStock }}
+                      accessibilityLabel={`${location.warehouse_name}, ${hasStock ? `còn ${location.available_quantity} cuốn` : 'hết sách'}`}
+                      disabled={!hasStock || isReserving}
+                      onPress={() => setBranchId(location.warehouse_id)}
+                      scale={false}
+                      style={{
+                        minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, borderRadius: radii.md,
+                        backgroundColor: selected ? colors.primarySoft : colors.surface, borderWidth: selected ? 2 : 1, borderColor: selected ? colors.primary : colors.border,
+                        opacity: hasStock ? 1 : 0.55,
+                      }}
+                    >
+                      <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: selected ? colors.primary : colors.borderStrong, alignItems: 'center', justifyContent: 'center' }}>
+                        {selected ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary }} /> : null}
+                      </View>
+                      <Text style={{ flex: 1, fontFamily: fontFamily.semibold, fontSize: 15.5, color: colors.textPrimary }}>{location.warehouse_name}</Text>
+                      <Text style={{ fontFamily: fontFamily.medium, fontSize: 13.5, color: hasStock ? colors.success : colors.textMuted }}>
+                        {hasStock ? `còn ${location.available_quantity}` : 'hết sách'}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {book.description ? (
+            <View style={{ gap: space.md }}>
+              <SectionHeader title="Giới thiệu" />
+              <Text style={[type.body, { lineHeight: 25 }]}>{book.description}</Text>
+            </View>
+          ) : null}
+
+          <Card>
+            <InfoRow label="Tác giả" value={book.author ?? '—'} />
+            <InfoRow label="Thể loại" value={book.category ?? '—'} />
+            <InfoRow label="Nhà xuất bản" value={book.publisher ?? '—'} />
+            {book.publish_year ? <InfoRow label="Năm xuất bản" value={String(book.publish_year)} /> : null}
+            <InfoRow label="ISBN" value={book.isbn ?? '—'} mono />
+            <InfoRow label="Còn lại" value={<StatusBadge tone={outOfStock ? 'neutral' : 'success'} label={`${book.available_quantity} cuốn`} icon={outOfStock ? null : 'checkmark-circle'} />} />
+          </Card>
+
+          <BookReviews bookId={book.id} />
+        </View>
+      </Screen>
     </>
   );
 }
-
-function HeroArt({ book }: { book: CustomerCatalogBook }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const showImage = Boolean(book.cover_image_url) && !imageFailed;
-  const [gradientStart, gradientEnd] = getCategoryGradient(book.category);
-
-  return (
-    <View style={styles.hero}>
-      {showImage ? (
-        <Image
-          source={{ uri: book.cover_image_url! }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-          onError={() => setImageFailed(true)}
-        />
-      ) : (
-        <>
-          <LinearGradient
-            colors={[gradientStart, gradientEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFill}
-          />
-          <Text style={[styles.heroMonogram, { color: gradientStart }]}>{getMonogramLetter(book.title)}</Text>
-        </>
-      )}
-      <LinearGradient colors={['transparent', colors.bg]} locations={[0.4, 1]} style={StyleSheet.absoluteFill} />
-      <View style={styles.heroText}>
-        <Text style={styles.title}>{book.title}</Text>
-        {book.subtitle ? <Text style={styles.subtitle}>{book.subtitle}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-function MetaRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metaRow}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  actionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  actionChipActive: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.primarySoft,
-  },
-  actionChipText: {
-    fontFamily: fonts.bodySemibold,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    paddingBottom: spacing.xxl,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.bg,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  hero: {
-    height: HERO_HEIGHT,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  heroMonogram: {
-    position: 'absolute',
-    top: -30,
-    left: -16,
-    fontFamily: fonts.displayBold,
-    fontSize: HERO_HEIGHT * 0.9,
-    lineHeight: HERO_HEIGHT * 0.9,
-    opacity: 0.22,
-  },
-  heroText: {
-    padding: spacing.lg,
-  },
-  title: {
-    ...typography.h1,
-  },
-  subtitle: {
-    ...typography.caption,
-    marginTop: spacing.xs,
-  },
-  body: {
-    paddingHorizontal: spacing.lg,
-  },
-  metaGrid: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    ...shadow.card,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metaLabel: {
-    ...typography.caption,
-  },
-  metaValue: {
-    ...typography.bodyBold,
-  },
-  section: {
-    marginTop: spacing.xl,
-  },
-  sectionLabel: {
-    ...typography.label,
-    marginBottom: spacing.sm,
-  },
-  description: {
-    ...typography.body,
-  },
-  branchList: {
-    gap: spacing.sm,
-  },
-  branchEmpty: {
-    ...typography.caption,
-  },
-  branchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    minHeight: 48,
-  },
-  branchRowSelected: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.primarySoft,
-  },
-  branchRowDisabled: {
-    opacity: 0.45,
-  },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioSelected: {
-    borderColor: colors.primary,
-  },
-  radioDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-  },
-  branchName: {
-    ...typography.bodyBold,
-    flex: 1,
-  },
-  branchStock: {
-    ...typography.caption,
-  },
-  button: {
-    borderRadius: radius.pill,
-    paddingVertical: spacing.md + 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.xxl,
-    overflow: 'hidden',
-  },
-  buttonGloss: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '45%',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  buttonPressed: {
-    opacity: 0.9,
-  },
-  buttonDisabled: {
-    opacity: 0.4,
-  },
-  buttonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 18,
-  },
-});

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { AppState, Text, View } from 'react-native';
 import * as Linking from 'expo-linking';
 
 import * as customerBorrowApi from '../../../../src/api/customerBorrow';
@@ -18,23 +17,28 @@ import {
   type StoredPayment,
 } from '../../../../src/lib/pendingPayment';
 import { useSubmitLock } from '../../../../src/lib/submitLock';
-import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/customerTokens';
+import { Button, Card, ErrorState, InfoRow, InlineAlert, LoadingState, Screen, ScreenHeader, StatusBadge, fontFamily, space, useTheme } from '../../../../src/design-system';
 import type { Fine } from '../../../../src/types/borrow';
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-const BANNER_STYLE: Record<PaymentView['tone'], { bg: string; fg: string }> = {
-  success: { bg: colors.successSoft, fg: colors.success },
-  warning: { bg: colors.warningSoft, fg: colors.warning },
-  danger: { bg: colors.dangerSoft, fg: colors.danger },
-  primary: { bg: colors.primarySoft, fg: colors.textPrimary },
+const VIEW_TITLE: Record<PaymentView['tone'], string> = {
+  success: 'Đã ghi nhận thanh toán',
+  warning: 'Đang chờ xác nhận',
+  danger: 'Thanh toán chưa thành công',
+  primary: 'Trạng thái thanh toán',
 };
+
+function methodLabel(method: string) {
+  return method === 'VNPAY' ? 'VNPay' : method === 'CASH' ? 'Tiền mặt tại quầy' : method;
+}
 
 export default function CustomerPayFineScreen() {
   const { fineId } = useLocalSearchParams<{ fineId: string }>();
   const { user } = useAuth();
+  const { colors, type } = useTheme();
   const [fine, setFine] = useState<Fine | null>(null);
   const [stored, setStored] = useState<StoredPayment | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,10 +153,8 @@ export default function CustomerPayFineScreen() {
   if (isLoading) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Thanh toán phí phạt' }} />
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
+        <ScreenHeader title="Thanh toán phí phạt" />
+        <Screen scroll={false}><LoadingState label="Đang kiểm tra khoản phí…" /></Screen>
       </>
     );
   }
@@ -160,10 +162,8 @@ export default function CustomerPayFineScreen() {
   if (!fine) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Thanh toán phí phạt' }} />
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
+        <ScreenHeader title="Thanh toán phí phạt" />
+        <Screen scroll={false}><ErrorState title="Không mở được khoản phí" message={error} onRetry={() => void reconcile()} /></Screen>
       </>
     );
   }
@@ -173,236 +173,75 @@ export default function CustomerPayFineScreen() {
   const status = getFineStatusDisplay(fine.status);
   const payments = fine.fine_payments ?? [];
 
+  const footer = decision.kind === 'wait' ? (
+    <Button label="Kiểm tra trạng thái thanh toán" icon="refresh" variant="secondary" loading={isChecking} loadingLabel="Đang kiểm tra…" onPress={() => void reconcile()} />
+  ) : decision.kind === 'pay' ? (
+    <>
+      <Button
+        label={`Thanh toán ${formatVnd(remaining)} qua VNPay`}
+        icon="card-outline"
+        loading={isStartingPayment}
+        loadingLabel="Đang mở VNPay…"
+        onPress={handlePayOnline}
+        accessibilityLabel={`Thanh toán ${formatVnd(remaining)} qua VNPay`}
+      />
+      <Text style={[type.caption, { textAlign: 'center' }]}>Khoản phạt chỉ được ghi nhận khi VNPay xác nhận với thư viện.</Text>
+    </>
+  ) : null;
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Thanh toán phí phạt' }} />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>{getFineTypeLabel(fine.fine_type)}</Text>
-          <Text style={[styles.summaryAmount, remaining <= 0 && styles.summaryAmountPaid]}>{formatVnd(remaining)}</Text>
-          <Text style={styles.summaryHint}>{remaining > 0 ? 'Số tiền còn phải trả' : 'Đã thanh toán đủ'}</Text>
-          <View style={styles.breakdown}>
-            <Row label="Tiền phạt" value={formatVnd(fine.amount)} />
-            {toMoney(fine.waived_amount) > 0 ? <Row label="Được miễn" value={`− ${formatVnd(fine.waived_amount)}`} /> : null}
-            {payments.length > 0 ? <Row label="Đã trả" value={`− ${formatVnd(payments.reduce((sum, p) => sum + toMoney(p.amount), 0))}`} /> : null}
-            <Row label="Trạng thái" value={status?.label ?? fine.status} />
-          </View>
+      <ScreenHeader title="Thanh toán phí phạt" />
+      <Screen footer={footer}>
+        <View style={{ gap: space.xs }}>
+          <Text style={type.caption}>{getFineTypeLabel(fine.fine_type)}</Text>
+          <Text
+            style={{ fontFamily: fontFamily.serif, fontSize: 40, lineHeight: 46, color: remaining > 0 ? colors.danger : colors.success, fontVariant: ['tabular-nums'] }}
+            accessibilityLabel={remaining > 0 ? `Còn phải trả ${formatVnd(remaining)}` : 'Đã thanh toán đủ'}
+          >
+            {formatVnd(remaining)}
+          </Text>
+          <Text style={type.callout}>{remaining > 0 ? 'Số tiền còn phải trả' : 'Đã thanh toán đủ'}</Text>
+          {status ? <View style={{ marginTop: space.xs }}><StatusBadge tone={status.tone} label={status.label} /></View> : null}
         </View>
 
         {view ? (
-          <View style={[styles.statusBanner, { backgroundColor: BANNER_STYLE[view.tone].bg }]} accessibilityLiveRegion="polite">
-            <Text style={[styles.statusBannerText, { color: BANNER_STYLE[view.tone].fg }]}>{view.message}</Text>
-            {decision.kind === 'wait' ? (
-              <Text style={styles.statusMeta}>Mã giao dịch {decision.txnRef} · hết hạn lúc {formatTime(decision.until)}</Text>
-            ) : null}
+          <View accessibilityLiveRegion="polite">
+            <InlineAlert
+              tone={view.tone}
+              title={VIEW_TITLE[view.tone]}
+              message={decision.kind === 'wait' ? `${view.message}\nMã giao dịch ${decision.txnRef}, liên kết hết hạn lúc ${formatTime(decision.until)}.` : view.message}
+            />
           </View>
         ) : null}
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <InlineAlert tone="danger" message={error} /> : null}
+
+        <Card>
+          <InfoRow label="Tiền phạt" value={formatVnd(fine.amount)} />
+          {toMoney(fine.waived_amount) > 0 ? <InfoRow label="Được miễn" value={`− ${formatVnd(fine.waived_amount)}`} tone={colors.success} /> : null}
+          {payments.length > 0 ? <InfoRow label="Đã trả" value={`− ${formatVnd(payments.reduce((sum, p) => sum + toMoney(p.amount), 0))}`} tone={colors.success} /> : null}
+          <View style={{ height: 1, backgroundColor: colors.border }} />
+          <InfoRow label="Còn lại" value={formatVnd(remaining)} tone={remaining > 0 ? colors.danger : colors.success} />
+        </Card>
 
         {payments.length > 0 ? (
-          <View style={styles.history}>
-            <Text style={styles.historyTitle}>Lịch sử thanh toán</Text>
-            {payments.map((payment) => (
-              <View key={payment.id} style={styles.historyRow}>
-                <View style={styles.historyBody}>
-                  <Text style={styles.historyMethod}>{payment.payment_method === 'VNPAY' ? 'VNPay' : payment.payment_method === 'CASH' ? 'Tiền mặt tại quầy' : payment.payment_method}</Text>
-                  <Text style={styles.historyDate}>{new Date(payment.paid_at).toLocaleString('vi-VN')}</Text>
+          <View style={{ gap: space.md }}>
+            <Text style={type.heading} accessibilityRole="header">Lịch sử thanh toán</Text>
+            <Card>
+              {payments.map((payment) => (
+                <View key={payment.id} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={type.bodyStrong}>{methodLabel(String(payment.payment_method))}</Text>
+                    <Text style={type.caption}>{new Date(payment.paid_at).toLocaleString('vi-VN')}</Text>
+                  </View>
+                  <Text style={{ fontFamily: fontFamily.bold, fontSize: 15, color: colors.success, fontVariant: ['tabular-nums'] }}>{formatVnd(payment.amount)}</Text>
                 </View>
-                <Text style={styles.historyAmount}>{formatVnd(payment.amount)}</Text>
-              </View>
-            ))}
+              ))}
+            </Card>
           </View>
         ) : null}
-
-        {decision.kind === 'wait' ? (
-          <Pressable
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.payButtonPressed]}
-            onPress={() => void reconcile()}
-            disabled={isChecking}
-            accessibilityRole="button"
-          >
-            {isChecking ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.secondaryButtonText}>Kiểm tra trạng thái thanh toán</Text>}
-          </Pressable>
-        ) : decision.kind === 'pay' ? (
-          <Pressable
-            style={({ pressed }) => [styles.payButton, isStartingPayment && styles.payButtonDisabled, pressed && styles.payButtonPressed]}
-            onPress={handlePayOnline}
-            disabled={isStartingPayment}
-            accessibilityRole="button"
-            accessibilityLabel={`Thanh toán ${formatVnd(remaining)} qua VNPay`}
-          >
-            <LinearGradient
-              colors={[colors.accentGradientStart, colors.accentGradientEnd]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-            {isStartingPayment ? (
-              <ActivityIndicator color={colors.onPrimary} />
-            ) : (
-              <Text style={styles.payButtonText}>Thanh toán {formatVnd(remaining)} qua VNPay</Text>
-            )}
-          </Pressable>
-        ) : null}
-        {decision.kind === 'pay' ? (
-          <Text style={styles.note}>Bạn sẽ được chuyển sang trang VNPay. Khoản phạt chỉ được ghi nhận khi VNPay xác nhận với thư viện.</Text>
-        ) : null}
-      </ScrollView>
+      </Screen>
     </>
   );
 }
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  container: {
-    flexGrow: 1,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.bg,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  summaryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    ...shadow.card,
-  },
-  summaryLabel: {
-    ...typography.label,
-  },
-  summaryAmount: {
-    ...typography.h1,
-    marginTop: spacing.sm,
-    color: colors.danger,
-  },
-  summaryAmountPaid: {
-    color: colors.success,
-  },
-  summaryHint: {
-    ...typography.caption,
-    marginTop: spacing.xs,
-  },
-  breakdown: {
-    alignSelf: 'stretch',
-    marginTop: spacing.lg,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: spacing.xs,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  rowLabel: {
-    ...typography.caption,
-  },
-  rowValue: {
-    ...typography.caption,
-    color: colors.textPrimary,
-  },
-  statusBanner: {
-    borderRadius: radius.sm,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  statusBannerText: {
-    ...typography.body,
-    fontSize: 15,
-  },
-  statusMeta: {
-    ...typography.caption,
-    fontSize: 12,
-  },
-  history: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  historyTitle: {
-    ...typography.label,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  historyBody: {
-    flex: 1,
-  },
-  historyMethod: {
-    ...typography.bodyBold,
-    fontSize: 14,
-  },
-  historyDate: {
-    ...typography.caption,
-    fontSize: 12,
-  },
-  historyAmount: {
-    ...typography.code,
-    color: colors.success,
-  },
-  payButton: {
-    borderRadius: radius.pill,
-    minHeight: 52,
-    paddingVertical: spacing.md + 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 'auto',
-    overflow: 'hidden',
-  },
-  payButtonPressed: {
-    opacity: 0.9,
-  },
-  payButtonDisabled: {
-    opacity: 0.6,
-  },
-  payButtonText: {
-    fontFamily: typography.h3.fontFamily,
-    color: colors.onPrimary,
-    fontSize: 16,
-  },
-  secondaryButton: {
-    marginTop: 'auto',
-    minHeight: 52,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButtonText: {
-    ...typography.bodyBold,
-    color: colors.primary,
-  },
-  note: {
-    ...typography.caption,
-    textAlign: 'center',
-  },
-});

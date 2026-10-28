@@ -1,10 +1,13 @@
 import { forwardRef, useState, type ReactNode } from 'react';
-import { Pressable, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View, type TextInputProps, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '../theme-context';
 import { fontFamily, radii, size, space } from '../tokens';
 import type { IconName } from './primitives';
+
+/** The field draws its own focus ring; the browser's outline would draw a second one. */
+const NO_WEB_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
 interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   label?: string;
@@ -55,7 +58,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           onBlur={(event) => { setFocused(false); onBlur?.(event); }}
           accessibilityLabel={input.accessibilityLabel ?? label}
           accessibilityHint={error ?? hint}
-          style={{
+          style={[NO_WEB_OUTLINE, {
             flex: 1,
             minHeight: size.control - 4,
             paddingVertical: space.sm,
@@ -63,7 +66,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             fontSize: mono ? 17 : 16,
             letterSpacing: mono ? 0.4 : 0,
             color: colors.textPrimary,
-          }}
+          }]}
           {...input}
         />
         {right}
@@ -144,7 +147,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
         placeholderTextColor={colors.textMuted}
         onFocus={(event) => { setFocused(true); onFocus?.(event); }}
         onBlur={(event) => { setFocused(false); onBlur?.(event); }}
-        style={{ flex: 1, minHeight: size.control - 4, fontFamily: fontFamily.regular, fontSize: 16, color: colors.textPrimary }}
+        style={[NO_WEB_OUTLINE, { flex: 1, minHeight: size.control - 4, fontFamily: fontFamily.regular, fontSize: 16, color: colors.textPrimary }]}
         {...input}
       />
       {value ? (

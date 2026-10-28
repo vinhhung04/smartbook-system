@@ -1,66 +1,92 @@
 import { memo, useCallback } from 'react';
 import { router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlatList, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../../src/auth/auth-context';
-import { HeroBanner } from '../../../src/components/customer/HeroBanner';
-import { PosterCard } from '../../../src/components/customer/PosterCard';
+import { BookCover, BookTile } from '../../../src/components/customer/BookCover';
 import { useCustomerHome } from '../../../src/hooks/useCustomerHome';
 import { useUnreadNotifications } from '../../../src/hooks/useUnreadNotifications';
-import { useCustomerTabBarSpace } from '../../../src/hooks/useCustomerTabBarSpace';
-import { colors, fonts, radius, spacing, typography } from '../../../src/theme/customerTokens';
+import { getClothColor } from '../../../src/lib/posterArt';
+import {
+  Button, ErrorState, IconButton, PressableScale, Screen, SectionHeader, Skeleton, fontFamily, radii, space, useTheme,
+} from '../../../src/design-system';
 import type { CustomerCatalogBook } from '../../../src/types/customerCatalog';
 
 type ShelfItem = { book: CustomerCatalogBook; caption?: string | null };
 
-const POSTER_WIDTH = 120;
-const POSTER_GAP = spacing.md;
+const TILE_WIDTH = 120;
 
 function openBook(id: string) {
   router.push(`/customer/book/${id}`);
 }
 
-const Shelf = memo(function Shelf({ title, subtitle, items }: { title: string; subtitle?: string; items: ShelfItem[] }) {
+const Shelf = memo(function Shelf({ title, caption, items }: { title: string; caption?: string; items: ShelfItem[] }) {
   if (items.length === 0) return null;
   return (
-    <View style={styles.shelf}>
-      <Text style={styles.shelfTitle} accessibilityRole="header">{title}</Text>
-      {subtitle ? <Text style={styles.shelfSubtitle}>{subtitle}</Text> : null}
+    <View style={{ gap: space.md }}>
+      <View style={{ paddingHorizontal: space.lg }}>
+        <SectionHeader title={title} caption={caption} />
+      </View>
       <FlatList
         data={items}
         horizontal
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.book.id}
-        contentContainerStyle={styles.shelfList}
+        contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.md }}
         initialNumToRender={4}
         windowSize={3}
-        getItemLayout={(_, index) => ({ length: POSTER_WIDTH + POSTER_GAP, offset: (POSTER_WIDTH + POSTER_GAP) * index, index })}
-        renderItem={({ item }) => (
-          <View style={styles.posterItem}>
-            <PosterCard
-              title={item.book.title}
-              category={item.book.category}
-              coverImageUrl={item.book.cover_image_url}
-              width={POSTER_WIDTH}
-              height={180}
-              onPress={() => openBook(item.book.id)}
-            />
-            {item.caption ? <Text style={styles.posterCaption} numberOfLines={2}>{item.caption}</Text> : null}
-          </View>
-        )}
+        renderItem={({ item }) => <BookTile book={item.book} width={TILE_WIDTH} caption={item.caption} onPress={() => openBook(item.book.id)} />}
       />
     </View>
   );
 });
 
-function asItems(books: CustomerCatalogBook[]): ShelfItem[] {
-  return books.map((book) => ({ book }));
+function firstName(fullName?: string | null) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] || null;
+}
+
+/** The book the reader sees first: their top recommendation, or the library's most borrowed. */
+function FeaturedBook({ book, note, reason }: { book: CustomerCatalogBook; note: string; reason?: string | null }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={() => openBook(book.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${book.title}, ${book.author ?? 'chưa rõ tác giả'}. ${note}`}
+      style={{ marginHorizontal: space.lg, padding: space.lg, gap: space.lg, flexDirection: 'row', borderRadius: radii.xl, borderCurve: 'continuous', backgroundColor: colors.inkField }}
+    >
+      <BookCover title={book.title} author={book.author} category={book.category} coverImageUrl={book.cover_image_url} width={108} />
+      <View style={{ flex: 1, gap: space.sm, justifyContent: 'center' }}>
+        <Text style={{ fontFamily: fontFamily.serif, fontSize: 21, lineHeight: 26, color: colors.onInk }} numberOfLines={3}>{book.title}</Text>
+        <Text style={{ fontFamily: fontFamily.regular, fontSize: 14, color: colors.onInkMuted }} numberOfLines={1}>{book.author || 'Chưa rõ tác giả'}</Text>
+        <Text style={{ fontFamily: fontFamily.medium, fontSize: 13, lineHeight: 18, color: '#F6DFB4' }} numberOfLines={3}>{reason || note}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.xs }}>
+          <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.onInk }}>Xem sách</Text>
+          <Ionicons name="arrow-forward" size={16} color={colors.onInk} />
+        </View>
+      </View>
+    </PressableScale>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <View style={{ paddingHorizontal: space.lg, gap: space.xl }} accessibilityLabel="Đang tải trang khám phá">
+      <Skeleton height={176} radius={radii.xl} />
+      <Skeleton width={180} height={22} />
+      <View style={{ flexDirection: 'row', gap: space.md }}>
+        {[0, 1, 2].map((i) => <Skeleton key={i} width={TILE_WIDTH} height={180} radius={radii.xs} />)}
+      </View>
+    </View>
+  );
 }
 
 export default function CustomerHomeScreen() {
-  const tabBarSpace = useCustomerTabBarSpace();
+  const { colors, type } = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { home, isLoading, isRefreshing, error, recommendations, refresh, retry } = useCustomerHome(user?.id ?? null);
   const { count: unreadCount, refresh: refreshUnread } = useUnreadNotifications();
@@ -74,263 +100,118 @@ export default function CustomerHomeScreen() {
   const personal = recommendations.status === 'ready' && recommendations.personalized ? recommendations.items : [];
   const heroPersonal = personal[0] ?? null;
   const heroPopular = !heroPersonal ? (home?.most_borrowed[0] ?? home?.available_now[0] ?? null) : null;
+  const name = firstName(user?.full_name);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle} accessibilityRole="header">Khám phá</Text>
-        <View style={styles.headerActions}>
-          <Pressable style={styles.iconButton} onPress={() => router.push('/customer/scan-cover')} accessibilityRole="button" accessibilityLabel="Tìm sách bằng ảnh bìa">
-            <Ionicons name="camera-outline" size={20} color={colors.textPrimary} />
-          </Pressable>
-          <Pressable style={styles.iconButton} onPress={() => router.push('/customer/search')} accessibilityRole="button" accessibilityLabel="Tìm kiếm sách">
-            <Ionicons name="search" size={20} color={colors.textPrimary} />
-          </Pressable>
-          <Pressable
-            style={styles.iconButton}
+    <Screen bleed onRefresh={home ? refresh : undefined} refreshing={isRefreshing} contentStyle={{ paddingTop: insets.top + space.md }}>
+      <View style={{ paddingHorizontal: space.lg, gap: space.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={type.caption}>{name ? `Chào ${name},` : 'Chào bạn,'}</Text>
+            <Text style={type.display} accessibilityRole="header">Hôm nay đọc gì?</Text>
+          </View>
+          <IconButton
+            icon="notifications-outline"
+            variant="tonal"
+            accessibilityLabel="Thông báo"
+            badge={unreadCount}
             onPress={() => router.push('/customer/notifications')}
-            accessibilityRole="button"
-            accessibilityLabel={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
-          >
-            <Ionicons name="notifications-outline" size={20} color={colors.textPrimary} />
-            {unreadCount > 0 ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-              </View>
-            ) : null}
-          </Pressable>
+          />
         </View>
+
+        {/* Search is the main way in, so it looks like the search box it opens. */}
+        <View style={{ flexDirection: 'row', gap: space.sm }}>
+          <PressableScale
+            onPress={() => router.push('/customer/search')}
+            accessibilityRole="search"
+            accessibilityLabel="Tìm tên sách, tác giả"
+            style={{ flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, borderRadius: radii.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+          >
+            <Ionicons name="search" size={20} color={colors.textMuted} />
+            <Text style={{ fontFamily: fontFamily.regular, fontSize: 16, color: colors.textMuted }}>Tìm tên sách, tác giả…</Text>
+          </PressableScale>
+          <IconButton icon="camera-outline" variant="tonal" accessibilityLabel="Tìm sách bằng ảnh bìa" onPress={() => router.push('/customer/scan-cover')} />
+        </View>
+
+        <PressableScale
+          onPress={() => router.push('/customer/assistant')}
+          accessibilityRole="button"
+          accessibilityLabel="Trợ lý tìm sách: mô tả cuốn bạn muốn đọc"
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radii.lg, backgroundColor: colors.primarySoft }}
+        >
+          <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="sparkles" size={19} color={colors.onPrimary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: fontFamily.semibold, fontSize: 15, color: colors.textPrimary }}>Chưa biết tên sách?</Text>
+            <Text style={{ fontFamily: fontFamily.regular, fontSize: 13.5, color: colors.textSecondary }}>Mô tả cuốn bạn muốn đọc, trợ lý tìm trong thư viện.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+        </PressableScale>
       </View>
 
       {isLoading && !home ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
+        <HomeSkeleton />
       ) : error && !home ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-          <Pressable style={styles.moreButton} onPress={retry} accessibilityRole="button">
-            <Text style={styles.moreButtonText}>Thử lại</Text>
-          </Pressable>
-        </View>
+        <ErrorState message={error} onRetry={retry} />
       ) : home ? (
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: tabBarSpace }]}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />}
-        >
+        <>
           {heroPersonal ? (
-            <HeroBanner
-              title={heroPersonal.book.title}
-              author={heroPersonal.book.author}
-              category={heroPersonal.book.category}
-              coverImageUrl={heroPersonal.book.cover_image_url}
-              eyebrow="GỢI Ý CHO BẠN"
-              reason={heroPersonal.reason}
-              onPress={() => openBook(heroPersonal.book.id)}
-            />
+            <FeaturedBook book={heroPersonal.book} note="Gợi ý dành cho bạn" reason={heroPersonal.reason} />
           ) : heroPopular ? (
-            <HeroBanner
-              title={heroPopular.title}
-              author={heroPopular.author}
-              category={heroPopular.category}
-              coverImageUrl={heroPopular.cover_image_url}
-              eyebrow={home.most_borrowed.length > 0 ? 'ĐƯỢC MƯỢN NHIỀU NHẤT' : 'CÓ THỂ MƯỢN NGAY'}
-              onPress={() => openBook(heroPopular.id)}
-            />
+            <FeaturedBook book={heroPopular} note={home.most_borrowed.length > 0 ? 'Được mượn nhiều nhất thư viện' : 'Có thể mượn ngay hôm nay'} />
           ) : null}
 
           {recommendations.status === 'loading' ? (
-            <View style={styles.shelf}>
-              <Text style={styles.shelfTitle}>Gợi ý dành cho bạn</Text>
-              <View style={styles.inlineState}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={styles.shelfSubtitle}>Đang chọn sách theo lịch sử đọc của bạn…</Text>
+            <View style={{ paddingHorizontal: space.lg, gap: space.md }}>
+              <SectionHeader title="Gợi ý dành cho bạn" caption="Đang chọn sách theo lịch sử đọc của bạn…" />
+              <View style={{ flexDirection: 'row', gap: space.md }}>
+                {[0, 1, 2].map((i) => <Skeleton key={i} width={TILE_WIDTH} height={180} radius={radii.xs} />)}
               </View>
             </View>
           ) : personal.length > 1 ? (
             <Shelf
               title="Gợi ý dành cho bạn"
-              subtitle="Dựa trên sách bạn đã mượn, yêu thích và đánh giá"
+              caption="Dựa trên sách bạn đã mượn, yêu thích và đánh giá"
               items={personal.slice(1).map((item) => ({ book: item.book, caption: item.reason }))}
             />
           ) : recommendations.status === 'ready' && !recommendations.personalized ? (
-            <Text style={styles.note}>Mượn hoặc lưu vài cuốn sách để nhận gợi ý riêng cho bạn.</Text>
+            <Text style={[type.caption, { paddingHorizontal: space.lg }]}>Mượn hoặc lưu vài cuốn sách để nhận gợi ý riêng cho bạn.</Text>
           ) : null}
 
-          <Shelf title="Có thể mượn ngay" subtitle="Còn sách ở chi nhánh, đặt trước được" items={asItems(home.available_now)} />
-          <Shelf title="Đang được quan tâm" subtitle="Nhiều lượt mượn gần đây" items={asItems(home.trending)} />
-          <Shelf title="Mượn nhiều nhất" items={asItems(home.most_borrowed)} />
-          <Shelf title="Đánh giá cao" items={asItems(home.top_rated)} />
-          <Shelf title="Sách mới" items={asItems(home.new_arrivals)} />
+          <Shelf title="Có thể mượn ngay" caption="Còn sách ở chi nhánh, đặt trước được" items={home.available_now.map((book) => ({ book }))} />
+          <Shelf title="Đang được quan tâm" caption="Nhiều lượt mượn gần đây" items={home.trending.map((book) => ({ book }))} />
+          <Shelf title="Mượn nhiều nhất" items={home.most_borrowed.map((book) => ({ book }))} />
+          <Shelf title="Đánh giá cao" items={home.top_rated.map((book) => ({ book }))} />
+          <Shelf title="Sách mới về" items={home.new_arrivals.map((book) => ({ book }))} />
 
           {home.categories.length > 0 ? (
-            <View style={styles.shelf}>
-              <Text style={styles.shelfTitle} accessibilityRole="header">Danh mục</Text>
-              <View style={styles.categoryGrid}>
+            <View style={{ paddingHorizontal: space.lg, gap: space.md }}>
+              <SectionHeader title="Thể loại" caption="Số đầu sách đang có trên kệ của từng thể loại" />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
                 {home.categories.map((category) => (
-                  <Pressable
+                  <PressableScale
                     key={category.slug}
-                    style={({ pressed }) => [styles.category, pressed && styles.pressed]}
                     onPress={() => router.push({ pathname: '/customer/search', params: { category: category.slug, categoryName: category.name } })}
                     accessibilityRole="button"
-                    accessibilityLabel={`${category.name}, ${category.book_count} đầu sách`}
+                    accessibilityLabel={`${category.name}, ${category.available_count} trên ${category.book_count} đầu sách có sẵn`}
+                    style={{ flexBasis: '47%', flexGrow: 1, minHeight: 76, padding: space.md, gap: 4, justifyContent: 'space-between', borderRadius: radii.md, backgroundColor: getClothColor(category.name) }}
                   >
-                    <Text style={styles.categoryName} numberOfLines={1}>{category.name}</Text>
-                    <Text style={styles.categoryCount}>{category.available_count}/{category.book_count} có sẵn</Text>
-                  </Pressable>
+                    <Text numberOfLines={2} style={{ fontFamily: fontFamily.serif, fontSize: 16.5, lineHeight: 21, color: '#F3EBD8' }}>{category.name}</Text>
+                    <Text style={{ fontFamily: fontFamily.medium, fontSize: 12.5, color: 'rgba(243,235,216,0.85)' }}>
+                      {category.available_count}/{category.book_count} có sẵn
+                    </Text>
+                  </PressableScale>
                 ))}
               </View>
             </View>
           ) : null}
 
-          <Pressable style={styles.moreButton} onPress={() => router.push('/customer/search')} accessibilityRole="button">
-            <Text style={styles.moreButtonText}>Xem toàn bộ {home.stats.total_titles} đầu sách</Text>
-          </Pressable>
-        </ScrollView>
+          <View style={{ paddingHorizontal: space.lg }}>
+            <Button label={`Xem toàn bộ ${home.stats.total_titles} đầu sách`} variant="secondary" trailingIcon="arrow-forward" onPress={() => router.push('/customer/search')} />
+          </View>
+        </>
       ) : null}
-    </SafeAreaView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  headerTitle: {
-    ...typography.h2,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  badge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontFamily: fonts.bodySemibold,
-    fontSize: 10,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  content: {
-    paddingBottom: 120,
-  },
-  shelf: {
-    marginTop: spacing.xl,
-    gap: spacing.sm,
-  },
-  shelfTitle: {
-    ...typography.h3,
-    marginLeft: spacing.lg,
-  },
-  shelfSubtitle: {
-    ...typography.caption,
-    marginHorizontal: spacing.lg,
-    marginTop: -spacing.xs,
-  },
-  shelfList: {
-    paddingHorizontal: spacing.lg,
-  },
-  posterItem: {
-    width: POSTER_WIDTH,
-    marginRight: POSTER_GAP,
-    gap: 4,
-  },
-  posterCaption: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  inlineState: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginLeft: spacing.lg,
-  },
-  note: {
-    ...typography.caption,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  category: {
-    width: '48%',
-    flexGrow: 1,
-    minHeight: 64,
-    justifyContent: 'center',
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  categoryName: {
-    ...typography.bodyBold,
-    fontSize: 14,
-  },
-  categoryCount: {
-    ...typography.caption,
-    fontSize: 12,
-  },
-  moreButton: {
-    marginTop: spacing.xl,
-    marginHorizontal: spacing.lg,
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreButtonText: {
-    ...typography.bodyBold,
-  },
-});
