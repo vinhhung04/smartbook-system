@@ -1,106 +1,87 @@
 /**
- * Shared design tokens for the mobile app. Keeps colors, spacing, radii,
- * typography and shadows consistent across every screen.
- *
- * Visual language: "Ca làm việc" (the shift) — a calm reading-lamp green
- * gives today's real numbers room to be the loudest thing on the screen,
- * instead of costuming the whole app as a physical object again.
+ * Staff-app tokens in the original export shape (fonts/colors/spacing/radius/
+ * typography/shadow), now derived from the Native Edition design system
+ * (src/design-system). New code should use the design-system components and
+ * useTheme(); this file keeps older helpers reading the same values.
  */
-import { Platform } from 'react-native';
+import { fontFamily, radii, space, staffTheme } from '../design-system';
+
+const c = staffTheme.colors;
 
 export const fonts = {
-  display: 'Sora_600SemiBold',
-  displayBold: 'Sora_700Bold',
-  body: 'Manrope_400Regular',
-  bodyMedium: 'Manrope_500Medium',
-  bodySemibold: 'Manrope_600SemiBold',
-  mono: 'RobotoMono_400Regular',
-  monoSemibold: 'RobotoMono_700Bold',
+  display: fontFamily.semibold,
+  displayBold: fontFamily.bold,
+  body: fontFamily.regular,
+  bodyMedium: fontFamily.medium,
+  bodySemibold: fontFamily.semibold,
+  mono: fontFamily.mono,
+  monoSemibold: fontFamily.monoBold,
 };
 
 export const colors = {
-  bg: '#F6F7F5',
-  surface: '#FFFFFF',
-  surfaceRaised: '#ECEFEA',
-  border: '#DEE3DD',
-  borderStrong: '#C3CBC2',
+  bg: c.bg,
+  surface: c.surface,
+  surfaceRaised: c.surfaceRaised,
+  border: c.border,
+  borderStrong: c.borderStrong,
 
-  textPrimary: '#1B211D',
-  textSecondary: '#5B6660',
-  textMuted: '#96A199',
-  onPrimary: '#FFFFFF',
+  textPrimary: c.textPrimary,
+  textSecondary: c.textSecondary,
+  textMuted: c.textMuted,
+  onPrimary: c.onPrimary,
 
-  primary: '#1F8A6B',
-  primarySoft: 'rgba(31,138,107,0.10)',
-  primaryBorder: 'rgba(31,138,107,0.35)',
+  primary: c.primary,
+  primarySoft: c.primarySoft,
+  primaryBorder: 'rgba(55,48,163,0.35)',
 
-  success: '#2E8F5C',
-  successSoft: 'rgba(46,143,92,0.10)',
-  successBorder: 'rgba(46,143,92,0.35)',
+  success: c.success,
+  successSoft: c.successSoft,
+  successBorder: 'rgba(14,122,79,0.35)',
 
-  danger: '#C0392E',
-  dangerSoft: 'rgba(192,57,46,0.10)',
-  dangerBorder: 'rgba(192,57,46,0.35)',
+  danger: c.danger,
+  dangerSoft: c.dangerSoft,
+  dangerBorder: 'rgba(190,42,50,0.35)',
 
-  warning: '#B5791A',
-  warningSoft: 'rgba(181,121,26,0.10)',
-  warningBorder: 'rgba(181,121,26,0.35)',
+  warning: c.warning,
+  warningSoft: c.warningSoft,
+  warningBorder: 'rgba(154,86,0,0.35)',
 
-  neutral: '#6D766F',
-  neutralSoft: 'rgba(109,118,111,0.12)',
+  neutral: c.neutral,
+  neutralSoft: c.neutralSoft,
 
-  overlay: 'rgba(16,20,17,0.78)',
+  overlay: c.overlay,
 };
 
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
+  xs: space.xs,
+  sm: space.sm,
+  md: space.md,
+  lg: space.lg,
+  xl: space.xl,
+  xxl: space.xxl,
 };
 
 export const radius = {
-  sm: 6,
-  md: 12,
-  lg: 18,
-  pill: 999,
+  sm: radii.xs,
+  md: radii.sm,
+  lg: radii.md,
+  pill: radii.pill,
 };
 
+const t = staffTheme.type;
+
 export const typography = {
-  h1: { fontFamily: fonts.display, fontSize: 28, color: colors.textPrimary },
-  h2: { fontFamily: fonts.display, fontSize: 22, color: colors.textPrimary },
-  h3: { fontFamily: fonts.display, fontSize: 18, color: colors.textPrimary },
-  body: { fontFamily: fonts.body, fontSize: 16, color: colors.textPrimary },
-  bodyBold: { fontFamily: fonts.bodySemibold, fontSize: 16, color: colors.textPrimary },
-  caption: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textSecondary },
-  label: {
-    fontFamily: fonts.monoSemibold,
-    fontSize: 11,
-    color: colors.textSecondary,
-    letterSpacing: 1.1,
-    textTransform: 'uppercase' as const,
-  },
-  code: {
-    fontFamily: fonts.mono,
-    fontSize: 15,
-    color: colors.textPrimary,
-    letterSpacing: 0.2,
-  },
+  h1: t.display,
+  h2: t.title,
+  h3: t.heading,
+  body: t.body,
+  bodyBold: t.bodyStrong,
+  caption: t.caption,
+  // Sentence case now: tracked mono capitals were the old look's costume.
+  label: t.label,
+  code: t.code,
 };
 
 export const shadow = {
-  card: Platform.select({
-    web: { boxShadow: '0px 4px 16px rgba(27,33,29,0.07)', borderWidth: 1, borderColor: colors.border },
-    default: {
-      shadowColor: '#1B211D',
-      shadowOpacity: 0.08,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: 3,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-  }),
+  card: { ...staffTheme.shadow.card, borderWidth: 1, borderColor: c.border },
 };

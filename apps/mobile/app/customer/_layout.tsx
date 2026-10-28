@@ -1,23 +1,25 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-import { colors } from '../../src/theme/customerTokens';
+import { ThemeProvider, customerTheme } from '../../src/design-system';
 
+const { colors } = customerTheme;
+
+/** The reader area: light reading-room theme for every screen below. */
 export default function CustomerLayout() {
   return (
-    <>
-      {/* Dark customer theme: light status-bar icons, or they vanish on the black background. */}
-      <StatusBar style="light" />
+    <ThemeProvider name="customer">
+      <StatusBar style="dark" />
       <Stack
-      screenOptions={{
-        headerShown: false,
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.textPrimary,
-        headerTitleStyle: { fontWeight: '700' },
-        headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.bg },
-      }}
+        screenOptions={{
+          headerShown: false,
+          headerStyle: { backgroundColor: colors.bg },
+          headerTintColor: colors.textPrimary,
+          headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
+          contentStyle: { backgroundColor: colors.bg },
+        }}
       />
-    </>
+    </ThemeProvider>
   );
 }

@@ -1,83 +1,40 @@
-import { StyleSheet } from 'react-native';
-import { Tabs } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
-import { CustomerTabBarIcon } from '../../../src/components/customer/CustomerTabBarIcon';
-import { colors, fonts } from '../../../src/theme/customerTokens';
+import { customerTheme, fontFamily } from '../../../src/design-system';
 
+const { colors } = customerTheme;
+
+/**
+ * Reader tabs on the platform's own tab bar. The old floating blurred bar sat on
+ * top of the last rows of every list; the native bar reserves its own space and
+ * handles the home indicator / gesture bar itself.
+ */
 export default function CustomerTabsLayout() {
-  // Float above the Android gesture/nav bar (edge-to-edge) instead of a fixed 20pt.
-  const insets = useSafeAreaInsets();
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        // Floating dark-glass bar — the customer-side counterpart to the
-        // login screen's liquid glass, but dark instead of light.
-        tabBarStyle: {
-          position: 'absolute',
-          left: 16,
-          right: 16,
-          bottom: Math.max(insets.bottom, 12) + 8,
-          height: 68,
-          borderRadius: 28,
-          borderTopWidth: 0,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: 'transparent',
-          paddingBottom: 10,
-          paddingTop: 8,
-          elevation: 0,
-        },
-        tabBarBackground: () => (
-          <BlurView intensity={50} tint="dark" style={[StyleSheet.absoluteFill, styles.barBackground]} />
-        ),
-        tabBarLabelStyle: {
-          fontFamily: fonts.bodyMedium,
-          fontSize: 11,
-        },
-        tabBarAllowFontScaling: false,
-      }}
+    <NativeTabs
+      tintColor={colors.primary}
+      iconColor={{ default: colors.textMuted, selected: colors.primary }}
+      labelStyle={{ default: { fontFamily: fontFamily.medium, fontSize: 11.5, color: colors.textSecondary }, selected: { fontFamily: fontFamily.semibold, fontSize: 11.5, color: colors.primary } }}
+      backgroundColor={colors.surface}
+      indicatorColor={colors.primarySoft}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Khám phá',
-          tabBarIcon: ({ focused }) => <CustomerTabBarIcon name="compass" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="my-books"
-        options={{
-          title: 'Sách của tôi',
-          tabBarIcon: ({ focused }) => <CustomerTabBarIcon name="bookmark" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{
-          title: 'Ví & Phí',
-          tabBarIcon: ({ focused }) => <CustomerTabBarIcon name="wallet" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Cá nhân',
-          tabBarIcon: ({ focused }) => <CustomerTabBarIcon name="person-circle" focused={focused} />,
-        }}
-      />
-    </Tabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass" />
+        <NativeTabs.Trigger.Label>Khám phá</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="my-books">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="library" />
+        <NativeTabs.Trigger.Label>Sách của tôi</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="wallet">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="wallet" />
+        <NativeTabs.Trigger.Label>Ví & phí</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-circle" />
+        <NativeTabs.Trigger.Label>Cá nhân</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }
-
-const styles = StyleSheet.create({
-  barBackground: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(20,20,23,0.6)',
-  },
-});

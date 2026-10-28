@@ -1,61 +1,43 @@
-import { Tabs } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
-import { TabBarIcon } from '../../src/components/TabBarIcon';
-import { colors, fonts } from '../../src/theme/tokens';
+import { fontFamily, staffTheme } from '../../src/design-system';
 
+const { colors } = staffTheme;
+
+/**
+ * Staff tabs on the platform's own tab bar (Material 3 on Android, the system
+ * bar on iOS): native safe areas, no overlap, no custom bar to keep in sync.
+ * Four destinations only; every workflow is reached from Home or Scan. Tab
+ * switches are not animated (they happen dozens of times a shift).
+ * Ionicons via VectorIcon: the Material-symbol `md` icons need expo-symbols,
+ * which this app does not ship.
+ */
 export default function TabsLayout() {
-  // SDK 57 draws edge-to-edge: the Android gesture/nav bar sits on top of the app, so a
-  // fixed height + paddingBottom put the tab labels underneath it.
-  const insets = useSafeAreaInsets();
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 64 + insets.bottom,
-          paddingBottom: 10 + insets.bottom,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontFamily: fonts.bodyMedium,
-          fontSize: 11,
-        },
-        tabBarAllowFontScaling: false,
-      }}
+    <NativeTabs
+      tintColor={colors.primary}
+      iconColor={{ default: colors.textMuted, selected: colors.primary }}
+      labelStyle={{ default: { fontFamily: fontFamily.medium, fontSize: 11.5, color: colors.textSecondary }, selected: { fontFamily: fontFamily.semibold, fontSize: 11.5, color: colors.primary } }}
+      backgroundColor={colors.surface}
+      indicatorColor={colors.primarySoft}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Trang chủ',
-          tabBarIcon: ({ focused }) => <TabBarIcon name="home" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          title: 'Việc của tôi',
-          tabBarIcon: ({ focused }) => <TabBarIcon name="clipboard" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="scan"
-        options={{
-          title: 'Quét',
-          tabBarIcon: ({ focused }) => <TabBarIcon name="scan" focused={focused} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Cá nhân',
-          tabBarIcon: ({ focused }) => <TabBarIcon name="person-circle" focused={focused} />,
-        }}
-      />
-    </Tabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="home" />
+        <NativeTabs.Trigger.Label>Trang chủ</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tasks">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="clipboard" />
+        <NativeTabs.Trigger.Label>Việc của tôi</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="scan">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="scan" />
+        <NativeTabs.Trigger.Label>Quét</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-circle" />
+        <NativeTabs.Trigger.Label>Cá nhân</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

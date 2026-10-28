@@ -1,37 +1,27 @@
 /**
- * Login-screen-only tokens. Deliberately NOT imported from tokens.ts (staff
- * green) or customerTokens.ts (customer amber) — role is unknown until after
- * auth succeeds, so this screen has to read as neither.
- *
- * v3: a full reset to a light, paper-and-ink "library catalog card" — no
- * glass, no dark backdrop. Grounded in the actual materials of a library
- * (paper, ink, book-cloth binding, gilt page edges) rather than borrowing
- * Apple's material language a third time.
+ * Before sign-in the role is unknown, so the entry screens commit to neither
+ * half of the app: the brand alone (ink and white), from the design system.
  */
-import { fonts, spacing, radius } from './tokens';
+import { brand, loginTheme } from '../design-system';
+import { fonts, radius, spacing } from './tokens';
 
 export { fonts, spacing, radius };
 
 export const colors = {
-  paperTop: '#FBF5E9',
-  paperBottom: '#F0E4CC',
-
-  cardStock: '#FFFDF7',
-  cardRule: 'rgba(140,50,66,0.18)',
-
-  ink: '#2E2015',
-  inkSoft: '#6B5847',
-  inkMuted: '#A6957A',
-
-  accent: '#8C3242',
-  accentDeep: '#5E1F2A',
-  accentSoft: 'rgba(140,50,66,0.08)',
-  onAccent: '#FBF5E9',
-
-  gold: '#C9A44C',
-  goldSoft: 'rgba(201,164,76,0.16)',
-
-  danger: '#B3261E',
-  dangerSoft: 'rgba(179,38,30,0.08)',
-  dangerBorder: 'rgba(179,38,30,0.3)',
+  paperTop: '#FFFFFF',
+  paperBottom: '#FFFFFF',
+  cardStock: '#FFFFFF',
+  cardRule: loginTheme.colors.border,
+  ink: loginTheme.colors.textPrimary,
+  inkSoft: loginTheme.colors.textSecondary,
+  inkMuted: loginTheme.colors.textMuted,
+  accent: brand.ink,
+  accentDeep: brand.inkDeep,
+  accentSoft: loginTheme.colors.primarySoft,
+  onAccent: '#FFFFFF',
+  gold: brand.lamp,
+  goldSoft: 'rgba(246,223,180,0.35)',
+  danger: loginTheme.colors.danger,
+  dangerSoft: loginTheme.colors.dangerSoft,
+  dangerBorder: 'rgba(190,42,50,0.3)',
 };
