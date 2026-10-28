@@ -16,9 +16,12 @@ if [[ -z "$target" ]]; then
   [[ -n "$target" ]] || die "no earlier release in $RELEASES_LOG"
 fi
 
-for svc in "${APP_SERVICES[@]}"; do
-  docker image inspect "$(IMAGE_TAG="$target" dc config --images "$svc")" >/dev/null 2>&1 \
-    || die "image for $svc:$target is not on this server (re-run the GitHub workflow for that commit instead)"
+# `config --images` also lists the services' dependencies (db, redis, ...): keep the release's own
+mapfile -t images < <(IMAGE_TAG="$target" dc config --images "${APP_SERVICES[@]}" | grep -E ":$target\$" | sort -u)
+[[ ${#images[@]} -eq ${#APP_SERVICES[@]} ]] || die "could not resolve the images of release $target"
+for img in "${images[@]}"; do
+  docker image inspect "$img" >/dev/null 2>&1 \
+    || die "$img is not on this server (re-run the GitHub workflow for that commit instead)"
 done
 
 log "rolling back $cur -> $target"

@@ -180,7 +180,10 @@ ssh -i ~/.ssh/smartbook_vps root@160.250.5.241     # quản trị hệ thống
 cd /opt/smartbook
 ```
 
-Nếu mất key: dùng web console của VPSMMO để đăng nhập và thêm key mới vào `authorized_keys`.
+- Key `~/.ssh/smartbook_vps` có passphrase. Muốn script hoặc công cụ tự động dùng được key, hãy nạp nó vào ssh-agent một lần (`ssh-add ~/.ssh/smartbook_vps`).
+- Đăng nhập SSH bằng mật khẩu đã bị tắt; chỉ chấp nhận key.
+- UFW giới hạn **6 kết nối SSH mới trong 30 giây** cho mỗi IP, fail2ban khóa 1 giờ sau 5 lần đăng nhập sai. Nếu gặp `Connection timed out`, chờ khoảng 1 phút rồi thử lại. Không chạy vòng lặp SSH dày đặc; gộp nhiều lệnh vào một phiên `ssh`. Gỡ khóa fail2ban: `fail2ban-client set sshd unbanip <IP>` (chạy bằng root, qua web console).
+- Nếu mất key: dùng web console của VPSMMO để đăng nhập và thêm key mới vào `authorized_keys`.
 
 ## 11. Logs, trạng thái, restart
 
