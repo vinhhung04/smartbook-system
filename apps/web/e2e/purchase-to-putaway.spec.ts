@@ -91,7 +91,8 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.goto('/my-warehouse-tasks');
   // The queue is paged (10, oldest first) and may hold older receipts on a
   // database that is not fresh: narrow to receiving tasks, then open this receipt's task.
-  await page.getByRole('button', { name: /^Tiếp nhận/ }).click();
+  await page.getByRole('combobox', { name: 'Lọc theo loại công việc' }).click();
+  await page.getByRole('option', { name: /^Tiếp nhận hàng/ }).click();
   const receiptPath = new URL(receiptUrl).pathname;
   await page.locator(`a[href="${receiptPath}"]`, { hasText: 'Ghi nhận' }).click();
   await page.getByTestId('save-received-count-button').first().click();

@@ -10,8 +10,8 @@ export async function loginAs(page: Page, { identifier, password }: { identifier
 
 export async function loginAsCustomer(page: Page, { identifier, password }: { identifier: string; password: string }) {
   await page.goto('/customer/login');
-  await page.locator('#identifier').fill(identifier);
-  await page.locator('#password').fill(password);
+  await page.locator('#customer-login-identifier').fill(identifier);
+  await page.locator('#customer-login-password').fill(password);
   await page.getByTestId('customer-login-submit').click();
   await page.waitForURL((url) => !url.pathname.startsWith('/customer/login'));
 }
