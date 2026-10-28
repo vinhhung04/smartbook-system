@@ -1,214 +1,90 @@
-import { useState } from 'react';
-import { useNavigate, NavLink, useSearchParams } from 'react-router';
-import { motion } from 'motion/react';
-import { Mail, Lock, BookOpen, Calendar, Star, ShieldCheck, ArrowRight } from 'lucide-react';
-import { Eye, EyeOff } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
-import { MorphIcon } from 'morphicons/react';
-import { authService } from '@/services/auth';
-import { getApiErrorMessage } from '@/services/api';
-import { toast } from 'sonner';
+import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Lock, User } from 'lucide-react';
 import { safeReturnUrl, withReturnUrl } from '@/lib/return-url';
+import { AuthLayout } from '@/components/auth-layout';
+import { useLoginForm } from '@/components/auth/use-login-form';
+import { AuthField, AuthFormAlert, AuthPasswordField, AuthPortalSwitch, AuthRememberCheckbox, AuthSubmitButton } from '@/components/auth/auth-fields';
+
+const LINK = 'rounded-sm font-semibold text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:text-indigo-300';
 
 export function CustomerLoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!identifier || !password) {
-      toast.error('Vui lòng nhập tài khoản và mật khẩu');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      const loginData = await authService.login({ identifier, password });
-      if (!loginData.user?.roles?.includes('CUSTOMER')) {
-        toast.error('Tài khoản này không phải tài khoản khách hàng');
-        await authService.logout();
-        return;
-      }
-      toast.success('Đăng nhập thành công');
-      navigate(returnUrl || '/customer');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Đăng nhập thất bại'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  // "Đặt trước" on a book sends visitors here with ?reserve=1 on the way back.
+  const reserving = Boolean(returnUrl && /[?&]reserve=1(&|$)/.test(returnUrl));
+  const {
+    identifier, setIdentifier, password, setPassword, remember, setRemember,
+    errors, formError, submitting, submit, identifierRef, passwordRef,
+  } = useLoginForm({
+    portal: 'customer',
+    // Staff accounts are refused here and their session cleared again, as before.
+    refuse: (data) => (data.user?.roles?.includes('CUSTOMER')
+      ? null
+      : 'Tài khoản này không phải tài khoản bạn đọc. Nhân viên vui lòng đăng nhập ở cổng nội bộ.'),
+    onSuccess: () => navigate(returnUrl || '/customer'),
+  });
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background">
-      {/* Left — Brand Panel */}
-      <div className="hidden lg:flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-700 p-10">
-        {/* Decorative shapes */}
-        <motion.div
-          animate={{ y: [0, 20, 0], x: [0, 10, 0] }}
-          transition={{ duration: 7, repeat: Infinity }}
-          className="absolute w-48 h-48 bg-blue-400/10 rounded-full top-16 left-10"
-        />
-        <motion.div
-          animate={{ y: [0, -20, 0], x: [0, -10, 0] }}
-          transition={{ duration: 9, repeat: Infinity, delay: 1.5 }}
-          className="absolute w-64 h-64 bg-purple-400/10 rounded-full bottom-24 right-8"
-        />
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 25, repeat: Infinity, ease: 'linear' }}
-          className="absolute w-36 h-36 border-2 border-white/10 rounded-xl top-1/3 right-1/4"
-        />
-        <motion.div
-          animate={{ y: [-15, 15, -15] }}
-          transition={{ duration: 5, repeat: Infinity }}
-          className="absolute w-20 h-20 border border-white/10 rounded-full bottom-32 left-16"
-        />
-
-        <div className="relative z-10 text-center max-w-sm">
-          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5 }}>
-            <div className="w-16 h-16 rounded-2xl bg-card/10 backdrop-blur-md border border-white/20 flex items-center justify-center mx-auto mb-6 shadow-2xl">
-              <BookOpen className="w-8 h-8 text-white" />
-            </div>
-          </motion.div>
-
-          <motion.h1 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="text-4xl text-white mb-3 tracking-tight" style={{ fontWeight: 800 }}>
-            SmartBook
-          </motion.h1>
-          <p className="text-blue-100 text-lg mb-10">Cổng đọc sách cá nhân của bạn</p>
-
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="space-y-5 text-left">
-            {[
-              { icon: BookOpen, title: 'Khám phá sách', desc: 'Hàng nghìn đầu sách từ thư viện của chúng tôi' },
-              { icon: Calendar, title: 'Đặt trước sách', desc: 'Nhận sách đặt trước tại quầy theo lịch của bạn' },
-              { icon: Star, title: 'Theo dõi mượn trả', desc: 'Theo dõi hạn trả và quản lý gia hạn' },
-              { icon: ShieldCheck, title: 'Tích điểm hội viên', desc: 'Chương trình hội viên dành cho bạn đọc tích cực' },
-            ].map((f, i) => (
-              <motion.div key={i} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.4 + i * 0.1 }}
-                className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-card/10 backdrop-blur border border-white/20 flex items-center justify-center shrink-0">
-                  <f.icon className="w-5 h-5 text-blue-200" />
-                </div>
-                <div>
-                  <p className="text-white text-[14px]" style={{ fontWeight: 600 }}>{f.title}</p>
-                  <p className="text-blue-100 text-[12px]">{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Right — Login Form */}
-      <div className="flex flex-col items-center justify-center p-8 bg-card">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
-          {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-100 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/20 flex items-center justify-center border border-indigo-200/40 dark:border-indigo-800/40 mx-auto mb-3 shadow-lg">
-              <BookOpen className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-            </div>
-            <p className="text-[12px] text-muted-foreground">Cổng thông tin khách hàng</p>
-          </div>
-
-          <div className="mb-8">
-            <h2 className="text-[26px] tracking-tight text-foreground" style={{ fontWeight: 700 }}>Chào mừng trở lại</h2>
-            <p className="text-[13px] text-muted-foreground mt-1.5">Đăng nhập vào tài khoản khách hàng</p>
-          </div>
-
-          <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}>
-            {/* Email or Username */}
-            <div>
-              <label htmlFor="identifier" className="block text-[12px] font-medium text-muted-foreground mb-1.5">
-                Email hoặc tên đăng nhập
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                <input
-                  id="identifier"
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="Nhập email hoặc tên đăng nhập"
-                  autoComplete="username"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-input bg-background text-[13px] placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-[12px] font-medium text-muted-foreground mb-1.5">
-                Mật khẩu
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Nhập mật khẩu"
-                  autoComplete="current-password"
-                  className="w-full pl-10 pr-11 py-3 rounded-xl border border-input bg-background text-[13px] placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all"
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                  <MorphIcon icon={showPassword ? EyeOff : Eye} className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Remember me */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input type="checkbox" className="w-4 h-4 rounded border-input bg-background accent-primary" />
-                <span className="text-[12px] text-muted-foreground">Ghi nhớ đăng nhập</span>
-              </label>
-              <NavLink to="/forgot-password?portal=customer" className="text-[12px] text-primary hover:text-primary/80 transition-colors" style={{ fontWeight: 500 }}>
-                Quên mật khẩu?
-              </NavLink>
-            </div>
-
-            {/* Submit */}
-            <motion.button type="submit" data-testid="customer-login-submit" disabled={isSubmitting}
-              whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
-              className="w-full py-3 rounded-xl bg-primary text-primary-foreground text-[14px] font-semibold shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2">
-              {isSubmitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
-                  Đang đăng nhập...
-                </span>
-              ) : 'Đăng nhập'}
-            </motion.button>
-          </form>
-
-          <div className="mt-6 text-center text-[13px] text-muted-foreground">
+    <AuthLayout
+      portal="customer"
+      title="Chào mừng trở lại"
+      subtitle={reserving
+        ? 'Đăng nhập để hoàn tất đặt trước. Bạn sẽ quay lại đúng cuốn sách vừa chọn.'
+        : 'Đăng nhập bằng tài khoản bạn đọc của bạn.'}
+      footer={
+        <div className="space-y-4">
+          <p className="text-[14px] text-muted-foreground">
             Chưa có tài khoản?{' '}
-            <NavLink to={withReturnUrl('/customer/register', returnUrl)} className="text-primary font-semibold hover:text-primary/80 transition-colors">
-              Tạo tài khoản
-            </NavLink>
-          </div>
-
-          {/* Back to admin */}
-          <div className="mt-3 text-center text-[13px]">
-            <NavLink to={returnUrl || '/'} className="text-muted-foreground hover:text-foreground hover:underline">
+            <Link to={withReturnUrl('/customer/register', returnUrl)} className={LINK}>Tạo tài khoản bạn đọc</Link>
+          </p>
+          <p className="text-[14px]">
+            <Link to={returnUrl || '/'} className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60">
               Tiếp tục xem sách mà không cần đăng nhập
-            </NavLink>
+            </Link>
+          </p>
+          <div className="border-t border-border pt-4">
+            <AuthPortalSwitch question="Bạn là nhân viên thư viện?" action="Cổng nội bộ" to="/login" />
           </div>
-
-          <div className="mt-5 pt-5 border-t border-border text-center">
-            <NavLink to="/login" className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors">
-              <ArrowRight className="w-3 h-3 rotate-180" />
-              Quay lại đăng nhập nhân viên
-            </NavLink>
-          </div>
-        </motion.div>
-      </div>
-    </div>
+        </div>
+      }
+    >
+      <form className="space-y-5" noValidate onSubmit={submit} aria-busy={submitting || undefined}>
+        <AuthFormAlert message={formError} />
+        <AuthField
+          ref={identifierRef}
+          id="customer-login-identifier"
+          label="Email hoặc tên đăng nhập"
+          icon={User}
+          value={identifier}
+          onChange={(event) => setIdentifier(event.target.value)}
+          error={errors.identifier}
+          placeholder="Nhập email hoặc tên đăng nhập"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          readOnly={submitting}
+        />
+        <AuthPasswordField
+          ref={passwordRef}
+          id="customer-login-password"
+          label="Mật khẩu"
+          icon={Lock}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          error={errors.password}
+          placeholder="Nhập mật khẩu"
+          autoComplete="current-password"
+          readOnly={submitting}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-x-4">
+          <AuthRememberCheckbox checked={remember} onChange={setRemember} />
+          <Link to="/forgot-password?portal=customer" className={`inline-flex min-h-10 items-center text-[13.5px] ${LINK}`}>
+            Quên mật khẩu?
+          </Link>
+        </div>
+        <AuthSubmitButton submitting={submitting} label="Đăng nhập" busyLabel="Đang đăng nhập…" testId="customer-login-submit" />
+      </form>
+    </AuthLayout>
   );
 }

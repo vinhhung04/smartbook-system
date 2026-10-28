@@ -1,17 +1,11 @@
 import { createContext, useContext, useEffect, type RefObject } from 'react';
-import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { useGSAP } from '@gsap/react';
+import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '@/lib/gsap';
 
-// Registered once for the whole public site.
-gsap.registerPlugin(useGSAP, ScrollTrigger);
+// The public site adds ScrollTrigger on top of the shared core (lib/gsap).
+gsap.registerPlugin(ScrollTrigger);
 
-export { gsap, ScrollTrigger, useGSAP };
-
-/** Every GSAP scene runs only inside this query; reduced motion gets the final layout, untouched. */
-export const MOTION_OK = '(prefers-reduced-motion: no-preference)';
-/** Long exponential settle: fast start, soft landing. Shared so the page moves with one voice. */
-export const EASE_OUT = 'expo.out';
+export { EASE_OUT, MOTION_OK, gsap, ScrollTrigger, useGSAP };
 
 /**
  * Which engine runs <Reveal>. The rest of the public site keeps Motion's

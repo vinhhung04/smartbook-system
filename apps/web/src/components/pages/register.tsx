@@ -1,41 +1,64 @@
-import { useState } from "react";
-import { motion } from "motion/react";
-import { Mail, Lock, Check, X } from "lucide-react";
-import { Eye, EyeOff } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
-import { MorphIcon } from "morphicons/react";
-import { NavLink, useNavigate } from "react-router";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Building2, Check, Circle, Lock, Mail, User } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api.ts";
+import { cn } from "@/components/ui/utils";
 import { AuthLayout } from "@/components/auth-layout";
+import { AuthField, AuthFormAlert, AuthPasswordField, AuthPortalSwitch, AuthSubmitButton } from "@/components/auth/auth-fields";
+
+type Field = "firstName" | "lastName" | "email" | "organization" | "password";
+type FieldErrors = Partial<Record<Field, string>>;
+
+const REQUIRED: Record<Field, string> = {
+  firstName: "Nhập tên.",
+  lastName: "Nhập họ.",
+  email: "Nhập email.",
+  organization: "Nhập tên đơn vị.",
+  password: "Tạo mật khẩu.",
+};
+const FIELD_ORDER: Field[] = ["firstName", "lastName", "email", "organization", "password"];
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [password, setPassword] = useState("");
-  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", organization: "", password: "" });
+  const [formData, setFormData] = useState<Record<Field, string>>({ firstName: "", lastName: "", email: "", organization: "", password: "" });
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const refs = useRef<Partial<Record<Field, HTMLInputElement | null>>>({});
 
-  const passwordChecks = {
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    number: /[0-9]/.test(password),
+  const password = formData.password;
+  // The same three rules as before; shown as a checklist that ticks while typing.
+  const passwordChecks = [
+    { label: "Tối thiểu 8 ký tự", ok: password.length >= 8 },
+    { label: "Có chữ hoa", ok: /[A-Z]/.test(password) },
+    { label: "Có chữ số", ok: /[0-9]/.test(password) },
+  ];
+  const allChecksPassed = passwordChecks.every((check) => check.ok);
+
+  const update = (field: Field, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    setFormError(null);
   };
 
-  const allChecksPassed = Object.values(passwordChecks).every(Boolean);
-
-  const handleRegister = async () => {
-    if (!formData.firstName || !formData.lastName || !formData.email || !formData.organization || !password) {
-      toast.error("Vui lòng điền đầy đủ thông tin");
-      return;
-    }
-    if (!allChecksPassed) {
-      toast.error("Mật khẩu chưa đáp ứng đủ yêu cầu");
+  const handleRegister = async (event: FormEvent) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+    const next: FieldErrors = {};
+    for (const field of FIELD_ORDER) if (!formData[field].trim()) next[field] = REQUIRED[field];
+    if (!next.password && !allChecksPassed) next.password = "Mật khẩu chưa đáp ứng đủ yêu cầu bên dưới.";
+    const firstInvalid = FIELD_ORDER.find((field) => next[field]);
+    if (firstInvalid) {
+      setErrors(next);
+      refs.current[firstInvalid]?.focus();
       return;
     }
 
     try {
       setIsSubmitting(true);
+      setFormError(null);
       await authService.register({
         username: `${formData.firstName}.${formData.lastName}`.toLowerCase().replace(/\s+/g, "."),
         email: formData.email,
@@ -45,120 +68,55 @@ export function RegisterPage() {
       toast.success("Tạo tài khoản thành công. Vui lòng đăng nhập.");
       navigate("/login");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Đăng ký thất bại"));
+      setFormError(getApiErrorMessage(error, "Chưa tạo được tài khoản. Vui lòng thử lại."));
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const bind = (field: Field) => ({
+    ref: (node: HTMLInputElement | null) => { refs.current[field] = node; },
+    value: formData[field],
+    onChange: (event: ChangeEvent<HTMLInputElement>) => update(field, event.target.value),
+    error: errors[field],
+    readOnly: isSubmitting,
+  });
+
   return (
     <AuthLayout
       title="Tạo tài khoản mới"
-      subtitle="Tham gia SmartBook để quản lý thư viện và kho vận hiệu quả hơn"
+      subtitle="Tham gia SmartBook để quản lý thư viện và kho vận hiệu quả hơn."
       footer={
-        <>
-          <div className="text-center text-[12px] text-muted-foreground mt-4">
+        <div className="space-y-1 border-t border-border pt-5">
+          <p className="text-[13.5px] text-muted-foreground">
             Đã có tài khoản?{" "}
-            <NavLink to="/login" className="text-primary hover:opacity-80 font-semibold">
-              Đăng nhập
-            </NavLink>
-          </div>
-          <div className="text-center text-[12px] text-muted-foreground mt-2">
-            Bạn là bạn đọc thư viện?{" "}
-            <NavLink to="/customer/register" className="text-primary hover:opacity-80 font-semibold">
-              Tạo tài khoản khách hàng
-            </NavLink>
-          </div>
-        </>
+            <Link to="/login" className="rounded-sm font-semibold text-foreground hover:text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:hover:text-indigo-300">Đăng nhập</Link>
+          </p>
+          <AuthPortalSwitch question="Bạn là bạn đọc của thư viện?" action="Tạo tài khoản bạn đọc" to="/customer/register" />
+        </div>
       }
     >
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleRegister();
-        }}
-      >
-        <div className="space-y-4 mb-6">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="register-first-name" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-                Tên <span className="text-destructive">*</span>
-              </label>
-              <input id="register-first-name" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} type="text" placeholder="Văn" required
-                className="w-full px-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-            </div>
-            <div>
-              <label htmlFor="register-last-name" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-                Họ <span className="text-destructive">*</span>
-              </label>
-              <input id="register-last-name" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} type="text" placeholder="Nguyễn" required
-                className="w-full px-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="register-email" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-              Email <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input id="register-email" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} type="email" placeholder="ten@congty.com" required
-                className="w-full pl-10 pr-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-            </div>
-          </div>
-
-          <div>
-            <label htmlFor="register-org" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-              Tổ chức <span className="text-destructive">*</span>
-            </label>
-            <input id="register-org" value={formData.organization} onChange={e => setFormData({ ...formData, organization: e.target.value })} type="text" placeholder="Tên đơn vị của bạn" required
-              className="w-full px-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-          </div>
-
-          <div>
-            <label htmlFor="register-password" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-              Mật khẩu <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input id="register-password" value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? "text" : "password"} placeholder="Tạo mật khẩu mạnh" autoComplete="new-password" required
-                className="w-full pl-10 pr-10 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-                <MorphIcon icon={showPassword ? EyeOff : Eye} className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Password Strength */}
-            {password && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-3 space-y-2">
-                {[
-                  { label: "Tối thiểu 8 ký tự", check: passwordChecks.length },
-                  { label: "Có chữ hoa", check: passwordChecks.uppercase },
-                  { label: "Có chữ số", check: passwordChecks.number },
-                ].map(p => (
-                  <div key={p.label} className="flex items-center gap-2 text-[11px]">
-                    {p.check ? (
-                      <Check className="w-4 h-4 text-emerald-500" />
-                    ) : (
-                      <X className="w-4 h-4 text-muted-foreground/50" />
-                    )}
-                    <span className={p.check ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}>{p.label}</span>
-                  </div>
-                ))}
-              </motion.div>
-            )}
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 rounded border-input" />
-            <span className="text-[12px] text-muted-foreground">Tôi đồng ý với Điều khoản dịch vụ</span>
-          </label>
+      <form className="space-y-5" noValidate onSubmit={handleRegister} aria-busy={isSubmitting || undefined}>
+        <AuthFormAlert message={formError} />
+        <div className="grid gap-5 sm:grid-cols-2 sm:gap-3">
+          <AuthField {...bind("firstName")} id="register-first-name" label="Tên" icon={User} placeholder="Văn" autoComplete="given-name" />
+          <AuthField {...bind("lastName")} id="register-last-name" label="Họ" icon={User} placeholder="Nguyễn" autoComplete="family-name" />
         </div>
-
-        <motion.button type="submit" disabled={!allChecksPassed || isSubmitting} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          className={`w-full py-3 rounded-[10px] text-white text-[13px] font-semibold transition-all ${allChecksPassed ? "bg-gradient-to-r from-indigo-600 to-violet-600 shadow-lg shadow-indigo-600/20 hover:shadow-xl" : "bg-muted-foreground/40 cursor-not-allowed"}`}>
-          {isSubmitting ? "Đang tạo..." : "Tạo tài khoản"}
-        </motion.button>
+        <AuthField {...bind("email")} id="register-email" label="Email" icon={Mail} type="email" placeholder="ten@congty.com" autoComplete="email" autoCapitalize="none" spellCheck={false} />
+        <AuthField {...bind("organization")} id="register-org" label="Tổ chức" icon={Building2} placeholder="Tên đơn vị của bạn" autoComplete="organization" />
+        <div>
+          <AuthPasswordField {...bind("password")} id="register-password" label="Mật khẩu" icon={Lock} placeholder="Tạo mật khẩu mạnh" autoComplete="new-password" />
+          <ul className="mt-3 grid gap-1.5 sm:grid-cols-3" aria-label="Yêu cầu mật khẩu">
+            {passwordChecks.map((check) => (
+              <li key={check.label} className={cn("flex items-center gap-1.5 text-[12.5px]", check.ok ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground")}>
+                {check.ok ? <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <Circle className="h-3 w-3 shrink-0" aria-hidden="true" />}
+                {check.label}
+                <span className="sr-only">{check.ok ? ": đã đạt" : ": chưa đạt"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <AuthSubmitButton submitting={isSubmitting} label="Tạo tài khoản" busyLabel="Đang tạo tài khoản…" />
       </form>
     </AuthLayout>
   );

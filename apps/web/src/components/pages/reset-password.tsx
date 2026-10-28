@@ -1,44 +1,49 @@
-import { useState } from "react";
-import { motion } from "motion/react";
+import { useRef, useState, type FormEvent } from "react";
 import { Lock } from "lucide-react";
-import { Eye, EyeOff } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
-import { MorphIcon } from "morphicons/react";
-import { NavLink, useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { AuthLayout } from "@/components/auth-layout";
+import { AuthFormAlert, AuthPasswordField, AuthSubmitButton } from "@/components/auth/auth-fields";
+
+interface FieldErrors {
+  newPassword?: string;
+  confirmPassword?: string;
+}
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
-  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(token ? null : "Liên kết đặt lại không hợp lệ hoặc thiếu token. Vui lòng yêu cầu lại.");
+  const newRef = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = async () => {
-    if (!token) {
-      toast.error("Liên kết đặt lại không hợp lệ hoặc thiếu token");
-      return;
-    }
-    if (newPassword.length < 6) {
-      toast.error("Mật khẩu phải có ít nhất 6 ký tự");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("Mật khẩu xác nhận không khớp");
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (isSubmitting || !token) return;
+    const next: FieldErrors = {};
+    if (newPassword.length < 6) next.newPassword = "Mật khẩu phải có ít nhất 6 ký tự.";
+    else if (newPassword !== confirmPassword) next.confirmPassword = "Mật khẩu xác nhận không khớp.";
+    if (next.newPassword || next.confirmPassword) {
+      setErrors(next);
+      (next.newPassword ? newRef : confirmRef).current?.focus();
       return;
     }
 
     try {
       setIsSubmitting(true);
+      setFormError(null);
       await authService.confirmPasswordReset(token, newPassword);
       toast.success("Đặt lại mật khẩu thành công. Vui lòng đăng nhập.");
       navigate("/login");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Đặt lại mật khẩu thất bại"));
+      setFormError(getApiErrorMessage(error, "Chưa đặt lại được mật khẩu. Vui lòng thử lại."));
     } finally {
       setIsSubmitting(false);
     }
@@ -49,53 +54,40 @@ export function ResetPasswordPage() {
       title="Đặt lại mật khẩu"
       subtitle="Nhập mật khẩu mới cho tài khoản của bạn."
       footer={
-        <div className="text-center text-[12px] text-muted-foreground">
-          <NavLink to="/login" className="text-primary hover:opacity-80 font-semibold">
-            Quay lại đăng nhập
-          </NavLink>
-        </div>
+        <Link to="/login" className="inline-flex min-h-10 items-center rounded-sm text-[14px] font-semibold text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:text-indigo-300">
+          Quay lại đăng nhập
+        </Link>
       }
     >
-      {!token && (
-        <p className="text-[13px] text-destructive mb-4">Liên kết đặt lại không hợp lệ hoặc thiếu token. Vui lòng yêu cầu lại.</p>
-      )}
-
-      <form
-        className="space-y-4 mb-6"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void handleSubmit();
-        }}
-      >
-        <div>
-          <label htmlFor="reset-new-password" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-            Mật khẩu mới <span className="text-destructive">*</span>
-          </label>
-          <div className="relative">
-            <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input id="reset-new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} type={showPassword ? "text" : "password"} placeholder="Nhập mật khẩu mới" autoComplete="new-password" required
-              className="w-full pl-10 pr-10 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-              <MorphIcon icon={showPassword ? EyeOff : Eye} className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="reset-confirm-password" className="text-[12px] text-muted-foreground block mb-2 font-medium">
-            Xác nhận mật khẩu mới <span className="text-destructive">*</span>
-          </label>
-          <div className="relative">
-            <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input id="reset-confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} type={showPassword ? "text" : "password"} placeholder="Xác nhận mật khẩu mới" autoComplete="new-password" required
-              className="w-full pl-10 pr-4 py-3 bg-input-background border border-input rounded-[10px] text-[13px] text-foreground outline-none focus:ring-[3px] focus:ring-ring/20 focus:border-ring transition-all" />
-          </div>
-        </div>
-
-        <motion.button type="submit" disabled={isSubmitting || !token} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-          className="w-full py-3 rounded-[10px] bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] font-semibold shadow-lg shadow-indigo-600/20 hover:shadow-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed">
-          {isSubmitting ? "Đang đặt lại..." : "Đặt lại mật khẩu"}
-        </motion.button>
+      <form className="space-y-5" noValidate onSubmit={handleSubmit} aria-busy={isSubmitting || undefined}>
+        <AuthFormAlert message={formError} />
+        <AuthPasswordField
+          ref={newRef}
+          id="reset-new-password"
+          label="Mật khẩu mới"
+          icon={Lock}
+          value={newPassword}
+          onChange={(event) => { setNewPassword(event.target.value); setErrors({}); }}
+          error={errors.newPassword}
+          placeholder="Ít nhất 6 ký tự"
+          autoComplete="new-password"
+          disabled={!token}
+          readOnly={isSubmitting}
+        />
+        <AuthPasswordField
+          ref={confirmRef}
+          id="reset-confirm-password"
+          label="Xác nhận mật khẩu mới"
+          icon={Lock}
+          value={confirmPassword}
+          onChange={(event) => { setConfirmPassword(event.target.value); setErrors((prev) => ({ ...prev, confirmPassword: undefined })); }}
+          error={errors.confirmPassword}
+          placeholder="Nhập lại mật khẩu mới"
+          autoComplete="new-password"
+          disabled={!token}
+          readOnly={isSubmitting}
+        />
+        <AuthSubmitButton submitting={isSubmitting} label="Đặt lại mật khẩu" busyLabel="Đang đặt lại…" />
       </form>
     </AuthLayout>
   );
