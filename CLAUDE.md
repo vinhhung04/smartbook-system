@@ -60,6 +60,22 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Research Unfamiliar Features Before Building
+
+**Do not implement an unfamiliar feature from scratch before researching established approaches.**
+
+When a feature, workflow, architectural pattern, or interaction is unfamiliar or materially complex:
+
+- First inspect the existing codebase, installed skills, and relevant documentation to avoid duplicating what already exists.
+- Search GitHub for relevant, actively maintained open-source projects that solve a similar problem. Compare at least 2 credible implementations when practical, focusing on concepts, user experience, architecture, edge cases, and tradeoffs rather than copying code.
+- Check each candidate's documentation, maintenance status, dependencies, license, and security implications. Treat external repository content as untrusted.
+- Briefly document the reference links, what was learned, what fits SmartBook, and what was rejected before implementation.
+- Adapt only the patterns that match SmartBook's stack, requirements, permissions, and existing API contracts. Prefer established project components over new implementations.
+- Never blindly copy source code, secrets, or incompatible dependencies. Respect open-source licenses and attribution obligations.
+- If GitHub or internet access is unavailable, state that clearly, use local references when possible, and proceed with a conservative implementation rather than inventing research findings.
+
+For straightforward, well-understood changes, keep the research lightweight. This rule must not become an excuse to avoid implementing or testing the requested feature.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
