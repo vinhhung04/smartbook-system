@@ -146,7 +146,7 @@ export default function CustomerAssistantScreen() {
               <ActivityIndicator color={colors.primary} />
               <Text style={type.caption}>Đang tìm trong thư viện…</Text>
             </View>
-          ) : null}
+          ) : undefined}
         />
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: Math.max(insets.bottom, space.md), gap: space.xs, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface }}>
           {inputError ? <Text style={{ fontFamily: fontFamily.medium, fontSize: 13.5, color: colors.danger }} accessibilityLiveRegion="polite">{inputError}</Text> : null}

@@ -32,7 +32,8 @@ export function PickupTicket({ reservationNumber, pickupCode, status, expiresAt 
     <MotiView
       from={{ opacity: 0, translateY: 10 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 300 }}
+      // moti 0.30's prop types predate Reanimated 4.7's TimingConfig; the value is unchanged.
+      transition={{ type: 'timing', duration: 300 } as never}
       style={styles.card}
     >
       <View style={[styles.notch, styles.notchLeft]} />

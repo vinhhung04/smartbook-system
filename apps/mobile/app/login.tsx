@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,8 +41,8 @@ export default function LoginScreen() {
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const usernameRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
+  const usernameRef = useRef<TextInputInstance>(null);
+  const passwordRef = useRef<TextInputInstance>(null);
   const configError = getApiConfigError();
 
   async function handleSubmit() {

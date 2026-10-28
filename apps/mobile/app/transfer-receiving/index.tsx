@@ -31,11 +31,11 @@ export default function TransferReceivingListScreen() {
             contentInsetAdjustmentBehavior="automatic"
             refreshControl={<RefreshControl refreshing={false} onRefresh={() => void reload()} tintColor={colors.primary} colors={[colors.primary]} />}
             ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
-            ListHeaderComponent={error ? <View style={{ marginBottom: space.md }}><InlineAlert message={error} actionLabel="Thử lại" onAction={() => void reload()} /></View> : null}
+            ListHeaderComponent={error ? <View style={{ marginBottom: space.md }}><InlineAlert message={error} actionLabel="Thử lại" onAction={() => void reload()} /></View> : undefined}
             ListEmptyComponent={
               !error ? (
                 <EmptyState icon="swap-horizontal-outline" title="Không có kiện nào chờ nhận" message="Kiện điều chuyển gửi tới kho của bạn sẽ hiện ở đây. Kéo xuống để làm mới." />
-              ) : null
+              ) : undefined
             }
             renderItem={({ item: row }) => {
               const mine = row.item.received_by_user_id === user?.id;

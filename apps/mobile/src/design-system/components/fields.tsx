@@ -1,5 +1,5 @@
 import { forwardRef, useState, type ReactNode } from 'react';
-import { Platform, Pressable, Text, TextInput, View, type TextInputProps, type TextStyle } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View, type TextInputInstance, type TextInputProps, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '../theme-context';
@@ -24,7 +24,7 @@ interface TextFieldProps extends Omit<TextInputProps, 'style'> {
  * Labelled input. The label sits above (never placeholder-only), the error sits
  * right under the field with an icon and is announced, focus draws a 2pt ring.
  */
-export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
+export const TextField = forwardRef<TextInputInstance, TextFieldProps>(function TextField(
   { label, hint, error, icon, right, mono = false, onFocus, onBlur, editable = true, ...input },
   ref,
 ) {
@@ -84,7 +84,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 });
 
 /** Password with a show/hide toggle that keeps the keyboard up. */
-export const PasswordField = forwardRef<TextInput, Omit<TextFieldProps, 'right' | 'secureTextEntry'>>(function PasswordField(props, ref) {
+export const PasswordField = forwardRef<TextInputInstance, Omit<TextFieldProps, 'right' | 'secureTextEntry'>>(function PasswordField(props, ref) {
   const { colors } = useTheme();
   const [visible, setVisible] = useState(false);
   return (
@@ -118,7 +118,7 @@ interface SearchFieldProps extends Omit<TextInputProps, 'style'> {
 }
 
 /** Rounded search box with a clear button; Enter is "search". */
-export const SearchField = forwardRef<TextInput, SearchFieldProps>(function SearchField({ value, onChangeText, trailing, onFocus, onBlur, ...input }, ref) {
+export const SearchField = forwardRef<TextInputInstance, SearchFieldProps>(function SearchField({ value, onChangeText, trailing, onFocus, onBlur, ...input }, ref) {
   const { colors, name } = useTheme();
   const [focused, setFocused] = useState(false);
   return (

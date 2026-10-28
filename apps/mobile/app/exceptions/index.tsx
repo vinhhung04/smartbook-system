@@ -72,8 +72,8 @@ export default function ExceptionReportListScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ padding: space.lg, paddingBottom: 140, gap: space.sm, flexGrow: 1 }}
             contentInsetAdjustmentBehavior="automatic"
-            ListHeaderComponent={error ? <View style={{ marginBottom: space.sm }}><InlineAlert message={error} actionLabel="Thử lại" onAction={() => void load()} /></View> : null}
-            ListEmptyComponent={!error ? <EmptyState icon="flag-outline" title="Chưa có báo cáo nào" message="Gặp hàng thiếu, dư hay hư hỏng? Báo ngay kèm ảnh để quản lý xử lý." /> : null}
+            ListHeaderComponent={error ? <View style={{ marginBottom: space.sm }}><InlineAlert message={error} actionLabel="Thử lại" onAction={() => void load()} /></View> : undefined}
+            ListEmptyComponent={!error ? <EmptyState icon="flag-outline" title="Chưa có báo cáo nào" message="Gặp hàng thiếu, dư hay hư hỏng? Báo ngay kèm ảnh để quản lý xử lý." /> : undefined}
             renderItem={({ item }) => (
               <View
                 style={{ padding: space.lg, gap: space.sm, borderRadius: radii.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}

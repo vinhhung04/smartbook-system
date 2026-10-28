@@ -95,12 +95,12 @@ export default function CustomerSavedBooksScreen() {
                   {error ? <InlineAlert message={error} actionLabel="Thử lại" onAction={() => void load()} /> : null}
                   {missing > 0 ? <InlineAlert tone="info" message={`${missing} sách đã lưu hiện không còn trong danh mục công khai.`} /> : null}
                 </View>
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
               !error ? (
                 <EmptyState icon="heart-outline" title="Chưa có sách nào" message="Nhấn Yêu thích ở trang sách để lưu lại và quay lại sau." actionLabel="Khám phá sách" onAction={() => router.push('/customer')} />
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const available = item.book.available_quantity > 0;

@@ -210,7 +210,7 @@ export default function CustomerMyBooksScreen() {
               <InlineAlert message={list.error} actionLabel="Thử lại" onAction={list.retry} />
             ) : list.items.length > 0 && !list.hasNextPage ? (
               <Text style={[type.caption, { textAlign: 'center', marginTop: space.sm }]}>Đã hiển thị tất cả {list.total} mục</Text>
-            ) : null
+            ) : undefined
           }
           renderItem={({ item }) => (segment === 'loans' ? renderLoan(item as Loan) : renderReservation(item as Reservation))}
         />

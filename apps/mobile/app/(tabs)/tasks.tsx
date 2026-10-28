@@ -111,7 +111,7 @@ export default function TasksScreen() {
             ) : null
           }
           ListEmptyComponent={
-            error ? null : (
+            error ? undefined : (
               <EmptyState
                 icon={query ? 'search-outline' : 'checkmark-done-outline'}
                 title={query ? 'Không có việc nào khớp từ khóa' : EMPTY_TEXT[filter]}

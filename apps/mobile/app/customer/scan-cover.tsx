@@ -210,7 +210,7 @@ export default function CustomerScanCoverScreen() {
             ListEmptyComponent={
               !error ? (
                 <EmptyState icon="search-outline" title="Không tìm thấy sách khớp" message="Thử chụp lại ở nơi đủ sáng, giữ bìa thẳng trong khung hình, hoặc tìm theo tên sách." actionLabel="Tìm theo tên" onAction={() => router.push('/customer/search')} compact />
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const confidence = confidenceView(item.confidence);

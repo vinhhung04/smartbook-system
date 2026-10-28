@@ -121,7 +121,7 @@ export default function CustomerNotificationsScreen() {
             ListFooterComponent={
               list.loadingMore ? <ActivityIndicator color={colors.primary} style={{ marginVertical: space.lg }} /> : list.error ? (
                 <InlineAlert message="Không tải thêm được thông báo." actionLabel="Thử lại" onAction={list.retry} />
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const read = isRead(item);

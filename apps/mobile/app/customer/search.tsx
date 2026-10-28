@@ -112,13 +112,13 @@ export default function CustomerSearchScreen() {
             // Guarded in the loader: ignored while a page is loading or after the last page.
             onEndReached={catalog.loadMore}
             onEndReachedThreshold={0.5}
-            ListHeaderComponent={(term || category) && catalog.total > 0 ? <Text style={[type.caption, { marginBottom: space.xs }]}>{catalog.total} kết quả</Text> : null}
+            ListHeaderComponent={(term || category) && catalog.total > 0 ? <Text style={[type.caption, { marginBottom: space.xs }]}>{catalog.total} kết quả</Text> : undefined}
             ListFooterComponent={
               catalog.loadingMore ? (
                 <ActivityIndicator color={colors.primary} style={{ marginVertical: space.lg }} />
               ) : catalog.error ? (
                 <InlineAlert message="Không tải thêm được kết quả." actionLabel="Thử lại" onAction={catalog.retry} />
-              ) : null
+              ) : undefined
             }
             ListEmptyComponent={
               term && !isTyping ? (
@@ -129,7 +129,7 @@ export default function CustomerSearchScreen() {
                   actionLabel="Mô tả bằng lời"
                   onAction={() => router.push('/customer/assistant')}
                 />
-              ) : null
+              ) : undefined
             }
             renderItem={({ item }) => {
               const available = item.available_quantity > 0;

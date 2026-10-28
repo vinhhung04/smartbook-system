@@ -28,8 +28,9 @@ export function WebTabs({ theme, tabs }: { theme: Theme; tabs: { name: string; t
           name={tab.name}
           options={{
             title: tab.title,
+            // The tab bar always hands a string; RN 0.88's ColorValue type is just wider.
             tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={(focused ? tab.icon : `${tab.icon}-outline`) as IconName} size={22} color={color} />
+              <Ionicons name={(focused ? tab.icon : `${tab.icon}-outline`) as IconName} size={22} color={color as string} />
             ),
           }}
         />
