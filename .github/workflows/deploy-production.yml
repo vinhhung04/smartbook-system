@@ -1,0 +1,227 @@
+name: Deploy production
+
+# push to `production` -> tests -> build images (tag = commit SHA) -> GHCR -> VPS -> health checks.
+# Nothing else deploys: other branches only run ci.yml. A manual run (Actions tab ->
+# "Deploy production" -> Run workflow) must be started on the `production` branch.
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits for the running one instead of cancelling it
+# halfway through a rollout.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: 10.6.2
+  NODE_VERSION: 20
+  IMAGE_PREFIX: ghcr.io/vinhhung04/smartbook
+  PUBLIC_WEB_ORIGIN: https://smartbook.io.vn
+  PUBLIC_API_ORIGIN: https://api.smartbook.io.vn
+
+jobs:
+  test:
+    name: Tests (deploy gate)
+    if: github.ref == 'refs/heads/production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: services/ai-service/requirements.txt
+
+      - run: pnpm install --frozen-lockfile
+      - run: pip install -r services/ai-service/requirements.txt pytest
+
+      - name: Lint
+        run: pnpm lint:ci
+      - name: Typecheck (web)
+        run: pnpm --filter web exec tsc --noEmit
+      - name: Build (web)
+        run: pnpm --filter web build
+      - name: Workspace config tests
+        run: pnpm test:workspace-config
+      - name: Web unit tests
+        run: pnpm test:web
+      - name: Node service tests
+        run: pnpm test:node
+      - name: AI service tests
+        run: pnpm test:ai
+
+      - name: Prisma schemas
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+        run: |
+          for svc in auth-service inventory-service borrow-service; do
+            (cd "services/$svc" && npx prisma validate)
+          done
+
+      - name: Production compose file
+        run: IMAGE_TAG="$GITHUB_SHA" docker compose -f compose.prod.yml --env-file .env.production.example config -q
+
+  build:
+    name: Image ${{ matrix.name }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: web
+            context: .
+            file: apps/web/Dockerfile
+          - name: api-gateway
+            context: .
+            file: apps/api-gateway/Dockerfile
+          - name: auth-service
+            context: .
+            file: services/auth-service/Dockerfile
+          - name: inventory-service
+            context: .
+            file: services/inventory-service/Dockerfile
+          - name: borrow-service
+            context: .
+            file: services/borrow-service/Dockerfile
+          - name: analytics-service
+            context: .
+            file: services/analytics-service/Dockerfile
+          - name: ai-service
+            context: services/ai-service
+            file: services/ai-service/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      # served as https://smartbook.io.vn/version.json: lets the deploy job (and anyone)
+      # check which commit the live frontend was built from
+      - name: Stamp web version
+        if: matrix.name == 'web'
+        run: printf '{"sha":"%s"}\n' "$GITHUB_SHA" > apps/web/public/version.json
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}:production
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          # Vite bakes these into the bundle at build time (only the web Dockerfile uses them)
+          build-args: |
+            VITE_API_BASE_URL=${{ env.PUBLIC_API_ORIGIN }}
+            VITE_AUTH_BASE_URL=${{ env.PUBLIC_API_ORIGIN }}
+            VITE_AI_BASE_URL=${{ env.PUBLIC_API_ORIGIN }}/ai
+            VITE_GATEWAY_BASE_URL=${{ env.PUBLIC_API_ORIGIN }}
+            VITE_GATEWAY_HEALTH_URL=${{ env.PUBLIC_API_ORIGIN }}/health
+            VITE_GATEWAY_READY_URL=${{ env.PUBLIC_API_ORIGIN }}/ready
+            VITE_GATEWAY_SYSTEM_HEALTH_URL=${{ env.PUBLIC_API_ORIGIN }}/system/health
+            VITE_AI_HEALTH_URL=${{ env.PUBLIC_API_ORIGIN }}/ai/health
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  deploy:
+    name: Deploy to VPS
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Environment secrets + "only the production branch may deploy" rule live here.
+    environment:
+      name: production
+      url: https://smartbook.io.vn
+    permissions:
+      contents: read
+      packages: read
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH (pinned host key)
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName $VPS_HOST
+            User $VPS_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            BatchMode yes
+            ServerAliveInterval 30
+          EOF
+
+      - name: Upload compose file, Caddyfile and scripts
+        run: |
+          tar -czf - compose.prod.yml .env.production.example deploy db-init data \
+              scripts/seed-catalog-enrichment.mjs scripts/close-removed-title-loans.mjs scripts/lib \
+            | ssh vps 'tar -xzf - -C /opt/smartbook'
+
+      - name: Pull images and roll out ${{ github.sha }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s\n' "$GHCR_TOKEN" \
+            | ssh vps "/opt/smartbook/deploy/scripts/deploy.sh --registry-login '${{ github.actor }}' '${{ github.sha }}'"
+
+      - name: Verify from the internet
+        run: |
+          set -e
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$PUBLIC_API_ORIGIN/ready"
+          echo
+          live="$(curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$PUBLIC_WEB_ORIGIN/version.json" | jq -r .sha)"
+          echo "live frontend: $live"
+          test "$live" = "$GITHUB_SHA"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$PUBLIC_WEB_ORIGIN/login")" = 200
+          test "$(curl -s -o /dev/null -w '%{redirect_url}' https://www.smartbook.io.vn/)" = "$PUBLIC_WEB_ORIGIN/"
+          curl -fsS -o /dev/null -X OPTIONS \
+            -H "Origin: $PUBLIC_WEB_ORIGIN" -H 'Access-Control-Request-Method: POST' \
+            "$PUBLIC_API_ORIGIN/auth/login" -D - | grep -i "access-control-allow-origin: $PUBLIC_WEB_ORIGIN"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Production deploy: ${{ job.status }}"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Images: \`${IMAGE_PREFIX}-*:${{ github.sha }}\`"
+            echo "- Site: $PUBLIC_WEB_ORIGIN · API: $PUBLIC_API_ORIGIN"
+          } >> "$GITHUB_STEP_SUMMARY"

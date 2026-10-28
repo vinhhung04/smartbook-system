@@ -34,3 +34,4 @@ services/ai-service/eval/.cache/
 .github/skills/*/scripts/bin/
 # Scratch scripts in the web app
 apps/web/*.tmp.*
+.env.production

@@ -1,0 +1,414 @@
+# SmartBook production stack (VPS "smartbook", https://smartbook.io.vn).
+#
+# Separate from docker-compose.yml (development): nothing here is built on the server.
+# Every application image is built by .github/workflows/deploy-production.yml, pushed to
+# GHCR and pinned by commit SHA (IMAGE_TAG). Run it through deploy/scripts/dc, which
+# loads .env (secrets) and state/release.env (IMAGE_TAG) — see docs/DEPLOYMENT.md.
+#
+# Only Caddy publishes ports (80/443). db, redis and rabbitmq sit on an internal network
+# with no route to the internet and no route from Caddy.
+
+name: smartbook
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app: &app-defaults
+  restart: unless-stopped
+  logging: *default-logging
+  networks: [app, data]
+
+x-node-healthcheck: &node-healthcheck
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  # first boot also runs `prisma migrate deploy`
+  start_period: 60s
+
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    shm_size: 256m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=200
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-inventory}
+      ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:-analytics_reader}
+      ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Set ANALYTICS_DB_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # only read when postgres_data is empty (first boot)
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2g }
+    logging: *default-logging
+    networks: [data]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512m }
+    logging: *default-logging
+    networks: [data]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 768m }
+    logging: *default-logging
+    networks: [data]
+
+  inventory-service:
+    <<: *app-defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    command: sh -c "npx prisma migrate deploy && node -r ./src/telemetry.js src/index.js"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/inventory_db?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - REDIS_URL=redis://redis:6379
+      - AI_SERVICE_URL=http://ai-service:8000
+      - GATEWAY_URL=http://api-gateway:3000
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
+      - AGING_INVENTORY_DAYS_THRESHOLD=${AGING_INVENTORY_DAYS_THRESHOLD:-90}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+    volumes:
+      - packing_evidence_data:/app/evidence/packing
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      <<: *node-healthcheck
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 768m }
+
+  auth-service:
+    <<: *app-defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    command: sh -c "npx prisma migrate deploy && npm run start"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth_db?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+      - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.io.vn>}
+      - AUTH_LOGIN_RATE_LIMIT_MAX=${AUTH_LOGIN_RATE_LIMIT_MAX:-10}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      <<: *node-healthcheck
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512m }
+
+  borrow-service:
+    <<: *app-defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    command: sh -c "npx prisma migrate deploy && npm run start"
+    environment:
+      - NODE_ENV=production
+      - PORT=3005
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/borrow_db?schema=public
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - GATEWAY_URL=http://api-gateway:3000
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.io.vn>}
+      - FRONTEND_URL=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - VNPAY_TMN_CODE=${VNPAY_TMN_CODE:-}
+      - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET:-}
+      - VNPAY_PAYMENT_URL=${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      - VNPAY_RETURN_URL=${PUBLIC_API_ORIGIN:-https://api.smartbook.io.vn}/webhooks/vnpay/return
+    depends_on:
+      db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      <<: *node-healthcheck
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 768m }
+
+  analytics-service:
+    <<: *app-defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-analytics-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    environment:
+      - NODE_ENV=production
+      - PORT=3006
+      - INVENTORY_DATABASE_URL=postgresql://${ANALYTICS_DB_USER:-analytics_reader}:${ANALYTICS_DB_PASSWORD}@db:5432/inventory_db?schema=public
+      - BORROW_DATABASE_URL=postgresql://${ANALYTICS_DB_USER:-analytics_reader}:${ANALYTICS_DB_PASSWORD}@db:5432/borrow_db?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - LOW_STOCK_THRESHOLD=${LOW_STOCK_THRESHOLD:-5}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      # its read-only role reads tables the two services' migrations create
+      inventory-service: { condition: service_healthy }
+      borrow-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      <<: *node-healthcheck
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512m }
+
+  ai-service:
+    <<: *app-defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    depends_on:
+      db: { condition: service_healthy }
+      inventory-service: { condition: service_healthy }
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/ai_db
+      - SMARTBOOK_GATEWAY_URL=http://api-gateway:3000
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+      - BORROW_SERVICE_URL=http://borrow-service:3005
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - CATALOG_SYNC_INTERVAL_SECONDS=${CATALOG_SYNC_INTERVAL_SECONDS:-300}
+      - RECOMMENDATION_MODEL=${RECOMMENDATION_MODEL:-v2}
+      - RAG_RETRIEVAL_TIMEOUT_SECONDS=${RAG_RETRIEVAL_TIMEOUT_SECONDS:-8}
+      - CHAT_LLM_TIMEOUT_SECONDS=${CHAT_LLM_TIMEOUT_SECONDS:-12}
+      # OpenRouter is the only inference backend (text, tools, vision/OCR, embeddings) — no GPU, no local LLM.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_TEXT_MODEL=${OPENROUTER_TEXT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_ASSISTANT_MODEL=${OPENROUTER_ASSISTANT_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_VISION_MODEL=${OPENROUTER_VISION_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-}
+      - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
+      - COPILOT_SEMANTIC_PLANNER=${COPILOT_SEMANTIC_PLANNER:-off}
+      - COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS=${COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS:-5}
+      - OPENROUTER_EMBED_MODEL=${OPENROUTER_EMBED_MODEL:-qwen/qwen3-embedding-8b}
+      - OPENROUTER_EMBED_DIMENSIONS=${OPENROUTER_EMBED_DIMENSIONS:-768}
+      - OPENROUTER_EMBED_TIMEOUT_SECONDS=${OPENROUTER_EMBED_TIMEOUT_SECONDS:-30}
+      - RAG_ABSTENTION_ENABLED=${RAG_ABSTENTION_ENABLED:-true}
+      - GOOGLE_BOOKS_API_BASE_URL=${GOOGLE_BOOKS_API_BASE_URL:-https://www.googleapis.com/books/v1/volumes}
+      - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
+      - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-15}
+      - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
+      - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
+      - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
+      - ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL=${ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:-false}
+      - ENABLE_METADATA_INTELLIGENCE_V2=${ENABLE_METADATA_INTELLIGENCE_V2:-false}
+      - ISBN_FUSION_MODE=${ISBN_FUSION_MODE:-evidence}
+      - ISBN_LOOKUP_TOTAL_BUDGET_SECONDS=${ISBN_LOOKUP_TOTAL_BUDGET_SECONDS:-45}
+      - ISBN_INCOMPLETE_CACHE_TTL_SECONDS=${ISBN_INCOMPLETE_CACHE_TTL_SECONDS:-600}
+      - BOOK_MARKETPLACE_TIMEOUT_SECONDS=${BOOK_MARKETPLACE_TIMEOUT_SECONDS:-30}
+      - BOOK_LOOKUP_MAX_WEB_RESULTS=${BOOK_LOOKUP_MAX_WEB_RESULTS:-5}
+      - BOOK_LOOKUP_USER_AGENT=${BOOK_LOOKUP_USER_AGENT:-SmartBookBot/1.0}
+      - ENABLE_FAHA_CLOAKBROWSER=${ENABLE_FAHA_CLOAKBROWSER:-false}
+      - BOOK_BROWSER_TIMEOUT_SECONDS=${BOOK_BROWSER_TIMEOUT_SECONDS:-20}
+      - FAHASA_BROWSER_HARD_TIMEOUT_SECONDS=${FAHASA_BROWSER_HARD_TIMEOUT_SECONDS:-35}
+      - FAHASA_SEARCH_RESPONSE_WAIT_SECONDS=${FAHASA_SEARCH_RESPONSE_WAIT_SECONDS:-8}
+      # "Find book by cover photo": local CLIP (CPU) + OpenRouter vision OCR
+      - CLIP_MODEL_NAME=${CLIP_MODEL_NAME:-openai/clip-vit-base-patch32}
+      - COVER_OCR_MAX_TOKENS=${COVER_OCR_MAX_TOKENS:-200}
+      - COVER_OCR_TIMEOUT_SECONDS=${COVER_OCR_TIMEOUT_SECONDS:-20}
+      - COVER_SEARCH_VISUAL_THRESHOLD=${COVER_SEARCH_VISUAL_THRESHOLD:-0.80}
+      - COVER_SEARCH_MIN_CONFIDENCE=${COVER_SEARCH_MIN_CONFIDENCE:-0.5}
+      - COVER_SEARCH_VISUAL_WEIGHT=${COVER_SEARCH_VISUAL_WEIGHT:-0.6}
+      - COVER_SEARCH_RESULT_LIMIT=${COVER_SEARCH_RESULT_LIMIT:-5}
+      - PACKING_VISION_MAX_TOKENS=${PACKING_VISION_MAX_TOKENS:-200}
+      - PACKING_VISION_TIMEOUT_SECONDS=${PACKING_VISION_TIMEOUT_SECONDS:-15}
+      - RECEIPT_VISION_MAX_TOKENS=${RECEIPT_VISION_MAX_TOKENS:-1200}
+      - RECEIPT_VISION_TIMEOUT_SECONDS=${RECEIPT_VISION_TIMEOUT_SECONDS:-30}
+      - BOOK_OCR_ENABLED=${BOOK_OCR_ENABLED:-true}
+      - OPENROUTER_BOOK_OCR_MODEL=${OPENROUTER_BOOK_OCR_MODEL:-qwen/qwen3.7-flash}
+      - OPENROUTER_BOOK_OCR_FALLBACK_MODEL=${OPENROUTER_BOOK_OCR_FALLBACK_MODEL:-}
+      - BOOK_OCR_FALLBACK_DAILY_BUDGET_USD=${BOOK_OCR_FALLBACK_DAILY_BUDGET_USD:-0.5}
+      - BOOK_OCR_MAX_IMAGES=${BOOK_OCR_MAX_IMAGES:-3}
+      - BOOK_OCR_MAX_TOKENS=${BOOK_OCR_MAX_TOKENS:-1800}
+      - BOOK_OCR_TIMEOUT_SECONDS=${BOOK_OCR_TIMEOUT_SECONDS:-45}
+      - BOOK_OCR_MAX_FILE_MB=${BOOK_OCR_MAX_FILE_MB:-8}
+      - BOOK_OCR_MAX_TOTAL_MB=${BOOK_OCR_MAX_TOTAL_MB:-8}
+      - BOOK_OCR_MAX_IMAGE_EDGE=${BOOK_OCR_MAX_IMAGE_EDGE:-1600}
+      - BOOK_OCR_LOOKUP_TIMEOUT_SECONDS=${BOOK_OCR_LOOKUP_TIMEOUT_SECONDS:-35}
+      - BOOK_OCR_MAX_CONCURRENCY=${BOOK_OCR_MAX_CONCURRENCY:-2}
+      - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}
+      - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
+      - NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS:-180}
+    volumes:
+      - ai_model_cache:/root/.cache/huggingface
+      - ai_cloakbrowser_cache:/root/.cloakbrowser
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    deploy:
+      resources:
+        # torch + CLIP (CPU) and a headless Chromium for marketplace lookups
+        limits: { cpus: "2", memory: 3g }
+
+  api-gateway:
+    <<: *app-defaults
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    networks: [edge, app, data]
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - AUTH_SERVICE_URL=http://auth-service:3002
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
+      - BORROW_SERVICE_URL=http://borrow-service:3005
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3006
+      - AI_SERVICE_URL=http://ai-service:8000
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - SOCKET_CORS_ORIGIN=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+    depends_on:
+      auth-service: { condition: service_healthy }
+      inventory-service: { condition: service_healthy }
+      borrow-service: { condition: service_healthy }
+      analytics-service: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512m }
+
+  web:
+    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-web:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    restart: unless-stopped
+    environment:
+      # CSP connect-src (apps/web/nginx.conf); the API origins themselves are baked into the bundle at CI build time
+      - API_ORIGIN=${PUBLIC_API_ORIGIN:-https://api.smartbook.io.vn}
+      - API_WS_ORIGIN=${PUBLIC_API_WS_ORIGIN:-wss://api.smartbook.io.vn}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128m }
+    logging: *default-logging
+    networks: [edge]
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web: { condition: service_healthy }
+      api-gateway: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 256m }
+    logging: *default-logging
+    networks: [edge]
+
+networks:
+  # Caddy <-> web, api-gateway
+  edge:
+  # application services (needs egress: OpenRouter, SMTP, book lookups)
+  app:
+  # db, redis, rabbitmq: no internet, unreachable from Caddy/web
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  packing_evidence_data:
+  ai_model_cache:
+  ai_cloakbrowser_cache:
+  caddy_data:
+  caddy_config:
