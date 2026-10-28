@@ -208,7 +208,7 @@ export function HomeHero({ home, books, onShelf }: HomeHeroProps) {
                   {numberFormat.format(home.stats.available_titles)} đầu sách có sẵn hôm nay
                 </Link>
                 <Link data-hero="cta" to="/books" className="group inline-flex items-center gap-1.5 font-semibold text-indigo-700 dark:text-indigo-300">
-                  Duyệt toàn bộ {numberFormat.format(home.stats.total_titles)} đầu sách
+                  Khám phá toàn bộ {numberFormat.format(home.stats.total_titles)} đầu sách
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
               </>
