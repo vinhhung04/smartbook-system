@@ -1,52 +1,56 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../src/auth/auth-context';
 import { canUseStaffFeature, type StaffFeature } from '../../src/auth/access';
-import { FeatureCard } from '../../src/components/FeatureCard';
 import { TaskCard } from '../../src/components/TaskCard';
 import { useDashboardTasks, type FeatureCounts, type TaskEntry } from '../../src/hooks/useDashboardTasks';
 import { describeRoles, greetingFor } from '../../src/lib/roles';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import {
+  Button, EmptyState, InlineAlert, ListGroup, ListRow, Screen, SectionHeader, Skeleton, fontFamily, radii, space, useTheme, type IconName,
+} from '../../src/design-system';
 
 type Feature = {
   key: StaffFeature;
   countKey?: keyof FeatureCounts;
   title: string;
   subtitle: string;
-  tag: string;
-  tint: string;
-  tintSoft: string;
+  icon: IconName;
   href: string;
 };
 
+// Every workflow the app has; each account sees only those its permissions allow.
 const FEATURES: Feature[] = [
-  { key: 'picking', countKey: 'picking', title: 'Lấy hàng (Picking)', subtitle: 'Nhận và lấy hàng theo phiếu', tag: 'PK', tint: colors.primary, tintSoft: colors.primarySoft, href: '/picking' },
-  { key: 'putaway', countKey: 'putaway', title: 'Cất hàng (Putaway)', subtitle: 'Cất sách từ khu chờ lên kệ', tag: 'PA', tint: colors.success, tintSoft: colors.successSoft, href: '/putaway' },
-  { key: 'outbound', countKey: 'outbound', title: 'Xuất kho', subtitle: 'Quét mã đơn trên kiện để xác nhận xuất', tag: 'XK', tint: colors.danger, tintSoft: colors.dangerSoft, href: '/outbound' },
-  { key: 'transferReceiving', countKey: 'transferReceiving', title: 'Nhận điều chuyển', subtitle: 'Xác nhận hàng điều chuyển đã tới kho', tag: 'NĐ', tint: colors.primary, tintSoft: colors.primarySoft, href: '/transfer-receiving' },
-  { key: 'audit', countKey: 'audit', title: 'Kiểm kê', subtitle: 'Đếm và đối chiếu tồn kho thực tế', tag: 'KK', tint: colors.neutral, tintSoft: colors.neutralSoft, href: '/audit' },
-  { key: 'exceptions', countKey: 'exceptions', title: 'Báo cáo sự cố', subtitle: 'Thiếu/dư/hư hỏng — kèm ảnh bằng chứng', tag: 'BC', tint: colors.warning, tintSoft: colors.warningSoft, href: '/exceptions' },
-  { key: 'lookup', title: 'Tra cứu nhanh', subtitle: 'Quét mã để xem sách, tồn kho, vị trí', tag: 'TC', tint: colors.warning, tintSoft: colors.warningSoft, href: '/lookup' },
+  { key: 'picking', countKey: 'picking', title: 'Lấy hàng', subtitle: 'Nhận phiếu và lấy sách theo vị trí', icon: 'basket-outline', href: '/picking' },
+  { key: 'putaway', countKey: 'putaway', title: 'Cất hàng lên kệ', subtitle: 'Từ khu chờ lên đúng vị trí', icon: 'file-tray-stacked-outline', href: '/putaway' },
+  { key: 'outbound', countKey: 'outbound', title: 'Xuất kho', subtitle: 'Quét mã đơn trên kiện để xác nhận', icon: 'car-outline', href: '/outbound' },
+  { key: 'transferReceiving', countKey: 'transferReceiving', title: 'Nhận điều chuyển', subtitle: 'Xác nhận hàng chuyển tới kho', icon: 'swap-horizontal-outline', href: '/transfer-receiving' },
+  { key: 'audit', countKey: 'audit', title: 'Kiểm kê', subtitle: 'Đếm và đối chiếu tồn kho thực tế', icon: 'checkbox-outline', href: '/audit' },
+  { key: 'exceptions', countKey: 'exceptions', title: 'Báo cáo sự cố', subtitle: 'Thiếu, dư, hư hỏng, kèm ảnh', icon: 'warning-outline', href: '/exceptions' },
+  { key: 'lookup', title: 'Tra cứu nhanh', subtitle: 'Sách, tồn kho và vị trí theo mã', icon: 'search-outline', href: '/lookup' },
 ];
 
-function SummaryTile({ label, value, icon, tone }: { label: string; value: number; icon: keyof typeof Ionicons.glyphMap; tone: string }) {
+function Count({ label, value, tone, icon }: { label: string; value: number; tone: string; icon: IconName }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.tile} accessible accessibilityLabel={`${label}: ${value}`}>
-      <Ionicons name={icon} size={16} color={tone} />
-      <Text style={[styles.tileValue, { color: tone }]}>{value}</Text>
-      <Text style={styles.tileLabel} numberOfLines={2}>{label}</Text>
+    <View style={{ flex: 1, gap: 4 }} accessible accessibilityLabel={`${label}: ${value}`}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <Ionicons name={icon} size={15} color={tone} />
+        <Text style={{ fontFamily: fontFamily.medium, fontSize: 13, color: colors.textSecondary }} numberOfLines={1}>{label}</Text>
+      </View>
+      <Text style={{ fontFamily: fontFamily.bold, fontSize: 32, lineHeight: 36, color: colors.textPrimary, fontVariant: ['tabular-nums'] }}>{value}</Text>
     </View>
   );
 }
 
 export default function HomeDashboardScreen() {
+  const { colors, type } = useTheme();
   const { user } = useAuth();
   const { data, isLoading, isRefreshing, error, refetch } = useDashboardTasks();
   const features = FEATURES.filter((feature) => canUseStaffFeature(user, feature.key));
   const name = user?.full_name || user?.username || '';
+  const canScan = canUseStaffFeature(user, 'lookup');
 
   function openTask(entry: TaskEntry) {
     if (entry.route.kind === 'screen') router.push(entry.route.href as never);
@@ -54,219 +58,72 @@ export default function HomeDashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
-      >
-        <View style={styles.header}>
-          <Text style={styles.greeting}>{greetingFor(new Date())},</Text>
-          <Text style={styles.name} numberOfLines={1} accessibilityRole="header">{name}</Text>
-          <Text style={styles.role}>{describeRoles(user?.roles ?? [])}</Text>
-        </View>
+    <Screen safeTop onRefresh={refetch} refreshing={isRefreshing}>
+      <View style={{ gap: 4 }}>
+        <Text style={type.caption}>{greetingFor(new Date())},</Text>
+        <Text style={type.display} numberOfLines={1} accessibilityRole="header">{name}</Text>
+        <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.primary }}>{describeRoles(user?.roles ?? [])}</Text>
+      </View>
 
-        <View style={styles.summary}>
-          <Text style={styles.sectionLabel}>Ca làm việc</Text>
-          {error ? (
-            <View style={styles.errorRow}>
-              <Text style={styles.error}>{error}</Text>
-              <Pressable onPress={() => void refetch()} style={styles.retry} accessibilityRole="button">
-                <Text style={styles.retryText}>Thử lại</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.tiles}>
-              <SummaryTile label="Cần làm" value={data.counts.todo} icon="ellipse-outline" tone={colors.primary} />
-              <SummaryTile label="Đang xử lý" value={data.counts.in_progress} icon="time-outline" tone={colors.warning} />
-              <SummaryTile label="Hoàn thành gần đây" value={data.counts.done} icon="checkmark-circle" tone={colors.neutral} />
-            </View>
-          )}
-          {!error && data.counts.waiting > 0 ? (
-            <Text style={styles.waiting}>+ {data.counts.waiting} việc đang chờ quản lý duyệt/xử lý</Text>
-          ) : null}
-          {data.warnings.map((warning) => (
-            <Text key={warning} style={styles.warning}>{warning}</Text>
-          ))}
-        </View>
+      {/* Today's load: three numbers, nothing decorative around them. */}
+      <View style={{ padding: space.lg, gap: space.md, borderRadius: radii.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+        <Text style={type.heading}>Ca làm việc</Text>
+        {error ? (
+          <InlineAlert message={error} actionLabel="Thử lại" onAction={() => void refetch()} />
+        ) : isLoading && data.entries.length === 0 ? (
+          <Skeleton height={56} />
+        ) : (
+          <View style={{ flexDirection: 'row', gap: space.md }}>
+            <Count label="Cần làm" value={data.counts.todo} tone={colors.primary} icon="ellipse-outline" />
+            <Count label="Đang làm" value={data.counts.in_progress} tone={colors.warning} icon="time-outline" />
+            <Count label="Xong gần đây" value={data.counts.done} tone={colors.success} icon="checkmark-circle" />
+          </View>
+        )}
+        {!error && data.counts.waiting > 0 ? (
+          <Text style={type.caption}>Thêm {data.counts.waiting} việc đang chờ quản lý duyệt hoặc xử lý.</Text>
+        ) : null}
+      </View>
+      {data.warnings.map((warning) => <InlineAlert key={warning} tone="warning" message={warning} />)}
 
-        <Text style={styles.sectionLabel}>Việc tiếp theo</Text>
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Việc tiếp theo" actionLabel={data.entries.length > 1 ? 'Tất cả việc' : undefined} onAction={() => router.push('/tasks')} />
         {isLoading && data.entries.length === 0 ? (
-          <ActivityIndicator color={colors.primary} style={styles.spinner} />
+          <Skeleton height={150} radius={radii.md} />
         ) : data.next ? (
           <TaskCard entry={data.next} onOpen={openTask} />
         ) : !error ? (
-          <View style={styles.nextEmpty}>
-            <Ionicons name="checkmark-done-outline" size={22} color={colors.success} />
-            <Text style={styles.nextEmptyText}>Không có việc nào đang chờ bạn trên ứng dụng.</Text>
-          </View>
+          <EmptyState icon="checkmark-done-outline" title="Không có việc nào đang chờ" message="Khi quản lý giao việc, việc đó sẽ hiện ở đây." compact />
         ) : null}
+      </View>
 
-        {canUseStaffFeature(user, 'lookup') ? (
-          <Pressable
-            style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}
-            onPress={() => router.push('/scan')}
-            accessibilityRole="button"
-            accessibilityLabel="Quét nhanh mã sách hoặc vị trí"
-          >
-            <Ionicons name="scan" size={22} color={colors.onPrimary} />
-            <View style={styles.scanBody}>
-              <Text style={styles.scanTitle}>Quét nhanh</Text>
-              <Text style={styles.scanSubtitle}>Mã sách, ISBN hoặc mã vị trí kệ</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.onPrimary} />
-          </Pressable>
-        ) : null}
+      {canScan ? <Button label="Quét mã" icon="scan" onPress={() => router.push('/scan')} accessibilityHint="Mở máy quét mã sách, ISBN hoặc vị trí kệ" /> : null}
 
-        <Text style={styles.sectionLabel}>Nghiệp vụ</Text>
-        <View style={styles.list}>
-          {features.map((feature) => (
-            <FeatureCard
-              key={feature.key}
-              title={feature.title}
-              subtitle={feature.subtitle}
-              tag={feature.tag}
-              tint={feature.tint}
-              tintSoft={feature.tintSoft}
-              count={feature.countKey ? data.features[feature.countKey] : undefined}
-              onPress={() => router.push(feature.href as never)}
-            />
-          ))}
-          {features.length === 0 ? (
-            <Text style={styles.warning}>Tài khoản chưa được cấp quyền nghiệp vụ kho nào trên ứng dụng.</Text>
-          ) : null}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View style={{ gap: space.md }}>
+        <SectionHeader title="Nghiệp vụ" />
+        {features.length === 0 ? (
+          <InlineAlert tone="info" message="Tài khoản chưa được cấp quyền nghiệp vụ kho nào trên ứng dụng." />
+        ) : (
+          <ListGroup>
+            {features.map((feature) => {
+              const count = feature.countKey ? data.features[feature.countKey] : undefined;
+              return (
+                <ListRow
+                  key={feature.key}
+                  icon={feature.icon}
+                  title={feature.title}
+                  subtitle={feature.subtitle}
+                  onPress={() => router.push(feature.href as never)}
+                  trailing={count ? (
+                    <View style={{ minWidth: 28, height: 28, paddingHorizontal: 8, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel={`${count} việc`}>
+                      <Text style={{ fontFamily: fontFamily.bold, fontSize: 13.5, color: colors.onPrimary }}>{count}</Text>
+                    </View>
+                  ) : null}
+                />
+              );
+            })}
+          </ListGroup>
+        )}
+      </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
-  },
-  header: {
-    gap: 2,
-  },
-  greeting: {
-    ...typography.caption,
-  },
-  name: {
-    ...typography.h2,
-  },
-  role: {
-    ...typography.label,
-    color: colors.primary,
-  },
-  summary: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    gap: spacing.sm,
-    ...shadow.card,
-  },
-  sectionLabel: {
-    ...typography.label,
-    marginTop: spacing.xs,
-  },
-  tiles: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  tile: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.bg,
-    gap: 2,
-  },
-  tileValue: {
-    fontFamily: fonts.displayBold,
-    fontSize: 28,
-  },
-  tileLabel: {
-    ...typography.caption,
-    fontSize: 12,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  error: {
-    flex: 1,
-    color: colors.danger,
-    fontSize: 13,
-  },
-  retry: {
-    minHeight: 36,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  retryText: {
-    color: colors.primary,
-    fontFamily: fonts.bodySemibold,
-  },
-  warning: {
-    ...typography.caption,
-    color: colors.warning,
-  },
-  waiting: {
-    ...typography.caption,
-  },
-  spinner: {
-    marginVertical: spacing.lg,
-  },
-  nextEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.successSoft,
-  },
-  nextEmptyText: {
-    ...typography.caption,
-    flex: 1,
-    color: colors.textPrimary,
-  },
-  scanButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 64,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primary,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  scanBody: {
-    flex: 1,
-  },
-  scanTitle: {
-    fontFamily: fonts.display,
-    fontSize: 16,
-    color: colors.onPrimary,
-  },
-  scanSubtitle: {
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: colors.onPrimary,
-    opacity: 0.85,
-  },
-  list: {
-    gap: spacing.md,
-  },
-});

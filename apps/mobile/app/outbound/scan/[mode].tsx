@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Alert, FlatList, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as outboundApi from '../../../src/api/outbound';
 import { isOutcomeUnknown } from '../../../src/api/client';
@@ -19,7 +20,7 @@ import { resolveScannedCode, type OutboundMode } from '../../../src/lib/outbound
 import { notifyScanError, notifyScanSuccess } from '../../../src/scanner/haptics';
 import { ScanField } from '../../../src/scanner/ScanField';
 import { ChecklistMeter } from '../../../src/components/ChecklistMeter';
-import { colors, fonts, radius, spacing, typography } from '../../../src/theme/tokens';
+import { BottomActionBar, Button, EmptyState, LoadingState, ScreenHeader, fontFamily, radii, space, useTheme } from '../../../src/design-system';
 
 const MODE_LABEL: Record<OutboundMode, string> = {
   outbound: 'Xuất kho',
@@ -31,6 +32,7 @@ export default function OutboundScanSessionScreen() {
   const mode: OutboundMode = rawMode === 'transfer' ? 'transfer' : 'outbound';
   const { user } = useAuth();
   const userId = user?.id ?? 'anonymous';
+  const { colors, type } = useTheme();
   // Synchronous guard: the scanner's Enter can fire twice before isProcessing re-renders.
   const processingRef = useRef(false);
 
@@ -204,16 +206,14 @@ export default function OutboundScanSessionScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: MODE_LABEL[mode] }} />
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerText}>
-            Đã quét: {count}/{SESSION_SCAN_CAP} kiện
-          </Text>
+      <ScreenHeader title={MODE_LABEL[mode]} />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ padding: space.lg, gap: space.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }} accessible accessibilityLabel={`Đã quét ${count} trên ${SESSION_SCAN_CAP} kiện`}>
+            <Text style={{ fontFamily: fontFamily.bold, fontSize: 34, color: colors.textPrimary, fontVariant: ['tabular-nums'] }}>{count}</Text>
+            <Text style={type.body}>/{SESSION_SCAN_CAP} kiện đã xác nhận</Text>
+          </View>
           <ChecklistMeter value={count} max={SESSION_SCAN_CAP} />
-        </View>
-
-        <View style={styles.scanBox}>
           <ScanField
             value={scanInput}
             onChangeText={setScanInput}
@@ -222,103 +222,43 @@ export default function OutboundScanSessionScreen() {
             autoFocus
             editable={!isProcessing}
           />
-          {isProcessing ? <ActivityIndicator color={colors.primary} style={styles.spinner} /> : null}
+          {isProcessing ? <LoadingState label="Đang kiểm tra đơn…" /> : null}
         </View>
 
         <FlatList
           data={[...session.attempts].reverse()}
           keyExtractor={(_, index) => String(session.attempts.length - index)}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={styles.empty}>Chưa quét kiện nào trong phiên này</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.row}>
-              <Text style={item.success ? styles.rowTitleOk : styles.rowTitleFail}>
-                {item.success ? '✓ ' : item.uncertain ? '? ' : '✗ '}
-                {item.code}
-              </Text>
-              <Text style={item.success ? styles.rowMessageOk : styles.rowMessageFail}>{item.message}</Text>
-            </View>
-          )}
+          contentContainerStyle={{ padding: space.lg, paddingBottom: 140, gap: space.sm }}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={<EmptyState icon="scan-outline" title="Chưa quét kiện nào" message="Quét mã trên đơn hoặc kiện hàng để xác nhận xuất." compact />}
+          renderItem={({ item, index }) => {
+            const tone = item.success ? colors.success : item.uncertain ? colors.warning : colors.danger;
+            const latest = index === 0;
+            return (
+              <View
+                style={{
+                  flexDirection: 'row', alignItems: 'flex-start', gap: space.md, padding: space.md, borderRadius: radii.sm,
+                  backgroundColor: latest ? (item.success ? colors.successSoft : item.uncertain ? colors.warningSoft : colors.dangerSoft) : colors.surface,
+                  borderWidth: 1, borderColor: latest ? tone : colors.border,
+                }}
+                accessible
+                accessibilityLabel={`${item.success ? 'Thành công' : item.uncertain ? 'Chưa rõ' : 'Lỗi'}, mã ${item.code}, ${item.message}`}
+                accessibilityLiveRegion={latest ? 'polite' : 'none'}
+              >
+                <Ionicons name={item.success ? 'checkmark-circle' : item.uncertain ? 'help-circle' : 'close-circle'} size={22} color={tone} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text selectable style={{ fontFamily: fontFamily.monoBold, fontSize: 15, color: colors.textPrimary }}>{item.code}</Text>
+                  <Text style={{ fontFamily: fontFamily.regular, fontSize: 14, lineHeight: 20, color: colors.textSecondary }}>{item.message}</Text>
+                </View>
+              </View>
+            );
+          }}
         />
 
-        <Pressable style={({ pressed }) => [styles.endButton, pressed && styles.buttonPressed]} onPress={handleEndSession}>
-          <Text style={styles.endButtonText}>Kết thúc phiên</Text>
-        </Pressable>
+        <BottomActionBar>
+          <Button label="Kết thúc phiên" icon="stop-circle-outline" variant="secondary" onPress={handleEndSession} />
+        </BottomActionBar>
       </View>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  headerText: {
-    ...typography.code,
-    fontSize: 13,
-  },
-  scanBox: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.xs + 2,
-  },
-  spinner: {
-    marginTop: spacing.xs,
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  row: {
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowTitleOk: {
-    ...typography.code,
-    fontSize: 15,
-  },
-  rowTitleFail: {
-    ...typography.code,
-    fontSize: 15,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  rowMessageOk: {
-    color: colors.success,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  rowMessageFail: {
-    color: colors.danger,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  endButton: {
-    margin: spacing.lg,
-    backgroundColor: colors.neutral,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  endButtonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-});

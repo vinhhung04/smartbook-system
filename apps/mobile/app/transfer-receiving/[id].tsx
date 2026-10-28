@@ -1,18 +1,19 @@
 import { useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Alert, Text, View } from 'react-native';
 
 import * as transferApi from '../../src/api/transferReceiving';
 import { isOutcomeUnknown } from '../../src/api/client';
 import { ApiError, useAuth } from '../../src/auth/auth-context';
 import { isWarehouseManager } from '../../src/auth/access';
+import { ScanStep } from '../../src/components/ScanStep';
 import { StampBadge } from '../../src/components/StampBadge';
 import { useTransferReceiving } from '../../src/hooks/useTransferReceiving';
 import { useSubmitLock } from '../../src/lib/submitLock';
 import { matchesCode } from '../../src/scanner/matching';
 import { notifyScanError, notifyScanSuccess } from '../../src/scanner/haptics';
 import { ScanField } from '../../src/scanner/ScanField';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { Button, Card, EmptyState, ErrorState, InfoRow, LoadingState, Screen, ScreenHeader, fontFamily, space, useTheme } from '../../src/design-system';
 
 /**
  * Receive one inbound transfer: scan the transfer number on the package to make sure it
@@ -30,47 +31,44 @@ export default function TransferReceivingDetailScreen() {
   const [busy, setBusy] = useState<'claim' | 'confirm' | null>(null);
   const [done, setDone] = useState<{ receiptId: string | null; receiptNumber: string | null } | null>(null);
   const lock = useSubmitLock();
+  const { colors } = useTheme();
 
   if (done) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Đã nhận hàng' }} />
-        <View style={styles.center}>
-          <StampBadge text="Đã xác nhận nhận hàng điều chuyển" tone="success" />
-          <Text style={styles.body}>
-            Hàng đã vào khu chờ cất của kho{done.receiptNumber ? ` (phiếu nhập ${done.receiptNumber})` : ''}. Bước tiếp theo là cất lên kệ.
-          </Text>
-          {done.receiptId ? (
-            <Pressable style={styles.primary} onPress={() => router.replace(`/putaway/receipt/${done.receiptId}`)} accessibilityRole="button">
-              <Text style={styles.primaryText}>Cất hàng lên kệ ngay</Text>
-            </Pressable>
-          ) : null}
-          <Pressable style={styles.secondary} onPress={() => router.replace('/transfer-receiving')} accessibilityRole="button">
-            <Text style={styles.secondaryText}>Về danh sách</Text>
-          </Pressable>
-        </View>
+        <ScreenHeader title="Đã nhận hàng" />
+        <Screen scroll={false}>
+          <EmptyState
+            icon="checkmark-done-circle"
+            title="Đã xác nhận nhận hàng"
+            message={`Hàng đã vào khu chờ cất của kho${done.receiptNumber ? ` (phiếu nhập ${done.receiptNumber})` : ''}. Bước tiếp theo là cất lên kệ.`}
+          />
+          <View style={{ gap: space.sm }}>
+            {done.receiptId ? (
+              <Button label="Cất hàng lên kệ ngay" icon="arrow-forward" onPress={() => router.replace(`/putaway/receipt/${done.receiptId}`)} />
+            ) : null}
+            <Button label="Về danh sách" variant="secondary" onPress={() => router.replace('/transfer-receiving')} />
+          </View>
+        </Screen>
       </>
     );
   }
 
   if (isLoading && !row) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return (<><ScreenHeader title="Nhận điều chuyển" /><Screen scroll={false}><LoadingState label="Đang mở phiếu…" /></Screen></>);
   }
 
   if (!row) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Nhận điều chuyển' }} />
-        <View style={styles.center}>
-          <Text style={styles.error}>{error ?? 'Phiếu này không còn chờ nhận (đã được nhận hoặc không thuộc kho của bạn).'}</Text>
-          <Pressable style={styles.secondary} onPress={() => router.replace('/transfer-receiving')} accessibilityRole="button">
-            <Text style={styles.secondaryText}>Về danh sách</Text>
-          </Pressable>
-        </View>
+        <ScreenHeader title="Nhận điều chuyển" />
+        <Screen scroll={false}>
+          <ErrorState
+            title="Không mở được phiếu"
+            message={error ?? 'Phiếu này không còn chờ nhận (đã được nhận hoặc không thuộc kho của bạn).'}
+          />
+          <Button label="Về danh sách" variant="secondary" onPress={() => router.replace('/transfer-receiving')} />
+        </Screen>
       </>
     );
   }
@@ -140,73 +138,47 @@ export default function TransferReceivingDetailScreen() {
     );
   }
 
+  const claimed = Boolean(transfer.received_by_user_id);
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: transfer.transfer_number }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
-          <Text style={styles.title}>{transfer.transfer_number}</Text>
-          <Text style={styles.meta}>
-            Từ {transfer.from_warehouse_name ?? transfer.from_warehouse_code ?? '?'} → {transfer.to_warehouse_name ?? transfer.to_warehouse_code ?? '?'}
-          </Text>
-          {transfer.total_quantity > 0 ? <Text style={styles.meta}>{transfer.total_quantity} sản phẩm đã gửi</Text> : null}
-          {assignedToOther ? <StampBadge text="Phiếu đang giao cho nhân viên khác." tone="warning" /> : null}
-        </View>
+      <ScreenHeader title={transfer.transfer_number} />
+      <Screen>
+        <Card>
+          <Text selectable style={{ fontFamily: fontFamily.monoBold, fontSize: 20, color: colors.textPrimary }}>{transfer.transfer_number}</Text>
+          <InfoRow label="Từ kho" value={transfer.from_warehouse_name ?? transfer.from_warehouse_code ?? '?'} />
+          <InfoRow label="Đến kho" value={transfer.to_warehouse_name ?? transfer.to_warehouse_code ?? '?'} />
+          {transfer.total_quantity > 0 ? <InfoRow label="Đã gửi" value={`${transfer.total_quantity} sản phẩm`} /> : null}
+        </Card>
+        {assignedToOther ? <StampBadge text="Phiếu đang giao cho nhân viên khác." tone="warning" /> : null}
 
-        {!transfer.received_by_user_id ? (
-          <View style={styles.card}>
-            <Text style={styles.step}>1. Nhận việc</Text>
-            <Text style={styles.meta}>Nhận phiếu để người khác không xử lý trùng.</Text>
-            <Pressable style={styles.primary} onPress={handleClaim} disabled={busy !== null} accessibilityRole="button">
-              {busy === 'claim' ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.primaryText}>Nhận việc này</Text>}
-            </Pressable>
-          </View>
+        {!claimed ? (
+          <ScanStep n={1} title="Nhận việc" done={false} caption="Nhận phiếu để người khác không xử lý trùng.">
+            <Button label="Nhận việc này" icon="hand-left-outline" loading={busy === 'claim'} loadingLabel="Đang nhận…" disabled={busy !== null} onPress={handleClaim} />
+          </ScanStep>
         ) : null}
 
         {canConfirm ? (
           <>
-            <View style={styles.card}>
-              <Text style={styles.step}>{transfer.received_by_user_id ? '1' : '2'}. Quét mã trên kiện hàng</Text>
+            <ScanStep n={claimed ? 1 : 2} title="Quét mã trên kiện hàng" done={verified}>
               <ScanField value={scanInput} onChangeText={setScanInput} onSubmit={handleScan} placeholder="Quét hoặc nhập mã phiếu điều chuyển" autoFocus />
               {scanMessage ? <StampBadge text={scanMessage.text} tone={scanMessage.ok ? 'success' : 'danger'} /> : null}
-            </View>
+            </ScanStep>
 
-            <View style={styles.card}>
-              <Text style={styles.step}>{transfer.received_by_user_id ? '2' : '3'}. Xác nhận nhận hàng</Text>
-              <Pressable
-                style={[styles.confirm, (!verified || busy !== null) && styles.disabled]}
-                onPress={handleConfirm}
+            <ScanStep n={claimed ? 2 : 3} title="Xác nhận nhận hàng" done={false} caption={verified ? undefined : 'Quét đúng mã kiện trước khi xác nhận.'}>
+              <Button
+                label="Đã nhận đủ hàng"
+                icon="checkmark-circle"
+                loading={busy === 'confirm'}
+                loadingLabel="Đang xác nhận…"
                 disabled={!verified || busy !== null}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !verified || busy !== null }}
-              >
-                {busy === 'confirm' ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.primaryText}>Đã nhận đủ hàng</Text>}
-              </Pressable>
-              <Pressable style={styles.secondary} onPress={() => router.push('/exceptions/new')} accessibilityRole="button">
-                <Text style={styles.secondaryText}>Thiếu / hư hỏng? Báo cáo sự cố</Text>
-              </Pressable>
-            </View>
+                onPress={handleConfirm}
+              />
+              <Button label="Thiếu hoặc hư hỏng? Báo cáo sự cố" icon="warning-outline" variant="ghost" onPress={() => router.push('/exceptions/new')} />
+            </ScanStep>
           </>
         ) : null}
-      </ScrollView>
+      </Screen>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: spacing.lg, gap: spacing.lg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.md, backgroundColor: colors.bg },
-  card: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, gap: spacing.sm, ...shadow.card },
-  title: { ...typography.h3 },
-  meta: { ...typography.caption },
-  step: { ...typography.bodyBold },
-  body: { ...typography.body, textAlign: 'center' },
-  error: { color: colors.danger, textAlign: 'center' },
-  primary: { minHeight: 48, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
-  confirm: { minHeight: 52, borderRadius: radius.md, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center' },
-  primaryText: { fontFamily: fonts.displayBold, color: colors.onPrimary, fontSize: 15 },
-  secondary: { minHeight: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.lg },
-  secondaryText: { fontFamily: fonts.bodySemibold, color: colors.textSecondary },
-  disabled: { opacity: 0.5 },
-});

@@ -1,14 +1,37 @@
 import { useCallback, useState } from 'react';
-import { Stack, router, useFocusEffect } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useAuth } from '../../src/auth/auth-context';
 import { SESSION_SCAN_CAP, loadSessions, successCount, type OutboundSession } from '../../src/lib/outboundSession';
-import { colors, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import {
+  EmptyState, ListGroup, ListRow, PressableScale, Screen, ScreenHeader, SectionHeader, Skeleton, fontFamily, radii, space, useTheme, type IconName,
+} from '../../src/design-system';
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function StartTile({ icon, title, caption, onPress }: { icon: IconName; title: string; caption: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${caption}`}
+      style={{ flex: 1, minHeight: 132, padding: space.lg, gap: space.sm, borderRadius: radii.md, backgroundColor: colors.inkField, justifyContent: 'space-between' }}
+    >
+      <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.12)' }}>
+        <Ionicons name={icon} size={24} color={colors.onInk} />
+      </View>
+      <View style={{ gap: 2 }}>
+        <Text style={{ fontFamily: fontFamily.semibold, fontSize: 17, color: colors.onInk }}>{title}</Text>
+        <Text style={{ fontFamily: fontFamily.regular, fontSize: 13.5, lineHeight: 19, color: colors.onInkMuted }}>{caption}</Text>
+      </View>
+    </PressableScale>
+  );
 }
 
 function sessionStatusLabel(session: OutboundSession): string {
@@ -22,6 +45,7 @@ export default function OutboundHomeScreen() {
   const userId = user?.id ?? 'anonymous';
   const [sessions, setSessions] = useState<OutboundSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { colors } = useTheme();
 
   useFocusEffect(
     useCallback(() => {
@@ -43,148 +67,43 @@ export default function OutboundHomeScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Xuất kho' }} />
-      <View style={styles.container}>
-        <View style={styles.startRow}>
-          <Pressable
-            style={({ pressed }) => [styles.startButton, styles.startButtonOutbound, pressed && styles.buttonPressed]}
-            onPress={() => router.push('/outbound/scan/outbound')}
-          >
-            <Text style={styles.startButtonText}>Xuất kho</Text>
-            <Text style={styles.startButtonSubtext}>Quét đơn xuất kho</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.startButton, styles.startButtonTransfer, pressed && styles.buttonPressed]}
-            onPress={() => router.push('/outbound/scan/transfer')}
-          >
-            <Text style={styles.startButtonText}>Điều chuyển kho</Text>
-            <Text style={styles.startButtonSubtext}>Quét kiện điều chuyển</Text>
-          </Pressable>
+      <ScreenHeader title="Xuất kho" />
+      <Screen>
+        <View style={{ flexDirection: 'row', gap: space.md }}>
+          <StartTile icon="cube-outline" title="Xuất kho" caption="Quét đơn xuất kho" onPress={() => router.push('/outbound/scan/outbound')} />
+          <StartTile icon="swap-horizontal" title="Điều chuyển kho" caption="Quét kiện điều chuyển" onPress={() => router.push('/outbound/scan/transfer')} />
         </View>
 
-        <Text style={styles.sectionLabel}>Lịch sử phiên quét trên thiết bị này</Text>
-        <Text style={styles.sectionHint}>
-          Chỉ là nhật ký quét của bạn trên máy này. Trạng thái xuất kho chính thức của từng đơn nằm trên hệ thống.
-        </Text>
-
-        {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={sessions}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
-            ListEmptyComponent={<Text style={styles.empty}>Chưa có phiên nào được thực hiện</Text>}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                onPress={() => router.push(`/outbound/history/${item.id}`)}
-              >
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>
-                    {item.mode === 'outbound' ? 'Xuất kho' : 'Điều chuyển kho'} · {formatDateTime(item.started_at)}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {sessionStatusLabel(item)} · {successCount(item)}/{SESSION_SCAN_CAP} kiện
-                  </Text>
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            )}
+        <View style={{ gap: space.md }}>
+          <SectionHeader
+            title="Phiên quét trên máy này"
+            caption="Chỉ là nhật ký quét của bạn trên máy này. Trạng thái xuất kho chính thức của từng đơn nằm trên hệ thống."
           />
-        )}
-      </View>
+          {isLoading ? (
+            <View style={{ gap: space.sm }} accessibilityLabel="Đang tải lịch sử">
+              {[0, 1].map((i) => <Skeleton key={i} height={64} radius={radii.md} />)}
+            </View>
+          ) : sessions.length === 0 ? (
+            <EmptyState icon="time-outline" title="Chưa có phiên nào" message="Bắt đầu một phiên xuất kho hoặc điều chuyển ở trên." compact />
+          ) : (
+            <ListGroup>
+              {sessions.map((item) => {
+                const finished = item.ended_at && !item.interrupted;
+                return (
+                  <ListRow
+                    key={item.id}
+                    icon={item.mode === 'outbound' ? 'cube-outline' : 'swap-horizontal'}
+                    iconTone={!item.ended_at ? colors.primary : item.interrupted ? colors.warning : finished ? colors.success : undefined}
+                    title={`${item.mode === 'outbound' ? 'Xuất kho' : 'Điều chuyển kho'}, ${formatDateTime(item.started_at)}`}
+                    subtitle={`${sessionStatusLabel(item)}, ${successCount(item)}/${SESSION_SCAN_CAP} kiện`}
+                    onPress={() => router.push(`/outbound/history/${item.id}`)}
+                  />
+                );
+              })}
+            </ListGroup>
+          )}
+        </View>
+      </Screen>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  startRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  startButton: {
-    flex: 1,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: 2,
-    ...shadow.card,
-  },
-  startButtonOutbound: {
-    backgroundColor: colors.primary,
-  },
-  startButtonTransfer: {
-    backgroundColor: colors.neutral,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  startButtonText: {
-    color: colors.onPrimary,
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  startButtonSubtext: {
-    color: colors.onPrimary,
-    opacity: 0.85,
-    fontSize: 12,
-  },
-  sectionLabel: {
-    ...typography.label,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  sectionHint: {
-    ...typography.caption,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  list: {
-    padding: spacing.lg,
-    paddingTop: spacing.xs,
-    gap: spacing.sm + 2,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadow.card,
-  },
-  cardPressed: {
-    opacity: 0.7,
-  },
-  cardBody: {
-    flex: 1,
-  },
-  cardTitle: {
-    ...typography.h3,
-  },
-  cardSubtitle: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-  chevron: {
-    fontSize: 22,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
-  },
-});

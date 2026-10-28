@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Alert, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as pickingApi from '../../../../src/api/picking';
 import { ApiError } from '../../../../src/auth/auth-context';
@@ -19,12 +11,18 @@ import { useSubmitLock } from '../../../../src/lib/submitLock';
 import { notifyScanError, notifyScanSuccess } from '../../../../src/scanner/haptics';
 import { matchesCode } from '../../../../src/scanner/matching';
 import { ScanField } from '../../../../src/scanner/ScanField';
+import { ScanStep } from '../../../../src/components/ScanStep';
 import { StampBadge } from '../../../../src/components/StampBadge';
 import type { PickingLine, PickingTaskDetail, PickingTaskType, VariantMatch } from '../../../../src/types/picking';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
+import {
+  Button, EmptyState, ErrorState, InlineAlert, LoadingState, PressableScale, Screen, ScreenHeader, StepIndicator, TextField, fontFamily, radii, space, useTheme,
+} from '../../../../src/design-system';
+
+const STEPS = ['Vị trí', 'Sản phẩm', 'Số lượng'];
 
 export default function ScanScreen() {
   const { taskType, taskId } = useLocalSearchParams<{ taskType: PickingTaskType; taskId: string }>();
+  const { colors, type } = useTheme();
   const [task, setTask] = useState<PickingTaskDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -225,30 +223,20 @@ export default function ScanScreen() {
   }
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return (<><ScreenHeader title="Quét hàng" /><Screen scroll={false}><LoadingState label="Đang mở phiếu…" /></Screen></>);
   }
 
   if (loadError || !task) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{loadError ?? 'Không tìm thấy phiếu'}</Text>
-      </View>
-    );
+    return (<><ScreenHeader title="Quét hàng" /><Screen scroll={false}><ErrorState title={loadError ?? 'Không tìm thấy phiếu'} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} /></Screen></>);
   }
 
   if (!task.current_line) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Quét hàng' }} />
-        <View style={styles.center}>
-          <View style={styles.doneBox}>
-            <Text style={styles.done}>Đã lấy xong tất cả sản phẩm trong phiếu này.</Text>
-          </View>
-        </View>
+        <ScreenHeader title="Quét hàng" />
+        <Screen scroll={false}>
+          <EmptyState icon="checkmark-done-circle" title="Đã lấy xong" message="Tất cả sản phẩm trong phiếu này đã được lấy." actionLabel="Về danh sách phiếu" onAction={() => router.replace('/picking')} />
+        </Screen>
       </>
     );
   }
@@ -257,18 +245,23 @@ export default function ScanScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: task.order_number }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.stepCard}>
-          <View style={styles.stepHeader}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>1</Text>
-            </View>
-            <Text style={styles.stepLabel}>Vị trí cần đến</Text>
-          </View>
-          <View style={styles.infoBox}>
-            <Text style={styles.infoLabel}>Mã vị trí</Text>
-            <Text style={styles.infoValue}>{line.source_location_code ?? '(chưa xác định)'}</Text>
+      <ScreenHeader title={task.order_number} />
+      <Screen
+        footer={locationVerified && productVerified ? (
+          <Button label="Xác nhận đã lấy" icon="checkmark-circle" loading={isSubmitting} loadingLabel="Đang xác nhận…" onPress={handleConfirm} />
+        ) : null}
+      >
+        <View style={{ gap: space.md }}>
+          <StepIndicator steps={STEPS} current={!locationVerified ? 0 : !productVerified ? 1 : 2} />
+          <Text style={type.caption}>Đã lấy {line.picked_qty}/{line.requested_qty} cho dòng này</Text>
+        </View>
+
+        <ScanStep n={1} title="Đến đúng vị trí" done={locationVerified}>
+          <View style={{ padding: space.md, borderRadius: radii.sm, backgroundColor: colors.inkField, gap: 2 }}>
+            <Text style={{ fontFamily: fontFamily.medium, fontSize: 13, color: colors.onInkMuted }}>Mã vị trí</Text>
+            <Text selectable style={{ fontFamily: fontFamily.monoBold, fontSize: 24, color: colors.onInk, letterSpacing: 1 }}>
+              {line.source_location_code ?? '(chưa xác định)'}
+            </Text>
           </View>
           <ScanField
             value={locationInput}
@@ -280,24 +273,16 @@ export default function ScanScreen() {
           {locationMessage ? (
             <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} />
           ) : null}
-        </View>
+        </ScanStep>
 
         {locationVerified && (
-          <View style={styles.stepCard}>
-            <View style={styles.stepHeader}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>2</Text>
-              </View>
-              <Text style={styles.stepLabel}>Sản phẩm cần lấy</Text>
-            </View>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoValueBold}>{line.book_title}</Text>
-              <Text style={styles.infoLabel}>
-                SKU: {line.sku ?? '-'} · Mã: {line.barcode ?? '-'}
+          <ScanStep n={2} title="Quét đúng sản phẩm" done={productVerified}>
+            <View style={{ padding: space.md, borderRadius: radii.sm, backgroundColor: colors.surfaceRaised, gap: 4 }}>
+              <Text style={{ fontFamily: fontFamily.semibold, fontSize: 16, lineHeight: 22, color: colors.textPrimary }}>{line.book_title}</Text>
+              <Text selectable style={{ fontFamily: fontFamily.mono, fontSize: 13.5, color: colors.textSecondary }}>
+                SKU {line.sku ?? '—'}  ·  Mã {line.barcode ?? '—'}
               </Text>
-              <Text style={styles.infoLabel}>
-                Cần lấy: {line.remaining_qty} (đã lấy {line.picked_qty}/{line.requested_qty})
-              </Text>
+              <Text style={type.caption}>Cần lấy {line.remaining_qty}</Text>
             </View>
             <ScanField
               value={productInput}
@@ -306,192 +291,52 @@ export default function ScanScreen() {
               placeholder="Quét hoặc nhập mã sản phẩm"
               autoFocus
             />
-            {isLookingUpProduct ? <ActivityIndicator color={colors.primary} /> : null}
+            {isLookingUpProduct ? <LoadingState label="Đang tra mã sản phẩm…" /> : null}
             {productMessage ? (
               <StampBadge text={productMessage.text} tone={productMessage.ok ? 'success' : 'danger'} />
             ) : null}
 
             {ambiguousMatches.length > 0 && (
-              <View style={styles.ambiguousBox}>
-                <Text style={styles.infoLabel}>Chọn đúng sản phẩm:</Text>
-                {ambiguousMatches.map((match) => (
-                  <Pressable
-                    key={match.variant_id}
-                    style={({ pressed }) => [styles.ambiguousItem, pressed && styles.buttonPressed]}
-                    onPress={() => handleSelectAmbiguous(match)}
-                  >
-                    <Text style={styles.ambiguousText}>
-                      {match.sku ?? match.internal_barcode ?? match.isbn13 ?? match.isbn10} · {match.book_title}
-                    </Text>
-                  </Pressable>
-                ))}
+              <View style={{ gap: space.sm }}>
+                <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.textPrimary }}>Chọn đúng sản phẩm</Text>
+                {ambiguousMatches.map((match) => {
+                  const code = match.sku ?? match.internal_barcode ?? match.isbn13 ?? match.isbn10;
+                  return (
+                    <PressableScale
+                      key={match.variant_id}
+                      onPress={() => handleSelectAmbiguous(match)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${match.book_title}, mã ${code ?? 'không có'}`}
+                      style={{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.warning, backgroundColor: colors.warningSoft }}
+                    >
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ fontFamily: fontFamily.medium, fontSize: 15, color: colors.textPrimary }} numberOfLines={2}>{match.book_title}</Text>
+                        <Text style={{ fontFamily: fontFamily.mono, fontSize: 13, color: colors.textSecondary }}>{code ?? '—'}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                    </PressableScale>
+                  );
+                })}
               </View>
             )}
-          </View>
+          </ScanStep>
         )}
 
         {locationVerified && productVerified && (
-          <View style={styles.stepCard}>
-            <View style={styles.stepHeader}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>3</Text>
-              </View>
-              <Text style={styles.stepLabel}>Số lượng</Text>
-            </View>
-            <TextInput
-              style={styles.input}
+          <ScanStep n={3} title="Nhập số lượng đã lấy" done={false}>
+            <TextField
+              mono
               keyboardType="number-pad"
               value={quantity}
               onChangeText={(text) => setQuantity(sanitizeQuantityInput(text))}
               accessibilityLabel="Số lượng đã lấy"
+              hint={`Tối đa ${line.remaining_qty}`}
               maxLength={6}
             />
-            {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
-            <Pressable
-              style={({ pressed }) => [styles.confirmButton, (isSubmitting || pressed) && styles.buttonDisabled]}
-              onPress={handleConfirm}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={colors.onPrimary} />
-              ) : (
-                <Text style={styles.confirmButtonText}>Xác nhận đã lấy</Text>
-              )}
-            </Pressable>
-          </View>
+            {submitError ? <InlineAlert message={submitError} /> : null}
+          </ScanStep>
         )}
-      </ScrollView>
+      </Screen>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  error: {
-    ...typography.code,
-    color: colors.danger,
-    fontSize: 13,
-  },
-  success: {
-    ...typography.code,
-    color: colors.success,
-    fontSize: 13,
-  },
-  doneBox: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.successSoft,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
-  },
-  done: {
-    color: colors.success,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  stepCard: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    gap: spacing.sm + 2,
-    ...shadow.card,
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  stepBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBadgeText: {
-    color: colors.onPrimary,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 13,
-  },
-  stepLabel: {
-    ...typography.h3,
-  },
-  infoBox: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 2,
-  },
-  infoLabel: {
-    ...typography.code,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    ...typography.code,
-    fontSize: 17,
-    color: colors.primary,
-  },
-  infoValueBold: {
-    ...typography.body,
-    fontFamily: fonts.bodySemibold,
-    fontSize: 16,
-    marginBottom: 2,
-  },
-  ambiguousBox: {
-    gap: spacing.xs + 2,
-  },
-  ambiguousItem: {
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.md,
-    padding: spacing.sm + 2,
-  },
-  ambiguousText: {
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
-  },
-  confirmButton: {
-    backgroundColor: colors.success,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  confirmButtonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-});

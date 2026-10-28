@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, TextInput, View, type TextStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { CameraScannerModal } from './CameraScannerModal';
-import { colors, fonts, radius, spacing } from '../theme/tokens';
+import { fontFamily, radii, size, space, useTheme } from '../design-system';
 
 type Props = {
   value: string;
@@ -13,24 +14,32 @@ type Props = {
   autoFocus?: boolean;
 };
 
+const NO_WEB_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
+
 /**
- * Reusable scan input: a focused text field that receives hardware
- * keyboard-wedge scanner input directly (the scanner types + presses
- * Enter, which fires onSubmitEditing), plus a camera button as an
- * alternative input source. Both paths funnel through the same onSubmit.
- *
- * Styled as a manifest form field (bordered box, monospace entry) since
- * this is the single most repeated interaction in the app.
+ * The most repeated interaction in the staff app. A focused text field that
+ * takes keyboard-wedge scanner input directly (the scanner types and presses
+ * Enter, which fires onSubmitEditing) and doubles as manual entry, plus a
+ * large camera button. Both paths go through the same onSubmit. Codes are set
+ * in mono, large, so a misread character is visible before it is sent.
  */
 export function ScanField({ value, onChangeText, onSubmit, placeholder, editable = true, autoFocus }: Props) {
+  const { colors } = useTheme();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
   return (
-    <View style={styles.row}>
-      <View style={[styles.inputWrap, isFocused && styles.inputWrapFocused, !editable && styles.inputDisabled]}>
+    <View style={{ flexDirection: 'row', gap: space.sm }}>
+      <View
+        style={{
+          flex: 1, minHeight: size.control, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md,
+          borderRadius: radii.sm, backgroundColor: editable ? colors.surface : colors.surfaceRaised,
+          borderWidth: isFocused ? 2 : 1, borderColor: isFocused ? colors.focus : colors.borderStrong, opacity: editable ? 1 : 0.6,
+        }}
+      >
+        <Ionicons name="barcode-outline" size={22} color={isFocused ? colors.focus : colors.textMuted} />
         <TextInput
-          style={styles.input}
+          style={[NO_WEB_OUTLINE, { flex: 1, minHeight: size.control - 4, paddingRight: space.md, fontFamily: fontFamily.monoBold, fontSize: 17, letterSpacing: 0.6, color: colors.textPrimary }]}
           placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           value={value}
@@ -41,20 +50,24 @@ export function ScanField({ value, onChangeText, onSubmit, placeholder, editable
           editable={editable}
           autoFocus={autoFocus}
           autoCapitalize="characters"
-          blurOnSubmit={false}
+          autoCorrect={false}
+          returnKeyType="done"
+          submitBehavior="submit"
+          accessibilityLabel={placeholder}
+          accessibilityHint="Quét bằng máy quét cầm tay hoặc nhập mã rồi nhấn Xong"
         />
       </View>
       <Pressable
-        style={({ pressed }) => [styles.cameraButton, pressed && styles.cameraButtonPressed, !editable && styles.cameraButtonDisabled]}
+        style={({ pressed }) => ({
+          width: size.control, minHeight: size.control, borderRadius: radii.sm, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: pressed ? colors.primaryPressed : colors.primary, opacity: editable ? 1 : 0.5,
+        })}
         onPress={() => setCameraOpen(true)}
         disabled={!editable}
         accessibilityRole="button"
         accessibilityLabel="Quét bằng camera"
       >
-        <View style={styles.cameraIcon}>
-          <View style={styles.cameraIconBump} />
-          <View style={styles.cameraIconLens} />
-        </View>
+        <Ionicons name="camera" size={22} color={colors.onPrimary} />
       </Pressable>
       <CameraScannerModal
         visible={cameraOpen}
@@ -68,72 +81,3 @@ export function ScanField({ value, onChangeText, onSubmit, placeholder, editable
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  inputWrap: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.sm,
-  },
-  inputWrapFocused: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  inputDisabled: {
-    opacity: 0.5,
-  },
-  input: {
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    fontFamily: fonts.mono,
-    fontSize: 16,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: colors.textPrimary,
-  },
-  cameraButton: {
-    width: 48,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cameraButtonPressed: {
-    opacity: 0.8,
-  },
-  cameraButtonDisabled: {
-    opacity: 0.5,
-  },
-  cameraIcon: {
-    width: 22,
-    height: 17,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cameraIconBump: {
-    position: 'absolute',
-    top: -5,
-    width: 8,
-    height: 3,
-    borderRadius: 1,
-    backgroundColor: colors.primary,
-  },
-  cameraIconLens: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-});

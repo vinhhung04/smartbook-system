@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, SectionList, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert, RefreshControl, SectionList, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TaskCard } from '../../src/components/TaskCard';
 import { useDashboardTasks, type TaskEntry } from '../../src/hooks/useDashboardTasks';
 import { normalizeSearchText } from '../../src/lib/optionSearch';
 import { TASK_TYPE_LABEL, type TaskPhase } from '../../src/lib/taskRoutes';
-import { colors, fonts, radius, spacing, typography } from '../../src/theme/tokens';
+import { EmptyState, FilterChips, InlineAlert, PageTitle, SearchField, Skeleton, radii, space, useTheme } from '../../src/design-system';
 
 type Filter = 'open' | TaskPhase;
 
@@ -46,6 +45,8 @@ function matchesQuery(entry: TaskEntry, query: string): boolean {
 }
 
 export default function TasksScreen() {
+  const { colors, type } = useTheme();
+  const insets = useSafeAreaInsets();
   const { data, isLoading, isRefreshing, error, refetch } = useDashboardTasks();
   const [filter, setFilter] = useState<Filter>('open');
   const [query, setQuery] = useState('');
@@ -72,212 +73,57 @@ export default function TasksScreen() {
   const countFor = (key: Filter) => (key === 'open' ? data.counts.todo + data.counts.in_progress + data.counts.waiting : data.counts[key]);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">Việc của tôi</Text>
-        <Text style={styles.subtitle}>
-          {data.counts.todo} cần làm · {data.counts.in_progress} đang làm · {data.counts.waiting} chờ duyệt · {data.counts.done} xong gần đây
-        </Text>
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={16} color={colors.textMuted} />
-          <TextInput
-            style={styles.search}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Tìm mã phiếu, kho, loại việc"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            autoCapitalize="none"
-            returnKeyType="search"
-            accessibilityLabel="Tìm công việc"
-          />
-          {query ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Xóa tìm kiếm">
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-        </View>
-        <View style={styles.filters} accessibilityRole="tablist">
-          {FILTERS.map((item) => {
-            const active = filter === item.key;
-            return (
-              <Pressable
-                key={item.key}
-                style={[styles.filter, active && styles.filterActive]}
-                onPress={() => setFilter(item.key)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-              >
-                <Text style={[styles.filterText, active && styles.filterTextActive]} numberOfLines={1}>
-                  {item.label} {countFor(item.key)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.md }}>
+        <PageTitle
+          title="Việc của tôi"
+          subtitle={`${data.counts.todo} cần làm, ${data.counts.in_progress} đang làm, ${data.counts.waiting} chờ duyệt`}
+        />
+        <SearchField value={query} onChangeText={setQuery} placeholder="Mã phiếu, kho, loại việc" autoCapitalize="none" accessibilityLabel="Tìm công việc" />
+        <FilterChips
+          accessibilityLabel="Lọc theo trạng thái"
+          value={filter}
+          onChange={setFilter}
+          options={FILTERS.map((item) => ({ value: item.key, label: item.label, count: countFor(item.key) }))}
+        />
+        {error ? <InlineAlert message={error} actionLabel="Thử lại" onAction={() => void refetch()} /> : null}
+        {data.warnings.map((warning) => <InlineAlert key={warning} tone="warning" message={warning} />)}
       </View>
 
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.error}>{error}</Text>
-          <Pressable onPress={() => void refetch()} style={styles.retry} accessibilityRole="button">
-            <Text style={styles.retryText}>Thử lại</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {data.warnings.map((warning) => (
-        <Text key={warning} style={styles.warning}>{warning}</Text>
-      ))}
-
       {isLoading && data.entries.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+        <View style={{ paddingHorizontal: space.lg, gap: space.md }} accessibilityLabel="Đang tải công việc">
+          {[0, 1, 2].map((i) => <Skeleton key={i} height={150} radius={radii.md} />)}
         </View>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.key}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           stickySectionHeadersEnabled={false}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
           renderSectionHeader={({ section }) =>
-            filter === 'open' ? <Text style={styles.sectionTitle}>{section.title} ({section.data.length})</Text> : null
+            filter === 'open' ? (
+              <Text style={[type.heading, { marginTop: space.lg, marginBottom: space.sm }]} accessibilityRole="header">
+                {section.title} ({section.data.length})
+              </Text>
+            ) : null
           }
           ListEmptyComponent={
             error ? null : (
-              <View style={styles.empty}>
-                <Ionicons name={query ? 'search-outline' : 'checkmark-done-outline'} size={28} color={colors.textMuted} />
-                <Text style={styles.emptyText}>{query ? 'Không có việc nào khớp từ khóa.' : EMPTY_TEXT[filter]}</Text>
-              </View>
+              <EmptyState
+                icon={query ? 'search-outline' : 'checkmark-done-outline'}
+                title={query ? 'Không có việc nào khớp từ khóa' : EMPTY_TEXT[filter]}
+                actionLabel={query ? 'Xóa tìm kiếm' : undefined}
+                onAction={query ? () => setQuery('') : undefined}
+              />
             )
           }
           renderItem={({ item }) => <TaskCard entry={item} onOpen={handleOpen} />}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  title: {
-    ...typography.h2,
-  },
-  subtitle: {
-    ...typography.caption,
-    marginTop: -spacing.xs,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  search: {
-    flex: 1,
-    minHeight: 44,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  filter: {
-    flex: 1,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 4,
-  },
-  filterActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterText: {
-    fontFamily: fonts.bodySemibold,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  filterTextActive: {
-    color: colors.onPrimary,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorBox: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  error: {
-    flex: 1,
-    color: colors.danger,
-    fontSize: 13,
-  },
-  retry: {
-    minHeight: 36,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  retryText: {
-    color: colors.danger,
-    fontFamily: fonts.bodySemibold,
-  },
-  warning: {
-    ...typography.caption,
-    color: colors.warning,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  list: {
-    padding: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xxl,
-  },
-  sectionTitle: {
-    ...typography.label,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  separator: {
-    height: spacing.sm,
-  },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.xl,
-  },
-  emptyText: {
-    ...typography.caption,
-    textAlign: 'center',
-  },
-});

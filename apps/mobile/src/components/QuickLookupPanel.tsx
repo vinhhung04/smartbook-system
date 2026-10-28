@@ -1,12 +1,22 @@
 import { useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import * as catalogApi from '../api/catalog';
 import { ApiError } from '../auth/auth-context';
 import { notifyScanError, notifyScanSuccess } from '../scanner/haptics';
 import { ScanField } from '../scanner/ScanField';
 import type { BookSummary } from '../types/catalog';
-import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
+import { Card, EmptyState, InfoRow, InlineAlert, LoadingState, SectionHeader, fontFamily, radii, space, useTheme } from '../design-system';
+
+function Stock({ label, value, tone }: { label: string; value: number; tone: string }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, padding: space.md, gap: 2, borderRadius: radii.sm, backgroundColor: colors.surfaceRaised }} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Text style={{ fontFamily: fontFamily.bold, fontSize: 26, color: tone, fontVariant: ['tabular-nums'] }}>{value}</Text>
+      <Text style={{ fontFamily: fontFamily.medium, fontSize: 12.5, color: colors.textSecondary }}>{label}</Text>
+    </View>
+  );
+}
 
 /**
  * Scan-to-lookup body, shared by app/lookup/index.tsx (pushed to from the
@@ -14,6 +24,7 @@ import { colors, radius, shadow, spacing, typography } from '../theme/tokens';
  * tab (rendered directly as a tab root, no Stack.Screen needed there).
  */
 export function QuickLookupPanel() {
+  const { colors, type } = useTheme();
   const [code, setCode] = useState('');
   const [book, setBook] = useState<BookSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,169 +51,67 @@ export function QuickLookupPanel() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.bg }}
+      contentContainerStyle={{ padding: space.lg, gap: space.lg, paddingBottom: space.xxl }}
+      keyboardShouldPersistTaps="handled"
+      contentInsetAdjustmentBehavior="automatic"
+    >
       <ScanField
         value={code}
         onChangeText={setCode}
         onSubmit={handleSubmit}
-        placeholder="Quét hoặc nhập ISBN/barcode/SKU"
+        placeholder="Quét hoặc nhập ISBN, barcode, SKU"
         autoFocus
       />
 
-      {isLoading ? <ActivityIndicator style={styles.spinner} color={colors.primary} /> : null}
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
+      {isLoading ? <LoadingState label="Đang tra cứu mã…" /> : null}
+      {error ? <InlineAlert title="Không tra được mã này" message={error} /> : null}
+
+      {!book && !isLoading && !error ? (
+        <EmptyState icon="scan-outline" title="Quét một mã để bắt đầu" message="Dùng máy quét cầm tay, camera, hoặc gõ mã rồi nhấn Xong." compact />
       ) : null}
 
       {book ? (
-        <View style={styles.card}>
-          <Text style={styles.title}>{book.title}</Text>
-          {book.subtitle ? <Text style={styles.subtitle}>{book.subtitle}</Text> : null}
-          <View style={styles.metaList}>
-            <Text style={styles.meta}>Tác giả: {book.author}</Text>
-            <Text style={styles.meta}>NXB: {book.publisher}</Text>
-            <Text style={styles.meta}>Danh mục: {book.category}</Text>
-            <Text style={styles.meta}>ISBN/Mã: {book.isbn}</Text>
+        <View style={{ gap: space.lg }}>
+          <View style={{ gap: 2 }}>
+            <Text style={type.title} accessibilityRole="header">{book.title}</Text>
+            {book.subtitle ? <Text style={type.caption}>{book.subtitle}</Text> : null}
           </View>
 
-          <View style={styles.stockRow}>
-            <View style={styles.stockBox}>
-              <Text style={styles.stockNumber}>{book.quantity}</Text>
-              <Text style={styles.stockLabel}>Tổng tồn</Text>
-            </View>
-            <View style={[styles.stockBox, styles.stockBoxSuccess]}>
-              <Text style={[styles.stockNumber, styles.stockNumberSuccess]}>{book.available_quantity}</Text>
-              <Text style={styles.stockLabel}>Có thể lấy</Text>
-            </View>
-            <View style={[styles.stockBox, styles.stockBoxWarning]}>
-              <Text style={[styles.stockNumber, styles.stockNumberWarning]}>{book.receiving_quantity}</Text>
-              <Text style={styles.stockLabel}>Chờ nhập kho</Text>
-            </View>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Stock label="Tổng tồn" value={book.quantity} tone={colors.textPrimary} />
+            <Stock label="Có thể lấy" value={book.available_quantity} tone={colors.success} />
+            <Stock label="Chờ nhập kho" value={book.receiving_quantity} tone={colors.warning} />
           </View>
 
-          <Text style={styles.sectionTitle}>Vị trí lưu trữ ({book.location_count})</Text>
-          {book.locations.length === 0 ? (
-            <Text style={styles.meta}>Không còn tồn kho ở vị trí nào.</Text>
-          ) : (
-            <View style={styles.locationList}>
-              {book.locations.map((loc) => (
-                <View key={`${loc.warehouse_id}-${loc.location_id}`} style={styles.locationRow}>
-                  <Text style={styles.locationLabel}>{loc.label}</Text>
-                  <Text style={styles.locationQty}>{loc.quantity}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          <View style={{ gap: space.md }}>
+            <SectionHeader title={`Vị trí lưu trữ (${book.location_count})`} />
+            {book.locations.length === 0 ? (
+              <Text style={type.caption}>Không còn tồn kho ở vị trí nào.</Text>
+            ) : (
+              <Card padded={false}>
+                {book.locations.map((loc, index) => (
+                  <View
+                    key={`${loc.warehouse_id}-${loc.location_id}`}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, minHeight: 52, borderTopWidth: index > 0 ? 1 : 0, borderTopColor: colors.border }}
+                  >
+                    <Text selectable style={{ flex: 1, fontFamily: fontFamily.monoBold, fontSize: 15, color: colors.textPrimary }}>{loc.label}</Text>
+                    <Text style={{ fontFamily: fontFamily.bold, fontSize: 16, color: colors.textPrimary, fontVariant: ['tabular-nums'] }}>{loc.quantity}</Text>
+                  </View>
+                ))}
+              </Card>
+            )}
+          </View>
+
+          <Card>
+            <InfoRow label="Tác giả" value={book.author ?? '—'} />
+            <InfoRow label="Nhà xuất bản" value={book.publisher ?? '—'} />
+            <InfoRow label="Danh mục" value={book.category ?? '—'} />
+            <InfoRow label="ISBN / mã" value={book.isbn ?? '—'} mono />
+          </Card>
         </View>
       ) : null}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  spinner: {
-    marginTop: spacing.sm,
-  },
-  errorBox: {
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  card: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadow.card,
-  },
-  title: {
-    ...typography.h2,
-  },
-  subtitle: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-  metaList: {
-    marginTop: spacing.sm,
-    gap: 2,
-  },
-  meta: {
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  stockRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  stockBox: {
-    flex: 1,
-    backgroundColor: colors.neutralSoft,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm + 2,
-    alignItems: 'center',
-  },
-  stockBoxSuccess: {
-    backgroundColor: colors.successSoft,
-  },
-  stockBoxWarning: {
-    backgroundColor: colors.warningSoft,
-  },
-  stockNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-  },
-  stockNumberSuccess: {
-    color: colors.success,
-  },
-  stockNumberWarning: {
-    color: colors.warning,
-  },
-  stockLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  sectionTitle: {
-    ...typography.label,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xs,
-  },
-  locationList: {
-    gap: 0,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  locationLabel: {
-    flex: 1,
-    marginRight: spacing.sm,
-    color: colors.textPrimary,
-  },
-  locationQty: {
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-});

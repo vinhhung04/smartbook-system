@@ -1,14 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Alert, Text, View } from 'react-native';
 
 import * as pickingApi from '../../../../src/api/picking';
 import { ApiError, useAuth } from '../../../../src/auth/auth-context';
@@ -16,11 +8,16 @@ import { notifyScanError, notifyScanSuccess } from '../../../../src/scanner/hapt
 import { ScanField } from '../../../../src/scanner/ScanField';
 import { useSubmitLock } from '../../../../src/lib/submitLock';
 import type { PickingTaskDetail, PickingTaskType } from '../../../../src/types/picking';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../../../src/theme/tokens';
+import {
+  Button, Card, ErrorState, InlineAlert, LoadingState, ProgressBar, Screen, ScreenHeader, SectionHeader, StatusBadge, StepIndicator, fontFamily, radii, space, useTheme,
+} from '../../../../src/design-system';
+
+const STEPS = ['Nhận phiếu', 'Lấy hàng', 'Hoàn tất'];
 
 export default function TaskDetailScreen() {
   const { taskType, taskId } = useLocalSearchParams<{ taskType: PickingTaskType; taskId: string }>();
   const { user } = useAuth();
+  const { colors, type } = useTheme();
   const [task, setTask] = useState<PickingTaskDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,280 +125,126 @@ export default function TaskDetailScreen() {
   }
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return (<><ScreenHeader title="Phiếu lấy hàng" /><Screen scroll={false}><LoadingState label="Đang mở phiếu…" /></Screen></>);
   }
 
   if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error}</Text>
-      </View>
-    );
+    return (<><ScreenHeader title="Phiếu lấy hàng" /><Screen scroll={false}><ErrorState message={error} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} /></Screen></>);
   }
 
   if (needsClaim) {
     return (
       <>
-        <Stack.Screen options={{ headerShown: true, title: 'Nhận phiếu' }} />
-        <View style={styles.claimContainer}>
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Xác nhận vị trí để bắt đầu</Text>
-            <Text style={styles.claimHint}>Quét hoặc nhập vị trí hiện tại của bạn — phiếu sẽ được gán cho bạn ngay sau bước này.</Text>
-            <ScanField
-              value={locationInput}
-              onChangeText={setLocationInput}
-              onSubmit={handleConfirmPresence}
-              placeholder="Quét hoặc nhập mã vị trí kệ"
-              autoFocus
-              editable={!isConfirmingPresence}
-            />
-            {isConfirmingPresence ? <ActivityIndicator color={colors.primary} /> : null}
-            {presenceMessage ? <Text style={styles.error}>{presenceMessage}</Text> : null}
+        <ScreenHeader title="Nhận phiếu" />
+        <Screen>
+          <StepIndicator steps={STEPS} current={0} />
+          <View style={{ gap: space.sm }}>
+            <Text style={type.title} accessibilityRole="header">Xác nhận vị trí để bắt đầu</Text>
+            <Text style={type.body}>Quét hoặc nhập mã vị trí kệ bạn đang đứng. Phiếu được giao cho bạn ngay sau bước này.</Text>
           </View>
-        </View>
+          <ScanField
+            value={locationInput}
+            onChangeText={setLocationInput}
+            onSubmit={handleConfirmPresence}
+            placeholder="Mã vị trí kệ"
+            autoFocus
+            editable={!isConfirmingPresence}
+          />
+          {isConfirmingPresence ? <LoadingState label="Đang xác nhận vị trí…" /> : null}
+          {presenceMessage ? <InlineAlert message={presenceMessage} /> : null}
+        </Screen>
       </>
     );
   }
 
   if (!task) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>Không tìm thấy phiếu</Text>
-      </View>
-    );
+    return (<><ScreenHeader title="Phiếu lấy hàng" /><Screen scroll={false}><ErrorState title="Không tìm thấy phiếu" onRetry={() => router.replace('/picking')} /></Screen></>);
   }
 
   const totalPickedQty = task.lines.reduce((sum, l) => sum + l.picked_qty, 0);
+  const totalRequestedQty = task.lines.reduce((sum, l) => sum + l.requested_qty, 0);
   const canDeclareShortage = totalPickedQty > 0 && task.lines.some((l) => l.remaining_qty > 0);
+  const current = task.current_line;
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: task.order_number }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.titleRow}>
-          <Text style={styles.warehouse}>
-            Kho: {task.source_warehouse_code ?? '-'} · còn {task.remaining_line_count} dòng
-          </Text>
-          {task.task_class === 'REPICK' ? (
-            <View style={styles.repickBadge}>
-              <Text style={styles.repickBadgeText}>
-                REPICK{task.repick_sequence ? ` #${task.repick_sequence}` : ''}
-                {task.parent_order_number ? ` · gốc ${task.parent_order_number}` : ''}
-              </Text>
-            </View>
-          ) : null}
+      <ScreenHeader title={task.order_number} />
+      <Screen
+        footer={current ? (
+          <Button label="Bắt đầu quét lấy hàng" icon="scan" onPress={() => router.push(`/picking/${taskType}/${taskId}/scan`)} />
+        ) : (
+          <Button label="Về danh sách phiếu" variant="secondary" icon="list" onPress={() => router.replace('/picking')} />
+        )}
+      >
+        <StepIndicator steps={STEPS} current={current ? 1 : 2} />
+
+        <View style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            <StatusBadge tone="neutral" label={`Kho ${task.source_warehouse_code ?? '—'}`} icon="business-outline" />
+            <StatusBadge tone={task.remaining_line_count > 0 ? 'primary' : 'success'} label={`Còn ${task.remaining_line_count} dòng`} icon={task.remaining_line_count > 0 ? 'list' : 'checkmark-circle'} />
+            {task.task_class === 'REPICK' ? (
+              <StatusBadge tone="warning" icon="repeat" label={`Lấy bù${task.repick_sequence ? ` lần ${task.repick_sequence}` : ''}${task.parent_order_number ? `, gốc ${task.parent_order_number}` : ''}`} />
+            ) : null}
+          </View>
+          <View style={{ gap: 6 }}>
+            <ProgressBar value={totalRequestedQty > 0 ? totalPickedQty / totalRequestedQty : 0} tone={current ? 'primary' : 'success'} accessibilityLabel="Tiến độ lấy hàng" />
+            <Text style={type.caption}>Đã lấy {totalPickedQty}/{totalRequestedQty} sản phẩm</Text>
+          </View>
         </View>
 
-        {task.current_line ? (
-          <View style={styles.currentLineCard}>
-            <Text style={styles.currentLineLabel}>Đang lấy</Text>
-            <Text style={styles.bookTitle}>{task.current_line.book_title}</Text>
-            <Text style={styles.lineDetail}>Mã vị trí: {task.current_line.source_location_code ?? '-'}</Text>
-            <Text style={styles.lineDetail}>
-              SKU: {task.current_line.sku ?? '-'} · Mã sản phẩm: {task.current_line.barcode ?? '-'}
+        {current ? (
+          // Where to walk, then what to pick: the location is the loudest thing on screen.
+          <View style={{ padding: space.lg, gap: space.md, borderRadius: radii.md, backgroundColor: colors.inkField }}>
+            <Text style={{ fontFamily: fontFamily.medium, fontSize: 13.5, color: colors.onInkMuted }}>Đến vị trí</Text>
+            <Text selectable style={{ fontFamily: fontFamily.monoBold, fontSize: 30, lineHeight: 36, color: colors.onInk, letterSpacing: 1 }}>
+              {current.source_location_code ?? '—'}
             </Text>
-            <Text style={styles.lineDetail}>
-              Cần lấy: {task.current_line.remaining_qty} / {task.current_line.requested_qty}
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.14)' }} />
+            <Text style={{ fontFamily: fontFamily.semibold, fontSize: 17, lineHeight: 23, color: colors.onInk }}>{current.book_title}</Text>
+            <Text selectable style={{ fontFamily: fontFamily.mono, fontSize: 14, color: colors.onInkMuted }}>
+              SKU {current.sku ?? '—'}  ·  Mã {current.barcode ?? '—'}
             </Text>
-            <Pressable
-              style={({ pressed }) => [styles.scanButton, pressed && styles.buttonPressed]}
-              onPress={() => router.push(`/picking/${taskType}/${taskId}/scan`)}
-            >
-              <Text style={styles.scanButtonText}>Bắt đầu quét lấy hàng</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }}>
+              <Text style={{ fontFamily: fontFamily.bold, fontSize: 30, color: '#F6DFB4', fontVariant: ['tabular-nums'] }}>{current.remaining_qty}</Text>
+              <Text style={{ fontFamily: fontFamily.medium, fontSize: 15, color: colors.onInkMuted }}>cần lấy, trên {current.requested_qty}</Text>
+            </View>
           </View>
         ) : (
-          <View style={styles.doneBox}>
-            <Text style={styles.done}>Đã lấy xong tất cả sản phẩm trong phiếu này.</Text>
-          </View>
+          <InlineAlert tone="success" title="Đã lấy xong" message="Tất cả sản phẩm trong phiếu này đã được lấy." />
         )}
 
-        <Text style={styles.sectionTitle}>Toàn bộ danh sách</Text>
-        <View style={styles.lineList}>
-          {task.lines.map((line) => (
-            <View key={line.line_id} style={styles.lineRow}>
-              <Text style={line.remaining_qty === 0 ? styles.lineRowTitleDone : styles.lineRowTitle}>
-                {line.book_title}
-              </Text>
-              <Text style={styles.lineRowQty}>
-                {line.picked_qty}/{line.requested_qty}
-              </Text>
-            </View>
-          ))}
+        <View style={{ gap: space.md }}>
+          <SectionHeader title="Toàn bộ danh sách" caption={`${task.lines.length} dòng`} />
+          <Card padded={false}>
+            {task.lines.map((line, index) => {
+              const done = line.remaining_qty === 0;
+              return (
+                <View
+                  key={line.line_id}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.lg, borderTopWidth: index > 0 ? 1 : 0, borderTopColor: colors.border }}
+                  accessible
+                  accessibilityLabel={`${line.book_title}, đã lấy ${line.picked_qty} trên ${line.requested_qty}${done ? ', xong' : ''}`}
+                >
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={{ fontFamily: fontFamily.medium, fontSize: 15, lineHeight: 21, color: done ? colors.textMuted : colors.textPrimary }} numberOfLines={2}>{line.book_title}</Text>
+                    {done ? <StatusBadge tone="success" label="Xong" /> : null}
+                  </View>
+                  <Text style={{ fontFamily: fontFamily.bold, fontSize: 17, color: done ? colors.success : colors.textPrimary, fontVariant: ['tabular-nums'] }}>
+                    {line.picked_qty}/{line.requested_qty}
+                  </Text>
+                </View>
+              );
+            })}
+          </Card>
         </View>
 
         {canDeclareShortage ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.shortageButton,
-              (isDeclaringShortage || pressed) && styles.buttonPressed,
-            ]}
-            onPress={handleDeclareShortage}
-            disabled={isDeclaringShortage}
-          >
-            {isDeclaringShortage ? (
-              <ActivityIndicator color={colors.warning} />
-            ) : (
-              <Text style={styles.shortageButtonText}>Khai báo thiếu hàng & tạo REPICK</Text>
-            )}
-          </Pressable>
+          <View style={{ gap: space.sm }}>
+            <Text style={type.caption}>Kệ không đủ hàng? Khai báo thiếu để hệ thống tạo phiếu lấy bù cho phần còn lại.</Text>
+            <Button label="Khai báo thiếu hàng, tạo phiếu lấy bù" icon="alert-circle-outline" variant="secondary" loading={isDeclaringShortage} loadingLabel="Đang khai báo…" onPress={handleDeclareShortage} />
+          </View>
         ) : null}
-      </ScrollView>
+      </Screen>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  claimContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.bg,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  repickBadge: {
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.pill,
-    paddingVertical: 2,
-    paddingHorizontal: spacing.xs + 2,
-  },
-  repickBadgeText: {
-    color: colors.warning,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 10,
-    letterSpacing: 0.4,
-  },
-  shortageButton: {
-    backgroundColor: colors.warningSoft,
-    borderWidth: 1,
-    borderColor: colors.warningBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  shortageButtonText: {
-    color: colors.warning,
-    fontWeight: '700',
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  warehouse: {
-    ...typography.caption,
-  },
-  sectionTitle: {
-    ...typography.label,
-  },
-  card: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    gap: spacing.sm,
-    ...shadow.card,
-  },
-  claimHint: {
-    ...typography.caption,
-  },
-  currentLineCard: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primarySoft,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    gap: 4,
-  },
-  currentLineLabel: {
-    ...typography.label,
-    color: colors.primary,
-  },
-  bookTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  lineDetail: {
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  scanButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.success,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  scanButtonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 15,
-    letterSpacing: 0.5,
-  },
-  doneBox: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.successSoft,
-    borderWidth: 1,
-    borderColor: colors.successBorder,
-  },
-  done: {
-    color: colors.success,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  lineList: {
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.lg,
-    ...shadow.card,
-  },
-  lineRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  lineRowTitle: {
-    flex: 1,
-    marginRight: spacing.sm,
-    color: colors.textPrimary,
-  },
-  lineRowTitleDone: {
-    flex: 1,
-    marginRight: spacing.sm,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through',
-  },
-  lineRowQty: {
-    ...typography.code,
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-});

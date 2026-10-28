@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ActivityIndicator, Alert, FlatList, Platform, Text, TextInput, View, type TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import * as stockAuditApi from '../../src/api/stockAudit';
@@ -21,14 +20,19 @@ import { parseWholeQuantity, sanitizeQuantityInput } from '../../src/lib/quantit
 import { useSubmitLock } from '../../src/lib/submitLock';
 import type { SelectOption } from '../../src/lib/optionSearch';
 import type { StockAuditDetail, StockAuditLine } from '../../src/types/stockAudit';
-import { colors, fonts, radius, spacing, typography } from '../../src/theme/tokens';
+import {
+  BottomActionBar, Button, ErrorState, IconButton, InlineAlert, LoadingState, Screen, ScreenHeader, fontFamily, radii, space, useTheme,
+} from '../../src/design-system';
 
 const SLOW_HINT_AFTER_MS = 12000;
+/** The count box draws its own border; the browser's focus outline would draw a second one. */
+const NO_WEB_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
 type Tone = 'success' | 'danger' | 'primary' | 'warning';
 
 export default function StockAuditDetailScreen() {
   const { auditId } = useLocalSearchParams<{ auditId: string }>();
+  const { colors, type } = useTheme();
   const [audit, setAudit] = useState<StockAuditDetail | null>(null);
   // Every count write is "current + 1" or an absolute value; read the freshest lines from
   // here, not from a render-time closure that may predate the previous save.
@@ -269,18 +273,17 @@ export default function StockAuditDetailScreen() {
   }
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return (<><ScreenHeader title="Kiểm kê" /><Screen scroll={false}><LoadingState label="Đang mở phiếu kiểm kê…" /></Screen></>);
   }
 
   if (loadError || !audit) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{loadError ?? 'Không tìm thấy phiếu'}</Text>
-      </View>
+      <>
+        <ScreenHeader title="Kiểm kê" />
+        <Screen scroll={false}>
+          <ErrorState title={loadError ?? 'Không tìm thấy phiếu'} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} />
+        </Screen>
+      </>
     );
   }
 
@@ -294,18 +297,16 @@ export default function StockAuditDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: audit.audit_number }} />
-      <SafeAreaView style={styles.container} edges={['bottom']}>
-        <View style={styles.header}>
-          <Text style={styles.headerText}>
-            {audit.warehouse_code ?? '-'} · {countedTotal}/{audit.items.length} đã đếm
-          </Text>
+      <ScreenHeader title={audit.audit_number} />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ padding: space.lg, gap: space.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.sm }} accessible accessibilityLabel={`Đã đếm ${countedTotal} trên ${audit.items.length} dòng, kho ${audit.warehouse_code ?? 'không rõ'}`}>
+            <Text style={{ fontFamily: fontFamily.bold, fontSize: 28, color: colors.textPrimary, fontVariant: ['tabular-nums'] }}>{countedTotal}/{audit.items.length}</Text>
+            <Text style={[type.body, { flex: 1 }]}>dòng đã đếm, kho {audit.warehouse_code ?? '—'}</Text>
+          </View>
           <ChecklistMeter value={countedTotal} max={audit.items.length} />
-        </View>
-
-        <View style={styles.scanBox}>
-          <View style={styles.scanRow}>
-            <View style={styles.scanFieldWrap}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.sm }}>
+            <View style={{ flex: 1 }}>
               <ScanField
                 value={scanInput}
                 onChangeText={setScanInput}
@@ -315,20 +316,15 @@ export default function StockAuditDetailScreen() {
                 editable={!savingLineId}
               />
             </View>
-            <Pressable
-              style={styles.photoButton}
-              onPress={() => setCameraOpen(true)}
-              disabled={isIdentifying}
-              accessibilityRole="button"
-              accessibilityLabel="Chụp ảnh bìa để nhận diện sách"
-              accessibilityState={{ disabled: isIdentifying, busy: isIdentifying }}
-            >
-              {isIdentifying ? (
-                <ActivityIndicator color={colors.primary} size="small" />
-              ) : (
-                <Ionicons name="camera-outline" size={20} color={colors.primary} />
-              )}
-            </Pressable>
+            {isIdentifying ? (
+              <View style={{ width: 52, height: 52, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Đang nhận diện ảnh bìa">
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : (
+              <View style={{ paddingTop: 2 }}>
+                <IconButton icon="camera-outline" variant="tonal" accessibilityLabel="Chụp ảnh bìa để nhận diện sách" onPress={() => setCameraOpen(true)} />
+              </View>
+            )}
           </View>
           {scanMessage ? <StampBadge text={scanMessage.text} tone={scanMessage.tone} /> : null}
         </View>
@@ -336,56 +332,56 @@ export default function StockAuditDetailScreen() {
         <FlatList
           data={audit.items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={{ padding: space.lg, paddingBottom: 180, gap: space.sm }}
           keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
-            <View style={styles.row}>
-              <View style={styles.rowInfo}>
-                <Text style={styles.rowTitle}>{item.title ?? '-'}</Text>
-                <Text style={styles.rowMeta}>
-                  {item.location_code ?? '-'} · Hệ thống: {item.expected_qty}
-                </Text>
+          renderItem={({ item }) => {
+            const variance = item.variance_qty;
+            const varianceTone = variance === null ? colors.textMuted : variance === 0 ? colors.success : colors.danger;
+            return (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radii.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontFamily: fontFamily.medium, fontSize: 15, lineHeight: 21, color: colors.textPrimary }} numberOfLines={2}>{item.title ?? '—'}</Text>
+                  <Text style={type.caption}>
+                    <Text style={{ fontFamily: fontFamily.monoBold, color: colors.textPrimary }}>{item.location_code ?? '—'}</Text>, hệ thống {item.expected_qty}
+                  </Text>
+                </View>
+                <TextInput
+                  style={[{
+                    width: 72, height: 48, borderRadius: radii.sm, borderWidth: 1.5, borderColor: item.counted_qty === null ? colors.borderStrong : colors.primary,
+                    textAlign: 'center', fontFamily: fontFamily.monoBold, fontSize: 18, color: colors.textPrimary, backgroundColor: colors.surface,
+                  }, NO_WEB_OUTLINE]}
+                  keyboardType="number-pad"
+                  value={draftCounts[item.id] ?? ''}
+                  onChangeText={(text) => setDraftCounts((prev) => ({ ...prev, [item.id]: sanitizeQuantityInput(text) }))}
+                  onSubmitEditing={() => handleManualEntry(item)}
+                  onBlur={() => handleManualEntry(item)}
+                  placeholder="—"
+                  placeholderTextColor={colors.textMuted}
+                  maxLength={6}
+                  accessibilityLabel={`Số lượng đếm được của ${item.title ?? 'dòng'} tại ${item.location_code ?? 'vị trí không rõ'}`}
+                />
+                <View style={{ width: 52, alignItems: 'flex-end' }}>
+                  {savingLineId === item.id ? (
+                    <ActivityIndicator color={colors.primary} />
+                  ) : variance !== null ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }} accessible accessibilityLabel={variance === 0 ? 'Khớp hệ thống' : `Lệch ${variance}`}>
+                      {variance === 0 ? <Ionicons name="checkmark-circle" size={16} color={varianceTone} /> : null}
+                      <Text style={{ fontFamily: fontFamily.monoBold, fontSize: 15, color: varianceTone }}>
+                        {variance === 0 ? '0' : variance > 0 ? `+${variance}` : variance}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
               </View>
-              <TextInput
-                style={styles.countInput}
-                keyboardType="number-pad"
-                value={draftCounts[item.id] ?? ''}
-                onChangeText={(text) => setDraftCounts((prev) => ({ ...prev, [item.id]: sanitizeQuantityInput(text) }))}
-                onSubmitEditing={() => handleManualEntry(item)}
-                onBlur={() => handleManualEntry(item)}
-                placeholder="-"
-                placeholderTextColor={colors.textMuted}
-                maxLength={6}
-                accessibilityLabel={`Số lượng đếm được của ${item.title ?? 'dòng'} tại ${item.location_code ?? 'vị trí không rõ'}`}
-              />
-              {savingLineId === item.id ? (
-                <ActivityIndicator style={styles.rowSpinner} color={colors.primary} />
-              ) : item.variance_qty !== null ? (
-                <Text
-                  style={item.variance_qty === 0 ? styles.varianceOk : styles.varianceBad}
-                  accessibilityLabel={item.variance_qty === 0 ? 'Khớp hệ thống' : `Lệch ${item.variance_qty}`}
-                >
-                  {item.variance_qty === 0 ? '✓ 0' : item.variance_qty > 0 ? `+${item.variance_qty}` : item.variance_qty}
-                </Text>
-              ) : null}
-            </View>
-          )}
+            );
+          }}
         />
 
-        {submitError ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.error}>{submitError}</Text>
-          </View>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.submitButton, (isSubmitting || pressed) && styles.buttonDisabled]}
-          onPress={handleSubmitAudit}
-          disabled={isSubmitting}
-          accessibilityRole="button"
-        >
-          {isSubmitting ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={styles.submitButtonText}>Nộp phiếu kiểm kê</Text>}
-        </Pressable>
-      </SafeAreaView>
+        <BottomActionBar>
+          {submitError ? <InlineAlert message={submitError} /> : null}
+          <Button label="Nộp phiếu kiểm kê" icon="send" loading={isSubmitting} loadingLabel="Đang nộp…" onPress={handleSubmitAudit} />
+        </BottomActionBar>
+      </View>
 
       <PhotoCaptureModal visible={cameraOpen} onCaptured={handleCoverPhoto} onClose={() => setCameraOpen(false)} />
       <AuditCoverConfirmSheet
@@ -413,133 +409,3 @@ export default function StockAuditDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  errorBox: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  success: {
-    color: colors.success,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  header: {
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  headerText: {
-    ...typography.code,
-    fontSize: 13,
-  },
-  scanBox: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.xs + 2,
-  },
-  scanRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  scanFieldWrap: {
-    flex: 1,
-  },
-  photoButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  list: {
-    paddingHorizontal: spacing.lg,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.sm + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowInfo: {
-    flex: 1,
-  },
-  rowTitle: {
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  rowMeta: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  countInput: {
-    width: 60,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm,
-    textAlign: 'center',
-    fontFamily: fonts.mono,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.surfaceRaised,
-  },
-  rowSpinner: {
-    width: 32,
-  },
-  varianceOk: {
-    ...typography.code,
-    width: 32,
-    textAlign: 'center',
-    color: colors.success,
-  },
-  varianceBad: {
-    ...typography.code,
-    width: 32,
-    textAlign: 'center',
-    color: colors.danger,
-  },
-  submitButton: {
-    margin: spacing.lg,
-    backgroundColor: colors.success,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-});

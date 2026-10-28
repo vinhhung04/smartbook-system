@@ -1,35 +1,19 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { QuickLookupPanel } from '../../src/components/QuickLookupPanel';
-import { colors, spacing, typography } from '../../src/theme/tokens';
+import { PageTitle, space, useTheme } from '../../src/design-system';
 
+/** The scan tab: one job, look up whatever code is in front of you. */
 export default function ScanTabScreen() {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Quét</Text>
-        <Text style={styles.subtitle}>Quét mã để tra cứu sách, tồn kho, vị trí</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg }}>
+        <PageTitle title="Quét mã" subtitle="Mã sách, ISBN hoặc mã vị trí kệ: xem sách, tồn kho và vị trí." />
       </View>
       <QuickLookupPanel />
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-  },
-  title: {
-    ...typography.h2,
-  },
-  subtitle: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-});

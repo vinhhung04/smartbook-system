@@ -1,18 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { router } from 'expo-router';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as exceptionReportApi from '../../src/api/exceptionReport';
 import { ApiError } from '../../src/auth/auth-context';
@@ -23,7 +12,33 @@ import { parseOptionalQuantity, sanitizeQuantityInput } from '../../src/lib/quan
 import { useSubmitLock } from '../../src/lib/submitLock';
 import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
 import type { MyWarehouseTaskOption, WarehouseOption } from '../../src/types/exceptionReport';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import {
+  Button, ErrorState, FilterChips, InlineAlert, LoadingState, Screen, ScreenHeader, TextField, fontFamily, radii, size, space, useTheme,
+} from '../../src/design-system';
+
+/** A labelled field that opens a selection sheet instead of taking typing. */
+function PickerField({ label, value, placeholder, onPress }: { label: string; value: string | null; placeholder: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{ gap: space.sm }}>
+      <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.textPrimary }}>{label}</Text>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${value ?? 'chưa chọn'}`}
+        style={({ pressed }) => ({
+          minHeight: size.control, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.md, borderRadius: radii.sm,
+          borderWidth: 1, borderColor: colors.border, backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
+        })}
+      >
+        <Text style={{ flex: 1, fontFamily: value ? fontFamily.medium : fontFamily.regular, fontSize: 16, color: value ? colors.textPrimary : colors.textMuted }} numberOfLines={2}>
+          {value ?? placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
 
 const EXCEPTION_TYPES: { value: string; label: string }[] = [
   { value: 'SHORT', label: 'Thiếu hàng' },
@@ -42,6 +57,7 @@ const TASK_TYPE_LABEL: Record<string, string> = {
 };
 
 export default function NewExceptionReportScreen() {
+  const { colors } = useTheme();
   const [tasks, setTasks] = useState<MyWarehouseTaskOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [isLoadingContext, setIsLoadingContext] = useState(true);
@@ -174,145 +190,85 @@ export default function NewExceptionReportScreen() {
   }
 
   if (isLoadingContext) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return (<><ScreenHeader title="Báo cáo sự cố mới" /><Screen scroll={false}><LoadingState label="Đang tải task và kho…" /></Screen></>);
   }
 
   if (loadError) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{loadError}</Text>
-        <Pressable style={styles.retryButton} onPress={() => void loadContext()} accessibilityRole="button">
-          <Text style={styles.retryText}>Thử lại</Text>
-        </Pressable>
-      </View>
-    );
+    return (<><ScreenHeader title="Báo cáo sự cố mới" /><Screen scroll={false}><ErrorState message={loadError} onRetry={() => void loadContext()} /></Screen></>);
   }
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Báo cáo sự cố mới' }} />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Task liên quan *</Text>
-          <Pressable style={styles.picker} onPress={() => setPicker('task')} accessibilityRole="button" accessibilityLabel="Chọn task liên quan">
-            <Text style={selectedTask ? styles.pickerValue : styles.pickerPlaceholder}>
-              {selectedTask
-                ? `[${TASK_TYPE_LABEL[selectedTask.type] ?? selectedTask.type}] ${selectedTask.title}`
-                : '-- Chọn task --'}
-            </Text>
-          </Pressable>
-        </View>
+      <ScreenHeader title="Báo cáo sự cố mới" />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Screen
+          footer={<Button label="Gửi báo cáo" icon="send" loading={isSubmitting} loadingLabel="Đang gửi…" onPress={handleSubmit} />}
+        >
+          <PickerField
+            label="Task liên quan *"
+            value={selectedTask ? `${TASK_TYPE_LABEL[selectedTask.type] ?? selectedTask.type}: ${selectedTask.title}` : null}
+            placeholder="Chọn task"
+            onPress={() => setPicker('task')}
+          />
+          <PickerField label="Kho *" value={warehouseLabel(warehouseId)} placeholder="Chọn kho" onPress={() => setPicker('warehouse')} />
 
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Kho *</Text>
-          <Pressable style={styles.picker} onPress={() => setPicker('warehouse')} accessibilityRole="button" accessibilityLabel="Chọn kho">
-            <Text style={warehouseId ? styles.pickerValue : styles.pickerPlaceholder}>
-              {warehouseLabel(warehouseId) ?? '-- Chọn kho --'}
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Loại sự cố *</Text>
-          <View style={styles.chipRow}>
-            {EXCEPTION_TYPES.map((t) => (
-              <Pressable
-                key={t.value}
-                style={[styles.chip, exceptionType === t.value && styles.chipActive]}
-                onPress={() => setExceptionType(t.value)}
-              >
-                <Text style={[styles.chipText, exceptionType === t.value && styles.chipTextActive]}>
-                  {t.label}
-                </Text>
-              </Pressable>
-            ))}
+          <View style={{ gap: space.sm }}>
+            <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.textPrimary }}>Loại sự cố *</Text>
+            <FilterChips accessibilityLabel="Loại sự cố" value={exceptionType} onChange={setExceptionType} options={EXCEPTION_TYPES} />
           </View>
-        </View>
 
-        <View style={styles.row}>
-          <View style={[styles.field, styles.flex1]}>
-            <Text style={styles.fieldLabel}>SL dự kiến</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="number-pad"
-              value={expectedQty}
-              onChangeText={(text) => setExpectedQty(sanitizeQuantityInput(text))}
-              accessibilityLabel="Số lượng dự kiến"
-              placeholder="-"
-              placeholderTextColor={colors.textMuted}
-            />
+          <View style={{ flexDirection: 'row', gap: space.md }}>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label="SL dự kiến"
+                mono
+                keyboardType="number-pad"
+                value={expectedQty}
+                onChangeText={(text) => setExpectedQty(sanitizeQuantityInput(text))}
+                accessibilityLabel="Số lượng dự kiến"
+                placeholder="—"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <TextField
+                label="SL thực tế"
+                mono
+                keyboardType="number-pad"
+                value={actualQty}
+                onChangeText={(text) => setActualQty(sanitizeQuantityInput(text))}
+                accessibilityLabel="Số lượng thực tế"
+                placeholder="—"
+              />
+            </View>
           </View>
-          <View style={[styles.field, styles.flex1]}>
-            <Text style={styles.fieldLabel}>SL thực tế</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="number-pad"
-              value={actualQty}
-              onChangeText={(text) => setActualQty(sanitizeQuantityInput(text))}
-              accessibilityLabel="Số lượng thực tế"
-              placeholder="-"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
-        </View>
 
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Mô tả sự cố *</Text>
-          <TextInput
-            style={[styles.input, styles.textarea]}
+          <TextField
+            label="Mô tả sự cố *"
             multiline
             numberOfLines={4}
+            textAlignVertical="top"
             value={note}
             onChangeText={setNote}
-            placeholder="Mô tả chi tiết sự cố phát hiện..."
-            placeholderTextColor={colors.textMuted}
+            placeholder="Mô tả chi tiết sự cố phát hiện…"
           />
-        </View>
 
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Ảnh bằng chứng</Text>
-          {photoDataUrl ? (
-            <View style={styles.photoRow}>
-              <Image source={{ uri: photoDataUrl }} style={styles.photoThumb} />
-              <View style={styles.photoActions}>
-                <Pressable style={styles.photoActionButton} onPress={() => setCameraOpen(true)}>
-                  <Text style={styles.photoActionText}>Chụp lại</Text>
-                </Pressable>
-                <Pressable style={styles.photoActionButton} onPress={() => setPhotoDataUrl(null)}>
-                  <Text style={styles.photoActionTextDanger}>Xóa ảnh</Text>
-                </Pressable>
+          <View style={{ gap: space.sm }}>
+            <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.textPrimary }}>Ảnh bằng chứng</Text>
+            {photoDataUrl ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+                <Image source={{ uri: photoDataUrl }} style={{ width: 96, height: 96, borderRadius: radii.sm, backgroundColor: colors.surfaceRaised }} accessibilityLabel="Ảnh bằng chứng đã chụp" />
+                <View style={{ flex: 1, gap: space.sm }}>
+                  <Button label="Chụp lại" icon="camera-outline" variant="secondary" size="md" onPress={() => setCameraOpen(true)} />
+                  <Button label="Xóa ảnh" icon="trash-outline" variant="ghost" size="md" onPress={() => setPhotoDataUrl(null)} />
+                </View>
               </View>
-            </View>
-          ) : (
-            <Pressable style={styles.photoCaptureButton} onPress={() => setCameraOpen(true)}>
-              <Text style={styles.photoCaptureText}>📷 CHỤP ẢNH BẰNG CHỨNG</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {submitError ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.error}>{submitError}</Text>
+            ) : (
+              <Button label="Chụp ảnh bằng chứng" icon="camera-outline" variant="secondary" onPress={() => setCameraOpen(true)} />
+            )}
           </View>
-        ) : null}
 
-        <Pressable
-          style={({ pressed }) => [styles.submitButton, (isSubmitting || pressed) && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? (
-            <ActivityIndicator color={colors.onPrimary} />
-          ) : (
-            <Text style={styles.submitButtonText}>GỬI BÁO CÁO</Text>
-          )}
-        </Pressable>
-      </ScrollView>
+          {submitError ? <InlineAlert message={submitError} /> : null}
+        </Screen>
       </KeyboardAvoidingView>
 
       <SelectionSheet
@@ -351,178 +307,3 @@ export default function NewExceptionReportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  retryButton: {
-    marginTop: spacing.md,
-    minHeight: 44,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryText: {
-    color: colors.primary,
-    fontFamily: fonts.bodySemibold,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bg,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  flex1: {
-    flex: 1,
-  },
-  field: {
-    gap: spacing.xs,
-  },
-  fieldLabel: {
-    ...typography.label,
-  },
-  picker: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surfaceRaised,
-  },
-  pickerPlaceholder: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  pickerValue: {
-    ...typography.body,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs + 2,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceRaised,
-  },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  chipTextActive: {
-    color: colors.onPrimary,
-    fontFamily: fonts.bodySemibold,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    fontFamily: fonts.body,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.surfaceRaised,
-  },
-  textarea: {
-    minHeight: 90,
-    textAlignVertical: 'top',
-  },
-  photoCaptureButton: {
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.primaryBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-    backgroundColor: colors.primarySoft,
-  },
-  photoCaptureText: {
-    fontFamily: fonts.monoSemibold,
-    color: colors.primary,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
-  photoRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    alignItems: 'center',
-  },
-  photoThumb: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  photoActions: {
-    gap: spacing.sm,
-  },
-  photoActionButton: {
-    paddingVertical: spacing.xs,
-  },
-  photoActionText: {
-    ...typography.caption,
-    fontFamily: fonts.bodySemibold,
-    color: colors.primary,
-  },
-  photoActionTextDanger: {
-    ...typography.caption,
-    fontFamily: fonts.bodySemibold,
-    color: colors.danger,
-  },
-  errorBox: {
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  error: {
-    ...typography.code,
-    color: colors.danger,
-    fontSize: 13,
-  },
-  submitButton: {
-    backgroundColor: colors.danger,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 4,
-    alignItems: 'center',
-    ...shadow.card,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-});

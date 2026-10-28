@@ -1,58 +1,53 @@
-import { StyleSheet, Text } from 'react-native';
-import { MotiView } from 'moti';
-import { useReducedMotion } from 'react-native-reanimated';
+import { Text } from 'react-native';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
-import { colors, fonts, radius, spacing } from '../theme/tokens';
+import { fontFamily, radii, space, useTheme, type IconName } from '../design-system';
 
 type Tone = 'success' | 'danger' | 'warning' | 'primary';
-
-const TONE_COLOR: Record<Tone, string> = {
-  success: colors.success,
-  danger: colors.danger,
-  warning: colors.warning,
-  primary: colors.primary,
-};
 
 type Props = {
   text: string;
   tone?: Tone;
+  /** Kept for callers; the verdict no longer tilts. */
   rotate?: number;
 };
 
+const ICON: Record<Tone, IconName> = {
+  success: 'checkmark-circle',
+  danger: 'close-circle',
+  warning: 'alert-circle',
+  primary: 'information-circle',
+};
+
+const LAND = { from: { opacity: 0, transform: [{ scale: 0.9 }] }, to: { opacity: 1, transform: [{ scale: 1 }] } };
+
 /**
- * A confirmation reads like a stamp landing on the page — scales/rotates
- * into place — instead of a plain colored line of text appearing instantly.
- * Used at every scan-verified/scan-rejected moment across the app.
+ * The verdict after a scan: a solid pill with an icon and words, so "đúng",
+ * "sai" and "kiểm tra lại" read at arm's length and never by colour alone.
+ * It lands with a 150 ms scale (the one earned bit of motion in a scan loop),
+ * and simply appears under Reduce Motion. Announced politely to screen readers.
  */
-export function StampBadge({ text, tone = 'primary', rotate = -3 }: Props) {
-  const color = TONE_COLOR[tone];
-  // Shown after every scan in continuous scanning; with Reduce Motion it just appears.
-  const reducedMotion = useReducedMotion();
+export function StampBadge({ text, tone = 'primary' }: Props) {
+  const { colors } = useTheme();
+  const reduced = useReducedMotion();
+  const palette: Record<Tone, { bg: string; fg: string }> = {
+    success: { bg: colors.success, fg: '#FFFFFF' },
+    danger: { bg: colors.danger, fg: '#FFFFFF' },
+    warning: { bg: colors.warningSoft, fg: colors.warning },
+    primary: { bg: colors.primarySoft, fg: colors.primary },
+  };
+  const { bg, fg } = palette[tone];
   return (
-    <MotiView
+    <Animated.View
       accessibilityLiveRegion="polite"
-      from={reducedMotion ? undefined : { opacity: 0, scale: 0.7, rotate: '0deg' }}
-      animate={{ opacity: 1, scale: 1, rotate: `${rotate}deg` }}
-      transition={reducedMotion ? { type: 'timing', duration: 0 } : { type: 'spring', damping: 12, mass: 0.6 }}
-      style={[styles.stamp, { borderColor: color }]}
+      style={[
+        { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: space.md, borderRadius: radii.pill, backgroundColor: bg },
+        reduced ? null : { animationName: LAND, animationDuration: 150, animationTimingFunction: 'ease-out' },
+      ]}
     >
-      <Text style={[styles.text, { color }]}>{text}</Text>
-    </MotiView>
+      <Ionicons name={ICON[tone]} size={16} color={fg} />
+      <Text style={{ fontFamily: fontFamily.bold, fontSize: 13.5, color: fg }}>{text}</Text>
+    </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  stamp: {
-    alignSelf: 'flex-start',
-    borderWidth: 2.5,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  text: {
-    fontFamily: fonts.monoSemibold,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-});

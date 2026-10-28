@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { AuditCoverMatch } from '../lib/auditCoverMatch';
-import { colors, fonts, radius, spacing, typography } from '../theme/tokens';
+import { Button, StatusBadge, fontFamily, radii, space, useTheme } from '../design-system';
 
 type Props = {
   visible: boolean;
@@ -22,6 +22,7 @@ type Props = {
  */
 export function AuditCoverConfirmSheet({ visible, matches, photoTitle, saving, onConfirm, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors, type } = useTheme();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checkedLowConfidence, setCheckedLowConfidence] = useState(false);
 
@@ -44,26 +45,44 @@ export function AuditCoverConfirmSheet({ visible, matches, photoTitle, saving, o
     reset();
   }
 
+  const blocked = !selected || needsManualCheck || saving;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleDismiss} statusBarTranslucent>
-      <View style={styles.flex}>
-        <Pressable style={styles.backdrop} onPress={handleDismiss} accessibilityLabel="Bỏ qua kết quả nhận diện" />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-          <View style={styles.handle} />
-          <Text style={styles.title} accessibilityRole="header">Xác nhận sách vừa chụp</Text>
-          <Text style={styles.subtitle}>
-            AI chỉ gợi ý. Chọn đúng sách và vị trí bạn đang đếm — số lượng chỉ tăng sau khi bạn xác nhận.
-          </Text>
-          {photoTitle ? <Text style={styles.ocr} numberOfLines={2}>Chữ đọc được trên bìa: {photoTitle}</Text> : null}
+      <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]} onPress={handleDismiss} accessibilityRole="button" accessibilityLabel="Bỏ qua kết quả nhận diện" />
+        <View
+          style={{
+            maxHeight: '88%', backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, borderCurve: 'continuous',
+            paddingTop: space.sm, paddingHorizontal: space.lg, paddingBottom: Math.max(insets.bottom, space.lg), gap: space.md,
+          }}
+          accessibilityViewIsModal
+        >
+          <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong }} />
+          <View style={{ gap: space.xs }}>
+            <Text style={[type.title, { fontSize: 20 }]} accessibilityRole="header">Xác nhận sách vừa chụp</Text>
+            <Text style={type.caption}>
+              AI chỉ gợi ý. Chọn đúng sách và vị trí bạn đang đếm — số lượng chỉ tăng sau khi bạn xác nhận.
+            </Text>
+          </View>
+          {photoTitle ? (
+            <Text style={{ fontFamily: fontFamily.mono, fontSize: 13, color: colors.textSecondary, padding: space.sm, borderRadius: radii.xs, backgroundColor: colors.surfaceRaised }} numberOfLines={2}>
+              Chữ đọc được trên bìa: {photoTitle}
+            </Text>
+          ) : null}
 
-          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+          <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: space.sm }} accessibilityRole="radiogroup">
             {matches.map((match) => {
               const isSelected = match.line.id === selectedId;
               const percent = Math.round(match.confidence * 100);
               return (
                 <Pressable
                   key={match.line.id}
-                  style={[styles.option, isSelected && styles.optionSelected]}
+                  style={({ pressed }) => ({
+                    padding: space.md, gap: 6, borderRadius: radii.sm, borderWidth: isSelected ? 2 : 1,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                    backgroundColor: isSelected ? colors.primarySoft : pressed ? colors.surfaceRaised : colors.surface,
+                  })}
                   onPress={() => {
                     setSelectedId(match.line.id);
                     setCheckedLowConfidence(false);
@@ -72,21 +91,22 @@ export function AuditCoverConfirmSheet({ visible, matches, photoTitle, saving, o
                   accessibilityState={{ selected: isSelected }}
                   accessibilityLabel={`${match.line.title ?? match.candidateTitle}, vị trí ${match.line.location_code ?? 'không rõ'}, độ tin cậy ${percent} phần trăm`}
                 >
-                  <View style={styles.optionHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.sm }}>
                     <Ionicons name={isSelected ? 'radio-button-on' : 'radio-button-off'} size={20} color={isSelected ? colors.primary : colors.textMuted} />
-                    <Text style={styles.optionTitle} numberOfLines={2}>{match.line.title ?? match.candidateTitle}</Text>
+                    <Text style={{ flex: 1, fontFamily: fontFamily.semibold, fontSize: 15, lineHeight: 21, color: colors.textPrimary }} numberOfLines={2}>{match.line.title ?? match.candidateTitle}</Text>
                   </View>
-                  <Text style={styles.meta}>ISBN: {match.line.isbn13 ?? match.line.isbn10 ?? '—'}</Text>
-                  <Text style={styles.meta}>
-                    Vị trí: {match.line.location_code ?? '—'} · Đã đếm: {match.line.counted_qty ?? 0} · Hệ thống: {match.line.expected_qty}
+                  <Text style={{ fontFamily: fontFamily.mono, fontSize: 13, color: colors.textSecondary }}>ISBN {match.line.isbn13 ?? match.line.isbn10 ?? '—'}</Text>
+                  <Text style={type.caption}>
+                    Vị trí <Text style={{ fontFamily: fontFamily.monoBold, color: colors.textPrimary }}>{match.line.location_code ?? '—'}</Text>, đã đếm {match.line.counted_qty ?? 0}, hệ thống {match.line.expected_qty}
                   </Text>
-                  <View style={[styles.confidence, match.lowConfidence ? styles.confidenceLow : styles.confidenceOk]}>
-                    <Ionicons name={match.lowConfidence ? 'warning' : 'checkmark-circle'} size={14} color={match.lowConfidence ? colors.warning : colors.success} />
-                    <Text style={[styles.confidenceText, { color: match.lowConfidence ? colors.warning : colors.success }]}>
-                      Độ tin cậy {percent}%{match.lowConfidence ? ' — thấp, cần kiểm tra thủ công' : ''}
-                    </Text>
+                  <View style={{ alignSelf: 'flex-start' }}>
+                    <StatusBadge
+                      tone={match.lowConfidence ? 'warning' : 'success'}
+                      icon={match.lowConfidence ? 'warning' : 'checkmark-circle'}
+                      label={`Độ tin cậy ${percent}%${match.lowConfidence ? ', cần kiểm tra thủ công' : ''}`}
+                    />
                   </View>
-                  {match.evidence.length > 0 ? <Text style={styles.evidence}>{match.evidence.join(' · ')}</Text> : null}
+                  {match.evidence.length > 0 ? <Text style={{ fontFamily: fontFamily.regular, fontSize: 12.5, color: colors.textMuted }}>{match.evidence.join(' · ')}</Text> : null}
                 </Pressable>
               );
             })}
@@ -94,87 +114,26 @@ export function AuditCoverConfirmSheet({ visible, matches, photoTitle, saving, o
 
           {selected?.lowConfidence ? (
             <Pressable
-              style={styles.checkRow}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 48, paddingHorizontal: space.md, borderRadius: radii.sm, backgroundColor: colors.warningSoft }}
               onPress={() => setCheckedLowConfidence((value) => !value)}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: checkedLowConfidence }}
             >
               <Ionicons name={checkedLowConfidence ? 'checkbox' : 'square-outline'} size={22} color={colors.warning} />
-              <Text style={styles.checkText}>Tôi đã đối chiếu tên sách và ISBN trên sách thật</Text>
+              <Text style={{ flex: 1, fontFamily: fontFamily.medium, fontSize: 14.5, color: colors.textPrimary }}>Tôi đã đối chiếu tên sách và ISBN trên sách thật</Text>
             </Pressable>
           ) : null}
 
-          <View style={styles.actions}>
-            <Pressable style={[styles.button, styles.secondary]} onPress={handleDismiss} accessibilityRole="button">
-              <Text style={styles.secondaryText}>Không đúng sách</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.button, styles.primary, (!selected || needsManualCheck || saving) && styles.disabled]}
-              onPress={handleConfirm}
-              disabled={!selected || needsManualCheck || saving}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !selected || needsManualCheck || saving }}
-            >
-              <Text style={styles.primaryText}>{saving ? 'Đang lưu…' : 'Xác nhận +1'}</Text>
-            </Pressable>
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button label="Không đúng sách" variant="secondary" onPress={handleDismiss} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="Xác nhận +1" icon="add-circle" loading={saving} loadingLabel="Đang lưu…" disabled={blocked} onPress={handleConfirm} />
+            </View>
           </View>
         </View>
       </View>
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(16,20,17,0.45)' },
-  sheet: {
-    maxHeight: '88%',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    gap: spacing.sm,
-  },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderStrong },
-  title: { ...typography.h3 },
-  subtitle: { ...typography.caption },
-  ocr: { ...typography.caption, fontStyle: 'italic' },
-  list: { flexGrow: 0 },
-  listContent: { gap: spacing.sm, paddingVertical: spacing.xs },
-  option: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 4,
-  },
-  optionSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
-  optionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  optionTitle: { flex: 1, fontFamily: fonts.bodySemibold, fontSize: 15, color: colors.textPrimary },
-  meta: { ...typography.caption, marginLeft: 28 },
-  confidence: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    marginLeft: 28,
-    marginTop: 2,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-  },
-  confidenceOk: { backgroundColor: colors.successSoft },
-  confidenceLow: { backgroundColor: colors.warningSoft },
-  confidenceText: { fontFamily: fonts.bodySemibold, fontSize: 12 },
-  evidence: { ...typography.caption, fontSize: 12, marginLeft: 28, color: colors.textMuted },
-  checkRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 44 },
-  checkText: { flex: 1, fontFamily: fonts.bodyMedium, color: colors.textPrimary },
-  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-  button: { flex: 1, minHeight: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  secondary: { borderWidth: 1.5, borderColor: colors.border },
-  secondaryText: { fontFamily: fonts.bodySemibold, color: colors.textSecondary },
-  primary: { backgroundColor: colors.primary },
-  primaryText: { fontFamily: fonts.bodySemibold, color: colors.onPrimary },
-  disabled: { opacity: 0.45 },
-});

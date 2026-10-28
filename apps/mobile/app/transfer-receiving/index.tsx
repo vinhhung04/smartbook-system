@@ -1,10 +1,10 @@
-import { Stack, router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { FlatList, RefreshControl, View } from 'react-native';
 
 import { useAuth } from '../../src/auth/auth-context';
 import { useTransferReceiving } from '../../src/hooks/useTransferReceiving';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { WorkOrderCard } from '../../src/components/WorkOrderCard';
+import { EmptyState, InlineAlert, ScreenHeader, Skeleton, StatusBadge, radii, space, useTheme } from '../../src/design-system';
 
 function formatDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -13,57 +13,49 @@ function formatDate(iso: string | null): string {
 export default function TransferReceivingListScreen() {
   const { user } = useAuth();
   const { rows, isLoading, error, reload } = useTransferReceiving();
+  const { colors } = useTheme();
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Nhận hàng điều chuyển' }} />
-      <View style={styles.container}>
+      <ScreenHeader title="Nhận hàng điều chuyển" />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
         {isLoading && rows.length === 0 ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
+          <View style={{ padding: space.lg, gap: space.md }} accessibilityLabel="Đang tải phiếu điều chuyển">
+            {[0, 1, 2].map((i) => <Skeleton key={i} height={104} radius={radii.md} />)}
           </View>
         ) : (
           <FlatList
             data={rows}
             keyExtractor={(row) => row.item.id}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl, flexGrow: 1 }}
+            contentInsetAdjustmentBehavior="automatic"
             refreshControl={<RefreshControl refreshing={false} onRefresh={() => void reload()} tintColor={colors.primary} colors={[colors.primary]} />}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            ListHeaderComponent={error ? <Text style={styles.error}>{error}</Text> : null}
+            ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+            ListHeaderComponent={error ? <View style={{ marginBottom: space.md }}><InlineAlert message={error} actionLabel="Thử lại" onAction={() => void reload()} /></View> : null}
             ListEmptyComponent={
               !error ? (
-                <View style={styles.center}>
-                  <Ionicons name="swap-horizontal-outline" size={28} color={colors.textMuted} />
-                  <Text style={styles.empty}>Không có kiện điều chuyển nào đang chờ nhận tại kho của bạn.</Text>
-                </View>
+                <EmptyState icon="swap-horizontal-outline" title="Không có kiện nào chờ nhận" message="Kiện điều chuyển gửi tới kho của bạn sẽ hiện ở đây. Kéo xuống để làm mới." />
               ) : null
             }
             renderItem={({ item: row }) => {
               const mine = row.item.received_by_user_id === user?.id;
               const other = Boolean(row.item.received_by_user_id) && !mine;
+              const from = row.item.from_warehouse_code ?? row.item.from_warehouse_name ?? '?';
+              const to = row.item.to_warehouse_code ?? row.item.to_warehouse_name ?? '?';
               return (
-                <Pressable
-                  style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-                  onPress={() => router.push(`/transfer-receiving/${row.item.id}`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Phiếu ${row.item.transfer_number}`}
-                >
-                  <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle}>{row.item.transfer_number}</Text>
-                    <Text style={styles.cardSubtitle}>
-                      {row.item.from_warehouse_code ?? row.item.from_warehouse_name ?? '?'} → {row.item.to_warehouse_code ?? row.item.to_warehouse_name ?? '?'}
-                    </Text>
-                    <Text style={styles.cardSubtitle}>
-                      Gửi lúc {formatDate(row.item.shipped_at)}
-                      {row.item.total_quantity > 0 ? ` · ${row.item.total_quantity} sản phẩm` : ''}
-                    </Text>
-                  </View>
-                  <View style={[styles.badge, mine ? styles.badgeMine : other ? styles.badgeOther : styles.badgeOpen]}>
-                    <Text style={[styles.badgeText, { color: mine ? colors.success : other ? colors.neutral : colors.primary }]}>
-                      {mine ? 'Của tôi' : other ? 'Đã giao' : 'Chưa nhận'}
-                    </Text>
-                  </View>
-                </Pressable>
+                <WorkOrderCard
+                  code={row.item.transfer_number}
+                  detail={`${from} → ${to}, gửi lúc ${formatDate(row.item.shipped_at)}${row.item.total_quantity > 0 ? `, ${row.item.total_quantity} sản phẩm` : ''}`}
+                  onOpen={() => router.push(`/transfer-receiving/${row.item.id}`)}
+                  accessibilityLabel={`Phiếu ${row.item.transfer_number}, ${mine ? 'của tôi' : other ? 'đã giao người khác' : 'chưa có người nhận'}`}
+                  badges={
+                    <StatusBadge
+                      tone={mine ? 'success' : other ? 'neutral' : 'info'}
+                      label={mine ? 'Của tôi' : other ? 'Đã giao người khác' : 'Chưa có người nhận'}
+                      icon={mine ? 'person' : other ? 'people-outline' : 'hand-left-outline'}
+                    />
+                  }
+                />
               );
             }}
           />
@@ -72,22 +64,3 @@ export default function TransferReceivingListScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm },
-  list: { padding: spacing.lg, flexGrow: 1 },
-  separator: { height: spacing.sm },
-  error: { color: colors.danger, marginBottom: spacing.sm },
-  empty: { ...typography.caption, textAlign: 'center' },
-  card: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, ...shadow.card },
-  pressed: { opacity: 0.85 },
-  cardBody: { flex: 1, gap: 2 },
-  cardTitle: { ...typography.h3 },
-  cardSubtitle: { ...typography.caption },
-  badge: { borderRadius: radius.pill, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm + 2 },
-  badgeMine: { backgroundColor: colors.successSoft },
-  badgeOther: { backgroundColor: colors.neutralSoft },
-  badgeOpen: { backgroundColor: colors.primarySoft },
-  badgeText: { fontFamily: fonts.monoSemibold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
-});

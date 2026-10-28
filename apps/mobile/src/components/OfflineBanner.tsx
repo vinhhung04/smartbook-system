@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { probeApi } from '../api/client';
 import { getConnectivity, subscribeConnectivity } from '../lib/connectivity';
-import { fonts, spacing } from '../theme/tokens';
+import { brand, fontFamily, radii, space } from '../design-system';
 
 const AUTO_PROBE_MS = 15000;
 
@@ -46,55 +46,32 @@ export function OfflineBanner() {
   }
 
   return (
-    <View style={[styles.wrap, { paddingTop: insets.top + 4 }]} pointerEvents="box-none" accessibilityLiveRegion="polite">
-      <View style={styles.banner}>
-        <Ionicons name="cloud-offline-outline" size={16} color="#FFFFFF" />
-        <Text style={styles.text} numberOfLines={2}>
+    <View
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: insets.top + 4, paddingHorizontal: space.md, zIndex: 1000, elevation: 1000 }}
+      pointerEvents="box-none"
+      accessibilityLiveRegion="polite"
+    >
+      <View
+        style={{
+          flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.xs, paddingLeft: space.md, paddingRight: space.xs,
+          borderRadius: radii.md, borderCurve: 'continuous', backgroundColor: brand.inkDeep, boxShadow: '0 6px 18px rgba(20, 18, 58, 0.28)',
+        }}
+      >
+        <Ionicons name="cloud-offline-outline" size={18} color={brand.lamp} />
+        <Text style={{ flex: 1, color: '#FFFFFF', fontFamily: fontFamily.medium, fontSize: 13.5, lineHeight: 19 }} numberOfLines={2}>
           Mất kết nối tới máy chủ. Thao tác ghi dữ liệu sẽ không tự gửi lại.
         </Text>
-        <Pressable onPress={handleRetry} hitSlop={8} style={styles.retry} accessibilityRole="button" accessibilityLabel="Kiểm tra lại kết nối">
-          <Text style={styles.retryText}>{checking ? 'Đang thử…' : 'Thử lại'}</Text>
+        <Pressable
+          onPress={handleRetry}
+          hitSlop={4}
+          style={({ pressed }) => ({ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radii.sm, backgroundColor: pressed ? 'rgba(255,255,255,0.12)' : 'transparent' })}
+          accessibilityRole="button"
+          accessibilityLabel="Kiểm tra lại kết nối"
+          accessibilityState={{ busy: checking }}
+        >
+          <Text style={{ color: brand.lamp, fontFamily: fontFamily.semibold, fontSize: 14 }}>{checking ? 'Đang thử…' : 'Thử lại'}</Text>
         </Pressable>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.md,
-    zIndex: 1000,
-    elevation: 1000,
-  },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 12,
-    backgroundColor: '#3A2A12',
-    borderWidth: 1,
-    borderColor: '#B5791A',
-  },
-  text: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontFamily: fonts.bodyMedium,
-    fontSize: 13,
-  },
-  retry: {
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  retryText: {
-    color: '#F2C14E',
-    fontFamily: fonts.bodySemibold,
-    fontSize: 13,
-  },
-});

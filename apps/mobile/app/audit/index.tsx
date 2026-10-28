@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { FlatList, RefreshControl, View } from 'react-native';
 
 import * as stockAuditApi from '../../src/api/stockAudit';
 import { ApiError } from '../../src/auth/auth-context';
 import { getAuditStatusLabel } from '../../src/lib/stockAuditScan';
 import type { StockAuditSummary } from '../../src/types/stockAudit';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { WorkOrderCard } from '../../src/components/WorkOrderCard';
+import { EmptyState, ErrorState, ScreenHeader, Skeleton, StatusBadge, radii, space, useTheme } from '../../src/design-system';
 
 export default function StockAuditListScreen() {
   const [audits, setAudits] = useState<StockAuditSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { colors } = useTheme();
 
   const load = useCallback(async () => {
     setError(null);
@@ -28,42 +31,44 @@ export default function StockAuditListScreen() {
     load().finally(() => setIsLoading(false));
   }, [load]);
 
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await load();
+    setIsRefreshing(false);
+  }
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Stock Audit' }} />
-      <View style={styles.container}>
+      <ScreenHeader title="Kiểm kê" />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
         {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
+          <View style={{ padding: space.lg, gap: space.md }} accessibilityLabel="Đang tải phiếu kiểm kê">
+            {[0, 1, 2].map((i) => <Skeleton key={i} height={96} radius={radii.md} />)}
           </View>
         ) : error ? (
-          <View style={styles.center}>
-            <Text style={styles.error}>{error}</Text>
-          </View>
+          <ErrorState message={error} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} />
         ) : (
           <FlatList
             data={audits}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.list}
-            ListEmptyComponent={<Text style={styles.empty}>Chưa có phiếu kiểm kê nào được giao</Text>}
+            contentContainerStyle={{ padding: space.lg, paddingBottom: space.xxl, flexGrow: 1 }}
+            contentInsetAdjustmentBehavior="automatic"
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+            ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+            ListEmptyComponent={<EmptyState icon="clipboard-outline" title="Chưa có phiếu kiểm kê nào" message="Phiếu kiểm kê quản lý giao cho bạn sẽ hiện ở đây." />}
             renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                onPress={() => router.push(`/audit/${item.id}`)}
-              >
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{item.audit_number}</Text>
-                  <Text style={styles.cardSubtitle}>
-                    {item.warehouse_code ?? '-'} · {getAuditStatusLabel(item.status)} · {item.line_count} dòng
-                  </Text>
-                  {item.variance_count > 0 ? (
-                    <View style={styles.varianceBadge}>
-                      <Text style={styles.varianceBadgeText}>{item.variance_count} lệch</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
+              <WorkOrderCard
+                code={item.audit_number}
+                detail={`Kho ${item.warehouse_code ?? '—'}, ${item.line_count} dòng`}
+                onOpen={() => router.push(`/audit/${item.id}`)}
+                accessibilityLabel={`Phiếu ${item.audit_number}, ${getAuditStatusLabel(item.status)}, ${item.line_count} dòng${item.variance_count > 0 ? `, ${item.variance_count} dòng lệch` : ''}`}
+                badges={(
+                  <>
+                    <StatusBadge tone="neutral" label={getAuditStatusLabel(item.status)} />
+                    {item.variance_count > 0 ? <StatusBadge tone="warning" label={`${item.variance_count} lệch`} icon="alert-circle" /> : null}
+                  </>
+                )}
+              />
             )}
           />
         )}
@@ -71,71 +76,3 @@ export default function StockAuditListScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  list: {
-    padding: spacing.lg,
-    gap: spacing.sm + 2,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
-    ...shadow.card,
-  },
-  cardPressed: {
-    opacity: 0.7,
-  },
-  cardBody: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  cardTitle: {
-    ...typography.h3,
-  },
-  cardSubtitle: {
-    ...typography.caption,
-  },
-  varianceBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.pill,
-    paddingVertical: 2,
-    paddingHorizontal: spacing.sm,
-    marginTop: 2,
-  },
-  varianceBadgeText: {
-    color: colors.danger,
-    fontSize: 11,
-    fontFamily: fonts.monoSemibold,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  chevron: {
-    fontSize: 22,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
-  },
-});

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import * as putawayApi from '../../../src/api/putaway';
 import { isOutcomeUnknown } from '../../../src/api/client';
@@ -8,6 +9,7 @@ import { ApiError, useAuth } from '../../../src/auth/auth-context';
 import { isWarehouseManager } from '../../../src/auth/access';
 import { notifyScanError, notifyScanSuccess } from '../../../src/scanner/haptics';
 import { ScanField } from '../../../src/scanner/ScanField';
+import { ScanStep } from '../../../src/components/ScanStep';
 import { StampBadge } from '../../../src/components/StampBadge';
 import { SelectionSheet } from '../../../src/components/SelectionSheet';
 import { createIdempotencyKey } from '../../../src/lib/idempotency';
@@ -15,7 +17,9 @@ import { putawayLimit, sourcesHoldingVariant, type SourceOption } from '../../..
 import { parseWholeQuantity, sanitizeQuantityInput } from '../../../src/lib/quantity';
 import { useSubmitLock } from '../../../src/lib/submitLock';
 import type { CompartmentCandidate, PutawayReceiptDetail, PutawayReceiptItem } from '../../../src/types/putaway';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../../src/theme/tokens';
+import {
+  Button, ErrorState, InlineAlert, LoadingState, ProgressBar, Screen, ScreenHeader, StatusBadge, TextField, fontFamily, radii, space, useTheme,
+} from '../../../src/design-system';
 
 const VISIBLE_CANDIDATES = 4;
 
@@ -29,6 +33,7 @@ const VISIBLE_CANDIDATES = 4;
 export default function PutawayReceiptScreen() {
   const { receiptId } = useLocalSearchParams<{ receiptId: string }>();
   const { user } = useAuth();
+  const { colors, type } = useTheme();
 
   const [detail, setDetail] = useState<PutawayReceiptDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -241,21 +246,17 @@ export default function PutawayReceiptScreen() {
   }
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return (<><ScreenHeader title="Cất hàng" /><Screen scroll={false}><LoadingState label="Đang mở phiếu nhập…" /></Screen></>);
   }
 
   if (loadError || !detail) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{loadError || 'Không tìm thấy phiếu'}</Text>
-        <Pressable style={styles.linkButton} onPress={() => { setIsLoading(true); load().finally(() => setIsLoading(false)); }} accessibilityRole="button">
-          <Text style={styles.linkText}>Thử lại</Text>
-        </Pressable>
-      </View>
+      <>
+        <ScreenHeader title="Cất hàng" />
+        <Screen scroll={false}>
+          <ErrorState title={loadError || 'Không tìm thấy phiếu'} onRetry={() => { setIsLoading(true); load().finally(() => setIsLoading(false)); }} />
+        </Screen>
+      </>
     );
   }
 
@@ -264,20 +265,29 @@ export default function PutawayReceiptScreen() {
   const assignedToOther = Boolean(assignee && assignee !== user?.id);
   const visibleCandidates = showAllCandidates ? candidates : candidates.slice(0, VISIBLE_CANDIDATES);
 
+  const putAwayQty = detail.total_quantity - detail.remaining_quantity;
+  const canConfirm = Boolean(selectedItem && resolvedLocation && limit);
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: detail.receipt_number }} />
-      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.headerCard}>
-          <Text style={styles.headerTitle}>{detail.receipt_number}</Text>
-          <Text style={styles.headerSubtitle}>
-            {detail.warehouse_code ?? '-'} · còn {detail.remaining_quantity}/{detail.total_quantity} sản phẩm
-          </Text>
+      <ScreenHeader title={detail.receipt_number} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Screen
+          footer={canConfirm ? (
+            <Button label="Xác nhận cất hàng" icon="checkmark-circle" loading={isSubmitting} loadingLabel="Đang cất…" onPress={handleConfirm} />
+          ) : null}
+        >
+          <View style={{ gap: space.sm }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              <StatusBadge tone="neutral" label={`Kho ${detail.warehouse_code ?? '—'}`} icon="business-outline" />
+              {assignee === user?.id ? <StatusBadge tone="primary" label="Bạn đã nhận" icon="person" /> : null}
+            </View>
+            <ProgressBar value={detail.total_quantity > 0 ? putAwayQty / detail.total_quantity : 0} tone={detail.remaining_quantity > 0 ? 'primary' : 'success'} accessibilityLabel="Tiến độ cất hàng" />
+            <Text style={type.caption}>Đã cất {putAwayQty}/{detail.total_quantity}, còn {detail.remaining_quantity} sản phẩm</Text>
+          </View>
+
           {assignee === null && remainingItems.length > 0 ? (
-            <Pressable style={styles.claimButton} onPress={handleClaim} disabled={isClaiming} accessibilityRole="button">
-              {isClaiming ? <ActivityIndicator color={colors.primary} /> : <Text style={styles.linkText}>Nhận phiếu này để người khác không làm trùng</Text>}
-            </Pressable>
+            <Button label="Nhận phiếu này" icon="hand-left-outline" variant="secondary" loading={isClaiming} loadingLabel="Đang nhận…" onPress={handleClaim} accessibilityHint="Để người khác không làm trùng" />
           ) : null}
           {assignedToOther ? (
             <StampBadge
@@ -285,179 +295,153 @@ export default function PutawayReceiptScreen() {
               tone="warning"
             />
           ) : null}
-        </View>
 
-        <View style={styles.stepCard}>
-          <View style={styles.stepHeader}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>1</Text>
-            </View>
-            <Text style={styles.stepLabel}>Chọn dòng cần cất của phiếu này</Text>
-          </View>
-          {remainingItems.length === 0 ? (
-            <StampBadge text="Phiếu này đã cất hết lên kệ." tone="success" />
-          ) : (
-            <View style={styles.itemList}>
-              {remainingItems.map((item) => (
-                <Pressable
-                  key={item.id}
-                  style={({ pressed }) => [
-                    styles.itemRow,
-                    selectedItem?.id === item.id && styles.itemRowSelected,
-                    pressed && styles.rowPressed,
-                  ]}
-                  onPress={() => selectItem(item)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: selectedItem?.id === item.id }}
-                >
-                  <View style={styles.itemBody}>
-                    <Text style={styles.itemTitle}>{item.book_title}</Text>
-                    <Text style={styles.itemMeta}>
-                      Còn lại: {item.remaining_quantity}/{item.quantity}
-                      {item.isbn13 ? ` · ISBN ${item.isbn13}` : ''}
-                    </Text>
-                  </View>
-                  <Text style={styles.itemQty}>{item.remaining_quantity}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {selectedItem && (
-          <View style={styles.stepCard}>
-            <View style={styles.stepHeader}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>2</Text>
-              </View>
-              <Text style={styles.stepLabel}>Vị trí gợi ý</Text>
-            </View>
-            {source ? (
-              <Pressable
-                onPress={() => sources.length > 1 && setSourcePickerOpen(true)}
-                disabled={sources.length <= 1}
-                accessibilityRole={sources.length > 1 ? 'button' : undefined}
-              >
-                <Text style={styles.itemMeta}>
-                  Lấy từ khu chờ cất: {source.location_code} (đang có {source.available})
-                  {sources.length > 1 ? ' · Đổi khu' : ''}
-                </Text>
-              </Pressable>
-            ) : null}
-            {stepError ? <Text style={styles.error}>{stepError}</Text> : null}
-            {isLoadingCandidates ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : source && candidates.length === 0 && !stepError ? (
-              <Text style={styles.error}>Không tìm được vị trí trống phù hợp — liên hệ quản lý kho để mở thêm vị trí.</Text>
+          <ScanStep n={1} title="Chọn dòng cần cất" done={Boolean(selectedItem)}>
+            {remainingItems.length === 0 ? (
+              <StampBadge text="Phiếu này đã cất hết lên kệ." tone="success" />
             ) : (
-              <View style={styles.itemList}>
-                {visibleCandidates.map((candidate, index) => {
-                  const planned = plannedTarget?.id === candidate.id;
+              <View style={{ gap: space.sm }}>
+                {remainingItems.map((item) => {
+                  const selected = selectedItem?.id === item.id;
                   return (
                     <Pressable
-                      key={candidate.id}
-                      style={({ pressed }) => [styles.candidateRow, planned && styles.itemRowSelected, pressed && styles.rowPressed]}
-                      onPress={() => {
-                        setPlannedTarget(candidate);
-                        attemptKeyRef.current = null;
-                      }}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: planned }}
-                      accessibilityLabel={`Vị trí ${candidate.location_code}, còn trống ${candidate.remaining_capacity}`}
+                      key={item.id}
+                      style={({ pressed }) => ({
+                        minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radii.sm, borderWidth: selected ? 2 : 1,
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: selected ? colors.primarySoft : pressed ? colors.surfaceRaised : colors.surface,
+                      })}
+                      onPress={() => selectItem(item)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`${item.book_title}, còn ${item.remaining_quantity} trên ${item.quantity}`}
                     >
-                      <View style={styles.itemBody}>
-                        <Text style={styles.infoValue}>
-                          {candidate.location_code}
-                          {index === 0 ? <Text style={styles.bestTag}>  GỢI Ý TỐT NHẤT</Text> : null}
-                        </Text>
-                        <Text style={styles.infoLabel}>
-                          Kệ {candidate.shelf_code} · Khu {candidate.zone_code}
-                          {candidate.mixed_sku_count > 0 ? ` · đang chứa ${candidate.mixed_sku_count} đầu sách khác` : ''}
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={{ fontFamily: fontFamily.medium, fontSize: 15, lineHeight: 21, color: colors.textPrimary }} numberOfLines={2}>{item.book_title}</Text>
+                        <Text style={type.caption}>
+                          Còn {item.remaining_quantity}/{item.quantity}
+                          {item.isbn13 ? `  ·  ISBN ${item.isbn13}` : ''}
                         </Text>
                       </View>
-                      <View style={styles.capacityBox}>
-                        <Text style={styles.capacityValue}>{candidate.remaining_capacity}</Text>
-                        <Text style={styles.capacityLabel}>còn trống</Text>
-                      </View>
+                      <Text style={{ fontFamily: fontFamily.bold, fontSize: 20, color: selected ? colors.primary : colors.textPrimary, fontVariant: ['tabular-nums'] }}>{item.remaining_quantity}</Text>
                     </Pressable>
                   );
                 })}
-                {candidates.length > VISIBLE_CANDIDATES ? (
-                  <Pressable style={styles.linkButton} onPress={() => setShowAllCandidates((v) => !v)} accessibilityRole="button">
-                    <Text style={styles.linkText}>
-                      {showAllCandidates ? 'Thu gọn' : `Xem thêm ${candidates.length - VISIBLE_CANDIDATES} vị trí`}
-                    </Text>
-                  </Pressable>
-                ) : null}
               </View>
             )}
+          </ScanStep>
 
-            {source ? (
-              <>
-                <View style={styles.stepHeader}>
-                  <View style={styles.stepBadge}>
-                    <Text style={styles.stepBadgeText}>3</Text>
-                  </View>
-                  <Text style={styles.stepLabel}>
-                    Quét mã vị trí đã đến{plannedTarget ? ` (${plannedTarget.location_code})` : ''}
+          {selectedItem && (
+            <ScanStep n={2} title="Chọn vị trí trên kệ" done={Boolean(plannedTarget)}>
+              {source ? (
+                <Pressable
+                  onPress={() => sources.length > 1 && setSourcePickerOpen(true)}
+                  disabled={sources.length <= 1}
+                  accessibilityRole={sources.length > 1 ? 'button' : undefined}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44 }}
+                >
+                  <Ionicons name="file-tray-outline" size={18} color={colors.textSecondary} />
+                  <Text style={[type.caption, { flex: 1 }]}>
+                    Lấy từ khu chờ cất <Text style={{ fontFamily: fontFamily.monoBold, color: colors.textPrimary }}>{source.location_code}</Text> (đang có {source.available})
                   </Text>
-                </View>
-                <ScanField
-                  value={locationInput}
-                  onChangeText={(text) => {
-                    setLocationInput(text);
-                    setResolvedLocation(null);
-                    setLocationMessage(null);
-                  }}
-                  onSubmit={handleScanLocation}
-                  placeholder="Quét hoặc nhập mã vị trí"
-                />
-              </>
-            ) : null}
-            {locationMessage ? (
-              <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} />
-            ) : null}
-          </View>
-        )}
-
-        {!selectedItem && locationMessage ? <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} /> : null}
-
-        {selectedItem && resolvedLocation && limit && (
-          <View style={styles.stepCard}>
-            <View style={styles.stepHeader}>
-              <View style={styles.stepBadge}>
-                <Text style={styles.stepBadgeText}>4</Text>
-              </View>
-              <Text style={styles.stepLabel}>Số lượng cất</Text>
-            </View>
-            <Text style={styles.itemMeta}>Tối đa {limit.max} ({limit.reason})</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="number-pad"
-              value={quantity}
-              onChangeText={(text) => {
-                setQuantity(sanitizeQuantityInput(text));
-                attemptKeyRef.current = null;
-              }}
-              maxLength={6}
-              accessibilityLabel="Số lượng cất lên kệ"
-            />
-            {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
-            <Pressable
-              style={({ pressed }) => [styles.confirmButton, (isSubmitting || pressed) && styles.buttonDisabled]}
-              onPress={handleConfirm}
-              disabled={isSubmitting}
-              accessibilityRole="button"
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={colors.onPrimary} />
+                  {sources.length > 1 ? <Text style={{ fontFamily: fontFamily.semibold, fontSize: 14, color: colors.primary }}>Đổi khu</Text> : null}
+                </Pressable>
+              ) : null}
+              {stepError ? <InlineAlert message={stepError} /> : null}
+              {isLoadingCandidates ? (
+                <LoadingState label="Đang tìm vị trí trống…" />
+              ) : source && candidates.length === 0 && !stepError ? (
+                <InlineAlert tone="warning" message="Không tìm được vị trí trống phù hợp — liên hệ quản lý kho để mở thêm vị trí." />
               ) : (
-                <Text style={styles.confirmButtonText}>Xác nhận cất hàng</Text>
+                <View style={{ gap: space.sm }} accessibilityRole="radiogroup">
+                  {visibleCandidates.map((candidate, index) => {
+                    const planned = plannedTarget?.id === candidate.id;
+                    return (
+                      <Pressable
+                        key={candidate.id}
+                        style={({ pressed }) => ({
+                          minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: space.md, padding: space.md, borderRadius: radii.sm, borderWidth: planned ? 2 : 1,
+                          borderColor: planned ? colors.primary : colors.border,
+                          backgroundColor: planned ? colors.primarySoft : pressed ? colors.surfaceRaised : colors.surface,
+                        })}
+                        onPress={() => {
+                          setPlannedTarget(candidate);
+                          attemptKeyRef.current = null;
+                        }}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: planned }}
+                        accessibilityLabel={`Vị trí ${candidate.location_code}, còn trống ${candidate.remaining_capacity}${index === 0 ? ', gợi ý tốt nhất' : ''}`}
+                      >
+                        <Ionicons name={planned ? 'radio-button-on' : 'radio-button-off'} size={20} color={planned ? colors.primary : colors.textMuted} />
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text style={{ fontFamily: fontFamily.monoBold, fontSize: 17, color: colors.textPrimary }}>{candidate.location_code}</Text>
+                          <Text style={type.caption}>
+                            Kệ {candidate.shelf_code}, khu {candidate.zone_code}
+                            {candidate.mixed_sku_count > 0 ? `, đang chứa ${candidate.mixed_sku_count} đầu sách khác` : ''}
+                          </Text>
+                          {index === 0 ? <StatusBadge tone="success" label="Gợi ý tốt nhất" icon="star" /> : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontFamily: fontFamily.bold, fontSize: 20, color: colors.textPrimary, fontVariant: ['tabular-nums'] }}>{candidate.remaining_capacity}</Text>
+                          <Text style={{ fontFamily: fontFamily.medium, fontSize: 12, color: colors.textSecondary }}>còn trống</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                  {candidates.length > VISIBLE_CANDIDATES ? (
+                    <Button
+                      label={showAllCandidates ? 'Thu gọn' : `Xem thêm ${candidates.length - VISIBLE_CANDIDATES} vị trí`}
+                      variant="ghost"
+                      size="md"
+                      onPress={() => setShowAllCandidates((v) => !v)}
+                    />
+                  ) : null}
+                </View>
               )}
-            </Pressable>
-          </View>
-        )}
-      </ScrollView>
+            </ScanStep>
+          )}
+
+          {selectedItem && source ? (
+            <ScanStep n={3} title={`Quét mã vị trí đã đến${plannedTarget ? ` (${plannedTarget.location_code})` : ''}`} done={Boolean(resolvedLocation)}>
+              <ScanField
+                value={locationInput}
+                onChangeText={(text) => {
+                  setLocationInput(text);
+                  setResolvedLocation(null);
+                  setLocationMessage(null);
+                }}
+                onSubmit={handleScanLocation}
+                placeholder="Quét hoặc nhập mã vị trí"
+              />
+              {locationMessage ? (
+                <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} />
+              ) : null}
+            </ScanStep>
+          ) : null}
+
+          {selectedItem && !source && locationMessage ? (
+            <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} />
+          ) : null}
+          {!selectedItem && locationMessage ? <StampBadge text={locationMessage.text} tone={locationMessage.ok ? 'success' : 'danger'} /> : null}
+
+          {selectedItem && resolvedLocation && limit && (
+            <ScanStep n={4} title="Số lượng cất" done={false}>
+              <TextField
+                mono
+                keyboardType="number-pad"
+                value={quantity}
+                onChangeText={(text) => {
+                  setQuantity(sanitizeQuantityInput(text));
+                  attemptKeyRef.current = null;
+                }}
+                maxLength={6}
+                accessibilityLabel="Số lượng cất lên kệ"
+                hint={`Tối đa ${limit.max} (${limit.reason})`}
+              />
+              {submitError ? <InlineAlert message={submitError} /> : null}
+            </ScanStep>
+          )}
+        </Screen>
       </KeyboardAvoidingView>
 
       <SelectionSheet
@@ -481,184 +465,3 @@ export default function PutawayReceiptScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-  },
-  error: {
-    ...typography.code,
-    color: colors.danger,
-    fontSize: 13,
-  },
-  headerCard: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    gap: 2,
-    ...shadow.card,
-  },
-  headerTitle: {
-    ...typography.h3,
-  },
-  headerSubtitle: {
-    ...typography.caption,
-  },
-  stepCard: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    gap: spacing.sm + 2,
-    ...shadow.card,
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  stepBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBadgeText: {
-    color: colors.onPrimary,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 13,
-  },
-  stepLabel: {
-    ...typography.h3,
-  },
-  itemList: {
-    gap: spacing.xs + 2,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  itemRowSelected: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  rowPressed: {
-    opacity: 0.7,
-  },
-  itemBody: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  itemTitle: {
-    color: colors.textPrimary,
-  },
-  itemMeta: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-  itemQty: {
-    ...typography.code,
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  infoBox: {
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 2,
-  },
-  infoLabel: {
-    ...typography.code,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    ...typography.code,
-    fontSize: 17,
-    color: colors.primary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md + 2,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
-  },
-  confirmButton: {
-    backgroundColor: colors.success,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  confirmButtonText: {
-    fontFamily: fonts.displayBold,
-    color: colors.onPrimary,
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-  candidateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  bestTag: {
-    fontFamily: fonts.monoSemibold,
-    fontSize: 10,
-    color: colors.success,
-    letterSpacing: 0.5,
-  },
-  capacityBox: {
-    alignItems: 'center',
-    minWidth: 64,
-  },
-  capacityValue: {
-    ...typography.code,
-    fontSize: 18,
-    color: colors.textPrimary,
-  },
-  capacityLabel: {
-    ...typography.caption,
-    fontSize: 11,
-  },
-  claimButton: {
-    marginTop: spacing.sm,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  linkButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  linkText: {
-    color: colors.primary,
-    fontFamily: fonts.bodySemibold,
-  },
-});
