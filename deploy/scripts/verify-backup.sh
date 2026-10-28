@@ -7,7 +7,7 @@
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-src="${1:-$(ls -1d "$BACKUP_DIR"/*/ 2>/dev/null | sort | tail -n1)}"
+src="${1:-$(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d | sort | tail -n1)}"
 src="${src%/}"
 [[ -n "$src" && -f "$src/SHA256SUMS" ]] || die "no backup to verify"
 (cd "$src" && sha256sum -c --quiet SHA256SUMS) || die "checksum mismatch in $src"

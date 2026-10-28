@@ -107,14 +107,14 @@ Sửa `.env` xong thì áp dụng bằng: `cd /opt/smartbook && deploy/scripts/d
 
 ## 6. GitHub Actions: secrets và môi trường
 
-Environment **`production`** (Settings → Environments) chỉ cho nhánh `production` deploy. Các secret của environment:
+Environment **`production`** (Settings → Environments) chỉ cho nhánh `production` deploy. Cấu hình của environment:
 
-| Secret | Nội dung |
-|---|---|
-| `VPS_HOST` | `160.250.5.241` |
-| `VPS_USER` | `deploy` |
-| `VPS_SSH_KEY` | Private key riêng cho CI (ed25519, chỉ dùng để deploy) |
-| `VPS_KNOWN_HOSTS` | Host key đã ghim của VPS (bật `StrictHostKeyChecking=yes`) |
+| Tên | Loại | Nội dung |
+|---|---|---|
+| `VPS_SSH_KEY` | Secret | Private key riêng cho CI (ed25519, chỉ dùng để deploy) |
+| `VPS_KNOWN_HOSTS` | Secret | Host key đã ghim của VPS (bật `StrictHostKeyChecking=yes`) |
+| `VPS_HOST` | Variable | `160.250.5.241` |
+| `VPS_USER` | Variable | `deploy` (để dạng variable vì nếu là secret, GitHub sẽ che mọi chữ "deploy" trong log) |
 
 Không cần PAT cho GHCR. Job deploy dùng `GITHUB_TOKEN` ngắn hạn (`packages: read`), đưa qua stdin vào `deploy.sh`. Token chỉ nằm trong một `DOCKER_CONFIG` tạm và bị xóa ngay sau khi pull; trên VPS không lưu credential registry nào.
 

@@ -164,8 +164,8 @@ jobs:
       contents: read
       packages: read
     env:
-      VPS_HOST: ${{ secrets.VPS_HOST }}
-      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_HOST: ${{ vars.VPS_HOST }}
+      VPS_USER: ${{ vars.VPS_USER }}
     steps:
       - uses: actions/checkout@v4
 

@@ -53,7 +53,7 @@ log "backup complete ($(du -sh "$dest" | cut -f1))"
 keep_days="$(env_value BACKUP_KEEP_DAYS)"
 keep_days="${keep_days:-14}"
 find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '*-daily' -mtime +"$keep_days" -exec rm -rf {} +
-ls -1d "$BACKUP_DIR"/*-predeploy-* 2>/dev/null | sort -r | tail -n +6 | xargs -r rm -rf
+find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '*-predeploy-*' | sort -r | tail -n +6 | xargs -r rm -rf
 
 # --- optional off-server copy --------------------------------------------------------
 remote="$(env_value BACKUP_RCLONE_REMOTE)"
