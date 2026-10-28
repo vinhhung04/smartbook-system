@@ -6,6 +6,8 @@ import type { PublicBook } from '@/services/public-catalog';
 import { cn } from '@/components/ui/utils';
 import { BookCardSkeleton, PublicBookCard } from './public-book-card';
 import type { AvailabilityAlerts } from './use-availability-alerts';
+import { useRevealEngine } from './gsap-motion';
+import { GsapReveal } from './gsap-reveal';
 
 interface SectionHeadingProps {
   id: string;
@@ -23,21 +25,24 @@ interface SectionHeadingProps {
 export function SectionHeading({ id, title, eyebrow, basis, seeAllTo, actions, tone = 'default' }: SectionHeadingProps) {
   const inverse = tone === 'inverse';
   return (
-    <div className="mb-6 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        {eyebrow ? (
-          <p className={cn('mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.12em]', inverse ? 'text-indigo-200' : 'text-indigo-700 dark:text-indigo-300')}>{eyebrow}</p>
+    <div data-reveal-heading className="mb-8 flex flex-col items-start gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0 max-w-2xl">
+        <h2 id={id} className={cn('text-balance font-display text-[30px] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-[40px]', inverse ? 'text-white' : 'text-foreground')}>{title}</h2>
+        {/* What the list is (the old label above the title) leads the explanation instead. */}
+        {eyebrow || basis ? (
+          <p className={cn('mt-3 text-pretty text-[14.5px] leading-relaxed', inverse ? 'text-indigo-100/80' : 'text-muted-foreground')}>
+            {eyebrow ? <span className={cn('font-semibold', inverse ? 'text-white' : 'text-foreground')}>{eyebrow}. </span> : null}
+            {basis}
+          </p>
         ) : null}
-        <h2 id={id} className={cn('font-serif text-[26px] font-semibold leading-[1.1] tracking-tight sm:text-[32px]', inverse ? 'text-white' : 'text-foreground')}>{title}</h2>
-        {basis ? <p className={cn('mt-2 max-w-2xl text-[13.5px] leading-relaxed', inverse ? 'text-indigo-100/80' : 'text-muted-foreground')}>{basis}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {seeAllTo ? (
           <Link
             to={seeAllTo}
             className={cn(
-              'group/see inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50',
-              inverse ? 'border-white/25 text-white hover:bg-white/10' : 'border-border bg-card text-foreground hover:border-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300',
+              'group/see inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-[13.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50',
+              inverse ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-100 dark:bg-indigo-500/15 dark:text-indigo-200 dark:hover:bg-indigo-500/25',
             )}
           >
             Xem tất cả <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/see:translate-x-0.5" aria-hidden="true" />
@@ -100,6 +105,9 @@ export function CarouselArrows({ label, edges, onScroll, tone = 'default' }: { l
 }
 
 export function Reveal({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
+  // On the homepage GSAP owns section entrances (see gsap-motion.tsx).
+  const engine = useRevealEngine();
+  if (engine === 'gsap') return <GsapReveal className={className}>{children}</GsapReveal>;
   return (
     <motion.div
       className={className}
@@ -146,7 +154,7 @@ export function BookRow({ id, title, eyebrow, basis, books, seeAllTo, onReserve,
           className="-mx-4 -my-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 py-4 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:mx-0 lg:scroll-px-0 lg:gap-5 lg:px-0 [&::-webkit-scrollbar]:hidden"
         >
           {books.map((book) => (
-            <li key={book.id} className="w-[42%] shrink-0 snap-start sm:w-[28%] md:w-[22%] lg:w-[calc((100%-6.25rem)/6)]">
+            <li key={book.id} data-reveal-item className="w-[42%] shrink-0 snap-start sm:w-[28%] md:w-[22%] lg:w-[calc((100%-6.25rem)/6)]">
               <PublicBookCard book={book} onReserve={onReserve} alerts={alerts} />
             </li>
           ))}

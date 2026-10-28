@@ -1,6 +1,6 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { ArrowRight, Bell, BellRing, Flame, Star } from 'lucide-react';
+import { ArrowRight, Bell, BellRing, Clock, Flame, MapPin, Navigation, Phone, Star } from 'lucide-react';
 import type { PublicBook, PublicBranch, PublicHome } from '@/services/public-catalog';
 import { cn } from '@/components/ui/utils';
 import type { AvailabilityAlerts } from './use-availability-alerts';
@@ -8,8 +8,9 @@ import { AvailabilityStamp } from './availability-stamp';
 import { BookCover } from './book-cover';
 import { Reveal, SectionHeading } from './book-row';
 import { TiltCard } from './tilt-card';
-import { CategoryCard } from './category-card';
-import { BranchCard } from './branch-card';
+import { BranchStatus } from './branch-status';
+import { bindingFor } from '@/lib/book-binding';
+import { branchBooksUrl, directionsUrl } from '@/lib/branch-links';
 import { BackCover, SpinningBook } from './spinning-book';
 
 const numberFormat = new Intl.NumberFormat('vi-VN');
@@ -29,15 +30,13 @@ export function FeaturedTrending({ books, days, onReserve, alerts }: { books: Pu
       <section aria-labelledby="dang-duoc-yeu-thich">
         <SectionHeading
           id="dang-duoc-yeu-thich"
-          eyebrow={`Xu hướng · ${days} ngày qua`}
           title="Đang được yêu thích"
-          basis="Xếp theo lượt mượn, đặt trước và thêm vào yêu thích gần đây, không lặp lại các sách ở bảng Top 10."
+          basis={`Xếp theo lượt mượn, đặt trước và thêm vào yêu thích trong ${days} ngày qua, không lặp lại các sách ở bảng Top 10.`}
           seeAllTo="/books?sort=popular"
         />
         <div className="grid gap-4 lg:grid-cols-[1.15fr_1fr] lg:gap-5">
-          <article className="group relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-indigo-50 via-card to-card p-6 dark:from-indigo-950/40 sm:p-8">
-            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-indigo-400/20 blur-3xl dark:bg-indigo-500/20" aria-hidden="true" />
-            <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center">
+          <article data-reveal-item className="group relative overflow-hidden rounded-[28px] bg-indigo-50 p-6 dark:bg-indigo-500/10 sm:p-9">
+            <div className="relative flex flex-col gap-7 sm:flex-row sm:items-center">
               <SpinningBook
                 title={lead.title}
                 author={lead.author}
@@ -58,22 +57,22 @@ export function FeaturedTrending({ books, days, onReserve, alerts }: { books: Pu
                 )}
               />
               <div className="min-w-0">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-2.5 py-1 text-[11.5px] font-semibold text-white">
-                  <Flame className="h-3.5 w-3.5" aria-hidden="true" /> #1 đang được quan tâm
-                </span>
-                <h3 className="mt-3 font-serif text-[26px] font-semibold leading-[1.15] tracking-tight sm:text-[30px]">
+                <p className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-indigo-800 dark:text-indigo-200">
+                  <Flame className="h-4 w-4 text-orange-500" aria-hidden="true" /> Được quan tâm nhất lúc này
+                </p>
+                <h3 className="mt-2 text-balance font-display text-[28px] font-semibold leading-[1.08] tracking-[-0.02em] sm:text-[34px]">
                   <Link to={`/books/${lead.id}`} className="hover:underline">{lead.title}</Link>
                 </h3>
                 <p className="mt-1 text-[14px] text-muted-foreground">{lead.author || 'Chưa rõ tác giả'}</p>
                 <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[13px]">
                   <div>
                     <dt className="text-muted-foreground">Hoạt động {days} ngày</dt>
-                    <dd className="font-serif text-[22px] font-semibold tabular-nums">{numberFormat.format(activity(lead))}</dd>
+                    <dd className="font-display text-[26px] font-semibold tabular-nums">{numberFormat.format(activity(lead))}</dd>
                   </div>
                   {lead.signals && lead.signals.rating_count > 0 ? (
                     <div>
                       <dt className="text-muted-foreground">{lead.signals.rating_count} đánh giá</dt>
-                      <dd className="flex items-center gap-1 font-serif text-[22px] font-semibold tabular-nums">
+                      <dd className="flex items-center gap-1 font-display text-[26px] font-semibold tabular-nums">
                         {lead.signals.rating_avg.toFixed(1)} <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
                       </dd>
                     </div>
@@ -82,7 +81,7 @@ export function FeaturedTrending({ books, days, onReserve, alerts }: { books: Pu
                 <div className="mt-5 flex flex-wrap items-center gap-3">
                   <AvailabilityStamp book={lead} />
                   {lead.reservable ? (
-                    <button type="button" onClick={() => onReserve(lead)} className="inline-flex h-9 items-center rounded-full bg-indigo-700 px-4 text-[13px] font-semibold text-white hover:bg-indigo-800 dark:bg-indigo-500">
+                    <button type="button" onClick={() => onReserve(lead)} className="inline-flex h-11 items-center rounded-full bg-indigo-700 px-5 text-[14px] font-semibold text-white transition-[background-color,transform] hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400">
                       Đặt trước
                     </button>
                   ) : (
@@ -92,7 +91,7 @@ export function FeaturedTrending({ books, days, onReserve, alerts }: { books: Pu
                       disabled={alerts.isBusy(lead.id)}
                       aria-pressed={alerts.isOn(lead.id)}
                       className={cn(
-                        'inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition-colors disabled:opacity-60',
+                        'inline-flex h-11 items-center gap-1.5 rounded-full px-5 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:opacity-60',
                         alerts.isOn(lead.id)
                           ? 'border border-indigo-300 text-indigo-700 dark:border-indigo-500/40 dark:text-indigo-300'
                           : 'bg-indigo-700 text-white hover:bg-indigo-800 dark:bg-indigo-500',
@@ -112,15 +111,15 @@ export function FeaturedTrending({ books, days, onReserve, alerts }: { books: Pu
 
           <ol className="grid gap-3 sm:grid-cols-2 lg:gap-4">
             {rest.slice(0, 4).map((book, index) => (
-              <li key={book.id}>
+              <li key={book.id} data-reveal-item>
                 <TiltCard className="h-full rounded-2xl">
                 <Link
                   to={`/books/${book.id}`}
-                  className="group flex h-full items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-[border-color,box-shadow] hover:border-indigo-300 hover:shadow-[0_12px_30px_-18px_rgba(79,70,229,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 dark:hover:border-indigo-500/40"
+                  className="group flex h-full items-center gap-4 rounded-2xl bg-card p-4 ring-1 ring-border transition-[box-shadow] hover:ring-indigo-300 hover:shadow-[0_14px_30px_-20px_rgba(30,27,75,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 dark:hover:ring-indigo-500/40"
                 >
                   <BookCover title={book.title} author={book.author} imageUrl={book.cover_image_url} className="w-16 shrink-0" />
                   <span className="min-w-0">
-                    <span className="font-mono text-[11px] text-muted-foreground">#{index + 2}</span>
+                    <span className="font-display text-[15px] font-semibold tabular-nums text-muted-foreground">Hạng {index + 2}</span>
                     <span className="mt-0.5 line-clamp-2 block text-[14px] font-semibold leading-snug group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{book.title}</span>
                     <span className="mt-0.5 block truncate text-[12.5px] text-muted-foreground">{book.author || 'Chưa rõ tác giả'}</span>
                     <span className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium text-foreground/80">
@@ -157,16 +156,14 @@ export function RankingBand({ mostBorrowed, topRated, borrowDays, minReviews, al
       key: 'borrowed' as const,
       label: 'Mượn nhiều',
       books: mostBorrowed,
-      eyebrow: `Top 10 · ${borrowDays} ngày qua`,
       title: 'Được mượn nhiều nhất',
-      basis: 'Xếp theo số lượt mượn thực tế. Thanh bên cạnh so với cuốn đứng đầu.',
+      basis: `Mười cuốn có nhiều lượt mượn thực tế nhất trong ${borrowDays} ngày qua. Thanh bên cạnh so với cuốn đứng đầu.`,
       seeAllTo: '/books?sort=popular',
     },
     {
       key: 'rated' as const,
       label: 'Đánh giá cao',
       books: topRated,
-      eyebrow: 'Bạn đọc chấm điểm',
       title: 'Bạn đọc đánh giá cao',
       basis: `Điểm trung bình từ ít nhất ${minReviews} đánh giá của bạn đọc. Thanh bên cạnh là điểm trên thang 5.`,
       seeAllTo: '/books?sort=rating',
@@ -217,15 +214,12 @@ export function RankingBand({ mostBorrowed, topRated, borrowDays, minReviews, al
   ) : null;
 
   return (
-    <section aria-labelledby="xep-hang" className="relative overflow-hidden bg-[#141432] py-16 text-white sm:py-20">
-      <div className="pointer-events-none absolute -left-24 top-0 h-80 w-80 rounded-full bg-indigo-600/30 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl" aria-hidden="true" />
+    <section aria-labelledby="xep-hang" className="relative overflow-hidden bg-[#1d1a4a] py-20 text-white sm:py-28 dark:bg-[#15133a]">
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <SectionHeading
             id="xep-hang"
             tone="inverse"
-            eyebrow={current.eyebrow}
             title={current.title}
             basis={current.basis}
             seeAllTo={current.seeAllTo}
@@ -246,7 +240,7 @@ export function RankingBand({ mostBorrowed, topRated, borrowDays, minReviews, al
                 : `★ ${rating.toFixed(1)} · ${numberFormat.format(book.signals?.rating_count || 0)}`;
               const alertOn = alerts.isOn(book.id);
               return (
-                <li key={book.id} className="flex items-center gap-2">
+                <li key={book.id} data-reveal-item className="flex items-center gap-2">
                   <Link to={`/books/${book.id}`} className="group flex min-w-0 flex-1 items-center gap-4 rounded-xl px-2 py-3 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/60">
                     <span
                       className={cn('w-12 shrink-0 text-right font-serif font-semibold tabular-nums leading-none', index < 3 ? 'text-[40px] text-white' : 'text-[34px] text-transparent [-webkit-text-stroke:1px_rgba(255,255,255,0.45)]')}
@@ -262,9 +256,9 @@ export function RankingBand({ mostBorrowed, topRated, borrowDays, minReviews, al
                       </span>
                       <span className="mt-2 flex items-center gap-2">
                         <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
-                          <span className="block h-full rounded-full bg-gradient-to-r from-indigo-400 to-cyan-300" style={{ width: `${Math.max(4, share * 100)}%` }} />
+                          <span className="block h-full origin-left rounded-full bg-amber-200" style={{ transform: `scaleX(${Math.max(0.04, share)})` }} />
                         </span>
-                        <span className="shrink-0 whitespace-nowrap text-right font-mono text-[11.5px] tabular-nums text-indigo-100/80">{metric}</span>
+                        <span className="shrink-0 whitespace-nowrap text-right text-[12.5px] font-medium tabular-nums text-indigo-100/85">{metric}</span>
                       </span>
                     </span>
                   </Link>
@@ -294,7 +288,11 @@ export function RankingBand({ mostBorrowed, topRated, borrowDays, minReviews, al
   );
 }
 
-/** "Đến thư viện gần bạn": every public branch, with what is on its shelves today. */
+/**
+ * "Đến thư viện gần bạn" as an index of branches rather than a wall of equal
+ * cards: one row per branch, read left to right (where, when, what is on the
+ * shelves, what to do). Every value comes from the branch record.
+ */
 export function HomeBranches({ branches }: { branches: PublicBranch[] }) {
   if (branches.length === 0) return null;
   return (
@@ -302,35 +300,157 @@ export function HomeBranches({ branches }: { branches: PublicBranch[] }) {
       <section aria-labelledby="chi-nhanh">
         <SectionHeading
           id="chi-nhanh"
-          eyebrow={`${branches.length} chi nhánh`}
           title="Đến thư viện gần bạn"
-          basis="Đặt trước trực tuyến, nhận sách tại chi nhánh bạn chọn. Số sách có sẵn cập nhật theo kệ thật của từng chi nhánh."
+          basis={`${branches.length} chi nhánh. Đặt trước trực tuyến, nhận sách tại chi nhánh bạn chọn. Số sách có sẵn cập nhật theo kệ thật của từng chi nhánh.`}
           seeAllTo="/branches"
         />
-        <ul className={cn('grid gap-4', branches.length > 1 && 'md:grid-cols-2', branches.length > 2 && 'lg:grid-cols-3')}>
-          {branches.map((branch) => (
-            <li key={branch.id}><BranchCard branch={branch} headingLevel="h3" /></li>
-          ))}
+        <ul className="grid gap-3">
+          {branches.map((branch) => {
+            const { stats } = branch;
+            return (
+              <li key={branch.id} data-reveal-item>
+                <article
+                  aria-labelledby={`chi-nhanh-${branch.id}`}
+                  className="grid gap-5 rounded-[22px] bg-card p-5 ring-1 ring-border transition-shadow hover:shadow-[0_18px_40px_-28px_rgba(30,27,75,0.5)] sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto] lg:items-center lg:gap-8"
+                >
+                  <div className="min-w-0">
+                    <h3 id={`chi-nhanh-${branch.id}`} className="font-display text-[22px] font-semibold leading-tight tracking-[-0.01em]">
+                      <Link to={`/branches/${branch.id}`} className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">{branch.name}</Link>
+                    </h3>
+                    <div className="mt-2"><BranchStatus /></div>
+                  </div>
+                  <div className="min-w-0 space-y-1.5 text-[14px] leading-relaxed text-foreground/80">
+                    <p className="flex gap-2">
+                      <MapPin className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      {branch.address ? <span>{branch.address}</span> : <span className="text-muted-foreground">Địa chỉ đang được cập nhật</span>}
+                    </p>
+                    {branch.opening_hours ? (
+                      <p className="flex gap-2">
+                        <Clock className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span><span className="sr-only">Giờ mở cửa: </span>{branch.opening_hours}</span>
+                      </p>
+                    ) : null}
+                    {branch.phone ? (
+                      <p className="flex gap-2">
+                        <Phone className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <a href={`tel:${branch.phone.replace(/[^0-9+]/g, '')}`} className="hover:underline">{branch.phone}</a>
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center lg:justify-end">
+                    {stats.title_count > 0 ? (
+                      <dl className="flex gap-6">
+                        <div>
+                          <dt className="text-[12.5px] text-muted-foreground">Đầu sách</dt>
+                          <dd className="font-display text-[26px] font-semibold leading-tight tabular-nums">{numberFormat.format(stats.title_count)}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[12.5px] text-muted-foreground">Có sẵn</dt>
+                          <dd className="font-display text-[26px] font-semibold leading-tight tabular-nums text-emerald-700 dark:text-emerald-400">{numberFormat.format(stats.available_title_count)}</dd>
+                        </div>
+                      </dl>
+                    ) : (
+                      <p className="text-[13.5px] text-muted-foreground">Chi nhánh chưa có sách trên kệ.</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {stats.title_count > 0 ? (
+                        <Link
+                          to={branchBooksUrl(branch)}
+                          aria-label={`Xem sách tại ${branch.name}`}
+                          className="group inline-flex h-11 items-center gap-1.5 rounded-full bg-indigo-700 px-4 text-[13.5px] font-semibold text-white transition-[background-color,transform] hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400"
+                        >
+                          Xem sách <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                        </Link>
+                      ) : null}
+                      {branch.address ? (
+                        <a
+                          href={directionsUrl(branch.address)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Chỉ đường đến ${branch.name} (mở Google Maps trong thẻ mới)`}
+                          className="inline-flex h-11 items-center gap-1.5 rounded-full px-4 text-[13.5px] font-semibold text-foreground ring-1 ring-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50"
+                        >
+                          <Navigation className="h-4 w-4" aria-hidden="true" /> Chỉ đường
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </Reveal>
   );
 }
 
-/** Large category cards; the covers fan out further on hover. */
+/**
+ * Categories as an editorial spread: the largest category is a full field of
+ * its own binding colour with its covers fanned large, the next four are
+ * tinted with theirs. Each category keeps the same colour as its cloth
+ * binding elsewhere on the site, so it is recognisable at a glance.
+ */
 export function CategoryShowcase({ categories }: { categories: PublicHome['categories'] }) {
   if (categories.length === 0) return null;
   return (
     <Reveal>
       <section aria-labelledby="the-loai">
-        <SectionHeading id="the-loai" eyebrow="Thể loại" title="Khám phá theo thể loại" seeAllTo="/categories" />
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* 1 large + 4 small fills the 3-column bento exactly. */}
-          {categories.slice(0, 5).map((category, index) => (
-            <li key={category.slug} className={cn(index === 0 && 'lg:row-span-2')}>
-              <CategoryCard category={category} featured={index === 0} />
-            </li>
-          ))}
+        <SectionHeading id="the-loai" title="Khám phá theo thể loại" basis="Số đầu sách và số đang có trên kệ của từng thể loại." seeAllTo="/categories" />
+        <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4 lg:grid-rows-2">
+          {categories.slice(0, 5).map((category, index) => {
+            const lead = index === 0;
+            const colour = bindingFor(category.name);
+            const covers = category.covers.slice(0, lead ? 3 : 2);
+            return (
+              <li key={category.slug} data-reveal-item className={cn(lead && 'sm:col-span-2 lg:row-span-2')}>
+                <Link
+                  to={`/categories/${category.slug}`}
+                  className={cn(
+                    'group relative flex h-full overflow-hidden rounded-[22px] p-5 transition-shadow hover:shadow-[0_20px_44px_-26px_rgba(30,27,75,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 sm:p-6',
+                    lead ? 'min-h-[15rem] text-[#F3EBD8] lg:min-h-[26rem] lg:p-8' : 'min-h-[9.5rem] bg-card text-foreground ring-1 ring-border sm:min-h-[11.5rem]',
+                  )}
+                  style={lead ? { backgroundColor: colour } : undefined}
+                >
+                  {lead ? null : <span className="pointer-events-none absolute inset-0 opacity-[0.10] transition-opacity duration-500 group-hover:opacity-[0.18] dark:opacity-[0.22] dark:group-hover:opacity-[0.3]" style={{ backgroundColor: colour }} aria-hidden="true" />}
+                  <span className={cn('relative z-10 flex min-w-0 flex-col justify-between', lead ? 'max-w-[58%] lg:max-w-[16rem]' : 'max-w-[62%]')}>
+                    <span>
+                      <span className={cn('block text-balance font-display font-semibold tracking-[-0.015em]', lead ? 'text-[28px] lg:text-[40px]' : 'text-[19px] sm:text-[21px]', 'leading-[1.08]')}>{category.name}</span>
+                      <span className={cn('mt-2 block text-[13px] leading-snug', lead ? 'text-[#F3EBD8]/80' : 'text-muted-foreground')}>
+                        {numberFormat.format(category.book_count)} đầu sách, {numberFormat.format(category.available_count)} có trên kệ
+                      </span>
+                    </span>
+                    <span className={cn('mt-5 inline-flex items-center gap-1 whitespace-nowrap text-[13.5px] font-semibold', lead ? 'text-[#F3EBD8]' : 'text-indigo-700 dark:text-indigo-300')}>
+                      Xem thể loại <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                    </span>
+                  </span>
+                  {/* The category's own covers, fanned; they spread a little further on hover. */}
+                  <span className={cn('pointer-events-none absolute', lead ? '-bottom-6 right-4 h-[78%] w-[44%] lg:right-8 lg:h-[72%] lg:w-[46%]' : '-bottom-4 right-3 h-[80%] w-[34%] sm:right-2 sm:h-[70%] sm:w-[42%]')} aria-hidden="true">
+                    {(covers.length ? covers : [null, null]).map((cover, coverIndex, all) => {
+                      const spread = coverIndex - (all.length - 1) / 2;
+                      return (
+                        <span
+                          key={cover || coverIndex}
+                          className="absolute bottom-0 left-1/2 block w-[62%] origin-bottom transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [transform:translateX(calc(-50%_+_var(--fan-x)))_rotate(var(--fan-r))] group-hover:[transform:translateX(calc(-50%_+_var(--fan-x)*1.25))_translateY(-4%)_rotate(calc(var(--fan-r)*1.3))] motion-reduce:transition-none"
+                          style={{
+                            '--fan-x': `${spread * 26}%`,
+                            '--fan-r': `${spread * 8}deg`,
+                            zIndex: 10 - Math.abs(Math.round(spread * 2)),
+                          } as CSSProperties}
+                        >
+                          {cover ? (
+                            <img src={cover} alt="" loading="lazy" decoding="async" className="aspect-[2/3] w-full rounded-[4px] object-cover shadow-[0_14px_28px_-12px_rgba(15,23,42,0.6)]" />
+                          ) : (
+                            <span className="block aspect-[2/3] w-full rounded-[4px] shadow-lg" style={{ backgroundColor: bindingFor(`${category.name}-${coverIndex}`) }} />
+                          )}
+                        </span>
+                      );
+                    })}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </Reveal>

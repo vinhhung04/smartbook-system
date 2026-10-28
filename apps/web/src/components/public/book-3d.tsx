@@ -8,10 +8,10 @@ interface Book3DProps {
   author?: string | null;
   imageUrl?: string | null;
   /**
-   * shelf: stands angled on the hero shelf; card: flat until the card is hovered;
+   * showcase: angled on the hero display table (--show-ry / --show-z); card: flat until the card is hovered;
    * flow: angle/depth driven by the cover-flow carousel; spin: drag to rotate.
    */
-  pose: 'shelf' | 'card' | 'flow' | 'spin';
+  pose: 'showcase' | 'card' | 'flow' | 'spin';
   eager?: boolean;
   /** Content printed on the back cover (seen when the book is turned around). */
   back?: ReactNode;

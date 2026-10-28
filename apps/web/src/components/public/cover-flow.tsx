@@ -161,7 +161,7 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
             />
           }
         />
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-transparent via-indigo-50/50 to-indigo-100/60 dark:via-indigo-950/20 dark:to-indigo-950/40">
+        <div className="relative overflow-hidden rounded-[28px] bg-indigo-50/80 dark:bg-white/[0.03]">
           <ul
             ref={trackRef}
             tabIndex={0}
@@ -199,14 +199,14 @@ export function CoverFlow({ id, title, eyebrow, basis, books, seeAllTo, onReserv
         </div>
 
         <div className="mx-auto mt-6 flex max-w-xl flex-col items-center text-center" aria-live="polite">
-          <h3 className="font-serif text-[22px] font-semibold leading-tight tracking-tight sm:text-[26px]">
+          <h3 className="font-display text-[24px] font-semibold leading-tight tracking-[-0.015em] sm:text-[28px]">
             <Link to={`/books/${current.id}`} className="hover:underline">{current.title}</Link>
           </h3>
           <p className="mt-1 text-[14px] text-muted-foreground">{current.author || 'Chưa rõ tác giả'}</p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-3">
             <AvailabilityStamp book={current} />
             {current.reservable && onReserve ? (
-              <button type="button" onClick={() => onReserve(current)} className="inline-flex h-9 items-center rounded-full bg-indigo-700 px-4 text-[13px] font-semibold text-white hover:bg-indigo-800 dark:bg-indigo-500">
+              <button type="button" onClick={() => onReserve(current)} className="inline-flex h-10 items-center rounded-full bg-indigo-700 px-4 text-[13.5px] font-semibold text-white transition-[background-color,transform] hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400">
                 Đặt trước
               </button>
             ) : null}

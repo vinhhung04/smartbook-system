@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { BookOpen, LayoutDashboard, Menu, Moon, Sun, X } from 'lucide-react';
 import { useAuthUser } from '@/hooks/useAuthUser';
@@ -10,6 +10,7 @@ import { cn } from '@/components/ui/utils';
 import { NotificationBellDropdown } from '@/components/pages/customer/_shared/notification-bell-dropdown';
 import { UserAvatarMenu } from '@/components/pages/customer/_shared/user-avatar-menu';
 import { SearchAutocomplete } from './search-autocomplete';
+import { EASE_OUT, MOTION_OK, gsap, useGSAP } from './gsap-motion';
 
 interface NavItem {
   to: string;
@@ -37,6 +38,13 @@ const linkClass = (active: boolean) => cn(
   active ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground hover:text-foreground',
 );
 
+// Desktop bar: a short ink underline marks the current page and grows in on hover elsewhere.
+const barLinkClass = (active: boolean) => cn(
+  linkClass(active),
+  'relative after:absolute after:inset-x-3 after:bottom-1 after:h-[2px] after:origin-left after:rounded-full after:bg-indigo-600 after:transition-transform after:duration-300 dark:after:bg-indigo-300 motion-reduce:after:transition-none',
+  active ? 'after:scale-x-100' : 'after:scale-x-0 hover:after:scale-x-100',
+);
+
 function ThemeToggle() {
   const { resolvedTheme, toggleTheme } = useTheme();
   const Icon = resolvedTheme === 'dark' ? Sun : Moon;
@@ -53,7 +61,7 @@ export function Wordmark() {
       <span className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-700 text-white dark:bg-indigo-500">
         <BookOpen className="h-4 w-4" aria-hidden="true" />
       </span>
-      <span className="font-serif text-[19px] font-semibold tracking-tight text-foreground">SmartBook</span>
+      <span className="font-display text-[20px] font-semibold tracking-[-0.02em] text-foreground">SmartBook</span>
     </Link>
   );
 }
@@ -62,7 +70,11 @@ export function PublicHeader() {
   const { pathname, search } = useLocation();
   const params = new URLSearchParams(search);
   const { user, isAuthenticated, isCustomer, isStaff } = useAuthUser();
+  // `menuOpen` is what the reader asked for; `menuMounted` keeps the sheet on
+  // screen until its exit animation has finished.
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMounted, setMenuMounted] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Transparent while it sits on top of the page, a frosted bar once content scrolls under it.
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -75,7 +87,44 @@ export function PublicHeader() {
     };
   }, []);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const closeMenu = () => setMenuOpen(false);
+  // The exit runs after `menuOpen` is already false, so it lives in its own
+  // context; reopening mid-exit reverts it first.
+  const exitRef = useRef<gsap.Context | null>(null);
+  useEffect(() => () => exitRef.current?.revert(), []);
+  const openMenu = () => {
+    exitRef.current?.revert();
+    exitRef.current = null;
+    setMenuMounted(true);
+    setMenuOpen(true);
+  };
+
+  // Sheet slides in from the right, its contents follow; short, so it never
+  // stands between the reader and a link.
+  useGSAP(() => {
+    if (!menuOpen) return undefined;
+    const mm = gsap.matchMedia();
+    mm.add(MOTION_OK, () => {
+      gsap.timeline({ defaults: { ease: EASE_OUT } })
+        .from('[data-menu="backdrop"]', { opacity: 0, duration: 0.3 })
+        .from('[data-menu="sheet"]', { xPercent: 100, duration: 0.55 }, 0)
+        .from('[data-menu="item"]', { opacity: 0, x: 16, duration: 0.45, stagger: 0.035 }, 0.12);
+    });
+    return () => mm.revert();
+  }, { scope: menuRef, dependencies: [menuOpen], revertOnUpdate: true });
+
+  const closeMenu = useCallback(() => {
+    setMenuOpen(false);
+    const root = menuRef.current;
+    if (!root || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setMenuMounted(false);
+      return;
+    }
+    exitRef.current = gsap.context(() => {
+      gsap.timeline({ defaults: { duration: 0.25, ease: 'power2.in' }, onComplete: () => setMenuMounted(false) })
+        .to('[data-menu="sheet"]', { xPercent: 100 }, 0)
+        .to('[data-menu="backdrop"]', { opacity: 0 }, 0);
+    }, root);
+  }, []);
   useDialogA11y(menuOpen, closeMenu, sheetRef);
 
   const navItems = [...DISCOVER_ITEMS, ...(isCustomer ? CUSTOMER_ITEMS : VISITOR_ITEMS)];
@@ -109,7 +158,7 @@ export function PublicHeader() {
 
         <nav aria-label="Điều hướng chính" className="ml-4 hidden items-center lg:flex">
           {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} className={linkClass(item.isActive(pathname, params))} aria-current={item.isActive(pathname, params) ? 'page' : undefined} end>
+            <NavLink key={item.to} to={item.to} className={barLinkClass(item.isActive(pathname, params))} aria-current={item.isActive(pathname, params) ? 'page' : undefined} end>
               {item.label}
             </NavLink>
           ))}
@@ -126,38 +175,49 @@ export function PublicHeader() {
               <Link to={registerUrl} className="inline-flex h-9 items-center whitespace-nowrap rounded-md bg-indigo-700 px-3.5 text-[13.5px] font-semibold text-white hover:bg-indigo-800 dark:bg-indigo-500 dark:hover:bg-indigo-400">Đăng ký</Link>
             </div>
           )}
-          <button type="button" onClick={() => setMenuOpen(true)} aria-label="Mở menu" aria-expanded={menuOpen} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-foreground hover:bg-muted lg:hidden">
+          <button type="button" onClick={openMenu} aria-label="Mở menu" aria-expanded={menuOpen} className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground hover:bg-muted lg:hidden">
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      {menuOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden" onClick={closeMenu}>
-          <div className="absolute inset-0 bg-black/30" />
+      {menuMounted ? (
+        <div ref={menuRef} className="fixed inset-0 z-40 lg:hidden" onClick={closeMenu}>
+          <div data-menu="backdrop" className="absolute inset-0 bg-[#141233]/45" />
           <div
             ref={sheetRef}
+            data-menu="sheet"
             role="dialog"
             aria-modal="true"
             aria-label="Menu"
             onClick={(event) => event.stopPropagation()}
-            className="absolute inset-y-0 right-0 flex w-[min(20rem,88vw)] flex-col gap-5 overflow-y-auto border-l border-border bg-background p-5"
+            className="absolute inset-y-0 right-0 flex w-[min(21rem,90vw)] flex-col gap-5 overflow-y-auto bg-background p-5 shadow-[-24px_0_60px_-30px_rgba(20,18,51,0.6)]"
           >
-            <div className="flex items-center justify-between">
+            <div data-menu="item" className="flex items-center justify-between">
               <Wordmark />
-              <button type="button" onClick={closeMenu} aria-label="Đóng menu" className="rounded-md p-2 text-muted-foreground hover:bg-muted">
+              <button type="button" onClick={closeMenu} aria-label="Đóng menu" className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50">
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <SearchAutocomplete placeholder="Tìm sách, tác giả…" onNavigate={closeMenu} />
+            <div data-menu="item"><SearchAutocomplete placeholder="Tìm sách, tác giả…" onNavigate={closeMenu} /></div>
             <nav aria-label="Điều hướng chính" className="flex flex-col">
-              {navItems.map((item) => (
-                <Link key={item.to} to={item.to} onClick={closeMenu} className={cn(linkClass(item.isActive(pathname, params)), 'h-11 text-[15px]')}>
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                const active = item.isActive(pathname, params);
+                return (
+                  <Link
+                    key={item.to}
+                    data-menu="item"
+                    to={item.to}
+                    onClick={closeMenu}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(linkClass(active), 'h-12 font-display text-[22px] tracking-[-0.01em]', active ? 'text-indigo-700 dark:text-indigo-300' : 'text-foreground')}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </nav>
-            <div className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
+            <div data-menu="item" className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
               {isAuthenticated ? (
                 <div className="flex items-center gap-2">{accountActions}</div>
               ) : (
