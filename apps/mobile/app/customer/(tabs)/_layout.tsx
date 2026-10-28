@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { NativeTabs } from 'expo-router/native-tabs';
 
 import { customerTheme, fontFamily } from '../../../src/design-system';
 
@@ -20,19 +20,31 @@ export default function CustomerTabsLayout() {
       indicatorColor={colors.primarySoft}
     >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass" />
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'safari', selected: 'safari.fill' }}
+          src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="compass" /> }}
+        />
         <NativeTabs.Trigger.Label>Khám phá</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="my-books">
-        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="library" />
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'books.vertical', selected: 'books.vertical.fill' }}
+          src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="library-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="library" /> }}
+        />
         <NativeTabs.Trigger.Label>Sách của tôi</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="wallet">
-        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="wallet" />
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'creditcard', selected: 'creditcard.fill' }}
+          src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="wallet-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="wallet" /> }}
+        />
         <NativeTabs.Trigger.Label>Ví & phí</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
-        <NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-circle" />
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
+          src={{ default: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-circle-outline" />, selected: <NativeTabs.Trigger.VectorIcon family={Ionicons} name="person-circle" /> }}
+        />
         <NativeTabs.Trigger.Label>Cá nhân</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
