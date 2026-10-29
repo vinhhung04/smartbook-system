@@ -19,15 +19,20 @@ import {
   AlertTriangle,
   AreaChart as AreaIcon,
   ArrowDown,
+  ArrowDownRight,
   ArrowUp,
   ArrowUpDown,
+  ArrowUpRight,
   BarChart3,
+  Camera,
   Clock3,
   Database,
+  Info,
   LineChart as LineIcon,
   MapPin,
   Maximize2,
   MessageCircleQuestion,
+  Minus,
   PieChart as PieIcon,
   Search,
   Table2,
@@ -283,21 +288,26 @@ export function CopilotPieChart({ spec, height }: Omit<ChartProps, 'visible'>) {
 
 export function CopilotKpiCards({ spec }: { spec: CopilotVisualizationSpec }) {
   return (
-    <dl className="grid grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-2">
-      {spec.kpis.map((kpi) => (
-        <div key={kpi.key} className="min-w-0 rounded-lg border border-border bg-card px-3 py-2">
-          <dt className="line-clamp-2 text-[11px] leading-snug text-muted-foreground" title={kpi.label}>{kpi.label}</dt>
-          <dd className="mt-0.5 text-[18px] font-semibold tabular-nums text-foreground">
-            {kpi.value === null ? <span title="Không có dữ liệu">—</span> : formatValue(kpi.value, kpi.unit, kpi.kind)}
-          </dd>
-          {kpi.delta !== null && (
-            <p className="text-[11px] tabular-nums text-muted-foreground">
-              {kpi.delta > 0 ? '▲' : kpi.delta < 0 ? '▼' : '■'} {formatValue(Math.abs(kpi.delta), kpi.delta_unit)} {kpi.delta_label}
-            </p>
-          )}
-          {kpi.note && <p className="line-clamp-2 text-[11px] text-muted-foreground" title={kpi.note}>{kpi.note}</p>}
-        </div>
-      ))}
+    <dl className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-px overflow-hidden rounded-lg border border-border bg-border">
+      {spec.kpis.map((kpi) => {
+        const DeltaIcon = kpi.delta === null ? null : kpi.delta > 0 ? ArrowUpRight : kpi.delta < 0 ? ArrowDownRight : Minus;
+        return (
+          <div key={kpi.key} className="flex min-w-0 flex-col bg-card px-3.5 py-3">
+            <dt className="line-clamp-2 text-[12px] leading-snug text-muted-foreground" title={kpi.label}>{kpi.label}</dt>
+            <dd className="mt-1 text-[22px] font-semibold leading-tight tracking-[-0.01em] tabular-nums text-foreground">
+              {kpi.value === null ? <span title="Không có dữ liệu">—</span> : formatValue(kpi.value, kpi.unit, kpi.kind)}
+            </dd>
+            {kpi.delta !== null && DeltaIcon && (
+              // Direction is told by the arrow and the words, never by colour alone.
+              <p className="mt-1 inline-flex items-center gap-1 text-[12px] tabular-nums text-muted-foreground">
+                <DeltaIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{kpi.delta > 0 ? 'Tăng' : kpi.delta < 0 ? 'Giảm' : 'Không đổi'} {formatValue(Math.abs(kpi.delta), kpi.delta_unit)} {kpi.delta_label}</span>
+              </p>
+            )}
+            {kpi.note && <p className="mt-0.5 line-clamp-2 text-[11.5px] text-muted-foreground" title={kpi.note}>{kpi.note}</p>}
+          </div>
+        );
+      })}
     </dl>
   );
 }
@@ -316,21 +326,26 @@ export function CopilotDataTable({ spec, maxHeight = 320 }: { spec: CopilotVisua
       : current.direction === 'desc' ? { key, direction: 'asc' } : null);
   return (
     <div className="space-y-2">
-      {filterable && (
-        <label className="flex max-w-xs items-center gap-1.5 rounded-md border border-input bg-card px-2 py-1">
-          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Lọc theo tên..."
-            aria-label={`Lọc bảng ${spec.title}`}
-            className="w-full bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground"
-          />
-        </label>
-      )}
-      <div className="overflow-auto rounded-lg border border-border" style={{ maxHeight }}>
-        <table className="w-full min-w-[420px] border-collapse text-[12px]">
-          <thead className="sticky top-0 z-10 bg-muted/90 backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {filterable && (
+          <label className="flex h-8 w-full max-w-xs items-center gap-1.5 rounded-md border border-input bg-card px-2 focus-within:border-ring/60">
+            <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Lọc theo tên..."
+              aria-label={`Lọc bảng ${spec.title}`}
+              className="w-full bg-transparent text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+        )}
+        <p className="text-[11.5px] tabular-nums text-muted-foreground" aria-live="polite">
+          {rows.length === spec.data.length ? `${spec.data.length} dòng` : `${rows.length} / ${spec.data.length} dòng`}
+        </p>
+      </div>
+      <div className="overflow-auto rounded-lg border border-border" style={{ maxHeight }} tabIndex={0}>
+        <table className="w-full min-w-[420px] border-collapse text-[12.5px]">
+          <thead className="sticky top-0 z-10 bg-muted/95 backdrop-blur">
             <tr>
               {columns.map((col) => {
                 const numeric = col.kind !== 'text' && col.kind !== 'date';
@@ -430,16 +445,20 @@ function Legend({ spec, hidden, onToggle }: { spec: CopilotVisualizationSpec; hi
   );
 }
 
-function Footer({ spec }: { spec: CopilotVisualizationSpec }) {
+function Footer({ spec, snapshot }: { spec: CopilotVisualizationSpec; snapshot?: boolean }) {
   const asOf = formatDataAsOf(spec.data_as_of);
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+    <div className="flex flex-wrap gap-x-3.5 gap-y-1 border-t border-border/70 pt-2 text-[11.5px] text-muted-foreground">
       {spec.time_range?.label && <span className="inline-flex min-w-0 items-start gap-1"><Clock3 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />{spec.time_range.label}</span>}
       <span className="inline-flex min-w-0 items-start gap-1"><MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />{spec.scope.label}</span>
       <span className="inline-flex min-w-0 items-start gap-1 break-all" title={spec.source.tools.join(', ')}>
         <Database className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />Nguồn: {spec.source.endpoints.join(', ') || spec.source.tools.join(', ')}
       </span>
-      {asOf && <span>Ảnh chụp dữ liệu lúc {asOf}</span>}
+      {asOf && (
+        <span className={cn('inline-flex min-w-0 items-start gap-1', snapshot && 'font-medium text-foreground/80')}>
+          <Camera className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />Ảnh chụp dữ liệu lúc {asOf}
+        </span>
+      )}
     </div>
   );
 }
@@ -449,17 +468,17 @@ function BudgetSimulator({ spec, onAsk, disabled }: { spec: CopilotVisualization
   const [value, setValue] = useState(() => budget?.current[budget.current.length - 1] ?? budget?.min ?? 0);
   if (!budget || !onAsk) return null;
   return (
-    <div className="rounded-lg border border-dashed border-violet-300 bg-violet-50/40 px-3 py-2 dark:border-violet-500/30 dark:bg-violet-500/5">
+    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/[0.04] px-3 py-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[12px] font-medium text-foreground">Thử mức ngân sách khác</p>
-        <span className="text-[12px] font-semibold tabular-nums text-violet-700 dark:text-violet-300">{formatValue(value, '₫', 'currency')}</span>
+        <p className="text-[12.5px] font-medium text-foreground">Thử mức ngân sách khác</p>
+        <span className="text-[13px] font-semibold tabular-nums text-primary">{formatValue(value, '₫', 'currency')}</span>
       </div>
-      <Slider className="my-2" min={budget.min} max={budget.max} step={budget.step} value={[value]}
+      <Slider className="my-2.5" min={budget.min} max={budget.max} step={budget.step} value={[value]}
         onValueChange={(v) => setValue(v[0])} thumbLabel="Ngân sách nhập sách" disabled={disabled} />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">Hệ thống sẽ mô phỏng lại bằng dữ liệu thật; giao diện không tự ước lượng.</p>
+        <p className="text-[11.5px] text-muted-foreground">Hệ thống sẽ mô phỏng lại bằng dữ liệu thật; giao diện không tự ước lượng.</p>
         <button type="button" disabled={disabled} onClick={() => onAsk(budgetPrompt([value]))}
-          className="cursor-pointer rounded-md bg-violet-600 px-2.5 py-1 text-[12px] font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
+          className="cursor-pointer rounded-md bg-primary px-2.5 py-1 text-[12.5px] font-medium text-primary-foreground hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50">
           Mô phỏng lại
         </button>
       </div>
@@ -471,15 +490,18 @@ interface CardProps {
   spec: CopilotVisualizationSpec;
   onAsk?: (question: string) => void;
   disabled?: boolean;
+  /** Reopened from history: the data is a stored snapshot, not live. */
+  snapshot?: boolean;
 }
 
-export function CopilotVisualization({ spec, onAsk, disabled }: CardProps) {
+export function CopilotVisualization({ spec, onAsk, disabled, snapshot }: CardProps) {
   const [type, setType] = useState<VizType>(spec.type);
   const [hidden, setHidden] = useState<Set<string>>(() => new Set(spec.series.filter((s) => s.hidden).map((s) => s.key)));
   const [expanded, setExpanded] = useState(false);
   const visible = spec.series.filter((s) => !hidden.has(s.key));
   const alternatives = [spec.type, ...switchableTypes(spec)].filter((t, i, all) => all.indexOf(t) === i);
   const isKpi = spec.type === 'kpi';
+  const TypeIcon = TYPE_ICONS[type];
   const toggleSeries = (key: string) => setHidden((current) => {
     const next = new Set(current);
     if (next.has(key)) next.delete(key);
@@ -502,32 +524,44 @@ export function CopilotVisualization({ spec, onAsk, disabled }: CardProps) {
 
   return (
     <section
-      className={cn('space-y-2 rounded-xl border border-border bg-card/70 p-3 shadow-sm', SERIES_VARS)}
+      className={cn('space-y-3 rounded-xl border border-border bg-card p-3.5 sm:p-4', SERIES_VARS)}
       aria-label={`${VIZ_TYPE_LABELS[type]}: ${spec.title}`}
       data-viz-id={spec.id}
       data-viz-type={type}
     >
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-[10rem] flex-1">
-          <h4 className="text-[13px] font-semibold leading-snug text-foreground">{spec.title}</h4>
-          {spec.description && <p className="text-[12px] leading-snug text-muted-foreground">{spec.description}</p>}
+      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-[12rem] flex-1 gap-2.5">
+          <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true">
+            <TypeIcon className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-[14px] font-semibold leading-snug text-foreground">{spec.title}</h4>
+            {spec.description && <p className="mt-0.5 text-[12.5px] leading-snug text-muted-foreground">{spec.description}</p>}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-1">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          {snapshot && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+              title="Số liệu được lưu tại thời điểm trả lời">
+              <Camera className="h-3 w-3" aria-hidden="true" />Dữ liệu lịch sử
+            </span>
+          )}
           {spec.is_partial && (
-            <span className="rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
               title={spec.limitations.join(' ')}>
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
               Dữ liệu chưa đầy đủ
             </span>
           )}
           {!isKpi && alternatives.length > 1 && (
-            <div className="flex items-center rounded-md border border-input p-0.5" role="radiogroup" aria-label="Kiểu hiển thị">
+            <div className="flex items-center rounded-lg border border-input bg-background p-0.5" role="radiogroup" aria-label="Kiểu hiển thị">
               {alternatives.map((t) => {
                 const Icon = TYPE_ICONS[t];
                 return (
                   <button key={t} type="button" role="radio" aria-checked={type === t} title={`Hiển thị dạng ${VIZ_TYPE_LABELS[t].toLowerCase()}`}
                     aria-label={`Dạng ${VIZ_TYPE_LABELS[t].toLowerCase()}`} onClick={() => setType(t)}
-                    className={cn('cursor-pointer rounded p-1 text-muted-foreground hover:text-foreground',
-                      type === t && 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300')}>
+                    className={cn('grid h-7 w-7 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
+                      type === t && 'bg-primary/10 text-primary')}>
                     <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 );
@@ -536,7 +570,7 @@ export function CopilotVisualization({ spec, onAsk, disabled }: CardProps) {
           )}
           {!isKpi && (
             <button type="button" onClick={() => setExpanded(true)} title="Mở rộng" aria-label={`Mở rộng ${spec.title}`}
-              className="cursor-pointer rounded-md border border-input p-1 text-muted-foreground hover:text-foreground">
+              className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-input text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
           )}
@@ -557,18 +591,21 @@ export function CopilotVisualization({ spec, onAsk, disabled }: CardProps) {
         </ul>
       )}
       {spec.limitations.length > 0 && (
-        <ul className="list-disc space-y-0.5 pl-4 text-[11px] text-muted-foreground marker:text-muted-foreground/60">
-          {spec.limitations.map((l) => <li key={l}>{l}</li>)}
-        </ul>
+        <div className="flex gap-1.5 text-[11.5px] text-muted-foreground">
+          <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+          <ul className="space-y-0.5" aria-label="Giới hạn của dữ liệu">
+            {spec.limitations.map((l) => <li key={l}>{l}</li>)}
+          </ul>
+        </div>
       )}
       <BudgetSimulator spec={spec} onAsk={onAsk} disabled={disabled} />
-      <Footer spec={spec} />
+      <Footer spec={spec} snapshot={snapshot} />
       {onAsk && spec.interactions.followups.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {spec.interactions.followups.map((q) => (
             <button key={q} type="button" disabled={disabled} onClick={() => onAsk(q)}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-0.5 text-[11px] text-foreground hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10">
-              <MessageCircleQuestion className="h-3 w-3 text-violet-500" aria-hidden="true" />{q}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[12px] text-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50">
+              <MessageCircleQuestion className="h-3 w-3 text-primary" aria-hidden="true" />{q}
             </button>
           ))}
         </div>
@@ -582,7 +619,7 @@ export function CopilotVisualization({ spec, onAsk, disabled }: CardProps) {
           </DialogHeader>
           {body(440)}
           {type !== 'table' && type !== 'pie' && <Legend spec={spec} hidden={hidden} onToggle={toggleSeries} />}
-          <Footer spec={spec} />
+          <Footer spec={spec} snapshot={snapshot} />
         </DialogContent>
       </Dialog>
     </section>
@@ -590,11 +627,16 @@ export function CopilotVisualization({ spec, onAsk, disabled }: CardProps) {
 }
 
 /** A list of visualizations, in the order given (the backend orders them KPI → charts → tables). */
-export function CopilotVisualizations({ items, onAsk, disabled }: { items: CopilotVisualizationSpec[]; onAsk?: (q: string) => void; disabled?: boolean }) {
+export function CopilotVisualizations({ items, onAsk, disabled, snapshot }: {
+  items: CopilotVisualizationSpec[];
+  onAsk?: (q: string) => void;
+  disabled?: boolean;
+  snapshot?: boolean;
+}) {
   if (!items.length) return null;
   return (
     <div className="space-y-3">
-      {items.map((spec) => <CopilotVisualization key={spec.id} spec={spec} onAsk={onAsk} disabled={disabled} />)}
+      {items.map((spec) => <CopilotVisualization key={spec.id} spec={spec} onAsk={onAsk} disabled={disabled} snapshot={snapshot} />)}
     </div>
   );
 }
@@ -602,7 +644,7 @@ export function CopilotVisualizations({ items, onAsk, disabled }: { items: Copil
 export function CopilotVisualizationNotes({ notes }: { notes: string[] }) {
   if (!notes.length) return null;
   return (
-    <ul className="space-y-0.5 text-[11px] text-muted-foreground" aria-label="Ghi chú trực quan hóa">
+    <ul className="space-y-0.5 text-[12px] text-muted-foreground" aria-label="Ghi chú trực quan hóa">
       {notes.map((note) => (
         <li key={note} className="flex gap-1.5"><BarChart3 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />{note}</li>
       ))}

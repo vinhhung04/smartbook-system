@@ -51,21 +51,21 @@ export function AIDecisionCard({
   return (
     <section
       aria-label={ariaLabel}
-      className={cn("@container rounded-xl border border-border bg-card text-foreground", className)}
+      className={cn("@container overflow-hidden rounded-xl border border-border bg-card text-foreground", className)}
     >
       <div className="space-y-3 p-4">
-        <header className="space-y-2">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            {icon}
+        <header className="space-y-2.5">
+          <p className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground">
+            {icon && <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">{icon}</span>}
             {eyebrow}
           </p>
-          <h3 className="text-[15px] font-semibold leading-snug text-foreground">{title}</h3>
+          <h3 className="text-[16px] font-semibold leading-snug tracking-[-0.005em] text-foreground">{title}</h3>
           {facts && facts.length > 0 && (
-            <dl className="grid grid-cols-2 gap-2 @md:grid-cols-4">
+            <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border @md:grid-cols-4">
               {facts.map((fact) => (
-                <div key={fact.label} className="rounded-lg border border-border bg-muted/40 px-2.5 py-2">
-                  <dt className="text-[11px] text-muted-foreground">{fact.label}</dt>
-                  <dd className="text-[15px] font-semibold leading-tight text-foreground">{fact.value}</dd>
+                <div key={fact.label} className="bg-card px-3 py-2">
+                  <dt className="text-[11.5px] text-muted-foreground">{fact.label}</dt>
+                  <dd className="text-[15px] font-semibold leading-tight tabular-nums text-foreground">{fact.value}</dd>
                 </div>
               ))}
             </dl>
@@ -75,7 +75,7 @@ export function AIDecisionCard({
         </header>
         {children}
       </div>
-      {footer && <div className="border-t border-border px-4 py-3">{footer}</div>}
+      {footer && <div className="border-t border-border bg-muted/30 px-4 py-3">{footer}</div>}
     </section>
   );
 }
