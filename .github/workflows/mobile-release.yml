@@ -1,0 +1,110 @@
+# Mobile releases (apps/mobile) through EAS — separate from the backend deploy.
+#
+# Nothing here runs on a plain push: ci.yml already typechecks/tests apps/mobile on every
+# push to hungg/main, and backend-only changes never trigger a mobile build. This workflow
+# runs only when someone asks for it:
+#   - Actions tab -> "Mobile release" -> Run workflow: build preview APK, production
+#     AAB/IPA, or publish an EAS Update (JS/styles/assets only) to a channel.
+#   - pushing a tag mobile-v* (e.g. mobile-v1.0.1): production Android build (AAB).
+# It never submits to Google Play / App Store; submission stays a manual, approved step
+# (eas submit, see docs/MOBILE_DEPLOYMENT.md).
+#
+# Requires the repository secret EXPO_TOKEN (expo.dev -> Account settings -> Access tokens).
+# EXPO_PUBLIC_API_BASE_URL comes from the EAS project's environments, not from GitHub.
+name: Mobile release
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to run
+        type: choice
+        options: [build, update]
+        default: build
+      profile:
+        description: EAS build profile / update channel
+        type: choice
+        options: [preview, production]
+        default: preview
+      platform:
+        description: Platform (build only)
+        type: choice
+        options: [android, ios, all]
+        default: android
+      message:
+        description: Update message (update only)
+        type: string
+        default: ''
+  push:
+    tags: ['mobile-v*']
+
+concurrency:
+  group: mobile-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: 10.6.2
+  NODE_VERSION: 20
+
+jobs:
+  release:
+    name: EAS ${{ inputs.action || 'build' }} (${{ inputs.profile || 'production' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Check EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Repository secret EXPO_TOKEN is not set (expo.dev -> Access tokens)."
+            exit 1
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Typecheck and unit tests
+        run: |
+          pnpm typecheck
+          pnpm test --ci
+
+      - name: EAS Build
+        if: github.event_name == 'push' || inputs.action == 'build'
+        env:
+          PROFILE: ${{ inputs.profile || 'production' }}
+          # A tag builds Android only until iOS credentials exist on EAS (Apple Developer
+          # Program); run iOS from the Actions tab once `eas credentials -p ios` is done.
+          PLATFORM: ${{ inputs.platform || 'android' }}
+        # --no-wait: the build runs on EAS; follow it on expo.dev (link in the log).
+        run: eas build --platform "$PLATFORM" --profile "$PROFILE" --non-interactive --no-wait
+
+      - name: EAS Update
+        if: github.event_name == 'workflow_dispatch' && inputs.action == 'update'
+        env:
+          CHANNEL: ${{ inputs.profile }}
+          MESSAGE: ${{ inputs.message || github.event.head_commit.message || github.sha }}
+        run: eas update --channel "$CHANNEL" --environment "$CHANNEL" --message "$MESSAGE" --non-interactive

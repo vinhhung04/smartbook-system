@@ -1,0 +1,38 @@
+# Files EAS Build uploads from this monorepo for apps/mobile. When this file exists EAS
+# uses it instead of .gitignore, so it repeats the .gitignore rules that matter here.
+# The agent skill folders contain Windows junctions that EAS cannot copy (EPERM symlink).
+.claude/
+.agents/
+.codegraph/
+.github/skills/
+.worktrees/
+
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+build/
+coverage/
+*.log
+__pycache__/
+*.zip
+*.tar
+*.gz
+*.db
+*.sqlite
+ai_service_model_cache/
+ai_service_cloakbrowser_cache/
+ollama_data/
+services/ai-service/eval/.cache/
+services/borrow-service/prisma/simulation/output/
+
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem

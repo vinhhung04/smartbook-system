@@ -1,25 +1,36 @@
 {
   "expo": {
-    "name": "SmartBook Picking",
-    "slug": "mobile",
+    "name": "SmartBook",
+    "slug": "smartbook",
     "scheme": "smartbookpicking",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.smartbook.picking",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.smartbook.picking",
-      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#1D1A4A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,8 +45,26 @@
           "recordAudioAndroid": false
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain",
+          "backgroundColor": "#1D1A4A"
+        }
+      ],
       "expo-status-bar",
       "expo-font"
-    ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/e075b2db-bf39-49db-a4e2-ccc0851f7f46"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e075b2db-bf39-49db-a4e2-ccc0851f7f46"
+      }
+    },
+    "owner": "hungxh2982004"
   }
 }

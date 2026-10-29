@@ -12,17 +12,20 @@
     "@expo/metro-runtime": "~58.0.15",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~58.0.20",
+    "expo": "~58.0.21",
     "expo-blur": "~58.0.5",
-    "expo-camera": "~58.0.13",
-    "expo-constants": "~58.0.13",
-    "expo-font": "^58.0.10",
+    "expo-camera": "~58.0.14",
+    "expo-constants": "~58.0.14",
+    "expo-dev-client": "~58.0.17",
+    "expo-font": "^58.0.11",
     "expo-haptics": "~58.0.7",
     "expo-linear-gradient": "~58.0.3",
-    "expo-linking": "~58.0.14",
-    "expo-router": "~58.0.27",
+    "expo-linking": "~58.0.15",
+    "expo-router": "~58.0.28",
     "expo-secure-store": "~58.0.2",
+    "expo-splash-screen": "~58.0.12",
     "expo-status-bar": "~58.0.4",
+    "expo-updates": "~58.0.19",
     "moti": "^0.30.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -44,7 +47,7 @@
     "babel-preset-expo": "^58.0.21",
     "eslint": "^9.39.1",
     "eslint-config-expo": "~58.0.4",
-    "jest-expo": "~58.0.12",
+    "jest-expo": "~58.0.13",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -65,5 +68,12 @@
       "/.expo/",
       "/dist/"
     ]
+  },
+  "expo": {
+    "install": {
+      "exclude": [
+        "@types/react"
+      ]
+    }
   }
 }
