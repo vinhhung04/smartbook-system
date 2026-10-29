@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { AlertTriangle, Sparkles } from "lucide-react";
+import { useReducedMotion } from "motion/react";
+import { AlertTriangle, FileText } from "lucide-react";
 import { toast } from "sonner";
-import { PageWrapper, FadeItem } from "../../motion-utils";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
-import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { EASE_OUT, MOTION_OK, gsap, useGSAP } from "@/lib/gsap";
+import { OCR_STATUS_META } from "@/lib/book-ocr";
+import type { FieldOrigin } from "./field";
+import { REVIEW_CARD_IDS } from "./review-ids";
+import { StudioHeader, StudioSection, type SessionTone, type StudioStep } from "./studio-ui";
+import { useMediaQuery, WIDE_WORKSPACE_QUERY } from "./use-media-query";
+import type { SaveIssue } from "./sticky-footer";
 import { ExtractionEvidencePanel } from './extraction-evidence-panel';
 import { aiService, type EnrichMode, type LookupBookByIsbnResponse, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
@@ -88,6 +92,11 @@ export function AIImportPage() {
   const [confirmEntityLoading, setConfirmEntityLoading] = useState(false);
   const [confirmDuplicateAction, setConfirmDuplicateAction] = useState<{ action: string; candidate?: DuplicateReview["candidates"][number] } | null>(null);
   const [confirmDuplicateActionLoading, setConfirmDuplicateActionLoading] = useState(false);
+  // Presentation-only state of the studio: none of it changes what can be saved.
+  const [attemptedSave, setAttemptedSave] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [ocrCancelled, setOcrCancelled] = useState(false);
+  const wideWorkspace = useMediaQuery(WIDE_WORKSPACE_QUERY);
 
   // Loaded once for two AI-assist features: matching category suggestions against the
   // real catalog, and warning about likely duplicate books before save.
@@ -188,7 +197,6 @@ export function AIImportPage() {
       },
     ];
   }, [form.authorsText, form.description, form.isbn, form.isbn10, form.isbn13, form.title, aiFieldCandidates.description]);
-  const completeSignalCount = reviewSignals.filter((signal) => signal.complete).length;
   const authorityNeedsReview = Boolean(
     reconciliationDraft
       && (reconciliationDraft.decisions.length === 0 || reconciliationDraft.decisions.some((item) => item.status === "PENDING")),
@@ -315,6 +323,7 @@ export function AIImportPage() {
   }
 
   async function handleOcrScan() {
+    setOcrCancelled(false);
     const outcome = await ocr.scan();
     if (!outcome) return;
     if (outcome.reused) {
@@ -574,7 +583,7 @@ export function AIImportPage() {
         mode: "quality_check",
       });
       setQualityCheckResult({ provider: result.ai_provider, warnings: result.qualityWarnings });
-      if (result.qualityWarnings.length === 0) toast.success("Metadata đạt chất lượng tốt");
+      if (result.qualityWarnings.length === 0) toast.success("AI không đưa ra cảnh báo chất lượng nào");
       else toast.warning(result.qualityWarnings[0]);
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Công cụ AI gặp lỗi, vui lòng thử lại"));
@@ -584,6 +593,7 @@ export function AIImportPage() {
   }
 
   async function handleSave() {
+    setAttemptedSave(true); // reveals inline errors on the required fields; the checks below are unchanged
     if (lookupData?.intelligence && !reconciliationDraft) {
       toast.error('Cần có bản nháp kiểm duyệt trước khi lưu kết quả trích xuất.');
       return;
@@ -698,6 +708,7 @@ export function AIImportPage() {
       setIsbnInput("");
       setConfirmDuplicateSave(false);
       setUserEditedFields(new Set());
+      setAttemptedSave(false);
       ocr.reset();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Lưu thông tin sách thất bại"));
@@ -726,229 +737,342 @@ export function AIImportPage() {
     setForm(EMPTY_FORM);
     setIsbnInput("");
     setUserEditedFields(new Set());
+    setAttemptedSave(false);
+    setOcrCancelled(false);
     ocr.reset();
   }
 
-  return (
-    <PageWrapper className="mx-auto max-w-6xl space-y-6 pb-24">
-      <FadeItem>
-        <div className="rounded-2xl border border-border/80 bg-card p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] dark:shadow-none sm:p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-cyan-700 dark:text-cyan-300">AI-assisted cataloging</p>
-          <PageHeader
-            className="mt-2"
-            icon={Sparkles}
-            title="Nhập sách qua AI"
-            description="Quét mã vạch hoặc nhập ISBN để tra cứu metadata, sau đó AI tự tạo đề xuất mô tả, tóm tắt, từ khóa và thể loại cho admin duyệt."
-            iconBg="bg-cyan-100 dark:bg-cyan-500/15"
-            iconColor="text-cyan-600 dark:text-cyan-400"
-            iconSize="lg"
-          />
-        </div>
-      </FadeItem>
+  // Ask before discarding real work; an untouched form resets silently.
+  function requestReset() {
+    const touched = Object.keys(EMPTY_FORM).some((key) => {
+      const field = key as keyof EditableBookForm;
+      return (form[field] ?? "") !== (EMPTY_FORM[field] ?? "");
+    }) || Object.keys(ocr.slots).length > 0;
+    if (touched) setConfirmReset(true);
+    else handleReset();
+  }
 
-      <FadeItem>
-        <LookupSearchCard
-          isbnInput={isbnInput}
-          onIsbnInputChange={setIsbnInput}
-          onLookup={() => void handleLookup()}
-          onScanClick={() => setShowScanner(true)}
-          lookupLoading={lookupLoading}
-          hasLookupData={Boolean(lookupData)}
-        />
-      </FadeItem>
+  function goToReview(cardId: string) {
+    setActiveWorkspaceTab("review");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById(cardId)?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth", block: "start" });
+      });
+    });
+  }
 
-      {ocr.availability === "AVAILABLE" && ocr.capabilities ? (
-        <FadeItem>
-          <ImageOcrCard
+  // ── Studio presentation (derived; never feeds back into save rules) ─────────
+  const ocrDecisionCount = ocr.result && !ocr.resultStale
+    ? Object.values(ocr.result.proposals).filter((proposal) => ["CONFLICTED", "REVIEW_REQUIRED", "INVALID"].includes(proposal.status)).length
+    : 0;
+
+  const origins = useMemo(() => {
+    const map: Partial<Record<keyof EditableBookForm, FieldOrigin>> = {};
+    (Object.keys(form) as Array<keyof EditableBookForm>).forEach((field) => {
+      const value = String(form[field] ?? "").trim();
+      if (!value) return;
+      if (userEditedFields.has(field)) {
+        map[field] = { label: "Bạn đã sửa", tone: "edited" };
+        return;
+      }
+      const proposal = ocr.result?.proposals[field === "isbn13" ? "isbn" : field];
+      if (proposal && proposal.value === form[field]) {
+        map[field] = { label: OCR_STATUS_META[proposal.status].label, tone: proposal.status === "CORROBORATED" ? "ocr" : "ocr-weak" };
+        return;
+      }
+      if (lookupData?.found && !ocr.result) map[field] = { label: "Từ tra cứu", tone: "lookup" };
+    });
+    return map;
+  }, [form, userEditedFields, ocr.result, lookupData]);
+
+  // Mirrors handleSave's refusals, in the same order, so the bar never promises a save that will be refused.
+  const saveBlockers: SaveIssue[] = [];
+  if (lookupData) {
+    if (lookupData.intelligence && !reconciliationDraft) saveBlockers.push({ key: "draft", label: "Chưa có bản nháp kiểm duyệt", onGo: () => goToReview(REVIEW_CARD_IDS.authority) });
+    if (!normalizeIsbnInput(form.isbn || isbnInput)) saveBlockers.push({ key: "isbn", label: "Thiếu ISBN", onGo: () => focusField("isbn") });
+    if (!form.title.trim()) saveBlockers.push({ key: "title", label: "Thiếu tên sách", onGo: () => focusField("title") });
+    if (catalogDuplicateNeedsReview) saveBlockers.push({ key: "catalog-dup", label: "Xác nhận trùng catalog", onGo: () => goToReview(REVIEW_CARD_IDS.duplicate) });
+    if (reconciliationDraft?.decisions.some((item) => item.status === "PENDING")) saveBlockers.push({ key: "authority", label: "Quyết định chuẩn hóa còn chờ", onGo: () => goToReview(REVIEW_CARD_IDS.authority) });
+    if (duplicateNeedsReview) saveBlockers.push({ key: "duplicate", label: "Xử lý trùng lặp & ấn bản", onGo: () => goToReview(REVIEW_CARD_IDS.duplicate) });
+  }
+  const saveAdvisories: SaveIssue[] = [];
+  if (lookupData) {
+    if (evidenceNeedsReview) saveAdvisories.push({ key: "evidence", label: `${lookupData.conflicts?.length || 0} trường nguồn ghi khác nhau`, onGo: () => goToReview(REVIEW_CARD_IDS.evidence) });
+    if (ocrDecisionCount) saveAdvisories.push({ key: "ocr", label: `${ocrDecisionCount} trường OCR cần quyết định`, onGo: () => goToReview(REVIEW_CARD_IDS.ocr) });
+    reviewSignals.filter((signal) => !signal.complete && ["authors", "description"].includes(signal.fieldId))
+      .forEach((signal) => saveAdvisories.push({ key: signal.fieldId, label: `Chưa có ${signal.label.toLowerCase()}`, onGo: () => focusField(signal.fieldId) }));
+  }
+
+  const steps: StudioStep[] = [
+    { label: "Nguồn dữ liệu", hint: "ISBN hoặc ảnh sách", state: lookupData || lookupLoading || ocr.scanning ? "done" : "active" },
+    { label: "Trích xuất", hint: "Tra cứu, đọc ảnh, đối chiếu", state: lookupLoading || ocr.scanning ? "active" : lookupData ? "done" : "todo" },
+    { label: "Kiểm duyệt", hint: "Xung đột, trùng lặp, chuẩn hóa", state: !lookupData || lookupLoading ? "todo" : reviewIssueCount || ocrDecisionCount ? "active" : "done" },
+    { label: "Lưu", hint: "Chỉ khi bạn bấm Lưu", state: !lookupData || lookupLoading ? "todo" : saving || (!reviewIssueCount && !ocrDecisionCount) ? "active" : "todo" },
+  ];
+  const session: { label: string; tone: SessionTone } = saving ? { label: "Đang lưu", tone: "busy" }
+    : lookupLoading ? { label: "Đang tra cứu ISBN", tone: "busy" }
+    : ocr.scanning ? { label: "AI đang đọc ảnh", tone: "busy" }
+    : !lookupData ? { label: "Chưa bắt đầu", tone: "idle" }
+    : saveBlockers.length ? { label: `Đang kiểm duyệt · ${saveBlockers.length} việc bắt buộc`, tone: "review" }
+    : { label: "Sẵn sàng lưu", tone: "ready" };
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  // Entrance once; afterwards only a new lookup/scan result moves. Transform/opacity only,
+  // reduced motion gets the final layout. Motion components never wrap these nodes.
+  useGSAP(() => {
+    const mm = gsap.matchMedia();
+    mm.add(MOTION_OK, () => {
+      gsap.from("[data-reveal]", { autoAlpha: 0, y: 10, duration: 0.6, stagger: 0.07, ease: EASE_OUT });
+    });
+    return () => mm.revert();
+  }, { scope: rootRef });
+  useGSAP(() => {
+    if (!lookupData || !workspaceRef.current) return;
+    const mm = gsap.matchMedia();
+    mm.add(MOTION_OK, () => {
+      gsap.from(workspaceRef.current, { autoAlpha: 0, y: 12, duration: 0.45, ease: EASE_OUT, clearProps: "all" });
+    });
+    return () => mm.revert();
+  }, { dependencies: [lookupData], revertOnUpdate: true });
+
+  const footer = (
+    <StickyFooter
+      blockers={saveBlockers}
+      advisories={saveAdvisories}
+      onReset={requestReset}
+      onSave={() => void handleSave()}
+      saving={saving}
+      saveDisabled={duplicateMatches.length > 0 && !confirmDuplicateSave}
+    />
+  );
+
+  // A new lookup/scan result moves the focus of work from the sources to the review workspace.
+  useEffect(() => {
+    if (!lookupData) return;
+    const frame = window.requestAnimationFrame(() => {
+      workspaceRef.current?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [lookupData, shouldReduceMotion]);
+
+  const profile = lookupData ? (
+    <BookProfileAside
+      lookup={lookupData}
+      form={form}
+      signals={reviewSignals}
+      reviewIssueCount={reviewIssueCount}
+      onThumbnailChange={(value) => { markUserEdited("thumbnail"); setForm((prev) => ({ ...prev, thumbnail: value })); }}
+      onFocusField={focusField}
+    />
+  ) : null;
+
+  const bookInfo = (
+    <BookInfoTab
+      form={form}
+      onFieldChange={(field, value) => { markUserEdited(field); setForm((prev) => ({ ...prev, [field]: value })); }}
+      aiFieldCandidates={aiFieldCandidates}
+      aiFieldLoading={aiFieldLoading}
+      onRegenerateField={(field) => void regenerateAiField(field)}
+      onApplyField={applyAiFieldCandidate}
+      onApplyAllFields={applyAllAiFieldCandidates}
+      aiSuggestionCount={aiSuggestionCount}
+      qualityCheckLoading={qualityCheckLoading}
+      qualityCheckResult={qualityCheckResult}
+      onQualityCheck={() => void handleQualityCheck()}
+      onDismissQualityCheck={() => setQualityCheckResult(null)}
+      postIsbnSuggestions={postIsbnSuggestions}
+      hasPostIsbnSuggestions={hasPostIsbnSuggestions}
+      origins={origins}
+      showRequired={attemptedSave}
+    />
+  );
+
+  const review = lookupData ? (
+    <div className="space-y-3">
+      {lookupData.intelligence ? <ExtractionEvidencePanel bundle={lookupData.intelligence} draft={reconciliationDraft} onDecide={handleAuthorityDecision} /> : null}
+      <ReviewTab
+        lookupData={lookupData}
+        reconciliationDraft={reconciliationDraft}
+        duplicateReview={duplicateReview}
+        duplicateMatches={duplicateMatches}
+        confirmDuplicateSave={confirmDuplicateSave}
+        onConfirmDuplicateSave={setConfirmDuplicateSave}
+        activeReviewId={activeReviewId}
+        onToggleReview={(id) => setActiveReviewId((current) => current === id ? null : id)}
+        duplicateNeedsReview={duplicateNeedsReview}
+        authorityNeedsReview={authorityNeedsReview}
+        evidenceNeedsReview={evidenceNeedsReview}
+        reviewIssueCount={reviewIssueCount}
+        sourceCount={sourceCount}
+        onAuthorityDecision={(field, status) => void handleAuthorityDecision(field, status)}
+        onCreateAuthorityEntity={handleCreateAuthorityEntity}
+        onDuplicateAction={handleDuplicateAction}
+        ocrDecisionCount={ocrDecisionCount}
+        ocrPanel={ocr.result ? (
+          <OcrReviewPanel
+            result={ocr.result}
+            stale={ocr.resultStale}
             slots={ocr.slots}
-            preparing={ocr.preparing}
-            scanning={ocr.scanning}
-            error={ocr.error}
-            maxImages={ocr.capabilities.maxImages}
-            onSelect={(kind, file) => void ocr.selectFile(kind, file)}
-            onRemove={ocr.removeFile}
-            onScan={() => void handleOcrScan()}
-            onCancel={ocr.cancel}
-            hasResult={Boolean(ocr.result)}
+            form={form}
+            userEdited={userEditedFields}
+            onApply={handleOcrApply}
+            onApplySafe={handleOcrApplySafe}
+            onApplySingleSource={handleOcrApplySingleSource}
+            onDismiss={ocr.clearResult}
           />
-        </FadeItem>
-      ) : ocr.availability !== "AVAILABLE" ? (
-        <FadeItem>
-          <OcrAvailabilityNotice availability={ocr.availability} onRetry={() => void ocr.retryCapabilities()} />
-        </FadeItem>
-      ) : null}
+        ) : undefined}
+      />
+    </div>
+  ) : null;
 
-      {ocr.result ? (
-        <OcrReviewPanel
-          result={ocr.result}
-          stale={ocr.resultStale}
-          slots={ocr.slots}
-          form={form}
-          userEdited={userEditedFields}
-          onApply={handleOcrApply}
-          onApplySafe={handleOcrApplySafe}
-          onApplySingleSource={handleOcrApplySingleSource}
-          onDismiss={ocr.clearResult}
-        />
-      ) : null}
+  return (
+    <div ref={rootRef} className="mx-auto max-w-[1440px] space-y-5 p-4 pb-10 sm:p-6 lg:p-8">
+      <StudioHeader session={session} steps={steps} ocrAvailability={ocr.availability} />
 
-      <AnimatePresence mode="wait" initial={false}>
-      {pipelineEnabled && <section className="space-y-2 rounded-xl border bg-card p-4">
-        <label htmlFor="metadataSource" className="text-sm font-semibold">Trích xuất từ nội dung sách</label>
-        <p className="text-sm text-muted-foreground">Dán thông tin từ trang sách. ISBN ở ô trên là tùy chọn để đối chiếu ấn bản.</p>
-        <select aria-label="Định dạng nội dung" value={sourceType} onChange={e => setSourceType(e.target.value as 'text' | 'html')} className="rounded border bg-background p-2 text-sm">
-          <option value="text">Văn bản</option><option value="html">HTML</option>
-        </select>
-        <Textarea id="metadataSource" value={sourceText} onChange={e => setSourceText(e.target.value)} maxLength={100000} rows={5} placeholder="Tên sách, tác giả, thông tin xuất bản, mô tả…" />
-        <button type="button" disabled={lookupLoading || !sourceText.trim()} onClick={() => void handleLookup(undefined, true)} className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{lookupLoading ? 'Đang trích xuất…' : 'Trích xuất thông tin'}</button>
-      </section>}
-      {lookupData?.intelligence && <ExtractionEvidencePanel bundle={lookupData.intelligence} draft={reconciliationDraft} onDecide={handleAuthorityDecision} />}
-      {lookupLoading ? (
-        <motion.div key="lookup-loading" initial={shouldReduceMotion ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={shouldReduceMotion ? undefined : { opacity: 0, y: -4 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}>
-          <IsbnLookupProgress />
-        </motion.div>
-      ) : lookupData ? (
-          <motion.div
-            key={`lookup-result-${lookupData.isbn || isbnInput}`}
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -4 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <section className="rounded-lg border border-border/80 bg-card p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] sm:p-6 dark:shadow-none">
-              {manualMode ? (
-                <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    {lookupData.reason === "OCR_WITHOUT_PROVIDER_RECORD" || lookupData.reason === "OCR_LOOKUP_MISMATCH" ? (
-                      <>
-                        <p className="text-[13px] font-semibold text-foreground">
-                          {lookupData.reason === "OCR_LOOKUP_MISMATCH"
-                            ? "Bản ghi tra cứu ISBN không khớp sách trong ảnh — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh, hãy kiểm tra lại ISBN"
-                            : "Chưa có metadata từ nhà cung cấp — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh"}
-                        </p>
-                        <p className="mt-0.5 text-[13px] text-muted-foreground">{form.isbn.trim() ? "Kiểm tra lại từng trường với sách thật trước khi lưu." : "Ảnh không có ISBN hợp lệ — nhập ISBN in trên sách để lưu (ISBN là bắt buộc)."}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-[13px] font-semibold text-foreground">Không tìm thấy metadata từ nhà cung cấp</p>
-                        <p className="mt-0.5 text-[13px] text-muted-foreground">Vui lòng nhập tay thông tin sách — ISBN đã được giữ lại.</p>
-                      </>
-                    )}
-                    <button type="button" onClick={() => focusField("title")} className="mt-1.5 inline-flex cursor-pointer items-center text-[12px] font-semibold text-warning underline decoration-warning/50 underline-offset-4 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/30">
-                      Chuyển tới ô nhập tay
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              {lookupData?.reason === "barcode is not a valid ISBN but marketplace lookup attempted" ? (
-                <div className="mb-4 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3.5">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-foreground">Mã quét có thể không phải ISBN chuẩn</p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">Có thể là barcode bán lẻ — kết quả được tìm từ nhà sách trực tuyến.</p>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 gap-8 pb-24 lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-10">
-                <BookProfileAside
-                  lookup={lookupData}
-                  form={form}
-                  signals={reviewSignals}
-                  onThumbnailChange={(value) => { markUserEdited("thumbnail"); setForm((prev) => ({ ...prev, thumbnail: value })); }}
-                  onFocusField={focusField}
+      <div data-reveal>
+        <StudioSection
+          id="import-sources"
+          step={1}
+          title="Bắt đầu từ ISBN hoặc ảnh sách"
+          description="Hai cách cùng dẫn vào một không gian kiểm duyệt. Tra ISBN mới sẽ thay biểu mẫu; quét ảnh giữ lại trường bạn đã tự sửa."
+        >
+          <div className="space-y-5">
+            <LookupSearchCard
+              isbnInput={isbnInput}
+              onIsbnInputChange={setIsbnInput}
+              onLookup={() => void handleLookup()}
+              onScanClick={() => setShowScanner(true)}
+              lookupLoading={lookupLoading}
+              hasLookupData={Boolean(lookupData)}
+            />
+            <div className="border-t border-border pt-5">
+              {ocr.availability === "AVAILABLE" && ocr.capabilities ? (
+                <ImageOcrCard
+                  slots={ocr.slots}
+                  preparing={ocr.preparing}
+                  scanning={ocr.scanning}
+                  error={ocr.error}
+                  maxImages={ocr.capabilities.maxImages}
+                  maxFileBytes={ocr.capabilities.maxFileBytes}
+                  onSelect={(kind, file) => void ocr.selectFile(kind, file)}
+                  onRemove={ocr.removeFile}
+                  onScan={() => void handleOcrScan()}
+                  onCancel={() => { ocr.cancel(); setOcrCancelled(true); }}
+                  hasResult={Boolean(ocr.result)}
+                  stale={ocr.resultStale}
+                  cancelled={ocrCancelled}
                 />
+              ) : ocr.availability !== "AVAILABLE" ? (
+                <OcrAvailabilityNotice availability={ocr.availability} onRetry={() => void ocr.retryCapabilities()} />
+              ) : null}
+            </div>
+          </div>
 
-                <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="min-w-0 gap-0">
-                  <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border bg-transparent p-0 sm:gap-6" aria-label="Không gian làm việc nhập sách">
-                    <TabsTrigger
-                      value="book"
-                      aria-label="Thông tin sách và AI hỗ trợ"
-                      className="h-12 min-w-fit rounded-none border-x-0 border-b-2 border-t-0 border-transparent bg-transparent px-3 text-[13px] shadow-none data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:text-cyan-700 data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-cyan-300"
-                    >
-                      <span className="sm:hidden">Sách</span><span className="hidden sm:inline">Thông tin sách</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="review"
-                      aria-label={`Kiểm duyệt, ${reviewIssueCount} mục cần xử lý`}
-                      className="h-12 min-w-fit rounded-none border-x-0 border-b-2 border-t-0 border-transparent bg-transparent px-3 text-[13px] shadow-none data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:text-cyan-700 data-[state=active]:shadow-none dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-cyan-300"
-                    >
-                      <span className="sm:hidden">Duyệt</span><span className="hidden sm:inline">Kiểm duyệt</span>
-                      <StatusBadge label={String(reviewIssueCount)} variant={reviewIssueCount ? "warning" : "success"} />
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="review" className="mt-0 pt-6">
-                    <motion.div initial={shouldReduceMotion ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }}>
-                      <ReviewTab
-                        lookupData={lookupData}
-                        reconciliationDraft={reconciliationDraft}
-                        duplicateReview={duplicateReview}
-                        duplicateMatches={duplicateMatches}
-                        confirmDuplicateSave={confirmDuplicateSave}
-                        onConfirmDuplicateSave={setConfirmDuplicateSave}
-                        activeReviewId={activeReviewId}
-                        onToggleReview={(id) => setActiveReviewId((current) => current === id ? null : id)}
-                        duplicateNeedsReview={duplicateNeedsReview}
-                        authorityNeedsReview={authorityNeedsReview}
-                        evidenceNeedsReview={evidenceNeedsReview}
-                        reviewIssueCount={reviewIssueCount}
-                        sourceCount={sourceCount}
-                        onAuthorityDecision={(field, status) => void handleAuthorityDecision(field, status)}
-                        onCreateAuthorityEntity={handleCreateAuthorityEntity}
-                        onDuplicateAction={handleDuplicateAction}
-                      />
-                    </motion.div>
-                  </TabsContent>
-
-                  <TabsContent value="book" className="mt-0 pt-6">
-                    <motion.div initial={shouldReduceMotion ? false : { opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: shouldReduceMotion ? 0 : 0.18, ease: "easeOut" }} className="min-w-0">
-                      <BookInfoTab
-                        form={form}
-                        onFieldChange={(field, value) => { markUserEdited(field); setForm((prev) => ({ ...prev, [field]: value })); }}
-                        aiFieldCandidates={aiFieldCandidates}
-                        aiFieldLoading={aiFieldLoading}
-                        onRegenerateField={(field) => void regenerateAiField(field)}
-                        onApplyField={applyAiFieldCandidate}
-                        onApplyAllFields={applyAllAiFieldCandidates}
-                        aiSuggestionCount={aiSuggestionCount}
-                        qualityCheckLoading={qualityCheckLoading}
-                        qualityCheckResult={qualityCheckResult}
-                        onQualityCheck={() => void handleQualityCheck()}
-                        onDismissQualityCheck={() => setQualityCheckResult(null)}
-                        postIsbnSuggestions={postIsbnSuggestions}
-                        hasPostIsbnSuggestions={hasPostIsbnSuggestions}
-                      />
-                    </motion.div>
-                  </TabsContent>
-                </Tabs>
+          {pipelineEnabled ? (
+            <details className="group mt-5 rounded-xl border border-border px-4 py-3">
+              <summary className="flex min-h-8 cursor-pointer items-center gap-2 text-[13.5px] font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+                <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Trích xuất từ nội dung sách (văn bản / HTML)
+              </summary>
+              <div className="mt-3 space-y-2.5">
+                <p className="text-[12.5px] text-muted-foreground">Dán thông tin từ trang sách. ISBN ở ô tra cứu là tùy chọn để đối chiếu ấn bản.</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label htmlFor="metadataSourceType" className="text-[12px] text-muted-foreground">Định dạng</label>
+                  <select id="metadataSourceType" aria-label="Định dạng nội dung" value={sourceType} onChange={e => setSourceType(e.target.value as 'text' | 'html')} className="h-9 rounded-lg border border-border bg-input-background px-2 text-[13px] text-foreground">
+                    <option value="text">Văn bản</option><option value="html">HTML</option>
+                  </select>
+                </div>
+                <label htmlFor="metadataSource" className="sr-only">Nội dung sách</label>
+                <Textarea id="metadataSource" value={sourceText} onChange={e => setSourceText(e.target.value)} maxLength={100000} rows={5} placeholder="Tên sách, tác giả, thông tin xuất bản, mô tả…" />
+                <button type="button" disabled={lookupLoading || !sourceText.trim()} onClick={() => void handleLookup(undefined, true)} className="inline-flex min-h-10 cursor-pointer items-center rounded-lg bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-55">
+                  {lookupLoading ? 'Đang trích xuất…' : 'Trích xuất thông tin'}
+                </button>
               </div>
+            </details>
+          ) : null}
+        </StudioSection>
+      </div>
 
-              <StickyFooter
-                completeSignalCount={completeSignalCount}
-                reviewIssueCount={reviewIssueCount}
-                catalogDuplicateNeedsReview={catalogDuplicateNeedsReview}
-                onGoToReview={() => setActiveWorkspaceTab("review")}
-                onReset={handleReset}
-                onSave={() => void handleSave()}
-                saving={saving}
-                saveDisabled={duplicateMatches.length > 0 && !confirmDuplicateSave}
-              />
-            </section>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="lookup-empty"
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <EmptyLookupState />
-          </motion.div>
+      {lookupLoading ? (
+        <IsbnLookupProgress />
+      ) : lookupData ? (
+        <div ref={workspaceRef} className="space-y-4">
+          {manualMode ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-300/70 bg-amber-50/70 px-4 py-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                {lookupData.reason === "OCR_WITHOUT_PROVIDER_RECORD" || lookupData.reason === "OCR_LOOKUP_MISMATCH" ? (
+                  <>
+                    <p className="text-[13px] font-semibold text-foreground">
+                      {lookupData.reason === "OCR_LOOKUP_MISMATCH"
+                        ? "Bản ghi tra cứu ISBN không khớp sách trong ảnh — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh, hãy kiểm tra lại ISBN"
+                        : "Chưa có metadata từ nhà cung cấp — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh"}
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">{form.isbn.trim() ? "Kiểm tra lại từng trường với sách thật trước khi lưu." : "Ảnh không có ISBN hợp lệ — nhập ISBN in trên sách để lưu (ISBN là bắt buộc)."}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13px] font-semibold text-foreground">Không tìm thấy metadata từ nhà cung cấp</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">Vui lòng nhập tay thông tin sách — ISBN đã được giữ lại.</p>
+                  </>
+                )}
+                <button type="button" onClick={() => focusField("title")} className="mt-1.5 inline-flex min-h-8 cursor-pointer items-center text-[12.5px] font-semibold text-amber-800 underline decoration-amber-500/50 underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-ring dark:text-amber-300">
+                  Chuyển tới ô nhập tay
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {lookupData?.reason === "barcode is not a valid ISBN but marketplace lookup attempted" ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-300/70 bg-amber-50/70 px-4 py-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold text-foreground">Mã quét có thể không phải ISBN chuẩn</p>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">Có thể là barcode bán lẻ — kết quả được tìm từ nhà sách trực tuyến.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {wideWorkspace ? (
+            // Paperless-style two panes: the record on the left, every pending decision on the right.
+            <div className="grid grid-cols-[minmax(0,1fr)_minmax(380px,440px)] items-start gap-5">
+              <div className="min-w-0 space-y-4">
+                {profile}
+                {bookInfo}
+                {footer}
+              </div>
+              {/* Sticks just under the top bar and ends above the viewport bottom (the scroll
+                  container is <main>, below a 52px top bar), so its last card is always reachable;
+                  the save bar lives under the form column and never covers it. */}
+              <aside aria-label="Kiểm duyệt" className="sticky top-4 max-h-[calc(100dvh-6rem)] overflow-y-auto overscroll-contain rounded-2xl border border-border bg-muted/30 p-3 [scrollbar-width:thin]">
+                {review}
+              </aside>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {profile}
+              <Tabs value={activeWorkspaceTab} onValueChange={(value) => setActiveWorkspaceTab(value as "book" | "review")} className="min-w-0 gap-0">
+                <TabsList className="grid h-auto w-full grid-cols-2 rounded-xl bg-muted p-1" aria-label="Không gian làm việc nhập sách">
+                  <TabsTrigger value="book" className="min-h-10 rounded-lg text-[13px]">Thông tin sách</TabsTrigger>
+                  <TabsTrigger value="review" className="min-h-10 gap-1.5 rounded-lg text-[13px]" aria-label={`Kiểm duyệt, ${reviewIssueCount + (ocrDecisionCount ? 1 : 0)} nhóm cần xử lý`}>
+                    Kiểm duyệt
+                    {reviewIssueCount + (ocrDecisionCount ? 1 : 0) ? (
+                      <span className="rounded-md bg-amber-100 px-1.5 text-[11.5px] font-semibold tabular-nums text-amber-900 dark:bg-amber-500/20 dark:text-amber-200">{reviewIssueCount + (ocrDecisionCount ? 1 : 0)}</span>
+                    ) : null}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="book" className="mt-4">{bookInfo}</TabsContent>
+                <TabsContent value="review" className="mt-4">{review}</TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {wideWorkspace ? null : footer}
+        </div>
+      ) : (
+        <div data-reveal><EmptyLookupState /></div>
       )}
-      </AnimatePresence>
 
       <BarcodeScanModal
         isOpen={showScanner}
@@ -964,8 +1088,8 @@ export function AIImportPage() {
       <ConfirmDialog
         open={confirmEntityField !== null}
         onOpenChange={(open) => { if (!open) setConfirmEntityField(null); }}
-        title="Tạo entity mới?"
-        description="Entity mới chỉ được tạo khi bạn chấp nhận field này. Bạn có muốn tiếp tục?"
+        title="Thêm mục mới vào danh mục?"
+        description="Trường này sẽ được chấp nhận, và mục mới (tác giả, NXB hoặc thể loại) chỉ được tạo trong danh mục khi bạn bấm Lưu sách. Tiếp tục?"
         onConfirm={confirmCreateAuthorityEntity}
         loading={confirmEntityLoading}
       />
@@ -979,6 +1103,15 @@ export function AIImportPage() {
         onConfirm={confirmRunDuplicateAction}
         loading={confirmDuplicateActionLoading}
       />
-    </PageWrapper>
+
+      <ConfirmDialog
+        open={confirmReset}
+        onOpenChange={setConfirmReset}
+        title="Đặt lại phiên nhập sách?"
+        description="Biểu mẫu, ảnh đã chọn và kết quả đọc ảnh sẽ bị xóa. Chưa có gì được lưu vào catalog."
+        variant="destructive"
+        onConfirm={() => { handleReset(); setConfirmReset(false); }}
+      />
+    </div>
   );
 }
