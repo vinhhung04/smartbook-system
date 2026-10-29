@@ -106,4 +106,19 @@ function reconcileMetadata(raw, authorities) {
   return { normalized, authorNormalization, publisherNormalization, categoryNormalization, authorityMatches: { authors: authorNormalization, publisher: publisherNormalization, categories: categoryNormalization }, qualityWarnings };
 }
 
-module.exports = { canonicalKey, cleanDisplayValue, similarity, matchAuthority, normalizeCategory, normalizeLanguage, reconcileMetadata };
+// Authority fields whose every supplied value already resolves to a catalog
+// entry (exact normalized name, approved alias or internal taxonomy) need no
+// staff decision. One new or merely similar value keeps the field for review.
+function exactAuthorityFields(result) {
+  const allMatched = (items) => items.length > 0 && items.every((item) => item.status === 'AUTO_MATCH');
+  const authors = (result.authorNormalization || []).filter((item) => item.rawValue);
+  const categories = (result.categoryNormalization || []).filter((item) => item.rawValue);
+  const publisher = result.publisherNormalization;
+  const fields = [];
+  if (allMatched(authors)) fields.push('authors');
+  if (publisher?.rawValue && publisher.status === 'AUTO_MATCH') fields.push('publisher');
+  if (allMatched(categories)) fields.push('categories');
+  return fields;
+}
+
+module.exports = { canonicalKey, cleanDisplayValue, similarity, matchAuthority, normalizeCategory, normalizeLanguage, reconcileMetadata, exactAuthorityFields };

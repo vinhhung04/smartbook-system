@@ -1,5 +1,5 @@
 const { PrismaClient, Prisma } = require('@prisma/client');
-const { canonicalKey, reconcileMetadata } = require('../services/authority-normalization.service');
+const { canonicalKey, reconcileMetadata, exactAuthorityFields } = require('../services/authority-normalization.service');
 const { normalizeIsbn13, normalizeIsbn10, normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, normalizePageCount, normalizeKeywords } = require('../services/catalog-metadata.validation');
 
 const prisma = new PrismaClient();
@@ -68,6 +68,9 @@ async function createDraft(req, res) {
     const autoAcceptFields = new Set(AUTO_ACCEPT_FIELDS);
     if (result.authorNormalization.length === 0) autoAcceptFields.add('authors');
     if (result.categoryNormalization.length === 0) autoAcceptFields.add('categories');
+    // Every value already in the catalog (exact name or approved alias): nothing to decide.
+    // initialDecisionStatuses below still holds them PENDING when the sources disagree.
+    for (const field of exactAuthorityFields(result)) autoAcceptFields.add(field);
     // Conflicting or low-confidence values (V2 decisions, or the default lookup's
     // fieldStatus) stay PENDING for staff - AuthorityReviewPanel lists them.
     const initialStatus = initialDecisionStatuses({
