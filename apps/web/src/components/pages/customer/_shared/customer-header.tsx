@@ -1,4 +1,5 @@
-import { BookOpen, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 import { Moon, Sun } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from 'morphicons/react';
 import { NavLink, useLocation } from 'react-router';
@@ -42,11 +43,8 @@ export function CustomerHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-card/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
-        <NavLink to="/customer" className="flex shrink-0 items-center gap-2.5" aria-label="SmartBook — trang tổng quan">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 via-blue-600 to-cyan-500 shadow-md shadow-indigo-500/25">
-            <BookOpen className="h-4 w-4 text-white" aria-hidden="true" />
-          </span>
-          <span className="text-[15px] font-bold tracking-tight text-indigo-700 dark:text-indigo-400">SmartBook</span>
+        <NavLink to="/customer" className="flex shrink-0 items-center" aria-label="SmartBook — trang tổng quan">
+          <BrandLogo size={26} />
         </NavLink>
 
         <nav aria-label="Điều hướng chính" className="ml-2 hidden items-center gap-1 lg:flex">

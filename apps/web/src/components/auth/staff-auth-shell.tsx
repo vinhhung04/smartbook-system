@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, BookOpen, ChartColumn, Handshake, Library, ShieldCheck, Sparkles, Truck, Warehouse } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
+import { ArrowLeft, ChartColumn, Handshake, Library, ShieldCheck, Sparkles, Truck, Warehouse } from 'lucide-react';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '@/lib/gsap';
 import { AuthToneContext } from './auth-tone';
 
@@ -43,11 +44,8 @@ function OperationsSchematic() {
 
 function StaffWordmark({ inverse = false }: { inverse?: boolean }) {
   return (
-    <Link to="/" className="inline-flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" aria-label="SmartBook — trang chủ">
-      <span className={inverse ? 'flex h-8 w-8 items-center justify-center rounded-md bg-white text-[#1d1a4a]' : 'flex h-8 w-8 items-center justify-center rounded-md bg-[#1d1a4a] text-white dark:bg-indigo-500'}>
-        <BookOpen className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <span className={inverse ? 'text-[17px] font-semibold tracking-[-0.01em] text-white' : 'text-[17px] font-semibold tracking-[-0.01em] text-foreground'}>SmartBook</span>
+    <Link to="/" className="inline-flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" aria-label="SmartBook — trang chủ">
+      <BrandLogo size={26} tone={inverse ? 'inverse' : 'auto'} />
     </Link>
   );
 }

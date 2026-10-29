@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 import { publicCatalogService, type PublicBook } from '@/services/public-catalog';
 import { bindingFor } from '@/lib/book-binding';
 import { Book3D } from '@/components/public/book-3d';
@@ -131,11 +132,8 @@ export function CustomerAuthShell({ title, subtitle, children, footer, showcase 
       <div ref={scope} className="grid min-h-dvh bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.08fr)] lg:gap-4 lg:p-4">
         <main className="flex min-h-dvh flex-col px-5 py-6 sm:px-10 lg:min-h-0 lg:px-12">
           <div data-auth="form-item" className="mx-auto flex w-full max-w-[420px] items-center justify-between gap-4">
-            <Link to="/" className="inline-flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60" aria-label="SmartBook — trang chủ">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-700 text-white dark:bg-indigo-500">
-                <BookOpen className="h-4 w-4" aria-hidden="true" />
-              </span>
-              <span className="font-display text-[20px] font-semibold tracking-[-0.02em] text-foreground">SmartBook</span>
+            <Link to="/" className="inline-flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60" aria-label="SmartBook — trang chủ">
+              <BrandLogo size={28} />
             </Link>
             <Link to="/" className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-[13.5px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60">
               <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Về trang chủ

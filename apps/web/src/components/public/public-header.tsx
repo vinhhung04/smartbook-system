@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { BookOpen, LayoutDashboard, Menu, Moon, Sun, X } from 'lucide-react';
+import { LayoutDashboard, Menu, Moon, Sun, X } from 'lucide-react';
+import { BrandLogo } from '@/components/brand-logo';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { buildLoginUrl } from '@/lib/return-url';
@@ -57,11 +58,8 @@ function ThemeToggle() {
 
 export function Wordmark() {
   return (
-    <Link to="/" className="flex shrink-0 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50" aria-label="SmartBook — trang chủ">
-      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-700 text-white dark:bg-indigo-500">
-        <BookOpen className="h-4 w-4" aria-hidden="true" />
-      </span>
-      <span className="font-display text-[20px] font-semibold tracking-[-0.02em] text-foreground">SmartBook</span>
+    <Link to="/" className="flex shrink-0 items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50" aria-label="SmartBook — trang chủ">
+      <BrandLogo size={28} />
     </Link>
   );
 }

@@ -2,9 +2,9 @@ import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Text, View, type TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
 
 import { ApiError, useAuth } from '../src/auth/auth-context';
+import { BrandMark } from '../src/components/BrandMark';
 import { getApiConfigError } from '../src/api/config';
 import { Button, InlineAlert, PasswordField, TextField, ThemeProvider, brand, fontFamily, loginTheme, radii, space } from '../src/design-system';
 
@@ -81,9 +81,7 @@ export default function LoginScreen() {
             {/* The brand band: who this is, before what to do. */}
             <View style={{ paddingTop: insets.top + space.xxl, paddingHorizontal: space.xl, paddingBottom: space.xxxl, gap: space.xl }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }} accessibilityRole="header" accessibilityLabel="SmartBook">
-                <View style={{ width: 36, height: 36, borderRadius: radii.sm, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="book" size={19} color={brand.ink} />
-                </View>
+                <BrandMark size={30} />
                 <Text style={{ fontFamily: fontFamily.serif, fontSize: 22, color: '#FFFFFF', letterSpacing: -0.3 }}>SmartBook</Text>
               </View>
               <View style={{ gap: space.sm }}>

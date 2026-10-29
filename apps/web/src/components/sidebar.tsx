@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { BookOpen, ScanBarcode, ChevronLeft, ChevronDown } from "lucide-react";
+import { ScanBarcode, ChevronLeft, ChevronDown } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 import { navGroups } from "@/lib/nav-groups";
@@ -66,14 +67,12 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     >
       {/* Logo */}
       <div className="h-[56px] flex items-center justify-between px-4 border-b border-border">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-[10px] bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/25">
-            <BookOpen className="w-4 h-4 text-white" />
-          </div>
+        <div className="flex items-center gap-1.5" role="img" aria-label="SmartBook">
+          <BrandLogo variant="symbol" size={26} />
           <AnimatePresence>
             {!collapsed && (
               <motion.div initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.2 }}>
-                <span className="text-[15px] tracking-[-0.3px] bg-gradient-to-r from-indigo-700 to-violet-600 bg-clip-text text-transparent" style={{ fontWeight: 700 }}>SmartBook</span>
+                <BrandLogo variant="wordmark" size={15.5} />
               </motion.div>
             )}
           </AnimatePresence>
