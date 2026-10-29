@@ -3,14 +3,19 @@ import { Alert, AppState } from 'react-native';
 
 import * as authApi from '../api/auth';
 import { ApiError, setRefreshHandler, setUnauthorizedHandler } from '../api/client';
-import type { User } from '../types/auth';
+import type { LoginChallengeResponse, User } from '../types/auth';
 import { createSingleFlight, decodeJwtPayload, msUntilExpiry, userFromClaims, type RefreshResult } from './session';
 import { clearToken, getRefreshToken, getToken, setSessionTokens } from './token-storage';
+
+/** A login either signs in or needs an emailed code first (kept in screen state only). */
+export type LoginOutcome = { kind: 'signed-in' } | { kind: 'challenge'; response: LoginChallengeResponse };
 
 type AuthContextValue = {
   user: User | null;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<LoginOutcome>;
+  /** Finishes an OTP_REQUIRED login; only now are tokens stored. */
+  completeOtpLogin: (challengeId: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -154,8 +159,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user, refresh, endSession]);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string): Promise<LoginOutcome> => {
     const response = await authApi.login(username, password);
+    // No token yet: nothing is stored and the app stays signed out until the code.
+    if (authApi.isLoginChallenge(response)) return { kind: 'challenge', response };
+    await setSessionTokens(response.token, response.refresh_token);
+    setUser(response.user);
+    return { kind: 'signed-in' };
+  }, []);
+
+  const completeOtpLogin = useCallback(async (challengeId: string, code: string) => {
+    const response = await authApi.verifyLoginOtp(challengeId, code);
     await setSessionTokens(response.token, response.refresh_token);
     setUser(response.user);
   }, []);
@@ -169,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, completeOtpLogin, logout }}>
       {children}
     </AuthContext.Provider>
   );

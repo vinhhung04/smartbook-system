@@ -32,13 +32,16 @@ export class ApiError extends Error {
   /** True when a write may or may not have reached the server — never report it as a plain failure. */
   outcomeUnknown: boolean;
   code: string | null;
+  /** The error response body (e.g. attempts_remaining / retry_after_seconds of an OTP error). */
+  details: Record<string, unknown> | null;
 
-  constructor(status: number, message: string, kind: ApiErrorKind = 'http', outcomeUnknown = false, code: string | null = null) {
+  constructor(status: number, message: string, kind: ApiErrorKind = 'http', outcomeUnknown = false, code: string | null = null, details: Record<string, unknown> | null = null) {
     super(message);
     this.status = status;
     this.kind = kind;
     this.outcomeUnknown = outcomeUnknown;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -230,7 +233,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     if (!options.skipAuth && isAuthFailure(response.status, message)) {
       onUnauthorized?.();
     }
-    throw new ApiError(response.status, message, 'http', false, typeof data?.code === 'string' ? data.code : null);
+    throw new ApiError(response.status, message, 'http', false, typeof data?.code === 'string' ? data.code : null, data && typeof data === 'object' ? data : null);
   }
 
   return data as T;

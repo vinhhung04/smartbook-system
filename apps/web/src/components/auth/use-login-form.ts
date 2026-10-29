@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { authService, type LoginResponse } from '@/services/auth';
+import { authService, type LoginResponse, type LoginResult } from '@/services/auth';
 import { getApiErrorMessage } from '@/services/api';
 
 export type AuthPortal = 'staff' | 'customer';
@@ -51,6 +51,10 @@ export function describeLoginError(error: unknown): string {
     const status = error.response?.status;
     if (!error.response) return 'Không kết nối được máy chủ. Kiểm tra kết nối mạng rồi thử lại.';
     if (status === 401) return 'Tên đăng nhập hoặc mật khẩu không đúng.';
+    const code = (error.response?.data as { code?: string } | undefined)?.code;
+    // Second factor or verification code could not be emailed: no session, by design.
+    if (code === 'EMAIL_DELIVERY_UNAVAILABLE') return 'Chưa gửi được mã xác thực qua email. Vui lòng thử lại sau ít phút.';
+    if (code === 'OTP_SEND_LIMIT') return 'Tài khoản đã yêu cầu quá nhiều mã xác thực. Vui lòng thử lại sau khoảng một giờ.';
     if (status === 429) return 'Bạn đã thử đăng nhập quá nhiều lần. Vui lòng đợi một lúc rồi thử lại.';
     if (status && status >= 500) return 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau ít phút.';
   }
@@ -61,6 +65,9 @@ interface FieldErrors {
   identifier?: string;
   password?: string;
 }
+
+/** A login that needs an emailed code first. Held in memory only, never stored. */
+export type LoginChallenge = Extract<LoginResult, { kind: 'challenge' }>;
 
 interface UseLoginFormOptions {
   portal: AuthPortal;
@@ -78,6 +85,7 @@ export function useLoginForm({ portal, refuse, onSuccess }: UseLoginFormOptions)
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
   const identifierRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   // A ref, not state: a second Enter in the same tick must not send a second request.
@@ -89,6 +97,13 @@ export function useLoginForm({ portal, refuse, onSuccess }: UseLoginFormOptions)
     if (!window.matchMedia('(pointer: fine)').matches) return;
     (remembered.identifier ? passwordRef : identifierRef).current?.focus();
   }, [remembered.identifier]);
+
+  // Back from the code step the form mounts again: continue at the password.
+  const hadChallenge = useRef(false);
+  useEffect(() => {
+    if (challenge) hadChallenge.current = true;
+    else if (hadChallenge.current) passwordRef.current?.focus();
+  }, [challenge]);
 
   const setIdentifier = (value: string) => {
     setIdentifierValue(value);
@@ -118,16 +133,7 @@ export function useLoginForm({ portal, refuse, onSuccess }: UseLoginFormOptions)
     setSubmitting(true);
     setFormError(null);
     try {
-      const data = await authService.login({ identifier, password });
-      const refusal = refuse?.(data) ?? null;
-      if (refusal) {
-        await authService.logout();
-        setFormError(refusal);
-        return;
-      }
-      writeRemembered(portal, remember, identifier);
-      toast.success('Đăng nhập thành công');
-      onSuccess(data);
+      await handleResult(await authService.login({ identifier, password }));
     } catch (error) {
       setFormError(describeLoginError(error));
       // Wrong credentials: put the reader straight back into the password to retry.
@@ -138,7 +144,60 @@ export function useLoginForm({ portal, refuse, onSuccess }: UseLoginFormOptions)
     }
   };
 
+  async function finish(data: LoginResponse) {
+    const refusal = refuse?.(data) ?? null;
+    if (refusal) {
+      await authService.logout();
+      setChallenge(null);
+      setFormError(refusal);
+      return;
+    }
+    writeRemembered(portal, remember, identifier);
+    toast.success('Đăng nhập thành công');
+    onSuccess(data);
+  }
+
+  async function handleResult(result: LoginResult) {
+    if (result.kind === 'authenticated') {
+      await finish(result.data);
+      return;
+    }
+    // A second factor does not need the password again: drop it from memory now.
+    // Email verification does: once confirmed, the same sign-in is repeated for the user.
+    if (result.status === 'OTP_REQUIRED') setPasswordValue('');
+    setChallenge(result);
+  }
+
+  /** Called by the code step; rejects with the API error so the step can explain it. */
+  const verifyCode = async (code: string) => {
+    if (!challenge) return;
+    if (challenge.status === 'OTP_REQUIRED') {
+      await finish(await authService.verifyLoginOtp(challenge.challenge.id, code));
+      return;
+    }
+    await authService.verifyEmailOtp(challenge.challenge.id, code);
+    try {
+      await handleResult(await authService.login({ identifier, password }));
+    } catch {
+      // Verified, but the follow-up sign-in failed (rate limit, network): sign in by hand.
+      setChallenge(null);
+      setPasswordValue('');
+      toast.success('Email đã được xác thực.');
+      setFormError('Email đã được xác thực. Vui lòng đăng nhập lại.');
+    }
+  };
+
+  /** Back from the code step to the form, with the password to be typed again. */
+  const cancelChallenge = () => {
+    setChallenge(null);
+    setPasswordValue('');
+    setFormError(null);
+  };
+
   return {
+    challenge,
+    verifyCode,
+    cancelChallenge,
     identifier,
     setIdentifier,
     password,

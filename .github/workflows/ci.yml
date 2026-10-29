@@ -157,6 +157,8 @@ jobs:
           # scripts/*.mjs collectively log in as several roles across 7 flows in one
           # run — well over the production default of 10 logins per 15 minutes.
           echo "AUTH_LOGIN_RATE_LIMIT_MAX=1000" >> .env
+          echo "AUTH_OTP_VERIFY_RATE_LIMIT_MAX=1000" >> .env
+          echo "AUTH_OTP_RESEND_RATE_LIMIT_MAX=1000" >> .env
 
       - name: Start core stack
         run: docker compose up -d --build --wait --wait-timeout 300
@@ -226,6 +228,8 @@ jobs:
           # Each Playwright test logs in on its own — past the production default of
           # 10 logins per 15 minutes, the rest get 429 and never leave /login.
           echo "AUTH_LOGIN_RATE_LIMIT_MAX=1000" >> .env
+          # email-otp.spec.ts enters codes (wrong ones on purpose) from one IP
+          echo "AUTH_OTP_VERIFY_RATE_LIMIT_MAX=1000" >> .env
 
       # Full stack including smartbook-ui: the built production image, not the Vite dev
       # server — same thing a real user's browser hits, and one less moving part in CI.

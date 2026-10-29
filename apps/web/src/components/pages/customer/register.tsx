@@ -2,12 +2,14 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AtSign, Lock, Mail, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { authService } from '@/services/auth';
+import { authService, type OtpChallenge } from '@/services/auth';
 import { getApiErrorMessage } from '@/services/api';
 import { safeReturnUrl, withReturnUrl } from '@/lib/return-url';
 import { cn } from '@/components/ui/utils';
 import { AuthLayout } from '@/components/auth-layout';
 import { AuthConsentCheckbox, AuthField, AuthFormAlert, AuthPasswordField, AuthPortalSwitch, AuthSubmitButton } from '@/components/auth/auth-fields';
+import { OtpVerificationStep } from '@/components/auth/otp-verification';
+import { otpStepCopy } from '@/lib/otp';
 
 type Field = 'full_name' | 'email' | 'username' | 'password' | 'confirm_password';
 type FieldErrors = Partial<Record<Field | 'agreed', string>>;
@@ -37,6 +39,8 @@ export function CustomerRegisterPage() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // The email step. In memory only: after a reload the reader logs in, which sends a new code.
+  const [verification, setVerification] = useState<{ challenge: OtpChallenge; deliveryFailed: boolean } | null>(null);
   const refs = useRef<Partial<Record<Field, HTMLInputElement | null>>>({});
   const strength = strengthOf(form.password);
 
@@ -68,13 +72,19 @@ export function CustomerRegisterPage() {
     try {
       setIsSubmitting(true);
       setFormError(null);
-      await authService.register({
+      const result = await authService.register({
         full_name: form.full_name,
         email: form.email,
         username: form.username,
         password: form.password,
       });
-      toast.success('Đăng ký thành công. Vui lòng đăng nhập.');
+      if (result.status === 'VERIFICATION_REQUIRED' && result.challenge) {
+        setVerification({ challenge: result.challenge, deliveryFailed: result.email_delivery === 'FAILED' });
+        return;
+      }
+      toast.success(result.status === 'VERIFICATION_REQUIRED'
+        ? 'Đã tạo tài khoản. Đăng nhập để nhận mã xác thực email.'
+        : 'Đăng ký thành công. Vui lòng đăng nhập.');
       navigate(withReturnUrl('/customer/login', returnUrl));
     } catch (error) {
       setFormError(getApiErrorMessage(error, 'Chưa tạo được tài khoản. Vui lòng thử lại.'));
@@ -82,6 +92,40 @@ export function CustomerRegisterPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Confirmed: sign in with what was just typed, so the reader goes straight on.
+  const verifyEmail = async (code: string) => {
+    if (!verification) return;
+    await authService.verifyEmailOtp(verification.challenge.id, code);
+    try {
+      const login = await authService.login({ identifier: form.username, password: form.password });
+      if (login.kind === 'authenticated') {
+        toast.success('Đã xác thực email. Chào mừng bạn đến với SmartBook!');
+        navigate(returnUrl || '/customer');
+        return;
+      }
+    } catch {
+      // fall through to the login page
+    }
+    toast.success('Đã xác thực email. Vui lòng đăng nhập.');
+    navigate(withReturnUrl('/customer/login', returnUrl));
+  };
+
+  if (verification) {
+    const copy = otpStepCopy('EMAIL_VERIFICATION', verification.challenge.masked_email);
+    return (
+      <AuthLayout portal="customer" title={copy.title} subtitle={copy.subtitle}>
+        <OtpVerificationStep
+          challenge={verification.challenge}
+          onVerify={verifyEmail}
+          onBack={() => navigate(withReturnUrl('/customer/login', returnUrl))}
+          backLabel="Để sau, quay lại đăng nhập"
+          submitLabel="Xác thực và vào thư viện"
+          initialError={verification.deliveryFailed ? 'Tài khoản đã được tạo nhưng chưa gửi được email. Bấm "Gửi lại mã" sau ít phút.' : null}
+        />
+      </AuthLayout>
+    );
+  }
 
   const bind = (field: Field) => ({
     ref: (node: HTMLInputElement | null) => { refs.current[field] = node; },

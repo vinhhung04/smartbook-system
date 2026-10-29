@@ -29,6 +29,11 @@ pnpm test:e2e
 
 - `auth.spec.ts` — staff and customer login reach the right app; a wrong password is
   rejected without a redirect.
+- `email-otp.spec.ts` — reader sign-up with an emailed code (read from Mailpit at
+  `MAILPIT_URL`, default `http://localhost:8025`): no session before the code, wrong code,
+  pasted code, back to the book via `returnUrl`; unverified login shows the code step;
+  `/register` leads to reader sign-up. The staff second-factor test runs with
+  `E2E_STAFF_OTP=1` against auth-service started with `STAFF_EMAIL_OTP_MODE=optional`.
 - `public-discovery.spec.ts` — the public website: anonymous home → catalog → search → book
   detail → "Đặt mượn" redirects to login with `returnUrl`; after login the reader lands back on
   the book with the reservation step open (cancelled, so no stock is used); account/staff routes

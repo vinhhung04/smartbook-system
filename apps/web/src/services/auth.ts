@@ -33,9 +33,29 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
+export type OtpPurpose = 'EMAIL_VERIFICATION' | 'LOGIN_2FA';
+
+/** An emailed-code step (auth-service lib/email-otp.js). The id is not a credential. */
+export interface OtpChallenge {
+  id: string;
+  purpose: OtpPurpose;
+  masked_email: string;
+  code_length: number;
+  expires_at: string;
+  resend_available_at: string;
+  attempts_remaining: number;
+}
+
+/** /auth/login either signs in or asks for a code first (HTTP 202). */
+export type LoginResult =
+  | { kind: 'authenticated'; data: LoginResponse }
+  | { kind: 'challenge'; status: 'OTP_REQUIRED' | 'EMAIL_VERIFICATION_REQUIRED'; challenge: OtpChallenge };
+
 export interface RegisterResponse {
+  status: 'VERIFICATION_REQUIRED' | 'REGISTERED';
   message: string;
-  user: Omit<AuthUser, 'roles' | 'permissions'>;
+  email_delivery?: 'SENT' | 'FAILED';
+  challenge?: OtpChallenge | null;
 }
 
 interface TokenPayload {
@@ -82,18 +102,40 @@ function clearSession() {
 }
 
 export const authService = {
-  login: async (data: LoginRequest): Promise<LoginResponse> => {
+  login: async (data: LoginRequest): Promise<LoginResult> => {
     const response = await authAPI.post('/auth/login', {
       identifier: data.identifier,
       email: data.identifier,
       username: data.identifier,
       password: data.password,
     });
+    // The challenge only lives in memory (component state), never in storage.
+    if (response.status === 202 && response.data?.challenge) {
+      return { kind: 'challenge', status: response.data.status, challenge: response.data.challenge };
+    }
     const token = response.data.token;
     if (token) {
       setSession(token, response.data.user);
     }
+    return { kind: 'authenticated', data: response.data };
+  },
+
+  /** Second step of a login that answered OTP_REQUIRED; starts the session like login does. */
+  verifyLoginOtp: async (challengeId: string, code: string): Promise<LoginResponse> => {
+    const response = await authAPI.post('/auth/login/verify-otp', { challenge_id: challengeId, code });
+    setSession(response.data.token, response.data.user);
     return response.data;
+  },
+
+  /** Confirms an email address. No session is started: the caller logs in next. */
+  verifyEmailOtp: async (challengeId: string, code: string): Promise<{ status: 'VERIFIED'; message: string }> => {
+    const response = await authAPI.post('/auth/email-otp/verify', { challenge_id: challengeId, code });
+    return response.data;
+  },
+
+  resendEmailOtp: async (challenge: Pick<OtpChallenge, 'id' | 'purpose'>): Promise<OtpChallenge> => {
+    const response = await authAPI.post('/auth/email-otp/resend', { challenge_id: challenge.id, purpose: challenge.purpose });
+    return response.data.challenge;
   },
 
   register: async (data: RegisterRequest): Promise<RegisterResponse> => {
@@ -177,7 +219,7 @@ export const authService = {
     return response.data;
   },
 
-  resendVerification: async (): Promise<{ message: string }> => {
+  resendVerification: async (): Promise<{ status: 'OTP_SENT' | 'ALREADY_VERIFIED'; message: string; challenge?: OtpChallenge }> => {
     const response = await authAPI.post('/auth/resend-verification');
     return response.data;
   },

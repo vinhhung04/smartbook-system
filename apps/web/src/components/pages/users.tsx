@@ -43,9 +43,11 @@ interface UserRow {
   full_name: string;
   email: string;
   phone?: string;
-  status: "ACTIVE" | "INACTIVE" | "LOCKED" | "PENDING";
+  status: "ACTIVE" | "INACTIVE" | "LOCKED" | "PENDING" | "PENDING_VERIFICATION";
   created_at: string;
   roles: RoleItem[];
+  email_verified_at?: string | null;
+  email_otp_2fa_enabled?: boolean;
   primary_warehouse_id?: string | null;
   warehouse_scopes?: WarehouseScope[];
 }
@@ -56,8 +58,9 @@ interface CreateUserForm {
   email: string;
   phone: string;
   password: string;
-  status: "ACTIVE" | "INACTIVE" | "LOCKED" | "PENDING";
+  status: UserRow["status"];
   role_ids: string[];
+  email_otp_2fa_enabled: boolean;
   scopes: ScopeDraft[];
   primary_warehouse_id: string | null;
 }
@@ -70,6 +73,7 @@ const EMPTY_FORM: CreateUserForm = {
   password: "",
   status: "ACTIVE",
   role_ids: [],
+  email_otp_2fa_enabled: false,
   scopes: [],
   primary_warehouse_id: null,
 };
@@ -87,6 +91,7 @@ const ALL = "ALL";
 const STATUS_LABELS: Record<UserRow["status"], string> = {
   ACTIVE: "Đang hoạt động",
   PENDING: "Chờ kích hoạt",
+  PENDING_VERIFICATION: "Chờ xác thực email",
   LOCKED: "Đã khóa",
   INACTIVE: "Ngừng hoạt động",
 };
@@ -101,7 +106,7 @@ function formatDate(value: string) {
 function statusBadgeVariant(status: UserRow["status"]): "success" | "danger" | "warning" | "neutral" {
   if (status === "ACTIVE") return "success";
   if (status === "LOCKED") return "danger";
-  if (status === "PENDING") return "warning";
+  if (status === "PENDING" || status === "PENDING_VERIFICATION") return "warning";
   return "neutral";
 }
 
@@ -355,6 +360,7 @@ export function UsersPage() {
       password: "",
       status: user.status,
       role_ids: (user.roles || []).map((r) => r.id),
+      email_otp_2fa_enabled: Boolean(user.email_otp_2fa_enabled),
       scopes: (user.warehouse_scopes || []).map((s) => ({ warehouse_id: s.warehouse_id, access_level: s.access_level })),
       primary_warehouse_id: user.primary_warehouse_id || null,
     });
@@ -386,6 +392,7 @@ export function UsersPage() {
         phone: form.phone.trim() || undefined,
         status: form.status,
         role_ids: form.role_ids,
+        ...(form.email_otp_2fa_enabled !== Boolean(user.email_otp_2fa_enabled) ? { email_otp_2fa_enabled: form.email_otp_2fa_enabled } : {}),
       });
       const before = user.warehouse_scopes || [];
       const after = toScopes(form.scopes);
@@ -752,10 +759,30 @@ export function UsersPage() {
                 <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} aria-label="Trạng thái" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'sm:col-span-2' : ''}`}>
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="PENDING">PENDING</option>
+                  {editingUser?.status === "PENDING_VERIFICATION" ? <option value="PENDING_VERIFICATION">PENDING_VERIFICATION</option> : null}
                   <option value="LOCKED">LOCKED</option>
                   <option value="INACTIVE">INACTIVE</option>
                 </select>
               </div>
+
+              {editingUser ? (
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-input px-3 py-2.5 text-[13px]">
+                  <input
+                    type="checkbox"
+                    checked={form.email_otp_2fa_enabled}
+                    onChange={(event) => setForm((prev) => ({ ...prev, email_otp_2fa_enabled: event.target.checked }))}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
+                  />
+                  <span>
+                    <span className="block font-medium text-foreground">Yêu cầu mã đăng nhập qua email</span>
+                    <span className="block text-[12px] text-muted-foreground">
+                      {editingUser.email_verified_at
+                        ? "Sau mật khẩu, người dùng nhập mã 6 chữ số gửi tới email. Bật lên sẽ đăng xuất các phiên hiện có. Chỉ có hiệu lực khi hệ thống bật STAFF_EMAIL_OTP_MODE."
+                        : "Email của tài khoản chưa được xác thực: người dùng cần xác thực email ở trang Tài khoản trước khi bật."}
+                    </span>
+                  </span>
+                </label>
+              ) : null}
 
               <div>
                 <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gán vai trò *</p>

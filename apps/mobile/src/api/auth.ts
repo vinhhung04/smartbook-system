@@ -1,13 +1,44 @@
 import { apiFetch } from './client';
-import type { LoginResponse, RefreshResponse, User, WarehouseStaffOption } from '../types/auth';
+import type { LoginChallengeResponse, LoginResponse, OtpChallenge, RefreshResponse, User, WarehouseStaffOption } from '../types/auth';
 
 export function login(username: string, password: string) {
-  return apiFetch<LoginResponse>('/auth/login', {
+  return apiFetch<LoginResponse | LoginChallengeResponse>('/auth/login', {
     method: 'POST',
     // "mobile" asks auth-service for a rotating refresh token alongside the JWT.
     body: { username, password, client: 'mobile' },
     skipAuth: true,
   });
+}
+
+export function isLoginChallenge(response: LoginResponse | LoginChallengeResponse): response is LoginChallengeResponse {
+  return 'challenge' in response && Boolean(response.challenge) && !('token' in response && response.token);
+}
+
+/** Second step of a login that answered OTP_REQUIRED: the JWT and refresh token come only now. */
+export function verifyLoginOtp(challengeId: string, code: string) {
+  return apiFetch<LoginResponse>('/auth/login/verify-otp', {
+    method: 'POST',
+    body: { challenge_id: challengeId, code, client: 'mobile' },
+    skipAuth: true,
+  });
+}
+
+/** Confirms an email address; issues no session (log in again afterwards). */
+export function verifyEmailOtp(challengeId: string, code: string) {
+  return apiFetch<{ status: 'VERIFIED'; message: string }>('/auth/email-otp/verify', {
+    method: 'POST',
+    body: { challenge_id: challengeId, code },
+    skipAuth: true,
+  });
+}
+
+export async function resendEmailOtp(challenge: Pick<OtpChallenge, 'id' | 'purpose'>) {
+  const result = await apiFetch<{ challenge: OtpChallenge }>('/auth/email-otp/resend', {
+    method: 'POST',
+    body: { challenge_id: challenge.id, purpose: challenge.purpose },
+    skipAuth: true,
+  });
+  return result.challenge;
 }
 
 export function refreshSession(refreshToken: string) {

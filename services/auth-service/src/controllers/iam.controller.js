@@ -25,7 +25,9 @@ function normalizeEmail(value) {
   return email ? email.toLowerCase() : null;
 }
 
-const VALID_USER_STATUSES = new Set(['ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING']);
+// PENDING_VERIFICATION: self-registered, email not confirmed yet (auth.controller.js).
+// An administrator may activate such an account by setting ACTIVE.
+const VALID_USER_STATUSES = new Set(['ACTIVE', 'INACTIVE', 'LOCKED', 'PENDING', 'PENDING_VERIFICATION']);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function uniqueStringArray(values) {
@@ -103,6 +105,8 @@ async function getUserWithRoles(tx, userId) {
         u.status,
         u.is_superuser,
         u.primary_warehouse_id,
+        u.email_verified_at,
+        u.email_otp_2fa_enabled,
         u.created_at,
         u.updated_at,
         COALESCE(
@@ -185,6 +189,8 @@ async function listUsers(req, res) {
         u.status,
         u.is_superuser,
         u.primary_warehouse_id,
+        u.email_verified_at,
+        u.email_otp_2fa_enabled,
         u.created_at,
         u.updated_at,
         COALESCE(
@@ -427,6 +433,19 @@ async function updateUser(req, res) {
       updates.push(`email = $${params.length}`);
     }
 
+    // Per-account email OTP second factor (honoured when STAFF_EMAIL_OTP_MODE is
+    // optional/required). Only for a confirmed address, so the codes have somewhere
+    // to go; turning it off is the recovery path for a staff member who lost access.
+    let enablingEmailOtp = false;
+    if (payload.email_otp_2fa_enabled !== undefined) {
+      if (typeof payload.email_otp_2fa_enabled !== 'boolean') {
+        return res.status(400).json({ message: 'email_otp_2fa_enabled must be a boolean' });
+      }
+      enablingEmailOtp = payload.email_otp_2fa_enabled;
+      params.push(payload.email_otp_2fa_enabled);
+      updates.push(`email_otp_2fa_enabled = $${params.length}`);
+    }
+
     let nextPrimaryWarehouseId;
     if (payload.primary_warehouse_id !== undefined) {
       if (!isValidUuid(userId)) {
@@ -468,6 +487,16 @@ async function updateUser(req, res) {
       }
 
       const roleIds = roleIdsInput ? await resolveRoleIds(tx, payload.role_ids, payload.role_codes) : null;
+
+      if (enablingEmailOtp || payload.email !== undefined) {
+        const currentRows = await tx.$queryRawUnsafe(`SELECT email, email_verified_at FROM users WHERE id = $1::uuid`, userId);
+        const current = currentRows[0];
+        if (!current) throw new Error('USER_NOT_FOUND');
+        const emailChanges = payload.email !== undefined && String(current.email).toLowerCase() !== nextEmail;
+        // A new address starts unconfirmed.
+        if (emailChanges) updates.push('email_verified_at = NULL');
+        if (enablingEmailOtp && (emailChanges || !current.email_verified_at)) throw new Error('EMAIL_NOT_VERIFIED');
+      }
 
       if (nextPrimaryWarehouseId) {
         const scoped = await tx.$queryRawUnsafe(
@@ -531,7 +560,8 @@ async function updateUser(req, res) {
     // naturally expires. See auth.middleware.js authenticateToken in every service.
     // A role change does the same (Copilot 3.2): inventory/analytics/borrow read the
     // roles and permissions from the JWT, so an old token would keep the old rights.
-    if ((nextStatus && nextStatus !== 'ACTIVE') || roleIdsInput) {
+    // Turning the second factor on ends the sessions that were opened without it.
+    if ((nextStatus && nextStatus !== 'ACTIVE') || roleIdsInput || enablingEmailOtp) {
       await revokeUserTokensIssuedBefore(userId);
     }
     // a locked / deactivated account loses its warehouse access at once in
@@ -548,6 +578,9 @@ async function updateUser(req, res) {
     }
     if (error.message === 'CONFLICT_USER') {
       return res.status(409).json({ message: 'Email or username already exists' });
+    }
+    if (error.message === 'EMAIL_NOT_VERIFIED') {
+      return res.status(400).json({ message: 'Xác thực email của tài khoản trước khi bật mã đăng nhập qua email', code: 'EMAIL_NOT_VERIFIED' });
     }
     if (error.message === 'INVALID_ROLE_IDS') {
       return res.status(400).json({ message: 'One or more role_ids are invalid' });

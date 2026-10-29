@@ -93,11 +93,14 @@ Toàn bộ nằm trong `/opt/smartbook/.env`, tạo bằng `deploy/scripts/init-
 |---|---|---|
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `ANALYTICS_DB_PASSWORD` | ✔ | Đổi mật khẩu DB sau khi đã có dữ liệu phải `ALTER ROLE` trong Postgres, không chỉ sửa file |
 | `JWT_SECRET`, `INTERNAL_SERVICE_KEY` | ✔ | Đổi `JWT_SECRET` sẽ đăng xuất mọi người dùng |
+| `OTP_HMAC_SECRET` | ✔ | Khoá HMAC của mã OTP email; thiếu thì auth-service không khởi động. File `.env` tạo trước tính năng OTP phải thêm tay: `printf 'OTP_HMAC_SECRET=%s
+' "$(openssl rand -hex 32)" >> .env` |
+| `REGISTRATION_EMAIL_VERIFICATION`, `STAFF_EMAIL_OTP_MODE` | | Feature flag OTP, mặc định `required` / `off` — xem [EMAIL_OTP.md](SERVICES/EMAIL_OTP.md) §6, §10 |
 | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | ✔ | |
 | `OPENROUTER_API_KEY` | ✔ cho AI | Thiếu key: trợ lý AI/OCR/embedding báo lỗi, phần còn lại vẫn chạy |
 | `OPENROUTER_*_MODEL` | | Mặc định `qwen/qwen3.7-flash`, embedding `qwen/qwen3-embedding-8b` |
 | `GOOGLE_BOOKS_API_KEY` | | Tra cứu ISBN |
-| `SMTP_*` | | Email quên mật khẩu/thông báo |
+| `SMTP_*` | ✔ cho đăng ký | Mã xác thực khi đăng ký (thiếu SMTP thì `/auth/register` trả 503), quên mật khẩu, thông báo. Cấu hình SPF/DKIM/DMARC: [EMAIL_OTP.md](SERVICES/EMAIL_OTP.md) §7 |
 | `VNPAY_*` | | Mặc định dùng URL sandbox |
 | `BACKUP_KEEP_DAYS`, `BACKUP_RCLONE_REMOTE`, `ALERT_WEBHOOK_URL` | | Vận hành |
 

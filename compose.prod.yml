@@ -156,6 +156,13 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.io.vn>}
       - AUTH_LOGIN_RATE_LIMIT_MAX=${AUTH_LOGIN_RATE_LIMIT_MAX:-10}
+      - AUTH_OTP_VERIFY_RATE_LIMIT_MAX=${AUTH_OTP_VERIFY_RATE_LIMIT_MAX:-30}
+      - AUTH_OTP_RESEND_RATE_LIMIT_MAX=${AUTH_OTP_RESEND_RATE_LIMIT_MAX:-10}
+      # Email OTP (docs/DEPLOYMENT.md "Email OTP rollout"). The secret is required:
+      # auth-service refuses to start in production without it.
+      - OTP_HMAC_SECRET=${OTP_HMAC_SECRET:?Set OTP_HMAC_SECRET in .env (openssl rand -hex 32)}
+      - REGISTRATION_EMAIL_VERIFICATION=${REGISTRATION_EMAIL_VERIFICATION:-required}
+      - STAFF_EMAIL_OTP_MODE=${STAFF_EMAIL_OTP_MODE:-off}
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }

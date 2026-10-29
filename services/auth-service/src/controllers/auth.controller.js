@@ -2,10 +2,12 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
-const { sendEmail } = require('../lib/email-sender');
+const { sendEmail, deliverEmail, isEmailConfigured } = require('../lib/email-sender');
 const { revokeUserTokensIssuedBefore, blacklistToken } = require('../lib/token-revocation');
 const redis = require('../lib/redis');
 const { createRefreshTokenService, RefreshTokenError } = require('../lib/refresh-tokens');
+const { createEmailOtpService, OtpError, PURPOSES, resolveOtpSecret } = require('../lib/email-otp');
+const { createPrismaOtpStore } = require('../lib/email-otp-store');
 
 const refreshTokens = createRefreshTokenService({
   get: (key) => redis.getStrict(key),
@@ -13,6 +15,87 @@ const refreshTokens = createRefreshTokenService({
   getDel: (key) => redis.getDelStrict(key),
   del: (key) => redis.delStrict(key),
 });
+
+const emailOtp = createEmailOtpService({
+  store: createPrismaOtpStore(prisma),
+  deliver: (to, data) => deliverEmail(to, 'EMAIL_OTP', data),
+  secret: resolveOtpSecret(),
+  lookupUser: (id) => prisma.user.findUnique({ where: { id }, select: { full_name: true, deleted_at: true } }),
+});
+
+// Accounts created by /auth/register before their email is confirmed. They can
+// never receive a JWT or a refresh token (login answers with a verification challenge).
+const PENDING_VERIFICATION = 'PENDING_VERIFICATION';
+
+// REGISTRATION_EMAIL_VERIFICATION=off is an emergency switch back to the old
+// behaviour (accounts active at once), e.g. while the SMTP provider is down.
+function registrationVerificationRequired() {
+  return String(process.env.REGISTRATION_EMAIL_VERIFICATION || 'required').trim().toLowerCase() !== 'off';
+}
+
+// STAFF_EMAIL_OTP_MODE:
+//   off      (default) no second factor for anyone — the behaviour before this feature
+//   optional accounts with email_otp_2fa_enabled must enter an emailed code
+//   required every internal (non-customer, non-supplier) account must, plus the flagged ones
+function staffOtpMode() {
+  const mode = String(process.env.STAFF_EMAIL_OTP_MODE || 'off').trim().toLowerCase();
+  return mode === 'optional' || mode === 'required' ? mode : 'off';
+}
+
+function isInternalStaff(user, roles) {
+  return Boolean(user.is_superuser) || roles.some((role) => role !== 'CUSTOMER' && role !== 'SUPPLIER');
+}
+
+function requiresEmailOtp(user, roles) {
+  const mode = staffOtpMode();
+  if (mode === 'off') return false;
+  if (user.email_otp_2fa_enabled) return true;
+  return mode === 'required' && isInternalStaff(user, roles);
+}
+
+function sendOtpError(res, error, context) {
+  if (error instanceof OtpError) {
+    if (error.extra?.retry_after_seconds) res.setHeader?.('Retry-After', String(error.extra.retry_after_seconds));
+    return res.status(error.status).json({ message: error.message, code: error.code, ...error.extra });
+  }
+  console.error(`${context} error:`, error);
+  return res.status(500).json({ message: 'Internal server error' });
+}
+
+// Confirms the address the code was sent to. Runs in the transaction that consumes
+// the challenge; if the account's email changed since, nothing is confirmed.
+async function markEmailVerified(tx, challenge) {
+  const rows = await tx.$queryRawUnsafe(
+    `
+    UPDATE users
+       SET email_verified_at = COALESCE(email_verified_at, $3::timestamptz),
+           status = CASE WHEN status = '${PENDING_VERIFICATION}' THEN 'ACTIVE' ELSE status END,
+           updated_at = NOW()
+     WHERE id = $1::uuid AND lower(email::text) = lower($2) AND deleted_at IS NULL
+     RETURNING id
+    `,
+    challenge.user_id,
+    challenge.email,
+    challenge.consumed_at
+  );
+  if (!rows.length) {
+    throw new OtpError('OTP_CHALLENGE_INVALID', 410, 'This verification session is no longer valid. Start again.');
+  }
+}
+
+/** 202 with a challenge instead of a session; the client shows the code screen. */
+async function respondWithChallenge(res, user, purpose, status) {
+  try {
+    const { challenge } = await emailOtp.issue({ user, purpose });
+    return res.status(202).json({
+      status,
+      message: status === 'OTP_REQUIRED' ? 'Enter the code sent to your email to finish signing in' : 'Verify your email address to activate the account',
+      challenge,
+    });
+  } catch (error) {
+    return sendOtpError(res, error, 'login challenge');
+  }
+}
 
 // Refresh tokens are only issued to clients that ask (the mobile app sends
 // client: "mobile"); the web keeps its existing access-token-only session.
@@ -39,31 +122,8 @@ function signAccessToken(user, roles, permissions) {
 
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
-const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_FAILED_LOGIN_ATTEMPTS = Number(process.env.MAX_FAILED_LOGIN_ATTEMPTS || 5);
 const BCRYPT_ROUNDS = 12;
-
-async function sendVerificationEmail(user) {
-  try {
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    await prisma.emailVerificationToken.create({
-      data: {
-        user_id: user.id,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
-      },
-    });
-
-    const verifyUrl = `${FRONTEND_URL}/verify-email?token=${rawToken}`;
-    sendEmail(user.email, 'EMAIL_VERIFICATION_REQUESTED', { full_name: user.full_name, verify_url: verifyUrl }).catch((err) => {
-      console.error('sendVerificationEmail email error:', err);
-    });
-  } catch (err) {
-    console.error('sendVerificationEmail error:', err);
-  }
-}
 
 const BORROW_SERVICE_INTERNAL_URL = String(
   process.env.BORROW_SERVICE_INTERNAL_URL || process.env.BORROW_SERVICE_URL || 'http://borrow-service:3005'
@@ -177,6 +237,13 @@ async function register(req, res) {
       return res.status(409).json({ message: 'Email or username already exists' });
     }
 
+    const verificationRequired = registrationVerificationRequired();
+    // Without a mail server the account could never be activated: refuse up front
+    // instead of leaving a pending account behind.
+    if (verificationRequired && !isEmailConfigured()) {
+      return res.status(503).json({ message: 'Email delivery is unavailable. Registration is temporarily closed.', code: 'EMAIL_DELIVERY_UNAVAILABLE' });
+    }
+
     const password_hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     const createdUser = await prisma.$transaction(async (tx) => {
@@ -186,7 +253,7 @@ async function register(req, res) {
           email,
           password_hash,
           full_name,
-          status: 'ACTIVE',
+          status: verificationRequired ? PENDING_VERIFICATION : 'ACTIVE',
         },
       });
 
@@ -264,11 +331,28 @@ async function register(req, res) {
       return res.status(502).json({ message: 'Unable to create customer profile. Please try again.' });
     }
 
-    await sendVerificationEmail(createdUser);
+    if (!verificationRequired) {
+      return res.status(201).json({ status: 'REGISTERED', message: 'Register successful' });
+    }
+
+    // The account exists from here on. If the email cannot go out now, the client
+    // still gets the challenge and can ask for the code again; logging in with the
+    // password also starts a fresh challenge.
+    let challenge = null;
+    let emailDelivery = 'SENT';
+    try {
+      challenge = (await emailOtp.issue({ user: createdUser, purpose: PURPOSES.EMAIL_VERIFICATION })).challenge;
+    } catch (error) {
+      emailDelivery = 'FAILED';
+      if (error instanceof OtpError) challenge = error.extra?.challenge || null;
+      else console.error('register otp error:', error);
+    }
 
     return res.status(201).json({
-      message: 'Register successful',
-      user: sanitizeUser(createdUser),
+      status: 'VERIFICATION_REQUIRED',
+      message: 'Register successful. Verify your email address to activate the account.',
+      email_delivery: emailDelivery,
+      challenge,
     });
   } catch (error) {
     console.error('register error:', error);
@@ -363,11 +447,28 @@ async function updateMe(req, res) {
       return res.status(400).json({ message: 'Invalid phone format' });
     }
 
+    // A new address is unconfirmed until its own code is entered. Where the email is
+    // a second factor, an attacker holding a session could otherwise redirect the
+    // codes to themselves, so that change goes through an administrator.
+    let emailChange = {};
+    if (email !== undefined) {
+      const nextEmail = normalizeIdentifier(email);
+      const current = await prisma.user.findUnique({ where: { id: userId } });
+      if (!current) return res.status(404).json({ message: 'User not found' });
+      if (nextEmail !== normalizeIdentifier(current.email)) {
+        const { roles } = await getUserRolesAndPermissions(userId);
+        if (requiresEmailOtp(current, roles)) {
+          return res.status(403).json({ message: 'This account uses email sign-in codes; ask an administrator to change its email.', code: 'EMAIL_CHANGE_REQUIRES_ADMIN' });
+        }
+        emailChange = { email: nextEmail, email_verified_at: null };
+      }
+    }
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {
         ...(full_name !== undefined ? { full_name: String(full_name).trim() } : {}),
-        ...(email !== undefined ? { email: normalizeIdentifier(email) } : {}),
+        ...emailChange,
         ...(phone !== undefined ? { phone: String(phone).trim() || null } : {}),
       },
     });
@@ -468,8 +569,14 @@ async function refresh(req, res) {
     }
 
     const { roles, permissions } = await getUserRolesAndPermissions(user.id);
+    // A session that began without the second factor the account now needs (2FA
+    // turned on later, or STAFF_EMAIL_OTP_MODE raised) must sign in again.
+    if (requiresEmailOtp(user, roles) && !record.mfa) {
+      await refreshTokens.revokeFamily(record.family_id);
+      return res.status(401).json({ message: 'Invalid refresh token', code: 'REFRESH_TOKEN_REVOKED' });
+    }
     const token = signAccessToken(user, roles, permissions);
-    const next = await refreshTokens.issue(user.id, record.family_id);
+    const next = await refreshTokens.issue(user.id, record.family_id, { mfa: Boolean(record.mfa) });
 
     return res.json({
       message: 'Token refreshed',
@@ -531,6 +638,15 @@ async function login(req, res) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
+    // Right password, email not confirmed yet: no session, a verification code instead.
+    // Wrong passwords never reach this, so it reveals nothing to someone guessing.
+    if (user.status === PENDING_VERIFICATION) {
+      if (user.failed_login_attempts > 0) {
+        await prisma.user.update({ where: { id: user.id }, data: { failed_login_attempts: 0 } });
+      }
+      return respondWithChallenge(res, user, PURPOSES.EMAIL_VERIFICATION, 'EMAIL_VERIFICATION_REQUIRED');
+    }
+
     if (user.status !== 'ACTIVE') {
       return res.status(403).json({ message: 'User is not active' });
     }
@@ -545,32 +661,120 @@ async function login(req, res) {
 
     const { roles, permissions } = await getUserRolesAndPermissions(user.id);
 
-    const token = signAccessToken(user, roles, permissions);
-
-    let refresh = null;
-    if (wantsRefreshToken(req)) {
-      try {
-        refresh = await refreshTokens.issue(user.id);
-      } catch (error) {
-        // Redis down: the login still works, the app just has no refresh token and
-        // asks for the password again when the access token expires.
-        console.warn('login: refresh token not issued:', error.message);
-      }
+    // Second factor: nothing that grants access (JWT, refresh token) is issued here.
+    if (requiresEmailOtp(user, roles)) {
+      return respondWithChallenge(res, user, PURPOSES.LOGIN_2FA, 'OTP_REQUIRED');
     }
 
-    return res.json({
-      message: 'Login successful',
-      token,
-      ...(refresh ? { refresh_token: refresh.token, refresh_expires_at: refresh.expiresAt } : {}),
-      user: {
-        ...sanitizeUser(user),
-        roles,
-        permissions,
-      },
-    });
+    return issueSession(req, res, user, roles, permissions, { mfa: false });
   } catch (error) {
     console.error('login error:', error);
     return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+/** The response of a completed login (unchanged contract; `status` is new and optional to read). */
+async function issueSession(req, res, user, roles, permissions, { mfa }) {
+  const token = signAccessToken(user, roles, permissions);
+
+  let refresh = null;
+  if (wantsRefreshToken(req)) {
+    try {
+      refresh = await refreshTokens.issue(user.id, undefined, { mfa });
+    } catch (error) {
+      // Redis down: the login still works, the app just has no refresh token and
+      // asks for the password again when the access token expires.
+      console.warn('login: refresh token not issued:', error.message);
+    }
+  }
+
+  return res.json({
+    status: 'AUTHENTICATED',
+    message: 'Login successful',
+    token,
+    ...(refresh ? { refresh_token: refresh.token, refresh_expires_at: refresh.expiresAt } : {}),
+    user: {
+      ...sanitizeUser(user),
+      roles,
+      permissions,
+    },
+  });
+}
+
+// POST /auth/login/verify-otp { challenge_id, code, client? } — second step of a login
+// that answered OTP_REQUIRED. Issues exactly what /auth/login would have.
+async function verifyLoginOtp(req, res) {
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ message: 'JWT_SECRET is not configured' });
+  }
+
+  let challenge;
+  try {
+    challenge = await emailOtp.verify({
+      challengeId: req.body?.challenge_id,
+      purpose: PURPOSES.LOGIN_2FA,
+      code: req.body?.code,
+      apply: markEmailVerified,
+    });
+  } catch (error) {
+    return sendOtpError(res, error, 'verifyLoginOtp');
+  }
+
+  try {
+    // Re-read: the account may have been locked or deactivated while the code was in the mail.
+    const user = await prisma.user.findUnique({ where: { id: challenge.user_id } });
+    if (!user || user.deleted_at || user.status !== 'ACTIVE') {
+      return res.status(403).json({ message: 'User is not active' });
+    }
+
+    // A password change (or lock, role change) after the password step started ends it.
+    let cutoff;
+    try {
+      cutoff = Number(await redis.getStrict(`user:tokens-valid-after:${user.id}`));
+    } catch (error) {
+      console.error('verifyLoginOtp: revocation state unavailable:', error.message);
+      return res.status(503).json({ message: 'Sign-in cannot be completed right now. Try again shortly.', code: 'AUTH_STATE_UNAVAILABLE' });
+    }
+    if (Number.isFinite(cutoff) && cutoff > Math.floor(new Date(challenge.created_at).getTime() / 1000)) {
+      return res.status(410).json({ message: 'This verification session is no longer valid. Start again.', code: 'OTP_CHALLENGE_INVALID' });
+    }
+
+    const { roles, permissions } = await getUserRolesAndPermissions(user.id);
+    return issueSession(req, res, user, roles, permissions, { mfa: true });
+  } catch (error) {
+    console.error('verifyLoginOtp error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+// POST /auth/email-otp/verify { challenge_id, code } — confirms the email of a new
+// (or not yet verified) account. No session is issued: the client logs in next.
+async function verifyEmailOtp(req, res) {
+  try {
+    await emailOtp.verify({
+      challengeId: req.body?.challenge_id,
+      purpose: PURPOSES.EMAIL_VERIFICATION,
+      code: req.body?.code,
+      apply: markEmailVerified,
+    });
+    return res.json({ status: 'VERIFIED', message: 'Email verified successfully' });
+  } catch (error) {
+    return sendOtpError(res, error, 'verifyEmailOtp');
+  }
+}
+
+// POST /auth/email-otp/resend { challenge_id, purpose? } — a new code for the same
+// challenge (cooldown, per-challenge and per-account limits in lib/email-otp.js).
+async function resendEmailOtp(req, res) {
+  const purpose = String(req.body?.purpose || PURPOSES.EMAIL_VERIFICATION).toUpperCase();
+  if (!PURPOSES[purpose]) {
+    return res.status(400).json({ message: 'Invalid purpose', code: 'VALIDATION_ERROR' });
+  }
+  try {
+    const { challenge } = await emailOtp.resend({ challengeId: req.body?.challenge_id, purpose });
+    return res.json({ status: 'OTP_SENT', message: 'A new code has been sent', challenge });
+  } catch (error) {
+    return sendOtpError(res, error, 'resendEmailOtp');
   }
 }
 
@@ -689,32 +893,9 @@ async function confirmPasswordReset(req, res) {
   }
 }
 
-async function verifyEmail(req, res) {
-  try {
-    const token = String(req.body?.token || '').trim();
-    if (!token) {
-      return res.status(400).json({ message: 'token is required' });
-    }
-
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const verificationToken = await prisma.emailVerificationToken.findUnique({ where: { token_hash: tokenHash } });
-
-    if (!verificationToken || verificationToken.used_at || verificationToken.expires_at < new Date()) {
-      return res.status(400).json({ message: 'Invalid or expired verification token' });
-    }
-
-    await prisma.$transaction([
-      prisma.user.update({ where: { id: verificationToken.user_id }, data: { email_verified_at: new Date() } }),
-      prisma.emailVerificationToken.update({ where: { id: verificationToken.id }, data: { used_at: new Date() } }),
-    ]);
-
-    return res.json({ message: 'Email verified successfully' });
-  } catch (error) {
-    console.error('verifyEmail error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-}
-
+// POST /auth/resend-verification (signed in) — accounts that are already active but
+// never confirmed their address (existing accounts, or after an email change) get a
+// code; it is entered through POST /auth/email-otp/verify like a new account's.
 async function resendVerification(req, res) {
   try {
     const userId = req.auth?.sub;
@@ -728,14 +909,13 @@ async function resendVerification(req, res) {
     }
 
     if (user.email_verified_at) {
-      return res.json({ message: 'Email already verified' });
+      return res.json({ status: 'ALREADY_VERIFIED', message: 'Email already verified' });
     }
 
-    await sendVerificationEmail(user);
-    return res.json({ message: 'Verification email sent' });
+    const { challenge } = await emailOtp.issue({ user, purpose: PURPOSES.EMAIL_VERIFICATION });
+    return res.json({ status: 'OTP_SENT', message: 'Verification code sent', challenge });
   } catch (error) {
-    console.error('resendVerification error:', error);
-    return res.status(500).json({ message: 'Internal server error' });
+    return sendOtpError(res, error, 'resendVerification');
   }
 }
 
@@ -751,6 +931,8 @@ module.exports = {
   changePassword,
   requestPasswordReset,
   confirmPasswordReset,
-  verifyEmail,
   resendVerification,
+  verifyEmailOtp,
+  resendEmailOtp,
+  verifyLoginOtp,
 };

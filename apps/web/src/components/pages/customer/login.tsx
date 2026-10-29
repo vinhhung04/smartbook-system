@@ -4,6 +4,8 @@ import { safeReturnUrl, withReturnUrl } from '@/lib/return-url';
 import { AuthLayout } from '@/components/auth-layout';
 import { useLoginForm } from '@/components/auth/use-login-form';
 import { AuthField, AuthFormAlert, AuthPasswordField, AuthPortalSwitch, AuthRememberCheckbox, AuthSubmitButton } from '@/components/auth/auth-fields';
+import { OtpVerificationStep } from '@/components/auth/otp-verification';
+import { otpStepCopy } from '@/lib/otp';
 
 const LINK = 'rounded-sm font-semibold text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:text-indigo-300';
 
@@ -16,6 +18,7 @@ export function CustomerLoginPage() {
   const {
     identifier, setIdentifier, password, setPassword, remember, setRemember,
     errors, formError, submitting, submit, identifierRef, passwordRef,
+    challenge, verifyCode, cancelChallenge,
   } = useLoginForm({
     portal: 'customer',
     // Staff accounts are refused here and their session cleared again, as before.
@@ -24,6 +27,23 @@ export function CustomerLoginPage() {
       : 'Tài khoản này không phải tài khoản bạn đọc. Nhân viên vui lòng đăng nhập ở cổng nội bộ.'),
     onSuccess: () => navigate(returnUrl || '/customer'),
   });
+
+  // returnUrl stays in the address bar the whole time, so the reader still lands on their book.
+  if (challenge) {
+    const copy = otpStepCopy(challenge.challenge.purpose, challenge.challenge.masked_email);
+    return (
+      <AuthLayout portal="customer" title={copy.title} subtitle={copy.subtitle}>
+        <OtpVerificationStep
+          key={challenge.challenge.id}
+          challenge={challenge.challenge}
+          onVerify={verifyCode}
+          onBack={cancelChallenge}
+          backLabel="Quay lại đăng nhập"
+          submitLabel={challenge.status === 'OTP_REQUIRED' ? 'Xác nhận và đăng nhập' : 'Xác thực và đăng nhập'}
+        />
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout

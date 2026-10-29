@@ -14,8 +14,10 @@ export interface User {
   username: string;
   full_name: string;
   phone?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'LOCKED' | 'PENDING';
+  status: 'ACTIVE' | 'INACTIVE' | 'LOCKED' | 'PENDING' | 'PENDING_VERIFICATION';
   roles: Array<{ id: string; code: string; name: string }>;
+  email_verified_at?: string | null;
+  email_otp_2fa_enabled?: boolean;
   primary_warehouse_id?: string | null;
   warehouse_scopes?: WarehouseScope[];
   created_at: string;
@@ -55,7 +57,7 @@ export interface UserCreateRequest {
   email: string;
   password: string;
   phone?: string;
-  status?: 'ACTIVE' | 'INACTIVE' | 'LOCKED' | 'PENDING';
+  status?: User['status'];
   role_ids?: string[];
   warehouse_scopes?: WarehouseScope[];
   primary_warehouse_id?: string | null;
@@ -65,8 +67,9 @@ export interface UserUpdateRequest {
   full_name?: string;
   email?: string;
   phone?: string;
-  status?: 'ACTIVE' | 'INACTIVE' | 'LOCKED' | 'PENDING';
+  status?: User['status'];
   role_ids?: string[];
+  email_otp_2fa_enabled?: boolean;
 }
 
 export const userService = {

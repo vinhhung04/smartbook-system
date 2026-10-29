@@ -3,7 +3,7 @@ const crypto = require('crypto');
 // Opaque refresh tokens for the mobile app, kept in Redis (AOF-persisted in
 // docker-compose) so no table is needed. Only a SHA-256 of the token is stored.
 //
-//   refresh:token:<hash>   -> { user_id, family_id, issued_at }   (the live token)
+//   refresh:token:<hash>   -> { user_id, family_id, issued_at, mfa? }   (the live token)
 //   refresh:used:<hash>    -> family_id                            (rotated-away tokens)
 //   refresh:family:<id>    -> <hash of the family's live token>
 //
@@ -13,6 +13,9 @@ const crypto = require('crypto');
 // A token is also refused when it predates the user's revocation cutoff
 // (user:tokens-valid-after:<id>), which password change, lock/deactivate and
 // role changes already write — so those end mobile sessions too.
+// `mfa: true` marks a family that began with a completed email OTP; it is carried
+// across rotations so /auth/refresh can refuse families that skipped a second factor
+// the account now requires.
 
 const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -37,12 +40,12 @@ function ttlSeconds() {
  *   method must throw when Redis cannot answer (never treat "down" as "no such key").
  */
 function createRefreshTokenService(store, { now = () => Date.now() } = {}) {
-  async function issue(userId, familyId = crypto.randomUUID()) {
+  async function issue(userId, familyId = crypto.randomUUID(), { mfa = false } = {}) {
     const token = crypto.randomBytes(32).toString('base64url');
     const hash = hashToken(token);
     const ttl = ttlSeconds();
     const issuedAt = Math.floor(now() / 1000);
-    await store.set(`refresh:token:${hash}`, JSON.stringify({ user_id: userId, family_id: familyId, issued_at: issuedAt }), ttl);
+    await store.set(`refresh:token:${hash}`, JSON.stringify({ user_id: userId, family_id: familyId, issued_at: issuedAt, ...(mfa ? { mfa: true } : {}) }), ttl);
     await store.set(`refresh:family:${familyId}`, hash, ttl);
     return { token, familyId, expiresAt: new Date((issuedAt + ttl) * 1000).toISOString() };
   }

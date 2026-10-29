@@ -18,7 +18,7 @@ sed \
   -e "s/^ANALYTICS_DB_PASSWORD=.*/ANALYTICS_DB_PASSWORD=$(gen 24)/" \
   -e "s/^RABBITMQ_PASSWORD=.*/RABBITMQ_PASSWORD=$(gen 24)/" \
   -e "s/^JWT_SECRET=.*/JWT_SECRET=$(gen 48)/" \
-  -e "s/^INTERNAL_SERVICE_KEY=.*/INTERNAL_SERVICE_KEY=$(gen 32)/" \
+  -e "s/^INTERNAL_SERVICE_KEY=.*/INTERNAL_SERVICE_KEY=$(gen 32)/"   -e "s/^OTP_HMAC_SECRET=.*/OTP_HMAC_SECRET=$(gen 32)/" \
   "$APP_DIR/.env.production.example" >"$target"
 chmod 600 "$target"
-log "created $target - now fill in OPENROUTER_API_KEY (and SMTP/VNPay if used)"
+log "created $target - now fill in OPENROUTER_API_KEY and SMTP_* (sign-up codes need it; VNPay if used)"

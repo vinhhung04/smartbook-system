@@ -5,6 +5,8 @@ import { safeReturnUrl } from "@/lib/return-url";
 import { AuthLayout } from "@/components/auth-layout";
 import { useLoginForm } from "@/components/auth/use-login-form";
 import { AuthField, AuthFormAlert, AuthPasswordField, AuthPortalSwitch, AuthRememberCheckbox, AuthSubmitButton } from "@/components/auth/auth-fields";
+import { OtpVerificationStep } from "@/components/auth/otp-verification";
+import { otpStepCopy } from "@/lib/otp";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -12,11 +14,28 @@ export function LoginPage() {
   const {
     identifier, setIdentifier, password, setPassword, remember, setRemember,
     errors, formError, submitting, submit, identifierRef, passwordRef,
+    challenge, verifyCode, cancelChallenge,
   } = useLoginForm({
     portal: "staff",
     // Where to go is decided by the roles the backend returned, never by this page.
     onSuccess: (data) => navigate(safeReturnUrl(searchParams.get("returnUrl")) || getHomePathForUser(data.user)),
   });
+
+  if (challenge) {
+    const copy = otpStepCopy(challenge.challenge.purpose, challenge.challenge.masked_email);
+    return (
+      <AuthLayout title={copy.title} subtitle={copy.subtitle}>
+        <OtpVerificationStep
+          key={challenge.challenge.id}
+          challenge={challenge.challenge}
+          onVerify={verifyCode}
+          onBack={cancelChallenge}
+          backLabel="Quay lại đăng nhập"
+          submitLabel={challenge.status === "OTP_REQUIRED" ? "Xác nhận và đăng nhập" : "Xác thực email"}
+        />
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout
@@ -25,9 +44,9 @@ export function LoginPage() {
       footer={
         <div className="space-y-1 border-t border-border pt-5">
           <AuthPortalSwitch question="Bạn là bạn đọc của thư viện?" action="Cổng bạn đọc" to="/customer/login" />
+          {/* Staff accounts are created by an administrator (IAM), never by self sign-up. */}
           <p className="text-[13.5px] text-muted-foreground">
-            Chưa có tài khoản nhân viên?{" "}
-            <Link to="/register" className="rounded-sm font-semibold text-foreground hover:text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:hover:text-indigo-300">Đăng ký</Link>
+            Chưa có tài khoản nhân viên? Liên hệ quản trị viên thư viện để được cấp tài khoản.
           </p>
         </div>
       }
