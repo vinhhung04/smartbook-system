@@ -1,0 +1,93 @@
+---
+title: "ERD: Phân hệ xác thực và phân quyền (auth-service)"
+---
+%% Nguồn đối chiếu: services/auth-service/prisma/schema.prisma
+%% Không vẽ: auth_audit_logs, integration_outbox, integration_inbox (không có khóa ngoại).
+%% warehouse_id và primary_warehouse_id tham chiếu kho của inventory-service
+%% (khác cơ sở dữ liệu, không có ràng buộc khóa ngoại).
+erDiagram
+    users ||--o{ email_verification_tokens : "legacy"
+    users ||--o{ password_reset_tokens : "yêu cầu"
+    users ||--o{ email_otp_challenges : "nhận mã"
+    users ||--o{ refresh_tokens : "sở hữu"
+    users ||--o{ user_warehouse_scopes : "phụ trách kho"
+    users ||--o{ user_roles : "được gán"
+    roles ||--o{ user_roles : "gồm"
+    roles ||--o{ role_permissions : "có"
+    permissions ||--o{ role_permissions : "thuộc"
+
+    users {
+        uuid id PK
+        varchar username UK
+        varchar email UK
+        text password_hash
+        varchar full_name
+        varchar status "ACTIVE, LOCKED, PENDING_VERIFICATION..."
+        uuid primary_warehouse_id "tham chiếu logic sang inventory-service"
+        boolean is_superuser
+        int failed_login_attempts
+        timestamptz email_verified_at
+        boolean email_otp_2fa_enabled
+        timestamptz deleted_at
+    }
+    roles {
+        uuid id PK
+        varchar code UK
+        varchar name
+        boolean is_system
+    }
+    permissions {
+        uuid id PK
+        varchar code UK
+        varchar module_name
+        varchar action_name
+    }
+    user_roles {
+        uuid id PK
+        uuid user_id FK
+        uuid role_id FK
+        uuid assigned_by_user_id
+        timestamptz expires_at
+    }
+    role_permissions {
+        uuid id PK
+        uuid role_id FK
+        uuid permission_id FK
+    }
+    user_warehouse_scopes {
+        uuid id PK
+        uuid user_id FK
+        uuid warehouse_id "tham chiếu logic sang inventory-service"
+        varchar access_level
+    }
+    refresh_tokens {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash UK
+        timestamptz expires_at
+        timestamptz revoked_at
+    }
+    password_reset_tokens {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash UK
+        timestamptz expires_at
+        timestamptz used_at
+    }
+    email_otp_challenges {
+        uuid id PK
+        uuid user_id FK
+        varchar purpose "EMAIL_VERIFICATION, LOGIN_2FA"
+        varchar code_hash "HMAC-SHA256"
+        int attempts
+        int send_count
+        timestamptz expires_at
+        timestamptz consumed_at
+        timestamptz invalidated_at
+    }
+    email_verification_tokens {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash UK
+        timestamptz expires_at
+    }
