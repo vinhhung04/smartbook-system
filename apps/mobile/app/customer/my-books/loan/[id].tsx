@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
+import { Alert, Text, View } from 'react-native';
 
 import * as customerBorrowApi from '../../../../src/api/customerBorrow';
 import { ApiError } from '../../../../src/auth/auth-context';
-import { GlowBadge } from '../../../../src/components/customer/GlowBadge';
-import { canRequestRenewal, getLoanStatusDisplay } from '../../../../src/lib/loanStatus';
-import { colors, radius, shadow, spacing, typography } from '../../../../src/theme/customerTokens';
+import { getDueState, getLoanStatusDisplay, getRenewalView } from '../../../../src/lib/loanStatus';
+import { useSubmitLock } from '../../../../src/lib/submitLock';
+import { Button, Card, ErrorState, InfoRow, InlineAlert, LoadingState, Screen, ScreenHeader, SectionHeader, StatusBadge, fontFamily, space, useTheme } from '../../../../src/design-system';
 import type { Loan } from '../../../../src/types/borrow';
+import { formatVnd, toMoney } from '../../../../src/lib/money';
+
+const DEPOSIT_STATUS_LABEL = {
+  HELD: 'đang giữ',
+  RELEASED: 'đã hoàn',
+  PARTIALLY_REFUNDED: 'hoàn một phần',
+  CAPTURED: 'đã khấu trừ',
+} as const;
 
 export default function CustomerLoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { colors, type } = useTheme();
   const [loan, setLoan] = useState<Loan | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRenewing, setIsRenewing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const renewLock = useSubmitLock();
 
   const load = useCallback(async () => {
     setError(null);
@@ -33,165 +42,104 @@ export default function CustomerLoanDetailScreen() {
   }, [load]);
 
   async function handleRenewRequest() {
-    setIsRenewing(true);
-    try {
-      const result = await customerBorrowApi.requestMyLoanRenewal(id);
-      Alert.alert(
-        'Đã gửi yêu cầu gia hạn',
-        `Thư viện sẽ xem xét gia hạn thêm ${result.data.requested_extension_days} ngày.`,
-      );
-    } catch (err) {
-      Alert.alert('Không gửi được yêu cầu', err instanceof ApiError ? err.message : 'Vui lòng thử lại sau.');
-    } finally {
-      setIsRenewing(false);
-    }
+    await renewLock.run(async () => {
+      setIsRenewing(true);
+      try {
+        const result = await customerBorrowApi.requestMyLoanRenewal(id);
+        Alert.alert(
+          'Đã gửi yêu cầu gia hạn',
+          `Thư viện sẽ xem xét gia hạn thêm ${result.data.requested_extension_days} ngày.`,
+        );
+      } catch (err) {
+        Alert.alert('Không gửi được yêu cầu', err instanceof ApiError ? err.message : 'Vui lòng thử lại sau.');
+      } finally {
+        // Either way, show the server's view: a request that did land (lost response)
+        // turns the button into "đang chờ duyệt" instead of inviting a second one.
+        await load();
+        setIsRenewing(false);
+      }
+    });
   }
+
+  const due = loan ? getDueState(loan.due_date, loan.status) : null;
+  const renewal = loan ? getRenewalView(loan.status, loan.renewal) : null;
+
+  const title = loan ? `Phiếu ${loan.loan_number}` : 'Chi tiết mượn sách';
+  if (isLoading) {
+    return (<><ScreenHeader title={title} /><Screen scroll={false}><LoadingState /></Screen></>);
+  }
+  if (error || !loan) {
+    return (<><ScreenHeader title={title} /><Screen scroll={false}><ErrorState message={error ?? 'Không tìm thấy lượt mượn'} onRetry={() => { setIsLoading(true); void load().finally(() => setIsLoading(false)); }} /></Screen></>);
+  }
+
+  const status = getLoanStatusDisplay(loan.status);
+  const daysText = due && due.kind !== 'closed' ? due.label : null;
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: loan?.loan_number ?? 'Chi tiết mượn sách' }} />
-      {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : error || !loan ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error ?? 'Không tìm thấy'}</Text>
-        </View>
-      ) : (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-          <View style={styles.statusRow}>
-            <GlowBadge text={getLoanStatusDisplay(loan.status).label} tone={getLoanStatusDisplay(loan.status).tone} />
+      <ScreenHeader title={title} />
+      <Screen
+        onRefresh={() => void load()}
+        footer={renewal?.canRequest ? (
+          <Button label="Yêu cầu gia hạn" icon="refresh" loading={isRenewing} loadingLabel="Đang gửi yêu cầu…" onPress={handleRenewRequest} />
+        ) : undefined}
+      >
+        {/* The date that matters, first and large; the rest follows. */}
+        <View style={{ gap: space.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {status ? <StatusBadge tone={status.tone} label={status.label} /> : null}
+            {due && (due.kind === 'overdue' || due.kind === 'soon') ? <StatusBadge tone={due.kind === 'overdue' ? 'danger' : 'warning'} label={due.label} icon="alarm" /> : null}
           </View>
+          <Text style={type.caption}>Hạn trả</Text>
+          <Text style={{ fontFamily: fontFamily.serif, fontSize: 34, lineHeight: 40, color: due?.kind === 'overdue' ? colors.danger : colors.textPrimary }}>
+            {new Date(loan.due_date).toLocaleDateString('vi-VN')}
+          </Text>
+          {daysText && due?.kind !== 'overdue' ? <Text style={type.callout}>{daysText}</Text> : null}
+        </View>
 
-          <View style={styles.metaGrid}>
-            <MetaRow label="Ngày mượn" value={new Date(loan.borrow_date).toLocaleDateString('vi-VN')} />
-            <MetaRow label="Hạn trả" value={new Date(loan.due_date).toLocaleDateString('vi-VN')} />
-            <MetaRow label="Số đầu sách" value={String(loan.total_items)} />
+        {due?.kind === 'overdue' ? (
+          <InlineAlert tone="danger" title="Sách đã quá hạn trả" message="Phí phạt trả trễ có thể phát sinh theo quy định của thư viện. Hãy trả sách hoặc gửi yêu cầu gia hạn." />
+        ) : null}
+        {renewal?.note ? <InlineAlert tone="info" message={renewal.note} /> : null}
+
+        <Card>
+          <InfoRow label="Ngày mượn" value={new Date(loan.borrow_date).toLocaleDateString('vi-VN')} />
+          <InfoRow label="Hạn trả" value={new Date(loan.due_date).toLocaleDateString('vi-VN')} />
+          <InfoRow label="Số đầu sách" value={String(loan.total_items)} />
+          <InfoRow label="Mã phiếu" value={loan.loan_number} mono />
+        </Card>
+
+        {loan.loan_items && loan.loan_items.length > 0 ? (
+          <View style={{ gap: space.md }}>
+            <SectionHeader title="Sách trong lượt mượn" />
+            <Card>
+              {loan.loan_items.map((item, index) => {
+                const itemStatus = getLoanStatusDisplay(item.status as Loan['status']);
+                return (
+                  <View key={item.id} style={{ gap: 4, paddingTop: index > 0 ? space.md : 0, borderTopWidth: index > 0 ? 1 : 0, borderTopColor: colors.border }}>
+                    <Text style={{ fontFamily: fontFamily.serif, fontSize: 17, lineHeight: 22, color: colors.textPrimary }} numberOfLines={2}>{item.book_title ?? 'Sách chưa có tên'}</Text>
+                    {item.book_author ? <Text style={type.caption}>{item.book_author}</Text> : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+                      <Text selectable style={{ fontFamily: fontFamily.mono, fontSize: 13.5, color: colors.textSecondary }}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
+                      {itemStatus ? <StatusBadge tone={itemStatus.tone} label={itemStatus.label} /> : <Text style={type.caption}>{item.status}</Text>}
+                    </View>
+                    {item.deposit ? (
+                      <Text style={type.caption}>
+                        Tiền cọc {formatVnd(item.deposit.amount)} · {DEPOSIT_STATUS_LABEL[item.deposit.status] ?? item.deposit.status}
+                        {toMoney(item.deposit.refunded_amount) > 0 ? ` · đã hoàn ${formatVnd(item.deposit.refunded_amount)}` : ''}
+                        {toMoney(item.deposit.captured_amount) > 0 ? ` · khấu trừ ${formatVnd(item.deposit.captured_amount)}` : ''}
+                      </Text>
+                    ) : null}
+                    {toMoney(item.outstanding_fine_amount) > 0 ? (
+                      <Text style={[type.caption, { color: colors.danger }]}>Còn phải thanh toán {formatVnd(item.outstanding_fine_amount)} (mục Tiền phạt)</Text>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </Card>
           </View>
-
-          {loan.loan_items && loan.loan_items.length > 0 ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Đầu sách trong lượt mượn</Text>
-              {loan.loan_items.map((item) => (
-                <View key={item.id} style={styles.itemRow}>
-                  <Text style={styles.itemBarcode}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
-                  <Text style={styles.itemStatus}>{item.status}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {canRequestRenewal(loan.status) ? (
-            <Pressable
-              style={({ pressed }) => [styles.button, isRenewing && styles.buttonDisabled, pressed && styles.buttonPressed]}
-              onPress={handleRenewRequest}
-              disabled={isRenewing}
-            >
-              <LinearGradient
-                colors={[colors.accentGradientStart, colors.accentGradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-              />
-              {isRenewing ? (
-                <ActivityIndicator color={colors.onPrimary} />
-              ) : (
-                <Text style={styles.buttonText}>Yêu cầu gia hạn</Text>
-              )}
-            </Pressable>
-          ) : null}
-        </ScrollView>
-      )}
+        ) : null}
+      </Screen>
     </>
   );
 }
-
-function MetaRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.metaRow}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={styles.metaValue}>{value}</Text>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  content: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-    gap: spacing.lg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: colors.bg,
-  },
-  error: {
-    color: colors.danger,
-    fontWeight: '600',
-  },
-  statusRow: {
-    alignItems: 'flex-start',
-  },
-  metaGrid: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    ...shadow.card,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  metaLabel: {
-    ...typography.caption,
-  },
-  metaValue: {
-    ...typography.bodyBold,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionLabel: {
-    ...typography.label,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  itemBarcode: {
-    ...typography.code,
-    fontSize: 13,
-  },
-  itemStatus: {
-    ...typography.caption,
-  },
-  button: {
-    borderRadius: radius.pill,
-    paddingVertical: spacing.md + 4,
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  buttonPressed: {
-    opacity: 0.9,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    fontFamily: typography.h3.fontFamily,
-    color: colors.onPrimary,
-    fontSize: 16,
-  },
-});

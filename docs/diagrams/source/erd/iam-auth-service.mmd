@@ -1,0 +1,59 @@
+---
+title: "ERD – Phân hệ định danh và phân quyền (auth-service)"
+---
+erDiagram
+    users ||--o{ user_roles : "được gán"
+    roles ||--o{ user_roles : "gán cho"
+    roles ||--o{ role_permissions : "bao gồm"
+    permissions ||--o{ role_permissions : "thuộc"
+    users ||--o{ email_otp_challenges : "nhận mã OTP"
+
+    users {
+        uuid id PK
+        varchar username UK
+        varchar email UK
+        text password_hash
+        varchar full_name
+        varchar status
+        uuid primary_warehouse_id "tham chiếu logic sang inventory-service"
+        boolean is_superuser
+        timestamptz email_verified_at
+        boolean email_otp_2fa_enabled
+        timestamptz deleted_at
+    }
+    roles {
+        uuid id PK
+        varchar code UK
+        varchar name
+        boolean is_system
+    }
+    permissions {
+        uuid id PK
+        varchar code UK
+        varchar module_name
+        varchar action_name
+    }
+    user_roles {
+        uuid id PK
+        uuid user_id FK
+        uuid role_id FK
+        uuid assigned_by_user_id
+        timestamptz expires_at
+    }
+    role_permissions {
+        uuid id PK
+        uuid role_id FK
+        uuid permission_id FK
+        timestamptz granted_at
+    }
+    email_otp_challenges {
+        uuid id PK
+        uuid user_id FK
+        varchar purpose "EMAIL_VERIFICATION | LOGIN_2FA"
+        varchar code_hash "HMAC-SHA256"
+        int attempts
+        int send_count
+        timestamptz expires_at
+        timestamptz consumed_at
+        timestamptz invalidated_at
+    }

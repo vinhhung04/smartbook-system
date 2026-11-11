@@ -7,9 +7,10 @@ import { toast } from 'sonner';
 import { ChevronLeft, Printer } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CustomerPageHeader } from './_shared/customer-page-header';
-import { formatDateTime } from './_shared/customer-format';
+import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { getStatusTone } from './_shared/customer-status';
 import { printLoanReceipt } from '@/lib/print-utils';
+import { getBorrowLabel } from '@/lib/status-registry';
 
 export function CustomerLoanDetailPage() {
   const { id } = useParams();
@@ -147,6 +148,19 @@ export function CustomerLoanDetailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-medium text-foreground">{getBookTitle(item)}</p>
                     <p className="text-[12px] text-muted-foreground">Hạn: {formatDateTime(item.due_date)}</p>
+                    {item.deposit && (
+                      <p className="text-[12px] text-muted-foreground">
+                        Tiền cọc {formatCurrencyVnd(Number(item.deposit.amount))} · {getBorrowLabel('deposit', item.deposit.status)}
+                        {Number(item.deposit.refunded_amount) > 0 && ` · đã hoàn ${formatCurrencyVnd(Number(item.deposit.refunded_amount))}`}
+                        {Number(item.deposit.captured_amount) > 0 && ` · khấu trừ ${formatCurrencyVnd(Number(item.deposit.captured_amount))}`}
+                      </p>
+                    )}
+                    {Number(item.outstanding_fine_amount) > 0 && (
+                      <p className="text-[12px] text-rose-600 dark:text-rose-400">
+                        Còn phải thanh toán {formatCurrencyVnd(Number(item.outstanding_fine_amount))} ·{' '}
+                        <NavLink to="/customer/fines" className="font-medium underline">Thanh toán</NavLink>
+                      </p>
+                    )}
                   </div>
                   <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-medium ${itemTone.className}`}>{itemTone.label}</span>
                 </li>

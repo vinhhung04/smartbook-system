@@ -25,6 +25,23 @@ WAREHOUSES = [{"id": "w-hn", "code": "WH-HN-01", "name": "Kho Ha Noi"},
               {"id": "w-hcm", "code": "WH-HCM-01", "name": "Kho HCM Chinh"},
               {"id": "w-dn", "code": "WH-DN-01", "name": "Kho Da Nang"}]
 
+
+class _FrozenDatetime(datetime):
+    """datetime whose now() is NOW. MONTHLY's complete months (05-09/2026, -25%)
+    only hold for "6 tháng gần đây" asked around mid-October 2026; with the real
+    clock the window drifts and the endpoint tests read a different trend."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return NOW.astimezone(tz) if tz else NOW.replace(tzinfo=None)
+
+
+def frozen_clock():
+    """Patches pinning every module the /assistant pipeline reads the clock in to NOW."""
+    return [patch(f"{module}.datetime", _FrozenDatetime)
+            for module in ("main", "copilot_plan", "copilot_response", "copilot_semantic_planner", "copilot_tools",
+                           "copilot_visualization")]
+
 MONTHLY = [{"date": f"2026-{m:02d}", "loans": n, "returns": n - 5, "reservations": 3}
            for m, n in zip(range(4, 11), [40, 120, 130, 110, 100, 90, 45])]
 STOCK_RISK = [
@@ -521,6 +538,7 @@ class VisualizationEndpointTests(unittest.IsolatedAsyncioTestCase):
             patch("main.copilot_tools._warehouses", new=AsyncMock(return_value=WAREHOUSES)),
             patch("main._get_assistant_provider", return_value=self.provider),
             patch.dict(main.TOOL_FUNCTIONS, {"get_borrow_trends": borrow_trends}),
+            *frozen_clock(),
         ]
         for p in self._patches:
             p.start()
@@ -572,7 +590,7 @@ class VisualizationEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stale_snapshot_is_re_read_with_the_same_tool_calls(self):
         await self.ask("Vẽ biểu đồ lượt mượn 6 tháng gần đây", "v6")
-        stale = (datetime.now(VN_TZ) - timedelta(hours=3)).isoformat(timespec="seconds")
+        stale = (NOW - timedelta(hours=3)).isoformat(timespec="seconds")
         self.store.messages[-1].msg_metadata["extras"]["data_as_of"] = stale
         before = list(self.trend_calls)
         body = await self.ask("Đổi sang biểu đồ cột", "v6")

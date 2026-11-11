@@ -1,25 +1,23 @@
-import { useMemo, useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
-  AlertTriangle, ArrowLeftRight, ArrowRight, CheckCircle2, ClipboardCheck, ClipboardList, Clock, Hand, Hourglass,
+  AlertTriangle, ArrowLeftRight, CheckCircle2, ClipboardCheck, ClipboardList, Hand, Hourglass,
   Inbox, Link2, MapPinned, PackageCheck, RefreshCw, Search, ShoppingCart, Truck,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Skeleton } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import { FilterBar } from "@/components/ui/filter-bar";
-import {
-  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
-  PaginationNext, PaginationPrevious,
-} from "@/components/ui/pagination";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BlockError } from "@/components/pages/dashboard/panel";
+import { ListFooter, QueueTabs, RowsSkeleton } from "@/components/ops/ops-kit";
+import { elapsedSince, formatDateTime, darkFieldClass } from "@/components/ops/ops-utils";
 import { cn } from "@/components/ui/utils";
-import { getPaginationRange } from "@/lib/pagination";
 import { getApiErrorMessage } from "@/services/api";
+import { authService } from "@/services/auth";
+import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 import { myWarehouseTaskService, type AvailableWarehouseTask, type MyWarehouseTask } from "@/services/my-warehouse-tasks";
 import { putawayService, type PutawayReceiptSummary } from "@/services/putaway";
 import { getWarehouseTaskStatusLabel, getWarehouseTaskStatusVariant } from "@/lib/status-registry";
@@ -35,37 +33,24 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   STAFF_TASK: "Task được giao",
 };
 
-const FILTER_CHIPS: Array<{ key: string; label: string }> = [
-  { key: "ALL", label: "Tất cả" },
-  { key: "RECEIVING", label: "Tiếp nhận" },
-  { key: "PUTAWAY", label: "Cất hàng" },
-  { key: "PICKING", label: "Lấy hàng" },
-  { key: "OUTBOUND", label: "Xuất kho" },
-  { key: "TRANSFER_RECEIVING", label: "Nhận chuyển kho" },
-  { key: "PURCHASE_REQUEST", label: "Yêu cầu mua" },
-  { key: "EXCEPTION_REPORT", label: "Báo cáo sự cố" },
-  { key: "STAFF_TASK", label: "Task được giao" },
-];
-
-// Same color families the sidebar (nav-groups.ts) already uses for these features —
-// goods receipts/purchase requests = indigo, putaway = violet, picking = emerald,
-// outbound = sky, exception reports = red — so a task's accent always matches the
-// color the rest of the app already trained the user to read as that feature.
-const TASK_TYPE_ACCENT: Record<string, { icon: ComponentType<{ className?: string }>; border: string; iconBg: string; iconColor: string }> = {
-  RECEIVING: { icon: Inbox, border: "border-l-indigo-400 dark:border-l-indigo-500/60", iconBg: "bg-indigo-50 dark:bg-indigo-500/15", iconColor: "text-indigo-600 dark:text-indigo-400" },
-  PUTAWAY: { icon: MapPinned, border: "border-l-violet-400 dark:border-l-violet-500/60", iconBg: "bg-violet-50 dark:bg-violet-500/15", iconColor: "text-violet-600 dark:text-violet-400" },
-  PICKING: { icon: PackageCheck, border: "border-l-emerald-400 dark:border-l-emerald-500/60", iconBg: "bg-emerald-50 dark:bg-emerald-500/15", iconColor: "text-emerald-600 dark:text-emerald-400" },
-  OUTBOUND: { icon: Truck, border: "border-l-sky-400 dark:border-l-sky-500/60", iconBg: "bg-sky-50 dark:bg-sky-500/15", iconColor: "text-sky-600 dark:text-sky-400" },
-  TRANSFER_RECEIVING: { icon: ArrowLeftRight, border: "border-l-teal-400 dark:border-l-teal-500/60", iconBg: "bg-teal-50 dark:bg-teal-500/15", iconColor: "text-teal-600 dark:text-teal-400" },
-  PURCHASE_REQUEST: { icon: ShoppingCart, border: "border-l-amber-400 dark:border-l-amber-500/60", iconBg: "bg-amber-50 dark:bg-amber-500/15", iconColor: "text-amber-600 dark:text-amber-400" },
-  EXCEPTION_REPORT: { icon: AlertTriangle, border: "border-l-red-400 dark:border-l-red-500/60", iconBg: "bg-red-50 dark:bg-red-500/15", iconColor: "text-red-600 dark:text-red-400" },
-  STAFF_TASK: { icon: ClipboardCheck, border: "border-l-fuchsia-400 dark:border-l-fuchsia-500/60", iconBg: "bg-fuchsia-50 dark:bg-fuchsia-500/15", iconColor: "text-fuchsia-600 dark:text-fuchsia-400" },
+// One grey glyph per kind of work, read beside its label; colour stays for status and the next action.
+const TASK_TYPE_ICON: Record<string, ComponentType<{ className?: string }>> = {
+  RECEIVING: Inbox,
+  PUTAWAY: MapPinned,
+  PICKING: PackageCheck,
+  OUTBOUND: Truck,
+  TRANSFER_RECEIVING: ArrowLeftRight,
+  PURCHASE_REQUEST: ShoppingCart,
+  EXCEPTION_REPORT: AlertTriangle,
+  STAFF_TASK: ClipboardCheck,
 };
-const DEFAULT_ACCENT = { icon: ClipboardList, border: "border-l-border", iconBg: "bg-muted", iconColor: "text-muted-foreground" };
 
-const OPERATIONAL_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND", "TRANSFER_RECEIVING"];
+// Task types the exception-report API accepts; the report button is offered only for these.
+const REPORTABLE_TYPES = ["RECEIVING", "PUTAWAY", "PICKING", "OUTBOUND"];
 
 const PAGE_SIZE = 10;
+const PANEL_ID = "warehouse-task-list";
+const ALL = "ALL";
 
 type View = "todo" | "available" | "waiting" | "done";
 type Bucket = Exclude<View, "available">;
@@ -101,24 +86,6 @@ function taskActionLabel(type: string) {
   return "Thực hiện";
 }
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-function ageOf(value: string | null | undefined) {
-  if (!value) return null;
-  const time = new Date(value).getTime();
-  if (Number.isNaN(time)) return null;
-  const minutes = Math.max(0, Math.round((Date.now() - time) / 60_000));
-  if (minutes < 60) return { text: `${minutes} phút`, stale: false };
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return { text: `${hours} giờ`, stale: hours >= 8 };
-  return { text: `${Math.round(hours / 24)} ngày`, stale: true };
-}
-
 function getTaskActionPath(task: MyWarehouseTask, putawayReady: Map<string, PutawayReceiptSummary> | null) {
   // Open the receipt directly while it still has stock to shelve; otherwise use the feed's path.
   if (task.type === "PUTAWAY" && putawayReady?.has(task.id)) return `/putaway/${task.id}`;
@@ -131,11 +98,10 @@ function getTaskActionPath(task: MyWarehouseTask, putawayReady: Map<string, Puta
   return null;
 }
 
-function getRelatedEntityDisplay(task: MyWarehouseTask) {
-  return (
-    (task as MyWarehouseTask & { related_entity_display?: { ref_number: string; details?: string } | null })
-      .related_entity_display ?? null
-  );
+type RelatedEntity = { ref_number: string; details?: string } | null;
+
+function getRelatedEntityDisplay(task: MyWarehouseTask | AvailableWarehouseTask): RelatedEntity {
+  return (task as MyWarehouseTask & { related_entity_display?: RelatedEntity }).related_entity_display ?? null;
 }
 
 function sortByTime(list: MyWarehouseTask[], key: "created_at" | "completed_at", direction: "asc" | "desc") {
@@ -146,57 +112,50 @@ function sortByTime(list: MyWarehouseTask[], key: "created_at" | "completed_at",
   });
 }
 
-function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (page: number) => void }) {
-  if (totalPages <= 1) return null;
-  return (
-    <Pagination className="mx-0 w-auto justify-end">
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            onClick={(event) => { event.preventDefault(); onChange(Math.max(1, page - 1)); }}
-            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
-          />
-        </PaginationItem>
-        {getPaginationRange(page, totalPages).map((item, i) => (
-          <PaginationItem key={`${item}-${i}`}>
-            {typeof item === "number" ? (
-              <PaginationLink isActive={item === page} onClick={(event) => { event.preventDefault(); onChange(item); }} className="cursor-pointer">
-                {item}
-              </PaginationLink>
-            ) : (
-              <PaginationEllipsis />
-            )}
-          </PaginationItem>
-        ))}
-        <PaginationItem>
-          <PaginationNext
-            onClick={(event) => { event.preventDefault(); onChange(Math.min(totalPages, page + 1)); }}
-            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  );
+function warehouseLabel(task: MyWarehouseTask | AvailableWarehouseTask) {
+  const available = task as AvailableWarehouseTask;
+  if (available.task_type === "transfer" && available.from_warehouse_name && available.to_warehouse_name) {
+    return `${available.from_warehouse_name} → ${available.to_warehouse_name}`;
+  }
+  return task.warehouse || "Chưa rõ kho";
 }
 
-const primaryActionClass = "inline-flex h-8 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-lg bg-emerald-600 px-3 text-[12px] font-semibold text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400";
-const secondaryActionClass = "inline-flex h-8 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-lg border border-border bg-background px-3 text-[12px] font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const VIEW_HINT: Record<View, string> = {
+  todo: "Task chờ lâu nhất ở đầu hàng đợi",
+  available: "Nhận task để chuyển nó vào mục Cần làm",
+  waiting: "Yêu cầu và báo cáo bạn gửi, chờ quản lý xử lý",
+  done: "Đã xong, đã hủy hoặc đã chuyển cho người khác",
+};
+
+const actionLinkClass = "inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3.5 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:h-8 sm:min-w-[7.5rem]";
+const primaryLinkClass = cn(actionLinkClass, "bg-primary text-primary-foreground hover:bg-primary/90");
+const outlineLinkClass = cn(actionLinkClass, "border border-border bg-card text-foreground hover:bg-muted");
 
 export function MyWarehouseTasksPage() {
   const navigate = useNavigate();
+  const currentUser = authService.getCurrentUser();
+  const canOpenPurchaseRequests = canAccess(currentUser, ROUTE_ACCESS.purchaseRequestSelf);
+  const canOpenExceptionReports = canAccess(currentUser, ROUTE_ACCESS.exceptionReportSelf);
+
   const [tasks, setTasks] = useState<MyWarehouseTask[]>([]);
+  const [availableTasks, setAvailableTasks] = useState<AvailableWarehouseTask[]>([]);
   const [putawayReady, setPutawayReady] = useState<Map<string, PutawayReceiptSummary> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState<Date | null>(null);
   const [view, setView] = useState<View>("todo");
-  const [activeType, setActiveType] = useState("ALL");
+  const [activeType, setActiveType] = useState(ALL);
+  const [activeWarehouse, setActiveWarehouse] = useState(ALL);
   const [searchQuery, setSearchQuery] = useState("");
-  const [availableTasks, setAvailableTasks] = useState<AvailableWarehouseTask[]>([]);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const claimInFlight = useRef(false);
   const [page, setPage] = useState(1);
 
-  const loadTasks = async () => {
+  // First load shows the skeleton; a refresh keeps the rows on screen and only spins the button.
+  const loadTasks = useCallback(async (mode: "initial" | "refresh" = "refresh") => {
+    if (mode === "initial") setLoading(true); else setRefreshing(true);
     try {
-      setLoading(true);
       const [response, availableResponse, readyReceipts] = await Promise.all([
         myWarehouseTaskService.getMyTasks(),
         myWarehouseTaskService.getAvailableTasks(),
@@ -206,14 +165,19 @@ export function MyWarehouseTasksPage() {
       setTasks(Array.isArray(response.data) ? response.data : []);
       setAvailableTasks(Array.isArray(availableResponse.data) ? availableResponse.data : []);
       setPutawayReady(Array.isArray(readyReceipts) ? new Map(readyReceipts.map((receipt) => [receipt.id, receipt])) : null);
+      setLoadError(null);
+      setLoadedAt(new Date());
     } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không tải được công việc kho"));
+      const message = getApiErrorMessage(error, "Không tải được công việc kho");
+      setLoadError(message);
+      if (mode === "refresh") toast.error(message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void loadTasks(); }, []);
+  useEffect(() => { void loadTasks("initial"); }, [loadTasks]);
 
   const buckets = useMemo(() => {
     const grouped: Record<Bucket, MyWarehouseTask[]> = { todo: [], waiting: [], done: [] };
@@ -228,29 +192,40 @@ export function MyWarehouseTasksPage() {
 
   const viewTasks: Array<MyWarehouseTask | AvailableWarehouseTask> = view === "available" ? availableTasks : buckets[view];
 
-  const countsByType = useMemo(() => {
-    const map: Record<string, number> = { ALL: viewTasks.length };
+  const typeCounts = useMemo(() => {
+    const map: Record<string, number> = {};
     for (const task of viewTasks) map[task.type] = (map[task.type] ?? 0) + 1;
     return map;
   }, [viewTasks]);
 
-  const filtered = useMemo(() => {
-    const base = activeType === "ALL" ? viewTasks : viewTasks.filter((task) => task.type === activeType);
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return base;
-    return base.filter((task) => task.title.toLowerCase().includes(query) || (task.warehouse ?? "").toLowerCase().includes(query));
-  }, [viewTasks, activeType, searchQuery]);
+  const warehouseOptions = useMemo(
+    () => [...new Set(viewTasks.map((task) => task.warehouse).filter((name): name is string => Boolean(name)))].sort(),
+    [viewTasks],
+  );
 
-  const isFiltering = activeType !== "ALL" || searchQuery.trim() !== "";
+  const filtered = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return viewTasks.filter((task) => {
+      if (activeType !== ALL && task.type !== activeType) return false;
+      if (activeWarehouse !== ALL && task.warehouse !== activeWarehouse) return false;
+      if (!query) return true;
+      const related = getRelatedEntityDisplay(task);
+      return [task.title, task.warehouse, TASK_TYPE_LABELS[task.type], related?.ref_number]
+        .filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
+  }, [viewTasks, activeType, activeWarehouse, searchQuery]);
+
+  const isFiltering = activeType !== ALL || activeWarehouse !== ALL || searchQuery.trim() !== "";
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [view, activeType, searchQuery]);
+  useEffect(() => { setPage(1); }, [view, activeType, activeWarehouse, searchQuery]);
   useEffect(() => { setPage((current) => Math.min(current, totalPages)); }, [totalPages]);
   useEffect(() => {
-    // Drop a type filter that has nothing left in the newly selected view.
-    if (activeType !== "ALL" && !countsByType[activeType]) setActiveType("ALL");
-  }, [activeType, countsByType]);
+    // Drop a filter that has nothing left in the newly selected view.
+    if (activeType !== ALL && !typeCounts[activeType]) setActiveType(ALL);
+    if (activeWarehouse !== ALL && !warehouseOptions.includes(activeWarehouse)) setActiveWarehouse(ALL);
+  }, [activeType, typeCounts, activeWarehouse, warehouseOptions]);
 
   const handleReportException = (task: MyWarehouseTask) => {
     const params = new URLSearchParams({ task_id: task.id, task_type: task.type, task_warehouse: task.warehouse ?? "" });
@@ -259,155 +234,173 @@ export function MyWarehouseTasksPage() {
   };
 
   const handleClaimTask = async (task: AvailableWarehouseTask) => {
+    // A ref, not state: a fast double click lands before React re-renders the disabled button.
+    if (claimInFlight.current) return;
+    claimInFlight.current = true;
     setClaimingId(task.id);
     try {
       await myWarehouseTaskService.claimTask(task.claim_endpoint);
-      toast.success(`Đã nhận task ${task.title}. Task đã chuyển sang mục Cần làm.`);
-      void loadTasks();
+      toast.success(`Đã nhận ${task.title}`, {
+        description: "Task đã chuyển sang mục Cần làm.",
+        action: { label: "Xem Cần làm", onClick: () => setView("todo") },
+      });
+      await loadTasks();
     } catch (error: unknown) {
       const apiError = error as { response?: { status?: number } };
       if (apiError?.response?.status === 409) {
-        toast.error("Task này vừa được nhân viên khác nhận. Làm mới danh sách để xem task còn trống.");
+        toast.error("Task này vừa được nhân viên khác nhận. Danh sách đã được làm mới.");
+        await loadTasks();
       } else {
         toast.error(getApiErrorMessage(error, "Không thể nhận task"));
       }
     } finally {
+      claimInFlight.current = false;
       setClaimingId(null);
     }
   };
 
-  const views: Array<{ key: View; label: string; count: number; icon: ComponentType<{ className?: string }>; tone: string }> = [
-    { key: "todo", label: "Cần làm", count: buckets.todo.length, icon: ClipboardList, tone: "text-emerald-600 dark:text-emerald-400" },
-    { key: "available", label: "Có thể nhận", count: availableTasks.length, icon: Hand, tone: "text-sky-600 dark:text-sky-400" },
-    { key: "waiting", label: "Đang chờ duyệt", count: buckets.waiting.length, icon: Hourglass, tone: "text-amber-600 dark:text-amber-400" },
-    { key: "done", label: "Đã xong", count: buckets.done.length, icon: CheckCircle2, tone: "text-muted-foreground" },
+  const tabs: Array<{ key: View; label: string; count: number }> = [
+    { key: "todo", label: "Cần làm", count: buckets.todo.length },
+    { key: "available", label: "Có thể nhận", count: availableTasks.length },
+    { key: "waiting", label: "Đang chờ duyệt", count: buckets.waiting.length },
+    { key: "done", label: "Đã xong", count: buckets.done.length },
   ];
 
-  // The oldest open task gets the spotlight only on the unfiltered first page of "Cần làm".
-  const spotlight = view === "todo" && !isFiltering && page === 1 ? (paged[0] as MyWarehouseTask | undefined) : undefined;
-  const listRows = spotlight ? paged.slice(1) : paged;
+  // The oldest open task is the one to do next, but only while the queue is shown unfiltered.
+  const nextTaskKey = view === "todo" && !isFiltering && page === 1 && paged[0] ? `${paged[0].type}:${paged[0].id}` : null;
   const queueOffset = (page - 1) * PAGE_SIZE;
 
-  const taskMeta = (task: MyWarehouseTask) => {
+  const putawayMeta = (task: MyWarehouseTask) => {
     const putaway = task.type === "PUTAWAY" ? putawayReady?.get(task.id) : undefined;
     return putaway ? `Còn ${putaway.remaining_quantity}/${putaway.total_quantity} cuốn cần cất` : null;
   };
 
-  const renderTaskRow = (task: MyWarehouseTask, index: number) => {
-    const actionPath = getTaskActionPath(task, putawayReady);
-    const relatedEntity = getRelatedEntityDisplay(task);
-    const accent = TASK_TYPE_ACCENT[task.type] ?? DEFAULT_ACCENT;
-    const Icon = accent.icon;
-    const isTodo = view === "todo";
-    const isDone = view === "done";
-    const canReport = isTodo && OPERATIONAL_TYPES.includes(task.type);
-    const age = ageOf(task.created_at);
-    const meta = taskMeta(task);
+  const renderMeta = (task: MyWarehouseTask | AvailableWarehouseTask, extra?: string | null) => {
+    const TypeIcon = TASK_TYPE_ICON[task.type] ?? ClipboardList;
+    const related = getRelatedEntityDisplay(task);
     return (
-      <div key={`${task.type}:${task.id}`} className={cn("flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:gap-4", isDone && "opacity-80")}>
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          {isTodo ? (
-            <span className="mt-0.5 w-5 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground" aria-label={`Thứ tự ${index}`}>{index}</span>
-          ) : null}
-          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", accent.iconBg)}>
-            <Icon className={cn("h-4 w-4", accent.iconColor)} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <p className="truncate font-mono text-[13px] font-medium text-foreground" title={task.title}>{task.title}</p>
-              <StatusBadge label={getWarehouseTaskStatusLabel(task.status)} variant={getWarehouseTaskStatusVariant(task.status)} />
-            </div>
-            <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
-              {TASK_TYPE_LABELS[task.type] ?? task.type} · {task.warehouse || "-"}
-              {meta ? <> · <span className="text-violet-700 dark:text-violet-400">{meta}</span></> : null}
-            </p>
-            {relatedEntity && (
-              <p className="mt-0.5 flex items-center gap-1 text-[11px] text-indigo-700 dark:text-indigo-400">
-                <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
-                <span className="font-mono font-medium">{relatedEntity.ref_number}</span>
-                {relatedEntity.details ? <span className="truncate text-muted-foreground">· {relatedEntity.details}</span> : null}
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className={cn("mr-auto whitespace-nowrap text-[11px] tabular-nums sm:mr-0", !isDone && age?.stale ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")} title={formatDate(isDone ? task.completed_at : task.created_at)}>
-            {isDone ? (task.completed_at ? `Xong ${formatDate(task.completed_at)}` : "Đã đóng") : age ? `Chờ ${age.text}` : "-"}
-          </span>
-          {actionPath ? (
-            <NavLink to={actionPath} className={isTodo ? primaryActionClass : secondaryActionClass}>
-              {isTodo ? taskActionLabel(task.type) : "Xem"}
-            </NavLink>
-          ) : null}
-          {canReport && (
-            <button
-              type="button"
-              onClick={() => handleReportException(task)}
-              aria-label={`Báo cáo sự cố cho task ${task.title}`}
-              title="Báo cáo sự cố cho task này"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:border-red-500/20 dark:hover:bg-red-500/10 dark:hover:text-red-400"
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
+      <>
+        <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted-foreground">
+          <TypeIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>{TASK_TYPE_LABELS[task.type] ?? task.type}</span>
+          <span aria-hidden="true">·</span>
+          <span className="truncate">{warehouseLabel(task)}</span>
+          {extra ? <><span aria-hidden="true">·</span><span className="font-medium text-foreground">{extra}</span></> : null}
+        </p>
+        {related ? (
+          <p className="mt-1 flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground">
+            <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="font-mono text-foreground">{related.ref_number}</span>
+            {related.details ? <span className="truncate">· {related.details}</span> : null}
+          </p>
+        ) : null}
+      </>
     );
   };
 
-  const renderSpotlight = (task: MyWarehouseTask) => {
+  const renderTaskRow = (task: MyWarehouseTask, position: number) => {
     const actionPath = getTaskActionPath(task, putawayReady);
-    const accent = TASK_TYPE_ACCENT[task.type] ?? DEFAULT_ACCENT;
-    const Icon = accent.icon;
-    const age = ageOf(task.created_at);
-    const meta = taskMeta(task);
-    const relatedEntity = getRelatedEntityDisplay(task);
+    const isTodo = view === "todo";
+    const isDone = view === "done";
+    const isNext = `${task.type}:${task.id}` === nextTaskKey;
+    const canReport = isTodo && REPORTABLE_TYPES.includes(task.type);
+    const age = elapsedSince(task.created_at);
+    const stamp = isDone
+      ? (task.completed_at ? `Xong ${formatDateTime(task.completed_at)}` : "Đã đóng")
+      : age ? `Chờ ${age.text}` : "—";
+
     return (
-      <div className={cn("flex flex-col gap-4 border-b border-l-4 border-border bg-emerald-50/50 px-5 py-4 dark:bg-emerald-500/5 sm:flex-row sm:items-center sm:justify-between", accent.border)}>
-        <div className="flex min-w-0 items-start gap-3">
-          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", accent.iconBg)}>
-            <Icon className={cn("h-5 w-5", accent.iconColor)} />
+      <li
+        key={`${task.type}:${task.id}`}
+        className={cn("flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-5", isNext && "bg-primary/[0.04] dark:bg-primary/[0.07]")}
+      >
+        {isTodo ? (
+          <span className="hidden w-6 shrink-0 text-right text-[12px] tabular-nums text-muted-foreground sm:block" aria-hidden="true">{position}</span>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={cn("min-w-0 truncate font-mono font-semibold text-foreground", isNext ? "text-[14px]" : "text-[13px]")} title={task.title}>{task.title}</span>
+            <StatusBadge label={getWarehouseTaskStatusLabel(task.status)} variant={getWarehouseTaskStatusVariant(task.status)} />
+            {isNext ? <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">Làm tiếp</span> : null}
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Làm tiếp theo · {TASK_TYPE_LABELS[task.type] ?? task.type}</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <p className="truncate font-mono text-[15px] font-semibold text-foreground">{task.title}</p>
-              <StatusBadge label={getWarehouseTaskStatusLabel(task.status)} variant={getWarehouseTaskStatusVariant(task.status)} dot />
-            </div>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {task.warehouse || "-"}
-              {age ? <> · <span className={cn(age.stale && "font-medium text-amber-700 dark:text-amber-400")}>chờ {age.text}</span></> : null}
-              {meta ? <> · <span className="text-violet-700 dark:text-violet-400">{meta}</span></> : null}
-            </p>
-            {relatedEntity && (
-              <p className="mt-0.5 flex items-center gap-1 text-[11px] text-indigo-700 dark:text-indigo-400">
-                <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
-                <span className="font-mono font-medium">{relatedEntity.ref_number}</span>
-                {relatedEntity.details ? <span className="truncate text-muted-foreground">· {relatedEntity.details}</span> : null}
-              </p>
-            )}
-          </div>
+          {renderMeta(task, putawayMeta(task))}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {OPERATIONAL_TYPES.includes(task.type) && (
-            <Button variant="ghost" size="sm" onClick={() => handleReportException(task)} className="text-muted-foreground hover:text-red-700">
-              <AlertTriangle className="h-3.5 w-3.5" />Báo sự cố
-            </Button>
-          )}
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <span
+            className={cn("mr-auto whitespace-nowrap text-[12px] tabular-nums sm:mr-2 sm:w-32 sm:text-right", !isDone && age?.stale ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}
+            title={formatDateTime(isDone ? task.completed_at : task.created_at) ?? undefined}
+          >
+            {stamp}
+          </span>
           {actionPath ? (
-            <NavLink to={actionPath} className={cn(primaryActionClass, "h-9 px-4 text-[13px]")}>
-              {taskActionLabel(task.type)}
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            <NavLink to={actionPath} className={isNext ? primaryLinkClass : outlineLinkClass}>
+              {isTodo ? taskActionLabel(task.type) : "Xem"}
             </NavLink>
           ) : null}
+          {canReport ? (
+            <button
+              type="button"
+              onClick={() => handleReportException(task)}
+              aria-label={`Báo cáo sự cố cho ${task.title}`}
+              title="Báo cáo sự cố"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400 sm:h-8 sm:w-8"
+            >
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
-      </div>
+      </li>
+    );
+  };
+
+  const renderAvailableRow = (task: AvailableWarehouseTask) => {
+    const age = elapsedSince(task.created_at);
+    const claiming = claimingId === task.id;
+    const step = task.type === "PICKING"
+      ? (task.is_repick ? `Lấy bổ sung cho ${task.parent_order_number ?? "đơn trước"}` : "Bước 1 của 2: lấy hàng")
+      : task.type === "OUTBOUND" ? "Bước 2 của 2: xuất kho" : null;
+    return (
+      <li key={`avail:${task.type}:${task.id}`} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:gap-4 sm:px-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="min-w-0 truncate font-mono text-[13px] font-semibold text-foreground" title={task.title}>{task.title}</span>
+            {task.is_repick ? <StatusBadge label="Lấy bổ sung" variant="warning" /> : null}
+          </div>
+          {renderMeta(task, step)}
+        </div>
+        <div className="flex items-center gap-2 sm:shrink-0">
+          <span
+            className={cn("mr-auto whitespace-nowrap text-[12px] tabular-nums sm:mr-2 sm:w-32 sm:text-right", age?.stale ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}
+            title={formatDateTime(task.created_at) ?? undefined}
+          >
+            {age ? `Chờ ${age.text}` : "—"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleClaimTask(task)}
+            loading={claiming}
+            disabled={claimingId !== null && !claiming}
+            className="h-10 min-w-[7.5rem] text-[13px] sm:h-8"
+            aria-label={`Nhận task ${task.title}`}
+          >
+            {claiming ? "Đang nhận…" : <><Hand className="h-3.5 w-3.5" aria-hidden="true" />Nhận task</>}
+          </Button>
+        </div>
+      </li>
     );
   };
 
   const emptyState = () => {
     if (isFiltering) {
-      return <EmptyState icon={Search} title="Không tìm thấy task phù hợp" description="Thử đổi loại task hoặc từ khóa tìm kiếm khác." />;
+      return (
+        <EmptyState
+          icon={Search}
+          title="Không có task khớp bộ lọc"
+          description="Thử từ khóa khác hoặc bỏ bớt bộ lọc."
+          action={<Button size="sm" variant="outline" onClick={() => { setSearchQuery(""); setActiveType(ALL); setActiveWarehouse(ALL); }}>Bỏ lọc</Button>}
+        />
+      );
     }
     if (view === "todo") {
       return (
@@ -420,22 +413,16 @@ export function MyWarehouseTasksPage() {
       );
     }
     if (view === "available") {
-      return <EmptyState icon={Hand} title="Không có task nào đang chờ người nhận" description="Lấy hàng, xuất kho và nhận chuyển kho chưa phân công sẽ hiện ở đây. Cất hàng luôn do quản lý giao trực tiếp." />;
+      return <EmptyState icon={Hand} title="Không có task nào chờ người nhận" description="Lấy hàng, xuất kho và nhận chuyển kho chưa phân công sẽ hiện ở đây. Cất hàng luôn do quản lý giao trực tiếp." />;
     }
     if (view === "waiting") {
-      return <EmptyState icon={Hourglass} title="Không có yêu cầu nào đang chờ" description="Yêu cầu mua hàng và báo cáo sự cố bạn gửi sẽ hiện ở đây cho đến khi quản lý xử lý." />;
+      return <EmptyState icon={Hourglass} title="Không có yêu cầu nào đang chờ" description="Yêu cầu mua hàng và báo cáo sự cố bạn gửi sẽ ở đây cho đến khi quản lý xử lý." />;
     }
     return <EmptyState icon={ClipboardList} title="Chưa có task hoàn tất" description="Task bạn làm xong sẽ được lưu ở đây." />;
   };
 
-  const sectionTitle = view === "todo" ? "Hàng đợi của bạn" : view === "available" ? "Task chưa ai nhận" : view === "waiting" ? "Đang chờ quản lý xử lý" : "Đã hoàn tất";
-  const sectionSubtitle = view === "todo"
-    ? "Task cũ nhất ở trên cùng — làm theo thứ tự từ trên xuống"
-    : view === "available"
-      ? "Nhận task để chuyển nó vào hàng đợi của bạn"
-      : view === "waiting"
-        ? "Yêu cầu mua hàng và báo cáo sự cố bạn đã gửi"
-        : "Task đã xong, bị hủy hoặc đã chuyển cho người khác";
+  const loadedLabel = loadedAt ? loadedAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : null;
+  const activeTab = tabs.find((tab) => tab.key === view)!;
 
   return (
     <PageWrapper className="space-y-5">
@@ -447,163 +434,87 @@ export function MyWarehouseTasksPage() {
           iconBg="bg-emerald-100 dark:bg-emerald-500/15"
           iconColor="text-emerald-700 dark:text-emerald-400"
           actions={
-            <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading}>
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              Làm mới
-            </Button>
+            <>
+              {loadedLabel ? <span className="hidden text-[12px] tabular-nums text-muted-foreground sm:inline">Cập nhật {loadedLabel}</span> : null}
+              <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || refreshing}>
+                <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin motion-reduce:animate-none")} />
+                Làm mới
+              </Button>
+            </>
           }
         />
       </FadeItem>
 
       <FadeItem>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" role="tablist" aria-label="Nhóm công việc">
-          {views.map((item) => {
-            const active = view === item.key;
-            const ItemIcon = item.icon;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setView(item.key)}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  active ? "border-foreground/20 shadow-sm ring-1 ring-foreground/10" : "border-border hover:bg-muted/40",
-                )}
-              >
-                <ItemIcon className={cn("hidden h-5 w-5 shrink-0 sm:block", active ? item.tone : "text-muted-foreground/70")} />
-                <div className="min-w-0">
-                  <p className={cn("text-[22px] font-semibold leading-none tabular-nums", active ? "text-foreground" : item.count ? "text-foreground/80" : "text-muted-foreground/60")}>
-                    {loading ? "–" : item.count}
-                  </p>
-                  <p className={cn("mt-1 text-[12px] leading-tight", active ? "font-medium text-foreground" : "text-muted-foreground")}>{item.label}</p>
-                </div>
-                {item.key === "available" && item.count > 0 && !active ? (
-                  <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-sky-500" aria-label="có task mới" />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      </FadeItem>
+        <section aria-label="Hàng đợi công việc" className="min-w-0 rounded-xl border border-border bg-card">
+          <QueueTabs label="Nhóm công việc" tabs={tabs} value={view} onChange={setView} panelId={PANEL_ID} loading={loading} />
 
-      <FadeItem>
-        <SectionCard noPadding title={sectionTitle} subtitle={sectionSubtitle}>
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
-              searchPlaceholder="Tìm mã task, kho..."
-              showSearchClear
-              filters={
-                <div className="max-w-full overflow-x-auto">
-                  <div className="flex w-max items-center gap-1.5">
-                    {FILTER_CHIPS.filter((chip) => chip.key === "ALL" || (countsByType[chip.key] ?? 0) > 0).map((chip) => {
-                      const isActive = activeType === chip.key;
-                      return (
-                        <button
-                          key={chip.key}
-                          type="button"
-                          onClick={() => setActiveType(chip.key)}
-                          aria-pressed={isActive}
-                          className={cn(
-                            "flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            isActive
-                              ? "border-foreground/20 bg-foreground text-background"
-                              : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                          )}
-                        >
-                          {chip.label}
-                          <span className="font-mono text-[11px] tabular-nums opacity-70">{countsByType[chip.key] ?? 0}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              }
-            />
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+            <div className="relative min-w-0 sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Tìm mã task, kho, chứng từ…"
+                aria-label="Tìm công việc"
+                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9 sm:text-[13px]"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Select value={activeType} onValueChange={setActiveType}>
+                <SelectTrigger className={cn("h-10 min-w-0 flex-1 sm:h-9 sm:w-52 sm:flex-none", darkFieldClass)} aria-label="Lọc theo loại công việc">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Mọi loại công việc ({viewTasks.length})</SelectItem>
+                  {Object.keys(TASK_TYPE_LABELS).filter((type) => typeCounts[type]).map((type) => (
+                    <SelectItem key={type} value={type}>{TASK_TYPE_LABELS[type]} ({typeCounts[type]})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {warehouseOptions.length > 1 ? (
+                <Select value={activeWarehouse} onValueChange={setActiveWarehouse}>
+                  <SelectTrigger className={cn("h-10 min-w-0 flex-1 sm:h-9 sm:w-44 sm:flex-none", darkFieldClass)} aria-label="Lọc theo kho">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Mọi kho</SelectItem>
+                    {warehouseOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+            <p className="hidden text-[12px] text-muted-foreground lg:ml-auto lg:block">{VIEW_HINT[view]}</p>
           </div>
 
-          <div className="border-t border-border">
+          {view === "waiting" && (canOpenPurchaseRequests || canOpenExceptionReports) ? (
+            <p className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border px-4 py-2.5 text-[12px] text-muted-foreground sm:px-5">
+              <span>Xem đầy đủ phản hồi của quản lý:</span>
+              {canOpenPurchaseRequests ? <NavLink to="/my-purchase-requests" className="font-medium text-primary underline-offset-4 hover:underline">Yêu cầu mua hàng</NavLink> : null}
+              {canOpenExceptionReports ? <NavLink to="/my-exception-reports" className="font-medium text-primary underline-offset-4 hover:underline">Báo cáo sự cố</NavLink> : null}
+            </p>
+          ) : null}
+
+          <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${view}`} aria-busy={loading || refreshing}>
+            <h2 className="sr-only">{activeTab.label}</h2>
             {loading ? (
-              <div>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-4 border-b border-border p-4 last:border-b-0">
-                    <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-56" />
-                      <Skeleton className="h-3 w-32" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <RowsSkeleton rows={6} />
+            ) : loadError && tasks.length === 0 && availableTasks.length === 0 ? (
+              <div className="p-4 sm:p-5"><BlockError what="công việc kho của bạn" onRetry={() => void loadTasks("initial")} /></div>
             ) : paged.length === 0 ? (
-              <div className="px-5 py-10">{emptyState()}</div>
-            ) : view === "available" ? (
-              <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                {(paged as AvailableWarehouseTask[]).map((task) => {
-                  const accent = TASK_TYPE_ACCENT[task.type] ?? DEFAULT_ACCENT;
-                  const Icon = accent.icon;
-                  const age = ageOf(task.created_at);
-                  const step = task.type === "PICKING"
-                    ? (task.is_repick ? <>Bổ sung cho <span className="font-mono">{task.parent_order_number}</span></> : "Bước 1 · Lấy hàng")
-                    : task.type === "OUTBOUND" ? "Bước 2 · Xuất kho" : TASK_TYPE_LABELS[task.type] ?? task.type;
-                  return (
-                    <div key={`avail:${task.type}:${task.id}`} className="flex flex-col gap-3 rounded-xl border border-dashed border-border bg-card p-4 transition-colors hover:border-sky-300 dark:hover:border-sky-500/40">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", accent.iconBg)}>
-                            <Icon className={cn("h-4 w-4", accent.iconColor)} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-mono text-[13px] font-medium text-foreground">{task.title}</p>
-                            <p className="text-[11px] text-muted-foreground">{step}</p>
-                          </div>
-                        </div>
-                        {task.is_repick && (
-                          <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">Bổ sung</span>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
-                        <span className="truncate">
-                          {task.task_type === "transfer" && task.from_warehouse_name && task.to_warehouse_name
-                            ? `${task.from_warehouse_name} → ${task.to_warehouse_name}`
-                            : task.warehouse || "-"}
-                        </span>
-                        {age ? (
-                          <span className={cn("flex shrink-0 items-center gap-1", age.stale && "font-medium text-amber-700 dark:text-amber-400")} title={formatDate(task.created_at)}>
-                            <Clock className="h-3 w-3" aria-hidden="true" />{age.text}
-                          </span>
-                        ) : null}
-                      </div>
-                      <Button type="button" size="sm" onClick={() => void handleClaimTask(task)} disabled={claimingId === task.id} className="w-full">
-                        <Hand className="h-3.5 w-3.5" />
-                        {claimingId === task.id ? "Đang nhận..." : "Nhận task"}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
+              <div className="px-5 py-8">{emptyState()}</div>
             ) : (
-              <>
-                {spotlight ? renderSpotlight(spotlight) : null}
-                <div className="divide-y divide-border">
-                  {(listRows as MyWarehouseTask[]).map((task, i) => renderTaskRow(task, queueOffset + i + (spotlight ? 2 : 1)))}
-                </div>
-              </>
+              <ul className="divide-y divide-border">
+                {view === "available"
+                  ? (paged as AvailableWarehouseTask[]).map(renderAvailableRow)
+                  : (paged as MyWarehouseTask[]).map((task, i) => renderTaskRow(task, queueOffset + i + 1))}
+              </ul>
             )}
           </div>
 
-          {!loading && filtered.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-[12px] text-muted-foreground">
-                Hiển thị {queueOffset + 1}–{Math.min(queueOffset + PAGE_SIZE, filtered.length)} trong {filtered.length} task
-              </p>
-              <Pager page={page} totalPages={totalPages} onChange={setPage} />
-            </div>
-          )}
-        </SectionCard>
+          {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={filtered.length} noun="task" onPageChange={setPage} /> : null}
+        </section>
       </FadeItem>
     </PageWrapper>
   );

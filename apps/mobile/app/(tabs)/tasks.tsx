@@ -1,166 +1,129 @@
+import { useMemo, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MotiView } from 'moti';
+import { Alert, RefreshControl, SectionList, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useDashboardTasks } from '../../src/hooks/useDashboardTasks';
-import type { MyWarehouseTask } from '../../src/types/myWarehouseTasks';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
+import { TaskCard } from '../../src/components/TaskCard';
+import { useDashboardTasks, type TaskEntry } from '../../src/hooks/useDashboardTasks';
+import { normalizeSearchText } from '../../src/lib/optionSearch';
+import { TASK_TYPE_LABEL, type TaskPhase } from '../../src/lib/taskRoutes';
+import { EmptyState, FilterChips, InlineAlert, PageTitle, SearchField, Skeleton, radii, space, useTheme } from '../../src/design-system';
 
-const TYPE_LABEL: Record<string, string> = {
-  RECEIVING: 'Tiếp nhận hàng',
-  PUTAWAY: 'Cất hàng',
-  PICKING: 'Lấy hàng',
-  OUTBOUND: 'Xuất kho',
-  TRANSFER_RECEIVING: 'Nhận điều chuyển',
-  PURCHASE_REQUEST: 'Yêu cầu mua hàng',
-  EXCEPTION_REPORT: 'Báo cáo sự cố',
-  STAFF_TASK: 'Việc được giao',
+type Filter = 'open' | TaskPhase;
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'open', label: 'Đang mở' },
+  { key: 'todo', label: 'Cần làm' },
+  { key: 'in_progress', label: 'Đang làm' },
+  { key: 'done', label: 'Đã xong' },
+];
+
+const SECTION_TITLE: Record<TaskPhase, string> = {
+  in_progress: 'Đang thực hiện',
+  todo: 'Cần làm',
+  waiting: 'Chờ quản lý xử lý',
+  done: 'Hoàn thành gần đây',
 };
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '-';
-  return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+const EMPTY_TEXT: Record<Filter, string> = {
+  open: 'Không còn việc nào đang mở. Kéo xuống để làm mới.',
+  todo: 'Không có việc mới cần làm.',
+  in_progress: 'Không có việc nào đang dở dang.',
+  waiting: 'Không có yêu cầu nào đang chờ duyệt.',
+  done: 'Chưa có việc nào hoàn thành gần đây.',
+};
+
+function matchesQuery(entry: TaskEntry, query: string): boolean {
+  if (!query) return true;
+  const haystack = normalizeSearchText(
+    [entry.task.title, entry.task.warehouse, TASK_TYPE_LABEL[entry.task.type], entry.statusLabel, entry.task.description].filter(Boolean).join(' '),
+  );
+  return normalizeSearchText(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((term) => haystack.includes(term));
 }
 
 export default function TasksScreen() {
-  const { data, isLoading, error, refetch } = useDashboardTasks();
+  const { colors, type } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { data, isLoading, isRefreshing, error, refetch } = useDashboardTasks();
+  const [filter, setFilter] = useState<Filter>('open');
+  const [query, setQuery] = useState('');
 
-  function handlePress(task: MyWarehouseTask) {
-    if (task.action_path) {
-      router.push(task.action_path);
+  const sections = useMemo(() => {
+    const phases: TaskPhase[] = filter === 'open' ? ['in_progress', 'todo', 'waiting'] : [filter];
+    return phases
+      .map((phase) => ({
+        phase,
+        title: SECTION_TITLE[phase],
+        data: data.entries.filter((entry) => entry.phase === phase && matchesQuery(entry, query)),
+      }))
+      .filter((section) => section.data.length > 0);
+  }, [data.entries, filter, query]);
+
+  function handleOpen(entry: TaskEntry) {
+    if (entry.route.kind === 'screen') {
+      router.push(entry.route.href as never);
+      return;
     }
+    Alert.alert(entry.task.title, entry.route.reason);
   }
 
+  const countFor = (key: Filter) => (key === 'open' ? data.counts.todo + data.counts.in_progress + data.counts.waiting : data.counts[key]);
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Việc của tôi</Text>
-        <Text style={styles.subtitle}>{data.tasks.length} việc đang theo dõi</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View style={{ paddingTop: insets.top + space.md, paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.md }}>
+        <PageTitle
+          title="Việc của tôi"
+          subtitle={`${data.counts.todo} cần làm, ${data.counts.in_progress} đang làm, ${data.counts.waiting} chờ duyệt`}
+        />
+        <SearchField value={query} onChangeText={setQuery} placeholder="Mã phiếu, kho, loại việc" autoCapitalize="none" accessibilityLabel="Tìm công việc" />
+        <FilterChips
+          accessibilityLabel="Lọc theo trạng thái"
+          value={filter}
+          onChange={setFilter}
+          options={FILTERS.map((item) => ({ value: item.key, label: item.label, count: countFor(item.key) }))}
+        />
+        {error ? <InlineAlert message={error} actionLabel="Thử lại" onAction={() => void refetch()} /> : null}
+        {data.warnings.map((warning) => <InlineAlert key={warning} tone="warning" message={warning} />)}
       </View>
 
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.error}>{error}</Text>
-        </View>
-      ) : null}
-
-      {isLoading && data.tasks.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+      {isLoading && data.entries.length === 0 ? (
+        <View style={{ paddingHorizontal: space.lg, gap: space.md }} accessibilityLabel="Đang tải công việc">
+          {[0, 1, 2].map((i) => <Skeleton key={i} height={150} radius={radii.md} />)}
         </View>
       ) : (
-        <FlatList
-          data={data.tasks}
-          keyExtractor={(item, index) => `${item.type}-${item.id}-${index}`}
-          contentContainerStyle={styles.list}
-          refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />}
-          ListEmptyComponent={<Text style={styles.empty}>Không có việc nào đang theo dõi</Text>}
-          renderItem={({ item, index }) => (
-            <MotiView
-              from={{ opacity: 0, translateY: 6 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ type: 'timing', duration: 220, delay: Math.min(index, 8) * 40 }}
-            >
-              <Pressable
-                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                onPress={() => handlePress(item)}
-              >
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSubtitle}>
-                    {TYPE_LABEL[item.type] ?? item.type} · {item.warehouse ?? '-'} · {formatDate(item.created_at)}
-                  </Text>
-                </View>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusBadgeText}>{item.status}</Text>
-                </View>
-              </Pressable>
-            </MotiView>
-          )}
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.key}
+          contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl, flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          stickySectionHeadersEnabled={false}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refetch} tintColor={colors.primary} colors={[colors.primary]} />}
+          renderSectionHeader={({ section }) =>
+            filter === 'open' ? (
+              <Text style={[type.heading, { marginTop: space.lg, marginBottom: space.sm }]} accessibilityRole="header">
+                {section.title} ({section.data.length})
+              </Text>
+            ) : null
+          }
+          ListEmptyComponent={
+            error ? undefined : (
+              <EmptyState
+                icon={query ? 'search-outline' : 'checkmark-done-outline'}
+                title={query ? 'Không có việc nào khớp từ khóa' : EMPTY_TEXT[filter]}
+                actionLabel={query ? 'Xóa tìm kiếm' : undefined}
+                onAction={query ? () => setQuery('') : undefined}
+              />
+            )
+          }
+          renderItem={({ item }) => <TaskCard entry={item} onOpen={handleOpen} />}
+          ItemSeparatorComponent={() => <View style={{ height: space.md }} />}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  header: {
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  title: {
-    ...typography.h2,
-  },
-  subtitle: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorBox: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-  },
-  list: {
-    padding: spacing.lg,
-    paddingTop: 0,
-    gap: spacing.sm,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadow.card,
-  },
-  cardPressed: {
-    opacity: 0.85,
-  },
-  cardBody: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  cardTitle: {
-    ...typography.h3,
-  },
-  cardSubtitle: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-  statusBadge: {
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
-    backgroundColor: colors.primarySoft,
-  },
-  statusBadgeText: {
-    fontFamily: fonts.monoSemibold,
-    fontSize: 10,
-    color: colors.primary,
-    letterSpacing: 0.5,
-  },
-});

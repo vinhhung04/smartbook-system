@@ -36,6 +36,22 @@ export interface StaffTask {
   created_at: string;
   updated_at: string;
   warehouses?: { id: string; code: string; name: string } | null;
+  /** Manager list only: false when the assignee lost WRITE scope there or is no longer active. */
+  assignee_can_work?: boolean | null;
+}
+
+export interface OpenTaskSummaryRow {
+  warehouse_id: string | null;
+  open: number;
+  in_progress: number;
+}
+
+export interface StaffWorkloadRow {
+  assignee_user_id: string;
+  open: number;
+  in_progress: number;
+  overdue: number;
+  done_last_7_days: number;
 }
 
 export interface StaffTaskCreateInput {
@@ -97,6 +113,20 @@ export const staffTaskService = {
 
   async updateStatus(id: string, status: StaffTaskStatus): Promise<{ data: StaffTask }> {
     const response = await inventoryAPI.patch<{ data: StaffTask }>(`/api/staff-tasks/${id}/status`, { status });
+    return response.data;
+  },
+
+  async getOpenSummary(assigneeUserId: string): Promise<{ data: OpenTaskSummaryRow[] }> {
+    const response = await inventoryAPI.get<{ data: OpenTaskSummaryRow[] }>('/api/staff-tasks/open-summary', {
+      params: { assignee_user_id: assigneeUserId },
+    });
+    return response.data;
+  },
+
+  async getWorkload(warehouseId?: string): Promise<{ data: StaffWorkloadRow[]; generated_at: string }> {
+    const response = await inventoryAPI.get<{ data: StaffWorkloadRow[]; generated_at: string }>('/api/staff-tasks/workload', {
+      params: warehouseId ? { warehouse_id: warehouseId } : undefined,
+    });
     return response.data;
   },
 

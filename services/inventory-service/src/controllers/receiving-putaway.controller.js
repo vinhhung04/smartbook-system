@@ -787,7 +787,33 @@ async function transferReceivingToShelf(req, res) {
     0,
   );
 
+  // Movement keys are `${client key}:${target}` (see createMany below). A request that
+  // was already applied (e.g. the response was lost and the phone re-sent it) is answered
+  // from those rows instead of tripping the unique index with a 500.
+  const movementKeys = clientIdempotencyKey
+    ? mergedAllocations.map((allocation) => `${clientIdempotencyKey}:${allocation.target_location_id}`.slice(-99))
+    : [];
+  const findReplay = async (client) => {
+    if (movementKeys.length === 0) return null;
+    const existing = await client.stock_movements.findMany({
+      where: { idempotency_key: { in: movementKeys } },
+      select: { quantity: true, variant_id: true },
+    });
+    if (existing.length === 0) return null;
+    return {
+      success: true,
+      idempotent: true,
+      moved_quantity: existing.reduce((sum, row) => sum + Number(row.quantity || 0), 0),
+      allocation_count: existing.length,
+    };
+  };
+
   try {
+    const replay = await findReplay(prisma);
+    if (replay) {
+      return res.status(200).json({ message: "Transfer already applied", data: replay });
+    }
+
     const result = await prisma.$transaction(
       async (tx) => {
         const sourceLocation = await tx.locations.findUnique({
@@ -1119,6 +1145,13 @@ async function transferReceivingToShelf(req, res) {
       data: result,
     });
   } catch (error) {
+    // Two copies of the same request raced: the loser hits the unique movement key.
+    if (error?.code === "P2002" && movementKeys.length > 0) {
+      const replay = await findReplay(prisma).catch(() => null);
+      if (replay) {
+        return res.status(200).json({ message: "Transfer already applied", data: replay });
+      }
+    }
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:

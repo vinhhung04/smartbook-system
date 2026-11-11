@@ -2,30 +2,33 @@ import { Link, Outlet, ScrollRestoration, useLocation } from 'react-router';
 import { SocketProvider } from '@/lib/socket';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { RouteErrorBoundary } from '@/components/route-error-boundary';
-import { PublicHeader, Wordmark } from './public-header';
+import { PublicHeader } from './public-header';
 
-const FOOTER_LINK = 'block py-1 text-foreground/80 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 rounded-sm';
+const FOOTER_LINK = 'inline-flex min-h-9 items-center rounded-sm text-[14px] text-indigo-100/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70';
 
 function FooterColumn({ label, links }: { label: string; links: Array<{ to: string; label: string }> }) {
   return (
-    <nav aria-label={label} className="space-y-1.5 text-[13px]">
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-      {links.map((link) => <Link key={link.to} to={link.to} className={FOOTER_LINK}>{link.label}</Link>)}
+    <nav aria-label={label}>
+      <h2 className="mb-2 text-[14px] font-semibold text-white">{label}</h2>
+      <ul>
+        {links.map((link) => <li key={link.to + link.label}><Link to={link.to} className={FOOTER_LINK}>{link.label}</Link></li>)}
+      </ul>
     </nav>
   );
 }
 
+/**
+ * A designed close rather than a sitemap: the promise in one line, three
+ * short groups of real links, and the name set at full width to end the page.
+ */
 function PublicFooter() {
   const { isAuthenticated } = useAuthUser();
   return (
-    <footer className="mt-20 border-t border-border">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:grid-cols-3 sm:px-6 lg:grid-cols-[1.4fr_1fr_1fr_1fr] lg:px-8">
-        <div className="space-y-3 sm:col-span-3 lg:col-span-1">
-          <Wordmark />
-          <p className="max-w-sm text-[13px] leading-relaxed text-muted-foreground">
-            Tìm sách, xem chi nhánh nào còn sách và đặt trước trực tuyến. Nhận sách tại quầy bằng mã nhận sách.
-          </p>
-        </div>
+    <footer className="mt-24 overflow-hidden bg-[#1d1a4a] text-white sm:mt-32 dark:bg-[#121030]">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 pb-6 pt-14 sm:grid-cols-3 sm:px-6 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:px-8 lg:pt-20">
+        <p className="max-w-sm font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-white sm:col-span-3 lg:col-span-1">
+          Tìm sách, xem chi nhánh nào còn sách và đặt trước trực tuyến. Nhận sách tại quầy bằng mã nhận sách.
+        </p>
         <FooterColumn
           label="Khám phá"
           links={[
@@ -53,6 +56,16 @@ function PublicFooter() {
             { to: '/login', label: 'Đăng nhập nhân viên' },
           ]}
         />
+      </div>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <p className="flex flex-wrap items-center justify-between gap-2 py-6 text-[13px] text-indigo-100/70">
+          <span>© {new Date().getFullYear()} SmartBook</span>
+          <Link to="/" className="rounded-sm hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70">Về trang chủ</Link>
+        </p>
+        {/* The name returns at full width; decorative, the wordmark above already names the site. */}
+        <p aria-hidden="true" className="-mb-[0.2em] select-none whitespace-nowrap text-center font-display text-[20.5vw] font-semibold leading-[0.9] tracking-[-0.05em] text-white/[0.08] lg:text-[min(20vw,17.5rem)]">
+          SmartBook
+        </p>
       </div>
     </footer>
   );

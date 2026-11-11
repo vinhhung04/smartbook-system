@@ -1,266 +1,44 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { motion, AnimatePresence } from 'motion/react';
-import {
-  AlertTriangle,
-  Bot,
-  Clock,
-  MessageCircle,
-  MessagesSquare,
-  PanelLeft,
-  Package,
-  Pencil,
-  RotateCcw,
-  Send,
-  ShieldAlert,
-  Trash2,
-  TrendingUp,
-  User,
-  Warehouse,
-} from 'lucide-react';
-import { PageWrapper, FadeItem } from '@/components/motion-utils';
-import { PageHeader } from '@/components/ui/page-header';
-import { SectionCard } from '@/components/ui/section-card';
+import { MotionConfig } from 'motion/react';
+import { ArrowDown, History, MessagesSquare, Plus, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import {
-  aiService,
-  type AiConversationSummary,
-  type AiDecision,
-  type AiEvidenceItem,
-  type AiExplanation,
-  type AiFaithfulness,
-  type AiRecommendation,
-  type AssistantExtras,
-  type PendingAction,
-} from '@/services/ai';
-import type { AiVerification } from '@/lib/copilot-verification';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
+import { aiService, type AiConversationSummary } from '@/services/ai';
 import { authService, type AuthUser } from '@/services/auth';
-import { hasAnyPermission } from '@/lib/rbac';
-import {
-  CopilotAnswerText,
-  CopilotCaveats,
-  CopilotDataAsOf,
-  CopilotExplanation,
-  CopilotFaithfulness,
-  CopilotFollowups,
-  CopilotRecommendations,
-} from '@/components/ai-copilot-insights';
-import { CopilotVisualizationNotes, CopilotVisualizations } from '@/components/ai-copilot-visualization';
-import { formatDataAsOf, sanitizeVisualizations, type CopilotVisualizationSpec } from '@/lib/copilot-visualization';
+import { formatDataAsOf } from '@/lib/copilot-visualization';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
-import { ActionCard } from '@/components/ai-action-card';
-import { CopilotDecision } from '@/components/ai-copilot-decision';
 import { AIActionCenter } from '@/components/ai-action-center';
 import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
+import { cn } from '@/components/ui/utils';
+import { extrasToMessageFields, suggestionGroupsFor, type AssistantMessage } from '@/components/ai-assistant/model';
+import { ConversationSidebar, type ConversationsStatus } from '@/components/ai-assistant/conversation-sidebar';
+import { AssistantEmptyState } from '@/components/ai-assistant/assistant-empty-state';
+import { AssistantComposer } from '@/components/ai-assistant/assistant-composer';
+import { MessageItem, type StreamPhase } from '@/components/ai-assistant/assistant-message';
+import { useStickToBottom } from '@/components/ai-assistant/use-stick-to-bottom';
 
-interface AssistantMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  pendingAction?: PendingAction;
-  evidence?: AiEvidenceItem[];
-  groundingWarning?: string | null;
-  retrievalWarnings?: string[];
-  followups?: string[];
-  caveats?: string[];
-  recommendations?: AiRecommendation[];
-  dataAsOf?: string | null;
-  explanation?: AiExplanation | null;
-  visualizations?: CopilotVisualizationSpec[];
-  visualizationNotes?: string[];
-  faithfulness?: AiFaithfulness | null;
-  verification?: AiVerification | null;
-  decision?: AiDecision | null;
-  /** Streaming: the draft text is being checked against the data (Copilot 3.2). */
-  verifying?: boolean;
-  /** Reopened from history: charts show the stored snapshot, never refreshed. */
-  fromHistory?: boolean;
-  isError?: boolean;
-}
-
-function extrasToMessageFields(extras?: AssistantExtras | null): Partial<AssistantMessage> {
-  return {
-    followups: extras?.suggested_followups ?? [],
-    caveats: extras?.caveats ?? [],
-    recommendations: extras?.recommendations ?? [],
-    dataAsOf: extras?.data_as_of ?? null,
-    explanation: extras?.explanation ?? null,
-    visualizations: sanitizeVisualizations(extras?.visualizations),
-    visualizationNotes: extras?.visualization_notes ?? [],
-    faithfulness: extras?.faithfulness ?? null,
-    verification: extras?.verification ?? null,
-    decision: extras?.decision ?? null,
-  };
-}
+// /ai-assistant - a decision workspace: conversation history on the left
+// (drawer below xl), the conversation in the centre, and the AI Action Center
+// as a second view of the same workspace. Answers stream through
+// askAssistantStream; everything they show comes from the backend response.
 
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'smartbook:ai-assistant:active-conversation-id';
+const RAIL_STORAGE_KEY = 'smartbook:ai-assistant:history-rail';
+const XL_QUERY = '(min-width: 1280px)';
 
-const TONES = {
-  indigo: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400',
-  emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400',
-  amber: 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
-  violet: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400',
-};
-
-/** Starter questions by what the role can actually read: a warehouse manager
- * has no borrow analytics (analytics.borrow.read), so loans/fines questions
- * would only come back as "không có quyền". */
-function suggestedQuestionsFor(user: AuthUser | null) {
-  const readsBorrow = Boolean(user?.is_superuser) || hasAnyPermission(user, ['analytics.borrow.read']);
-  if (readsBorrow) {
-    return [
-      { icon: Clock, tone: TONES.amber, text: 'Nên ưu tiên xử lý việc gì hôm nay?' },
-      { icon: Package, tone: TONES.emerald, text: 'Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?' },
-      { icon: TrendingUp, tone: TONES.violet, text: 'Lượt mượn tháng này so với tháng trước thế nào?' },
-      { icon: Warehouse, tone: TONES.indigo, text: 'Với ngân sách 20 triệu nên nhập sách gì?' },
-    ];
+function readRailCollapsed(): boolean {
+  try {
+    return localStorage.getItem(RAIL_STORAGE_KEY) === 'collapsed';
+  } catch {
+    return false;
   }
-  return [
-    { icon: Warehouse, tone: TONES.indigo, text: 'Kho nào đang rủi ro thiếu sách nhất?' },
-    { icon: Package, tone: TONES.emerald, text: 'Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?' },
-    { icon: TrendingUp, tone: TONES.violet, text: 'Với ngân sách 20 triệu nên nhập sách gì?' },
-    { icon: Clock, tone: TONES.amber, text: 'Sách nào tồn kho lâu không ai mượn?' },
-  ];
-}
-
-// A multi-round tool-calling answer (OpenRouter/Qwen) can still take several seconds
-// per round across up to ASSISTANT_MAX_TOOL_ROUNDS rounds. A single static "loading"
-// message reads as frozen well before that; these stages set honest expectations as
-// time passes.
-const LOADING_STAGES = [
-  { atSeconds: 0, label: 'Đang phân tích câu hỏi...' },
-  { atSeconds: 8, label: 'Đang chọn công cụ phân tích phù hợp...' },
-  { atSeconds: 30, label: 'Đang tra cứu dữ liệu từ hệ thống...' },
-  { atSeconds: 60, label: 'Đang tổng hợp câu trả lời (có thể mất đến ~2 phút)...' },
-];
-
-function formatPlainValue(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—';
-  if (typeof value === 'number') return value.toLocaleString('vi-VN');
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
-/** Every evidence item is a citation backing the answer above — numbered like footnotes
- * in a research memo. The backend returns a flat list with no per-word anchor, so chips
- * are numbered in order rather than tied to specific claims in the text. */
-function EvidenceCitations({ evidence }: { evidence: AiEvidenceItem[] }) {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const active = openIndex !== null ? evidence[openIndex] : null;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="mr-0.5 text-[11px] text-muted-foreground">Bằng chứng:</span>
-        {evidence.map((item, i) => (
-          <button
-            key={i}
-            type="button"
-            aria-expanded={openIndex === i}
-            aria-label={`Xem bằng chứng số ${i + 1}: ${item.label}`}
-            onClick={() => setOpenIndex(openIndex === i ? null : i)}
-            className={`flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border text-[10px] font-medium transition-colors ${
-              openIndex === i
-                ? 'border-violet-600 bg-violet-600 text-white dark:border-violet-500 dark:bg-violet-500'
-                : 'border-border text-muted-foreground hover:border-violet-300 dark:hover:border-violet-500/40'
-            }`}
-          >
-            {i + 1}
-          </button>
-        ))}
-      </div>
-      {active && (
-        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-foreground">{active.label}</span>
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{active.source_type}</span>
-          </div>
-          <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">{active.metric}</div>
-          <div className="text-[13px] font-medium tabular-nums text-foreground">
-            {formatPlainValue(active.value)}
-            {active.unit ? ` ${active.unit}` : ''}
-          </div>
-          {active.description && <div className="mt-0.5 text-[11px] text-muted-foreground">{active.description}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface ConversationListProps {
-  conversations: AiConversationSummary[];
-  activeId: string;
-  onSwitch: (id: string) => void;
-  onRename: (id: string, currentTitle: string | null) => void;
-  onDelete: (id: string, title: string | null) => void;
-  onAfterSelect?: () => void;
-}
-
-function ConversationList({ conversations, activeId, onSwitch, onRename, onDelete, onAfterSelect }: ConversationListProps) {
-  if (conversations.length === 0) {
-    return <p className="px-4 py-4 text-[12px] text-muted-foreground">Chưa có hội thoại nào.</p>;
-  }
-  return (
-    <div className="max-h-[65vh] min-h-[420px] overflow-y-auto">
-      {conversations.map((conv) => (
-        <div
-          key={conv.conversation_id}
-          onClick={() => {
-            onSwitch(conv.conversation_id);
-            onAfterSelect?.();
-          }}
-          className={`group flex cursor-pointer items-start gap-1.5 px-4 py-3 text-left transition-colors hover:bg-muted/50 ${
-            conv.conversation_id === activeId ? 'bg-muted/70' : ''
-          }`}
-        >
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[12px] font-medium text-foreground">
-              {conv.title || 'Hội thoại chưa đặt tên'}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
-              {formatDataAsOf(conv.last_message_at) ?? ''}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onRename(conv.conversation_id, conv.title);
-              }}
-              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted"
-              title="Đổi tên hội thoại"
-              aria-label="Đổi tên hội thoại"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete(conv.conversation_id, conv.title);
-              }}
-              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-              title="Xóa hội thoại"
-              aria-label="Xóa hội thoại"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function newConversationId() {
@@ -270,7 +48,7 @@ function newConversationId() {
 export function AIAssistantPage() {
   const location = useLocation();
   const [currentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
-  const suggestedQuestions = suggestedQuestionsFor(currentUser);
+  const suggestionGroups = suggestionGroupsFor(currentUser);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   // Another page can hand over a question via router state; it is only pre-filled, never auto-sent.
   const [input, setInput] = useState(() => (location.state as { prompt?: string } | null)?.prompt ?? '');
@@ -278,27 +56,33 @@ export function AIAssistantPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [conversationId, setConversationId] = useState<string>(newConversationId);
   const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
+  const [conversationsStatus, setConversationsStatus] = useState<ConversationsStatus>('loading');
   const [hydrating, setHydrating] = useState(false);
   const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string | null } | null>(null);
   const [deletingConversation, setDeletingConversation] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string | null } | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renaming, setRenaming] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
+  const [tab, setTab] = useState<'chat' | 'actions'>('chat');
   const [pendingActionCount, setPendingActionCount] = useState(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [announcement, setAnnouncement] = useState('');
   const pendingCountReloadTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, loading]);
+  // Guards a second send fired before React re-renders with loading=true (double Enter/click).
+  const inFlightRef = useRef(false);
+  const { scrollRef, contentRef, atBottom, scrollToBottom } = useStickToBottom(messages.length > 0);
 
   const loadConversations = async () => {
     try {
       const { items } = await aiService.listConversations();
       setConversations(items);
+      setConversationsStatus('ready');
     } catch {
-      // Non-critical — the sidebar just stays empty, doesn't block the chat itself.
+      // Non-critical — the history shows a retry, the chat itself keeps working.
+      setConversationsStatus('error');
     }
   };
 
@@ -378,6 +162,11 @@ export function AIAssistantPage() {
     }
   }, []);
 
+  // A reopened conversation opens at its latest message.
+  useEffect(() => {
+    if (hydrating) scrollToBottom('auto');
+  }, [hydrating, scrollToBottom]);
+
   useEffect(() => {
     if (!loading) {
       setElapsedSeconds(0);
@@ -387,9 +176,6 @@ export function AIAssistantPage() {
     const interval = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
     return () => clearInterval(interval);
   }, [loading]);
-
-  const currentStage = [...LOADING_STAGES].reverse().find((stage) => elapsedSeconds >= stage.atSeconds) ?? LOADING_STAGES[0];
-  const currentStageIndex = LOADING_STAGES.indexOf(currentStage);
 
   const updateLastMessage = (updater: (message: AssistantMessage) => AssistantMessage) => {
     setMessages((prev) => {
@@ -402,17 +188,30 @@ export function AIAssistantPage() {
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || loading) return;
+    if (!trimmed || inFlightRef.current || hydrating) return;
+    inFlightRef.current = true;
     // Placeholder assistant message is filled in-place as tokens stream in — this IS the
     // "is the assistant working" indicator, no separate loading bubble needed once text starts.
     setMessages((prev) => [...prev, { role: 'user', content: trimmed }, { role: 'assistant', content: '' }]);
-    setInput('');
+    setInput((current) => (current.trim() === trimmed ? '' : current));
     setLoading(true);
+    setAnnouncement('Đã gửi câu hỏi. Đang chờ trợ lý trả lời.');
+    scrollToBottom();
+    let firstToken = true;
     try {
       await aiService.askAssistantStream(trimmed, conversationId, {
-        onToken: (token) => updateLastMessage((message) => ({ ...message, content: message.content + token })),
+        onToken: (token) => {
+          if (firstToken) {
+            firstToken = false;
+            setAnnouncement('Trợ lý đang soạn bản nháp câu trả lời.');
+          }
+          updateLastMessage((message) => ({ ...message, content: message.content + token }));
+        },
         onStatus: (stage) => {
-          if (stage === 'verifying') updateLastMessage((message) => ({ ...message, verifying: true }));
+          if (stage === 'verifying') {
+            updateLastMessage((message) => ({ ...message, verifying: true }));
+            setAnnouncement('Đang đối chiếu câu trả lời với dữ liệu.');
+          }
         },
         onDone: (response) => {
           updateLastMessage(() => ({
@@ -424,6 +223,7 @@ export function AIAssistantPage() {
             retrievalWarnings: response.retrieval_warnings,
             ...extrasToMessageFields(response),
           }));
+          setAnnouncement('Trợ lý đã trả lời xong.');
           const finalConversationId = response.conversation_id || conversationId;
           setConversationId(finalConversationId);
           localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, finalConversationId);
@@ -431,6 +231,7 @@ export function AIAssistantPage() {
         },
         onError: (error) => {
           toast.error(getApiErrorMessage(error, 'Không thể gửi câu hỏi tới trợ lý AI'));
+          setAnnouncement('Có lỗi khi trả lời câu hỏi.');
           updateLastMessage(() => ({
             role: 'assistant',
             content: 'Xin lỗi, đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại.',
@@ -439,14 +240,36 @@ export function AIAssistantPage() {
         },
       });
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   };
 
-  const handleActionConfirmed = (_actionId: string, result: any) => {
-    const createdReqs: any[] = result?.created_requests ?? [];
-    const skippedItems: string[] = result?.skipped_items ?? [];
-    const noWhItems: string[] = result?.no_warehouse_items ?? [];
+  // Children are memoised; hand them stable callbacks that always run the latest closure.
+  const sendRef = useRef(sendMessage);
+  const messagesRef = useRef(messages);
+  useLayoutEffect(() => {
+    sendRef.current = sendMessage;
+    messagesRef.current = messages;
+  });
+  const ask = useCallback((text: string) => {
+    void sendRef.current(text);
+  }, []);
+
+  const retryLast = useCallback(() => {
+    const current = messagesRef.current;
+    const question = current[current.length - 2];
+    if (question?.role !== 'user' || !current[current.length - 1]?.isError || inFlightRef.current) return;
+    // Drop the failed exchange, then ask again: the resend appends it back.
+    setMessages((prev) => prev.slice(0, -2));
+    void sendRef.current(question.content);
+  }, []);
+
+  const handleActionConfirmed = useCallback((_actionId: string, result: unknown) => {
+    const res = result as { created_requests?: Array<{ warehouse_name?: string; request_number?: string }>; skipped_items?: string[]; no_warehouse_items?: string[] } | null;
+    const createdReqs = res?.created_requests ?? [];
+    const skippedItems = res?.skipped_items ?? [];
+    const noWhItems = res?.no_warehouse_items ?? [];
 
     let requestLine = '';
     if (createdReqs.length > 0) {
@@ -465,22 +288,24 @@ export function AIAssistantPage() {
 
     const content = ['✅ Đã xác nhận hành động.', requestLine, skippedLine, noWhLine].filter(Boolean).join('\n');
     setMessages((prev) => [...prev, { role: 'assistant', content: content || '✅ Đã xác nhận hành động.' }]);
-  };
+  }, []);
 
-  const handleActionCancelled = () => {
+  const handleActionCancelled = useCallback(() => {
     setMessages((prev) => [...prev, { role: 'assistant', content: 'Đã hủy hành động.' }]);
-  };
+  }, []);
 
+  // The typed draft is kept across new/switched conversations: it is the
+  // person's own text, and only sending it clears it.
   const startNewConversation = () => {
     setMessages([]);
-    setInput('');
     setConversationId(newConversationId());
     localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
+    setHistoryDrawerOpen(false);
   };
 
   const switchConversation = (id: string) => {
+    setHistoryDrawerOpen(false);
     if (id === conversationId || loading || hydrating) return;
-    setInput('');
     hydrateConversation(id);
   };
 
@@ -526,378 +351,223 @@ export function AIAssistantPage() {
     }
   };
 
-  return (
-    <PageWrapper>
-      <FadeItem className="space-y-6">
-        <PageHeader
-          icon={MessageCircle}
-          title="Trợ lý AI"
-          description="Đặt câu hỏi bằng tiếng Việt về tình trạng vận hành thư viện/kho — trợ lý sẽ tra cứu dữ liệu thật và đưa ra khuyến nghị có dẫn chứng số liệu."
-          iconBg="bg-gradient-to-br from-indigo-500 to-violet-500"
-          iconColor="text-white"
-        />
-
-        <Tabs defaultValue="chat">
-          <TabsList>
-            <TabsTrigger value="chat">
-              <MessagesSquare className="h-3.5 w-3.5" />
-              Hội thoại
-            </TabsTrigger>
-            <TabsTrigger value="actions">
-              <ShieldAlert className="h-3.5 w-3.5" />
-              Trung tâm hành động AI
-              {pendingActionCount > 0 && (
-                <Badge variant="destructive" className="ml-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]">
-                  {pendingActionCount > 50 ? '50+' : pendingActionCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="chat">
-        <SectionCard
-          title="Hội thoại"
-          subtitle="Hội thoại được lưu để tiếp tục phân tích sau"
-          noPadding
-          actions={
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setMobileSidebarOpen(true)}
-                title="Xem các hội thoại trước"
-                className="md:hidden"
-              >
-                <PanelLeft className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={startNewConversation}
-                disabled={loading}
-                title="Bắt đầu cuộc trò chuyện mới"
-                className="active:scale-95 transition-transform"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Trò chuyện mới
-              </Button>
-            </div>
+  // The API archives one conversation per call and lists at most 50, so
+  // "delete all" pages through the list in small batches until it is empty.
+  // Same archive semantics as deleting one; proposed AI actions are untouched.
+  const clearAllConversations = async () => {
+    setClearingAll(true);
+    let removed = 0;
+    let failed = 0;
+    try {
+      for (let round = 0; round < 20; round += 1) {
+        const { items } = await aiService.listConversations();
+        if (items.length === 0) break;
+        let progressed = false;
+        for (let i = 0; i < items.length; i += 5) {
+          const results = await Promise.allSettled(
+            items.slice(i, i + 5).map((c) => aiService.archiveConversation(c.conversation_id)),
+          );
+          for (const r of results) {
+            if (r.status === 'fulfilled') { removed += 1; progressed = true; } else failed += 1;
           }
-        >
-          <div className="flex">
-          <aside className="hidden w-56 shrink-0 flex-col divide-y divide-border border-r border-border md:flex">
-            <ConversationList
-              conversations={conversations}
-              activeId={conversationId}
-              onSwitch={switchConversation}
-              onRename={openRenameDialog}
-              onDelete={handleDeleteConversation}
-            />
+        }
+        if (!progressed) break;
+      }
+    } catch {
+      // Listing failed mid-way: reported below with what was already removed.
+      failed += 1;
+    } finally {
+      startNewConversation();
+      await loadConversations();
+      setClearingAll(false);
+      setConfirmClearAll(false);
+    }
+    if (failed === 0) toast.success(removed > 0 ? `Đã xóa ${removed} hội thoại.` : 'Không còn hội thoại nào để xóa.');
+    else if (removed > 0) toast.error(`Đã xóa ${removed} hội thoại; một số hội thoại chưa xóa được, vui lòng thử lại.`);
+    else if (failed > 0) toast.error('Không xóa được lịch sử hội thoại, vui lòng thử lại.');
+  };
+
+  const setRail = (collapsed: boolean) => {
+    setRailCollapsed(collapsed);
+    try {
+      localStorage.setItem(RAIL_STORAGE_KEY, collapsed ? 'collapsed' : 'open');
+    } catch {
+      // Per-viewer convenience only.
+    }
+  };
+
+  const openHistory = () => {
+    if (window.matchMedia(XL_QUERY).matches) setRail(false);
+    else setHistoryDrawerOpen(true);
+  };
+
+  const last = messages[messages.length - 1];
+  const streamPhase: StreamPhase | null = loading && last?.role === 'assistant'
+    ? last.verifying ? 'verifying' : last.content === '' ? 'waiting' : 'draft'
+    : null;
+  const activeConversation = conversations.find((c) => c.conversation_id === conversationId);
+  const title = activeConversation ? activeConversation.title || 'Hội thoại chưa đặt tên' : 'Hội thoại mới';
+  const subtitle = hydrating
+    ? 'Đang mở hội thoại…'
+    : loading
+      ? 'Đang trả lời…'
+      : activeConversation?.last_message_at
+        ? `Cập nhật ${formatDataAsOf(activeConversation.last_message_at)}`
+        : 'Câu hỏi đầu tiên sẽ tạo và lưu hội thoại';
+  const busy = loading || hydrating;
+
+  const sidebarProps = {
+    conversations,
+    status: conversationsStatus,
+    activeId: conversationId,
+    busy,
+    onSelect: switchConversation,
+    onNew: startNewConversation,
+    onRename: openRenameDialog,
+    onDelete: handleDeleteConversation,
+    onRetry: () => {
+      setConversationsStatus('loading');
+      loadConversations();
+    },
+    onClearAll: () => {
+      setHistoryDrawerOpen(false);
+      setConfirmClearAll(true);
+    },
+  };
+
+  return (
+    <MotionConfig reducedMotion="user">
+      <Tabs value={tab} onValueChange={(value) => setTab(value as 'chat' | 'actions')} className="flex h-full min-h-0 flex-row gap-0">
+        {tab === 'chat' && !railCollapsed && (
+          <aside className="hidden w-[272px] shrink-0 border-r border-border bg-card/50 xl:block">
+            <ConversationSidebar {...sidebarProps} onCollapse={() => setRail(true)} />
           </aside>
-          <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-            <SheetContent side="left" className="w-72 p-0">
-              <SheetHeader className="border-b border-border">
-                <SheetTitle>Hội thoại trước</SheetTitle>
-              </SheetHeader>
-              <ConversationList
-                conversations={conversations}
-                activeId={conversationId}
-                onSwitch={switchConversation}
-                onRename={openRenameDialog}
-                onDelete={handleDeleteConversation}
-                onAfterSelect={() => setMobileSidebarOpen(false)}
-              />
-            </SheetContent>
-          </Sheet>
-          <div className="min-w-0 flex-1">
-          <div ref={scrollRef} className="max-h-[65vh] min-h-[420px] space-y-6 overflow-y-auto px-5 py-6">
-            {messages.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-6 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-muted">
-                  <Bot className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div>
-                  <h3 className="text-[18px] font-semibold text-foreground">Chưa có câu hỏi nào</h3>
-                  <p className="mx-auto mt-1.5 max-w-md text-[13px] text-muted-foreground">
-                    Thử hỏi về tồn kho thấp, sách quá hạn, gợi ý nhập hàng, hoặc phễu reservation.
-                  </p>
-                </div>
-                <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
-                  {suggestedQuestions.map(({ icon: Icon, tone, text }, index) => (
-                    <motion.button
-                      key={text}
-                      type="button"
-                      onClick={() => sendMessage(text)}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
-                      whileHover={{ y: -2 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-violet-300 hover:shadow-md dark:hover:border-violet-500/30"
-                    >
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tone}`}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <span className="text-[13px] leading-snug text-foreground">{text}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <AnimatePresence initial={false}>
-                {messages.map((message, idx) => {
-                  const isStreamingMessage = loading && idx === messages.length - 1 && message.role === 'assistant';
-                  const isAwaitingFirstToken = isStreamingMessage && message.content === '';
+        )}
 
-                  const isUser = message.role === 'user';
-                  const isLastAssistant = !isUser && idx === messages.length - 1;
-                  // Text and charts interleave only once the answer is final: the
-                  // conclusion, then KPIs/charts, then the analysis, then tables.
-                  const visuals = !isUser && !isStreamingMessage ? message.visualizations ?? [] : [];
-                  const leadVisuals = visuals.filter((v) => v.type !== 'table');
-                  const tableVisuals = visuals.filter((v) => v.type === 'table');
-                  const splitAnswer = visuals.length > 0 && !message.isError;
-
-                  return (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                      className={`flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
-                    >
-                      {!isUser && (
-                        <div className="relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 shadow-sm">
-                          {isStreamingMessage && (
-                            <span className="absolute inset-0 rounded-full bg-violet-400 animate-ping opacity-40" />
-                          )}
-                          <Bot className="relative h-4 w-4 text-white" />
-                        </div>
-                      )}
-                      <div className={isUser ? 'max-w-[80%] space-y-2' : 'min-w-0 flex-1 space-y-3'}>
-                        <div
-                          className={`whitespace-pre-wrap text-[14px] leading-relaxed ${
-                            isUser
-                              ? 'rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 px-4 py-2.5 text-white'
-                              : message.isError
-                                ? 'rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-400'
-                                : isStreamingMessage
-                                  ? 'text-foreground/75'
-                                  : 'text-foreground'
-                          }`}
-                          aria-live={isStreamingMessage ? 'polite' : undefined}
-                          role={isStreamingMessage ? 'status' : undefined}
-                        >
-                          {isAwaitingFirstToken ? (
-                            <span className="inline-flex flex-col gap-1.5 text-muted-foreground">
-                              <span className="flex items-center gap-2">
-                                <motion.span
-                                  key={currentStage.label}
-                                  initial={{ opacity: 0, y: 4 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ duration: 0.25 }}
-                                  className="text-[12px]"
-                                >
-                                  {currentStage.label}
-                                </motion.span>
-                                <span className="tabular-nums text-[12px] text-muted-foreground/60">· {elapsedSeconds}s</span>
-                              </span>
-                              <span className="flex gap-1">
-                                {LOADING_STAGES.map((stage, i) => (
-                                  <span
-                                    key={stage.label}
-                                    className={`h-1 w-6 rounded-full transition-colors duration-500 ${
-                                      i <= currentStageIndex ? 'bg-violet-500' : 'bg-muted'
-                                    }`}
-                                  />
-                                ))}
-                              </span>
-                            </span>
-                          ) : (
-                            <>
-                              {message.isError && <AlertTriangle className="mr-1.5 inline-block h-3.5 w-3.5 -translate-y-px" />}
-                              {isUser ? message.content : (
-                                <CopilotAnswerText
-                                  text={message.content}
-                                  part={splitAnswer ? 'lead' : 'all'}
-                                  emphasizeLead={!isStreamingMessage && Boolean(message.explanation?.display)}
-                                />
-                              )}
-                              {isStreamingMessage && (
-                                <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-current" />
-                              )}
-                              {isStreamingMessage && (
-                                // The streamed text is a draft: the verified answer replaces it when done.
-                                <span className="mt-1 block text-[11px] text-muted-foreground" data-testid="copilot-draft-status">
-                                  {message.verifying
-                                    ? 'Đang đối chiếu với dữ liệu…'
-                                    : 'Bản nháp — sẽ được đối chiếu với dữ liệu trước khi hoàn tất'}
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        {splitAnswer && (
-                          <>
-                            <CopilotVisualizations items={leadVisuals} onAsk={sendMessage} disabled={loading} />
-                            <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">
-                              <CopilotAnswerText text={message.content} part="rest" />
-                            </div>
-                            <CopilotVisualizations items={tableVisuals} onAsk={sendMessage} disabled={loading} />
-                            {message.fromHistory && (
-                              <p className="text-[11px] italic text-muted-foreground">
-                                Biểu đồ hiển thị dữ liệu tại thời điểm trả lời (xem mốc thời gian ở từng biểu đồ), không tự cập nhật.
-                              </p>
-                            )}
-                          </>
-                        )}
-                        {!isStreamingMessage && message.visualizationNotes && message.visualizationNotes.length > 0 && (
-                          <CopilotVisualizationNotes notes={message.visualizationNotes} />
-                        )}
-                        {message.pendingAction && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                          >
-                            <ActionCard
-                              action={message.pendingAction}
-                              onConfirmed={handleActionConfirmed}
-                              onCancelled={handleActionCancelled}
-                            />
-                          </motion.div>
-                        )}
-                        {(message.groundingWarning ||
-                          (message.retrievalWarnings && message.retrievalWarnings.length > 0)) && (
-                          <Alert className="border-amber-300 bg-amber-50 text-amber-800 [&>svg]:text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400 dark:[&>svg]:text-amber-400">
-                            <AlertTriangle />
-                            <AlertDescription className="text-amber-800 dark:text-amber-400">
-                              {message.groundingWarning ||
-                                'Một số số liệu trong câu trả lời chưa khớp hoàn toàn với dữ liệu tra cứu được. Vui lòng đối chiếu lại trước khi sử dụng.'}
-                              {message.retrievalWarnings && message.retrievalWarnings.length > 0 && (
-                                <ul className="mt-1 list-disc pl-4">
-                                  {message.retrievalWarnings.map((warning, i) => (
-                                    <li key={i}>{warning}</li>
-                                  ))}
-                                </ul>
-                              )}
-                            </AlertDescription>
-                          </Alert>
-                        )}
-
-                        {!isStreamingMessage && <CopilotFaithfulness result={message.faithfulness} verification={message.verification} />}
-                        {!isStreamingMessage && (
-                          <CopilotDecision decision={message.decision} onDraft={isLastAssistant ? sendMessage : undefined} disabled={loading} />
-                        )}
-                        {!isStreamingMessage && <CopilotExplanation explanation={message.explanation} />}
-                        {!isStreamingMessage && message.recommendations && message.recommendations.length > 0 && (
-                          <CopilotRecommendations items={message.recommendations} />
-                        )}
-                        {!isStreamingMessage && message.caveats && message.caveats.length > 0 && (
-                          <CopilotCaveats items={message.caveats} />
-                        )}
-                        {/* The "why" panel carries the figures behind each claim; the flat
-                            citation list is kept for answers without one. */}
-                        {message.evidence && message.evidence.length > 0 && !message.explanation?.display && (
-                          <EvidenceCitations evidence={message.evidence} />
-                        )}
-                        {!isStreamingMessage && <CopilotDataAsOf iso={message.dataAsOf} />}
-                        {isLastAssistant && !loading && message.followups && message.followups.length > 0 && (
-                          <CopilotFollowups items={message.followups} onPick={sendMessage} disabled={loading} />
-                        )}
-                      </div>
-                      {isUser && (
-                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-500/15">
-                          <User className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 sm:gap-3 sm:px-5">
+            {tab === 'chat' && (
+              <button type="button" onClick={openHistory} aria-label="Lịch sử hội thoại" title="Lịch sử hội thoại"
+                className={cn('grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring',
+                  !railCollapsed && 'xl:hidden')}>
+                <History className="h-4 w-4" aria-hidden="true" />
+              </button>
             )}
-          </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11.5px] font-medium text-muted-foreground">Trợ lý AI</p>
+              <h1 className="truncate text-[14.5px] font-semibold leading-tight text-foreground" title={tab === 'chat' ? title : undefined}>
+                {tab === 'chat' ? title : 'Trung tâm hành động AI'}
+              </h1>
+            </div>
+            {tab === 'chat' && (
+              <span className="hidden max-w-[16rem] truncate text-[12px] text-muted-foreground lg:block">{subtitle}</span>
+            )}
+            <TabsList className="h-9 shrink-0 rounded-lg">
+              <TabsTrigger value="chat" className="rounded-md px-2.5 text-[13px]">
+                <MessagesSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Hội thoại</span>
+                <span className="sr-only sm:hidden">Hội thoại</span>
+              </TabsTrigger>
+              <TabsTrigger value="actions" className="rounded-md px-2.5 text-[13px]">
+                <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Hành động AI</span>
+                <span className="sr-only sm:hidden">Hành động AI</span>
+                {pendingActionCount > 0 && (
+                  <span className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10.5px] font-semibold tabular-nums text-white"
+                    aria-label={`${pendingActionCount > 50 ? 'Hơn 50' : pendingActionCount} hành động chờ xác nhận`}>
+                    {pendingActionCount > 50 ? '50+' : pendingActionCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            {tab === 'chat' && (
+              <Button type="button" variant="outline" size="sm" onClick={startNewConversation} disabled={busy}
+                title="Bắt đầu hội thoại mới" aria-label="Hội thoại mới" className="h-9 shrink-0 px-2.5 sm:px-3">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden md:inline">Hội thoại mới</span>
+              </Button>
+            )}
+          </header>
 
-          <div className="border-t border-border px-5 py-4">
-            {messages.length > 0 && (
-              <Accordion type="single" collapsible className="mb-2">
-                <AccordionItem value="suggestions" className="border-none">
-                  <AccordionTrigger className="py-1 text-[11px] text-muted-foreground hover:no-underline">
-                    Câu hỏi gợi ý
-                  </AccordionTrigger>
-                  <AccordionContent className="pb-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      {suggestedQuestions.map(({ text }) => (
-                        <button
-                          key={text}
-                          type="button"
-                          onClick={() => sendMessage(text)}
-                          disabled={loading}
-                          className="cursor-pointer rounded-full border border-border bg-card px-3 py-1 text-[12px] text-foreground transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10"
-                        >
-                          {text}
-                        </button>
+          {/* Kept mounted while the Action Center is open: a streaming answer and the reading position survive the switch. */}
+          <TabsContent value="chat" forceMount className="relative flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+            <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
+            <div ref={scrollRef} data-assistant-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div ref={contentRef}
+                className={cn('mx-auto flex w-full max-w-[50rem] 2xl:max-w-[56rem] flex-col px-4 pb-8 pt-6 sm:px-6', messages.length === 0 && 'min-h-full justify-center')}>
+                {messages.length === 0 ? (
+                  hydrating ? (
+                    <div className="space-y-6 py-6" aria-label="Đang mở hội thoại">
+                      {[0, 1].map((i) => (
+                        <div key={i} className="space-y-3">
+                          <span className="ml-auto block h-9 w-1/2 animate-pulse rounded-2xl bg-muted" />
+                          <span className="block h-3 w-3/4 animate-pulse rounded bg-muted" />
+                          <span className="block h-3 w-2/3 animate-pulse rounded bg-muted" />
+                        </div>
                       ))}
                     </div>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            )}
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                sendMessage(input);
-              }}
-              className="flex items-end gap-2 rounded-2xl border border-input bg-card p-2 shadow-sm transition-shadow focus-within:border-violet-300 focus-within:shadow-md dark:focus-within:border-violet-500/40"
-            >
-              <Textarea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    sendMessage(input);
-                  }
-                }}
-                placeholder="Hỏi về tồn kho, nhu cầu mượn, so sánh kỳ, ngân sách nhập hàng..."
-                aria-label="Câu hỏi cho trợ lý AI"
-                className="max-h-32 min-h-[40px] resize-none border-0 bg-transparent px-2 py-1.5 shadow-none focus-visible:ring-0"
-                disabled={loading}
-              />
-              <Button
-                type="submit"
-                disabled={loading || !input.trim()}
-                size="icon"
-                aria-label="Gửi câu hỏi"
-                className="h-9 w-9 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-violet-600 text-white transition-transform hover:opacity-90 active:scale-95"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </form>
-            {!loading && (
-              <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Có thể mất 30–120 giây để trả lời do mô hình AI chạy nội bộ.
-              </p>
-            )}
-          </div>
-          </div>
-          </div>
-        </SectionCard>
+                  ) : (
+                    <AssistantEmptyState groups={suggestionGroups} onAsk={ask} disabled={busy} />
+                  )
+                ) : (
+                  <div className={cn('space-y-8 transition-opacity', hydrating && 'opacity-50')}>
+                    {messages.map((message, idx) => {
+                      const isLast = idx === messages.length - 1;
+                      const phase = isLast && message.role === 'assistant' ? streamPhase : null;
+                      return (
+                        <MessageItem
+                          key={idx}
+                          message={message}
+                          phase={phase}
+                          elapsed={phase ? elapsedSeconds : 0}
+                          isLast={isLast}
+                          busy={busy}
+                          onAsk={ask}
+                          onRetry={retryLast}
+                          onActionConfirmed={handleActionConfirmed}
+                          onActionCancelled={handleActionCancelled}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="relative shrink-0 bg-gradient-to-t from-background via-background to-background/0 px-3 pb-3 pt-1 sm:px-6 sm:pb-4">
+              {!atBottom && messages.length > 0 && (
+                <button type="button" onClick={() => scrollToBottom()}
+                  className="absolute -top-11 left-1/2 inline-flex h-8 -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[12.5px] font-medium text-foreground shadow-md transition-colors hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-ring">
+                  <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  {loading ? 'Theo dõi câu trả lời' : 'Tin nhắn mới nhất'}
+                </button>
+              )}
+              <div className="mx-auto max-w-[50rem] 2xl:max-w-[56rem]">
+                <AssistantComposer
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={ask}
+                  sending={loading}
+                  blocked={hydrating}
+                  suggestions={messages.length > 0 ? suggestionGroups : undefined}
+                />
+              </div>
+            </div>
           </TabsContent>
 
-          <TabsContent value="actions">
-            <SectionCard
-              title="Trung tâm hành động AI"
-              subtitle="Lịch sử hành động AI đã đề xuất — xác nhận, hủy, và audit log đầy đủ"
-              noPadding
-            >
-              <AIActionCenter />
-            </SectionCard>
+          <TabsContent value="actions" className="flex min-h-0 flex-1 flex-col">
+            <AIActionCenter />
           </TabsContent>
-        </Tabs>
-      </FadeItem>
+        </div>
+      </Tabs>
+
+      <Sheet open={historyDrawerOpen} onOpenChange={setHistoryDrawerOpen}>
+        <SheetContent side="left" className="w-[min(20rem,88vw)] gap-0 p-0 [&>button:last-child]:hidden">
+          <SheetTitle className="sr-only">Lịch sử hội thoại</SheetTitle>
+          <SheetDescription className="sr-only">Chọn một hội thoại để mở lại, đổi tên hoặc xóa.</SheetDescription>
+          <ConversationSidebar {...sidebarProps} onClose={() => setHistoryDrawerOpen(false)} />
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDialog
         open={!!pendingDeleteConversation}
@@ -910,10 +580,22 @@ export function AIAssistantPage() {
         loading={deletingConversation}
       />
 
+      <ConfirmDialog
+        open={confirmClearAll}
+        onOpenChange={(open) => { if (!open && !clearingAll) setConfirmClearAll(false); }}
+        title="Xóa toàn bộ lịch sử hội thoại?"
+        description={`Tất cả ${conversations.length >= 50 ? '50+' : conversations.length} hội thoại của bạn sẽ bị xóa khỏi lịch sử. Hành động này không thể hoàn tác. Các hành động AI đã đề xuất vẫn được giữ trong Trung tâm hành động.`}
+        variant="destructive"
+        confirmLabel="Xóa tất cả"
+        onConfirm={clearAllConversations}
+        loading={clearingAll}
+      />
+
       <Dialog open={!!renameTarget} onOpenChange={(open) => { if (!open) setRenameTarget(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Đổi tên hội thoại</DialogTitle>
+            <DialogDescription>Tên giúp bạn tìm lại phân tích này trong lịch sử.</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="rename-conversation-input">Tên hội thoại</Label>
@@ -940,6 +622,6 @@ export function AIAssistantPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageWrapper>
+    </MotionConfig>
   );
 }

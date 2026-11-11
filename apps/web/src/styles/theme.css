@@ -139,6 +139,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  /* Public-site display face (variable optical size, full Vietnamese set). */
+  --font-display: 'Fraunces', 'Lora', Georgia, serif;
 }
 
 @layer base {

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Clock, Lock, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { authService, type AuthUser } from '@/services/auth';
+import { authService, type AuthUser, type OtpChallenge } from '@/services/auth';
 import { getApiErrorMessage } from '@/services/api';
+import { getApiErrorCode } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { SectionCard } from '@/components/ui/section-card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { OtpVerificationStep } from '@/components/auth/otp-verification';
 
 function formatDateTime(value?: string | null) {
   if (!value) return null;
@@ -46,6 +49,7 @@ export function AccountPage() {
 
 function AccountHeaderCard({ user, onRefresh }: { user: AuthUser | null; onRefresh: () => void }) {
   const [resending, setResending] = useState(false);
+  const [challenge, setChallenge] = useState<OtpChallenge | null>(null);
   const verified = Boolean(user?.email_verified_at);
   const lastLogin = formatDateTime(user?.last_login_at);
 
@@ -53,13 +57,25 @@ function AccountHeaderCard({ user, onRefresh }: { user: AuthUser | null; onRefre
     try {
       setResending(true);
       const res = await authService.resendVerification();
-      toast.success(res.message === 'Email already verified' ? 'Email đã được xác thực' : 'Đã gửi email xác thực, vui lòng kiểm tra hộp thư');
-      onRefresh();
+      if (res.status === 'OTP_SENT' && res.challenge) {
+        setChallenge(res.challenge);
+      } else {
+        toast.success('Email đã được xác thực');
+        onRefresh();
+      }
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Không thể gửi email xác thực'));
+      toast.error(getApiErrorMessage(err, 'Không thể gửi mã xác thực'));
     } finally {
       setResending(false);
     }
+  };
+
+  const verifyCode = async (code: string) => {
+    if (!challenge) return;
+    await authService.verifyEmailOtp(challenge.id, code);
+    setChallenge(null);
+    toast.success('Đã xác thực email');
+    onRefresh();
   };
 
   return (
@@ -105,11 +121,31 @@ function AccountHeaderCard({ user, onRefresh }: { user: AuthUser | null; onRefre
           )}
           {!verified && (
             <Button type="button" variant="warning-outline" size="sm" onClick={() => void handleResend()} loading={resending} loadingLabel="Đang gửi">
-              Gửi lại email xác thực
+              Xác thực email
             </Button>
           )}
         </div>
       </div>
+      <Dialog open={Boolean(challenge)} onOpenChange={(open) => { if (!open) setChallenge(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xác thực email</DialogTitle>
+            <DialogDescription>
+              Nhập mã 6 chữ số vừa gửi tới {challenge?.masked_email}.
+            </DialogDescription>
+          </DialogHeader>
+          {challenge ? (
+            <OtpVerificationStep
+              key={challenge.id}
+              challenge={challenge}
+              onVerify={verifyCode}
+              onBack={() => setChallenge(null)}
+              backLabel="Để sau"
+              submitLabel="Xác thực email"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </SectionCard>
   );
 }
@@ -138,9 +174,13 @@ function ProfileSection({ user, onUpdated }: { user: AuthUser | null; onUpdated:
         phone: form.phone.trim(),
       });
       onUpdated(updated);
-      toast.success('Đã cập nhật thông tin tài khoản');
+      toast.success(updated.email_verified_at || updated.email === user?.email
+        ? 'Đã cập nhật thông tin tài khoản'
+        : 'Đã cập nhật. Email mới cần được xác thực lại.');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Cập nhật thông tin thất bại'));
+      toast.error(getApiErrorCode(err) === 'EMAIL_CHANGE_REQUIRES_ADMIN'
+        ? 'Tài khoản dùng mã đăng nhập qua email nên không tự đổi email được. Liên hệ quản trị viên.'
+        : getApiErrorMessage(err, 'Cập nhật thông tin thất bại'));
     } finally {
       setSaving(false);
     }

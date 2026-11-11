@@ -138,6 +138,14 @@ export type ReorderSuggestionItem = {
   reason: string;
   unit_cost: number;
   estimated_cost: number;
+  /** Per-item lead time the quantity was sized on, and where it came from. */
+  lead_time_days?: number;
+  lead_time_source?: 'LEARNED' | 'SUPPLIER_DECLARED' | 'DEFAULT';
+  lead_time_samples?: number;
+  /** Demand expected before an order placed now arrives. */
+  lead_time_demand?: number;
+  demand_pace?: number;
+  demand_volatility?: number;
   within_budget?: boolean;
   /** Budget mode (3.3): copies the budget funds - a line can be funded in part. */
   funded_qty?: number;
@@ -173,6 +181,10 @@ export type ReorderSuggestionsData = {
     funded_lines?: number;
     funded_qty?: number;
     partially_funded_lines?: number;
+    /** Every re-sized line funded in full: what this budget mode would need. */
+    capped_need_cost?: number;
+    /** Share of the modelled lead-time demand the funded copies serve, 0-100. */
+    expected_service_pct?: number | null;
     funding_order?: string;
     assumptions?: string[];
   } | null;

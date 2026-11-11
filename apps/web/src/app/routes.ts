@@ -114,9 +114,10 @@ export const router = createBrowserRouter([
     lazy: { Component: async () => (await import("@/components/pages/login")).LoginPage },
   },
   {
+    // Self sign-up only ever creates reader (CUSTOMER) accounts; staff accounts come from
+    // an administrator (IAM). The old staff-styled page here posted to the same endpoint.
     path: "/register",
-    loader: publicOnlyLoader,
-    lazy: { Component: async () => (await import("@/components/pages/register")).RegisterPage },
+    loader: ({ request }: LoaderFunctionArgs) => redirect(`/customer/register${new URL(request.url).search}`),
   },
   {
     path: "/forgot-password",

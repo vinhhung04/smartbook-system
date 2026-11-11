@@ -24,6 +24,11 @@ function setWarehouseScopeResolver(next) {
   resolver = next;
 }
 
+/** Drops a user's cached scope (auth-service calls this after a change). */
+function clearScopeCache(userId) {
+  resolver.clearCache?.(userId);
+}
+
 function isAdminUser(user) {
   return user?.is_superuser === true;
 }
@@ -91,10 +96,46 @@ async function requireWarehouseWriteAccess(req, res, warehouseId, options) {
   return requireAccess(req, res, warehouseId, canWriteWarehouse, 'write', options);
 }
 
+// Who may be handed warehouse work. LIBRARIAN / CUSTOMER / SUPPLIER accounts
+// never are, even with a scope row.
+const ASSIGNEE_ROLES = ['WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER', 'ADMIN'];
+const ASSIGNEE_REJECTIONS = {
+  NOT_FOUND: { code: 'ASSIGNEE_NOT_FOUND', message: 'Không tìm thấy người được giao' },
+  INACTIVE: { code: 'ASSIGNEE_INACTIVE', message: 'Tài khoản người được giao không còn hoạt động' },
+  ROLE_NOT_ALLOWED: { code: 'ASSIGNEE_ROLE_NOT_ALLOWED', message: 'Người được giao không phải nhân sự kho' },
+  NO_WRITE_SCOPE: { code: 'ASSIGNEE_OUT_OF_SCOPE', message: 'Người được giao không có quyền thao tác ở kho này' },
+};
+
+/**
+ * Usage: if (!(await requireAssignableUser(res, assigneeId, warehouseId))) return;
+ * The assignee (not the caller) must be ACTIVE, warehouse staff/manager and
+ * hold WRITE scope on the warehouse - read fresh from auth-service. A record
+ * without a warehouse cannot be handed to anyone but a superuser.
+ */
+async function requireAssignableUser(res, assigneeId, warehouseId) {
+  let result;
+  try {
+    result = await resolver.checkAssignee(assigneeId, warehouseId || '', { roles: ASSIGNEE_ROLES });
+  } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) return respondUnavailable(res, error);
+    throw error;
+  }
+  if (result.ok) return true;
+  const rejection = ASSIGNEE_REJECTIONS[result.reason] || ASSIGNEE_REJECTIONS.NO_WRITE_SCOPE;
+  res.status(400).json(rejection);
+  return false;
+}
+
 /** null = no filter needed (superuser); otherwise the readable warehouse IDs. */
 async function readableWarehouseFilter(user) {
   const scope = await resolver.resolve(user);
   return scope.all ? null : [...scope.read];
+}
+
+/** null = every warehouse (superuser); otherwise the writable warehouse IDs. */
+async function writableWarehouseFilter(user) {
+  const scope = await resolver.resolve(user);
+  return scope.all ? null : [...scope.write];
 }
 
 /**
@@ -139,7 +180,11 @@ module.exports = {
   requireWarehouseWriteAccess,
   filterReadableWarehouses,
   readableWarehouseFilter,
+  writableWarehouseFilter,
   scopedWarehouseWhere,
   scopeErrorStatus,
   setWarehouseScopeResolver,
+  clearScopeCache,
+  requireAssignableUser,
+  ASSIGNEE_ROLES,
 };

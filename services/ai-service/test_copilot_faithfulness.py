@@ -11,7 +11,7 @@ import copilot_faithfulness as cf
 import main
 from main import AssistantRequest
 from test_copilot_endpoints import ADMIN, SequenceProvider, _request
-from test_copilot_visualization import COMPARE, MONTHLY, WAREHOUSES, FakeStoreWithData, plan
+from test_copilot_visualization import COMPARE, MONTHLY, WAREHOUSES, FakeStoreWithData, frozen_clock, plan
 from copilot_explain import build_explanation
 import copilot_visualization as cv
 
@@ -105,6 +105,7 @@ class FaithfulnessEndpointTests(unittest.IsolatedAsyncioTestCase):
             patch("main.conversation_store.get_recent_messages", new=self.store.get_recent_messages),
             patch("main.copilot_tools._warehouses", new=AsyncMock(return_value=WAREHOUSES)),
             patch.dict(main.TOOL_FUNCTIONS, {"get_borrow_trends": borrow_trends}),
+            *frozen_clock(),
         ]
         for p in self._patches:
             p.start()

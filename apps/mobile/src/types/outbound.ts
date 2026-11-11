@@ -14,7 +14,7 @@ export type OutboundTaskListItem = {
 
 export type AvailableOutboundTask = {
   id: string;
-  type: 'OUTBOUND';
+  type: 'OUTBOUND' | 'PICKING' | 'TRANSFER_RECEIVING';
   task_type: 'outbound' | 'transfer';
   title: string;
   status: string;

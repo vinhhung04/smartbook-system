@@ -7,3 +7,8 @@ export function branchBooksUrl(branch: { id: string; stats: BranchStats }) {
   if (branch.stats.available_title_count > 0) params.set('availability', 'available');
   return `/books?${params.toString()}`;
 }
+
+/** Opens the address in the reader's maps app (a plain search link: no API key, no tracking script). */
+export function directionsUrl(address: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}

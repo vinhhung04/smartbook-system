@@ -87,16 +87,17 @@
 
 /* ── Poses ─────────────────────────────────────────────────────────────── */
 
-/* Hero shelf: stands at an angle that shows the spine; the scene tilt
- * (--shelf-tilt-x / -y, set from the pointer) adds a little parallax.
- * Hovering pulls the book forward off the shelf and turns it to face you. */
-.book3d--shelf .book3d__body {
-  transform: rotateX(var(--shelf-tilt-x, 0deg)) rotateY(calc(28deg + var(--shelf-tilt-y, 0deg)));
+/* Hero showcase: books stand on a display table, each at its own angle and
+ * depth (--show-ry / --show-z per slot). Hovering or focusing one lifts it
+ * forward and turns it to face you. The table itself tilts with the pointer
+ * (GSAP, on the stage), never these bodies. */
+.book3d--showcase .book3d__body {
+  transform: translateZ(var(--show-z, 0px)) rotateX(3deg) rotateY(var(--show-ry, 0deg));
 }
 
-.book3d--shelf:hover .book3d__body,
-.book3d--shelf:focus-within .book3d__body {
-  transform: translateY(-12%) translateZ(90px) rotateY(-8deg) rotateX(4deg);
+.book3d--showcase:hover .book3d__body,
+.book3d--showcase:focus-within .book3d__body {
+  transform: translateY(-6%) translateZ(calc(var(--show-z, 0px) + 60px)) rotateX(2deg) rotateY(-6deg);
 }
 
 /* Cards: flat at rest; on hover the book lifts and turns to show its spine. */
@@ -169,7 +170,7 @@
   pointer-events: none;
 }
 
-.book3d--shelf:hover .book3d__shadow,
+.book3d--showcase:hover .book3d__shadow,
 .group:hover .book3d--card .book3d__shadow {
   transform: scaleX(0.85);
   opacity: 0.55;
@@ -204,20 +205,6 @@
   opacity: 1;
 }
 
-/* ── Hero depth: layers drift with the pointer at different depths ──────── */
-.hero-depth-far,
-.hero-depth-near {
-  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.hero-depth-far {
-  transform: translate3d(calc(var(--pointer-x, 0) * -18px), calc(var(--pointer-y, 0) * -12px), 0);
-}
-
-.hero-depth-near {
-  transform: translate3d(calc(var(--pointer-x, 0) * -48px), calc(var(--pointer-y, 0) * -30px), 0);
-}
-
 /* ── Cover flow track ────────────────────────────────────────────────────── */
 .cover-flow__item {
   transition: opacity 0.25s ease-out, filter 0.25s ease-out;
@@ -233,14 +220,12 @@
   }
 
   .book3d--flow .book3d__body,
-  .tilt-card,
-  .hero-depth-far,
-  .hero-depth-near {
+  .tilt-card {
     transform: none;
   }
 
-  .book3d--shelf:hover .book3d__body,
-  .book3d--shelf:focus-within .book3d__body,
+  .book3d--showcase:hover .book3d__body,
+  .book3d--showcase:focus-within .book3d__body,
   .group:hover .book3d--card .book3d__body,
   .group:focus-within .book3d--card .book3d__body {
     transform: rotateY(12deg);

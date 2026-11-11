@@ -1,6 +1,7 @@
 import { apiFetch } from './client';
 import { createIdempotencyKey } from '../lib/idempotency';
 import type {
+  BorrowListScope,
   CreateReservationPayload,
   FinesResponse,
   Loan,
@@ -14,11 +15,18 @@ function idempotencyHeaders(prefix: string) {
   return { 'Idempotency-Key': createIdempotencyKey(prefix) };
 }
 
-// Gateway rewrites /my to borrow-service's /borrow/my — see services/borrow-service/src/controllers/my.controller.js.
-export function getMyReservations(page = 1, pageSize = 20, status?: ReservationStatus) {
+type ListFilter = { scope?: BorrowListScope; status?: ReservationStatus | string };
+
+function listQuery(page: number, pageSize: number, filter: ListFilter = {}) {
   const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (status) query.set('status', status);
-  return apiFetch<PaginatedResponse<Reservation>>(`/my/reservations?${query.toString()}`);
+  if (filter.status) query.set('status', filter.status);
+  else if (filter.scope) query.set('scope', filter.scope);
+  return query.toString();
+}
+
+// Gateway rewrites /my to borrow-service's /borrow/my — see services/borrow-service/src/controllers/my.controller.js.
+export function getMyReservations(page = 1, pageSize = 20, filter: ListFilter = {}) {
+  return apiFetch<PaginatedResponse<Reservation>>(`/my/reservations?${listQuery(page, pageSize, filter)}`);
 }
 
 export function createMyReservation(payload: CreateReservationPayload) {
@@ -29,12 +37,9 @@ export function createMyReservation(payload: CreateReservationPayload) {
   });
 }
 
-// No GET /my/reservations/:id exists on the backend (see
-// services/borrow-service/src/routes/my.routes.js) — a patron's reservation list
-// is small enough that fetching one page and finding the row client-side is fine.
-export async function getMyReservationById(id: string): Promise<Reservation | null> {
-  const result = await getMyReservations(1, 100);
-  return result.data.find((reservation) => reservation.id === id) ?? null;
+/** Any reservation of the signed-in reader by id (ownership checked server-side), however old. */
+export function getMyReservationById(id: string) {
+  return apiFetch<{ data: Reservation }>(`/my/reservations/${encodeURIComponent(id)}`);
 }
 
 export function cancelMyReservation(id: string) {
@@ -44,14 +49,12 @@ export function cancelMyReservation(id: string) {
   });
 }
 
-export function getMyLoans(page = 1, pageSize = 20, status?: string) {
-  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (status) query.set('status', status);
-  return apiFetch<PaginatedResponse<Loan>>(`/my/loans?${query.toString()}`);
+export function getMyLoans(page = 1, pageSize = 20, filter: ListFilter = {}) {
+  return apiFetch<PaginatedResponse<Loan>>(`/my/loans?${listQuery(page, pageSize, filter)}`);
 }
 
 export function getMyLoanById(id: string) {
-  return apiFetch<{ data: Loan }>(`/my/loans/${id}`);
+  return apiFetch<{ data: Loan }>(`/my/loans/${encodeURIComponent(id)}`);
 }
 
 export function requestMyLoanRenewal(id: string) {

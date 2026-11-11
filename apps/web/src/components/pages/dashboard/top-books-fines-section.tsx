@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { NavLink } from 'react-router';
-import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/components/ui/utils';
-import type { FineSummary } from '@/services/analytics';
-import { formatMoney } from './utils';
+import type { FineSummary, TopBookItem } from '@/services/analytics';
+import { BlockEmpty, BlockError, Panel, PanelBody, PanelHeader, PanelLink } from './panel';
+import { formatMoney, formatNumber, formatShare } from './utils';
 
 // Backend stores a few spellings for the same fine reason; readers see one Vietnamese label.
 const FINE_TYPE_LABELS: Record<string, string> = {
@@ -14,21 +14,63 @@ const FINE_TYPE_LABELS: Record<string, string> = {
   LOST: 'Mất sách',
 };
 
-function compactMoney(value: number) {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', notation: 'compact', maximumFractionDigits: 1 }).format(value || 0);
-}
-
 interface TopBooksFinesSectionProps {
-  topBookData: Array<{ variant_id: string; book_id: string | null; title: string; borrow_count: number }>;
-  fines: FineSummary;
+  topBooks: TopBookItem[] | null;
+  /** The number of books requested: a shorter list means fewer books have been borrowed. */
+  topBooksLimit: number;
+  fines: FineSummary | null;
+  access: { catalog: boolean; borrow: boolean };
+  onRetry: () => void;
 }
 
-export function TopBooksFinesSection({ topBookData, fines }: TopBooksFinesSectionProps) {
-  const topMax = topBookData[0]?.borrow_count || 1;
+function TopBooksPanel({ topBooks, limit, canOpenBook, onRetry }: { topBooks: TopBookItem[] | null; limit: number; canOpenBook: boolean; onRetry: () => void }) {
+  const topMax = topBooks?.[0]?.borrow_count || 1;
 
+  return (
+    <Panel titleId="top-books-title" className="@5xl:col-span-5">
+      <PanelHeader id="top-books-title" level={3} title="Sách được mượn nhiều nhất" description="Xếp hạng theo tổng lượt mượn" />
+      <PanelBody>
+        {!topBooks ? (
+          <BlockError what="xếp hạng sách" onRetry={onRetry} />
+        ) : !topBooks.length ? (
+          <BlockEmpty>Sách sẽ được xếp hạng khi có giao dịch mượn.</BlockEmpty>
+        ) : (
+          <>
+            <div className="flex h-8 items-center justify-between border-b border-border text-[12px] text-muted-foreground" aria-hidden="true">
+              <span>Đầu sách</span>
+              <span>Lượt mượn</span>
+            </div>
+            <ol className="mt-1">
+              {topBooks.map((book, index) => {
+                const title = <span className="block truncate text-[13px] font-medium text-foreground" title={book.title}>{book.title}</span>;
+                return (
+                  <li key={book.variant_id} className="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 py-2">
+                    <span className="text-[12px] font-medium tabular-nums text-muted-foreground">{index + 1}</span>
+                    {canOpenBook && book.book_id ? (
+                      <NavLink to={`/book/${book.book_id}`} className="min-w-0 rounded-sm underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">{title}</NavLink>
+                    ) : title}
+                    <span className="text-right text-[13px] font-semibold tabular-nums text-foreground">{formatNumber(book.borrow_count)}</span>
+                    <span className="col-start-2 col-end-4 h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                      <span className="block h-full rounded-full bg-indigo-500 dark:bg-indigo-400" style={{ width: `${(book.borrow_count / topMax) * 100}%` }} />
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            {topBooks.length < limit ? (
+              <p className="mt-2 text-[12px] leading-5 text-muted-foreground">Mới có {formatNumber(topBooks.length)} đầu sách được mượn.</p>
+            ) : null}
+          </>
+        )}
+      </PanelBody>
+    </Panel>
+  );
+}
+
+function FinesPanel({ fines, canOpenFines, onRetry }: { fines: FineSummary | null; canOpenFines: boolean; onRetry: () => void }) {
   const byType = useMemo(() => {
     const merged = new Map<string, { label: string; amount: number; count: number }>();
-    for (const item of fines.by_type) {
+    for (const item of fines?.by_type ?? []) {
       const label = FINE_TYPE_LABELS[String(item.fine_type).toUpperCase()] || item.fine_type;
       const current = merged.get(label) || { label, amount: 0, count: 0 };
       current.amount += Number(item.amount || 0);
@@ -36,86 +78,68 @@ export function TopBooksFinesSection({ topBookData, fines }: TopBooksFinesSectio
       merged.set(label, current);
     }
     return [...merged.values()].sort((a, b) => b.amount - a.amount);
-  }, [fines.by_type]);
+  }, [fines]);
 
-  const statusParts = [
-    { key: 'unpaid', label: 'Chưa thu', value: fines.total_unpaid, color: 'bg-rose-500' },
+  const statusParts = fines ? [
+    { key: 'unpaid', label: 'Chưa thu', value: fines.total_unpaid, color: 'bg-amber-500' },
     { key: 'paid', label: 'Đã thu', value: fines.total_paid, color: 'bg-emerald-500' },
-    { key: 'waived', label: 'Miễn giảm', value: fines.total_waived, color: 'bg-slate-400' },
-  ];
+    { key: 'waived', label: 'Miễn giảm', value: fines.total_waived, color: 'bg-slate-400 dark:bg-slate-500' },
+  ] : [];
   const statusTotal = statusParts.reduce((sum, part) => sum + part.value, 0);
+  const byTypeTotal = byType.reduce((sum, row) => sum + row.amount, 0);
 
   return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-      <section aria-labelledby="top-books-title" className="rounded-xl border border-border bg-card p-5">
-        <h3 id="top-books-title" className="text-[14px] font-semibold text-foreground">Sách được mượn nhiều nhất</h3>
-        <p className="mt-1 text-[13px] text-muted-foreground">Xếp hạng theo tổng lượt mượn</p>
-        <div className="mt-4">
-          {topBookData.length ? (
-            <ol className="space-y-3">
-              {topBookData.map((book, index) => {
-                const title = (
-                  <span className="truncate text-[13px] font-medium text-foreground" title={book.title}>{book.title}</span>
-                );
-                return (
-                  <li key={book.variant_id} className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
-                    <span className="text-[12px] font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
-                    {book.book_id ? (
-                      <NavLink to={`/book/${book.book_id}`} className="min-w-0 truncate hover:underline">{title}</NavLink>
-                    ) : title}
-                    <span className="text-[13px] font-semibold tabular-nums text-foreground">{book.borrow_count.toLocaleString('vi-VN')}</span>
-                    <span className="col-start-2 col-end-4 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                      <span className="block h-full rounded-full bg-indigo-500 dark:bg-indigo-400" style={{ width: `${(book.borrow_count / topMax) * 100}%` }} />
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
-          ) : (
-            <EmptyState variant="no-data" title="Chưa có dữ liệu mượn sách" description="Sách sẽ được xếp hạng sau khi có giao dịch mượn." />
-          )}
-        </div>
-      </section>
-
-      <section aria-labelledby="fines-title" className="rounded-xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h3 id="fines-title" className="text-[14px] font-semibold text-foreground">Tiền phạt</h3>
-          <NavLink to="/borrow/fines?status=UNPAID" className="text-[13px] font-medium text-indigo-600 hover:underline dark:text-indigo-400">Xem khoản chưa thu</NavLink>
-        </div>
-        {statusTotal > 0 ? (
+    <Panel titleId="fines-title" className="@5xl:col-span-7">
+      <PanelHeader
+        id="fines-title"
+        level={3}
+        title="Tiền phạt"
+        description={fines && statusTotal > 0
+          ? <>Tổng phát sinh <span className="font-medium text-foreground">{formatMoney(statusTotal)}</span> · chưa thu {formatNumber(fines.unpaid_count)} khoản</>
+          : 'Cơ cấu tiền phạt theo trạng thái và lý do'}
+        aside={canOpenFines && fines && fines.unpaid_count > 0 ? <PanelLink to="/borrow/fines?tab=open">Xem khoản chưa thu</PanelLink> : null}
+      />
+      <PanelBody className="@container">
+        {!fines ? (
+          <BlockError what="tổng quan tiền phạt" onRetry={onRetry} />
+        ) : statusTotal > 0 ? (
           <>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              Chưa thu <span className="font-semibold text-foreground">{formatMoney(fines.total_unpaid)}</span> · {fines.unpaid_count.toLocaleString('vi-VN')} khoản
-            </p>
-            <div className="mt-4 flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label="Tỷ trọng tiền phạt theo trạng thái">
+            <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full" role="img" aria-label={`Tỷ trọng tiền phạt: ${statusParts.map((part) => `${part.label} ${formatShare(part.value, statusTotal)}`).join(', ')}`}>
               {statusParts.filter((part) => part.value > 0).map((part) => (
                 <span key={part.key} className={cn('h-full', part.color)} style={{ width: `${(part.value / statusTotal) * 100}%`, minWidth: 3 }} />
               ))}
             </div>
-            <dl className="mt-3 grid grid-cols-3 gap-3">
+            <dl className="mt-3 grid grid-cols-1 gap-3 @md:grid-cols-3">
               {statusParts.map((part) => (
-                <div key={part.key}>
+                <div key={part.key} className="min-w-0">
                   <dt className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                    <span className={cn('h-2 w-2 rounded-[2px]', part.color)} aria-hidden="true" />
-                    {part.label}
+                    <span className={cn('h-2.5 w-2.5 rounded-[3px]', part.color)} aria-hidden="true" />
+                    {part.label} · {formatShare(part.value, statusTotal)}
                   </dt>
-                  <dd className="mt-0.5 text-[15px] font-semibold text-foreground">{compactMoney(part.value)}</dd>
+                  <dd className="mt-0.5 text-[16px] font-semibold leading-6 tabular-nums text-foreground">{formatMoney(part.value)}</dd>
                 </div>
               ))}
             </dl>
 
             {byType.length ? (
               <table className="mt-5 w-full text-[13px]">
-                <caption className="mb-1 text-left text-[12px] font-medium text-muted-foreground">Theo lý do phạt</caption>
-                <thead className="sr-only">
-                  <tr><th>Lý do</th><th>Số khoản</th><th>Số tiền</th></tr>
+                <caption className="sr-only">Tiền phạt theo lý do</caption>
+                <thead>
+                  <tr className="border-b border-border text-[12px] text-muted-foreground [&>th]:h-8 [&>th]:font-normal">
+                    <th scope="col" className="text-left">Theo lý do phạt</th>
+                    <th scope="col" className="px-3 text-right">Số khoản</th>
+                    <th scope="col" className="text-right">Số tiền</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {byType.map((row) => (
-                    <tr key={row.label} className="border-b border-border last:border-0">
-                      <td className="py-2 text-foreground">{row.label}</td>
-                      <td className="py-2 text-right tabular-nums text-muted-foreground">{row.count.toLocaleString('vi-VN')} khoản</td>
-                      <td className="w-28 py-2 text-right font-semibold tabular-nums text-foreground">{compactMoney(row.amount)}</td>
+                    <tr key={row.label} className="border-b border-border/70 last:border-0">
+                      <th scope="row" className="py-2 text-left font-normal text-foreground">{row.label}</th>
+                      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{formatNumber(row.count)}</td>
+                      <td className="py-2 text-right tabular-nums">
+                        <span className="font-semibold text-foreground">{formatMoney(row.amount)}</span>
+                        <span className="ml-2 hidden w-12 text-muted-foreground @md:inline-block">{formatShare(row.amount, byTypeTotal)}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -123,9 +147,18 @@ export function TopBooksFinesSection({ topBookData, fines }: TopBooksFinesSectio
             ) : null}
           </>
         ) : (
-          <EmptyState variant="no-data" title="Chưa có tiền phạt" description="Tổng quan tiền phạt sẽ hiển thị khi có phạt." className="py-8" />
+          <BlockEmpty>Chưa phát sinh khoản phạt nào.</BlockEmpty>
         )}
-      </section>
+      </PanelBody>
+    </Panel>
+  );
+}
+
+export function TopBooksFinesSection({ topBooks, topBooksLimit, fines, access, onRetry }: TopBooksFinesSectionProps) {
+  return (
+    <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
+      <TopBooksPanel topBooks={topBooks} limit={topBooksLimit} canOpenBook={access.catalog} onRetry={onRetry} />
+      <FinesPanel fines={fines} canOpenFines={access.borrow} onRetry={onRetry} />
     </div>
   );
 }

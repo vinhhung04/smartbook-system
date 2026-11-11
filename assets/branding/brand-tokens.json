@@ -1,0 +1,18 @@
+{
+  "$description": "SmartBook brand colors. Ink and Lamp carry the identity; Indigo is the product UI primary already used across apps/web and apps/mobile.",
+  "color": {
+    "ink":    { "value": "#1D1A4A", "role": "Primary brand color. Symbol and wordmark on light backgrounds, app icon tile." },
+    "night":  { "value": "#14123A", "role": "Deep background for splash, dark brand surfaces." },
+    "indigo": { "value": "#4338CA", "role": "Secondary. Interactive UI primary (links, buttons, focus)." },
+    "lamp":   { "value": "#F6DFB4", "role": "Accent. Symbol on Ink (app icon, favicon, splash). Never as text on white." },
+    "mist":   { "value": "#E6E8FF", "role": "Symbol on dark UI backgrounds." },
+    "paper":  { "value": "#FFFFFF", "role": "Wordmark on dark, light backgrounds." },
+    "canvas": { "value": "#F6F7FB", "role": "Light app background (matches apps/web --background)." }
+  },
+  "typography": {
+    "wordmark": { "family": "Fraunces", "weight": 600, "tracking": "-0.02em", "license": "SIL Open Font License 1.1" },
+    "ui-web":   { "family": "Inter", "license": "SIL Open Font License 1.1" },
+    "ui-mobile": { "family": "Be Vietnam Pro / Manrope", "license": "SIL Open Font License 1.1" },
+    "mono":     { "family": "JetBrains Mono", "license": "SIL Open Font License 1.1" }
+  }
+}

@@ -8,7 +8,15 @@ export type CustomerProfile = {
   birth_date: string | null;
   address: string | null;
   status: string;
-  total_fine_balance: number;
+  total_fine_balance: number | string;
+};
+
+/** Fields a reader may change themselves (borrow-service updateMyProfile). */
+export type CustomerProfileUpdate = {
+  full_name?: string;
+  phone?: string | null;
+  birth_date?: string | null;
+  address?: string | null;
 };
 
 export type MembershipInfo = {
@@ -27,5 +35,5 @@ export type MembershipInfo = {
   };
   active_loan_count: number;
   remaining_loan_slots: number;
-  outstanding_fine_balance: number;
+  outstanding_fine_balance: number | string;
 };

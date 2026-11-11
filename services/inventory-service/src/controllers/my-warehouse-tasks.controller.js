@@ -1,25 +1,30 @@
 const { PrismaClient } = require('@prisma/client');
 const { parseId } = require('../utils/validation');
+const { readableWarehouseFilter, writableWarehouseFilter, scopeErrorStatus } = require('../utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 
 async function getAvailableTasks(req, res) {
-  // Build permission scope inline (mirrors pattern used in other controllers)
-  const roles = Array.isArray(req.user?.roles)
-    ? req.user.roles.map((r) => String(r).toUpperCase())
-    : [];
-  const canManageAssignment =
-    Boolean(req.user?.is_superuser) ||
-    roles.includes('ADMIN') ||
-    roles.includes('WAREHOUSE_MANAGER');
-
-  // Warehouse scope: use warehouse_id from JWT if available, else from query param.
-  // NOTE: Current JWT payload does not include warehouse_id. Until auth-service adds
-  // primary_warehouse_id to the token, filtering relies on ?warehouse_id= query param.
-  // Without a warehouse filter, all available tasks are returned (backward-compatible).
-  const userWarehouseId = parseId(req.user?.warehouse_id);
-  const queryWarehouseId = parseId(req.query.warehouse_id);
-  const warehouseId = userWarehouseId || queryWarehouseId || null;
+  // Warehouse scope comes from auth-service (resolver), never from the token
+  // or the query alone: no warehouse_id means "my readable warehouses", not
+  // "every warehouse". A warehouse_id the client names was already checked
+  // against the read scope by enforceRequestedWarehouseScope; it only narrows.
+  // `claimable` is true only where the caller has WRITE scope - the claim
+  // endpoints refuse everything else.
+  const requestedWarehouseId = parseId(req.query.warehouse_id);
+  let readable;
+  let writable;
+  try {
+    [readable, writable] = await Promise.all([readableWarehouseFilter(req.user), writableWarehouseFilter(req.user)]);
+  } catch (error) {
+    return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+  }
+  const writableSet = writable === null ? null : new Set(writable);
+  const canClaim = (warehouseId) => writableSet === null || writableSet.has(warehouseId);
+  const inScope = (field) => {
+    if (requestedWarehouseId) return { [field]: requestedWarehouseId };
+    return readable === null ? {} : { [field]: { in: readable } };
+  };
 
   try {
     const [
@@ -34,7 +39,7 @@ async function getAvailableTasks(req, res) {
         where: {
           status: 'APPROVED',
           processed_by_user_id: null,
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...inScope('warehouse_id'),
         },
         select: {
           id: true,
@@ -54,7 +59,7 @@ async function getAvailableTasks(req, res) {
         where: {
           status: 'APPROVED',
           shipped_by_user_id: null,
-          ...(warehouseId ? { from_warehouse_id: warehouseId } : {}),
+          ...inScope('from_warehouse_id'),
         },
         select: {
           id: true,
@@ -79,7 +84,7 @@ async function getAvailableTasks(req, res) {
           status: { in: ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'] },
           outbound_assigned_user_id: null,
           packing_tasks: { some: { status: 'COMPLETED' } },
-          ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+          ...inScope('warehouse_id'),
         },
         select: {
           id: true,
@@ -98,7 +103,7 @@ async function getAvailableTasks(req, res) {
         where: {
           status: 'READY_FOR_OUTBOUND',
           outbound_assigned_user_id: null,
-          ...(warehouseId ? { from_warehouse_id: warehouseId } : {}),
+          ...inScope('from_warehouse_id'),
         },
         select: {
           id: true,
@@ -119,7 +124,7 @@ async function getAvailableTasks(req, res) {
         where: {
           status: 'IN_TRANSIT',
           received_by_user_id: null,
-          ...(warehouseId ? { to_warehouse_id: warehouseId } : {}),
+          ...inScope('to_warehouse_id'),
         },
         select: {
           id: true,
@@ -175,7 +180,7 @@ async function getAvailableTasks(req, res) {
           created_at: o.created_at,
           completed_at: null,
           action_path: '/picking',
-          claimable: true,
+          claimable: canClaim(o.warehouse_id),
           claim_endpoint: `/api/picking/tasks/outbound/${o.id}/claim-self`,
         };
       }),
@@ -190,7 +195,7 @@ async function getAvailableTasks(req, res) {
         created_at: o.created_at,
         completed_at: null,
         action_path: '/picking',
-        claimable: true,
+        claimable: canClaim(o.from_warehouse_id),
         claim_endpoint: `/api/picking/tasks/transfer/${o.id}/claim-self`,
         ...transferDirectionFields(o),
       })),
@@ -205,7 +210,7 @@ async function getAvailableTasks(req, res) {
         created_at: o.created_at,
         completed_at: null,
         action_path: '/outbound',
-        claimable: true,
+        claimable: canClaim(o.warehouse_id),
         claim_endpoint: `/api/outbound/orders/outbound/${o.id}/claim-self`,
       })),
       ...outboundConfirmTransfer.map((o) => ({
@@ -219,7 +224,7 @@ async function getAvailableTasks(req, res) {
         created_at: o.created_at,
         completed_at: null,
         action_path: '/outbound',
-        claimable: true,
+        claimable: canClaim(o.from_warehouse_id),
         claim_endpoint: `/api/outbound/orders/transfer/${o.id}/claim-self`,
         ...transferDirectionFields(o),
       })),
@@ -234,7 +239,7 @@ async function getAvailableTasks(req, res) {
         created_at: o.created_at,
         completed_at: null,
         action_path: '/transfer-receiving',
-        claimable: true,
+        claimable: canClaim(o.to_warehouse_id),
         claim_endpoint: `/api/transfer-receiving/${o.id}/claim-self`,
         ...transferDirectionFields(o),
       })),

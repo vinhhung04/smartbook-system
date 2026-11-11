@@ -7,6 +7,7 @@ const {
   listRenewalRequests,
   reviewLoanRenewal,
   returnLoan,
+  previewLoanReturn,
   runOverdueSweepNow,
 } = require('../controllers/loan.controller');
 const { authorizeBorrowAdminRead, authorizeBorrowAdminWrite } = require('../middlewares/auth.middleware');
@@ -19,6 +20,7 @@ router.post('/direct', authorizeBorrowAdminWrite, createDirectLoan);
 router.post('/:id/renewals/review', authorizeBorrowAdminWrite, reviewLoanRenewal);
 router.get('/:id', authorizeBorrowAdminRead, getLoanById);
 router.post('/from-reservation/:id', authorizeBorrowAdminWrite, convertReservationToLoan);
+router.get('/:id/return-preview', authorizeBorrowAdminRead, previewLoanReturn);
 router.post('/:id/return', authorizeBorrowAdminWrite, returnLoan);
 router.post('/jobs/overdue-sweep', authorizeBorrowAdminWrite, runOverdueSweepNow);
 

@@ -25,6 +25,7 @@ import { Button, IconButton } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
 interface DraftAllocationLine {
   id: string;
@@ -1001,8 +1002,9 @@ export function ReceivingPutawayPage() {
                 type="number"
                 min={1}
                 max={reverseItem?.on_hand_qty || 1}
+                {...zeroFieldProps}
                 value={reverseQuantity}
-                onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(event.target.value || 0))))}
+                onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(numberInputValue(event) || 0))))}
                 className="h-auto py-2.5"
               />
             </div>

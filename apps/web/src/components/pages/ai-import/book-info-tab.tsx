@@ -4,10 +4,10 @@ import { AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, RefreshCw, Sparkl
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Field } from "./field";
+import { Field, OriginTag, type FieldOrigin } from "./field";
 import type { AiFieldCandidates, AiFieldKey, EditableBookForm } from "./types";
 import type { PostIsbnAiSuggestions } from "@/services/ai";
-import { splitCommaValues } from "./utils";
+import { normalizeIsbnInput, splitCommaValues } from "./utils";
 
 function FieldGroup({
   id,
@@ -23,15 +23,15 @@ function FieldGroup({
   children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="grid gap-x-8 gap-y-4 border-t border-border py-7 first:border-t-0 first:pt-0 last:pb-0 xl:grid-cols-[168px_minmax(0,1fr)]">
-      <div className="flex items-start justify-between gap-3 xl:block">
-        <div>
+    <section aria-labelledby={id} className="rounded-2xl border border-border bg-card">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+        <div className="min-w-0">
           <h3 id={id} className="text-[14px] font-semibold text-foreground">{title}</h3>
-          <p className="mt-1 max-w-[46ch] text-[12px] leading-5 text-muted-foreground">{hint}</p>
+          <p className="mt-0.5 max-w-[60ch] text-[12px] leading-5 text-muted-foreground">{hint}</p>
         </div>
-        {actions ? <div className="shrink-0 xl:mt-3">{actions}</div> : null}
+        {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
-      <div className="min-w-0">{children}</div>
+      <div className="min-w-0 px-4 py-4 sm:px-5">{children}</div>
     </section>
   );
 }
@@ -66,6 +66,7 @@ function AiAssistedField({
   applyLabel = "Áp dụng",
   chips = false,
   className = "",
+  origin,
   children,
 }: {
   id: string;
@@ -79,6 +80,7 @@ function AiAssistedField({
   applyLabel?: string;
   chips?: boolean;
   className?: string;
+  origin?: FieldOrigin;
   children: ReactNode;
 }) {
   const shouldReduceMotion = useReducedMotion();
@@ -89,7 +91,7 @@ function AiAssistedField({
   return (
     <div className={`overflow-hidden rounded-lg border bg-card transition-colors focus-within:border-violet-300 dark:focus-within:border-violet-500/40 ${hasSuggestion ? "border-violet-200 dark:border-violet-500/25" : "border-border"} ${className}`}>
       <div className="flex min-h-10 items-center justify-between gap-2 py-1.5 pl-3.5 pr-2">
-        <Label htmlFor={id} className="text-[12px] font-semibold text-foreground">{label}</Label>
+        <Label htmlFor={id} className="flex min-w-0 flex-1 items-center gap-2 text-[12px] font-semibold text-foreground">{label}<OriginTag origin={origin} /></Label>
         <button
           type="button"
           onClick={() => onRegenerate(field)}
@@ -158,6 +160,8 @@ export function BookInfoTab({
   onDismissQualityCheck,
   postIsbnSuggestions,
   hasPostIsbnSuggestions,
+  origins,
+  showRequired,
 }: {
   form: EditableBookForm;
   onFieldChange: (field: keyof EditableBookForm, value: string) => void;
@@ -173,48 +177,49 @@ export function BookInfoTab({
   onDismissQualityCheck: () => void;
   postIsbnSuggestions: PostIsbnAiSuggestions | null;
   hasPostIsbnSuggestions: boolean;
+  /** Where each field's current value came from (edited / photo / lookup). */
+  origins: Partial<Record<keyof EditableBookForm, FieldOrigin>>;
+  /** A save was attempted: mark the required fields that block it. */
+  showRequired: boolean;
 }) {
   const noTitle = !form.title.trim();
+  const isbnError = showRequired && !normalizeIsbnInput(form.isbn) ? "Cần ISBN để lưu sách" : null;
+  const titleError = showRequired && noTitle ? "Cần tên sách để lưu" : null;
   const providerNote = hasPostIsbnSuggestions && postIsbnSuggestions
     ? postIsbnSuggestions.provider === "none"
       ? "AI không khả dụng"
-      : `${postIsbnSuggestions.provider} · ${Math.round((postIsbnSuggestions.confidence || 0) * 100)}% tin cậy`
+      : `${postIsbnSuggestions.provider} · AI tự báo ${Math.round((postIsbnSuggestions.confidence || 0) * 100)}% tin cậy`
     : null;
 
   return (
-    <div>
-      <FieldGroup id="group-identity" title="Nhận diện" hint="Dùng để khớp ấn bản và kiểm tra trùng trong catalog.">
+    <div className="space-y-4">
+      <FieldGroup id="group-identity" title="Định danh" hint="ISBN và tên sách là bắt buộc; dùng để khớp ấn bản và kiểm tra trùng.">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-6">
-          <Field id="isbn" className="sm:col-span-2" label="ISBN" mono required value={form.isbn} onChange={(v) => onFieldChange("isbn", v)} />
-          <Field id="title" className="sm:col-span-4" label="Tên sách" required inputClassName="font-medium" value={form.title} onChange={(v) => onFieldChange("title", v)} />
-          <Field id="subtitle" className="sm:col-span-6" label="Tựa phụ" value={form.subtitle} onChange={(v) => onFieldChange("subtitle", v)} />
+          <Field id="isbn" className="sm:col-span-2" label="ISBN" mono required value={form.isbn} onChange={(v) => onFieldChange("isbn", v)} origin={origins.isbn} error={isbnError} />
+          <Field id="title" className="sm:col-span-4" label="Tên sách" required inputClassName="font-medium" value={form.title} onChange={(v) => onFieldChange("title", v)} origin={origins.title} error={titleError} />
+          <Field id="subtitle" className="sm:col-span-6" label="Tựa phụ" value={form.subtitle} onChange={(v) => onFieldChange("subtitle", v)} origin={origins.subtitle} />
+          <Field id="isbn13" className="sm:col-span-3" label="ISBN-13" mono value={form.isbn13} onChange={(v) => onFieldChange("isbn13", v)} origin={origins.isbn13} />
+          <Field id="isbn10" className="sm:col-span-3" label="ISBN-10" mono value={form.isbn10} onChange={(v) => onFieldChange("isbn10", v)} origin={origins.isbn10} />
         </div>
       </FieldGroup>
 
-      <FieldGroup id="group-people" title="Tác giả" hint="Nhiều người thì cách nhau bằng dấu phẩy.">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field id="authors" label="Tác giả" value={form.authorsText} onChange={(v) => onFieldChange("authorsText", v)} />
-          <Field id="translator" label="Dịch giả" value={form.translatorText || ""} onChange={(v) => onFieldChange("translatorText", v)} />
-        </div>
-      </FieldGroup>
-
-      <FieldGroup id="group-publishing" title="Xuất bản" hint="Thông tin ấn bản vật lý của cuốn sách đang nhập.">
+      <FieldGroup id="group-publishing" title="Xuất bản" hint="Người viết và ấn bản vật lý của cuốn sách đang nhập. Nhiều người thì cách nhau bằng dấu phẩy.">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-6">
-          <Field id="publisher" className="col-span-2 sm:col-span-6" label="Nhà xuất bản" value={form.publisher} onChange={(v) => onFieldChange("publisher", v)} />
-          <Field id="publishedDate" className="sm:col-span-2" label="Ngày xuất bản" value={form.publishedDate} onChange={(v) => onFieldChange("publishedDate", v)} />
-          <Field id="pageCount" className="sm:col-span-2" label="Số trang" mono value={form.pageCount} onChange={(v) => onFieldChange("pageCount", v)} />
-          <Field id="language" className="col-span-2 sm:col-span-2" label="Ngôn ngữ" value={form.language} onChange={(v) => onFieldChange("language", v)} />
-          <Field id="isbn13" className="col-span-2 sm:col-span-3" label="ISBN-13" mono value={form.isbn13} onChange={(v) => onFieldChange("isbn13", v)} />
-          <Field id="isbn10" className="col-span-2 sm:col-span-3" label="ISBN-10" mono value={form.isbn10} onChange={(v) => onFieldChange("isbn10", v)} />
+          <Field id="authors" className="col-span-2 sm:col-span-3" label="Tác giả" value={form.authorsText} onChange={(v) => onFieldChange("authorsText", v)} origin={origins.authorsText} />
+          <Field id="translator" className="col-span-2 sm:col-span-3" label="Dịch giả" value={form.translatorText || ""} onChange={(v) => onFieldChange("translatorText", v)} origin={origins.translatorText} />
+          <Field id="publisher" className="col-span-2 sm:col-span-6" label="Nhà xuất bản" value={form.publisher} onChange={(v) => onFieldChange("publisher", v)} origin={origins.publisher} />
+          <Field id="publishedDate" className="sm:col-span-2" label="Ngày xuất bản" value={form.publishedDate} onChange={(v) => onFieldChange("publishedDate", v)} origin={origins.publishedDate} />
+          <Field id="pageCount" className="sm:col-span-2" label="Số trang" mono inputMode="numeric" value={form.pageCount} onChange={(v) => onFieldChange("pageCount", v)} origin={origins.pageCount} />
+          <Field id="language" className="col-span-2 sm:col-span-2" label="Ngôn ngữ" value={form.language} onChange={(v) => onFieldChange("language", v)} origin={origins.language} />
         </div>
       </FieldGroup>
 
       <FieldGroup
         id="group-ai"
-        title="Nội dung"
-        hint="AI chỉ đề xuất. Xem trước rồi bấm Áp dụng — không có gì tự ghi đè."
+        title="Nội dung & phân loại"
+        hint="Trợ lý viết AI chỉ đề xuất. Xem trước rồi bấm Áp dụng — không có gì tự ghi đè nội dung bạn đã viết."
         actions={(
-          <div className="flex flex-wrap items-center gap-2 xl:flex-col xl:items-start">
+          <div className="flex flex-wrap items-center gap-2">
             {aiSuggestionCount > 0 ? (
               <button
                 type="button"
@@ -242,19 +247,22 @@ export function BookInfoTab({
         {qualityCheckResult ? (
           <div
             role="status"
-            className={`mb-4 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-[13px] ${qualityCheckResult.warnings.length === 0 ? "border-success/30 bg-success/10 text-success" : "border-warning/30 bg-warning/10 text-foreground"}`}
+            className={`mb-4 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-[13px] ${qualityCheckResult.warnings.length === 0 ? "border-emerald-200 bg-emerald-50/60 text-foreground dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-warning/30 bg-warning/10 text-foreground"}`}
           >
             {qualityCheckResult.warnings.length === 0 ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             ) : (
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
             )}
             <div className="min-w-0 flex-1">
               {qualityCheckResult.warnings.length === 0 ? (
-                <p className="font-medium">Metadata đạt chất lượng tốt</p>
+                <>
+                  <p className="font-medium">AI không đưa ra cảnh báo chất lượng nào</p>
+                  <p className="mt-0.5 text-muted-foreground">Điều này không bảo đảm metadata đúng — vẫn nên so với sách thật.</p>
+                </>
               ) : (
                 <>
-                  <p className="font-semibold">{qualityCheckResult.warnings.length} cảnh báo chất lượng</p>
+                  <p className="font-semibold">{qualityCheckResult.warnings.length} cảnh báo chất lượng (không chặn việc lưu)</p>
                   <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
                     {qualityCheckResult.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}
                   </ul>
@@ -270,6 +278,7 @@ export function BookInfoTab({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <AiAssistedField
             id="description"
+            origin={origins.description}
             label="Mô tả"
             field="description"
             candidates={aiFieldCandidates}
@@ -285,6 +294,7 @@ export function BookInfoTab({
 
           <AiAssistedField
             id="summaryVi"
+            origin={origins.summaryVi}
             label="Tóm tắt cho chatbot"
             field="summaryVi"
             candidates={aiFieldCandidates}
@@ -300,6 +310,7 @@ export function BookInfoTab({
 
           <AiAssistedField
             id="keywords"
+            origin={origins.keywordsText}
             label="Từ khóa"
             field="keywords"
             candidates={aiFieldCandidates}
@@ -315,6 +326,7 @@ export function BookInfoTab({
 
           <AiAssistedField
             id="categories"
+            origin={origins.categoriesText}
             label="Thể loại"
             field="categories"
             candidates={aiFieldCandidates}

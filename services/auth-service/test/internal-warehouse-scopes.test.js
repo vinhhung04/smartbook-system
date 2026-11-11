@@ -8,6 +8,7 @@ const users = {
   [USER_ID]: {
     id: USER_ID, status: 'ACTIVE', is_superuser: false, deleted_at: null,
     user_warehouse_scopes: [{ warehouse_id: '00000000-0000-0000-0000-000000000003', access_level: 'READ' }],
+    user_roles: [{ role: { code: 'WAREHOUSE_STAFF' } }],
   },
 };
 const prisma = { user: { findUnique: async ({ where }) => users[where.id] || null } };
@@ -32,12 +33,13 @@ test('warehouse scopes are only served to callers with the internal key', async 
   assert.equal((await call(`/internal/users/${USER_ID}/warehouse-scopes`, { 'x-internal-service-key': '' }, '')).status, 403);
 });
 
-test('returns status, superuser flag and every scope row of the user', async () => {
+test('returns status, superuser flag, role codes and every scope row of the user', async () => {
   const { status, body } = await call(`/internal/users/${USER_ID}/warehouse-scopes`, { 'x-internal-service-key': 'secret' });
   assert.equal(status, 200);
   assert.deepEqual(body.data, {
     user_id: USER_ID, status: 'ACTIVE', deleted: false, is_superuser: false,
     scopes: [{ warehouse_id: '00000000-0000-0000-0000-000000000003', access_level: 'READ' }],
+    roles: ['WAREHOUSE_STAFF'],
   });
 });
 

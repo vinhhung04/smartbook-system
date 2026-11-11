@@ -2,6 +2,8 @@ const express = require('express');
 const {
   register,
   login,
+  refresh,
+  revokeRefresh,
   me,
   listWarehouseStaff,
   updateMe,
@@ -9,8 +11,10 @@ const {
   changePassword,
   requestPasswordReset,
   confirmPasswordReset,
-  verifyEmail,
   resendVerification,
+  verifyEmailOtp,
+  resendEmailOtp,
+  verifyLoginOtp,
 } = require('../controllers/auth.controller');
 const { authenticateToken } = require('../middlewares/auth.middleware');
 const { createRateLimiter } = require('@smartbook/shared/runtime');
@@ -27,10 +31,19 @@ const authRateLimit = createRateLimiter({
   trustedProxyHops: 2,
 });
 const resetRateLimit = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
+// Email OTP: per-IP budgets on top of the per-challenge (5 guesses) and per-account
+// (10 codes an hour) limits enforced in lib/email-otp.js.
+const otpVerifyRateLimit = createRateLimiter({ max: Number(process.env.AUTH_OTP_VERIFY_RATE_LIMIT_MAX) || 30, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
+const otpResendRateLimit = createRateLimiter({ max: Number(process.env.AUTH_OTP_RESEND_RATE_LIMIT_MAX) || 10, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
+const refreshRateLimit = createRateLimiter({ max: Number(process.env.AUTH_REFRESH_RATE_LIMIT_MAX) || 30, windowMs: 15 * 60 * 1000, trustedProxyHops: 2 });
 
 // Public endpoints
 router.post('/register', authRateLimit, register);
 router.post('/login', authRateLimit, login);
+// Mobile session renewal. Separate budget from login: a refresh is not a password
+// guess, but it is still bounded so a stolen token cannot be hammered.
+router.post('/refresh', refreshRateLimit, refresh);
+router.post('/refresh/revoke', refreshRateLimit, revokeRefresh);
 router.post('/logout', authenticateToken, logout);
 router.get('/me', authenticateToken, me);
 router.get('/warehouse-staff', authenticateToken, listWarehouseStaff);
@@ -38,7 +51,9 @@ router.patch('/me', authenticateToken, updateMe);
 router.post('/change-password', authenticateToken, changePassword);
 router.post('/password-reset/request', resetRateLimit, requestPasswordReset);
 router.post('/password-reset/confirm', resetRateLimit, confirmPasswordReset);
-router.post('/verify-email', resetRateLimit, verifyEmail);
-router.post('/resend-verification', authenticateToken, resetRateLimit, resendVerification);
+router.post('/email-otp/verify', otpVerifyRateLimit, verifyEmailOtp);
+router.post('/email-otp/resend', otpResendRateLimit, resendEmailOtp);
+router.post('/login/verify-otp', otpVerifyRateLimit, verifyLoginOtp);
+router.post('/resend-verification', authenticateToken, otpResendRateLimit, resendVerification);
 
 module.exports = router;

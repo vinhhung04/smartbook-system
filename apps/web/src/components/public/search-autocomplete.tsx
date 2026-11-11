@@ -102,7 +102,7 @@ export function SearchAutocomplete({ variant = 'compact', placeholder = 'Tên s�
       <div
         className={cn(
           'flex items-center gap-2 border border-border bg-card transition-shadow focus-within:border-indigo-500',
-          hero ? 'rounded-xl p-1.5 shadow-sm focus-within:ring-4 focus-within:ring-indigo-500/15' : 'rounded-md focus-within:ring-2 focus-within:ring-indigo-500/20',
+          hero ? 'rounded-2xl p-1.5 shadow-[0_10px_30px_-18px_rgba(30,27,75,0.45)] focus-within:ring-4 focus-within:ring-indigo-500/15' : 'rounded-md focus-within:ring-2 focus-within:ring-indigo-500/20',
         )}
       >
         <Search className={cn('shrink-0 text-muted-foreground', hero ? 'ml-2.5 h-5 w-5' : 'ml-3 h-4 w-4')} aria-hidden="true" />
@@ -124,12 +124,12 @@ export function SearchAutocomplete({ variant = 'compact', placeholder = 'Tên s�
           onKeyDown={onKeyDown}
           className={cn(
             'min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden',
-            hero ? 'h-11 text-[15px]' : 'h-9 pr-3 text-[13px]',
+            hero ? 'h-12 text-[15.5px]' : 'h-9 pr-3 text-[13px]',
           )}
         />
         {hero ? addon : null}
         {hero ? (
-          <button type="submit" className="h-11 shrink-0 rounded-lg bg-indigo-700 px-5 text-[14px] font-semibold text-white hover:bg-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400">
+          <button type="submit" className="h-12 shrink-0 rounded-xl bg-indigo-700 px-5 text-[14px] font-semibold text-white transition-[background-color,transform] hover:bg-indigo-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500 dark:hover:bg-indigo-400">
             Tìm sách
           </button>
         ) : null}

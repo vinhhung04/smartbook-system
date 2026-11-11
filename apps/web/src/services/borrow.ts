@@ -125,6 +125,50 @@ export interface LoanItem {
   fine_amount: number;
   lost_fee_amount: number;
   notes: string | null;
+  loan_item_deposits?: LoanItemDeposit | null;
+}
+
+export type DepositStatus = 'HELD' | 'RELEASED' | 'PARTIALLY_REFUNDED' | 'CAPTURED';
+
+export interface LoanItemDeposit {
+  id: string;
+  loan_item_id: string;
+  amount: number | string;
+  captured_amount: number | string;
+  refunded_amount: number | string;
+  status: DepositStatus;
+  return_condition: string | null;
+  settlement_reason: string | null;
+  settled_at: string | null;
+}
+
+export interface ReturnPreviewItem {
+  loan_item_id: string;
+  item_barcode: string | null;
+  deposit_amount: number;
+  deposit_status: DepositStatus | null;
+  fines: { fine_type: string; amount: number; source: string }[];
+  penalty: number;
+  deposit_captured: number;
+  deposit_refunded: number;
+  additional_due: number;
+}
+
+export interface ReturnPreview {
+  items: ReturnPreviewItem[];
+  totals: { deposit_amount: number; penalty: number; deposit_captured: number; deposit_refunded: number; additional_due: number };
+  requires_reason: boolean;
+}
+
+export interface CustomerAccountView {
+  customer_id: string;
+  account_id: string;
+  status: string;
+  available_balance: number;
+  held_balance: number;
+  held_deposits: LoanItemDeposit[];
+  reconciliation: { ok: boolean };
+  ledger: { id: string; entry_type: string; amount: number | string; balance_after: number | string; note: string | null; created_at: string }[];
 }
 
 export interface Loan {
@@ -376,11 +420,28 @@ export const borrowService = {
     return response.data as { data: Loan };
   },
 
-  returnLoan: async (id: string, payload?: { loan_item_id?: string; returned_to_location_id?: string; item_condition_on_return?: string; notes?: string; mark_lost?: boolean }, idempotencyKey?: string) => {
+  returnLoan: async (id: string, payload?: { loan_item_id?: string; returned_to_location_id?: string; item_condition_on_return?: string; notes?: string; mark_lost?: boolean; settlement_reason?: string }, idempotencyKey?: string) => {
     const response = await gatewayAPI.post(`/borrow/loans/${id}/return`, payload || {}, {
         headers: createIdempotencyHeaders(idempotencyKey),
       });
     return response.data as { data: Loan };
+  },
+
+  previewReturn: async (id: string, params: { loan_item_id?: string; item_condition_on_return?: string; mark_lost?: boolean }) => {
+    const response = await gatewayAPI.get(`/borrow/loans/${id}/return-preview`, { params });
+    return response.data as { data: ReturnPreview };
+  },
+
+  getCustomerAccount: async (customerId: string) => {
+    const response = await gatewayAPI.get(`/borrow/customers/${customerId}/account`, { params: { pageSize: 10 } });
+    return response.data as { data: CustomerAccountView };
+  },
+
+  topupCustomerAccount: async (customerId: string, payload: { amount: number; method: 'CASH' | 'TRANSFER'; reference?: string; note?: string }, idempotencyKey?: string) => {
+    const response = await gatewayAPI.post(`/borrow/customers/${customerId}/account/topups`, payload, {
+      headers: createIdempotencyHeaders(idempotencyKey),
+    });
+    return response.data as { data: { ledger_entry_id: string; credited_amount: number; available_balance: number } };
   },
 
   getFines: async (params?: Record<string, unknown>) => {

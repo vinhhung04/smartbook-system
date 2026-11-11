@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getMyReservations,
+  getMyReservationById,
   createMyReservation,
   cancelMyReservation,
   getMyLoans,
@@ -34,6 +35,7 @@ const {
   createVnpayFinePayment,
   getVnpayFinePaymentStatus,
 } = require('../controllers/vnpay-payment.controller');
+const { createVnpayTopup, getVnpayTopupStatus } = require('../controllers/wallet-topup.controller');
 
 const router = express.Router();
 
@@ -43,6 +45,7 @@ router.get('/membership', require('../controllers/customer.controller').getMyMem
 
 router.get('/reservations', getMyReservations);
 router.post('/reservations', createMyReservation);
+router.get('/reservations/:id', getMyReservationById);
 router.patch('/reservations/:id/cancel', cancelMyReservation);
 
 router.get('/loans', getMyLoans);
@@ -51,6 +54,8 @@ router.post('/loans/:id/renew-request', requestMyLoanRenewal);
 
 router.get('/account', getMyAccount);
 router.get('/account/ledger', getMyAccountLedger);
+router.post('/account/topups/vnpay/create', createVnpayTopup);
+router.get('/account/topups/vnpay/status/:txnRef', getVnpayTopupStatus);
 router.get('/fines', getMyFines);
 router.post('/fines/payments/vnpay/create', createVnpayFinePayment);
 router.get('/fines/payments/vnpay/status/:txnRef', getVnpayFinePaymentStatus);

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/components/ui/utils";
+import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
 interface FormLine extends PurchaseOrderLinePayload {
   key: string;
@@ -314,7 +315,7 @@ export function PurchaseOrderFormPage() {
                   <div className="mt-1 font-mono text-[11px] text-muted-foreground">{line.isbn13 || line.sku || line.variant_id || "Bấm rồi tìm ở trên"}</div>
                 </button>
                 <Input type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="font-mono" placeholder="SL" />
-                <Input type="number" min={0} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(e.target.value) })} className="font-mono" placeholder="Đơn giá" />
+                <Input type="number" min={0} {...zeroFieldProps} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(numberInputValue(e)) })} className="font-mono" placeholder="Đơn giá" />
                 <Input value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} placeholder="Ghi chú dòng" />
                 <Button
                   type="button"

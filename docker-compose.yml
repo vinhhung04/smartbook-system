@@ -51,6 +51,15 @@ services:
       timeout: 3s
       retries: 5
 
+  # Dev mail catcher. auth-service sends its email (sign-up / sign-in codes, password
+  # reset) here unless SMTP_HOST is set in .env, so codes are read in the inbox at
+  # http://localhost:8025 instead of being logged. Not part of compose.prod.yml.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     restart: unless-stopped
@@ -166,15 +175,25 @@ services:
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      # warehouse ids in user_warehouse_scopes are validated against inventory's internal contract
+      - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - REDIS_URL=redis://redis:6379
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
+      # mailpit by default; a real relay needs SMTP_HOST *and* SMTP_PORT in .env
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
-      - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.vn>}
+      - SMTP_FROM=${SMTP_FROM:-SmartBook <noreply@smartbook.io.vn>}
       - AUTH_LOGIN_RATE_LIMIT_MAX=${AUTH_LOGIN_RATE_LIMIT_MAX:-10}
+      - AUTH_OTP_VERIFY_RATE_LIMIT_MAX=${AUTH_OTP_VERIFY_RATE_LIMIT_MAX:-30}
+      - AUTH_OTP_RESEND_RATE_LIMIT_MAX=${AUTH_OTP_RESEND_RATE_LIMIT_MAX:-10}
+      # Email OTP (docs/SERVICES/AUTH_SERVICE.md). Without OTP_HMAC_SECRET a key is
+      # derived from JWT_SECRET outside production.
+      - OTP_HMAC_SECRET=${OTP_HMAC_SECRET:-}
+      - REGISTRATION_EMAIL_VERIFICATION=${REGISTRATION_EMAIL_VERIFICATION:-required}
+      - STAFF_EMAIL_OTP_MODE=${STAFF_EMAIL_OTP_MODE:-off}
     depends_on:
       db:
         condition: service_healthy
@@ -459,6 +478,7 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SOCKET_CORS_ORIGIN=${SOCKET_CORS_ORIGIN:-http://localhost:5173}
+      - GATEWAY_RATE_LIMIT_MAX=${GATEWAY_RATE_LIMIT_MAX:-600}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
     depends_on:
       auth-service:

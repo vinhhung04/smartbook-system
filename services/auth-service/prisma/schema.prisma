@@ -63,6 +63,8 @@ model User {
   failed_login_attempts Int   @default(0)
   last_login_at     DateTime? @db.Timestamptz(6)
   email_verified_at DateTime? @db.Timestamptz(6)
+  // Per-account email OTP second factor; only honoured when STAFF_EMAIL_OTP_MODE != off.
+  email_otp_2fa_enabled Boolean @default(false)
   created_at        DateTime @default(now()) @db.Timestamptz(6)
   updated_at        DateTime @updatedAt @db.Timestamptz(6)
   deleted_at        DateTime? @db.Timestamptz(6)
@@ -72,6 +74,7 @@ model User {
   refresh_tokens RefreshToken[]
   password_reset_tokens PasswordResetToken[]
   email_verification_tokens EmailVerificationToken[]
+  email_otp_challenges EmailOtpChallenge[]
 
   @@index([email], map: "idx_auth_users_email")
   @@index([username], map: "idx_auth_users_username")
@@ -135,6 +138,8 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+// Legacy link-based verification (replaced by EmailOtpChallenge). Kept so the
+// migration stays additive; nothing writes to it any more.
 model EmailVerificationToken {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id      String    @db.Uuid
@@ -146,6 +151,29 @@ model EmailVerificationToken {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("email_verification_tokens")
+}
+
+// One email OTP challenge. Only an HMAC of the code is stored (lib/email-otp.js).
+// A resend replaces code_hash on the same row; a new challenge for the same
+// user + purpose sets invalidated_at on the older ones.
+model EmailOtpChallenge {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String    @db.Uuid
+  purpose        String    @db.VarChar(30)
+  email          String    @db.VarChar(150)
+  code_hash      String    @db.VarChar(64)
+  attempts       Int       @default(0)
+  send_count     Int       @default(1)
+  expires_at     DateTime  @db.Timestamptz(6)
+  last_sent_at   DateTime  @default(now()) @db.Timestamptz(6)
+  consumed_at    DateTime? @db.Timestamptz(6)
+  invalidated_at DateTime? @db.Timestamptz(6)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, purpose, created_at], map: "idx_email_otp_challenges_user_purpose")
+  @@map("email_otp_challenges")
 }
 
 model AuthAuditLog {

@@ -1,7 +1,6 @@
-import { StyleSheet, Text } from 'react-native';
-import { MotiView } from 'moti';
+import { View } from 'react-native';
 
-import { colors, radius } from '../theme/tokens';
+import { useTheme } from '../design-system';
 
 type Props = {
   value: number;
@@ -10,53 +9,20 @@ type Props = {
 };
 
 /**
- * Progress reads as a row of ticked checklist boxes — the packing-slip
- * checklist a picker actually marks off — instead of a smooth fill bar.
+ * Progress as a row of segments, the checklist a worker marks off, readable at a
+ * glance. Pair it with the count in words next to it (the callers do); the
+ * segments are decoration for sighted users, the number is the information.
  */
 export function ChecklistMeter({ value, max, boxes = 10 }: Props) {
+  const { colors } = useTheme();
   const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
-  const checkedCount = Math.round(ratio * boxes);
-
+  const filled = Math.round(ratio * boxes);
+  const done = max > 0 && value >= max;
   return (
-    <MotiView style={styles.row}>
-      {Array.from({ length: boxes }).map((_, i) => {
-        const checked = i < checkedCount;
-        return (
-          <MotiView
-            key={i}
-            animate={{
-              borderColor: checked ? colors.success : colors.borderStrong,
-              backgroundColor: checked ? colors.successSoft : colors.surface,
-            }}
-            transition={{ type: 'timing', duration: 200 }}
-            style={styles.box}
-          >
-            {checked ? <Text style={styles.tick}>✓</Text> : null}
-          </MotiView>
-        );
-      })}
-    </MotiView>
+    <View style={{ flexDirection: 'row', gap: 3 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {Array.from({ length: boxes }).map((_, i) => (
+        <View key={i} style={{ flex: 1, height: 8, borderRadius: 2, backgroundColor: i < filled ? (done ? colors.success : colors.primary) : colors.surfaceRaised }} />
+      ))}
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  box: {
-    flex: 1,
-    aspectRatio: 1,
-    maxWidth: 22,
-    borderWidth: 1.5,
-    borderRadius: radius.sm / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tick: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
-});

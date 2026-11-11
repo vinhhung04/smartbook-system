@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 const { parseId, normalizeRequiredUserId, normalizeOptionalUserId } = require("../utils/validation");
 const { toSerializableError } = require("../utils/inventory");
-const { scopedWarehouseWhere, scopeErrorStatus } = require("../utils/warehouse-scope.utils");
+const { requireAssignableUser, scopedWarehouseWhere, scopeErrorStatus } = require("../utils/warehouse-scope.utils");
 const {
   postTransferReceiptToReceiving,
   createReceiptNumber,
@@ -104,9 +104,10 @@ async function assignTransferReceiving(req, res) {
   try {
     const order = await prisma.transfer_orders.findUnique({
       where: { id: transferId },
-      select: { id: true, transfer_number: true, status: true },
+      select: { id: true, transfer_number: true, status: true, to_warehouse_id: true },
     });
     if (!order) return res.status(404).json({ message: "Transfer order not found" });
+    if (!(await requireAssignableUser(res, assignedUserId, order.to_warehouse_id))) return undefined;
     if (order.status !== "IN_TRANSIT") {
       return res.status(400).json({ message: "Transfer order must be IN_TRANSIT to assign receiver" });
     }

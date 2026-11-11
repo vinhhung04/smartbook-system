@@ -1,0 +1,7 @@
+{
+  "$description": "Kerned glyph offsets for 'SmartBook' in Fraunces SemiBold at 1000px with letter-spacing -0.02em, measured from the browser's shaping (render.cjs --measure).",
+  "text": "SmartBook",
+  "fontSizePx": 1000,
+  "offsetsPx": [0, 588.5, 1528, 2068.5, 2527, 2896, 3585, 4160.5, 4736],
+  "widthPx": 5332
+}

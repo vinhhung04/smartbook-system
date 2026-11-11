@@ -1,17 +1,12 @@
 import { Link } from 'react-router';
 import { ArrowRight, Clock, MapPin, Navigation, Phone } from 'lucide-react';
 import type { PublicBranch } from '@/services/public-catalog';
-import { branchBooksUrl } from '@/lib/branch-links';
+import { branchBooksUrl, directionsUrl } from '@/lib/branch-links';
 import { BranchStatus } from './branch-status';
 
 const numberFormat = new Intl.NumberFormat('vi-VN');
 
-/** Opens the address in the reader's maps app (a plain search link: no API key, no tracking script). */
-function directionsUrl(address: string) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-}
-
-/** One branch: where it is, when it opens, what is on its shelves. Used on /branches and the home page. */
+/** One branch: where it is, when it opens, what is on its shelves. Used on /branches. */
 export function BranchCard({ branch, headingLevel = 'h2' }: { branch: PublicBranch; headingLevel?: 'h2' | 'h3' }) {
   const { stats } = branch;
   const Heading = headingLevel;

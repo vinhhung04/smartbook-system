@@ -1,24 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  RefreshControl,
-  SectionList,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { router } from 'expo-router';
+import { Alert, RefreshControl, SectionList, Text, View } from 'react-native';
 
 import * as pickingApi from '../../src/api/picking';
-import * as authApi from '../../src/api/auth';
 import { ApiError, useAuth } from '../../src/auth/auth-context';
+import { isWarehouseManager } from '../../src/auth/access';
+import { SelectionSheet } from '../../src/components/SelectionSheet';
+import { WorkOrderCard } from '../../src/components/WorkOrderCard';
+import { useWarehouseStaff, type StaffOption } from '../../src/hooks/useWarehouseStaff';
 import type { AvailableTask, PickingTaskListItem } from '../../src/types/picking';
-import type { WarehouseStaffOption } from '../../src/types/auth';
-import { colors, fonts, radius, shadow, spacing, typography } from '../../src/theme/tokens';
-
-const MANAGER_ROLES = ['ADMIN', 'WAREHOUSE_MANAGER'];
+import { EmptyState, InlineAlert, ScreenHeader, SegmentedControl, Skeleton, StatusBadge, radii, space, useTheme } from '../../src/design-system';
 
 type Row =
   | { kind: 'mine'; item: PickingTaskListItem }
@@ -29,6 +20,7 @@ type Filter = 'all' | 'mine';
 
 export default function PickingListScreen() {
   const { user } = useAuth();
+  const { colors, type } = useTheme();
   const [myTasks, setMyTasks] = useState<PickingTaskListItem[]>([]);
   const [otherTasks, setOtherTasks] = useState<PickingTaskListItem[]>([]);
   const [availableTasks, setAvailableTasks] = useState<AvailableTask[]>([]);
@@ -36,18 +28,18 @@ export default function PickingListScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [assigningKey, setAssigningKey] = useState<string | null>(null);
-  const [staffOptions, setStaffOptions] = useState<WarehouseStaffOption[]>([]);
+  const [assignTarget, setAssignTarget] = useState<{ taskType: PickingTaskListItem['task_type']; taskId: string; orderNumber: string; currentAssigneeId: string | null } | null>(null);
+  const staff = useWarehouseStaff();
   const [error, setError] = useState<string | null>(null);
 
-  const canManage = (user?.roles ?? []).some((role) => MANAGER_ROLES.includes(role));
+  const canManage = isWarehouseManager(user);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [mine, available, staff] = await Promise.all([
+      const [mine, available] = await Promise.all([
         pickingApi.getMyTasks(),
         pickingApi.getAvailableTasks(),
-        canManage ? authApi.getWarehouseStaff() : Promise.resolve({ data: [] }),
       ]);
       // /api/picking/tasks returns every order eligible for picking in the warehouse
       // to a manager/admin, not just the current picker's — a task claimed by a
@@ -58,11 +50,10 @@ export default function PickingListScreen() {
         mine.data.filter((t) => t.assigned_picker_user_id && t.assigned_picker_user_id !== user?.id),
       );
       setAvailableTasks(available.data.filter((t) => t.type === 'PICKING'));
-      setStaffOptions(staff.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Không tải được danh sách');
     }
-  }, [user?.id, canManage]);
+  }, [user?.id]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -75,12 +66,15 @@ export default function PickingListScreen() {
     setIsRefreshing(false);
   }
 
-  async function handleAssign(taskType: PickingTaskListItem['task_type'], taskId: string, staffId: string) {
-    const key = `${taskType}-${taskId}`;
+  async function handleAssign(option: StaffOption) {
+    const target = assignTarget;
+    if (!target || assigningKey) return;
+    setAssignTarget(null);
+    const key = `${target.taskType}-${target.taskId}`;
     setAssigningKey(key);
     try {
-      await pickingApi.assignTask(taskType, taskId, staffId);
-      load();
+      await pickingApi.assignTask(target.taskType, target.taskId, option.userId);
+      await load();
     } catch (err) {
       Alert.alert('Giao task thất bại', err instanceof ApiError ? err.message : 'Vui lòng thử lại');
     } finally {
@@ -88,22 +82,9 @@ export default function PickingListScreen() {
     }
   }
 
-  function handleAssignPress(taskType: PickingTaskListItem['task_type'], taskId: string, orderNumber: string) {
-    if (staffOptions.length === 0) {
-      Alert.alert('Không có nhân viên', 'Không tải được danh sách nhân viên kho.');
-      return;
-    }
-    Alert.alert(
-      `Giao đơn ${orderNumber}`,
-      'Chọn nhân viên để giao việc lấy hàng',
-      [
-        ...staffOptions.map((staff) => ({
-          text: staff.full_name,
-          onPress: () => handleAssign(taskType, taskId, staff.id),
-        })),
-        { text: 'Hủy', style: 'cancel' as const },
-      ],
-    );
+  function handleAssignPress(taskType: PickingTaskListItem['task_type'], taskId: string, orderNumber: string, currentAssigneeId: string | null = null) {
+    staff.ensureLoaded();
+    setAssignTarget({ taskType, taskId, orderNumber, currentAssigneeId });
   }
 
   const sections =
@@ -127,291 +108,103 @@ export default function PickingListScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Picking' }} />
-      <View style={styles.container}>
-        <View style={styles.filterRow}>
-          <Pressable
-            style={[styles.filterButton, filter === 'all' && styles.filterButtonActive]}
-            onPress={() => setFilter('all')}
-          >
-            <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>Tất cả</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.filterButton, filter === 'mine' && styles.filterButtonActive]}
-            onPress={() => setFilter('mine')}
-          >
-            <Text style={[styles.filterText, filter === 'mine' && styles.filterTextActive]}>Của tôi</Text>
-          </Pressable>
+      <ScreenHeader title="Lấy hàng" />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.sm, gap: space.md }}>
+          <SegmentedControl
+            accessibilityLabel="Phạm vi phiếu"
+            value={filter}
+            onChange={setFilter}
+            options={[{ value: 'all', label: 'Tất cả' }, { value: 'mine', label: 'Của tôi', count: myTasks.length }]}
+          />
+          {error ? <InlineAlert message={error} actionLabel="Thử lại" onAction={() => void handleRefresh()} /> : null}
         </View>
 
-
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.error}>{error}</Text>
-          </View>
-        ) : null}
-
         {isLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
+          <View style={{ paddingHorizontal: space.lg, gap: space.md }} accessibilityLabel="Đang tải phiếu">
+            {[0, 1, 2].map((i) => <Skeleton key={i} height={104} radius={radii.md} />)}
           </View>
         ) : (
           <SectionList
             sections={sections}
+            contentContainerStyle={{ paddingHorizontal: space.lg, paddingBottom: space.xxl }}
+            stickySectionHeadersEnabled={false}
             keyExtractor={(row) =>
               `${row.kind}-${row.item.task_type}-${row.kind === 'available' ? row.item.id : row.item.task_id}`
             }
-            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
-            renderSectionHeader={({ section }) => <Text style={styles.sectionTitle}>{section.title}</Text>}
-            ListEmptyComponent={<Text style={styles.empty}>Không có phiếu nào</Text>}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+            renderSectionHeader={({ section }) => (
+              <Text style={[type.heading, { marginTop: space.lg, marginBottom: space.sm }]} accessibilityRole="header">{section.title}</Text>
+            )}
+            renderSectionFooter={({ section }) => (section.data.length === 0 ? <Text style={type.caption}>Không có phiếu nào.</Text> : null)}
+            ItemSeparatorComponent={() => <View style={{ height: space.sm }} />}
+            ListEmptyComponent={<EmptyState icon="basket-outline" title="Không có phiếu lấy hàng nào" message="Kéo xuống để làm mới khi có đơn mới." />}
             renderItem={({ item: row }) => {
               if (row.kind === 'mine' || row.kind === 'other') {
                 const task = row.item;
                 const isMine = row.kind === 'mine';
                 const key = `${task.task_type}-${task.task_id}`;
                 return (
-                  <Pressable
-                    style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                    onPress={() => router.push(`/picking/${task.task_type}/${task.task_id}`)}
-                  >
-                    <View style={styles.cardBody}>
-                      <View style={styles.titleRow}>
-                        <Text style={styles.cardTitle}>{task.order_number}</Text>
-                        {task.task_class === 'REPICK' ? (
-                          <View style={[styles.badge, styles.badgeRepick]}>
-                            <Text style={styles.badgeRepickText}>
-                              REPICK{task.repick_sequence ? ` #${task.repick_sequence}` : ''}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text style={styles.cardSubtitle}>
-                        {task.source_warehouse_code ?? '-'} · còn {task.remaining_quantity} sản phẩm
-                      </Text>
-                    </View>
-                    <View style={styles.actionsColumn}>
-                      <View style={[styles.badge, isMine ? styles.badgeMine : styles.badgeOther]}>
-                        <Text style={isMine ? styles.badgeMineText : styles.badgeOtherText}>
-                          {isMine ? 'Đã nhận' : 'Đã giao'}
-                        </Text>
-                      </View>
-                      {canManage ? (
-                        <Pressable
-                          style={({ pressed }) => [styles.giaoButton, pressed && styles.cardPressed]}
-                          onPress={() => handleAssignPress(task.task_type, task.task_id, task.order_number)}
-                          disabled={assigningKey === key}
-                        >
-                          <Text style={styles.giaoButtonText}>
-                            {assigningKey === key ? 'Đang giao...' : 'Giao'}
-                          </Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </Pressable>
+                  <WorkOrderCard
+                    code={task.order_number}
+                    detail={`Kho ${task.source_warehouse_code ?? '—'}, còn ${task.remaining_quantity} sản phẩm cần lấy`}
+                    onOpen={() => router.push(`/picking/${task.task_type}/${task.task_id}`)}
+                    accessibilityLabel={`Đơn ${task.order_number}, ${isMine ? 'bạn đã nhận' : 'đã giao người khác'}, còn ${task.remaining_quantity} sản phẩm`}
+                    badges={(
+                      <>
+                        <StatusBadge tone={isMine ? 'primary' : 'neutral'} label={isMine ? 'Bạn đã nhận' : 'Đã giao người khác'} icon={isMine ? 'person' : 'people-outline'} />
+                        {task.task_class === 'REPICK' ? <StatusBadge tone="warning" label={`Lấy bù${task.repick_sequence ? ` lần ${task.repick_sequence}` : ''}`} icon="repeat" /> : null}
+                      </>
+                    )}
+                    action={canManage ? {
+                      label: 'Giao cho nhân viên', busyLabel: 'Đang giao…', busy: assigningKey === key,
+                      onPress: () => handleAssignPress(task.task_type, task.task_id, task.order_number, task.assigned_picker_user_id),
+                      accessibilityLabel: `Giao đơn ${task.order_number} cho nhân viên khác`,
+                    } : null}
+                  />
                 );
               }
 
               const task = row.item;
               const key = `${task.task_type}-${task.id}`;
               return (
-                <Pressable
-                  style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-                  onPress={() => router.push(`/picking/${task.task_type}/${task.id}`)}
-                >
-                  <View style={styles.cardBody}>
-                    <View style={styles.titleRow}>
-                      <Text style={styles.cardTitle}>{task.title}</Text>
-                      {task.is_repick ? (
-                        <View style={[styles.badge, styles.badgeRepick]}>
-                          <Text style={styles.badgeRepickText}>REPICK</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.cardSubtitle}>{task.warehouse ?? '-'}</Text>
-                  </View>
-                  <View style={styles.actionsColumn}>
-                    <View style={[styles.badge, styles.badgeAvailable]}>
-                      <Text style={styles.badgeAvailableText}>Chưa nhận</Text>
-                    </View>
-                    {canManage ? (
-                      <Pressable
-                        style={({ pressed }) => [styles.giaoButton, pressed && styles.cardPressed]}
-                        onPress={() => handleAssignPress(task.task_type, task.id, task.title)}
-                        disabled={assigningKey === key}
-                      >
-                        <Text style={styles.giaoButtonText}>
-                          {assigningKey === key ? 'Đang giao...' : 'Giao'}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </Pressable>
+                <WorkOrderCard
+                  code={task.title}
+                  detail={task.warehouse ? `Kho ${task.warehouse}` : null}
+                  onOpen={() => router.push(`/picking/${task.task_type}/${task.id}`)}
+                  accessibilityLabel={`Đơn ${task.title}, chưa có người nhận`}
+                  badges={(
+                    <>
+                      <StatusBadge tone="info" label="Chưa có người nhận" icon="hand-left-outline" />
+                      {task.is_repick ? <StatusBadge tone="warning" label="Lấy bù" icon="repeat" /> : null}
+                    </>
+                  )}
+                  action={canManage ? {
+                    label: 'Giao cho nhân viên', busyLabel: 'Đang giao…', busy: assigningKey === key,
+                    onPress: () => handleAssignPress(task.task_type, task.id, task.title),
+                    accessibilityLabel: `Giao đơn ${task.title} cho nhân viên`,
+                  } : null}
+                />
               );
             }}
           />
         )}
       </View>
+
+      <SelectionSheet
+        visible={assignTarget !== null}
+        title={assignTarget ? `Giao đơn ${assignTarget.orderNumber}` : ''}
+        options={staff.options}
+        selectedId={assignTarget?.currentAssigneeId}
+        loading={staff.loading}
+        error={staff.error}
+        onRetry={staff.reload}
+        onSelect={handleAssign}
+        onClose={() => setAssignTarget(null)}
+        searchPlaceholder="Tìm nhân viên theo tên, tài khoản, email"
+        emptyText="Không có nhân viên kho nào trong phạm vi kho của bạn"
+      />
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterText: {
-    color: colors.textSecondary,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 12,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-  },
-  filterTextActive: {
-    color: colors.onPrimary,
-  },
-  errorBox: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.dangerSoft,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  error: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  sectionTitle: {
-    ...typography.label,
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-  },
-  empty: {
-    textAlign: 'center',
-    color: colors.textMuted,
-    padding: spacing.lg,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.xs,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadow.card,
-  },
-  cardPressed: {
-    opacity: 0.7,
-  },
-  cardBody: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  cardTitle: {
-    ...typography.h3,
-  },
-  cardSubtitle: {
-    ...typography.caption,
-    marginTop: 2,
-  },
-  badge: {
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
-  },
-  badgeMine: {
-    backgroundColor: colors.successSoft,
-  },
-  badgeMineText: {
-    color: colors.success,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  badgeAvailable: {
-    backgroundColor: colors.primarySoft,
-  },
-  badgeAvailableText: {
-    color: colors.primary,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  badgeRepick: {
-    backgroundColor: colors.warningSoft,
-    paddingVertical: 2,
-    paddingHorizontal: spacing.xs + 2,
-  },
-  badgeRepickText: {
-    color: colors.warning,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 10,
-    letterSpacing: 0.5,
-  },
-  badgeOther: {
-    backgroundColor: colors.neutralSoft,
-  },
-  badgeOtherText: {
-    color: colors.neutral,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  actionsColumn: {
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-  },
-  giaoButton: {
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-  },
-  giaoButtonText: {
-    color: colors.primary,
-    fontFamily: fonts.monoSemibold,
-    fontSize: 11,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-});

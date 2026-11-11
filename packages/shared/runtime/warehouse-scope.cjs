@@ -57,7 +57,8 @@ function createWarehouseScopeResolver(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const cache = new Map();
 
-  async function load(userId) {
+  /** Raw internal-endpoint body, or null for an unknown user (404). */
+  async function loadProfile(userId) {
     if (!internalKey || !authUrl || typeof fetchImpl !== 'function') {
       throw new WarehouseScopeUnavailableError('Thiếu cấu hình xác minh phạm vi kho (AUTH_SERVICE_URL / INTERNAL_SERVICE_KEY)');
     }
@@ -70,7 +71,7 @@ function createWarehouseScopeResolver(options = {}) {
     } catch (_error) {
       throw new WarehouseScopeUnavailableError();
     }
-    if (response.status === 404) return NO_ACCESS;
+    if (response.status === 404) return null;
     if (!response.ok) throw new WarehouseScopeUnavailableError();
     let body;
     try {
@@ -78,7 +79,12 @@ function createWarehouseScopeResolver(options = {}) {
     } catch (_error) {
       throw new WarehouseScopeUnavailableError();
     }
-    return scopeFromRows(body?.data ?? body);
+    return body?.data ?? body;
+  }
+
+  async function load(userId) {
+    const body = await loadProfile(userId);
+    return body ? scopeFromRows(body) : NO_ACCESS;
   }
 
   /** {all, read: Set|null, write: Set|null} for a req.user (verified JWT payload).
@@ -105,10 +111,35 @@ function createWarehouseScopeResolver(options = {}) {
     return scope.all || scope.write.has(String(warehouseId || ''));
   }
 
+  /**
+   * Can `userId` be given work in `warehouseId`? Always a fresh read (an
+   * assignment must not rely on a 30 s old scope): the user must be ACTIVE,
+   * hold one of `roles` (when given; a superuser always passes) and have
+   * WRITE-level scope on the warehouse - READ never makes someone assignable.
+   * @returns {Promise<{ ok: boolean, reason?: 'NOT_FOUND'|'INACTIVE'|'ROLE_NOT_ALLOWED'|'NO_WRITE_SCOPE' }>}
+   */
+  async function checkAssignee(userId, warehouseId, { roles = null } = {}) {
+    const id = String(userId || '');
+    if (!id) return { ok: false, reason: 'NOT_FOUND' };
+    const body = await loadProfile(id);
+    if (!body) return { ok: false, reason: 'NOT_FOUND' };
+    if (body.status !== 'ACTIVE' || body.deleted) return { ok: false, reason: 'INACTIVE' };
+    const scope = scopeFromRows(body);
+    cache.set(id, { at: Date.now(), value: scope });
+    if (scope.all) return { ok: true };
+    const userRoles = Array.isArray(body.roles) ? body.roles.map((r) => String(r).toUpperCase()) : [];
+    if (Array.isArray(roles) && roles.length && !roles.some((r) => userRoles.includes(String(r).toUpperCase()))) {
+      return { ok: false, reason: 'ROLE_NOT_ALLOWED' };
+    }
+    if (!scope.write.has(String(warehouseId || ''))) return { ok: false, reason: 'NO_WRITE_SCOPE' };
+    return { ok: true };
+  }
+
   return {
     resolve,
     canRead,
     canWrite,
+    checkAssignee,
     clearCache: (userId) => (userId ? cache.delete(String(userId)) : cache.clear()),
   };
 }

@@ -2,7 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const { pushToRooms } = require('../lib/socket-emitter');
 
 const {
-  canReadWarehouse,
+  requireAssignableUser,
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
   scopedWarehouseWhere,
@@ -331,9 +331,7 @@ async function assignExceptionReport(req, res) {
       return res.status(404).json({ message: 'Exception report not found' });
     }
     if (!(await requireWarehouseWriteAccess(req, res, report.warehouse_id))) return undefined;
-    if (!(await canReadWarehouse({ id: assignee_user_id.trim() }, report.warehouse_id))) {
-      return res.status(400).json({ message: 'Người được giao không có quyền ở kho này', code: 'ASSIGNEE_OUT_OF_SCOPE' });
-    }
+    if (!(await requireAssignableUser(res, assignee_user_id.trim(), report.warehouse_id))) return undefined;
 
     const updated = await prisma.warehouse_exception_reports.update({
       where: { id },

@@ -10,7 +10,7 @@ const {
   normalizeOptionalUserId,
 } = require("../utils/validation");
 const { createMovementNumber } = require("../utils/inventory");
-const { requireWarehouseReadAccess, scopedWarehouseWhere, scopeErrorStatus } = require("../utils/warehouse-scope.utils");
+const { requireWarehouseReadAccess, requireAssignableUser, scopedWarehouseWhere, scopeErrorStatus } = require("../utils/warehouse-scope.utils");
 const { toSerializableError } = require("../utils/inventory");
 const {
   resolveOrCreateShippingLocation,
@@ -741,9 +741,10 @@ async function assignOutboundTask(req, res) {
     if (taskType === "outbound") {
       const order = await prisma.outbound_orders.findUnique({
         where: { id: taskId },
-        select: { id: true, outbound_number: true, status: true },
+        select: { id: true, outbound_number: true, status: true, warehouse_id: true },
       });
       if (!order) return res.status(404).json({ message: "Outbound order not found" });
+      if (!(await requireAssignableUser(res, assignedUserId, order.warehouse_id))) return undefined;
       const ASSIGNABLE_STATUSES = ["APPROVED", "PICKING", "PARTIAL_PICKED", "REPICKING", "READY_FOR_OUTBOUND", "READY_TO_SHIP"];
       if (!ASSIGNABLE_STATUSES.includes(order.status)) {
         return res.status(400).json({ message: "Order must be in an active picking status to assign" });
@@ -774,9 +775,10 @@ async function assignOutboundTask(req, res) {
 
     const order = await prisma.transfer_orders.findUnique({
       where: { id: taskId },
-      select: { id: true, transfer_number: true, status: true },
+      select: { id: true, transfer_number: true, status: true, from_warehouse_id: true },
     });
     if (!order) return res.status(404).json({ message: "Transfer order not found" });
+    if (!(await requireAssignableUser(res, assignedUserId, order.from_warehouse_id))) return undefined;
     if (order.status !== "READY_FOR_OUTBOUND") {
       return res.status(400).json({ message: "Transfer order must be READY_FOR_OUTBOUND to assign" });
     }

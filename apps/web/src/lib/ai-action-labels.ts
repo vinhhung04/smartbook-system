@@ -19,3 +19,19 @@ export const AI_ACTION_STATUS_LABEL: Record<string, string> = {
   EXPIRED: 'Hết hạn',
   FAILED: 'Thất bại',
 };
+
+export const AI_ACTION_RISK_LABEL: Record<string, string> = {
+  LOW: 'Rủi ro thấp',
+  MEDIUM: 'Rủi ro vừa',
+  HIGH: 'Rủi ro cao',
+};
+
+/** Audit trail events written by the ai-service for each lifecycle step. */
+export const AI_AUDIT_EVENT_LABEL: Record<string, string> = {
+  CREATED: 'AI tạo đề xuất',
+  CONFIRMED: 'Đã xác nhận',
+  EXECUTED: 'Đã thực thi',
+  CANCELLED: 'Đã từ chối',
+  EXPIRED: 'Hết hạn',
+  FAILED: 'Thực thi thất bại',
+};

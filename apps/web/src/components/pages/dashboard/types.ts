@@ -9,14 +9,23 @@ import type {
   WarehouseStockRiskItem,
 } from '@/services/analytics';
 
+export type ReorderSummary = ReorderSuggestionsData['summary'];
+
+/**
+ * Every block loads on its own. `null` means the request failed (the block shows its own error);
+ * borrow-domain fields also stay `null` for users without `analytics.borrow.read`, who never see them.
+ */
 export type DashboardState = {
-  kpis: DashboardKpis;
-  trends: BorrowTrendItem[];
-  topBooks: TopBookItem[];
-  overdue: OverdueSummary;
-  fines: FineSummary;
-  stockRisk: WarehouseStockRiskItem[];
-  funnel: ReservationFunnel;
+  kpis: DashboardKpis | null;
+  trends: BorrowTrendItem[] | null;
+  topBooks: TopBookItem[] | null;
+  overdue: OverdueSummary | null;
+  fines: FineSummary | null;
+  stockRisk: WarehouseStockRiskItem[] | null;
+  funnel: ReservationFunnel | null;
+  pendingPR: number | null;
+  openER: number | null;
+  reorder: ReorderSummary | null;
 };
 
 export const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];
@@ -63,7 +72,7 @@ export const emptyFunnel: ReservationFunnel = {
   conversion_rate: 0,
 };
 
-export const emptyReorderSummary: ReorderSuggestionsData['summary'] = {
+export const emptyReorderSummary: ReorderSummary = {
   total_candidates: 0,
   high_priority: 0,
   medium_priority: 0,

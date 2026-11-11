@@ -1,4 +1,4 @@
-import { findAuditLineByCode, getAuditStatusLabel } from './stockAuditScan';
+import { findAuditLineByCode, findAuditLinesByCode, getAuditStatusLabel } from './stockAuditScan';
 import type { StockAuditLine } from '../types/stockAudit';
 
 const line = (overrides: Partial<StockAuditLine>): StockAuditLine => ({
@@ -47,5 +47,18 @@ describe('getAuditStatusLabel', () => {
     expect(getAuditStatusLabel('IN_PROGRESS')).toBe('Đang kiểm');
     expect(getAuditStatusLabel('SUBMITTED')).toBe('Chờ duyệt');
     expect(getAuditStatusLabel('SOMETHING_NEW')).toBe('SOMETHING_NEW');
+  });
+});
+
+describe('findAuditLinesByCode', () => {
+  const base = { variant_id: 'v', location_id: 'l', sku: null, isbn10: null, barcode: null, title: 'T', expected_qty: 1, counted_qty: null, variance_qty: null };
+  it('returns every shelf location holding the scanned book', () => {
+    const items = [
+      { ...base, id: 'a', location_code: 'A-01', isbn13: '9786041234567' },
+      { ...base, id: 'b', location_code: 'B-02', isbn13: '9786041234567' },
+      { ...base, id: 'c', location_code: 'C-03', isbn13: '9780000000000' },
+    ];
+    expect(findAuditLinesByCode(items, ' 9786041234567 ').map((l) => l.id)).toEqual(['a', 'b']);
+    expect(findAuditLinesByCode(items, '')).toEqual([]);
   });
 });

@@ -1,7 +1,32 @@
+const { Prisma } = require('@prisma/client');
+
+const Decimal = Prisma.Decimal;
+
 function normalizeMoney(value) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return 0;
   return Number(parsed.toFixed(2));
+}
+
+// The only amounts a wallet can be topped up with, online or at the counter, so balances
+// stay in round thousands of VND.
+const WALLET_TOPUP_AMOUNTS_VND = Object.freeze([10000, 20000, 50000, 100000, 200000]);
+
+function isAllowedTopupAmount(value) {
+  let amount;
+  try {
+    amount = toMoney(value);
+  } catch {
+    return false;
+  }
+  return WALLET_TOPUP_AMOUNTS_VND.some((allowed) => amount.eq(allowed));
+}
+
+/** Exact money value (2 decimals) — never a float. Throws on anything non-numeric. */
+function toMoney(value) {
+  const amount = new Decimal(value ?? 0);
+  if (!amount.isFinite()) throw new TypeError(`invalid money value: ${value}`);
+  return amount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 }
 
 class AccountError extends Error {
@@ -19,13 +44,11 @@ async function ensureCustomerAccount(tx, customerId) {
     return existing;
   }
 
-  return tx.customer_accounts.create({
-    data: {
-      customer_id: customerId,
-      currency_code: 'VND',
-      status: 'ACTIVE',
-    },
-  });
+  // Two first reads for the same reader (the wallet page loads the balance and the
+  // ledger together) used to race here: both found nothing, both created, and the
+  // second hit the unique key — a 500 on the first visit. ON CONFLICT makes it a no-op.
+  await tx.$executeRaw`INSERT INTO customer_accounts (customer_id, currency_code, status) VALUES (${customerId}::uuid, 'VND', 'ACTIVE') ON CONFLICT (customer_id) DO NOTHING`;
+  return tx.customer_accounts.findUnique({ where: { customer_id: customerId } });
 }
 
 async function ensureAutoPaymentSettings(tx, customerId) {
@@ -34,15 +57,21 @@ async function ensureAutoPaymentSettings(tx, customerId) {
     return existing;
   }
 
-  return tx.auto_payment_settings.create({
-    data: {
-      customer_id: customerId,
-      auto_debit_borrow_fee: true,
-      auto_debit_fines: false,
-      allow_partial_fine_payment: true,
-      min_wallet_balance_required: 0,
-    },
-  });
+  // Same first-visit race as ensureCustomerAccount (customer_id is the primary key).
+  await tx.$executeRaw`INSERT INTO auto_payment_settings (customer_id, auto_debit_borrow_fee, auto_debit_fines, allow_partial_fine_payment, min_wallet_balance_required) VALUES (${customerId}::uuid, true, false, true, 0) ON CONFLICT (customer_id) DO NOTHING`;
+  return tx.auto_payment_settings.findUnique({ where: { customer_id: customerId } });
+}
+
+/**
+ * Creates the account if missing and takes its row lock for the rest of the
+ * transaction. Every balance change goes through this first, so a deposit hold,
+ * a release, a borrow-fee debit and a top-up on the same wallet run one after
+ * another instead of overwriting each other's balance.
+ */
+async function lockCustomerAccount(tx, customerId) {
+  await tx.$executeRaw`INSERT INTO customer_accounts (customer_id) VALUES (${customerId}::uuid) ON CONFLICT (customer_id) DO NOTHING`;
+  const rows = await tx.$queryRaw`SELECT * FROM customer_accounts WHERE customer_id = ${customerId}::uuid FOR UPDATE`;
+  return rows[0];
 }
 
 async function getCustomerAccountSnapshot(tx, customerId) {
@@ -79,6 +108,7 @@ async function debitBorrowFee(tx, input) {
     throw new AccountError('INVALID_AMOUNT', 'debit amount must be positive');
   }
 
+  await lockCustomerAccount(tx, customerId);
   const { account, settings, availableBalance, minWalletBalanceRequired } = await getCustomerAccountSnapshot(tx, customerId);
 
   if (settings.auto_debit_borrow_fee !== true) {
@@ -172,6 +202,7 @@ async function creditAccount(tx, input) {
     throw new AccountError('INVALID_AMOUNT', 'credit amount must be positive');
   }
 
+  await lockCustomerAccount(tx, customerId);
   const { account, availableBalance } = await getCustomerAccountSnapshot(tx, customerId);
 
   const existingEntry = await tx.account_ledger.findFirst({
@@ -233,6 +264,172 @@ async function creditAccount(tx, input) {
   };
 }
 
+// How each held-funds movement changes the wallet. balance_before/after on the
+// ledger entry always describe available_balance (as for DEBIT/CREDIT); the held
+// side is recorded in the entry's metadata.
+const HELD_MOVEMENTS = {
+  // available -> held (deposit taken when a book is lent)
+  HOLD: { availableSign: -1, heldSign: 1, debited: false, source: 'available_balance' },
+  // held -> available (deposit, or its unused part, given back)
+  RELEASE: { availableSign: 1, heldSign: -1, debited: false, source: 'held_balance' },
+  // held -> paid out (deposit used to pay that book's fines)
+  CAPTURE: { availableSign: 0, heldSign: -1, debited: true, source: 'held_balance' },
+};
+
+async function moveHeldFunds(tx, entryType, input) {
+  const movement = HELD_MOVEMENTS[entryType];
+  const {
+    customerId,
+    actorUserId = null,
+    amount,
+    idempotencyKey,
+    referenceId = null,
+    referenceType = 'LOAN_ITEM_DEPOSIT',
+    note = null,
+    metadata = {},
+  } = input;
+
+  if (!idempotencyKey) {
+    throw new AccountError('IDEMPOTENCY_KEY_REQUIRED', `idempotency key is required for ${entryType}`);
+  }
+  const value = toMoney(amount);
+  if (value.lte(0)) {
+    throw new AccountError('INVALID_AMOUNT', `${entryType} amount must be positive`);
+  }
+
+  // Lock first: a concurrent request with the same key waits here, then finds the
+  // entry below instead of writing a second one (the unique index is the backstop).
+  const account = await lockCustomerAccount(tx, customerId);
+
+  const existingEntry = await tx.account_ledger.findFirst({
+    where: { customer_id: customerId, idempotency_key: idempotencyKey },
+  });
+  if (existingEntry) {
+    if (existingEntry.entry_type !== entryType || !toMoney(existingEntry.amount).eq(value)) {
+      throw new AccountError('IDEMPOTENCY_CONFLICT', 'idempotency key already used for a different ledger entry', {
+        idempotency_key: idempotencyKey,
+      });
+    }
+    return { idempotent: true, entry: existingEntry, account };
+  }
+
+  if (account.status !== 'ACTIVE') {
+    throw new AccountError('ACCOUNT_NOT_ACTIVE', `customer account is ${account.status}`);
+  }
+
+  const availableBefore = toMoney(account.available_balance);
+  const heldBefore = toMoney(account.held_balance);
+  const sourceBalance = movement.source === 'available_balance' ? availableBefore : heldBefore;
+  if (sourceBalance.lt(value)) {
+    throw new AccountError(
+      movement.source === 'available_balance' ? 'INSUFFICIENT_FUNDS' : 'HELD_BALANCE_TOO_LOW',
+      movement.source === 'available_balance'
+        ? 'insufficient wallet balance for deposit'
+        : 'held balance is lower than the amount to settle',
+      { available_balance: availableBefore.toNumber(), held_balance: heldBefore.toNumber(), required_amount: value.toNumber() },
+    );
+  }
+
+  const availableDelta = value.mul(movement.availableSign).toFixed(2);
+  const heldDelta = value.mul(movement.heldSign).toFixed(2);
+  const debitedDelta = movement.debited ? value.toFixed(2) : '0';
+  const rows = await tx.$queryRaw`
+    UPDATE customer_accounts
+       SET available_balance = available_balance + ${availableDelta}::numeric,
+           held_balance = held_balance + ${heldDelta}::numeric,
+           total_debited = total_debited + ${debitedDelta}::numeric,
+           updated_at = now()
+     WHERE id = ${account.id}::uuid
+     RETURNING available_balance, held_balance`;
+  const availableAfter = toMoney(rows[0].available_balance);
+  const heldAfter = toMoney(rows[0].held_balance);
+
+  const entry = await tx.account_ledger.create({
+    data: {
+      account_id: account.id,
+      customer_id: customerId,
+      entry_type: entryType,
+      amount: value.toFixed(2),
+      balance_before: availableBefore.toFixed(2),
+      balance_after: availableAfter.toFixed(2),
+      reference_type: referenceType,
+      reference_id: referenceId,
+      idempotency_key: idempotencyKey,
+      note,
+      metadata: {
+        ...metadata,
+        held_balance_before: heldBefore.toNumber(),
+        held_balance_after: heldAfter.toNumber(),
+      },
+      created_by_user_id: actorUserId,
+    },
+  });
+
+  return {
+    idempotent: false,
+    entry,
+    account,
+    availableBalance: availableAfter,
+    heldBalance: heldAfter,
+  };
+}
+
+const holdFunds = (tx, input) => moveHeldFunds(tx, 'HOLD', input);
+const releaseHeldFunds = (tx, input) => moveHeldFunds(tx, 'RELEASE', input);
+const captureHeldFunds = (tx, input) => moveHeldFunds(tx, 'CAPTURE', input);
+
+/**
+ * Checks a wallet against its ledger:
+ * - held_balance must equal HOLD − RELEASE − CAPTURE (holds only ever move through the ledger);
+ * - entries must chain (each balance_before = the previous balance_after on available_balance),
+ *   and the last balance_after must equal available_balance now.
+ * Opening balances written directly by seed scripts show up as the first entry's
+ * balance_before, so they do not count as a break.
+ */
+async function reconcileCustomerAccount(tx, customerId) {
+  const account = await tx.customer_accounts.findUnique({ where: { customer_id: customerId } });
+  if (!account) {
+    return { ok: true, entry_count: 0, account_exists: false };
+  }
+
+  const entries = await tx.account_ledger.findMany({
+    where: { account_id: account.id },
+    orderBy: [{ entry_seq: 'asc' }],
+    select: { id: true, entry_type: true, amount: true, balance_before: true, balance_after: true },
+  });
+
+  let heldFromLedger = new Decimal(0);
+  const chainBreaks = [];
+  entries.forEach((entry, index) => {
+    const amount = toMoney(entry.amount);
+    if (entry.entry_type === 'HOLD') heldFromLedger = heldFromLedger.add(amount);
+    if (entry.entry_type === 'RELEASE' || entry.entry_type === 'CAPTURE') heldFromLedger = heldFromLedger.sub(amount);
+    if (index > 0 && !toMoney(entries[index - 1].balance_after).eq(toMoney(entry.balance_before))) {
+      chainBreaks.push(entry.id);
+    }
+  });
+
+  const availableBalance = toMoney(account.available_balance);
+  const heldBalance = toMoney(account.held_balance);
+  const last = entries[entries.length - 1];
+  const lastBalanceAfter = last ? toMoney(last.balance_after) : null;
+  const heldMatches = heldBalance.eq(heldFromLedger);
+  const availableMatches = lastBalanceAfter === null || lastBalanceAfter.eq(availableBalance);
+
+  return {
+    ok: heldMatches && availableMatches && chainBreaks.length === 0,
+    account_exists: true,
+    entry_count: entries.length,
+    available_balance: availableBalance.toNumber(),
+    last_entry_balance_after: lastBalanceAfter ? lastBalanceAfter.toNumber() : null,
+    available_matches: availableMatches,
+    held_balance: heldBalance.toNumber(),
+    held_from_ledger: heldFromLedger.toNumber(),
+    held_matches: heldMatches,
+    chain_breaks: chainBreaks,
+  };
+}
+
 async function listAccountLedger(tx, customerId, options = {}) {
   const page = Math.max(1, Number.parseInt(String(options.page || '1'), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(String(options.pageSize || '20'), 10) || 20));
@@ -244,7 +441,7 @@ async function listAccountLedger(tx, customerId, options = {}) {
   const [items, total] = await Promise.all([
     tx.account_ledger.findMany({
       where,
-      orderBy: [{ created_at: 'desc' }],
+      orderBy: [{ created_at: 'desc' }, { entry_seq: 'desc' }],
       skip,
       take: pageSize,
     }),
@@ -264,10 +461,18 @@ async function listAccountLedger(tx, customerId, options = {}) {
 
 module.exports = {
   AccountError,
+  WALLET_TOPUP_AMOUNTS_VND,
+  isAllowedTopupAmount,
+  toMoney,
   ensureCustomerAccount,
   ensureAutoPaymentSettings,
   getCustomerAccountSnapshot,
+  lockCustomerAccount,
   debitBorrowFee,
   creditAccount,
+  holdFunds,
+  releaseHeldFunds,
+  captureHeldFunds,
+  reconcileCustomerAccount,
   listAccountLedger,
 };

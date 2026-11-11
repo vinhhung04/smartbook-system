@@ -28,9 +28,11 @@ const {
 const { parseId, normalizeText } = require("../utils/validation");
 const {
   requireWarehouseReadAccess,
+  requireAssignableUser,
   scopedWarehouseWhere,
   scopeErrorStatus,
 } = require("../utils/warehouse-scope.utils");
+const { taskOrderWarehouse } = require("../utils/record-warehouse");
 const { toInt } = require("../utils/validation");
 const { normalizeLocationType } = require("../utils/validation");
 const { normalizeTaskType } = require("../utils/validation");
@@ -1096,6 +1098,15 @@ async function claimPickingTask(req, res) {
     return res
       .status(403)
       .json({ message: "You can only claim task for yourself" });
+  }
+
+  // handing the task to someone else: that picker must be able to work there
+  if (pickerUserId !== currentUserId) {
+    const warehouseId = await taskOrderWarehouse(taskType)(req);
+    if (warehouseId === undefined) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+    if (!(await requireAssignableUser(res, pickerUserId, warehouseId))) return undefined;
   }
 
   try {

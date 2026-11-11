@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# docker compose for the production stack with .env and the current release's IMAGE_TAG
+# loaded, e.g. `deploy/scripts/dc ps`, `deploy/scripts/dc logs -f --tail=200 api-gateway`.
+set -Eeuo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+dc "$@"

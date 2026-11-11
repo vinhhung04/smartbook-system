@@ -1,0 +1,40 @@
+# HTTPS edge for SmartBook (compose.prod.yml). Caddy obtains and renews Let's Encrypt
+# certificates on its own (ACME state lives in the caddy_data volume) and redirects
+# HTTP to HTTPS for every site below.
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+smartbook.io.vn {
+	import common
+	# During a deploy the upstream container is briefly recreated: hold requests
+	# until it is back instead of answering 502.
+	reverse_proxy web:80 {
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
+}
+
+api.smartbook.io.vn {
+	import common
+	# Socket.IO (/socket.io, WebSocket upgrade) goes through the same proxy; Caddy
+	# handles the upgrade natively and sets X-Forwarded-For to the client IP, which
+	# api-gateway trusts as exactly one proxy hop.
+	reverse_proxy api-gateway:3000 {
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
+}
+
+www.smartbook.io.vn {
+	redir https://smartbook.io.vn{uri} permanent
+}

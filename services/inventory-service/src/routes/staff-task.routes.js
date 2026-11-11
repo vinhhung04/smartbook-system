@@ -7,6 +7,8 @@ const {
   updateStaffTask,
   updateStaffTaskStatus,
   getEntityOptions,
+  getOpenTaskSummary,
+  getStaffWorkload,
 } = require('../controllers/staff-task.controller');
 const {
   authorizeTaskRead,
@@ -19,6 +21,8 @@ const canReadTask = authorizeTaskRead(['inventory.task.read']);
 const canManageTask = authorizeManagerDecision(['inventory.operation.decide']);
 
 router.get('/entity-options', canManageTask, getEntityOptions);
+router.get('/open-summary', canManageTask, getOpenTaskSummary);
+router.get('/workload', canManageTask, getStaffWorkload);
 router.get('/', canReadTask, listStaffTasks);
 router.get('/my', canReadTask, getMyStaffTasks);
 router.post('/', canManageTask, createStaffTask);

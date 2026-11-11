@@ -10,6 +10,7 @@ const {
   updateMyProfile,
   getMyMembership,
 } = require('../controllers/customer.controller');
+const { getCustomerAccount, recordCounterTopup } = require('../controllers/customer-account.controller');
 const { authorizeBorrowAdminRead, authorizeBorrowAdminWrite } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
@@ -24,5 +25,7 @@ router.get('/:id', authorizeBorrowAdminRead, getCustomerById);
 router.patch('/:id', authorizeBorrowAdminWrite, updateCustomer);
 router.get('/:id/membership/active', authorizeBorrowAdminRead, getActiveMembership);
 router.post('/:id/membership/renew', authorizeBorrowAdminWrite, renewMembership);
+router.get('/:id/account', authorizeBorrowAdminRead, getCustomerAccount);
+router.post('/:id/account/topups', authorizeBorrowAdminWrite, recordCounterTopup);
 
 module.exports = router;

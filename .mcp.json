@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
+    },
+    "drawio": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@next-ai-drawio/mcp-server@0.4.11"
+      ],
+      "env": {}
+    }
+  }
+}

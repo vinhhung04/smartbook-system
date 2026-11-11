@@ -1,0 +1,64 @@
+---
+title: "Sơ đồ tuần tự: Đăng nhập Web có xác thực OTP qua email"
+---
+%% Nguồn đối chiếu (nhánh feature/email-otp-auth):
+%%   apps/web/src/services/auth.ts (login, verifyLoginOtp)
+%%   apps/api-gateway/src/index.js (proxy pathFilter "/auth")
+%%   services/auth-service/src/routes/auth.routes.js
+%%   services/auth-service/src/controllers/auth.controller.js (login, respondWithChallenge, verifyLoginOtp, issueSession)
+%%   services/auth-service/src/lib/email-otp.js (issue, verify)
+sequenceDiagram
+    autonumber
+    actor U as Người dùng
+    participant W as Web App (React)
+    participant G as API Gateway
+    participant A as Auth Service
+    participant DB as PostgreSQL (auth DB)
+    participant R as Redis
+    participant M as Máy chủ SMTP
+
+    U->>W: Nhập tên đăng nhập/email và mật khẩu
+    W->>G: POST /auth/login {identifier, password}
+    G->>A: Chuyển tiếp yêu cầu (proxy /auth)
+    Note right of A: Kiểm tra giới hạn tần suất<br/>(10 lần / 15 phút / IP)
+    A->>DB: Tìm user theo username hoặc email (chưa bị xóa)
+    DB-->>A: Bản ghi user
+
+    break Không tìm thấy user hoặc sai mật khẩu
+        A->>DB: Tăng failed_login_attempts (khi user tồn tại)
+        A-->>G: 401 Invalid credentials (403 và khóa tài khoản khi vượt ngưỡng)
+        G-->>W: 401 / 403
+        W-->>U: Hiển thị thông báo lỗi
+    end
+
+    Note over A,DB: Mật khẩu đúng (bcrypt.compare).<br/>PENDING_VERIFICATION → 202 EMAIL_VERIFICATION_REQUIRED<br/>status khác ACTIVE → 403 (không vẽ chi tiết)
+    A->>DB: Lấy roles và permissions của user
+    DB-->>A: roles, permissions
+
+    opt Cần OTP: email_otp_2fa_enabled, hoặc STAFF_EMAIL_OTP_MODE=required với nhân viên nội bộ (mặc định off)
+        A->>DB: Tạo EmailOtpChallenge (chỉ lưu HMAC của mã)
+        A->>M: Gửi email chứa mã OTP 6 chữ số
+        A-->>G: 202 OTP_REQUIRED {challenge}
+        G-->>W: 202 {challenge}
+        W-->>U: Hiển thị màn hình nhập mã
+        U->>W: Nhập mã OTP
+        W->>G: POST /auth/login/verify-otp {challenge_id, code}
+        G->>A: Chuyển tiếp yêu cầu
+        A->>DB: Giữ một lượt thử, so khớp HMAC, đánh dấu đã dùng
+
+        break Mã sai, hết hạn hoặc vượt số lần thử
+            A-->>G: 400 OTP_INVALID / 410 OTP_EXPIRED / 429 OTP_TOO_MANY_ATTEMPTS
+            G-->>W: Lỗi kèm attempts_remaining
+            W-->>U: Báo lỗi, cho nhập lại hoặc gửi lại mã
+        end
+
+        A->>DB: Đọc lại user (phải còn ACTIVE)
+        A->>R: Đọc mốc thu hồi token (user:tokens-valid-after)
+        A->>DB: Lấy lại roles và permissions
+    end
+
+    Note right of A: Ký JWT access token
+    A-->>G: 200 AUTHENTICATED {token, user}
+    G-->>W: 200 {token, user}
+    Note right of W: Lưu token vào localStorage
+    W-->>U: Vào trang làm việc

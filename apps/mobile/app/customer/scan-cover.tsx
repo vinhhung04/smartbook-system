@@ -1,63 +1,75 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack, router } from 'expo-router';
-import { AccessibilityInfo, ActivityIndicator, Easing, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { MotiView } from 'moti';
 
 import * as coverSearchApi from '../../src/api/coverSearch';
 import type { CoverSearchCandidate } from '../../src/api/coverSearch';
+import { isAbortError } from '../../src/api/client';
 import { ApiError } from '../../src/auth/auth-context';
 import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
-import { PosterCard } from '../../src/components/customer/PosterCard';
-import { colors, radius, spacing, typography } from '../../src/theme/customerTokens';
+import { BookCover } from '../../src/components/customer/BookCover';
+import { Button, EmptyState, InlineAlert, PressableScale, ScreenHeader, StatusBadge, fontFamily, radii, space, useTheme, type Tone } from '../../src/design-system';
 
-function confidenceTone(confidence: number) {
-  if (confidence >= 0.85) return colors.success;
-  if (confidence >= 0.65) return colors.warning;
-  return colors.neutral;
+/** How sure the match is, in words as well as a percentage. */
+function confidenceView(confidence: number): { tone: Tone; label: string } {
+  const pct = `${Math.round(confidence * 100)}%`;
+  if (confidence >= 0.85) return { tone: 'success', label: `Rất khớp, ${pct}` };
+  if (confidence >= 0.65) return { tone: 'warning', label: `Có thể khớp, ${pct}` };
+  return { tone: 'neutral', label: `Ít khớp, ${pct}` };
 }
 
-// Visual matching (CLIP) is fast in practice (~2s/image against the real
-// gallery) — this timer just gives that checklist row a legible "done"
-// moment. OCR (OpenRouter vision) has no progress signal from the server,
-// so its row stays "in progress" until the actual response arrives — never
-// faked past that point.
-const VISUAL_STEP_MS = 3000;
+// The server runs visual matching and OCR in parallel and answers once, with no
+// progress signal — so both rows stay "in progress" until that answer arrives.
+// Neither is ever shown as done on a timer.
 const SLOW_HINT_AFTER_MS = 12000;
 const SCAN_PREVIEW_HEIGHT = 220;
 
 function ChecklistRow({ label, done, hint }: { label: string; done: boolean; hint?: string }) {
+  const { colors, type } = useTheme();
   return (
-    <View style={styles.checklistRow}>
-      {done ? (
-        <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-      ) : (
-        <ActivityIndicator size="small" color={colors.primary} />
-      )}
-      <Text style={[styles.checklistLabel, done && styles.checklistLabelDone]}>
-        {label}
-        {hint ? <Text style={styles.checklistHint}> — {hint}</Text> : null}
-      </Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 32 }}>
+      {done ? <Ionicons name="checkmark-circle" size={20} color={colors.success} /> : <ActivityIndicator size="small" color={colors.primary} />}
+      <View style={{ flex: 1 }}>
+        <Text style={type.callout}>{label}</Text>
+        {hint ? <Text style={type.caption}>{hint}</Text> : null}
+      </View>
     </View>
   );
 }
 
-// The one authored moment: a scan-line sweeping the user's own photo — names
-// the actual thing the AI is doing to it, not a generic spinner. Skipped
-// under Reduce Motion; the checklist state below still communicates progress.
-function ScanSweep({ reducedMotion }: { reducedMotion: boolean }) {
-  if (reducedMotion) return null;
+const SWEEP = { from: { transform: [{ translateY: -40 }] }, to: { transform: [{ translateY: SCAN_PREVIEW_HEIGHT + 40 }] } };
+
+// The one authored moment: a scan line sweeping the reader's own photo, naming what
+// the matching is doing to it. It runs only while a search is in flight and is
+// dropped under Reduce Motion; the checklist below carries the progress either way.
+function ScanSweep() {
+  const reduced = useReducedMotion();
+  if (reduced) return null;
   return (
-    <MotiView
-      style={styles.sweep}
-      from={{ translateY: -40 }}
-      animate={{ translateY: SCAN_PREVIEW_HEIGHT + 40 }}
-      transition={{ type: 'timing', duration: 2200, loop: true, easing: Easing.inOut(Easing.quad) }}
+    <Animated.View
+      style={{
+        position: 'absolute', left: 0, right: 0, height: 3, backgroundColor: '#8F87FF',
+        animationName: SWEEP, animationDuration: 2200, animationIterationCount: 'infinite', animationTimingFunction: 'ease-in-out',
+      }}
     />
   );
 }
 
+function describeSearchError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.kind === 'timeout') return 'Hệ thống nhận diện phản hồi quá lâu. Bạn có thể thử lại hoặc chụp ảnh khác.';
+    if (err.kind === 'network') return 'Mất kết nối mạng khi gửi ảnh. Kiểm tra Internet rồi thử lại.';
+    if (err.status === 429) return 'Bạn đã tìm quá nhiều lần trong thời gian ngắn. Vui lòng đợi một lát rồi thử lại.';
+    if (err.status >= 500) return 'Dịch vụ nhận diện ảnh đang tạm thời gián đoạn. Vui lòng thử lại sau.';
+    return err.message;
+  }
+  return 'Không thể tìm sách từ ảnh này';
+}
+
 export default function CustomerScanCoverScreen() {
+  const { colors, type } = useTheme();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -65,150 +77,163 @@ export default function CustomerScanCoverScreen() {
   const [searched, setSearched] = useState(false);
   const [candidates, setCandidates] = useState<CoverSearchCandidate[]>([]);
   const [ocrTitle, setOcrTitle] = useState<string | null>(null);
-  const [visualStepDone, setVisualStepDone] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [reducedMotion, setReducedMotion] = useState(false);
-  const visualTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled?.().then(setReducedMotion).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReducedMotion);
-    return () => sub?.remove?.();
-  }, []);
+  // Each search gets an id + AbortController: retaking the photo or leaving the screen
+  // cancels the old request, and a late answer for an old id is ignored.
+  const requestRef = useRef<{ id: number; controller: AbortController | null }>({ id: 0, controller: null });
+  const lastPhotoRef = useRef<string | null>(null);
 
   const clearTimers = useCallback(() => {
-    if (visualTimerRef.current) clearTimeout(visualTimerRef.current);
     if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = null;
   }, []);
 
-  useEffect(() => clearTimers, [clearTimers]);
+  useEffect(
+    () => () => {
+      clearTimers();
+      requestRef.current.controller?.abort();
+    },
+    [clearTimers],
+  );
 
   async function handleCaptured(photoDataUrl: string) {
     setCameraOpen(false);
+    lastPhotoRef.current = photoDataUrl;
+    requestRef.current.controller?.abort();
+    const controller = new AbortController();
+    const requestId = requestRef.current.id + 1;
+    requestRef.current = { id: requestId, controller };
+    const isCurrent = () => requestRef.current.id === requestId;
+
     setPhotoPreview(photoDataUrl);
     setIsSearching(true);
     setError(null);
-    setVisualStepDone(false);
     setElapsedMs(0);
     clearTimers();
     const startedAt = Date.now();
-    visualTimerRef.current = setTimeout(() => setVisualStepDone(true), VISUAL_STEP_MS);
     elapsedTimerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
 
     try {
-      const result = await coverSearchApi.findBookByCover(photoDataUrl);
+      const result = await coverSearchApi.findBookByCover(photoDataUrl, controller.signal);
+      if (!isCurrent()) return;
       setCandidates(result.candidates);
       setOcrTitle(result.signals.ocr_extracted?.title ?? null);
       setSearched(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Không thể tìm sách từ ảnh này');
+      if (!isCurrent() || isAbortError(err)) return;
+      setCandidates([]);
+      setSearched(true);
+      setError(describeSearchError(err));
     } finally {
-      clearTimers();
-      setIsSearching(false);
+      if (isCurrent()) {
+        clearTimers();
+        setIsSearching(false);
+        requestRef.current.controller = null;
+      }
     }
+  }
+
+  function handleCancel() {
+    requestRef.current.controller?.abort();
+    requestRef.current = { id: requestRef.current.id + 1, controller: null };
+    clearTimers();
+    setIsSearching(false);
+    setSearched(false);
+    setError(null);
+  }
+
+  function handleRetry() {
+    if (lastPhotoRef.current) void handleCaptured(lastPhotoRef.current);
   }
 
   const showEmptyHero = !isSearching && !searched && !error;
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Tìm sách bằng ảnh bìa' }} />
-      <View style={styles.container}>
+      <ScreenHeader title="Tìm bằng ảnh bìa" />
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
         {showEmptyHero ? (
-          // First-run state teaches the feature instead of showing a bare
-          // button on empty space — matches the customer web page's hero.
-          <View style={styles.emptyHero}>
-            <View style={styles.emptyIconWrap}>
+          // First run teaches the feature instead of a bare button on empty space.
+          <View style={{ flex: 1, padding: space.xl, gap: space.xl, justifyContent: 'center' }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primarySoft, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="camera-outline" size={30} color={colors.primary} />
             </View>
-            <Text style={styles.emptyTitle}>Tìm sách bằng ảnh bìa</Text>
-            <Text style={styles.emptySubtitle}>
-              Chụp ảnh bìa bất kỳ cuốn sách nào — hệ thống sẽ tìm sách khớp trong thư viện để bạn đặt trước ngay.
-            </Text>
-            <Pressable style={styles.captureButton} onPress={() => setCameraOpen(true)}>
-              <Ionicons name="camera" size={17} color={colors.onPrimary} />
-              <Text style={styles.captureButtonText}>Chụp ảnh bìa sách</Text>
-            </Pressable>
+            <View style={{ gap: space.sm }}>
+              <Text style={type.title} accessibilityRole="header">Chụp bìa, tìm sách</Text>
+              <Text style={type.body}>Chụp ảnh bìa một cuốn sách, hệ thống tìm cuốn khớp trong thư viện để bạn đặt trước ngay.</Text>
+            </View>
+            <View style={{ gap: space.sm }}>
+              {['Chụp nơi đủ sáng, tránh lóa', 'Giữ bìa thẳng và lấp đầy khung hình', 'Tên sách rõ thì nhận diện nhanh hơn'].map((tip) => (
+                <View key={tip} style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
+                  <Ionicons name="checkmark" size={18} color={colors.success} />
+                  <Text style={type.callout}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+            <Button label="Chụp ảnh bìa sách" icon="camera" onPress={() => setCameraOpen(true)} />
           </View>
         ) : isSearching ? (
-          <View style={styles.scanningWrap}>
-            <View style={styles.scanPreview}>
-              {photoPreview && <Image source={{ uri: photoPreview }} style={StyleSheet.absoluteFill} resizeMode="contain" />}
-              <ScanSweep reducedMotion={reducedMotion} />
-              <View style={styles.elapsedBadge}>
-                <Text style={styles.elapsedBadgeText}>Đã chờ {Math.round(elapsedMs / 1000)}s</Text>
+          <View style={{ flex: 1, padding: space.lg, gap: space.xl }}>
+            <View style={{ height: SCAN_PREVIEW_HEIGHT, borderRadius: radii.lg, overflow: 'hidden', backgroundColor: colors.inkField }}>
+              {photoPreview ? <Image source={{ uri: photoPreview }} style={StyleSheet.absoluteFill} resizeMode="contain" accessibilityLabel="Ảnh bìa bạn vừa chụp" /> : null}
+              <ScanSweep />
+              <View style={{ position: 'absolute', right: space.sm, bottom: space.sm, paddingHorizontal: space.sm, paddingVertical: 4, borderRadius: radii.pill, backgroundColor: 'rgba(0,0,0,0.6)' }}>
+                <Text style={{ fontFamily: fontFamily.semibold, fontSize: 12.5, color: '#FFFFFF', fontVariant: ['tabular-nums'] }}>Đã chờ {Math.round(elapsedMs / 1000)} giây</Text>
               </View>
             </View>
-
-            <View style={styles.checklist}>
-              <ChecklistRow label="So khớp hình ảnh bìa" done={visualStepDone} />
-              <ChecklistRow
-                label="Đọc chữ trên bìa sách"
-                done={false}
-                hint={elapsedMs >= SLOW_HINT_AFTER_MS ? 'có thể mất đến 1–2 phút' : undefined}
-              />
+            <View style={{ gap: space.sm }} accessibilityLiveRegion="polite">
+              <Text style={type.heading}>Đang tìm sách khớp…</Text>
+              <ChecklistRow label="So khớp hình ảnh bìa" done={false} />
+              <ChecklistRow label="Đọc chữ trên bìa sách" done={false} hint={elapsedMs >= SLOW_HINT_AFTER_MS ? 'Có thể mất đến 1–2 phút.' : undefined} />
             </View>
+            <Button label="Hủy tìm kiếm" variant="secondary" onPress={handleCancel} />
           </View>
         ) : (
-          <>
-            <View style={styles.searchedHeader}>
-              {photoPreview && <Image source={{ uri: photoPreview }} style={styles.photoThumb} />}
-              <View style={styles.searchedHeaderBody}>
-                {ocrTitle && (
-                  <Text style={styles.ocrHint} numberOfLines={2}>
-                    Đọc được trên bìa: {ocrTitle}
-                  </Text>
-                )}
-                <Pressable onPress={() => setCameraOpen(true)} hitSlop={8}>
-                  <Text style={styles.retakeText}>Chụp ảnh khác</Text>
-                </Pressable>
+          <FlatList
+            data={error ? [] : candidates}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}
+            ListHeaderComponent={
+              <View style={{ gap: space.md, marginBottom: space.sm }}>
+                <View style={{ flexDirection: 'row', gap: space.md, alignItems: 'center' }}>
+                  {photoPreview ? <Image source={{ uri: photoPreview }} style={{ width: 56, height: 76, borderRadius: radii.xs, backgroundColor: colors.surfaceRaised }} accessibilityLabel="Ảnh bìa đã chụp" /> : null}
+                  <View style={{ flex: 1, gap: space.xs }}>
+                    <Text style={type.heading}>{error ? 'Chưa tìm được' : candidates.length > 0 ? `${candidates.length} sách có thể khớp` : 'Không có sách khớp'}</Text>
+                    {ocrTitle ? <Text style={type.caption} numberOfLines={2}>Đọc được trên bìa: {ocrTitle}</Text> : null}
+                  </View>
+                </View>
+                <Button label="Chụp ảnh khác" icon="camera-outline" variant="secondary" size="md" onPress={() => setCameraOpen(true)} />
+                {error ? <InlineAlert message={error} actionLabel="Thử lại với ảnh này" onAction={handleRetry} /> : null}
               </View>
-            </View>
-
-            {error && <Text style={styles.error}>{error}</Text>}
-
-            {!error && (
-              <FlatList
-                data={candidates}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={styles.list}
-                ListEmptyComponent={
-                  <View style={styles.emptyResult}>
-                    <Ionicons name="search-outline" size={24} color={colors.textMuted} />
-                    <Text style={styles.emptyResultText}>
-                      Không tìm thấy sách khớp. Thử chụp lại ở nơi đủ sáng, giữ bìa thẳng trong khung hình.
-                    </Text>
+            }
+            ListEmptyComponent={
+              !error ? (
+                <EmptyState icon="search-outline" title="Không tìm thấy sách khớp" message="Thử chụp lại ở nơi đủ sáng, giữ bìa thẳng trong khung hình, hoặc tìm theo tên sách." actionLabel="Tìm theo tên" onAction={() => router.push('/customer/search')} compact />
+              ) : undefined
+            }
+            renderItem={({ item }) => {
+              const confidence = confidenceView(item.confidence);
+              return (
+                <PressableScale
+                  onPress={() => router.push(`/customer/book/${item.id}`)}
+                  scale={false}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.title}, ${item.author ?? 'chưa rõ tác giả'}, ${confidence.label}`}
+                  style={{ flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
+                  pressedStyle={{ backgroundColor: colors.surfaceRaised }}
+                >
+                  <BookCover title={item.title} author={item.author} category={item.category} coverImageUrl={item.cover_image_url} width={64} />
+                  <View style={{ flex: 1, justifyContent: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: fontFamily.serif, fontSize: 17, lineHeight: 22, color: colors.textPrimary }} numberOfLines={2}>{item.title}</Text>
+                    <Text style={type.caption} numberOfLines={1}>{item.author ?? 'Chưa rõ tác giả'}</Text>
+                    <StatusBadge tone={confidence.tone} label={confidence.label} icon={confidence.tone === 'success' ? 'checkmark-circle' : 'help-circle'} />
                   </View>
-                }
-                renderItem={({ item }) => (
-                  <View style={styles.row}>
-                    <View style={styles.posterWrap}>
-                      <PosterCard
-                        title={item.title}
-                        category={item.category}
-                        coverImageUrl={item.cover_image_url}
-                        width={80}
-                        height={120}
-                        onPress={() => router.push(`/customer/book/${item.id}`)}
-                      />
-                      <View style={[styles.confidenceBadge, { backgroundColor: confidenceTone(item.confidence) }]}>
-                        <Text style={styles.confidenceBadgeText}>{Math.round(item.confidence * 100)}%</Text>
-                      </View>
-                    </View>
-                    <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.rowMeta} numberOfLines={1}>
-                        {item.author ?? 'Chưa rõ tác giả'}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-              />
-            )}
-          </>
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={{ alignSelf: 'center' }} />
+                </PressableScale>
+              );
+            }}
+          />
         )}
       </View>
 
@@ -216,181 +241,3 @@ export default function CustomerScanCoverScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    padding: spacing.lg,
-  },
-  emptyHero: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  emptyTitle: {
-    ...typography.h3,
-  },
-  emptySubtitle: {
-    ...typography.caption,
-    textAlign: 'center',
-    maxWidth: 280,
-  },
-  captureButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    marginTop: spacing.md,
-  },
-  captureButtonText: {
-    ...typography.bodyBold,
-    color: colors.onPrimary,
-  },
-  scanningWrap: {
-    gap: spacing.lg,
-  },
-  scanPreview: {
-    height: SCAN_PREVIEW_HEIGHT,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-  },
-  sweep: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 40,
-    backgroundColor: colors.primarySoft,
-  },
-  elapsedBadge: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: spacing.sm,
-    backgroundColor: colors.overlay,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  elapsedBadgeText: {
-    ...typography.caption,
-    color: '#fff',
-    fontSize: 11,
-  },
-  checklist: {
-    gap: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-  },
-  checklistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  checklistLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  checklistLabelDone: {
-    color: colors.textPrimary,
-  },
-  checklistHint: {
-    color: colors.textMuted,
-  },
-  searchedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  photoThumb: {
-    width: 48,
-    height: 64,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  searchedHeaderBody: {
-    flex: 1,
-    gap: 4,
-  },
-  error: {
-    color: colors.danger,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  ocrHint: {
-    ...typography.caption,
-  },
-  retakeText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontFamily: typography.bodyBold.fontFamily,
-  },
-  list: {
-    gap: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  emptyResult: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyResultText: {
-    ...typography.caption,
-    textAlign: 'center',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  posterWrap: {
-    position: 'relative',
-  },
-  confidenceBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  confidenceBadgeText: {
-    ...typography.label,
-    color: colors.onPrimary,
-    fontSize: 10,
-    letterSpacing: 0,
-    textTransform: 'none',
-  },
-  rowBody: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 4,
-  },
-  rowTitle: {
-    ...typography.bodyBold,
-  },
-  rowMeta: {
-    ...typography.caption,
-  },
-});

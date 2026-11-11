@@ -32,6 +32,9 @@ export type AvailableTask = {
   created_at: string;
   claimable: boolean;
   claim_endpoint: string;
+  /** Transfer tasks only (my-warehouse-tasks.controller transferDirectionFields). */
+  from_warehouse_name?: string | null;
+  to_warehouse_name?: string | null;
 };
 
 export type PickingLine = {

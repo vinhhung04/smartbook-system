@@ -1,11 +1,10 @@
-import { Stack } from 'expo-router';
-
 import { QuickLookupPanel } from '../../src/components/QuickLookupPanel';
+import { ScreenHeader } from '../../src/design-system';
 
 export default function QuickLookupScreen() {
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: 'Tra cứu nhanh' }} />
+      <ScreenHeader title="Tra cứu nhanh" />
       <QuickLookupPanel />
     </>
   );
