@@ -5,6 +5,8 @@ const { finalizeVnpayPayment } = require('../src/services/vnpay-payment.service'
 function makeFakePrisma({ intent, fine, customer }) {
   const state = { intent: { ...intent }, fine: { ...fine }, customer: { ...customer }, payments: [], notifications: [], audits: [] };
   const tx = {
+    // Row lock taken before the fine is read (SELECT ... FOR UPDATE); nothing to model here.
+    $executeRaw: async () => 1,
     fine_payment_intents: {
       findUnique: async ({ where }) => {
         if (where.txn_ref !== undefined) return where.txn_ref === state.intent.txn_ref ? state.intent : null;

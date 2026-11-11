@@ -66,6 +66,16 @@ export type LoanItem = {
   book_title?: string | null;
   book_author?: string | null;
   book_cover_url?: string | null;
+  /** Per-book deposit held in the wallet (GET /my/loans/:id only). */
+  deposit?: {
+    id: string;
+    amount: Money;
+    status: 'HELD' | 'RELEASED' | 'PARTIALLY_REFUNDED' | 'CAPTURED';
+    captured_amount: Money;
+    refunded_amount: Money;
+  } | null;
+  /** Still owed for this book after any deposit was applied. */
+  outstanding_fine_amount?: Money;
 };
 
 /** Renewal requests the reader filed for a loan (borrow-service my.controller loadRenewalState). */

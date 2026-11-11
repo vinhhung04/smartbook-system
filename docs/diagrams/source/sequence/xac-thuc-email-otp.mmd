@@ -1,0 +1,49 @@
+---
+title: "Sơ đồ tuần tự – Xác thực email bằng mã OTP khi đăng ký"
+---
+sequenceDiagram
+    autonumber
+    actor ND as Người dùng
+    participant APP as Web / Mobile app
+    participant GW as API Gateway
+    participant RT as auth-service<br/>auth.routes (rate limit)
+    participant CTL as auth.controller<br/>verifyEmailOtp
+    participant OTP as EmailOtpService<br/>lib/email-otp.js
+    participant DB as PostgreSQL<br/>(CSDL auth)
+
+    ND->>APP: Nhập mã OTP 6 chữ số
+    APP->>GW: POST /auth/email-otp/verify {challenge_id, code}
+    GW->>RT: Chuyển tiếp yêu cầu (proxy /auth)
+    Note over APP,GW: Mọi phản hồi bên dưới đi ngược qua API Gateway (proxy trong suốt)
+    alt Vượt giới hạn yêu cầu theo IP
+        RT-->>APP: 429 Too Many Requests
+    else Trong giới hạn
+        RT->>CTL: verifyEmailOtp(req, res)
+        CTL->>OTP: verify(challengeId, EMAIL_VERIFICATION, code, markEmailVerified)
+        alt Mã không đủ 6 chữ số
+            OTP-->>CTL: OtpError OTP_FORMAT (không tính lượt thử)
+            CTL-->>APP: 400 OTP_FORMAT
+        else Mã đúng định dạng
+            OTP->>DB: SELECT email_otp_challenges theo id
+            DB-->>OTP: Bản ghi challenge
+            alt Challenge đã dùng, bị vô hiệu, hết hạn hoặc hết lượt thử
+                OTP-->>CTL: OtpError OTP_CHALLENGE_INVALID / OTP_EXPIRED / OTP_TOO_MANY_ATTEMPTS
+                CTL-->>APP: 410 hoặc 429
+            else Challenge còn hiệu lực
+                OTP->>DB: UPDATE attempts = attempts + 1 (có điều kiện)
+                DB-->>OTP: Challenge đã giữ lượt thử
+                Note over OTP: So sánh HMAC-SHA256<br/>(timingSafeEqual)
+                alt Mã sai
+                    OTP-->>CTL: OtpError OTP_INVALID (kèm attempts_remaining)
+                    CTL-->>APP: 400 OTP_INVALID
+                else Mã đúng
+                    OTP->>DB: BEGIN – UPDATE consumed_at (có điều kiện)
+                    OTP->>DB: markEmailVerified: UPDATE users SET email_verified_at,<br/>status PENDING_VERIFICATION → ACTIVE – COMMIT
+                    DB-->>OTP: Challenge đã sử dụng
+                    OTP-->>CTL: Kết quả hợp lệ
+                    CTL-->>APP: 200 {status: "VERIFIED"}
+                end
+            end
+        end
+    end
+    APP-->>ND: Hiển thị kết quả xác thực (đăng nhập ở bước tiếp theo)

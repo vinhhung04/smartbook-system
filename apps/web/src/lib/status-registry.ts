@@ -54,6 +54,12 @@ const DOMAINS = {
     BLOCKED: 'danger',
     INACTIVE: 'neutral',
   },
+  deposit: {
+    HELD: 'info',
+    RELEASED: 'success',
+    PARTIALLY_REFUNDED: 'warning',
+    CAPTURED: 'rose',
+  },
   fine: {
     PAID: 'success',
     WAIVED: 'neutral',
@@ -187,6 +193,20 @@ const BORROW_LABELS = {
     OVERDUE: 'Trả trễ',
     LOST: 'Mất sách',
     DAMAGED: 'Hư hỏng',
+    DAMAGE: 'Hư hỏng',
+  },
+  deposit: {
+    HELD: 'Đang giữ',
+    RELEASED: 'Đã hoàn',
+    PARTIALLY_REFUNDED: 'Hoàn một phần',
+    CAPTURED: 'Đã khấu trừ',
+  },
+  ledgerEntry: {
+    CREDIT: 'Nạp tiền vào ví',
+    DEBIT: 'Trừ phí mượn',
+    HOLD: 'Giữ tiền cọc',
+    RELEASE: 'Hoàn tiền cọc',
+    CAPTURE: 'Khấu trừ tiền cọc',
   },
   sourceChannel: {
     WEB: 'Website',

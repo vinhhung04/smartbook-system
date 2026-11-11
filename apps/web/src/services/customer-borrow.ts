@@ -74,6 +74,11 @@ export const customerBorrowService = {
     return response.data;
   },
 
+  async createVnpayTopup(amount: number) {
+    const response = await gatewayAPI.post('/my/account/topups/vnpay/create', { amount });
+    return response.data as { data: { payment_url: string; txn_ref: string; amount: number; expires_at: string } };
+  },
+
   async getMyNotifications(params?: { page?: number; pageSize?: number; status?: 'unread' | 'read' }) {
     const response = await gatewayAPI.get('/my/notifications', { params });
     return response.data;

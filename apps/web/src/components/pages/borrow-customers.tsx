@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, UserPlus, Send, X, Pencil } from 'lucide-react';
+import { Users, UserPlus, Send, X, Pencil, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard, FilterBar, EmptyState } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { StatusBadge } from '@/components/status-badge';
 import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
-import { borrowService, type Customer, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
+import { WALLET_TOPUP_AMOUNTS } from '@/lib/wallet-topup';
+import { borrowService, type Customer, type CustomerAccountView, type CustomerPayload, type CustomerStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { StageTabs, type StageTab } from './borrow-shared/stage-tabs';
@@ -63,6 +64,13 @@ export function BorrowCustomersPage() {
   const [notifyTarget, setNotifyTarget] = useState<Customer | null>(null);
   const [notifyForm, setNotifyForm] = useState({ subject: '', body: '' });
   const [notifySending, setNotifySending] = useState(false);
+  // Wallet + counter top-up. The idempotency key is fixed while the dialog is open,
+  // so a double click or a retry after a timeout records the money only once.
+  const [walletTarget, setWalletTarget] = useState<Customer | null>(null);
+  const [walletAccount, setWalletAccount] = useState<CustomerAccountView | null>(null);
+  const [topupForm, setTopupForm] = useState({ amount: '', method: 'CASH' as 'CASH' | 'TRANSFER', note: '' });
+  const [topupKey, setTopupKey] = useState('');
+  const [topupSaving, setTopupSaving] = useState(false);
 
   const counts = list.meta.status_counts;
   const tabs: StageTab<'ALL' | CustomerStatus>[] = [
@@ -85,6 +93,51 @@ export function BorrowCustomersPage() {
   const notifyModalRef = useRef<HTMLDivElement>(null);
   const closeNotify = () => setNotifyTarget(null);
   useDialogA11y(Boolean(notifyTarget), closeNotify, notifyModalRef);
+  const walletModalRef = useRef<HTMLDivElement>(null);
+  const closeWallet = () => { setWalletTarget(null); setWalletAccount(null); };
+  useDialogA11y(Boolean(walletTarget), closeWallet, walletModalRef);
+
+  const loadWallet = async (customerId: string) => {
+    try {
+      const response = await borrowService.getCustomerAccount(customerId);
+      setWalletAccount(response.data);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Không tải được ví khách hàng'));
+    }
+  };
+
+  const openWallet = (customer: Customer) => {
+    setWalletTarget(customer);
+    setWalletAccount(null);
+    setTopupForm({ amount: '', method: 'CASH', note: '' });
+    setTopupKey(crypto.randomUUID());
+    void loadWallet(customer.id);
+  };
+
+  const submitTopup = async () => {
+    if (!walletTarget) return;
+    const amount = Number(topupForm.amount);
+    if (!WALLET_TOPUP_AMOUNTS.some((allowed) => allowed === amount)) {
+      toast.error('Chọn một mức nạp tiền');
+      return;
+    }
+    try {
+      setTopupSaving(true);
+      const response = await borrowService.topupCustomerAccount(
+        walletTarget.id,
+        { amount, method: topupForm.method, ...(topupForm.note.trim() ? { note: topupForm.note.trim() } : {}) },
+        topupKey,
+      );
+      toast.success(`Đã nạp ${formatFine(response.data.credited_amount)} vào ví`);
+      setTopupForm({ amount: '', method: topupForm.method, note: '' });
+      setTopupKey(crypto.randomUUID());
+      await loadWallet(walletTarget.id);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Nạp tiền thất bại'));
+    } finally {
+      setTopupSaving(false);
+    }
+  };
 
   const openEdit = (customer: Customer) => {
     setFormState({
@@ -268,6 +321,15 @@ export function BorrowCustomersPage() {
                             >
                               <Send className="h-3.5 w-3.5" />
                             </button>
+                            <button
+                              type="button"
+                              aria-label={`Ví của ${customer.full_name}`}
+                              title="Ví & nạp tiền"
+                              onClick={() => openWallet(customer)}
+                              className={cn(ICON_BUTTON_CLASS, 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20')}
+                            >
+                              <Wallet className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </motion.tr>
@@ -414,6 +476,71 @@ export function BorrowCustomersPage() {
                 } catch (error) { toast.error(getApiErrorMessage(error, 'Gửi thông báo thất bại')); } finally { setNotifySending(false); }
               }}>
                 <Send className="w-3.5 h-3.5 mr-1" /> {notifySending ? 'Đang gửi...' : 'Gửi'}
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {walletTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title">
+          <motion.div ref={walletModalRef} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="wallet-modal-title" className="text-[16px] font-semibold">Ví khách hàng</h3>
+              <button onClick={closeWallet} aria-label="Đóng" className="text-muted-foreground hover:text-foreground"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-[12px] text-muted-foreground mb-3"><strong>{walletTarget.full_name}</strong> ({walletTarget.customer_code})</p>
+
+            {walletAccount ? (
+              <dl className="mb-4 grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/40 p-3 text-[13px]">
+                <dt className="text-muted-foreground">Số dư khả dụng</dt>
+                <dd className="text-right font-mono font-semibold tabular-nums">{formatFine(walletAccount.available_balance)}</dd>
+                <dt className="text-muted-foreground">Đang giữ (tiền cọc)</dt>
+                <dd className="text-right font-mono tabular-nums">{formatFine(walletAccount.held_balance)}</dd>
+                {!walletAccount.reconciliation.ok && (
+                  <dd className="col-span-2 text-[12px] text-rose-600 dark:text-rose-400">Số dư không khớp sổ giao dịch — cần kiểm tra trước khi nạp thêm.</dd>
+                )}
+              </dl>
+            ) : (
+              <p className="mb-4 text-[12px] text-muted-foreground">Đang tải ví…</p>
+            )}
+
+            <p className="mb-2 text-[13px] font-medium">Ghi nhận nạp tiền tại quầy</p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="topup-amount" className="block text-[12px] font-medium text-muted-foreground mb-1">Số tiền (VND)</label>
+                  <select id="topup-amount" value={topupForm.amount}
+                    onChange={(e) => setTopupForm({ ...topupForm, amount: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40">
+                    <option value="">Chọn mức nạp</option>
+                    {WALLET_TOPUP_AMOUNTS.map((amount) => (
+                      <option key={amount} value={String(amount)}>{formatFine(amount)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="topup-method" className="block text-[12px] font-medium text-muted-foreground mb-1">Hình thức</label>
+                  <select id="topup-method" value={topupForm.method}
+                    onChange={(e) => setTopupForm({ ...topupForm, method: e.target.value as 'CASH' | 'TRANSFER' })}
+                    className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40">
+                    <option value="CASH">Tiền mặt</option>
+                    <option value="TRANSFER">Chuyển khoản</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="topup-note" className="block text-[12px] font-medium text-muted-foreground mb-1">Ghi chú</label>
+                <input id="topup-note" value={topupForm.note} onChange={(e) => setTopupForm({ ...topupForm, note: e.target.value })}
+                  className="w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40"
+                  placeholder="Mã giao dịch chuyển khoản, số biên lai…" />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={closeWallet}>Đóng</Button>
+              <Button className="flex-1" disabled={topupSaving || !topupForm.amount} onClick={() => void submitTopup()}>
+                {topupSaving ? 'Đang ghi nhận...' : 'Nạp tiền'}
               </Button>
             </div>
           </motion.div>

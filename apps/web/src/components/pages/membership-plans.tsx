@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { withoutLeadingZeros, zeroFieldProps } from '@/lib/number-input';
 import { borrowService } from '@/services/borrow';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
@@ -35,6 +36,7 @@ export interface MembershipPlan {
   reservation_hold_hours: number;
   fine_per_day: number | string;
   lost_item_fee_multiplier: number | string;
+  deposit_per_item?: number | string;
   price: number | string;
   duration_days: number;
   is_default: boolean;
@@ -55,6 +57,7 @@ interface PlanFormState {
   reservation_hold_hours: string;
   fine_per_day: string;
   lost_item_fee_multiplier: string;
+  deposit_per_item: string;
   price: string;
   duration_days: string;
   is_default: boolean;
@@ -71,6 +74,7 @@ const initialFormState: PlanFormState = {
   reservation_hold_hours: '24',
   fine_per_day: '0',
   lost_item_fee_multiplier: '1',
+  deposit_per_item: '0',
   price: '0',
   duration_days: '365',
   is_default: false,
@@ -78,7 +82,7 @@ const initialFormState: PlanFormState = {
 };
 
 type PlanNumberKey = 'max_active_loans' | 'max_loan_days' | 'max_renewal_count' | 'reservation_hold_hours'
-  | 'fine_per_day' | 'lost_item_fee_multiplier' | 'price' | 'duration_days';
+  | 'fine_per_day' | 'lost_item_fee_multiplier' | 'deposit_per_item' | 'price' | 'duration_days';
 
 const PLAN_NUMBER_FIELDS: Array<{ key: PlanNumberKey; label: string; integer: boolean; min: number }> = [
   { key: 'max_active_loans', label: 'Tối đa mượn đồng thời', integer: true, min: 1 },
@@ -87,6 +91,7 @@ const PLAN_NUMBER_FIELDS: Array<{ key: PlanNumberKey; label: string; integer: bo
   { key: 'reservation_hold_hours', label: 'Giữ đặt trước (giờ)', integer: true, min: 1 },
   { key: 'fine_per_day', label: 'Phạt/ngày', integer: false, min: 0 },
   { key: 'lost_item_fee_multiplier', label: 'Hệ số phí mất sách', integer: false, min: 0 },
+  { key: 'deposit_per_item', label: 'Tiền cọc mỗi cuốn', integer: true, min: 0 },
   { key: 'price', label: 'Phí gói', integer: false, min: 0 },
   { key: 'duration_days', label: 'Thời hạn thẻ', integer: true, min: 1 },
 ];
@@ -113,6 +118,7 @@ function PlanCard({ plan, onEdit }: { plan: MembershipPlan; onEdit: (plan: Membe
     { label: 'Giữ chỗ đặt trước', value: `${plan.reservation_hold_hours} giờ` },
     { label: 'Phạt mỗi ngày trễ', value: toNum(plan.fine_per_day) > 0 ? formatVnd(plan.fine_per_day) : 'Không phạt' },
     { label: 'Hệ số phí mất sách', value: `×${toNum(plan.lost_item_fee_multiplier)}` },
+    { label: 'Tiền cọc mỗi cuốn', value: toNum(plan.deposit_per_item) > 0 ? formatVnd(plan.deposit_per_item) : 'Không cọc' },
   ];
   return (
     <article className={cn('flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md', !plan.is_active && 'opacity-70')}>
@@ -179,6 +185,7 @@ function planToForm(p: MembershipPlan): PlanFormState {
     reservation_hold_hours: String(p.reservation_hold_hours),
     fine_per_day: String(toNum(p.fine_per_day)),
     lost_item_fee_multiplier: String(toNum(p.lost_item_fee_multiplier)),
+    deposit_per_item: String(toNum(p.deposit_per_item)),
     price: String(toNum(p.price)),
     duration_days: String(p.duration_days),
     is_default: p.is_default,
@@ -479,7 +486,8 @@ export function MembershipPlansPage() {
                     min={1}
                     className={inputClass}
                     value={form.max_active_loans}
-                    onChange={(e) => setForm((f) => ({ ...f, max_active_loans: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, max_active_loans: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -491,7 +499,8 @@ export function MembershipPlansPage() {
                     min={1}
                     className={inputClass}
                     value={form.max_loan_days}
-                    onChange={(e) => setForm((f) => ({ ...f, max_loan_days: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, max_loan_days: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -503,7 +512,8 @@ export function MembershipPlansPage() {
                     min={0}
                     className={inputClass}
                     value={form.max_renewal_count}
-                    onChange={(e) => setForm((f) => ({ ...f, max_renewal_count: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, max_renewal_count: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -515,7 +525,8 @@ export function MembershipPlansPage() {
                     min={1}
                     className={inputClass}
                     value={form.reservation_hold_hours}
-                    onChange={(e) => setForm((f) => ({ ...f, reservation_hold_hours: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, reservation_hold_hours: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -528,7 +539,8 @@ export function MembershipPlansPage() {
                     step="0.01"
                     className={inputClass}
                     value={form.fine_per_day}
-                    onChange={(e) => setForm((f) => ({ ...f, fine_per_day: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, fine_per_day: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -542,7 +554,8 @@ export function MembershipPlansPage() {
                     step="1000"
                     className={inputClass}
                     value={form.price}
-                    onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, price: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -555,7 +568,8 @@ export function MembershipPlansPage() {
                     min={1}
                     className={inputClass}
                     value={form.duration_days}
-                    onChange={(e) => setForm((f) => ({ ...f, duration_days: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, duration_days: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
                 <div>
@@ -568,7 +582,23 @@ export function MembershipPlansPage() {
                     step="0.01"
                     className={inputClass}
                     value={form.lost_item_fee_multiplier}
-                    onChange={(e) => setForm((f) => ({ ...f, lost_item_fee_multiplier: e.target.value }))}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, lost_item_fee_multiplier: withoutLeadingZeros(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="plan-deposit" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Tiền cọc mỗi cuốn (VND)
+                  </label>
+                  <input
+                    id="plan-deposit"
+                    type="number"
+                    min={0}
+                    step="1000"
+                    className={inputClass}
+                    value={form.deposit_per_item}
+                    {...zeroFieldProps}
+                    onChange={(e) => setForm((f) => ({ ...f, deposit_per_item: withoutLeadingZeros(e.target.value) }))}
                   />
                 </div>
               </div>

@@ -10,6 +10,7 @@ import { getApiErrorMessage } from "@/services/api";
 import { supplierAccountService } from "@/services/supplier-account";
 import { purchaseOrderStatusLabel } from "@/lib/purchase-order-status";
 import type { SupplierPortalOrder, SupplierPortalShortageReport } from "@/services/supplier-portal";
+import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
 type InvoiceLines = Record<string, number>;
 
@@ -336,7 +337,7 @@ export function SupplierAccountPage() {
                           <td className="px-3 py-2">{item.received_qty}</td>
                           <td className="px-3 py-2">{item.remaining_qty}</td>
                           <td className="px-3 py-2">
-                            <input type="number" min={0} max={item.remaining_qty} value={lines[item.id] || 0} onChange={(event) => setLineQty(item.id, Number(event.target.value), item.remaining_qty)} className="w-24 rounded-[8px] border border-slate-200 px-2 py-1" />
+                            <input type="number" min={0} max={item.remaining_qty} {...zeroFieldProps} value={lines[item.id] || 0} onChange={(event) => setLineQty(item.id, Number(numberInputValue(event)), item.remaining_qty)} className="w-24 rounded-[8px] border border-slate-200 px-2 py-1" />
                           </td>
                         </tr>
                       ))}

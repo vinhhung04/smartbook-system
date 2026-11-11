@@ -191,6 +191,9 @@ async function recordFinePayment(req, res) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // Row-lock the fine so a concurrent VNPay confirmation or deposit settlement
+      // cannot pay against the same remaining balance.
+      await tx.$executeRaw`SELECT id FROM fines WHERE id = ${fineId}::uuid FOR UPDATE`;
       const fine = await tx.fines.findUnique({
         where: { id: fineId },
         include: { fine_payments: true },
