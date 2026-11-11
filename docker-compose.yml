@@ -478,6 +478,7 @@ services:
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
       - SOCKET_CORS_ORIGIN=${SOCKET_CORS_ORIGIN:-http://localhost:5173}
+      - GATEWAY_RATE_LIMIT_MAX=${GATEWAY_RATE_LIMIT_MAX:-600}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
     depends_on:
       auth-service:

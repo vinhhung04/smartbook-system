@@ -230,6 +230,9 @@ jobs:
           echo "AUTH_LOGIN_RATE_LIMIT_MAX=1000" >> .env
           # email-otp.spec.ts enters codes (wrong ones on purpose) from one IP
           echo "AUTH_OTP_VERIFY_RATE_LIMIT_MAX=1000" >> .env
+          # The whole suite is one client IP; past the gateway's 600 requests per 15
+          # minutes every API call answers 429 and the later specs fail at random steps.
+          echo "GATEWAY_RATE_LIMIT_MAX=20000" >> .env
 
       # Full stack including smartbook-ui: the built production image, not the Vite dev
       # server — same thing a real user's browser hits, and one less moving part in CI.
