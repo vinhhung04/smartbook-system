@@ -43,6 +43,13 @@ pnpm test:e2e
   reserves a book → staff confirms → staff marks it ready for pickup (pickup code issued)
   → staff converts the pickup code to a loan at the counter → staff returns the loan.
   Runs as two browser contexts (customer + staff) in one test.
+- `vnpay-payment.spec.ts` — online wallet top-up and fine payment through VNPay, against the
+  local VNPay simulator (`pnpm vnpay:simulator`; setup in `docs/SERVICES/BORROW_SERVICE.md`):
+  paid top-up credits the wallet once, a replayed return URL credits nothing, a cancelled
+  top-up credits nothing, a forged return URL is rejected. Opt-in: `VNPAY_SIMULATOR=1`.
+- `membership-plan-number-fields.spec.ts` — number fields that show 0 replace it as you type.
+- `number-input-audit.spec.ts` — opt-in audit (`NUMBER_INPUT_AUDIT=1`) of every number field
+  across staff, reader and supplier screens; writes `test-results/number-input-audit.json`.
 
 ## Notes
 

@@ -61,6 +61,9 @@ async function finalizeVnpayPayment(prismaClient, verifiedParams) {
       return { outcome: 'PAYMENT_FAILED', intent: updated };
     }
 
+    // Row-lock the fine: a counter payment or a deposit settlement for the same fine
+    // waits until this one commits, so the remaining balance below cannot go stale.
+    await tx.$executeRaw`SELECT id FROM fines WHERE id = ${intent.fine_id}::uuid FOR UPDATE`;
     const fine = await tx.fines.findUnique({ where: { id: intent.fine_id }, include: { fine_payments: true } });
     if (!fine) {
       const updated = await tx.fine_payment_intents.update({

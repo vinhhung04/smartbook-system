@@ -147,7 +147,7 @@ test('membership limits come from the plan, with per-card overrides', async () =
   const info = await resolveActiveMembership(membershipClient({ id: 'm1', max_active_loans_override: null, max_loan_days_override: 21, membership_plans: goldPlan }), 'cust-1');
   assert.deepEqual(
     { ...info.limits, lost_item_fee_multiplier: undefined },
-    { max_active_loans: 8, max_loan_days: 21, max_renewal_count: 3, reservation_hold_hours: 48, fine_per_day: 2000, lost_item_fee_multiplier: undefined },
+    { max_active_loans: 8, max_loan_days: 21, max_renewal_count: 3, reservation_hold_hours: 48, fine_per_day: 2000, lost_item_fee_multiplier: undefined, deposit_per_item: 0 },
   );
 });
 

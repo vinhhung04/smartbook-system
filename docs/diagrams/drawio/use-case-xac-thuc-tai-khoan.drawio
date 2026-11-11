@@ -1,0 +1,103 @@
+<mxfile host="localhost">
+  <diagram id="rnswzis9-mdkp" name="Page-1">
+    <mxGraphModel dx="1083" dy="983" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#1F2933;whiteSpace=wrap;" value="Sơ đồ Use Case – Phân hệ Xác thực tài khoản (auth-service)" vertex="1">
+          <mxGeometry height="30" width="790" x="170" as="geometry" />
+        </mxCell>
+        <mxCell id="boundary" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#2F5D8A;verticalAlign=top;align=center;fontStyle=1;fontSize=14;fontColor=#2F5D8A;spacingTop=6;" value="Hệ thống SmartBook – auth-service" vertex="1">
+          <mxGeometry height="720" width="790" x="170" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="actGuest" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Khách&lt;br&gt;(chưa có tài khoản)" vertex="1">
+          <mxGeometry height="60" width="30" x="70" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="actUser" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Người dùng&lt;br&gt;(mọi vai trò)" vertex="1">
+          <mxGeometry height="60" width="30" x="70" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="actMail" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#F5F7FA;strokeColor=#4A5568;fontColor=#1F2933;" value="Dịch vụ Email&lt;br&gt;(SMTP)" vertex="1">
+          <mxGeometry height="60" width="30" x="1030" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="ucRegister" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Đăng ký tài khoản" vertex="1">
+          <mxGeometry height="60" width="190" x="250" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ucVerifyEmail" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Xác thực email bằng mã OTP" vertex="1">
+          <mxGeometry height="60" width="190" x="250" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="ucResend" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Gửi lại mã OTP" vertex="1">
+          <mxGeometry height="60" width="170" x="510" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="ucSendOtp" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Gửi mã OTP qua email" vertex="1">
+          <mxGeometry height="60" width="190" x="740" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ucLogin" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Đăng nhập" vertex="1">
+          <mxGeometry height="60" width="190" x="250" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="uc2fa" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Xác thực OTP đăng nhập (2FA)" vertex="1">
+          <mxGeometry height="60" width="190" x="545" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="ucForgot" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Quên mật khẩu" vertex="1">
+          <mxGeometry height="60" width="190" x="250" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="ucResetMail" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Gửi liên kết đặt lại mật khẩu" vertex="1">
+          <mxGeometry height="60" width="190" x="740" y="440" as="geometry" />
+        </mxCell>
+        <mxCell id="ucChangePw" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Đổi mật khẩu" vertex="1">
+          <mxGeometry height="60" width="190" x="250" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="ucProfile" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Cập nhật hồ sơ cá nhân" vertex="1">
+          <mxGeometry height="60" width="190" x="250" y="610" as="geometry" />
+        </mxCell>
+        <mxCell id="ucLogout" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EAF2FB;strokeColor=#2F5D8A;fontColor=#1F2933;" value="Đăng xuất" vertex="1">
+          <mxGeometry height="55" width="190" x="250" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="aG1" edge="1" parent="1" source="actGuest" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucRegister">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aG2" edge="1" parent="1" source="actGuest" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucVerifyEmail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aU1" edge="1" parent="1" source="actUser" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucLogin">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aU2" edge="1" parent="1" source="actUser" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucForgot">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aU3" edge="1" parent="1" source="actUser" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucChangePw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aU4" edge="1" parent="1" source="actUser" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucProfile">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aU5" edge="1" parent="1" source="actUser" style="endArrow=none;html=1;strokeColor=#4A5568;" target="ucLogout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aM1" edge="1" parent="1" source="ucSendOtp" style="endArrow=none;html=1;strokeColor=#4A5568;" target="actMail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aM2" edge="1" parent="1" source="ucResetMail" style="endArrow=none;html=1;strokeColor=#4A5568;" target="actMail">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc1" edge="1" parent="1" source="ucRegister" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#4A5568;fontColor=#4A5568;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ucSendOtp" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc2" edge="1" parent="1" source="uc2fa" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#4A5568;fontColor=#4A5568;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ucSendOtp" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="inc3" edge="1" parent="1" source="ucForgot" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#4A5568;fontColor=#4A5568;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ucResetMail" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext1" edge="1" parent="1" source="ucResend" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#4A5568;fontColor=#4A5568;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ucVerifyEmail" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext2" edge="1" parent="1" source="uc2fa" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#4A5568;fontColor=#4A5568;fontSize=11;labelBackgroundColor=#FFFFFF;" target="ucLogin" value="«extend»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ext2Cond" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=10;fillColor=#FFF8E1;strokeColor=#C9A227;fontColor=#1F2933;fontSize=11;" value="Điều kiện mở rộng: STAFF_EMAIL_OTP_MODE ≠ off" vertex="1">
+          <mxGeometry height="32" width="270" x="455" y="398" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
-import { borrowService, type Loan } from '@/services/borrow';
+import { borrowService, type Loan, type ReturnPreview } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 import { printLoanReceipt } from '@/lib/print-utils';
@@ -20,18 +20,45 @@ function daysOverdue(dueDate: string): number {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
+const formatVnd = (value: number | string | null | undefined) => `${Number(value || 0).toLocaleString('vi-VN')} VND`;
+
+type ReturnMode = 'return' | 'damage' | 'lost';
+
+const RETURN_DIALOG: Record<ReturnMode, { title: string; description: string; variant: 'default' | 'destructive'; success: string; failure: string }> = {
+  return: {
+    title: 'Xác nhận trả sách',
+    description: 'Trả tất cả sách đang mượn trong phiếu này? Hành động này không thể hoàn tác.',
+    variant: 'default',
+    success: 'Đã trả sách thành công',
+    failure: 'Trả sách thất bại',
+  },
+  damage: {
+    title: 'Báo hư hỏng sách',
+    description: 'Đánh dấu sách trả bị hư hỏng và tạo tiền phạt?',
+    variant: 'destructive',
+    success: 'Đã xử lý trả sách hư hỏng',
+    failure: 'Báo hư hỏng thất bại',
+  },
+  lost: {
+    title: 'Đánh dấu mất sách',
+    description: 'Đánh dấu một sách đang mượn là mất và tạo tiền phạt?',
+    variant: 'destructive',
+    success: 'Đã xử lý sách mất',
+    failure: 'Đánh dấu mất thất bại',
+  },
+};
+
 export function BorrowLoanDetailPage() {
   const { id } = useParams();
   const [loan, setLoan] = useState<Loan | null>(null);
   const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [confirmState, setConfirmState] = useState<{
-    open: boolean;
-    title: string;
-    description?: string;
-    variant: 'default' | 'destructive';
-    onConfirm: () => Promise<void>;
-  }>({ open: false, title: '', variant: 'default', onConfirm: async () => {} });
+  // One dialog for the three return actions. itemId '' = every active book.
+  const [returnDialog, setReturnDialog] = useState<{ open: boolean; mode: ReturnMode; itemId: string; reason: string }>(
+    { open: false, mode: 'return', itemId: '', reason: '' },
+  );
+  const [preview, setPreview] = useState<ReturnPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -57,71 +84,65 @@ export function BorrowLoanDetailPage() {
   const getBookTitle = (variantId: string) =>
     books.find((b) => b.variant_id === variantId)?.title ?? variantId;
 
-  const openConfirm = (title: string, description: string, variant: 'default' | 'destructive', action: () => Promise<void>) => {
-    setConfirmState({ open: true, title, description, variant, onConfirm: action });
+  const activeItems = (loan?.loan_items || []).filter((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
+
+  const openReturnDialog = (mode: ReturnMode) => {
+    if (!loan) return;
+    if (mode === 'lost' && activeItems.length === 0) {
+      toast.error('Không tìm thấy sách đang mượn để đánh dấu mất');
+      return;
+    }
+    // Lost is always one book (defaults to the first active one, as before).
+    setReturnDialog({ open: true, mode, itemId: mode === 'lost' ? activeItems[0].id : '', reason: '' });
   };
 
-  const returnLoan = () => {
+  // Deposit/fine preview for the current dialog inputs, so staff see what will be
+  // refunded or still owed before they confirm.
+  useEffect(() => {
+    if (!loan || !returnDialog.open) return;
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreview(null);
+    borrowService
+      .previewReturn(loan.id, {
+        ...(returnDialog.itemId ? { loan_item_id: returnDialog.itemId } : {}),
+        item_condition_on_return: returnDialog.mode === 'damage' ? 'DAMAGED' : returnDialog.mode === 'lost' ? 'LOST' : 'GOOD',
+        ...(returnDialog.mode === 'lost' ? { mark_lost: true } : {}),
+      })
+      .then((response) => { if (!cancelled) setPreview(response.data); })
+      .catch(() => { if (!cancelled) setPreview(null); })
+      .finally(() => { if (!cancelled) setPreviewLoading(false); });
+    return () => { cancelled = true; };
+  }, [loan, returnDialog.open, returnDialog.mode, returnDialog.itemId]);
+
+  const confirmReturn = async () => {
     if (!loan) return;
-    openConfirm(
-      'Xác nhận trả sách',
-      'Trả tất cả sách đang mượn trong phiếu này? Hành động này không thể hoàn tác.',
-      'default',
-      async () => {
-        try {
-          await borrowService.returnLoan(loan.id, {});
-          toast.success('Đã trả sách thành công');
-          setConfirmState((s) => ({ ...s, open: false }));
-          await load();
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Trả sách thất bại'));
-        }
-      },
-    );
+    const { mode, itemId, reason } = returnDialog;
+    const copy = RETURN_DIALOG[mode];
+    if (preview?.requires_reason && !reason.trim()) {
+      toast.error('Nhập lý do khấu trừ tiền cọc trước khi xác nhận');
+      return;
+    }
+    const payload = {
+      ...(itemId ? { loan_item_id: itemId } : {}),
+      ...(mode === 'damage' ? { item_condition_on_return: 'DAMAGED' } : {}),
+      ...(mode === 'lost' ? { mark_lost: true, item_condition_on_return: 'LOST' } : {}),
+      ...(reason.trim() ? { settlement_reason: reason.trim() } : {}),
+    };
+    try {
+      await borrowService.returnLoan(loan.id, payload);
+      toast.success(copy.success);
+      setReturnDialog((s) => ({ ...s, open: false }));
+      await load();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, copy.failure));
+    }
   };
 
-  const reportDamage = () => {
-    if (!loan) return;
-    openConfirm(
-      'Báo hư hỏng sách',
-      'Đánh dấu sách trả bị hư hỏng và tạo tiền phạt?',
-      'destructive',
-      async () => {
-        try {
-          await borrowService.returnLoan(loan.id, { item_condition_on_return: 'DAMAGED' });
-          toast.success('Đã xử lý trả sách hư hỏng');
-          setConfirmState((s) => ({ ...s, open: false }));
-          await load();
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Báo hư hỏng thất bại'));
-        }
-      },
-    );
-  };
-
-  const markLost = () => {
-    if (!loan) return;
-    openConfirm(
-      'Đánh dấu mất sách',
-      'Đánh dấu một sách đang mượn là mất và tạo tiền phạt?',
-      'destructive',
-      async () => {
-        try {
-          const activeItem = (loan.loan_items || []).find((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
-          if (!activeItem) {
-            toast.error('Không tìm thấy sách đang mượn để đánh dấu mất');
-            return;
-          }
-          await borrowService.returnLoan(loan.id, { loan_item_id: activeItem.id, mark_lost: true, item_condition_on_return: 'LOST' });
-          toast.success('Đã xử lý sách mất');
-          setConfirmState((s) => ({ ...s, open: false }));
-          await load();
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Đánh dấu mất thất bại'));
-        }
-      },
-    );
-  };
+  const returnLoan = () => openReturnDialog('return');
+  const reportDamage = () => openReturnDialog('damage');
+  const markLost = () => openReturnDialog('lost');
+  const dialogCopy = RETURN_DIALOG[returnDialog.mode];
 
   const canAct = loan && (loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED');
 
@@ -227,7 +248,7 @@ export function BorrowLoanDetailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/80">
-                    {['Mã vạch sách', 'Sách', 'Hạn trả', 'Ngày trả', 'Trạng thái', 'Tiền phạt'].map((header) => (
+                    {['Mã vạch sách', 'Sách', 'Hạn trả', 'Ngày trả', 'Trạng thái', 'Tiền phạt', 'Tiền cọc'].map((header) => (
                       <th key={header} className="text-left text-[11px] text-muted-foreground px-4 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
                         {header}
                       </th>
@@ -247,6 +268,22 @@ export function BorrowLoanDetailPage() {
                       <td className="px-4 py-3 font-mono text-[12px] tabular-nums text-foreground">
                         {Number(item.fine_amount || 0).toLocaleString('vi-VN')} VND
                       </td>
+                      <td className="px-4 py-3">
+                        {item.loan_item_deposits ? (
+                          <div className="space-y-1">
+                            <p className="font-mono text-[12px] tabular-nums text-foreground">{formatVnd(item.loan_item_deposits.amount)}</p>
+                            <StatusBadge
+                              label={getBorrowLabel('deposit', item.loan_item_deposits.status)}
+                              variant={getStatusVariant('deposit', item.loan_item_deposits.status)}
+                            />
+                            {Number(item.loan_item_deposits.captured_amount) > 0 && (
+                              <p className="font-mono text-[11px] text-muted-foreground">Khấu trừ {formatVnd(item.loan_item_deposits.captured_amount)}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[12px] text-muted-foreground">-</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -258,13 +295,68 @@ export function BorrowLoanDetailPage() {
       )}
 
       <ConfirmDialog
-        open={confirmState.open}
-        onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}
-        title={confirmState.title}
-        description={confirmState.description}
-        variant={confirmState.variant}
-        onConfirm={confirmState.onConfirm}
-      />
+        open={returnDialog.open}
+        onOpenChange={(open) => setReturnDialog((s) => ({ ...s, open }))}
+        title={dialogCopy.title}
+        description={dialogCopy.description}
+        variant={dialogCopy.variant}
+        onConfirm={confirmReturn}
+      >
+        <div className="space-y-3 text-[12px]">
+          {returnDialog.mode !== 'return' && activeItems.length > 1 && (
+            <label className="block space-y-1">
+              <span className="text-muted-foreground">Sách</span>
+              <select
+                value={returnDialog.itemId}
+                onChange={(e) => setReturnDialog((s) => ({ ...s, itemId: e.target.value }))}
+                className="h-9 w-full rounded-lg border border-input bg-card px-2 text-[12px] text-foreground"
+              >
+                {returnDialog.mode === 'damage' && <option value="">Tất cả sách đang mượn</option>}
+                {activeItems.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {(item.item_barcode || item.id.slice(0, 8))} — {getBookTitle(item.variant_id)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {previewLoading ? (
+            <p className="text-muted-foreground">Đang tính tiền cọc và tiền phạt…</p>
+          ) : preview && preview.totals.deposit_amount > 0 ? (
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/40 p-3">
+              <dt className="text-muted-foreground">Tiền cọc đang giữ</dt>
+              <dd className="text-right font-mono tabular-nums">{formatVnd(preview.totals.deposit_amount)}</dd>
+              <dt className="text-muted-foreground">Tiền phạt dự kiến</dt>
+              <dd className="text-right font-mono tabular-nums">{formatVnd(preview.totals.penalty)}</dd>
+              <dt className="text-muted-foreground">Khấu trừ từ cọc</dt>
+              <dd className="text-right font-mono tabular-nums">{formatVnd(preview.totals.deposit_captured)}</dd>
+              <dt className="text-muted-foreground">Hoàn về ví khách</dt>
+              <dd className="text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{formatVnd(preview.totals.deposit_refunded)}</dd>
+              {preview.totals.additional_due > 0 && (
+                <>
+                  <dt className="text-muted-foreground">Khách còn phải trả</dt>
+                  <dd className="text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{formatVnd(preview.totals.additional_due)}</dd>
+                </>
+              )}
+            </dl>
+          ) : null}
+
+          {preview?.requires_reason && (
+            <label className="block space-y-1">
+              <span className="text-muted-foreground">Lý do khấu trừ tiền cọc (bắt buộc)</span>
+              <textarea
+                value={returnDialog.reason}
+                onChange={(e) => setReturnDialog((s) => ({ ...s, reason: e.target.value }))}
+                rows={2}
+                maxLength={1000}
+                placeholder="Mô tả tình trạng sách"
+                className="w-full rounded-lg border border-input bg-card px-2 py-1.5 text-[12px] text-foreground"
+              />
+            </label>
+          )}
+        </div>
+      </ConfirmDialog>
     </PageWrapper>
   );
 }

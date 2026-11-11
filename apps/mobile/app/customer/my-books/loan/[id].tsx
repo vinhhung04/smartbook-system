@@ -8,6 +8,14 @@ import { getDueState, getLoanStatusDisplay, getRenewalView } from '../../../../s
 import { useSubmitLock } from '../../../../src/lib/submitLock';
 import { Button, Card, ErrorState, InfoRow, InlineAlert, LoadingState, Screen, ScreenHeader, SectionHeader, StatusBadge, fontFamily, space, useTheme } from '../../../../src/design-system';
 import type { Loan } from '../../../../src/types/borrow';
+import { formatVnd, toMoney } from '../../../../src/lib/money';
+
+const DEPOSIT_STATUS_LABEL = {
+  HELD: 'đang giữ',
+  RELEASED: 'đã hoàn',
+  PARTIALLY_REFUNDED: 'hoàn một phần',
+  CAPTURED: 'đã khấu trừ',
+} as const;
 
 export default function CustomerLoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -115,6 +123,16 @@ export default function CustomerLoanDetailScreen() {
                       <Text selectable style={{ fontFamily: fontFamily.mono, fontSize: 13.5, color: colors.textSecondary }}>{item.item_barcode ?? item.id.slice(0, 8)}</Text>
                       {itemStatus ? <StatusBadge tone={itemStatus.tone} label={itemStatus.label} /> : <Text style={type.caption}>{item.status}</Text>}
                     </View>
+                    {item.deposit ? (
+                      <Text style={type.caption}>
+                        Tiền cọc {formatVnd(item.deposit.amount)} · {DEPOSIT_STATUS_LABEL[item.deposit.status] ?? item.deposit.status}
+                        {toMoney(item.deposit.refunded_amount) > 0 ? ` · đã hoàn ${formatVnd(item.deposit.refunded_amount)}` : ''}
+                        {toMoney(item.deposit.captured_amount) > 0 ? ` · khấu trừ ${formatVnd(item.deposit.captured_amount)}` : ''}
+                      </Text>
+                    ) : null}
+                    {toMoney(item.outstanding_fine_amount) > 0 ? (
+                      <Text style={[type.caption, { color: colors.danger }]}>Còn phải thanh toán {formatVnd(item.outstanding_fine_amount)} (mục Tiền phạt)</Text>
+                    ) : null}
                   </View>
                 );
               })}

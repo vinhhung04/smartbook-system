@@ -27,6 +27,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog, WorkflowStepper, type WorkflowStep } from "@/components/ui";
+import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
 type PortalTab = "overview" | "order" | "invoices" | "shortages" | "redelivery" | "activity";
 
@@ -591,10 +592,11 @@ export function SupplierPortalPage() {
                                 type="number"
                                 min={0}
                                 max={item.remaining_qty}
+                                {...zeroFieldProps}
                                 value={qty}
                                 disabled={!canInvoice}
                                 onChange={(event) => {
-                                  const next = Math.min(item.remaining_qty, Math.max(0, Number(event.target.value) || 0));
+                                  const next = Math.min(item.remaining_qty, Math.max(0, Number(numberInputValue(event)) || 0));
                                   setInvoiceQty((current) => ({ ...current, [item.id]: next }));
                                 }}
                                 className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"
@@ -798,9 +800,10 @@ export function SupplierPortalPage() {
                                     type="number"
                                     min={0}
                                     max={item.shortage_qty}
+                                    {...zeroFieldProps}
                                     value={qty}
                                     onChange={(event) => {
-                                      const next = Math.min(item.shortage_qty, Math.max(0, Number(event.target.value) || 0));
+                                      const next = Math.min(item.shortage_qty, Math.max(0, Number(numberInputValue(event)) || 0));
                                       setRedeliveryQty((current) => ({ ...current, [item.purchase_order_item_id]: next }));
                                     }}
                                     className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-[12px]"

@@ -10,9 +10,16 @@ const {
   consumeReservation,
   returnBorrowedStock,
 } = require('../services/inventory-integration.service');
-const { AccountError, debitBorrowFee, getCustomerAccountSnapshot } = require('../services/account.service');
+const { AccountError, debitBorrowFee, getCustomerAccountSnapshot, toMoney } = require('../services/account.service');
 const { queueReconciliation } = require('../services/reconciliation.service');
-const { applyReturnFines, runOverdueSweep } = require('../services/fine.service');
+const { applyReturnFines, recomputeCustomerFineBalance, runOverdueSweep } = require('../services/fine.service');
+const {
+  getDepositPerItem,
+  settlementNeedsReason,
+  holdLoanItemDeposits,
+  settleLoanItemDeposits,
+  previewReturnSettlement,
+} = require('../services/deposit.service');
 const { normalizePickupCode } = require('../utils/pickup-code');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
@@ -56,6 +63,38 @@ function getBorrowFeePerItem() {
     return 0;
   }
   return Number(configured.toFixed(2));
+}
+
+/**
+ * Checked before any stock is touched: can the wallet cover the borrow fee and
+ * every book's deposit? Returns the 409 body when it cannot, else null. The hold
+ * itself re-checks under the account row lock inside the loan transaction.
+ */
+async function checkDepositFunds(customerId, quantity, membershipLimits, borrowFeeAmount) {
+  const depositPerItem = getDepositPerItem(membershipLimits);
+  if (depositPerItem.lte(0)) return null;
+
+  const depositTotal = depositPerItem.mul(quantity);
+  const snapshot = await prisma.$transaction((tx) => getCustomerAccountSnapshot(tx, customerId));
+  const spendable = toMoney(snapshot.account.available_balance).sub(toMoney(borrowFeeAmount || 0));
+  if (spendable.gte(depositTotal)) return null;
+
+  return {
+    message: 'Insufficient wallet balance for book deposit',
+    code: 'INSUFFICIENT_DEPOSIT_FUNDS',
+    detail: {
+      available_balance: toMoney(snapshot.account.available_balance).toNumber(),
+      borrow_fee_amount: Number(borrowFeeAmount || 0),
+      deposit_per_item: depositPerItem.toNumber(),
+      deposit_total: depositTotal.toNumber(),
+      shortfall: depositTotal.sub(spendable).toNumber(),
+    },
+  };
+}
+
+function summarizeDeposits(deposits) {
+  const total = deposits.reduce((sum, row) => sum.add(toMoney(row.amount)), toMoney(0));
+  return { deposit_count: deposits.length, deposit_total: total.toNumber() };
 }
 
 async function listLoans(req, res) {
@@ -241,6 +280,11 @@ async function createDirectLoan(req, res) {
       }
     }
 
+    const depositShortfall = await checkDepositFunds(customer_id, normalizedQuantity, membershipInfo.limits, borrowFeeAmount);
+    if (depositShortfall) {
+      return res.status(409).json(depositShortfall);
+    }
+
     await reserveStock({
       reservation_id: reservationId,
       reservation_number: reservationNumber,
@@ -346,6 +390,16 @@ async function createDirectLoan(req, res) {
 
         await tx.loan_items.createMany({ data: loanItems });
 
+        const deposits = await holdLoanItemDeposits(tx, {
+          customerId: customer_id,
+          loanId: loan.id,
+          loanNumber: loan.loan_number,
+          items: loanItems,
+          amountPerItem: getDepositPerItem(membershipInfo.limits),
+          actorUserId,
+        });
+        const depositSummary = summarizeDeposits(deposits);
+
         await writeAuditLog(tx, {
           actor_user_id: actorUserId,
           action_name: 'CREATE_DIRECT_LOAN',
@@ -355,6 +409,7 @@ async function createDirectLoan(req, res) {
             source_channel: normalizedSource,
             quantity: normalizedQuantity,
             borrow_fee_amount: borrowFeeAmount,
+            ...depositSummary,
             idempotency_key: idempotencyKey,
           },
         });
@@ -364,7 +419,9 @@ async function createDirectLoan(req, res) {
           channel: 'IN_APP',
           template_code: 'LOAN_CREATED',
           subject: 'Đã tạo phiếu mượn',
-          body: `Phiếu mượn ${loan.loan_number} đã được tạo.`,
+          body: depositSummary.deposit_total > 0
+            ? `Phiếu mượn ${loan.loan_number} đã được tạo. Tiền cọc ${depositSummary.deposit_total.toLocaleString('vi-VN')}đ đang được giữ trong ví.`
+            : `Phiếu mượn ${loan.loan_number} đã được tạo.`,
           reference_type: 'LOAN_TRANSACTION',
           reference_id: loan.id,
         });
@@ -374,6 +431,7 @@ async function createDirectLoan(req, res) {
           borrow_fee_amount: borrowFeeAmount,
           borrow_fee_ledger_entry_id: debitResult?.entry?.id || null,
           borrow_fee_remaining_wallet_balance: debitResult?.remainingBalance ?? null,
+          ...depositSummary,
         };
       });
 
@@ -684,7 +742,7 @@ async function getLoanById(req, res) {
             status: true,
           },
         },
-        loan_items: true,
+        loan_items: { include: { loan_item_deposits: true } },
       },
     });
 
@@ -695,6 +753,54 @@ async function getLoanById(req, res) {
     return res.json({ data: loan });
   } catch (error) {
     console.error('Error while loading loan:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+// GET /borrow/loans/:id/return-preview?loan_item_id=&item_condition_on_return=&mark_lost=
+// What a return with these inputs would charge and refund, per book, before staff
+// confirm it. Writes nothing; uses the same fine policy as the return itself.
+async function previewLoanReturn(req, res) {
+  const loanId = parseId(req.params.id);
+  const loanItemId = parseId(req.query.loan_item_id);
+  const markLost = String(req.query.mark_lost || '').toLowerCase() === 'true';
+  const condition = markLost ? 'LOST' : String(req.query.item_condition_on_return || 'GOOD').trim().toUpperCase();
+
+  if (!loanId || !isUuid(loanId)) {
+    return res.status(400).json({ message: 'Invalid loan id' });
+  }
+  if (loanItemId && !isUuid(loanItemId)) {
+    return res.status(400).json({ message: 'loan_item_id must be a valid UUID when provided' });
+  }
+  if (markLost && !loanItemId) {
+    return res.status(400).json({ message: 'mark_lost requires loan_item_id for single-item processing' });
+  }
+
+  try {
+    const loan = await prisma.loan_transactions.findUnique({ where: { id: loanId }, include: { loan_items: true } });
+    if (!loan) {
+      return res.status(404).json({ message: 'Loan not found' });
+    }
+
+    const targets = loanItemId
+      ? loan.loan_items.filter((item) => item.id === loanItemId && (item.status === 'BORROWED' || item.status === 'OVERDUE'))
+      : loan.loan_items.filter((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
+    if (targets.length === 0) {
+      return res.status(409).json({ message: 'No active loan items to return' });
+    }
+
+    const membershipInfo = await resolveActiveMembership(prisma, loan.customer_id);
+    const preview = await previewReturnSettlement(prisma, {
+      items: targets,
+      returnedAt: new Date(),
+      membershipLimits: membershipInfo?.limits,
+      markLost,
+      itemConditionOnReturn: condition,
+    });
+
+    return res.json({ data: { loan_id: loan.id, item_condition_on_return: condition, mark_lost: markLost, ...preview } });
+  } catch (error) {
+    console.error('Error while previewing loan return:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -824,6 +930,11 @@ async function convertReservationToLoan(req, res) {
       }
     }
 
+    const depositShortfall = await checkDepositFunds(reservation.customer_id, reservation.quantity, membershipInfo.limits, borrowFeeAmount);
+    if (depositShortfall) {
+      return res.status(409).json(depositShortfall);
+    }
+
     await consumeReservation({
       reservation_id: reservationId,
       loan_id: loanId,
@@ -901,6 +1012,16 @@ async function convertReservationToLoan(req, res) {
 
         await tx.loan_items.createMany({ data: loanItems });
 
+        const deposits = await holdLoanItemDeposits(tx, {
+          customerId: reservation.customer_id,
+          loanId: loan.id,
+          loanNumber: loan.loan_number,
+          items: loanItems,
+          amountPerItem: getDepositPerItem(membershipInfo.limits),
+          actorUserId,
+        });
+        const depositSummary = summarizeDeposits(deposits);
+
         await tx.loan_reservations.update({
           where: { id: reservation.id },
           data: {
@@ -922,22 +1043,27 @@ async function convertReservationToLoan(req, res) {
             idempotency_key: idempotencyKey,
             borrow_fee_amount: borrowFeeAmount,
             borrow_fee_ledger_entry_id: debitResult?.entry?.id || null,
+            ...depositSummary,
           },
         });
 
+        const depositSentence = depositSummary.deposit_total > 0
+          ? ` Tiền cọc ${depositSummary.deposit_total.toLocaleString('vi-VN')}đ đang được giữ trong ví.`
+          : '';
         await createNotificationRecord(tx, {
           customer_id: reservation.customer_id,
           channel: 'IN_APP',
           template_code: 'LOAN_CREATED',
           subject: 'Đã tạo phiếu mượn',
-          body: borrowFeeAmount > 0
+          body: (borrowFeeAmount > 0
             ? `Đặt trước ${reservation.reservation_number} đã chuyển thành phiếu mượn ${loan.loan_number}. Phí mượn ${borrowFeeAmount.toLocaleString('vi-VN')}đ đã được trừ tự động.`
-            : `Đặt trước ${reservation.reservation_number} đã chuyển thành phiếu mượn ${loan.loan_number}.`,
+            : `Đặt trước ${reservation.reservation_number} đã chuyển thành phiếu mượn ${loan.loan_number}.`) + depositSentence,
           reference_type: 'LOAN_TRANSACTION',
           reference_id: loan.id,
           metadata: {
             borrow_fee_amount: borrowFeeAmount,
             borrow_fee_ledger_entry_id: debitResult?.entry?.id || null,
+            ...depositSummary,
           },
         });
 
@@ -946,6 +1072,7 @@ async function convertReservationToLoan(req, res) {
           borrow_fee_amount: borrowFeeAmount,
           borrow_fee_ledger_entry_id: debitResult?.entry?.id || null,
           borrow_fee_remaining_wallet_balance: debitResult?.remainingBalance ?? null,
+          ...depositSummary,
         };
       });
 
@@ -1034,11 +1161,13 @@ async function returnLoan(req, res) {
     item_condition_on_return,
     notes,
     mark_lost,
+    settlement_reason,
   } = req.body || {};
   const markLost = mark_lost === true;
   const normalizedReturnCondition = markLost
     ? 'LOST'
     : String(item_condition_on_return || 'GOOD').trim().toUpperCase();
+  const settlementReason = String(settlement_reason || notes || '').trim();
 
   if (!loanId || !isUuid(loanId)) {
     return res.status(400).json({ message: 'Invalid loan id' });
@@ -1086,6 +1215,20 @@ async function returnLoan(req, res) {
 
     if (targets.length === 0) {
       return res.status(409).json({ message: 'No active loan items to return' });
+    }
+
+    // A deposit is only used to pay for damage or loss on an explicit, explained
+    // staff decision. Checked before any stock moves.
+    if (settlementNeedsReason({ markLost, itemConditionOnReturn: normalizedReturnCondition }) && !settlementReason) {
+      const heldDepositCount = await prisma.loan_item_deposits.count({
+        where: { loan_item_id: { in: targets.map((item) => item.id) }, status: 'HELD' },
+      });
+      if (heldDepositCount > 0) {
+        return res.status(400).json({
+          message: 'settlement_reason is required when a deposit is settled for a damaged or lost book',
+          code: 'SETTLEMENT_REASON_REQUIRED',
+        });
+      }
     }
 
     for (let index = 0; index < targets.length; index += 1) {
@@ -1137,6 +1280,18 @@ async function returnLoan(req, res) {
         itemConditionOnReturn: normalizedReturnCondition,
       });
 
+      // After the fines exist: each returned book's deposit pays its own fines,
+      // the rest goes back to the wallet.
+      const depositSettlements = await settleLoanItemDeposits(tx, {
+        loanItemIds: targetIds,
+        actorUserId,
+        returnCondition: normalizedReturnCondition,
+        reason: settlementReason || null,
+      });
+      const totalFineBalance = depositSettlements.some((row) => row.captured_amount > 0)
+        ? await recomputeCustomerFineBalance(tx, loan.customer_id)
+        : fineResult.totalFineBalance;
+
       const remaining = await tx.loan_items.count({
         where: {
           loan_id: loan.id,
@@ -1169,7 +1324,8 @@ async function returnLoan(req, res) {
           target_status: targetStatus,
           returned_item_count: targets.length,
           generated_fine_count: fineResult.fines.length,
-          total_fine_balance: fineResult.totalFineBalance,
+          total_fine_balance: totalFineBalance,
+          settled_deposit_ids: depositSettlements.map((row) => row.deposit_id),
           idempotency_key: idempotencyKey,
         },
       });
@@ -1186,15 +1342,41 @@ async function returnLoan(req, res) {
         reference_id: loan.id,
         metadata: {
           generated_fine_count: fineResult.fines.length,
-          total_fine_balance: fineResult.totalFineBalance,
+          total_fine_balance: totalFineBalance,
           mark_lost: markLost,
         },
       });
 
+      if (depositSettlements.length > 0) {
+        const sum = (key) => depositSettlements.reduce((total, row) => total.add(toMoney(row[key])), toMoney(0)).toNumber();
+        const refunded = sum('refunded_amount');
+        const captured = sum('captured_amount');
+        const additionalDue = sum('additional_due');
+        const parts = [`Hoàn ${refunded.toLocaleString('vi-VN')}đ tiền cọc về ví`];
+        if (captured > 0) parts.push(`khấu trừ ${captured.toLocaleString('vi-VN')}đ để trả tiền phạt`);
+        if (additionalDue > 0) parts.push(`còn phải thanh toán ${additionalDue.toLocaleString('vi-VN')}đ`);
+        await createNotificationRecord(tx, {
+          customer_id: loan.customer_id,
+          channel: 'IN_APP',
+          template_code: 'LOAN_DEPOSIT_SETTLED',
+          subject: 'Đã quyết toán tiền cọc',
+          body: `Phiếu mượn ${loan.loan_number}: ${parts.join(', ')}.`,
+          reference_type: 'LOAN_TRANSACTION',
+          reference_id: loan.id,
+          metadata: {
+            deposit_ids: depositSettlements.map((row) => row.deposit_id),
+            refunded_amount: refunded,
+            captured_amount: captured,
+            additional_due: additionalDue,
+          },
+        });
+      }
+
       return {
         ...loanUpdated,
         generated_fines: fineResult.fines,
-        total_fine_balance: fineResult.totalFineBalance,
+        total_fine_balance: totalFineBalance,
+        deposit_settlements: depositSettlements.map(({ deposit, ...row }) => row),
       };
     });
 
@@ -1248,5 +1430,6 @@ module.exports = {
   listRenewalRequests,
   reviewLoanRenewal,
   returnLoan,
+  previewLoanReturn,
   runOverdueSweepNow,
 };
