@@ -7,6 +7,14 @@
         "serve",
         "--mcp"
       ]
+    },
+    "drawio": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@next-ai-drawio/mcp-server@0.4.11"
+      ]
     }
   }
 }

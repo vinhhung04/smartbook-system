@@ -17,6 +17,7 @@ const PLAN_NUMBER_RULES = {
   reservation_hold_hours: { integer: true, min: 1, max: INT_MAX, default: 24 },
   fine_per_day: { integer: false, min: 0, max: 99999999.99, default: 0 },
   lost_item_fee_multiplier: { integer: false, min: 0, max: 999.99, default: 1 },
+  deposit_per_item: { integer: false, min: 0, max: 9999999999.99, default: 0 },
   price: { integer: false, min: 0, max: 9999999999.99, default: 0 },
   duration_days: { integer: true, min: 1, max: INT_MAX, default: 365 },
 };

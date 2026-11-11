@@ -8,8 +8,14 @@ import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/components/ui/utils';
+import { getBorrowLabel } from '@/lib/status-registry';
+import { WALLET_TOPUP_AMOUNTS } from '@/lib/wallet-topup';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { FineCard } from './_shared/fine-card';
+
+// Ledger amounts are stored positive; the entry type says which way the money went
+// for the available balance (CAPTURE leaves it unchanged: it uses held money).
+const LEDGER_OUTFLOW = new Set(['DEBIT', 'HOLD', 'CAPTURE']);
 
 function remainingOf(fine: any): number {
   const paid = (fine?.fine_payments || []).reduce((sum: number, row: any) => sum + Number(row?.amount || 0), 0);
@@ -23,6 +29,26 @@ export function CustomerFinesPage() {
   const [accountSnapshot, setAccountSnapshot] = useState<any | null>(null);
   const [ledgerRows, setLedgerRows] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [topupAmount, setTopupAmount] = useState('');
+  const [startingTopup, setStartingTopup] = useState(false);
+
+  // The wallet is credited only when VNPay's signed callback confirms the payment;
+  // this just opens the VNPay page. Coming back lands here with ?payment=success|failed.
+  const startTopup = async () => {
+    const amount = Number(topupAmount);
+    if (!WALLET_TOPUP_AMOUNTS.some((allowed) => allowed === amount)) {
+      toast.error('Chọn một mức nạp tiền');
+      return;
+    }
+    setStartingTopup(true);
+    try {
+      const result = await customerBorrowService.createVnpayTopup(amount);
+      window.location.href = result.data.payment_url;
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Không thể khởi tạo nạp tiền qua VNPay'));
+      setStartingTopup(false);
+    }
+  };
 
   const loadFines = async () => {
     try {
@@ -62,6 +88,7 @@ export function CustomerFinesPage() {
 
   const totalFine = Number(data?.total_fine_balance || 0);
   const walletBalance = Number(accountSnapshot?.available_balance || 0);
+  const heldBalance = Number(accountSnapshot?.held_balance || 0);
   const fines: any[] = data?.fines || [];
   const openFines = fines.filter((fine) => remainingOf(fine) > 0);
   const settledFines = fines.filter((fine) => remainingOf(fine) <= 0);
@@ -112,6 +139,34 @@ export function CustomerFinesPage() {
               <p className="mt-2 text-[12px] text-muted-foreground">
                 {walletBalance < 100000 ? 'Số dư thấp, nên nạp thêm để mượn sách thuận tiện.' : 'Sẵn sàng để mượn sách.'}
               </p>
+              {heldBalance > 0 && (
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  Đang giữ làm tiền cọc: <span className="font-mono font-semibold tabular-nums text-foreground">{formatCurrencyVnd(heldBalance)}</span>
+                </p>
+              )}
+              <form
+                className="mt-3 flex gap-2"
+                onSubmit={(event) => { event.preventDefault(); void startTopup(); }}
+              >
+                <select
+                  value={topupAmount}
+                  onChange={(event) => setTopupAmount(event.target.value)}
+                  aria-label="Số tiền nạp vào ví (VND)"
+                  className="h-9 min-w-0 flex-1 rounded-[10px] border border-input bg-background px-3 text-[13px] text-foreground"
+                >
+                  <option value="">Chọn mức nạp</option>
+                  {WALLET_TOPUP_AMOUNTS.map((amount) => (
+                    <option key={amount} value={String(amount)}>{formatCurrencyVnd(amount)}</option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  disabled={startingTopup || !topupAmount}
+                  className="inline-flex h-9 shrink-0 items-center rounded-[10px] bg-primary px-3 text-[12px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {startingTopup ? 'Đang chuyển…' : 'Nạp qua VNPay'}
+                </button>
+              </form>
             </div>
           </section>
 
@@ -141,15 +196,16 @@ export function CustomerFinesPage() {
             ) : (
               <ul className="divide-y divide-border">
                 {ledgerRows.map((entry) => {
-                  const amount = Number(entry.amount);
+                  const outflow = LEDGER_OUTFLOW.has(entry.entry_type);
+                  const amount = Math.abs(Number(entry.amount));
                   return (
                     <li key={entry.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-medium text-foreground">{entry.entry_type || entry.reference_type || 'Giao dịch'}</p>
+                        <p className="truncate text-[13px] font-medium text-foreground">{entry.entry_type ? getBorrowLabel('ledgerEntry', entry.entry_type) : entry.reference_type || 'Giao dịch'}</p>
                         <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
                       </div>
-                      <span className={cn('shrink-0 font-mono text-[14px] font-bold tabular-nums', amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-                        {amount >= 0 ? '+' : ''}{formatCurrencyVnd(amount)}
+                      <span className={cn('shrink-0 font-mono text-[14px] font-bold tabular-nums', outflow ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                        {outflow ? '−' : '+'}{formatCurrencyVnd(amount)}
                       </span>
                     </li>
                   );

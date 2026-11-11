@@ -32,6 +32,7 @@ async function resolveActiveMembership(tx, customerId) {
       reservation_hold_hours: membership.membership_plans.reservation_hold_hours,
       fine_per_day: Number(membership.membership_plans.fine_per_day),
       lost_item_fee_multiplier: Number(membership.membership_plans.lost_item_fee_multiplier),
+      deposit_per_item: Number(membership.membership_plans.deposit_per_item || 0),
     },
   };
 }

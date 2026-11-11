@@ -19,6 +19,14 @@ export function useDialogA11y(
   containerRef: RefObject<HTMLElement | null>,
 ) {
   const triggerRef = useRef<HTMLElement | null>(null);
+  // Callers usually pass a close handler that is a new function on every render.
+  // Keeping it in a ref stops the effect below from re-running on each keystroke —
+  // which used to send focus back to the trigger and then to the first field,
+  // so a form input inside the modal lost focus after every character.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -32,7 +40,7 @@ export function useDialogA11y(
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -58,5 +66,5 @@ export function useDialogA11y(
       document.removeEventListener("keydown", onKeyDown);
       triggerRef.current?.focus?.();
     };
-  }, [isOpen, onClose, containerRef]);
+  }, [isOpen, containerRef]);
 }

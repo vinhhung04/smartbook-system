@@ -24,7 +24,7 @@ Borrow Service quản lý toàn bộ nghiệp vụ lưu thông và cổng tự p
 | Membership plan | /borrow/membership-plans | Quản lý gói thành viên |
 | Notification admin | /borrow/notifications | Gửi thông báo tập trung |
 | Công khai (không cần đăng nhập) | /public/reviews, /public/membership | Review `VISIBLE` theo sách, danh sách gói thẻ |
-| Webhook VNPay | /webhooks/vnpay | `return` / `ipn` — xác minh chữ ký HMAC-SHA512 |
+| Webhook VNPay | /webhooks/vnpay | `return` / `ipn` — xác minh chữ ký HMAC-SHA512; một merchant phục vụ cả trả phạt và nạp ví (phân biệt theo `vnp_TxnRef`) |
 | Nội bộ (không qua Gateway) | /internal/customers, /internal/recommendation | Provision/resolve customer cho Auth; feed tương tác ẩn danh cho AI (`x-internal-service-key`) |
 
 ## Endpoint trọng yếu
@@ -34,7 +34,10 @@ Borrow Service quản lý toàn bộ nghiệp vụ lưu thông và cổng tự p
 | GET | /borrow/loans | Danh sách phiếu mượn |
 | POST | /borrow/loans/direct | Tạo mượn trực tiếp |
 | POST | /borrow/loans/from-reservation/:id | Tạo loan từ reservation |
-| POST | /borrow/loans/:id/return | Trả sách |
+| POST | /borrow/loans/:id/return | Trả sách; quyết toán tiền cọc của từng cuốn (`settlement_reason` bắt buộc khi sách hư hỏng/mất và có cọc) |
+| GET | /borrow/loans/:id/return-preview | Xem trước tiền phạt, tiền cọc khấu trừ/hoàn và số còn phải thu, không ghi gì |
+| GET | /borrow/customers/:id/account | Ví khách: số dư khả dụng, đang giữ, cọc đang giữ, đối soát ledger |
+| POST | /borrow/customers/:id/account/topups | Ghi nhận nạp tiền tại quầy (`Idempotency-Key` bắt buộc). Chỉ nhận 5 mức: 10.000, 20.000, 50.000, 100.000, 200.000 VND; mức khác trả 400 `INVALID_TOPUP_AMOUNT` |
 | GET | /borrow/loans/renewal-requests | Hàng chờ yêu cầu gia hạn |
 | POST | /borrow/loans/:id/renewals/review | Duyệt/từ chối gia hạn |
 | GET | /borrow/reservations | Danh sách giữ chỗ |
@@ -49,6 +52,8 @@ Borrow Service quản lý toàn bộ nghiệp vụ lưu thông và cổng tự p
 | POST | /borrow/my/loans/:id/renew-request | Bạn đọc gửi yêu cầu gia hạn |
 | POST | /borrow/my/fines/payments/vnpay/create | Bạn đọc tạo payment intent VNPay để trả phạt |
 | GET | /borrow/my/fines/payments/vnpay/status/:txnRef | Trạng thái giao dịch VNPay |
+| POST | /borrow/my/account/topups/vnpay/create | Bạn đọc tạo link VNPay nạp ví; `amount` chỉ nhận 5 mức 10.000, 20.000, 50.000, 100.000, 200.000 VND (cùng quy tắc với nạp tại quầy). Ví chỉ được cộng khi callback VNPay có chữ ký xác nhận |
+| GET | /borrow/my/account/topups/vnpay/status/:txnRef | Trạng thái giao dịch nạp ví |
 | GET | /borrow/my/notifications, /borrow/my/notifications/unread-count | Trung tâm thông báo |
 | PATCH | /borrow/my/notifications/:id/read, /borrow/my/notifications/read-all | Đánh dấu đã đọc |
 | POST/DELETE | /borrow/my/availability-alerts, /borrow/my/availability-alerts/:bookId | Đăng ký/huỷ "Báo khi có sách" |
@@ -78,7 +83,7 @@ Borrow Service quản lý toàn bộ nghiệp vụ lưu thông và cổng tự p
 | RABBITMQ_URL | Event bus (consumer "Báo khi có sách") |
 | FRONTEND_URL | URL web dùng trong email/redirect |
 | SMTP_HOST/PORT/USER/PASS/FROM | Cấu hình gửi email thông báo |
-| VNPAY_TMN_CODE, VNPAY_HASH_SECRET, VNPAY_PAYMENT_URL, VNPAY_RETURN_URL | Thanh toán phạt online qua VNPay; thiếu cấu hình thì endpoint VNPay trả 503 |
+| VNPAY_TMN_CODE, VNPAY_HASH_SECRET, VNPAY_PAYMENT_URL, VNPAY_RETURN_URL | Trả phạt và nạp ví online qua VNPay; thiếu cấu hình thì endpoint VNPay trả 503. Sandbox: đăng ký merchant thử nghiệm của VNPay (miễn phí, không cần hợp đồng) để lấy mã TMN và hash secret; thanh toán bằng thẻ test. IPN cần URL public (tunnel hoặc VPS); khi chạy cục bộ không có IPN, trang return vẫn ghi nhận giao dịch. Production chỉ đổi cấu hình (cần hợp đồng với VNPay). |
 | DEFAULT_MEMBERSHIP_PLAN_CODE | Mã gói dự phòng khi chưa gói nào có `is_default = true` |
 | DEFAULT_FINE_PER_DAY, LOST_ITEM_BASE_FEE, DAMAGED_ITEM_FEE, BORROW_FEE_PER_ITEM | Mức phí mặc định |
 | `*_INTERVAL_MS`, `*_BATCH_SIZE` | Chu kỳ/kích thước lô của từng job nền |
@@ -91,8 +96,24 @@ npm install
 npm run dev
 ```
 
+## Thanh toán VNPay khi chưa có sandbox: trình giả lập
+
+`scripts/vnpay-simulator.mjs` đứng thay **trang thanh toán** của VNPay để chạy trọn luồng trên máy:
+1. Kiểm `vnp_SecureHash` của link thanh toán theo quy tắc VNPay (HMAC-SHA512).
+2. Khi bấm "Thanh toán" hoặc "Hủy", ký kết quả theo cùng quy tắc, gọi IPN, rồi chuyển trình duyệt về return URL.
+
+Toàn bộ code thanh toán của SmartBook chạy y như với VNPay thật. Trang giả lập ghi rõ là thử nghiệm và **không phải cổng VNPay, không trừ tiền thật**.
+
+1. Trong `.env`, đặt `VNPAY_TMN_CODE` và `VNPAY_HASH_SECRET` là một cặp giá trị bất kỳ (trình giả lập và borrow-service cùng đọc từ đây), và `VNPAY_PAYMENT_URL=http://localhost:8099/paymentv2/vpcpay.html`. Giữ `VNPAY_RETURN_URL=http://localhost:3000/webhooks/vnpay/return`.
+2. Áp cấu hình: `docker compose up -d borrow-service`.
+3. Chạy trình giả lập: `pnpm vnpay:simulator`.
+4. Kiểm thử tự động: từ `apps/web`, chạy `VNPAY_SIMULATOR=1 npx playwright test e2e/vnpay-payment.spec.ts`. Spec dùng bạn đọc demo `customer01` và cộng tiền vào ví của tài khoản này.
+
+**Chuyển sang VNPay sandbox thật:** thay 4 biến `VNPAY_*` bằng mã TMN và hash secret sandbox, và `VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html`, rồi `docker compose up -d borrow-service`. Không phải sửa code.
+
 ## Tài liệu liên quan
 
+- Tiền cọc theo từng cuốn và quyết toán khi trả sách: ./BOOK_DEPOSIT.md
 - README root (mục Borrow, Customer Portal, VNPay, "Báo khi có sách"): ../../README.md
 - Docker runbook: ../RUN_WITH_DOCKER.md
 - Kiến trúc tổng quan: ../ARCHITECTURE/PROJECT_OVERVIEW.md

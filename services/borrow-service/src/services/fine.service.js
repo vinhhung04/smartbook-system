@@ -117,6 +117,38 @@ async function recomputeCustomerFineBalance(tx, customerId) {
   return normalizeMoney(total);
 }
 
+/**
+ * The fines one returned item is charged under the library's current policy
+ * (membership fine_per_day / lost_item_fee_multiplier, LOST_ITEM_BASE_FEE,
+ * DAMAGED_ITEM_FEE). Pure: used by the return itself and by the return preview,
+ * so the amount shown before confirming is the amount that gets charged.
+ */
+function computeReturnFineAmounts({ item, returnedAt, membershipLimits, markLost = false, itemConditionOnReturn = 'GOOD' }) {
+  const normalizedCondition = String(itemConditionOnReturn || 'GOOD').trim().toUpperCase();
+  const finePerDay = normalizeMoney(membershipLimits?.fine_per_day || 0);
+  const lostMultiplier = Number(membershipLimits?.lost_item_fee_multiplier || 1);
+  const baseLostFee = normalizeMoney(process.env.LOST_ITEM_BASE_FEE || 100000);
+  const baseDamageFee = normalizeMoney(process.env.DAMAGED_ITEM_FEE || 50000);
+
+  const charges = [];
+  const overdueDays = daysOverdue(item.due_date, returnedAt);
+  if (overdueDays > 0 && finePerDay > 0) {
+    charges.push({ fineType: 'OVERDUE', amount: overdueDays * finePerDay, note: `Auto overdue fine for ${overdueDays} day(s)` });
+  }
+
+  if (markLost) {
+    charges.push({
+      fineType: 'LOST',
+      amount: normalizeMoney(baseLostFee * Math.max(1, lostMultiplier)),
+      note: 'Lost item fine generated on return processing',
+    });
+  } else if (normalizedCondition === 'DAMAGED' || normalizedCondition === 'POOR') {
+    charges.push({ fineType: 'DAMAGE', amount: baseDamageFee, note: `Damage fine generated for condition ${normalizedCondition}` });
+  }
+
+  return charges;
+}
+
 async function applyReturnFines(tx, input) {
   const {
     customerId,
@@ -129,56 +161,21 @@ async function applyReturnFines(tx, input) {
     itemConditionOnReturn = 'GOOD',
   } = input;
 
-  const normalizedCondition = String(itemConditionOnReturn || 'GOOD').trim().toUpperCase();
-  const finePerDay = normalizeMoney(membershipLimits?.fine_per_day || 0);
-  const lostMultiplier = Number(membershipLimits?.lost_item_fee_multiplier || 1);
-  const baseLostFee = normalizeMoney(process.env.LOST_ITEM_BASE_FEE || 100000);
-  const baseDamageFee = normalizeMoney(process.env.DAMAGED_ITEM_FEE || 50000);
-
   const createdOrUpdated = [];
 
   for (const item of items) {
-    const overdueDays = daysOverdue(item.due_date, returnedAt);
-    if (overdueDays > 0 && finePerDay > 0) {
-      const overdueFine = await upsertFine(tx, {
+    const charges = computeReturnFineAmounts({ item, returnedAt, membershipLimits, markLost, itemConditionOnReturn });
+    for (const charge of charges) {
+      const fine = await upsertFine(tx, {
         customerId,
         loanItemId: item.id,
-        fineType: 'OVERDUE',
-        amount: overdueDays * finePerDay,
+        fineType: charge.fineType,
+        amount: charge.amount,
         actorUserId,
-        note: `Auto overdue fine for ${overdueDays} day(s)`,
+        note: charge.note,
       });
-      if (overdueFine) {
-        createdOrUpdated.push(overdueFine);
-      }
-    }
-
-    if (markLost) {
-      const lostFine = await upsertFine(tx, {
-        customerId,
-        loanItemId: item.id,
-        fineType: 'LOST',
-        amount: normalizeMoney(baseLostFee * Math.max(1, lostMultiplier)),
-        actorUserId,
-        note: 'Lost item fine generated on return processing',
-      });
-      if (lostFine) {
-        createdOrUpdated.push(lostFine);
-      }
-      continue;
-    }
-
-    if (normalizedCondition === 'DAMAGED' || normalizedCondition === 'POOR') {
-      const damageFine = await upsertFine(tx, {
-        customerId,
-        loanItemId: item.id,
-        fineType: 'DAMAGE',
-        amount: baseDamageFee,
-        actorUserId,
-        note: `Damage fine generated for condition ${normalizedCondition}`,
-      });
-      if (damageFine) {
-        createdOrUpdated.push(damageFine);
+      if (fine) {
+        createdOrUpdated.push(fine);
       }
     }
   }
@@ -367,6 +364,7 @@ module.exports = {
   daysOverdue,
   upsertFine,
   recomputeCustomerFineBalance,
+  computeReturnFineAmounts,
   applyReturnFines,
   runOverdueSweep,
 };

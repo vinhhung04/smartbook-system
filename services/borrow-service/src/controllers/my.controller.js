@@ -299,7 +299,14 @@ async function getMyLoanById(req, res) {
 
     const loan = await prisma.loan_transactions.findUnique({
       where: { id: loanId },
-      include: { loan_items: true },
+      include: {
+        loan_items: {
+          include: {
+            loan_item_deposits: true,
+            fines: { include: { fine_payments: true } },
+          },
+        },
+      },
     });
 
     if (!loan || loan.customer_id !== customer.id) {
@@ -318,11 +325,28 @@ async function getMyLoanById(req, res) {
     const renewalByLoan = await loadRenewalState(customer.id, [loan.id]);
     const enrichedLoan = {
       ...loan,
-      loan_items: loan.loan_items.map((li) => ({
+      loan_items: loan.loan_items.map(({ loan_item_deposits: deposit, fines, ...li }) => ({
         ...li,
         book_title: variantById.get(li.variant_id)?.title || null,
         book_author: variantById.get(li.variant_id)?.author || null,
         book_cover_url: variantById.get(li.variant_id)?.cover_image_url || null,
+        deposit: deposit
+          ? {
+            id: deposit.id,
+            amount: Number(deposit.amount),
+            status: deposit.status,
+            captured_amount: Number(deposit.captured_amount),
+            refunded_amount: Number(deposit.refunded_amount),
+            return_condition: deposit.return_condition,
+            settled_at: deposit.settled_at,
+          }
+          : null,
+        // What is still owed for this book after any deposit was applied.
+        outstanding_fine_amount: (fines || []).reduce((sum, fine) => {
+          if (fine.status === 'PAID' || fine.status === 'WAIVED') return sum;
+          const paid = fine.fine_payments.reduce((acc, row) => acc + Number(row.amount), 0);
+          return sum + Math.max(0, Number(fine.amount) - Number(fine.waived_amount) - paid);
+        }, 0),
       })),
       renewal: renewalByLoan.get(loan.id) || EMPTY_RENEWAL,
     };

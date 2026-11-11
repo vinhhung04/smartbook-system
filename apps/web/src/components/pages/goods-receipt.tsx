@@ -17,6 +17,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
+import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
 interface WarehouseOption {
   id: string;
@@ -480,10 +481,11 @@ export function GoodsReceiptPage() {
                           type="number"
                           min={0}
                           max={Math.min(item.remaining_qty, item.invoiced_qty)}
+                          {...zeroFieldProps}
                           value={qty}
                           onChange={(event) => {
                             const max = Math.min(Number(item.remaining_qty || 0), Number(item.invoiced_qty || 0));
-                            const next = Math.min(max, Math.max(0, Number(event.target.value) || 0));
+                            const next = Math.min(max, Math.max(0, Number(numberInputValue(event)) || 0));
                             setCountedQty((current) => ({ ...current, [item.id]: next }));
                           }}
                           className="w-24 rounded-[8px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-blue-400"
@@ -786,8 +788,9 @@ export function GoodsReceiptPage() {
                         <div>
                           <label className="mb-1 block text-[10px] font-semibold text-muted-foreground">Giá nhập</label>
                           <input
+                            {...zeroFieldProps}
                             value={item.unit_cost}
-                            onChange={(event) => updateItem(item.id, "unit_cost", Number(event.target.value) || 0)}
+                            onChange={(event) => updateItem(item.id, "unit_cost", Number(numberInputValue(event)) || 0)}
                             type="number"
                             min={0}
                             className="w-full rounded-[6px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-blue-300 focus:ring-[2px] focus:ring-blue-500/15"

@@ -16,6 +16,7 @@
     "check:mobile-config": "pnpm --filter @smartbook/mobile exec expo config --type public --json",
     "test:workspace-config": "node --test tests/*.test.mjs",
     "test:smoke": "node scripts/demo-smoke.mjs",
+    "vnpay:simulator": "node scripts/vnpay-simulator.mjs",
     "eval:recommendation": "node services/borrow-service/prisma/simulation/seed-simulation.js --dry-run && python services/ai-service/eval/eval_recommendation_v2.py",
     "verify": "pnpm lint:ci && pnpm typecheck && pnpm build && pnpm test:workspace-config && pnpm test:web && pnpm test:mobile && pnpm check:mobile-config && pnpm test:node && pnpm test:ai",
     "demo:env": "node scripts/init-demo-env.mjs",
@@ -52,5 +53,8 @@
       "ws": "8.21.0",
       "@types/react": "18.3.1"
     }
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "12.2.0"
   }
 }
