@@ -10,9 +10,13 @@ from __future__ import annotations
 # Smart ISBN Intelligence is deliberately deterministic.  These weights describe
 # source reliability, while agreement is calculated from the responses received
 # for this ISBN; no model-generated score is used for catalog metadata.
-ISBN_SOURCE_ORDER = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "webSearch"]
+ISBN_SOURCE_ORDER = [
+    "catalog", "googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook",
+    "nhanam", "dinhTi", "thaiHa", "vanLang",
+    "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks", "webSearch", "aiWebSearch",
+]
 ISBN_INTELLIGENCE_FIELDS = (
-    "title", "subtitle", "authors", "publisher", "publishedDate", "description",
+    "title", "subtitle", "authors", "translator", "publisher", "publishedDate", "description",
     "categories", "language", "pageCount", "thumbnail",
 )
 ISBN_QUALITY_WEIGHTS = {
@@ -31,7 +35,7 @@ FIELD_TIERS = {
 }
 # Free text differs between providers even when both are right, so it can never
 # be "conflicted"; only these atomic facts can.
-FACTUAL_FIELDS = frozenset({"title", "authors", "publisher", "publishedDate", "pageCount"})
+FACTUAL_FIELDS = frozenset({"title", "authors", "translator", "publisher", "publishedDate", "pageCount"})
 
 LOW_CONFIDENCE_THRESHOLD = 0.70
 MIN_DESCRIPTION_CHARS = 80  # same floor as main._check_book_quality

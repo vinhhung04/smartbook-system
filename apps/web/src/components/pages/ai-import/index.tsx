@@ -147,7 +147,7 @@ export function AIImportPage() {
 
   const sourceCount = useMemo(() => {
     if (!lookupData) return 0;
-    const keys = ["googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "webSearch"] as const;
+    const keys = ["catalog", "googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "nhanam", "dinhTi", "thaiHa", "vanLang", "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks", "webSearch", "aiWebSearch"] as const;
     return keys.filter((key) => lookupData.source[key]).length;
   }, [lookupData]);
 
@@ -286,7 +286,17 @@ export function AIImportPage() {
           isbn13: lookup.isbn13 || (normalized.length === 13 ? normalized : ""),
           isbn10: lookup.isbn10 || (normalized.length === 10 ? normalized : ""),
         });
-        toast.info("Không tìm thấy metadata. Chuyển sang nhập tay.");
+        // No source carries this code: the book itself is the reliable source - its
+        // copyright page holds ISBN, publisher, year and page count for the OCR flow.
+        toast.info(lookup.message || "Không tìm thấy metadata. Chuyển sang nhập tay.", {
+          description: "Chụp trang thông tin xuất bản để AI đọc ISBN, NXB, năm và số trang, hoặc nhập tay.",
+          action: {
+            label: "Chụp trang xuất bản",
+            onClick: () => document.querySelector('[data-testid="ocr-slot-copyright_page"]')
+              ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+          },
+          duration: 10000,
+        });
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Tra cứu ISBN thất bại"));

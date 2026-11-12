@@ -67,11 +67,48 @@ function mapCorpusBook(book) {
   };
 }
 
+// ISBN-10, ISBN-13 or a 13-digit EAN as printed on the book; nothing else is looked up.
+function normalizeCatalogCode(raw) {
+  const code = String(raw || '').toUpperCase().replace(/[^0-9X]/g, '');
+  return /^(\d{9}[\dX]|\d{13})$/.test(code) ? code : null;
+}
+
+// One catalogued edition, in the field names ai-service's ISBN lookup uses.
+// Only data a librarian saved - never placeholders.
+function mapCatalogRecord(variant) {
+  const book = variant.books || {};
+  const metadata = book.metadata || {};
+  const translator = Array.isArray(metadata.translator) ? metadata.translator.filter(Boolean) : [];
+  const publishedDate = book.published_date
+    ? new Date(book.published_date).toISOString().slice(0, 10)
+    : (variant.publish_year ? String(variant.publish_year) : null);
+  return {
+    book_id: book.id || variant.book_id,
+    variant_id: variant.id,
+    isbn13: variant.isbn13 || null,
+    isbn10: variant.isbn10 || null,
+    title: book.title || null,
+    subtitle: book.subtitle || null,
+    authors: (book.book_authors || []).map((item) => item.authors?.full_name).filter(Boolean),
+    translator,
+    publisher: book.publishers?.name || null,
+    published_date: publishedDate,
+    page_count: book.page_count ?? null,
+    language: variant.language_code || book.default_language || null,
+    description: book.description || null,
+    categories: (book.book_categories || []).map((item) => item.categories?.name).filter(Boolean),
+    cover_image_url: variant.cover_image_url || null,
+    updated_at: book.updated_at || null,
+  };
+}
+
 module.exports = {
   CORPUS_PAGE_DEFAULT,
   CORPUS_PAGE_MAX,
   isValidInternalKey,
   mapCorpusBook,
   mapCoverGalleryItem,
+  mapCatalogRecord,
+  normalizeCatalogCode,
   parseCorpusPageParams,
 };

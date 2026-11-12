@@ -171,7 +171,11 @@ export function IsbnIntelligencePanel({ lookup }: { lookup: LookupBookByIsbnResp
           description={`${sources.length} nguồn đã được kiểm tra`}
         >
           <div className="flex flex-wrap gap-1.5">
-            {sources.map((source) => <StatusBadge key={source.name} label={`${source.name}: ${source.status}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" || source.status === "SKIPPED" ? "neutral" : "warning"} />)}
+            {sources.map((source) => {
+              const note = source.round === 1 && source.status === "SUCCESS" ? t("isbn_intelligence.round1_match")
+                : source.matchedBy === "title" ? t("isbn_intelligence.matched_by_title") : null;
+              return <StatusBadge key={source.name} label={`${SOURCE_LABELS[source.name] || source.name}: ${source.status}${note ? ` · ${note}` : ""}`} variant={source.status === "SUCCESS" ? "success" : source.status === "DISABLED" || source.status === "SKIPPED" ? "neutral" : "warning"} />;
+            })}
           </div>
         </ReviewDisclosure>
       ) : null}

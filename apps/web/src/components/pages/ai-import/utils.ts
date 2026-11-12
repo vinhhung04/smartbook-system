@@ -5,13 +5,25 @@ import type { CatalogBookLite, DuplicateMatch, EditableBookForm } from "./types"
 /** Human-readable labels for each ISBN lookup provider, shared by the hero summary,
  *  the ISBN intelligence panel, and the loading-progress checklist. */
 export const SOURCE_LABELS: Record<IsbnSourceName, string> = {
+  catalog: "Kho SmartBook",
   googleBooks: "Google Books",
   openLibrary: "OpenLibrary",
   worldCat: "WorldCat",
   fahasa: "Fahasa",
   tiki: "Tiki",
   vinabook: "Vinabook",
+  nhanam: "Nhã Nam",
+  dinhTi: "Đinh Tị",
+  thaiHa: "Thái Hà",
+  vanLang: "Văn Lang",
+  ipm: "IPM",
+  kimDong: "Kim Đồng",
+  azVietnam: "AZ Việt Nam",
+  omegaPlus: "Omega+",
+  tanViet: "Tân Việt",
+  alphaBooks: "Alpha Books",
   webSearch: "Web search",
+  aiWebSearch: "Web search (AI)",
 };
 
 /** Librarian-facing (Vietnamese) names for the metadata fields shown in coverage/gap summaries. */
@@ -35,7 +47,9 @@ export function fieldLabel(field: string): string {
 }
 
 export function winningSourceName(lookup: LookupBookByIsbnResponse): string | null {
-  const winner = (lookup.sources || []).find((source) => source.status === "SUCCESS");
+  // The source that identified the book by its code (round 1) first, then any other hit.
+  const found = (lookup.sources || []).filter((source) => source.status === "SUCCESS");
+  const winner = found.find((source) => source.round === 1) || found[0];
   return winner ? SOURCE_LABELS[winner.name] || winner.name : null;
 }
 
@@ -281,6 +295,8 @@ const EXTRACTION_METHOD_I18N_KEY: Record<string, string> = {
   json_ld: "isbn_intelligence.method.json_ld",
   dom: "isbn_intelligence.method.dom",
   snippet_regex: "isbn_intelligence.method.snippet_regex",
+  title_match: "isbn_intelligence.method.title_match",
+  llm_grounded: "isbn_intelligence.method.llm_grounded",
   llm_derived: "isbn_intelligence.method.llm_derived",
 };
 

@@ -34,11 +34,14 @@ export interface LookupBookByIsbnRequest {
   generateVietnameseSummary?: boolean;
 }
 
-export type IsbnSourceName = 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook' | 'webSearch';
+export type IsbnSourceName =
+  | 'catalog' | 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook'
+  | 'nhanam' | 'dinhTi' | 'thaiHa' | 'vanLang'
+  | 'ipm' | 'kimDong' | 'azVietnam' | 'omegaPlus' | 'tanViet' | 'alphaBooks' | 'webSearch' | 'aiWebSearch';
 
 /** How a source's value was pulled out - structured API/JSON-LD is most reliable,
  *  an AI-inferred value the least (see services/ai-service/isbn_fusion.py). */
-export type IsbnExtractionMethod = 'api_structured' | 'json_ld' | 'dom' | 'snippet_regex' | 'llm_derived';
+export type IsbnExtractionMethod = 'api_structured' | 'json_ld' | 'dom' | 'snippet_regex' | 'title_match' | 'llm_grounded' | 'llm_derived';
 
 /** Why Evidence Fusion picked (or didn't pick) this field's value - see
  *  services/ai-service/isbn_fusion.py's reasonCodes. */
@@ -67,7 +70,12 @@ export interface IsbnFieldEvidenceItem {
 export interface IsbnFieldEvidence {
   selectedValue: string | string[] | number | null;
   selectedSource: IsbnSourceName | null;
-  confirmations: Array<{ source: IsbnSourceName; value: unknown; sourceUrl?: string }>;
+  confirmations: Array<{
+    source: IsbnSourceName; value: unknown; sourceUrl?: string;
+    /** Two-round provenance (services/ai-service/isbn_rounds.py). */
+    retrievedAt?: string; verification?: IsbnVerification; matchConfidence?: number;
+    round?: 1 | 2; normalizedValue?: unknown;
+  }>;
   selectionReason?: { sourceReliability: number; agreementCount: number; conflictCount: number };
   /** INITIAL = found by the first lookup; TARGETED = recovered afterwards for a missing/weak field. */
   selectedPhase?: IsbnRetrievalPhase;
@@ -86,11 +94,52 @@ export interface IsbnLookupSource {
   name: IsbnSourceName;
   enabled: boolean;
   /** SKIPPED = not called because the metadata was already good enough. */
-  status: 'SUCCESS' | 'NOT_FOUND' | 'TIMEOUT' | 'ERROR' | 'DISABLED' | 'SKIPPED';
+  /** MISMATCH = the record shows another code; DIFFERENT_EDITION = same title, other ISBN;
+   *  PAUSED = the site blocked us (403/429) recently, so it is not asked until the pause ends. */
+  status: 'SUCCESS' | 'NOT_FOUND' | 'TIMEOUT' | 'ERROR' | 'DISABLED' | 'SKIPPED' | 'MISMATCH' | 'DIFFERENT_EDITION' | 'PAUSED';
   durationMs: number;
   sourceUrl?: string;
   phase?: IsbnRetrievalPhase;
   reasons?: string[];
+  /** Two-round search: 1 = identified the book by its code, 2 = cross-check. */
+  round?: 1 | 2;
+  query?: 'code' | 'title' | '-';
+  attempts?: number;
+  verification?: IsbnVerification;
+  matchConfidence?: number;
+  retrievedAt?: string;
+  /** Why the source was skipped or disabled (e.g. "INACTIVE: ..."). */
+  reason?: string;
+  error?: string;
+  /** "title" = found by the identified book's title, not by the scanned code. */
+  matchedBy?: 'title';
+}
+
+/** How a source's record was tied to the scanned code. */
+export type IsbnVerification = 'CODE_MATCH' | 'TITLE_MATCH' | 'CODE_IN_SNIPPET';
+
+/** Summary of the two-round search (verification in the lookup response). */
+export interface IsbnSearchVerification {
+  round1: {
+    order: IsbnSourceName[];
+    matchedSource: IsbnSourceName | null;
+    matchedUrl?: string | null;
+    attempts: Array<{ source: IsbnSourceName; status: IsbnLookupSource['status']; durationMs: number; attempts: number; reason?: string; error?: string }>;
+  };
+  round2Ran: boolean;
+  totalSourcesChecked: number;
+  sourcesFound: number;
+  sourcesNotFound: number;
+  sourcesFailed: number;
+  sourcesRejected: number;
+  foundSources: IsbnSourceName[];
+  notFoundSources: IsbnSourceName[];
+  failedSources: IsbnSourceName[];
+  rejectedSources: IsbnSourceName[];
+  disabledSources: IsbnSourceName[];
+  verifiedFields: string[];
+  conflictedFields: string[];
+  crossSourceVerified: boolean;
 }
 
 export interface IsbnMetadataCoverage {
@@ -137,29 +186,60 @@ export interface LookupBookByIsbnResponse {
   pageCount: number | null;
   thumbnail: string | null;
   source: {
+    catalog?: boolean;
     googleBooks: boolean;
     openLibrary: boolean;
     worldCat?: boolean;
     fahasa?: boolean;
     tiki?: boolean;
     vinabook?: boolean;
+    nhanam?: boolean;
+    dinhTi?: boolean;
+    thaiHa?: boolean;
+    vanLang?: boolean;
+    ipm?: boolean;
+    kimDong?: boolean;
+    azVietnam?: boolean;
+    omegaPlus?: boolean;
+    tanViet?: boolean;
+    alphaBooks?: boolean;
     webSearch?: boolean;
+    aiWebSearch?: boolean;
     aiSummary: string;
   };
   confidence: {
     overall: number;
+    catalog?: number;
     googleBooks: number;
     openLibrary: number;
     worldCat?: number;
     fahasa?: number;
     tiki?: number;
     vinabook?: number;
+    nhanam?: number;
+    dinhTi?: number;
+    thaiHa?: number;
+    vanLang?: number;
+    ipm?: number;
+    kimDong?: number;
+    azVietnam?: number;
+    omegaPlus?: number;
+    tanViet?: number;
+    alphaBooks?: number;
     webSearch?: number;
+    aiWebSearch?: number;
   };
   summaryVi: string | null;
   keywords: string[];
   manualEntryRequired: boolean;
   reason?: string;
+  /** Set when no source carries the code ("Không tìm thấy thông tin sách theo mã đã nhập."). */
+  message?: string;
+  verification?: IsbnSearchVerification;
+  /** True when a re-lookup found nothing and the last verified result was returned instead. */
+  servedFromStore?: boolean;
+  /** Sources that agree on each field's selected value. */
+  fieldSources?: Record<string, IsbnSourceName[]>;
   fieldEvidence?: Record<string, IsbnFieldEvidence>;
   fieldConfidence?: Record<string, number>;
   sources?: IsbnLookupSource[];

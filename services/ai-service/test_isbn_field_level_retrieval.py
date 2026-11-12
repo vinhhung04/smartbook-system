@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from cache import isbn_lookup_cache
+from isbn_rounds import BookProvider
 from main import IsbnLookupRequest, lookup_book_by_isbn
 
 VALID_ISBN = "9780439708180"
@@ -36,6 +37,19 @@ def provider_router(table):
 
 def called_providers(mock):
     return [call.args[0] for call in mock.await_args_list]
+
+
+def code_provider(name, data, code=VALID_ISBN, **kwargs):
+    """A two-round registry entry whose code search returns data printed with code."""
+    async def by_code(_client, _code):
+        return {**data, "identifiers": [code]} if data else None
+    return BookProvider(name, by_code=by_code, round1=True, retries=0, **kwargs)
+
+
+def registry(*providers):
+    """Patch the provider registry and Round 1 order with these fakes (no network)."""
+    names = ",".join(p.name for p in providers if p.round1)
+    return patch("main._book_providers", return_value=list(providers)), patch("main.ISBN_ROUND1_ORDER", names)
 
 
 class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
@@ -144,18 +158,18 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
         result, _ = await self._lookup(google, {"fahasa": fahasa})
         self.assertIn("publisher", [c["field"] for c in result["conflicts"]])
 
-    async def test_orchestrator_crash_falls_back_to_legacy_path(self):
-        with patch("main._run_field_level_lookup", new=AsyncMock(side_effect=RuntimeError("bug"))), \
-             patch("main.ENABLE_MARKETPLACE_LOOKUP", False), \
-             patch("main._run_standard_lookups", new=AsyncMock(return_value=[google_partial(), (None, 0.0)])):
+    async def test_orchestrator_crash_falls_back_to_two_round_search(self):
+        reg, order = registry(code_provider("googleBooks", google_partial()[0]))
+        with patch("main._run_field_level_lookup", new=AsyncMock(side_effect=RuntimeError("bug"))), reg, order:
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=VALID_ISBN))
         self.assertTrue(result["found"])
+        self.assertEqual(result["verification"]["round1"]["matchedSource"], "googleBooks")
 
     async def test_barcode_mode_does_not_use_field_level_orchestrator(self):
-        marketplace = (market(publisher="NXB")[0], 0.8, None, 0.0, None, 0.0, True, {})
-        with patch("main._run_field_level_lookup", new=AsyncMock()) as orchestrator, \
-             patch("main._fetch_all_marketplace", new=AsyncMock(return_value=marketplace)):
-            result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="1234567890123"))
+        barcode = "1234567890123"  # fails the checksum: only raw-barcode sources may search it
+        reg, order = registry(code_provider("dinhTi", market(publisher="NXB")[0], code=barcode, accepts_raw_barcode=True))
+        with patch("main._run_field_level_lookup", new=AsyncMock()) as orchestrator, reg, order:
+            result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=barcode))
         orchestrator.assert_not_awaited()
         self.assertTrue(result["found"])
 
@@ -224,8 +238,9 @@ class ContractTests(FieldLevelLookupTests):
 class LegacyContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_coverage_fields_are_added_even_when_flag_is_off(self):
         isbn_lookup_cache.clear()
-        with patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), patch("main.ENABLE_MARKETPLACE_LOOKUP", False), \
-             patch("main._run_standard_lookups", new=AsyncMock(return_value=[google_partial(), (None, 0.0)])):
+        reg, order = registry(code_provider("googleBooks", google_partial()[0]),
+                              BookProvider("tiki", disabled_reason="DISABLED_BY_CONFIG"))
+        with patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), reg, order:
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=VALID_ISBN))
         isbn_lookup_cache.clear()
         self.assertTrue(result["found"])
@@ -296,10 +311,10 @@ class EnrichGuardTests(unittest.IsolatedAsyncioTestCase):
 
 
 class FlagOffTests(unittest.IsolatedAsyncioTestCase):
-    async def test_flag_off_keeps_legacy_behavior(self):
+    async def test_flag_off_uses_the_two_round_search(self):
         isbn_lookup_cache.clear()
-        with patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), patch("main.ENABLE_MARKETPLACE_LOOKUP", False), \
-             patch("main._run_standard_lookups", new=AsyncMock(return_value=[google_partial(), (None, 0.0)])), \
+        reg, order = registry(code_provider("googleBooks", google_partial()[0]))
+        with patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), reg, order, \
              patch("main._fetch_marketplace_provider", new=AsyncMock()) as provider:
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=VALID_ISBN))
         provider.assert_not_awaited()
