@@ -1356,9 +1356,15 @@
     "id": "doc-039",
     "corpus": "INTERNAL_DOC",
     "question": "Giờ mở cửa của thư viện là mấy giờ?",
-    "expected_ids": [],
-    "expected_facts": [],
-    "note": "Ngoai pham vi FAQ noi bo"
+    "expected_ids": [
+      "branches-opening-hours"
+    ],
+    "expected_facts": [
+      [
+        "8:00"
+      ]
+    ],
+    "note": "Cap nhat 2026-11-12: gio mo cua chi nhanh da co trong corpus (lay tu du lieu warehouses)"
   },
   {
     "id": "doc-040",
@@ -1556,9 +1562,15 @@
     "id": "doc-049",
     "corpus": "INTERNAL_DOC",
     "question": "Thư viện có ứng dụng di động riêng không?",
-    "expected_ids": [],
-    "expected_facts": [],
-    "note": "Ngoai pham vi 10 tai lieu FAQ noi bo - phai tra rong, khong bia"
+    "expected_ids": [
+      "reader-features"
+    ],
+    "expected_facts": [
+      [
+        "ung dung di dong"
+      ]
+    ],
+    "note": "Cap nhat 2026-11-12: corpus da mo ta ung dung di dong (apps/mobile)"
   },
   {
     "id": "doc-050",
@@ -2039,5 +2051,593 @@
     "expected_ids": [],
     "expected_facts": [],
     "note": "Bo sung 2026-10-08: AI soan, doi chieu voi 10 tai lieu corpus/*.md - ngoai pham vi. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-078",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chi nhánh SmartBook ở Hà Nội nằm ở địa chỉ nào?",
+    "expected_ids": [
+      "branches-opening-hours"
+    ],
+    "expected_facts": [
+      [
+        "xuan thuy"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-079",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chủ nhật thư viện có mở cửa không?",
+    "expected_ids": [
+      "branches-opening-hours"
+    ],
+    "expected_facts": [
+      [
+        "chu nhat"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-080",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi có thể đến kho Cần Thơ để mượn sách không?",
+    "expected_ids": [
+      "branches-opening-hours"
+    ],
+    "expected_facts": [
+      [
+        "kho"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-081",
+    "corpus": "INTERNAL_DOC",
+    "question": "Làm cách nào để đặt trước một cuốn sách rồi đến lấy?",
+    "expected_ids": [
+      "borrowing-process"
+    ],
+    "expected_facts": [
+      [
+        "ma nhan sach"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-082",
+    "corpus": "INTERNAL_DOC",
+    "question": "Pickup code là gì, lấy ở đâu?",
+    "expected_ids": [
+      "borrowing-process"
+    ],
+    "expected_facts": [
+      [
+        "pickup code"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-083",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đặt trước đang ở trạng thái READY_FOR_PICKUP nghĩa là gì?",
+    "expected_ids": [
+      "borrowing-process"
+    ],
+    "expected_facts": [
+      [
+        "san sang nhan"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-084",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi muốn hủy yêu cầu đặt sách thì làm thế nào?",
+    "expected_ids": [
+      "borrowing-process"
+    ],
+    "expected_facts": [
+      [
+        "huy"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-085",
+    "corpus": "INTERNAL_DOC",
+    "question": "Trả sách có cần đến tận quầy không?",
+    "expected_ids": [
+      "borrowing-process"
+    ],
+    "expected_facts": [
+      [
+        "quay"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-086",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thanh toán tiền phạt online được không?",
+    "expected_ids": [
+      "fines-payment"
+    ],
+    "expected_facts": [
+      [
+        "vnpay"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-087",
+    "corpus": "INTERNAL_DOC",
+    "question": "Còn nợ tiền phạt thì có mượn thêm sách được không?",
+    "expected_ids": [
+      "fines-payment"
+    ],
+    "expected_facts": [
+      [
+        "no phat"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-088",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đã trả tiền phạt qua VNPay mà hệ thống chưa cập nhật?",
+    "expected_ids": [
+      "fines-payment"
+    ],
+    "expected_facts": [
+      [
+        "15 phut"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-089",
+    "corpus": "INTERNAL_DOC",
+    "question": "Có những loại tiền phạt nào trong thư viện?",
+    "expected_ids": [
+      "fines-payment"
+    ],
+    "expected_facts": [
+      [
+        "damage"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-090",
+    "corpus": "INTERNAL_DOC",
+    "question": "Sách trả về bị rách thì bị phạt bao nhiêu?",
+    "expected_ids": [
+      "lost-item-fee"
+    ],
+    "expected_facts": [
+      [
+        "50.000"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-091",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nạp tiền vào ví SmartBook được những mệnh giá nào?",
+    "expected_ids": [
+      "wallet-vnpay"
+    ],
+    "expected_facts": [
+      [
+        "200.000"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-092",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thanh toán VNPay bằng quét mã QR như thế nào?",
+    "expected_ids": [
+      "wallet-vnpay"
+    ],
+    "expected_facts": [
+      [
+        "qr"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-093",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mã OTP xác thực email có hiệu lực trong bao lâu?",
+    "expected_ids": [
+      "account-security"
+    ],
+    "expected_facts": [
+      [
+        "5 phut"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-094",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi quên mật khẩu đăng nhập thì phải làm gì?",
+    "expected_ids": [
+      "account-security"
+    ],
+    "expected_facts": [
+      [
+        "quen mat khau"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-095",
+    "corpus": "INTERNAL_DOC",
+    "question": "Vì sao tài khoản của tôi bị khóa?",
+    "expected_ids": [
+      "account-security"
+    ],
+    "expected_facts": [
+      [
+        "5 lan"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-096",
+    "corpus": "INTERNAL_DOC",
+    "question": "Đăng ký tài khoản bạn đọc cần làm những bước nào?",
+    "expected_ids": [
+      "account-security"
+    ],
+    "expected_facts": [
+      [
+        "dang ky"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-097",
+    "corpus": "INTERNAL_DOC",
+    "question": "Hạng Vàng Hoàng được giữ chỗ đặt trước bao nhiêu giờ và phạt bao nhiêu mỗi ngày?",
+    "expected_ids": [
+      "membership-plans-overview"
+    ],
+    "expected_facts": [
+      [
+        "48 gio"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-098",
+    "corpus": "INTERNAL_DOC",
+    "question": "Làm sao để lên hạng thẻ thành viên cao hơn?",
+    "expected_ids": [
+      "membership-plans-overview"
+    ],
+    "expected_facts": [
+      [
+        "nang hang"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-099",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tài khoản mới tạo được cấp gói thành viên nào?",
+    "expected_ids": [
+      "membership-plans-overview"
+    ],
+    "expected_facts": [
+      [
+        "the doc"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-100",
+    "corpus": "INTERNAL_DOC",
+    "question": "Gửi yêu cầu gia hạn sách xong thì ai duyệt?",
+    "expected_ids": [
+      "renewal-count"
+    ],
+    "expected_facts": [
+      [
+        "thu thu"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-101",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chỉ những ai đã mượn sách mới được viết đánh giá phải không?",
+    "expected_ids": [
+      "reader-features"
+    ],
+    "expected_facts": [
+      [
+        "danh gia"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-102",
+    "corpus": "INTERNAL_DOC",
+    "question": "Không biết nên đọc gì thì hệ thống gợi ý ra sao?",
+    "expected_ids": [
+      "reader-features"
+    ],
+    "expected_facts": [
+      [
+        "kham pha"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-103",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tính năng quét bìa sách dùng để làm gì?",
+    "expected_ids": [
+      "reader-features"
+    ],
+    "expected_facts": [
+      [
+        "quet bia"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-104",
+    "corpus": "INTERNAL_DOC",
+    "question": "Làm sao biết khi nào cuốn sách hết hàng có lại?",
+    "expected_ids": [
+      "reader-features"
+    ],
+    "expected_facts": [
+      [
+        "thong bao"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-105",
+    "corpus": "INTERNAL_DOC",
+    "question": "Tôi muốn đổi email đăng nhập thì liên hệ ở đâu?",
+    "expected_ids": [
+      "reader-features"
+    ],
+    "expected_facts": [
+      [
+        "doi email"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-106",
+    "corpus": "INTERNAL_DOC",
+    "question": "Chatbot AI có tự tạo phiếu nhập sách không?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "expected_facts": [
+      [
+        "xac nhan"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-107",
+    "corpus": "INTERNAL_DOC",
+    "question": "Quản lý kho dùng trợ lý AI nào?",
+    "expected_ids": [
+      "ai-assistant-scope"
+    ],
+    "expected_facts": [
+      [
+        "tro ly ai"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-108",
+    "corpus": "INTERNAL_DOC",
+    "question": "Thủ thư có những quyền gì trong hệ thống?",
+    "expected_ids": [
+      "roles-permissions"
+    ],
+    "expected_facts": [
+      [
+        "librarian"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-109",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên kho chỉ thấy dữ liệu kho nào?",
+    "expected_ids": [
+      "roles-permissions"
+    ],
+    "expected_facts": [
+      [
+        "pham vi kho"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-110",
+    "corpus": "INTERNAL_DOC",
+    "question": "Quy trình kiểm kê kho diễn ra như thế nào?",
+    "expected_ids": [
+      "warehouse-operations"
+    ],
+    "expected_facts": [
+      [
+        "kiem ke"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-111",
+    "corpus": "INTERNAL_DOC",
+    "question": "Phát hiện hàng bị thiếu trong kho thì báo cáo ra sao?",
+    "expected_ids": [
+      "warehouse-operations"
+    ],
+    "expected_facts": [
+      [
+        "bao cao ngoai le"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-112",
+    "corpus": "INTERNAL_DOC",
+    "question": "Các bước picking và packing khi xuất kho là gì?",
+    "expected_ids": [
+      "warehouse-operations"
+    ],
+    "expected_facts": [
+      [
+        "picking"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-113",
+    "corpus": "INTERNAL_DOC",
+    "question": "Nhân viên kho tự nhận việc như thế nào?",
+    "expected_ids": [
+      "warehouse-operations"
+    ],
+    "expected_facts": [
+      [
+        "tu nhan"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-114",
+    "corpus": "INTERNAL_DOC",
+    "question": "Mã ISBN 13 số gồm những phần nào?",
+    "expected_ids": [
+      "isbn-classification"
+    ],
+    "expected_facts": [
+      [
+        "isbn"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-115",
+    "corpus": "INTERNAL_DOC",
+    "question": "Phân loại Dewey chia sách thành mấy lớp?",
+    "expected_ids": [
+      "isbn-classification"
+    ],
+    "expected_facts": [
+      [
+        "dewey"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-116",
+    "corpus": "INTERNAL_DOC",
+    "question": "Ngày Sách và Văn hóa đọc Việt Nam là ngày nào?",
+    "expected_ids": [
+      "library-law-reading-culture"
+    ],
+    "expected_facts": [
+      [
+        "21"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-117",
+    "corpus": "INTERNAL_DOC",
+    "question": "Người sử dụng thư viện có nghĩa vụ gì theo Luật Thư viện?",
+    "expected_ids": [
+      "library-law-reading-culture"
+    ],
+    "expected_facts": [
+      [
+        "luat thu vien"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-118",
+    "corpus": "INTERNAL_DOC",
+    "question": "Làm sao để giữ sách mượn không bị hư hỏng?",
+    "expected_ids": [
+      "book-care"
+    ],
+    "expected_facts": [
+      [
+        "bao quan"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
+  },
+  {
+    "id": "doc-119",
+    "corpus": "INTERNAL_DOC",
+    "question": "Lỡ làm ướt sách mượn thì nên xử lý thế nào?",
+    "expected_ids": [
+      "book-care"
+    ],
+    "expected_facts": [
+      [
+        "uot"
+      ]
+    ],
+    "note": "Bo sung 2026-11-12: corpus mo rong, doi chieu voi code/du lieu that. Can nguoi xac nhan lai."
   }
 ]

@@ -10,6 +10,7 @@ import httpx
 
 import faq_retrieval
 import retrieval_confidence
+from rag import CONFIDENT_FAQ_LEAD, UNCERTAIN_FAQ_LEAD
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -292,9 +293,9 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             f"- {match.entry['question']}: {match.entry['answer']}" for match in faq_matches
         ]
         summary_lead = (
-            "Co mot so ket qua gan dung nhung do tin cay chua cao, can doi chieu truoc khi tra loi chac chan:\n"
+            f"{UNCERTAIN_FAQ_LEAD}\n"
             if confidence_result.decision == retrieval_confidence.UNCERTAIN
-            else "Cau hoi thuong gap lien quan:\n"
+            else f"{CONFIDENT_FAQ_LEAD}\n"
         )
         summary = summary_lead + "\n".join(faq_lines)
 

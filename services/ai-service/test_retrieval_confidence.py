@@ -136,3 +136,11 @@ def test_internal_doc_weak_match_between_old_and_new_threshold_now_abstains():
     result = rc.evaluate(signals, rc._DOC_DEFAULTS)
     assert 0.35 <= result.confidence < 0.40
     assert result.decision == rc.NO_EVIDENCE
+
+
+def test_internal_doc_keyword_only_hit_can_still_pass_the_evidence_threshold():
+    """tau_evidence for INTERNAL_DOC must stay <= w_keyword: a top keyword hit
+    with no semantic signal (embeddings down) scores exactly w_keyword, and a
+    higher tau would silently disable that fallback (re-calibration 2026-11-12
+    picked 0.45 on semantic-only data; rejected for this reason)."""
+    assert rc._DOC_DEFAULTS.tau_evidence <= rc._DOC_DEFAULTS.w_keyword

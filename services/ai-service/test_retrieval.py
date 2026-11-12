@@ -9,6 +9,7 @@ import retrieval
 import retrieval_confidence as confidence
 from faq_retrieval import FAQMatch
 from intent import GENERAL_QUERY
+from rag import RAG_SYSTEM_RULES, UNCERTAIN_FALLBACK_REPLY, UNCERTAIN_FAQ_LEAD, build_fallback_reply
 
 
 def _confidence(decision: str, score: float = 0.8, reasons=("SEMANTIC_STRONG",)):
@@ -89,9 +90,25 @@ class GeneralQueryRetrievalTests(unittest.TestCase):
                 retrieval.retrieve_context({"intent": GENERAL_QUERY, "query": "cau hoi mo ho"}, auth_header=None)
             )
 
-        self.assertIn("do tin cay chua cao", result["summary"])
+        # the lead is the marker RAG_SYSTEM_RULES tells the model to key on
+        self.assertTrue(result["summary"].startswith(UNCERTAIN_FAQ_LEAD))
+        self.assertIn(UNCERTAIN_FAQ_LEAD, RAG_SYSTEM_RULES)
         self.assertTrue(result["sources"])
         self.assertEqual(result["retrieval_status"], confidence.UNCERTAIN)
+
+    def test_uncertain_fallback_names_the_near_misses_without_presenting_them(self):
+        retrieval_result = {
+            "summary": f"{UNCERTAIN_FAQ_LEAD}\n- Giờ mở cửa?: 8:00 – 20:00",
+            "raw": {"faq_matches": [{"id": "branches", "question": "Giờ mở cửa?", "answer": "8:00 – 20:00"}]},
+            "sources": [{"name": "FAQ: Giờ mở cửa?", "endpoint": "faq://branches", "status": "ok"}],
+            "warnings": [], "retrieval_status": confidence.UNCERTAIN,
+        }
+        reply = build_fallback_reply({"intent": GENERAL_QUERY}, retrieval_result)
+
+        self.assertTrue(reply.startswith(UNCERTAIN_FALLBACK_REPLY))
+        self.assertIn("Giờ mở cửa?", reply)
+        self.assertNotIn("8:00", reply)
+        self.assertNotIn("Nguồn dữ liệu", reply)
 
 
 if __name__ == "__main__":
