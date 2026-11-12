@@ -31,8 +31,8 @@ from intent import GENERAL_QUERY
 from main import ChatRequest
 
 USERS = {
-    "Bearer a": UserContext(user_id="user-a", roles=["CUSTOMER"]),
-    "Bearer b": UserContext(user_id="user-b", roles=["CUSTOMER"]),
+    "Bearer a": UserContext(user_id="user-a", roles=["CUSTOMER"], permissions=["customer.self.read", "customer.self.write"]),
+    "Bearer b": UserContext(user_id="user-b", roles=["CUSTOMER"], permissions=["customer.self.read", "customer.self.write"]),
 }
 FAQ_RETRIEVAL = {
     "summary": "Cau hoi thuong gap lien quan:\n- Phí phạt: 5.000đ/ngày",
@@ -220,3 +220,31 @@ class ChatPipelineTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CustomerPolicyQuestionTest(unittest.IsolatedAsyncioTestCase):
+    """A reader's policy question that NLU files under an analytics intent
+    (FINE_SUMMARY_QUERY) gets the library's documents - never system-wide
+    analytics, and never the reader's token sent to the analytics services."""
+
+    async def test_blocked_role_gets_documents_instead_of_nothing(self):
+        retrieve = AsyncMock(return_value=FAQ_RETRIEVAL)
+        with patch("main.rate_limiter.acquire", new=AsyncMock(return_value=(True, ""))), \
+             patch("main.get_user_context", new=AsyncMock(return_value=USERS["Bearer a"])), \
+             patch("main.classify_user_message", new=AsyncMock(
+                 return_value={"intent": "FINE_SUMMARY_QUERY", "confidence": 0.9, "query": "phat"})), \
+             patch("main.build_user_personal_context", new=AsyncMock(
+                 return_value={"role": "CUSTOMER", "persona": "Khách hàng", "summary": "Không có khoản phạt."})), \
+             patch("main.retrieve_context", new=retrieve), \
+             patch("main.response_cache", ResponseCache()), \
+             patch("main._chat_with_text_llm", new=AsyncMock(return_value=("Thẻ Đọc 5.000 VND/ngày.", True))), \
+             patch("main._get_text_llm_provider", return_value=SimpleNamespace(name="openrouter")), \
+             patch("main.plan_agent_action", new=AsyncMock(return_value=None)):
+            body = await main.chat(_request("Bearer a"), ChatRequest(message="Phí phạt trễ hạn tính thế nào?"))
+
+        intent_info, auth = retrieve.call_args.args
+        self.assertEqual(intent_info["intent"], GENERAL_QUERY)       # documents only
+        self.assertEqual(intent_info["query"], "Phí phạt trễ hạn tính thế nào?")
+        self.assertIsNone(auth)                                       # no analytics call with the reader's token
+        self.assertEqual(body["intent"], "FINE_SUMMARY_QUERY")       # so the GENERAL_QUERY abstention cannot fire
+        self.assertIn("5.000", body["reply"])

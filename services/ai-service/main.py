@@ -9,7 +9,6 @@ import re
 import logging
 import asyncio
 import functools
-import inspect
 import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
@@ -71,8 +70,13 @@ from agent_store import (
     get_action_result,
     cleanup_expired_actions,
     is_expired,
+    mark_action_needs_reconciliation,
+    release_stale_confirmed_actions,
+    resolve_reconciliation,
 )
-from agent_permissions import get_user_context, can_confirm_action, require_can_confirm_action
+from ai_core import policy as ai_policy, prompts as ai_prompts, tools as ai_tools
+from ai_core.observability import RequestIdMiddleware
+from ai_core.policy import get_user_context, can_confirm_action, require_can_confirm_action
 from user_personal_context import build_user_personal_context, get_primary_role, ANALYTICS_BLOCKED_ROLES
 from agent_executor import execute_agent_action
 from agent_schemas import ConfirmActionRequest, CancelActionRequest, ConfirmActionResponse
@@ -81,6 +85,9 @@ from agent_actions import (
     EXECUTED,
     CANCELLED,
     EXPIRED as ACTION_EXPIRED,
+    FAILED as ACTION_FAILED,
+    RECONCILE_REQUIRED,
+    RETRY_SAFE_ACTIONS,
     get_action_config,
 )
 from sqlalchemy import select, func
@@ -114,7 +121,8 @@ from copilot_plan import VN_TZ as COPILOT_TZ
 from copilot_visualization import Visualization
 from copilot_response import COPILOT_SYSTEM_PROMPT
 from routes_actions import router as actions_router
-from routes_conversations import ASSISTANT_PERMISSIONS, ASSISTANT_ROLES, router as conversations_router
+from ai_core.prompts import CHAT_SYSTEM_PROMPT, GENERAL_QUERY_ABSTENTION_REPLY, ROLE_BASED_RULES
+from routes_conversations import ASSISTANT_PERMISSIONS, ASSISTANT_ROLES, can_use_assistant, router as conversations_router
 from routes_cover_search import router as cover_search_router
 from routes_public_discover import router as public_discover_router
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -123,6 +131,8 @@ from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provi
 logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="SmartBook AI Service")
+# Request correlation (ai_core.observability): the gateway's x-request-id on every log line.
+app.add_middleware(RequestIdMiddleware)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
@@ -277,6 +287,18 @@ async def _startup_nightly_briefing() -> None:
 
 
 @app.on_event("startup")
+async def _startup_release_stale_actions() -> None:
+    """An action left CONFIRMED by a run that died with the previous process
+    must not stay "executing" forever (agent_store.release_stale_confirmed_actions)."""
+    try:
+        released = await release_stale_confirmed_actions()
+        if released:
+            logger.warning("startup: %d action(s) left CONFIRMED by an unfinished run were released", released)
+    except Exception as exc:  # noqa: BLE001 - never block startup; confirm_action sweeps again
+        logger.warning("startup: stale action sweep failed: %s", type(exc).__name__)
+
+
+@app.on_event("startup")
 async def _startup_ingest_corpus() -> None:
     """Dong bo vector store nen o background. Khong chan startup: service phai
     len duoc ngay ca khi OpenRouter/inventory chua san sang — retrieval se
@@ -337,6 +359,27 @@ async def catalog_sync_trigger(request: Request):
     return await catalog_sync.sync_book_corpus()
 
 
+_corpus_sync_lock = asyncio.Lock()
+
+
+@app.post("/internal/corpus-sync")
+async def corpus_sync_trigger(request: Request):
+    """Re-ingest corpus/*.md now (INTERNAL_DOC), without restarting the
+    service: only chunks whose content hash changed are re-embedded, a deleted
+    file's document is removed, and an empty or unreadable corpus directory
+    removes nothing (ingestion.ingest_internal_docs). Internal-key only; the
+    gateway does not expose /ai/internal/*. A second call while one runs
+    returns busy instead of ingesting twice."""
+    import catalog_sync
+    import ingestion
+    if not catalog_sync.is_valid_internal_key(request.headers.get("x-internal-service-key")):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if _corpus_sync_lock.locked():
+        return {"skipped": "busy"}
+    async with _corpus_sync_lock:
+        return await ingestion.ingest_internal_docs()
+
+
 # One definition, shared with routes_conversations (history is masked for a
 # reader who no longer passes this gate).
 ASSISTANT_ALLOWED_ROLES = ASSISTANT_ROLES
@@ -391,6 +434,8 @@ async def health():
         "assistant_model": ASSISTANT_MODEL,
         "vision_model": VISION_MODEL,
         "embed_model": embeddings.EMBED_MODEL,
+        # which prompt text is answering (ai_core.prompts): changes with every prompt edit
+        "prompt_versions": ai_prompts.versions(),
     }
 
 
@@ -3380,53 +3425,8 @@ async def _generate_book_summary(req: BookSummaryRequest):
 # AI Chat — Trợ lý ảo SmartBook
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Fixed reply for /chat when retrieval_confidence.py decides NO_EVIDENCE on an
-# information-seeking GENERAL_QUERY message (see chat()) - the corpus has no
-# real answer, so the LLM is skipped entirely rather than risk it inventing one
-# from an empty [RAG CONTEXT] block (Chức năng 1.4: no hallucination on weak
-# retrieval). A greeting/small-talk message with the same NO_EVIDENCE decision
-# still reaches the LLM below - see is_information_seeking().
-GENERAL_QUERY_ABSTENTION_REPLY = (
-    "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này."
-)
-
-CHAT_SYSTEM_PROMPT = (
-    "Bạn là **SmartBook AI** — trợ lý ảo thông minh chuyên biệt cho hệ thống quản lý thư viện SmartBook.\n\n"
-
-    "## Vai trò & năng lực\n"
-    "- Bạn có quyền truy cập DỮ LIỆU THỜI GIAN THỰC của thư viện (được cung cấp trong mục [DỮ LIỆU HỆ THỐNG] bên dưới).\n"
-    "- Bạn hỗ trợ: tra cứu sách, kiểm tra tồn kho, theo dõi mượn/trả, phạt quá hạn, gợi ý sách, phân tích xu hướng.\n"
-    "- Bạn hiểu cấu trúc hệ thống: Catalog (danh mục sách), Inventory (kho), Borrow (mượn/trả), Fines (phạt).\n\n"
-
-    "## Quy tắc trả lời\n"
-    "1. **Luôn dùng dữ liệu thực** khi có trong [DỮ LIỆU HỆ THỐNG]. Trích dẫn con số cụ thể.\n"
-    "2. Nếu người dùng hỏi về sách cụ thể, tìm trong danh sách sách được cung cấp. Nếu không tìm thấy, nói rõ.\n"
-    "3. Khi phân tích, đưa ra nhận xét có giá trị (ví dụ: cảnh báo tồn kho thấp, sách quá hạn nhiều).\n"
-    "4. Trả lời bằng **tiếng Việt**, ngắn gọn, thân thiện, chuyên nghiệp.\n"
-    "5. Dùng **bold** cho số liệu quan trọng và tên sách. Dùng emoji nhẹ (📚 📊 ⚠️ ✅) làm điểm nhấn.\n"
-    "6. Giới hạn 3-8 câu, trừ khi người dùng yêu cầu chi tiết.\n"
-    "7. Khi gợi ý hành động, chỉ rõ người dùng nên vào trang nào (Dashboard, Catalog, Inventory, Borrow, Reports).\n"
-    "8. Nếu dữ liệu không đủ để trả lời chính xác, nói rõ giới hạn và gợi ý cách kiểm tra.\n\n"
-
-    "## Khả năng đặc biệt\n"
-    "- Phân tích xu hướng mượn sách và gợi ý nhập thêm đầu sách.\n"
-    "- Cảnh báo sách tồn kho thấp hoặc hết hàng.\n"
-    "- Tổng hợp tình hình mượn quá hạn và phạt.\n"
-    "- So sánh và xếp hạng sách theo lượt mượn.\n"
-    "- Tư vấn quy trình nghiệp vụ thư viện (nhập kho, putaway, picking, xuất kho).\n"
-)
-
-ROLE_BASED_RULES = (
-    "\n## Quy tắc theo vai trò người dùng\n"
-    "- Luôn trả lời theo user hiện tại được xác định từ Authorization token. KHÔNG dùng thông tin user từ body request.\n"
-    "- CUSTOMER: Chỉ dùng dữ liệu cá nhân của customer đó. Không tiết lộ dữ liệu người khác hay analytics toàn hệ thống.\n"
-    "- WAREHOUSE_STAFF: Ưu tiên task được giao cho họ, không hiện task của người khác.\n"
-    "- WAREHOUSE_MANAGER/ADMIN: Có thể trả lời dữ liệu tổng quan hệ thống.\n"
-    "- LIBRARIAN: Tập trung nghiệp vụ mượn trả, reservation, loan, fine.\n"
-    "- SUPPLIER: Chỉ xem dữ liệu liên quan supplier của họ.\n"
-    "- Nếu người dùng hỏi ngoài phạm vi quyền của họ, giải thích ngắn gọn họ không có quyền xem dữ liệu đó.\n"
-    "- Không bịa dữ liệu. Nếu không có dữ liệu từ endpoint, nói rõ là chưa có thông tin.\n"
-)
+# The chatbot's prompts (CHAT_SYSTEM_PROMPT, ROLE_BASED_RULES) and its fixed
+# abstention reply live in ai_core/prompts.py, named and versioned.
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -3693,20 +3693,12 @@ async def _legacy_chat_user(auth_header: str | None):
 
 
 def _rate_limit_key(request: Request, user_ctx) -> str:
-    """The AI rate-limit bucket: per user once the caller is known. Every request
-    reaches this service through the gateway, so the socket peer is the
-    gateway's own IP - keyed by it, all users shared one 15/min bucket."""
-    if user_ctx is not None and getattr(user_ctx, "user_id", None):
-        return f"user:{user_ctx.user_id}"
-    # shortcut: anonymous callers still share the gateway-IP bucket; key them by the gateway's
-    # X-Forwarded-For entry once ai-service is reachable only through a known proxy chain
-    return f"ip:{request.client.host if request.client else 'unknown'}"
+    return ai_policy.rate_limit_key(request, user_ctx)
 
 
 async def _enforce_rate_limit(request: Request, user_ctx) -> None:
-    allowed, reason = await rate_limiter.acquire(key=_rate_limit_key(request, user_ctx))
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
+    """Per user, or per the gateway-vouched client IP (ai_core.policy)."""
+    await ai_policy.enforce_rate_limit(request, user_ctx, rate_limiter)
 
 
 async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
@@ -3733,7 +3725,13 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
     _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
     _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
     if _blocked and not _is_exempt_intent:
-        retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
+        # No system-wide analytics for them - but a policy question NLU filed
+        # under an analytics intent ("Phí phạt trễ hạn tính thế nào?" ->
+        # FINE_SUMMARY_QUERY) still deserves the library's documents. The
+        # documents are static policy, not anyone's data; the reader's own
+        # loans and fines keep coming from `personal`. Intent is unchanged, so
+        # the GENERAL_QUERY abstention below never fires for these.
+        retrieval = await retrieve_context({**intent_info, "intent": GENERAL_QUERY, "query": req.message.strip()}, None)
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
 
@@ -3920,27 +3918,11 @@ async def chat(request: Request, req: ChatRequest):
     return await _finish_chat_reply(turn, *_chat_draft(turn, reply, ok))
 
 
-def _filter_tool_args(tool_fn, args: dict) -> dict:
-    """Drop arguments the model hallucinated that aren't in the tool's real signature.
-
-    Smaller quantized models sometimes pass kwargs not present in the declared
-    JSON schema (e.g. calling get_warehouse_stock_risk with a stray `priority`
-    arg). Silently drop unknown keys instead of letting the call raise TypeError.
-    """
-    try:
-        valid_params = set(inspect.signature(tool_fn).parameters.keys())
-    except (TypeError, ValueError):
-        return args
-    return {key: value for key, value in args.items() if key in valid_params}
-
-
 async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tuple[str, dict]:
     """Execute one model-requested tool call, used with asyncio.gather to run every tool
-    call within a single round concurrently — all ANALYTICS_TOOLS are read-only GETs."""
-    tool_fn = TOOL_FUNCTIONS.get(name)
-    if tool_fn is None:
-        return name, {"error": f"Unknown tool: {name}"}
-    return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+    call within a single round concurrently — all ANALYTICS_TOOLS are read-only GETs.
+    Validation, timeout and audit logging: ai_core.tools.run_read_tool."""
+    return name, await ai_tools.run_read_tool(name, args, auth_header)
 
 
 def _get_assistant_provider():
@@ -4151,10 +4133,9 @@ async def _run_fast_path_tool(message: str, auth_header: str | None) -> list[dic
         return []
 
     async def _run_one(tool_name: str, tool_args: dict) -> dict | None:
-        tool_fn = TOOL_FUNCTIONS.get(tool_name)
-        if tool_fn is None:
+        if tool_name not in TOOL_FUNCTIONS:
             return None
-        tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, tool_args))
+        tool_result = await ai_tools.run_read_tool(tool_name, tool_args, auth_header)
         return {"tool_name": tool_name, "tool_args": tool_args, "tool_result": tool_result}
 
     results = await asyncio.gather(*(_run_one(name, args) for name, args in picks))
@@ -4311,15 +4292,7 @@ async def _build_assistant_pending_action(
 
 
 def _assistant_can_access(user_ctx) -> bool:
-    if user_ctx is None:
-        return False
-    if user_ctx.is_superuser:
-        return True
-    if set(user_ctx.roles or []) & ASSISTANT_ALLOWED_ROLES:
-        return True
-    if set(user_ctx.permissions or []) & ASSISTANT_ALLOWED_PERMISSIONS:
-        return True
-    return False
+    return can_use_assistant(user_ctx)
 
 
 def _collect_evidence(collected_data: dict) -> list[dict]:
@@ -4467,10 +4440,9 @@ def _plan_fast_path(plan, snapshot: dict | None = None):
             return await _run_fast_path_tool(message, auth_header)
 
         async def _run_one(call: dict) -> dict | None:
-            tool_fn = TOOL_FUNCTIONS.get(call["name"])
-            if tool_fn is None:
+            if call["name"] not in TOOL_FUNCTIONS:
                 return None
-            result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, call["args"]))
+            result = await ai_tools.run_read_tool(call["name"], call["args"], auth_header)
             return {"tool_name": call["name"], "tool_args": call["args"], "tool_result": result}
 
         results = await asyncio.gather(*(_run_one(call) for call in plan.required_tools))
@@ -5241,6 +5213,7 @@ async def chat_stream(request: Request, req: ChatRequest):
 @app.post("/actions/confirm", response_model=ConfirmActionResponse)
 async def confirm_action(request: Request, req: ConfirmActionRequest):
     await cleanup_expired_actions()
+    await release_stale_confirmed_actions()
 
     auth_header = request.headers.get("authorization")
     if not auth_header:
@@ -5324,6 +5297,9 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
                 message="Action was already executed (idempotent).",
                 result=await get_action_result(req.action_id),
             )
+        if latest is not None and latest.status == RECONCILE_REQUIRED:
+            raise HTTPException(status_code=409, detail="Chưa xác định được kết quả lần thực thi trước; đề xuất này "
+                                                        "đang chờ đối chiếu và không được thực thi lại.")
         raise HTTPException(status_code=409, detail="Action is already being executed or is no longer pending.")
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:confirmed",
@@ -5332,35 +5308,58 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         user_id_for_emit,
     ))
 
+    return await _execute_claimed_action(action, auth_header, user_ctx, user_id_for_emit)
+
+
+async def _execute_claimed_action(action, auth_header: str, user_ctx, user_id_for_emit) -> ConfirmActionResponse:
+    """Run a claimed (CONFIRMED) action and record where it ended:
+    - EXECUTED: the executor returned a result;
+    - FAILED: the target - or a local precondition - refused it (an
+      HTTPException), so nothing was written and it may be confirmed again;
+    - RECONCILE_REQUIRED: the outcome is unknown (ActionOutcomeUnknown, a bug
+      after the request may have been sent, or a multi-line result with lines
+      whose outcome is unknown). Never re-executed automatically, unless the
+      type is retry-safe (RETRY_SAFE_ACTIONS), which goes to FAILED instead."""
+    action_id, actor = action.id, user_ctx.user_id
     try:
         result = await execute_agent_action(action, auth_header, user_ctx)
-        await mark_action_executed(req.action_id, result, actor_user_id=user_ctx.user_id)
+    except HTTPException as exc:
+        error = f"HTTP {exc.status_code}: {exc.detail}"
+        await mark_action_failed(action_id, error, actor_user_id=actor)
         asyncio.ensure_future(push_ai_action_event(
-            "ai_action:executed",
-            req.action_id,
-            action.type,
-            user_id_for_emit,
-            {"result_summary": str(result)[:200] if result else None},
-        ))
-        return ConfirmActionResponse(
-            success=True,
-            action_id=req.action_id,
-            status=EXECUTED,
-            message="Action executed successfully.",
-            result=result,
-        )
-    except HTTPException:
+            "ai_action:failed", action_id, action.type, user_id_for_emit, {"error": error[:200]}))
         raise
-    except Exception as exc:
-        await mark_action_failed(req.action_id, str(exc), actor_user_id=user_ctx.user_id)
+    except Exception as exc:  # ActionOutcomeUnknown, or an unexpected error mid-execution
+        error = f"{type(exc).__name__}: {exc}"
+        logger.warning("action %s outcome unknown: %s", action_id, error[:300])
+        if action.type in RETRY_SAFE_ACTIONS:
+            await mark_action_failed(action_id, f"outcome unknown, retry-safe: {error}", actor_user_id=actor)
+            detail = "Chưa thực hiện được đề xuất do lỗi kết nối; có thể bấm xác nhận lại an toàn."
+        else:
+            await mark_action_needs_reconciliation(action_id, error, actor_user_id=actor)
+            detail = ("Không xác định được đề xuất đã được thực hiện hay chưa. Đề xuất được chuyển sang chờ đối chiếu; "
+                      "vui lòng kiểm tra trước khi tạo lại để tránh trùng lặp.")
         asyncio.ensure_future(push_ai_action_event(
-            "ai_action:failed",
-            req.action_id,
-            action.type,
-            user_id_for_emit,
-            {"error": str(exc)[:200]},
-        ))
-        raise HTTPException(status_code=500, detail=f"Action execution failed: {exc}")
+            "ai_action:failed", action_id, action.type, user_id_for_emit,
+            {"error": error[:200], "reconcile_required": action.type not in RETRY_SAFE_ACTIONS}))
+        raise HTTPException(status_code=502, detail=detail)
+
+    if isinstance(result, dict) and result.get("needs_reconciliation"):
+        await mark_action_needs_reconciliation(
+            action_id, "some lines have an unknown outcome", actor_user_id=actor, result=result)
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:failed", action_id, action.type, user_id_for_emit,
+            {"result_summary": str(result)[:200], "reconcile_required": True}))
+        return ConfirmActionResponse(
+            success=False, action_id=action_id, status=RECONCILE_REQUIRED,
+            message="Một phần đề xuất không xác định được kết quả; cần đối chiếu trước khi tạo lại.", result=result)
+
+    await mark_action_executed(action_id, result, actor_user_id=actor)
+    asyncio.ensure_future(push_ai_action_event(
+        "ai_action:executed", action_id, action.type, user_id_for_emit,
+        {"result_summary": str(result)[:200] if result else None}))
+    return ConfirmActionResponse(
+        success=True, action_id=action_id, status=EXECUTED, message="Action executed successfully.", result=result)
 
 
 @app.post("/actions/cancel")
@@ -5413,6 +5412,30 @@ async def get_action(request: Request, action_id: str):
     return action.model_dump()
 
 
+class ReconcileActionRequest(BaseModel):
+    action_id: str
+    outcome: Literal["EXECUTED", "FAILED"]
+    note: str
+
+
+@app.post("/actions/reconcile")
+async def reconcile_action(request: Request, req: ReconcileActionRequest):
+    """Resolve an action whose outcome was unknown (RECONCILE_REQUIRED) after
+    an administrator checked the target service: EXECUTED if the write is
+    there, FAILED if not (FAILED may then be confirmed again). Admin-only."""
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+    user_ctx = await get_user_context(auth_header)
+    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    if not req.note.strip():
+        raise HTTPException(status_code=400, detail="Cần ghi chú kết quả đối chiếu.")
+    if not await resolve_reconciliation(req.action_id, req.outcome, req.note.strip()[:500], user_ctx.user_id):
+        raise HTTPException(status_code=409, detail="Action is not waiting for reconciliation.")
+    return {"success": True, "action_id": req.action_id, "status": req.outcome}
+
+
 @app.get("/actions/stats")
 async def actions_stats(request: Request):
     auth_header = request.headers.get("authorization")
@@ -5430,8 +5453,12 @@ async def actions_stats(request: Request):
             select(func.count()).select_from(PendingActionRow).where(PendingActionRow.status == EXECUTED)
         )
         total = await session.scalar(select(func.count()).select_from(PendingActionRow))
+        reconcile = await session.scalar(
+            select(func.count()).select_from(PendingActionRow).where(PendingActionRow.status == RECONCILE_REQUIRED)
+        )
 
-    return {"pending": pending or 0, "executed": executed or 0, "total": total or 0}
+    return {"pending": pending or 0, "executed": executed or 0, "total": total or 0,
+            "reconcile_required": reconcile or 0}
 
 
 @app.post("/cache/clear")

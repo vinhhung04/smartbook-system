@@ -18,6 +18,7 @@ export const AI_ACTION_STATUS_LABEL: Record<string, string> = {
   CANCELLED: 'Đã từ chối',
   EXPIRED: 'Hết hạn',
   FAILED: 'Thất bại',
+  RECONCILE_REQUIRED: 'Chờ đối chiếu',
 };
 
 export const AI_ACTION_RISK_LABEL: Record<string, string> = {

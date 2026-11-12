@@ -143,6 +143,17 @@ def _n(val: Any, default: float = 0) -> float:
         return default
 
 
+def _loan_title(loan: dict) -> str:
+    """A loan's book title. borrow-service sends it as primary_book_title and
+    on each loan_items[] row (book_title); older shapes nest a `book`."""
+    book = loan.get("book") or loan.get("book_variant") or {}
+    items = loan.get("loan_items") if isinstance(loan.get("loan_items"), list) else []
+    return ((book.get("title") if isinstance(book, dict) else None) or loan.get("book_title")
+            or loan.get("primary_book_title")
+            or next((i.get("book_title") for i in items if isinstance(i, dict) and i.get("book_title")), None)
+            or "?")
+
+
 def _fmt_loans(data: Any) -> str:
     items = _normalise_to_items(data)
     if not items:
@@ -154,8 +165,7 @@ def _fmt_loans(data: Any) -> str:
         number = loan.get("loan_number") or loan.get("id", "")[:8]
         status = loan.get("status", "")
         due = loan.get("due_date") or loan.get("return_due_date") or ""
-        book = loan.get("book") or loan.get("book_variant") or {}
-        title = (book.get("title") if isinstance(book, dict) else None) or loan.get("book_title", "?")
+        title = _loan_title(loan)
         if status == "OVERDUE":
             n_overdue += 1
         status_vn = status_map.get(status, status)
@@ -298,8 +308,7 @@ def _fmt_borrow_loans_all(data: Any) -> str:
         for loan in overdue_list:
             number = loan.get("loan_number") or loan.get("id", "")[:8]
             customer = (loan.get("customers") or {}).get("full_name") if isinstance(loan.get("customers"), dict) else loan.get("customer_name", "?")
-            book = loan.get("book") or {}
-            title = (book.get("title") if isinstance(book, dict) else None) or loan.get("book_title", "?")
+            title = _loan_title(loan)
             due = (loan.get("due_date") or "")[:10]
             lines.append(f"  - [{number}] \"{title}\" — KH: {customer} | Hạn: {due}")
     return "\n".join(lines)

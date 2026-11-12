@@ -30,7 +30,7 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| GET | /health | Kiểm tra trạng thái service |
+| GET | /health | Kiểm tra trạng thái service; từ 2026-11-12 có thêm `prompt_versions` (phiên bản từng prompt, `ai_core/prompts.py`) |
 | GET | /recommendations | Gợi ý đọc sách |
 | POST | /recommendations | Gợi ý đọc sách cá nhân hoá (V1/V2, xem mục dưới) |
 | POST | /lookup-book-by-isbn | Tra cứu metadata theo ISBN |
@@ -41,10 +41,12 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /reading-stats | Tổng hợp thống kê đọc |
 | POST | /assistant | Trợ lý hỗ trợ ra quyết định (tool-calling qua OpenRouter + Analytics Service) |
 | POST | /assistant/stream | Bản streaming (SSE) của /assistant |
-| POST | /actions/confirm | Xác nhận (hoặc hủy, nếu `confirm: false`) một pending action |
+| POST | /actions/confirm | Xác nhận (hoặc hủy, nếu `confirm: false`) một pending action. Kết quả: `EXECUTED`; `FAILED` (đích từ chối, có thể xác nhận lại); `RECONCILE_REQUIRED` (không xác định được kết quả, chờ đối chiếu) — xem `docs/AI/ACTION_LIFECYCLE.md` |
 | POST | /actions/cancel | Hủy một pending action |
 | GET | /actions/pending/{action_id} | Xem chi tiết một pending action (chủ sở hữu hoặc superuser) |
-| GET | /actions/stats | Thống kê tổng số action pending/executed/total (admin) |
+| GET | /actions/stats | Thống kê tổng số action pending/executed/total và `reconcile_required` (admin) |
+| POST | /actions/reconcile | Đối chiếu một action `RECONCILE_REQUIRED` → `EXECUTED` hoặc `FAILED` sau khi kiểm tra service đích (admin; `{action_id, outcome, note}`) |
+| POST | /internal/corpus-sync | Đồng bộ lại `corpus/*.md` ngay, không cần restart (chỉ khóa nội bộ; gateway không mở `/ai/internal`) |
 | GET | /assistant/actions | Action Center — danh sách action, filter theo `status`/`conversation_id`/`mine` |
 | GET | /assistant/actions/{action_id} | Chi tiết action + audit log đầy đủ (CREATED→CONFIRMED→EXECUTED/...) |
 | GET | /assistant/conversations | Danh sách hội thoại của user hiện tại |
@@ -357,6 +359,10 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói, quét hóa đơn |
 | OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt. Phải là model OpenRouter — không có fallback provider khác |
 | ASSISTANT_TOOL_CONTEXT_CHARS | 2000 | Số ký tự tối đa một tool result đóng góp vào prompt `/assistant` |
+| ACTION_STALE_CONFIRMED_SECONDS | 900 | Action ở `CONFIRMED` lâu hơn mức này (service khởi động lại giữa lúc thực thi) được giải phóng: loại an toàn khi thử lại → `FAILED`, loại khác → `RECONCILE_REQUIRED` |
+| TOOL_TOTAL_TIMEOUT_SECONDS | 30 | Thời gian tối đa của một lần gọi tool đọc (kể cả tool tổng hợp) — `ai_core/tools.py` |
+| TRUST_GATEWAY_CLIENT_IP | true | Tin header `x-smartbook-client-ip` do gateway đặt để giới hạn tốc độ người dùng ẩn danh theo IP thật. Chỉ đúng khi ai-service chỉ truy cập được qua gateway |
+| INTERNAL_DOC_DIR | `corpus/` trong image | Thư mục tài liệu INTERNAL_DOC; mount volume vào đây để sửa tài liệu rồi gọi `/internal/corpus-sync` |
 | COPILOT_SEMANTIC_PLANNER | off | Phase 1: khi kế hoạch của planner luật có dấu hiệu thiếu (diễn đạt gián tiếp, câu nhiều ý), hỏi LLM một bản đọc có cấu trúc rồi backend kiểm tra và lập kế hoạch lại (`copilot_semantic_planner.py`). Mặc định tắt — xem `docs/ANALYSIS/AI_COPILOT_SEMANTIC_UNDERSTANDING.md` |
 | COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS | 5 | Thời gian chờ tối đa cho lần gọi LLM lập kế hoạch; quá hạn thì dùng kế hoạch của luật |
 | OPENROUTER_EMBED_MODEL | qwen/qwen3-embedding-8b | Model embedding cho semantic FAQ + book search |
@@ -457,6 +463,9 @@ Luồng mỗi lượt hỏi (chung cho `/assistant` và `/assistant/stream`, `ma
 - README root: ../../README.md
 - Docker runbook: ../RUN_WITH_DOCKER.md
 - Kiến trúc tổng quan: ../ARCHITECTURE/PROJECT_OVERVIEW.md
+- Kiến trúc AI (hai trải nghiệm + Shared AI Core): ../AI/AI_ARCHITECTURE.md
+- RAG pipeline: ../AI/RAG_PIPELINE.md · Vòng đời action: ../AI/ACTION_LIFECYCLE.md
+- Ma trận quyền & phạm vi kho: ../AI/PERMISSION_MATRIX.md · Chiến lược kiểm thử: ../AI/TESTING_STRATEGY.md
 
 ## Gợi ý sách (POST /recommendations)
 

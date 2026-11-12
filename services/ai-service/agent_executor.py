@@ -25,6 +25,34 @@ EXECUTOR_TIMEOUT = float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "10"))
 _STAFF_ROLES = {"ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF"}
 
 
+class ActionOutcomeUnknown(Exception):
+    """The request may have reached the target service, but whether it wrote
+    anything is unknown (timeout, connection drop, 5xx). Distinct from an
+    HTTPException, which this module raises only when the target - or a local
+    precondition - refused the action, i.e. nothing was written."""
+
+
+def _refused_or_unknown(resp: httpx.Response, what: str) -> Exception:
+    """A non-2xx answer: 4xx is a refusal (nothing written, safe to report as
+    failed); 5xx leaves the outcome unknown."""
+    if resp.status_code >= 500:
+        return ActionOutcomeUnknown(f"{what}: HTTP {resp.status_code} {resp.text[:200]}")
+    return HTTPException(status_code=resp.status_code, detail=f"{what}: {resp.text[:300]}")
+
+
+def _item_failure(title: str, resp: httpx.Response | None = None, exc: Exception | None = None) -> dict:
+    """One line of a multi-item executor that did not succeed. `outcome` is
+    "unknown" when the line may still have been written (5xx / no response)."""
+    if resp is not None:
+        return {"title": title, "error": f"HTTP {resp.status_code}", "detail": resp.text[:200],
+                "outcome": "unknown" if resp.status_code >= 500 else "refused"}
+    return {"title": title, "error": str(exc), "outcome": "unknown"}
+
+
+def _needs_reconciliation(failed_items: list[dict]) -> bool:
+    return any(item.get("outcome") == "unknown" for item in failed_items)
+
+
 def _short_id() -> str:
     return uuid4().hex[:8].upper()
 
@@ -186,13 +214,9 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
                         "suggested_supplier_name": effective_supplier_name,
                     })
                 else:
-                    failed_items.append({
-                        "title": title,
-                        "error": f"HTTP {resp.status_code}",
-                        "detail": resp.text[:200],
-                    })
+                    failed_items.append(_item_failure(title, resp=resp))
             except Exception as exc:
-                failed_items.append({"title": title, "error": str(exc)})
+                failed_items.append(_item_failure(title, exc=exc))
 
     has_skipped = bool(skipped_items) or bool(no_warehouse_items)
     if created_requests and not failed_items and not has_skipped:
@@ -223,6 +247,10 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
     if not created_requests:
         message_parts.append("Không có phiếu thật nào được tạo.")
 
+    needs_reconciliation = _needs_reconciliation(failed_items)
+    if needs_reconciliation:
+        message_parts.append("Một số phiếu không xác định được đã tạo hay chưa; cần kiểm tra danh sách phiếu "
+                             "yêu cầu nhập trước khi tạo lại.")
     return {
         "success": bool(created_requests) or mode == "draft_only",
         "mode": mode,
@@ -230,6 +258,7 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
         "failed_items": failed_items,
         "skipped_items": skipped_items,
         "no_warehouse_items": no_warehouse_items,
+        "needs_reconciliation": needs_reconciliation,
         "message": " ".join(message_parts),
     }
 
@@ -299,14 +328,11 @@ async def _exec_reservation(
                         "message": "Reservation created successfully via /my/reservations.",
                         "reservation": resp.json(),
                     }
-                raise HTTPException(
-                    status_code=resp.status_code,
-                    detail=f"Reservation failed: {resp.text[:300]}",
-                )
-        except HTTPException:
+                raise _refused_or_unknown(resp, "Reservation failed")
+        except (HTTPException, ActionOutcomeUnknown):
             raise
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Reservation error: {exc}")
+            raise ActionOutcomeUnknown(f"Reservation error: {exc}") from exc
 
     # Staff/manager/admin route — requires customer_id
     customer_id = payload.get("customer_id")
@@ -346,14 +372,11 @@ async def _exec_reservation(
                     "message": "Reservation created successfully via /borrow/reservations.",
                     "reservation": resp.json(),
                 }
-            raise HTTPException(
-                status_code=resp.status_code,
-                detail=f"Reservation failed: {resp.text[:300]}",
-            )
-    except HTTPException:
+            raise _refused_or_unknown(resp, "Reservation failed")
+    except (HTTPException, ActionOutcomeUnknown):
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Reservation error: {exc}")
+        raise ActionOutcomeUnknown(f"Reservation error: {exc}") from exc
 
 
 # ── Stock Alert Executor ───────────────────────────────────────────────────────
@@ -444,13 +467,9 @@ async def _exec_stock_alert(payload: dict, auth_header: str) -> dict:
                 elif resp.status_code == 200:
                     duplicate_items.append(title)
                 else:
-                    failed_items.append({
-                        "title": title,
-                        "error": f"HTTP {resp.status_code}",
-                        "detail": resp.text[:200],
-                    })
+                    failed_items.append(_item_failure(title, resp=resp))
             except Exception as exc:
-                failed_items.append({"title": title, "error": str(exc)})
+                failed_items.append(_item_failure(title, exc=exc))
 
     has_skipped = bool(skipped_items) or bool(no_warehouse_items)
     if created_alerts and not failed_items and not has_skipped:
@@ -473,6 +492,9 @@ async def _exec_stock_alert(payload: dict, auth_header: str) -> dict:
         parts.append(f"{len(no_warehouse_items)} sách bỏ qua (thiếu warehouse).")
     if not parts:
         parts.append("Không tạo được cảnh báo nào.")
+    needs_reconciliation = _needs_reconciliation(failed_items)
+    if needs_reconciliation:
+        parts.append("Một số cảnh báo không xác định được đã tạo hay chưa; cần kiểm tra trước khi tạo lại.")
 
     return {
         "success": bool(created_alerts) or bool(duplicate_items),
@@ -482,6 +504,7 @@ async def _exec_stock_alert(payload: dict, auth_header: str) -> dict:
         "failed_items": failed_items,
         "skipped_items": skipped_items,
         "no_warehouse_items": no_warehouse_items,
+        "needs_reconciliation": needs_reconciliation,
         "message": " ".join(parts),
     }
 
@@ -514,15 +537,18 @@ async def _exec_staff_task(payload: dict, auth_header: str) -> dict:
     if payload.get("due_date"):
         body["due_date"] = payload["due_date"]
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
-        resp = await client.post(
-            f"{GATEWAY_URL}/api/staff-tasks",
-            json=body,
-            headers={"Authorization": auth_header},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+            resp = await client.post(
+                f"{GATEWAY_URL}/api/staff-tasks",
+                json=body,
+                headers={"Authorization": auth_header},
+            )
+    except Exception as exc:  # the POST may have been processed before the connection dropped
+        raise ActionOutcomeUnknown(f"Staff task request: {exc}") from exc
 
     if resp.status_code not in (200, 201):
-        raise HTTPException(status_code=resp.status_code, detail=f"Gateway error creating staff task: {resp.text[:200]}")
+        raise _refused_or_unknown(resp, "Gateway error creating staff task")
 
     data = resp.json()
     task = data.get("data", data)

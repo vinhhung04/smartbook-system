@@ -10,7 +10,7 @@ import httpx
 
 import faq_retrieval
 import retrieval_confidence
-from rag import CONFIDENT_FAQ_LEAD, UNCERTAIN_FAQ_LEAD
+from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -298,6 +298,12 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             else f"{CONFIDENT_FAQ_LEAD}\n"
         )
         summary = summary_lead + "\n".join(faq_lines)
+
+        # Hybrid: a policy document explains the rule, but the values it quotes
+        # are configuration that can change - read them live; the live value wins.
+        live_block = await _live_policy_data({match.entry["id"] for match in faq_matches}, sources, warnings, raw)
+        if live_block:
+            summary = f"{summary}\n\n{live_block}"
 
         return {
             "summary": summary,
@@ -650,3 +656,72 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
         "warnings": warnings,
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Hybrid knowledge: live values for policy documents ──────────────────────
+# Static knowledge (corpus/*.md) explains rules and procedures. The VALUES some
+# of those documents quote are configuration an administrator can change
+# (membership plan limits and fees, branch addresses and opening hours). When
+# such a document is retrieved, the current values are read from the public
+# endpoints the website itself uses, and the prompt rule (rag.LIVE_DATA_LEAD)
+# makes the live value win over the document's.
+_PLAN_DOCS = {"membership-plans-overview", "membership-loan-limit", "fine-calculation", "reservation-hold",
+              "renewal-count", "lost-item-fee"}
+_BRANCH_DOCS = {"branches-opening-hours"}
+PUBLIC_PLANS_ENDPOINT = "/public/membership/plans"
+PUBLIC_BRANCHES_ENDPOINT = "/public/catalog/branches"
+
+
+def _format_plans(plans: list) -> list[str]:
+    fields = (
+        ("max_active_loans", "tối đa {} cuốn"), ("max_loan_days", "{} ngày/lượt"),
+        ("max_renewal_count", "gia hạn {} lần"), ("reservation_hold_hours", "giữ chỗ {} giờ"),
+        ("lost_item_fee_multiplier", "hệ số đền sách mất x{}"), ("duration_days", "thời hạn gói {} ngày"),
+    )
+    lines = []
+    for plan in plans:
+        if not isinstance(plan, dict) or not plan.get("name"):
+            continue
+        parts = [label.format(plan[key]) for key, label in fields if plan.get(key) is not None]
+        if plan.get("fine_per_day") is not None:
+            parts.insert(4, f"phạt trễ hạn {_format_vnd(plan['fine_per_day'])}/ngày")
+        if plan.get("price") is not None:
+            parts.append(f"phí gói {_format_vnd(plan['price'])}")
+        lines.append(f"- {plan['name']}: {', '.join(parts)}")
+    return lines
+
+
+def _format_branches(branches: list) -> list[str]:
+    return [
+        f"- {b['name']}: {b.get('address') or 'chưa có địa chỉ'}; giờ mở cửa: {b.get('opening_hours') or 'chưa công bố'}"
+        for b in branches if isinstance(b, dict) and b.get("name")
+    ]
+
+
+async def _live_policy_data(doc_ids: set[str], sources: list[dict], warnings: list[str], raw: dict) -> str:
+    """The live block for the retrieved documents, or "" when none of them
+    quotes configurable values. A failed read leaves the document's own values
+    and a warning saying they may be out of date."""
+    wanted = []
+    if doc_ids & _PLAN_DOCS:
+        wanted.append(("Gói thành viên hiện hành", PUBLIC_PLANS_ENDPOINT, _format_plans))
+    if doc_ids & _BRANCH_DOCS:
+        wanted.append(("Chi nhánh hiện hành", PUBLIC_BRANCHES_ENDPOINT, _format_branches))
+    if not wanted:
+        return ""
+    read_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(RETRIEVAL_TIMEOUT)) as client:
+        results = await asyncio.gather(*(_fetch(client, endpoint, None) for _name, endpoint, _fmt in wanted))
+    blocks = []
+    for (name, endpoint, fmt), (source, payload, warning) in zip(wanted, results):
+        source["name"] = name
+        sources.append(source)
+        lines = [] if warning else fmt(_as_list(payload))
+        if not lines:
+            warnings.append(f"{name}: không đọc được dữ liệu hiện hành; số liệu trong tài liệu có thể đã cũ.")
+            continue
+        raw.setdefault("live_data", {})[endpoint] = _as_list(payload)
+        blocks.append(f"{name}:\n" + "\n".join(lines))
+    if not blocks:
+        return ""
+    return f"{LIVE_DATA_LEAD} (đọc lúc {read_at})\n" + "\n\n".join(blocks)

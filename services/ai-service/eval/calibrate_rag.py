@@ -106,8 +106,28 @@ def _evaluate_candidate(rows: list[dict], cfg: confidence.ConfidenceConfig) -> d
         "recall_at_5": recall5, "answerable_recall_at_5": answerable5,
         "no_answer_accuracy": abstention["no_answer_accuracy"],
         "false_positive_rate": abstention["false_positive_rate"],
-        "coverage": abstention["coverage"], "abstention_f1": abstention["abstention_f1"],
+        "false_negative_rate": abstention["false_negative_rate"],
+        "coverage": abstention["coverage"],
+        "abstention_precision": abstention["abstention_precision"],
+        "abstention_recall": abstention["abstention_recall"],
+        "abstention_f1": abstention["abstention_f1"],
+        "keyword_fallback_ok": keyword_fallback_ok(cfg),
     }
+
+
+NO_VALID_CANDIDATE = "NO_VALID_CANDIDATE"
+
+
+def keyword_fallback_ok(cfg: confidence.ConfidenceConfig) -> bool:
+    """Whether a top keyword hit with NO semantic signal (embedding provider
+    down) can still pass the evidence threshold. A signals dump always has
+    semantic signals, so it cannot reveal a tau that silently disables this
+    fallback - this checks the rule directly (2026-11-12: 0.45 was chosen from
+    a dump and disabled it; see retrieval_confidence.py)."""
+    keyword_only = confidence.RetrievalSignals(
+        corpus="", result_count=1, semantic_available=False, semantic_top1=0.0,
+        semantic_rank=None, keyword_rank=1, top1_agree=False)
+    return confidence.evaluate(keyword_only, cfg).decision != confidence.NO_EVIDENCE
 
 
 def calibrate_corpus(corpus: str, rows: list[dict], base_cfg: confidence.ConfidenceConfig) -> tuple[dict, list[dict]]:
@@ -133,9 +153,16 @@ def calibrate_corpus(corpus: str, rows: list[dict], base_cfg: confidence.Confide
     # BASELINE_RECALL_AT_5 was measured on), so a straight comparison would
     # flag every candidate as "regressed" for a reason that has nothing to do
     # with retrieval quality.
-    eligible = [row for row in table if row["answerable_recall_at_5"] >= baseline - RECALL_TOLERANCE]
-    pool = eligible or table
-    best = max(pool, key=lambda row: (row["no_answer_accuracy"] or 0.0, row["abstention_f1"] or 0.0))
+    # Eligible: keeps answerable recall within tolerance of the baseline AND
+    # keeps the keyword-only fallback alive. With no eligible candidate the
+    # result is NO_VALID_CANDIDATE - never "the best of the invalid ones" -
+    # and the production thresholds (retrieval_confidence.py) stay as they are.
+    eligible = [row for row in table
+                if row["answerable_recall_at_5"] >= baseline - RECALL_TOLERANCE and row["keyword_fallback_ok"]]
+    if not eligible:
+        return {"status": NO_VALID_CANDIDATE, "chosen": None, "test_split_metrics": None,
+                "calib_n": len(calib_rows), "test_n": len(test_rows)}, table
+    best = max(eligible, key=lambda row: (row["no_answer_accuracy"] or 0.0, row["abstention_f1"] or 0.0))
 
     best_cfg = confidence.ConfidenceConfig(
         cos_floor=base_cfg.cos_floor, cos_ceil=base_cfg.cos_ceil,
@@ -143,11 +170,14 @@ def calibrate_corpus(corpus: str, rows: list[dict], base_cfg: confidence.Confide
         w_semantic=base_cfg.w_semantic, w_keyword=base_cfg.w_keyword, w_agree=base_cfg.w_agree,
     )
     test_metrics = _evaluate_candidate(test_rows, best_cfg)
-    return {"chosen": best, "test_split_metrics": test_metrics, "calib_n": len(calib_rows), "test_n": len(test_rows)}, table
+    return {"status": "OK", "chosen": best, "test_split_metrics": test_metrics,
+            "calib_n": len(calib_rows), "test_n": len(test_rows)}, table
 
 
 def render_report(by_corpus: dict, tables: dict, timestamp: str) -> str:
     lines = [f"# RAG confidence-threshold calibration — {timestamp} (split={SPLIT_MODE})", ""]
+    lines += ["This report never changes production thresholds; apply a chosen value by editing "
+              "retrieval_confidence.py after review.", ""]
     for corpus, outcome in by_corpus.items():
         chosen = outcome["chosen"]
         lines += [
@@ -155,19 +185,29 @@ def render_report(by_corpus: dict, tables: dict, timestamp: str) -> str:
             "",
             f"- calib/test split: {outcome['calib_n']} / {outcome['test_n']} case",
             f"- Baseline Answerable Recall@5 (pre-abstention): {BASELINE_RECALL_AT_5.get(corpus)}, tolerance {RECALL_TOLERANCE}",
-            f"- **Chosen: tau_confident={chosen['tau_confident']}, tau_evidence={chosen['tau_evidence']}**"
-            f" (calib R@5 {chosen['recall_at_5']}, No-answer acc {chosen['no_answer_accuracy']}, "
-            f"F1 {chosen['abstention_f1']})",
-            f"- On the held-out `test` split: {outcome['test_split_metrics']}",
+        ]
+        if chosen is None:
+            lines += [f"- **{NO_VALID_CANDIDATE}**: no candidate keeps answerable recall within tolerance and the "
+                      "keyword-only fallback alive. Keep the production thresholds."]
+        else:
+            lines += [
+                f"- **Chosen: tau_confident={chosen['tau_confident']}, tau_evidence={chosen['tau_evidence']}**"
+                f" (calib R@5 {chosen['recall_at_5']}, No-answer acc {chosen['no_answer_accuracy']}, "
+                f"F1 {chosen['abstention_f1']})",
+                f"- On the held-out `test` split: {outcome['test_split_metrics']}",
+            ]
+        lines += [
             "",
-            "| tau_confident | tau_evidence | R@5 | Answerable R@5 | No-answer acc | FPR | Coverage | Abstention F1 |",
-            "|---|---|---|---|---|---|---|---|",
+            "| tau_confident | tau_evidence | R@5 | Answerable R@5 | No-answer acc | FPR | FNR | Coverage "
+            "| Abst. P | Abst. R | Abst. F1 | Keyword fallback |",
+            "|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in sorted(tables[corpus], key=lambda r: (r["tau_confident"], r["tau_evidence"])):
             lines.append(
                 f"| {row['tau_confident']} | {row['tau_evidence']} | {row['recall_at_5']} | "
                 f"{row['answerable_recall_at_5']} | {row['no_answer_accuracy']} | {row['false_positive_rate']} | "
-                f"{row['coverage']} | {row['abstention_f1']} |"
+                f"{row['false_negative_rate']} | {row['coverage']} | {row['abstention_precision']} | "
+                f"{row['abstention_recall']} | {row['abstention_f1']} | {'ok' if row['keyword_fallback_ok'] else 'OFF'} |"
             )
         lines.append("")
     return "\n".join(lines)

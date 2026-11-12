@@ -74,11 +74,14 @@ ASSISTANT_PERMISSIONS = {"analytics.reports.view", "analytics.read", "reports.re
 
 
 def can_use_assistant(user_ctx) -> bool:
-    """Same gate as main._assistant_can_access (kept here to avoid importing main)."""
+    """THE gate of the Decision Assistant (/assistant, /assistant/stream and its
+    conversation history): a manager role AND an analytics permission - the
+    same rule the web applies (canAccess: hasAnyRole && hasAnyPermission) to
+    show /ai-assistant instead of the floating chatbot. Superusers pass."""
     if user_ctx is None:
         return False
-    return bool(user_ctx.is_superuser or set(user_ctx.roles or []) & ASSISTANT_ROLES
-                or set(user_ctx.permissions or []) & ASSISTANT_PERMISSIONS)
+    return bool(user_ctx.is_superuser or (set(user_ctx.roles or []) & ASSISTANT_ROLES
+                                          and set(user_ctx.permissions or []) & ASSISTANT_PERMISSIONS))
 
 
 async def _scoped_summaries(messages: list[MessageRow], user_ctx) -> list[dict]:

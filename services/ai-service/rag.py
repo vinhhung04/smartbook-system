@@ -10,6 +10,7 @@ from retrieval_confidence import UNCERTAIN
 CONFIDENT_FAQ_LEAD = "Câu hỏi thường gặp liên quan:"
 UNCERTAIN_FAQ_LEAD = ("Các mục câu hỏi thường gặp gần giống nhưng độ tin cậy chưa cao "
                       "(có thể không trả lời đúng câu hỏi):")
+LIVE_DATA_LEAD = "[DỮ LIỆU HIỆN HÀNH — đọc trực tiếp từ hệ thống, ưu tiên hơn số liệu trong tài liệu]"
 UNCERTAIN_FALLBACK_REPLY = ("Tôi chưa tìm thấy thông tin trả lời trực tiếp câu hỏi này trong tài liệu của thư viện. "
                             "Bạn có thể liên hệ thư viện qua trang Hỗ trợ & Liên hệ hoặc quầy thủ thư để được giải đáp.")
 
@@ -21,6 +22,12 @@ RAG_SYSTEM_RULES = f"""
 - Nếu không mục nào trả lời trực tiếp: nói rõ thư viện chưa có thông tin về điều đó và gợi ý liên hệ thư viện (trang Hỗ trợ & Liên hệ hoặc quầy thủ thư). Có thể nhắc tên 1–2 mục liên quan, nhưng không trình bày chúng như câu trả lời.
 - Tuyệt đối không tự suy ra hay đặt ra quy định, nội quy, dịch vụ, giờ giấc, mức phí hoặc quyền hạn không có trong context, kể cả dưới dạng "khuyến cáo" hay "thường thì".
 - Không có thông tin KHÔNG có nghĩa là thư viện không làm điều đó: đừng nói "SmartBook không hỗ trợ / chưa có dịch vụ X" nếu context không nói thẳng như vậy. Hãy nói "Tài liệu của thư viện chưa có thông tin về X".
+
+## Quy tắc nguồn dữ liệu
+- Tài liệu (câu hỏi thường gặp) giải thích quy định và quy trình; số liệu cấu hình (hạn mức gói thẻ, mức phí, địa chỉ, giờ mở cửa) lấy từ khối "{LIVE_DATA_LEAD}" nếu có. Khi hai nguồn khác nhau, dùng giá trị hiện hành và nói ngắn gọn rằng tài liệu ghi khác.
+- Số liệu nghiệp vụ động (tồn kho, phiếu mượn, đặt chỗ, tiền phạt, số dư) chỉ được lấy từ dữ liệu hệ thống trong context, không lấy từ tài liệu.
+- Nếu chỉ trả lời được một phần câu hỏi, nói rõ phần nào đã có căn cứ và phần nào chưa xác minh được.
+- Nếu câu hỏi chứa thông tin trái với context (ví dụ một mức phí hay thời hạn khác), chỉ ra điểm sai và nêu giá trị đúng theo context.
 
 ## Quy tắc RAG bắt buộc
 - Nếu có [RAG CONTEXT], phải ưu tiên trả lời dựa trên context đó.

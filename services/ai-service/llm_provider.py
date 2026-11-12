@@ -26,6 +26,7 @@ aggregates these across a request's rounds and attaches them to the
 """
 from __future__ import annotations
 
+from ai_core.observability import current_request_id
 import functools
 import logging
 import os
@@ -128,14 +129,14 @@ def _log_call(usage: ChatUsage) -> None:
         ai_llm_cost_usd_total.labels(feature=usage.feature, model=usage.model).inc(usage.cost_usd)
     if usage.error:
         logger.warning(
-            "llm_call feature=%s provider=%s model=%s latency_ms=%.0f error=%s",
-            usage.feature, usage.provider, usage.model, usage.latency_ms, usage.error,
+            "llm_call request_id=%s feature=%s provider=%s model=%s latency_ms=%.0f error=%s",
+            current_request_id(), usage.feature, usage.provider, usage.model, usage.latency_ms, usage.error,
         )
     else:
         logger.info(
-            "llm_call feature=%s provider=%s model=%s latency_ms=%.0f prompt_tokens=%s "
+            "llm_call request_id=%s feature=%s provider=%s model=%s latency_ms=%.0f prompt_tokens=%s "
             "completion_tokens=%s tool_calls=%d cost_usd=%s",
-            usage.feature, usage.provider, usage.model, usage.latency_ms, usage.prompt_tokens,
+            current_request_id(), usage.feature, usage.provider, usage.model, usage.latency_ms, usage.prompt_tokens,
             usage.completion_tokens, usage.tool_call_count, usage.cost_usd,
         )
 

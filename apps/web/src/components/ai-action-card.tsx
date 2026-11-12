@@ -266,7 +266,9 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
       if (needsAssignee && selectedAssigneeId) override.assignee_user_id = selectedAssigneeId;
       const resp = await aiService.confirmAction(action.id, Object.keys(override).length ? override : undefined);
       setLocalStatus(resp.status);
-      onConfirmed(action.id, resp.result, action.type);
+      // RECONCILE_REQUIRED: the outcome is unknown, so nothing is reported as done.
+      if (resp.status === 'EXECUTED') onConfirmed(action.id, resp.result, action.type);
+      else toast.warning(resp.message);
     } catch (err: any) {
       const status = err?.response?.status;
       if (status === 403) toast.error('Bạn không có quyền xác nhận đề xuất này.');
@@ -436,6 +438,7 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
           {localStatus === 'EXECUTED' ? 'Đã thực hiện theo xác nhận của bạn. Xem kết quả bên dưới.'
             : localStatus === 'CANCELLED' ? 'Bạn đã từ chối đề xuất này. Không có thay đổi nào được thực hiện.'
             : localStatus === 'EXPIRED' ? 'Đề xuất đã hết hạn. Hãy yêu cầu hệ thống tạo lại.'
+            : localStatus === 'RECONCILE_REQUIRED' ? 'Chưa xác định được đề xuất đã được thực hiện hay chưa. Cần đối chiếu trước khi tạo lại.'
             : 'Không thực hiện được đề xuất.'}
         </p>
       ) : (

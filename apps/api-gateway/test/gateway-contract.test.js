@@ -14,7 +14,7 @@ test('gateway keeps all public service proxy prefixes', () => {
 test('AI proxy fails in a documented degraded mode', () => {
   assert.match(source, /AI_UNAVAILABLE/);
   assert.match(source, /AI tạm thời không khả dụng/);
-  assert.match(source, /on: \{ error: handleAiProxyError \}/);
+  assert.match(source, /on: \{ error: handleAiProxyError, proxyReq: setAiClientIp \}/);
 });
 
 test('ai-service internal endpoints are never proxied from the public edge', () => {
@@ -67,6 +67,16 @@ test('public membership plans are proxied to borrow-service behind the same read
 
 test('public AI discovery has its own per-IP budget and degrades like the other AI routes', () => {
   assert.match(source, /"\/public\/discover",\s*createRateLimiter\([\s\S]{0,200}createRateLimiter\([\s\S]{0,200}target: aiTarget/);
-  assert.match(source, /"\/public\/discover"[\s\S]{0,700}on: \{ error: handleAiProxyError \}/);
+  assert.match(source, /"\/public\/discover"[\s\S]{0,700}on: \{ error: handleAiProxyError, proxyReq: setAiClientIp \}/);
   assert.ok(source.indexOf('"/public/discover"') < source.indexOf('app.use("/public", (req, res) => res.status(404)'));
+});
+
+test('every AI proxy hands ai-service the client IP the gateway resolved, never a client-written one', () => {
+  const aiProxies = source.match(/on: \{ error: handleAiProxyError[^}]*\}/g) || [];
+  assert.equal(aiProxies.length, 3);
+  for (const hook of aiProxies) assert.match(hook, /proxyReq: setAiClientIp/);
+  assert.match(source, /proxyReq\.setHeader\(AI_CLIENT_IP_HEADER, req\.aiClientIp/);
+  // resolved once, before any proxy appends to X-Forwarded-For
+  const resolved = source.indexOf('req.aiClientIp = resolveClientIp(req, AI_TRUSTED_PROXY_HOPS)');
+  assert.ok(resolved > 0 && resolved < source.indexOf('createProxyMiddleware({'));
 });

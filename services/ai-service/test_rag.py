@@ -258,3 +258,15 @@ class AnalyticsBlockExemptionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_personal_loan_titles_come_from_the_borrow_service_shape():
+    """borrow-service /my/loans sends primary_book_title and loan_items[].book_title;
+    the personal context showed every title as "?" before reading them."""
+    import user_personal_context as upc
+    assert upc._loan_title({"primary_book_title": "Norwegian Wood"}) == "Norwegian Wood"
+    assert upc._loan_title({"loan_items": [{"book_title": "Dế Mèn"}]}) == "Dế Mèn"
+    assert upc._loan_title({"book": {"title": "Cũ"}}) == "Cũ"
+    assert upc._loan_title({}) == "?"
+    text = upc._fmt_loans([{"loan_number": "L1", "status": "BORROWED", "primary_book_title": "Norwegian Wood"}])
+    assert '"Norwegian Wood"' in text
