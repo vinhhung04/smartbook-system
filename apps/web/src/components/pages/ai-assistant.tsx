@@ -73,6 +73,10 @@ export function AIAssistantPage() {
   const pendingCountReloadTimerRef = useRef<number | null>(null);
   // Guards a second send fired before React re-renders with loading=true (double Enter/click).
   const inFlightRef = useRef(false);
+  // The in-flight /assistant/stream request: "Dừng", a new conversation and
+  // leaving the page abort it, so no late answer lands in the wrong thread.
+  const streamRef = useRef<AbortController | null>(null);
+  useEffect(() => () => streamRef.current?.abort(), []);
   const { scrollRef, contentRef, atBottom, scrollToBottom } = useStickToBottom(messages.length > 0);
 
   const loadConversations = async () => {
@@ -198,8 +202,11 @@ export function AIAssistantPage() {
     setAnnouncement('Đã gửi câu hỏi. Đang chờ trợ lý trả lời.');
     scrollToBottom();
     let firstToken = true;
+    const controller = new AbortController();
+    streamRef.current = controller;
     try {
       await aiService.askAssistantStream(trimmed, conversationId, {
+        signal: controller.signal,
         onToken: (token) => {
           if (firstToken) {
             firstToken = false;
@@ -240,10 +247,29 @@ export function AIAssistantPage() {
         },
       });
     } finally {
+      if (streamRef.current === controller) streamRef.current = null;
       inFlightRef.current = false;
       setLoading(false);
     }
   };
+
+  // The streamed text is an unverified draft, so a stopped answer is not kept;
+  // marked as an error, the turn gets the usual "retry" affordance.
+  const stopAnswer = useCallback(() => {
+    if (!streamRef.current) return;
+    streamRef.current.abort();
+    setMessages((prev) => {
+      if (prev.length === 0 || prev[prev.length - 1].role !== 'assistant') return prev;
+      const next = [...prev];
+      next[next.length - 1] = {
+        role: 'assistant',
+        content: 'Đã dừng câu trả lời. Bản nháp chưa được đối chiếu với dữ liệu nên không được giữ lại.',
+        isError: true,
+      };
+      return next;
+    });
+    setAnnouncement('Đã dừng câu trả lời.');
+  }, []);
 
   // Children are memoised; hand them stable callbacks that always run the latest closure.
   const sendRef = useRef(sendMessage);
@@ -297,6 +323,7 @@ export function AIAssistantPage() {
   // The typed draft is kept across new/switched conversations: it is the
   // person's own text, and only sending it clears it.
   const startNewConversation = () => {
+    streamRef.current?.abort();
     setMessages([]);
     setConversationId(newConversationId());
     localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
@@ -548,6 +575,7 @@ export function AIAssistantPage() {
                   onChange={setInput}
                   onSubmit={ask}
                   sending={loading}
+                  onStop={stopAnswer}
                   blocked={hydrating}
                   suggestions={messages.length > 0 ? suggestionGroups : undefined}
                 />

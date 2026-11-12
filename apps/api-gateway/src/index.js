@@ -556,6 +556,10 @@ app.use(
 // service-to-service only. They check the internal key themselves; this keeps
 // them off the public edge entirely instead of relying on that check alone.
 app.use("/ai/internal", (_req, res) => res.status(404).json({ message: "Not found" }));
+// Prometheus scrapes ai-service:8000/metrics on the internal network; the public
+// edge must not expose its per-feature latency, token and cost counters, nor
+// FastAPI's generated docs / OpenAPI schema (the full internal API surface).
+app.use(["/ai/metrics", "/ai/docs", "/ai/redoc", "/ai/openapi.json"], (_req, res) => res.status(404).json({ message: "Not found" }));
 
 app.use(
   "/ai",

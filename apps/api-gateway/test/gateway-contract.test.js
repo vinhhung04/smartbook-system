@@ -23,6 +23,16 @@ test('ai-service internal endpoints are never proxied from the public edge', () 
   assert.ok(source.indexOf('app.use("/ai/internal"') < source.search(/"\/ai",\r?\n\s*createProxyMiddleware/));
 });
 
+test('ai-service metrics and generated API docs are not proxied from the public edge', () => {
+  const block = source.match(/app\.use\(\[([^\]]*)\], \(_req, res\) => res\.status\(404\)/);
+  assert.ok(block, 'expected a 404 block for ai-service introspection paths');
+  for (const path of ['/ai/metrics', '/ai/docs', '/ai/redoc', '/ai/openapi.json']) {
+    assert.ok(block[1].includes(`"${path}"`), `${path} must be blocked`);
+  }
+  // Registered before the /ai proxy, or the proxy would win.
+  assert.ok(block.index < source.search(/"\/ai",\r?\n\s*createProxyMiddleware/));
+});
+
 test('per-service health breakdown is admin-only and readiness checks dependency /ready', () => {
   assert.match(source, /app\.get\("\/system\/health", requireAdminToken,/);
   assert.match(source, /path: "\/ready", critical: true/);

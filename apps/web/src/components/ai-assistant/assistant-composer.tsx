@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Lightbulb, Loader2 } from 'lucide-react';
+import { ArrowUp, Lightbulb, Square } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '@/lib/gsap';
 import type { SuggestionGroup } from './model';
@@ -17,13 +17,15 @@ interface AssistantComposerProps {
   onSubmit: (text: string) => void;
   /** An answer is streaming: block sending, keep typing. */
   sending: boolean;
+  /** Stops the streaming answer; the send button becomes "Dừng" while sending. */
+  onStop?: () => void;
   /** A conversation is opening: sending now would race the history load. */
   blocked: boolean;
   /** Starter questions, offered once the conversation has begun. */
   suggestions?: SuggestionGroup[];
 }
 
-export function AssistantComposer({ value, onChange, onSubmit, sending, blocked, suggestions }: AssistantComposerProps) {
+export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, blocked, suggestions }: AssistantComposerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -101,15 +103,20 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, blocked,
               </Popover>
             )}
             <span id="assistant-composer-hint" className="hidden truncate px-1.5 text-[11.5px] text-muted-foreground sm:inline">
-              {sending ? 'Đang trả lời — bạn có thể soạn câu tiếp theo' : 'Enter để gửi · Shift + Enter để xuống dòng'}
+              {sending ? 'Đang trả lời — bạn có thể soạn câu tiếp theo hoặc bấm Dừng' : 'Enter để gửi · Shift + Enter để xuống dòng'}
             </span>
           </div>
-          <button type="submit" disabled={!canSend} aria-label="Gửi câu hỏi" title={sending ? 'Đang trả lời câu trước' : 'Gửi (Enter)'}
-            className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl bg-primary text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-35">
-            {sending
-              ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              : <ArrowUp className="h-4 w-4" aria-hidden="true" />}
-          </button>
+          {sending && onStop ? (
+            <button type="button" onClick={onStop} aria-label="Dừng trả lời" title="Dừng trả lời"
+              className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl bg-foreground text-background transition-[opacity,transform] hover:opacity-90 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+              <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            </button>
+          ) : (
+            <button type="submit" disabled={!canSend} aria-label="Gửi câu hỏi" title={sending ? 'Đang trả lời câu trước' : 'Gửi (Enter)'}
+              className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-xl bg-primary text-primary-foreground transition-[opacity,transform] hover:opacity-90 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-35">
+              <ArrowUp className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
         </div>
       </form>
       <p className="mt-2 px-1 text-center text-[11.5px] text-muted-foreground">

@@ -393,7 +393,8 @@ async function gatherSystemContext(user: AuthUser | null): Promise<SystemContext
 
 // ── Main AIChatbot component ──────────────────────────────────────────────────
 
-export function AIChatbot() {
+// `aboveBottomNav`: the customer portal has a fixed phone tab bar below lg.
+export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean }) {
   const [currentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<UIMessage[]>(() => loadStoredMessages(currentUser?.id || 'anon'));
@@ -405,6 +406,10 @@ export function AIChatbot() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const messageIdRef = useRef(messages.reduce((highest, message) => Math.max(highest, message.id), 0));
+  // The in-flight /chat/stream request: aborted on reset and on unmount so a
+  // late reply never lands in a cleared chat and the server stops generating.
+  const streamRef = useRef<AbortController | null>(null);
+  useEffect(() => () => streamRef.current?.abort(), []);
 
   useEffect(() => {
     saveStoredMessages(currentUser?.id || 'anon', messages);
@@ -455,8 +460,11 @@ export function AIChatbot() {
     // arrives, so the typing indicator (shown while `loading`) isn't doubled
     // up with an empty message bubble in the meantime.
     let started = false;
+    const controller = new AbortController();
+    streamRef.current = controller;
 
     await aiService.chatStream(trimmed, history, systemContext, {
+      signal: controller.signal,
       onToken: (chunk) => {
         if (!started) {
           started = true;
@@ -497,6 +505,7 @@ export function AIChatbot() {
         toast.error('AI tạm thời không khả dụng');
       },
     });
+    if (streamRef.current === controller) streamRef.current = null;
   };
 
   const ACTION_FOLLOWUP_SUGGESTIONS = useMemo<Record<string, string[]>>(() => ({
@@ -618,6 +627,8 @@ export function AIChatbot() {
   }, []);
 
   const handleReset = () => {
+    streamRef.current?.abort();
+    setLoading(false);
     setMessages([]);
     setInput('');
     setShowSuggestions(true);
@@ -628,11 +639,11 @@ export function AIChatbot() {
   const welcomeVisible = messages.length === 0 && !loading;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3">
+    <div className={`fixed right-4 z-50 flex flex-col items-end gap-3 ${aboveBottomNav ? 'bottom-20 lg:bottom-4' : 'bottom-4'}`}>
       {open && (
-        <div className="w-[400px] h-[580px] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="w-[400px] max-w-[calc(100vw-2rem)] h-[580px] max-h-[calc(100dvh-10rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-indigo-600 via-blue-600 to-violet-600 px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="bg-indigo-600 px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
                 <Bot size={16} className="text-white" />
@@ -689,7 +700,7 @@ export function AIChatbot() {
             {/* Welcome state */}
             {welcomeVisible && (
               <div className="flex flex-col items-center justify-center h-full gap-4 px-2">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center">
                   <Sparkles size={22} className="text-indigo-600" />
                 </div>
                 <div className="text-center">
@@ -874,7 +885,7 @@ export function AIChatbot() {
       {/* Floating Toggle Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative w-14 h-14 rounded-full bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 hover:from-indigo-700 hover:via-blue-700 hover:to-violet-700 shadow-lg shadow-indigo-500/25 flex items-center justify-center text-white transition-all active:scale-95"
+        className="relative w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 flex items-center justify-center text-white transition-all active:scale-95"
         aria-label="Mở chatbot AI"
       >
         <MorphIcon icon={open ? XData : BotData} size={open ? 22 : 24} />

@@ -43,16 +43,19 @@ ACTION_CONFIG: dict[str, dict] = {
         "requires_confirmation": True,
         "description": "Tạo reservation draft, chỉ gọi API thật nếu đủ variant_id + warehouse_id + customer context.",
     },
+    # Stock alerts and staff tasks: same gate as their inventory-service routes
+    # (authorizeManagerDecision: WAREHOUSE_MANAGER/ADMIN + inventory.operation.decide),
+    # so a card is never offered to someone the POST would refuse.
     CREATE_STOCK_ALERT: {
-        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
-        "allowed_permissions": ["inventory.stock.read", "inventory.task.read"],
+        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER"],
+        "allowed_permissions": ["inventory.operation.decide"],
         "risk": RISK_LOW,
         "requires_confirmation": True,
         "description": "Tạo cảnh báo tồn kho thấp/hết hàng từ warehouse-stock-risk, không chỉnh tồn kho.",
     },
     CREATE_STAFF_TASK_DRAFT: {
-        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"],
-        "allowed_permissions": ["inventory.task.read", "inventory.exception.report", "inventory.purchase.request"],
+        "allowed_roles": ["ADMIN", "WAREHOUSE_MANAGER"],
+        "allowed_permissions": ["inventory.operation.decide"],
         "risk": RISK_MEDIUM,
         "requires_confirmation": True,
         "description": "Tạo task draft cho staff. Bản đầu lưu trong AI Agent store hoặc trả demo-safe draft nếu chưa có task service thật.",

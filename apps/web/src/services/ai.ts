@@ -641,6 +641,8 @@ export const aiService = {
       onError: (error: unknown) => void;
       /** Copilot 3.2: the streamed text is a draft being checked against the data. */
       onStatus?: (stage: string) => void;
+      /** Aborting stops the request quietly: no onError, no onDone. */
+      signal?: AbortSignal;
     },
   ): Promise<void> => {
     try {
@@ -648,6 +650,7 @@ export const aiService = {
       const baseURL = aiAPI.defaults.baseURL || '';
       const response = await fetch(`${baseURL}/assistant/stream`, {
         method: 'POST',
+        signal: handlers.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -691,6 +694,7 @@ export const aiService = {
         }
       }
     } catch (error) {
+      if (handlers.signal?.aborted) return;
       handlers.onError(error);
     }
   },
@@ -719,6 +723,8 @@ export const aiService = {
       onToken: (text: string) => void;
       onDone: (data: ChatResponse) => void;
       onError: (error: unknown) => void;
+      /** Aborting stops the request quietly: no onError, no onDone. */
+      signal?: AbortSignal;
     },
   ): Promise<void> => {
     try {
@@ -726,6 +732,7 @@ export const aiService = {
       const baseURL = aiAPI.defaults.baseURL || '';
       const response = await fetch(`${baseURL}/chat/stream`, {
         method: 'POST',
+        signal: handlers.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -768,6 +775,7 @@ export const aiService = {
         }
       }
     } catch (error) {
+      if (handlers.signal?.aborted) return;
       handlers.onError(error);
     }
   },

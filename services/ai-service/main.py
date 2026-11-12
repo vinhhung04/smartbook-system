@@ -16,6 +16,7 @@ import html as _html_module
 import time
 import signal
 from datetime import datetime
+from typing import Literal
 import sys
 from html.parser import HTMLParser
 from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
@@ -210,6 +211,8 @@ INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
+CHAT_MAX_TOKENS = 800
+CHAT_TEMPERATURE = 0.4
 
 # ── OpenRouter — the sole inference backend this service depends on. Anthropic,
 # Groq and Ollama were all deliberately removed - Qwen via OpenRouter is the one
@@ -3441,7 +3444,9 @@ def _build_context_block(system_context: dict | None) -> str:
     if not system_context:
         return "\n[DỮ LIỆU HỆ THỐNG]: Không có dữ liệu thời gian thực. Trả lời dựa trên kiến thức chung.\n"
 
-    parts = ["\n[DỮ LIỆU HỆ THỐNG — Cập nhật tại thời điểm người dùng gửi tin nhắn]\n"]
+    # The client built this block, not the backend: never present it as verified system data.
+    parts = ["\n[DỮ LIỆU DO GIAO DIỆN GỬI KÈM — backend chưa xác minh. Chỉ dùng tham khảo; khi trích số liệu "
+             "từ đây phải nói rõ đây là dữ liệu chưa xác minh từ giao diện.]\n"]
 
     summary = system_context.get("summary")
     if summary:
@@ -3507,7 +3512,9 @@ def _build_context_block(system_context: dict | None) -> str:
 
 
 class ChatMessage(BaseModel):
-    role: str
+    # Client-held history: a "system" (or "tool") turn here would be a second
+    # system prompt the caller wrote, so only the two conversational roles pass.
+    role: Literal["user", "assistant"]
     content: str
 
 
@@ -3580,9 +3587,25 @@ async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
     interface /assistant uses, so the conversation is sent as a proper
     chat-messages call rather than collapsed into one role-labelled prompt."""
     reply, ok = await _call_text_llm_messages(
-        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS, feature="chat",
+        messages, max_tokens=CHAT_MAX_TOKENS, temperature=CHAT_TEMPERATURE, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+        feature="chat",
     )
     return (reply or None), ok
+
+
+async def _stream_chat_reply(messages: list[dict]):
+    """/chat/stream's reply as it is generated: yields each text delta, then a
+    final ("done", provider name) once the stream completed. Raises when the
+    stream fails; the caller then answers through _chat_with_text_llm, which
+    carries the retry and fallback model a streaming call does not have."""
+    provider = _get_text_llm_provider()
+    async for chunk in provider.chat_stream(
+        messages, [], num_predict=CHAT_MAX_TOKENS, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+        temperature=CHAT_TEMPERATURE, feature="chat",
+    ):
+        if chunk.delta:
+            yield "delta", chunk.delta
+    yield "done", provider.name
 
 
 _AGENT_ACTION_KEYWORDS = [
@@ -3669,26 +3692,38 @@ async def _legacy_chat_user(auth_header: str | None):
     return await get_user_context(auth_header)
 
 
-@app.post("/chat")
-async def chat(request: Request, req: ChatRequest):
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="Message không được để trống.")
+def _rate_limit_key(request: Request, user_ctx) -> str:
+    """The AI rate-limit bucket: per user once the caller is known. Every request
+    reaches this service through the gateway, so the socket peer is the
+    gateway's own IP - keyed by it, all users shared one 15/min bucket."""
+    if user_ctx is not None and getattr(user_ctx, "user_id", None):
+        return f"user:{user_ctx.user_id}"
+    # shortcut: anonymous callers still share the gateway-IP bucket; key them by the gateway's
+    # X-Forwarded-For entry once ai-service is reachable only through a known proxy chain
+    return f"ip:{request.client.host if request.client else 'unknown'}"
 
-    # Rate limiting - use the client IP as the limiter key.
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
+
+async def _enforce_rate_limit(request: Request, user_ctx) -> None:
+    allowed, reason = await rate_limiter.acquire(key=_rate_limit_key(request, user_ctx))
     if not allowed:
         raise HTTPException(status_code=429, detail=reason)
 
-    auth_header = request.headers.get("authorization")
 
-    # Resolve user identity early so persona and personal context can be built
-    # before retrieval (see _legacy_chat_user for the Phase 5 policy).
+async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
+    """Everything /chat and /chat/stream do before the LLM call - identity,
+    rate limit, intent, personal context, retrieval, the abstention decision,
+    the prompt and the cache lookup - in one copy so the two endpoints cannot
+    drift apart. `abstain` short-circuits everything after retrieval."""
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="Message không được để trống.")
+
+    auth_header = request.headers.get("authorization")
+    # Resolve user identity early so the rate limit is per user and persona and
+    # personal context can be built before retrieval (see _legacy_chat_user).
     user_ctx = await _legacy_chat_user(auth_header)
+    await _enforce_rate_limit(request, user_ctx)
 
     intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
-
-    # Build personal context (role-aware data) in parallel with system analytics.
     personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
 
     # CUSTOMER and SUPPLIER must not see system-wide analytics; their personal
@@ -3702,25 +3737,20 @@ async def chat(request: Request, req: ChatRequest):
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
 
+    turn = {"message": req.message, "auth_header": auth_header, "user_ctx": user_ctx,
+            "intent_info": intent_info, "retrieval": retrieval, "abstain": False}
+
     # NO_EVIDENCE on an information-seeking GENERAL_QUERY: skip the LLM entirely
     # instead of handing it an empty [RAG CONTEXT] and hoping the prompt rules
     # stop it from inventing an answer. A greeting/small-talk message with the
-    # same decision (is_information_seeking() false) still reaches the LLM
-    # below, since there is nothing to hallucinate about there.
+    # same decision (is_information_seeking() false) still reaches the LLM.
     if (
         intent_info.get("intent") == GENERAL_QUERY
         and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
         and is_information_seeking(req.message)
     ):
-        return {
-            "reply": GENERAL_QUERY_ABSTENTION_REPLY,
-            "ai_provider": "abstention",
-            "intent": intent_info.get("intent"),
-            "context_sources": [],
-            "retrieval_warnings": [],
-            "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
-            "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
-        }
+        turn["abstain"] = True
+        return turn
 
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
@@ -3737,11 +3767,7 @@ async def chat(request: Request, req: ChatRequest):
             "summary": legacy_context,
             "raw": {"legacy_system_context": req.system_context},
             "sources": [
-                {
-                    "name": "Legacy Frontend System Context",
-                    "endpoint": "system_context",
-                    "status": "ok",
-                }
+                {"name": "Legacy Frontend System Context", "endpoint": "system_context", "status": "ok"}
             ],
             "warnings": warnings + ["RAG retrieval failed; using legacy system_context fallback."],
         }
@@ -3751,17 +3777,6 @@ async def chat(request: Request, req: ChatRequest):
         context_block = build_rag_context(intent_info, retrieval)
     else:
         context_block = build_no_data_context(intent_info)
-
-    # CUSTOMER/SUPPLIER get `retrieval` zeroed out above, but their own data
-    # still reaches the prompt via `personal` - merge both so citation and
-    # numeric grounding see it too, not just system-wide analytics.
-    grounding_context = merge_grounding_context(retrieval, personal)
-
-    metadata = {
-        "intent": intent_info.get("intent"),
-        "context_sources": retrieval.get("sources") or [],
-        "retrieval_warnings": retrieval.get("warnings") or [],
-    }
 
     # Include auth and intent in the cache key so RAG answers do not leak across users.
     history_hash = ""
@@ -3773,87 +3788,136 @@ async def chat(request: Request, req: ChatRequest):
 
     # Bypass cache for action requests and personal queries (data is user-specific).
     is_action_request = _wants_agent_action(req.message)
-    is_personal_query = _is_personal_query(req.message)
-    skip_cache = is_action_request or is_personal_query
-    cached_reply = None if skip_cache else response_cache.get(req.message, history_hash)
-    if cached_reply:
-        return {"reply": cached_reply, "ai_provider": "cached", **metadata}
+    skip_cache = is_action_request or _is_personal_query(req.message)
 
-    # Build persona block from personal context.
     persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
     if personal.get("summary"):
         persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
-
     system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
     messages = [{"role": "system", "content": system_content}]
-
     for msg in req.conversation_history[-10:]:
         messages.append({"role": msg.role, "content": msg.content})
-
     messages.append({"role": "user", "content": req.message.strip()})
 
-    async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
-        """Try to plan an agent action and append a confirmation hint to the reply."""
-        pending_action_data = None
+    turn.update({
+        "retrieval": retrieval,
+        "used_legacy_context": used_legacy_context,
+        # CUSTOMER/SUPPLIER get `retrieval` zeroed out above, but their own data
+        # still reaches the prompt via `personal` - merge both so citation and
+        # numeric grounding see it too, not just system-wide analytics.
+        "grounding_context": merge_grounding_context(retrieval, personal),
+        "metadata": {
+            "intent": intent_info.get("intent"),
+            "context_sources": retrieval.get("sources") or [],
+            "retrieval_warnings": retrieval.get("warnings") or [],
+        },
+        "history_hash": history_hash,
+        "is_action_request": is_action_request,
+        "skip_cache": skip_cache,
+        "cached_reply": None if skip_cache else response_cache.get(req.message, history_hash),
+        "messages": messages,
+    })
+    return turn
 
-        if is_action_request and user_ctx is None:
-            reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
-            return reply_text, None
 
-        if user_ctx is not None:
-            try:
-                planned = await plan_agent_action(req.message, intent_info, retrieval, user_ctx, auth_header=auth_header)
-                if planned is not None:
-                    temp_action = _make_temp_action_for_check(planned)
-                    if not can_confirm_action(user_ctx, temp_action):
-                        reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
-                    else:
-                        action = await create_pending_action(
-                            action_type=planned["type"],
-                            summary=planned["summary"],
-                            payload=planned["payload"],
-                            risk=planned["risk"],
-                            sources=planned.get("sources", []),
-                            intent=planned.get("intent"),
-                            created_from_message=req.message,
-                            warnings=planned.get("warnings", []),
-                            requires_review=planned.get("requires_review", False),
-                            user_context=user_ctx,
-                        )
-                        pending_action_data = action.model_dump()
-                        reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
-                        asyncio.ensure_future(push_ai_action_event(
-                            "ai_action:created",
-                            action.action_id,
-                            action.type,
-                            user_ctx.user_id if user_ctx else None,
-                            {"summary": action.summary, "risk": action.risk},
-                        ))
-            except Exception as exc:
-                logger.warning("Agent planning failed (non-fatal): %s", exc)
+def _chat_abstention_payload(turn: dict) -> dict:
+    return {
+        "reply": GENERAL_QUERY_ABSTENTION_REPLY,
+        "ai_provider": "abstention",
+        "intent": turn["intent_info"].get("intent"),
+        "context_sources": [],
+        "retrieval_warnings": [],
+        "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
+        "retrievalConfidence": turn["retrieval"].get("retrieval_confidence", 0.0),
+    }
 
-        return reply_text, pending_action_data
 
-    reply, ok = await _chat_with_text_llm(messages)
+def _chat_cached_payload(turn: dict) -> dict:
+    return {"reply": turn["cached_reply"], "ai_provider": "cached", **turn["metadata"]}
+
+
+async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dict | None]:
+    """Try to plan an agent action and append a confirmation hint to the reply."""
+    user_ctx = turn["user_ctx"]
+    if turn["is_action_request"] and user_ctx is None:
+        return reply_text + "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.", None
+    if user_ctx is None:
+        return reply_text, None
+
+    pending_action_data = None
+    try:
+        planned = await plan_agent_action(
+            turn["message"], turn["intent_info"], turn["retrieval"], user_ctx, auth_header=turn["auth_header"])
+        if planned is not None:
+            temp_action = _make_temp_action_for_check(planned)
+            if not can_confirm_action(user_ctx, temp_action):
+                reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
+            else:
+                action = await create_pending_action(
+                    action_type=planned["type"],
+                    summary=planned["summary"],
+                    payload=planned["payload"],
+                    risk=planned["risk"],
+                    sources=planned.get("sources", []),
+                    intent=planned.get("intent"),
+                    created_from_message=turn["message"],
+                    warnings=planned.get("warnings", []),
+                    requires_review=planned.get("requires_review", False),
+                    user_context=user_ctx,
+                )
+                pending_action_data = action.model_dump()
+                reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+                asyncio.ensure_future(push_ai_action_event(
+                    "ai_action:created",
+                    action.id,
+                    action.type,
+                    user_ctx.user_id,
+                    {"summary": action.summary, "risk": action.risk},
+                ))
+    except Exception as exc:
+        logger.warning("Agent planning failed (non-fatal): %s", exc)
+    return reply_text, pending_action_data
+
+
+def _chat_draft(turn: dict, reply: str | None, ok: bool) -> tuple[str, str]:
+    """(reply text, provider name): the model's reply, or the rule-based
+    fallback built from the retrieved data when the model gave nothing."""
     if ok and reply:
-        reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
-        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-        if not pending_action_data and not skip_cache:
-            response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": _get_text_llm_provider().name, **metadata}
-        if grounding_warning:
-            result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
-        if pending_action_data:
-            result["pending_action"] = pending_action_data
-        return result
+        return reply, _get_text_llm_provider().name
+    return build_fallback_reply(turn["intent_info"], turn["retrieval"], turn["used_legacy_context"]), "fallback"
 
-    fallback_reply = build_fallback_reply(intent_info, retrieval, used_legacy_context)
-    fallback_reply, pending_action_data = await _apply_agent_layer(fallback_reply)
-    result = {"reply": fallback_reply, "ai_provider": "fallback", **metadata}
+
+async def _finish_chat_reply(turn: dict, text: str, provider: str) -> dict:
+    """Source line, numeric grounding (model replies only), the agent-action
+    layer and the cache write - the final body of /chat and of /chat/stream's
+    `done` event."""
+    # An uncertain FAQ near-miss is not a citation the reply necessarily used.
+    uncertain = turn["retrieval"].get("retrieval_status") == retrieval_confidence.UNCERTAIN
+    reply_with_sources = text if uncertain else ensure_source_line(text, turn["retrieval"].get("sources") or [])
+    grounding_warning = (
+        verify_numeric_grounding(reply_with_sources, turn["grounding_context"]) if provider != "fallback" else None
+    )
+    reply_with_sources, pending_action_data = await _apply_chat_agent_layer(turn, reply_with_sources)
+    if not pending_action_data and not turn["skip_cache"] and provider != "fallback":
+        response_cache.set(turn["message"], reply_with_sources, turn["history_hash"])
+
+    result = {"reply": reply_with_sources, "ai_provider": provider, **turn["metadata"]}
+    if grounding_warning:
+        result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
     if pending_action_data:
         result["pending_action"] = pending_action_data
     return result
+
+
+@app.post("/chat")
+async def chat(request: Request, req: ChatRequest):
+    turn = await _prepare_chat_turn(request, req)
+    if turn["abstain"]:
+        return _chat_abstention_payload(turn)
+    if turn["cached_reply"]:
+        return _chat_cached_payload(turn)
+    reply, ok = await _chat_with_text_llm(turn["messages"])
+    return await _finish_chat_reply(turn, *_chat_draft(turn, reply, ok))
 
 
 def _filter_tool_args(tool_fn, args: dict) -> dict:
@@ -4847,13 +4911,9 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message không được để trống.")
 
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
-
     auth_header = request.headers.get("authorization")
     user_ctx = await get_user_context(auth_header)
+    await _enforce_rate_limit(request, user_ctx)
     if not _assistant_can_access(user_ctx):
         raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
 
@@ -5134,181 +5194,44 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 
 @app.post("/chat/stream")
 async def chat_stream(request: Request, req: ChatRequest):
-    """Streaming twin of /chat: same prep (auth, intent, retrieval, cache,
-    agent-action layer). The LLM reply itself is sent as a single `token`
-    event (not per-token) - _chat_with_text_llm's underlying provider call is
-    non-streaming; the SSE shape is kept for client compatibility and so a
-    future genuinely-streaming call (OpenRouterProvider.chat_stream) can slot
-    in here without changing the endpoint's event contract.
+    """Streaming twin of /chat: the same prepared turn (_prepare_chat_turn) and
+    the same final body (_finish_chat_reply). The model's reply streams as
+    `token` events while it is generated (OpenRouterProvider.chat_stream); if
+    the stream fails, the reply comes from the non-streaming call as one
+    `token` event instead.
     The final `done` event's `reply` is the source of truth (it has the
     source-line / agent-confirmation sentences appended, which streamed tokens
     don't include yet) — the client should replace, not just append, on done.
     """
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="Message không được để trống.")
-
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
-
-    auth_header = request.headers.get("authorization")
-    user_ctx = await _legacy_chat_user(auth_header)
-
-    intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
-    personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
-
-    _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
-    _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
-    if _blocked and not _is_exempt_intent:
-        retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
-    else:
-        retrieval = await retrieve_context(intent_info, auth_header)
-
-    # See the identical check in /chat above.
-    abstain = (
-        intent_info.get("intent") == GENERAL_QUERY
-        and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
-        and is_information_seeking(req.message)
-    )
-
-    warnings = list(retrieval.get("warnings") or [])
-    sources = list(retrieval.get("sources") or [])
-    ok_sources = any(source.get("status") == "ok" for source in sources)
-    missing_auth = any("Missing Authorization" in warning for warning in warnings)
-    used_legacy_context = False
-
-    if not ok_sources and warnings and req.system_context and not missing_auth:
-        legacy_context = _build_context_block(req.system_context)
-        retrieval = {
-            **retrieval,
-            "summary": legacy_context,
-            "raw": {"legacy_system_context": req.system_context},
-            "sources": [
-                {"name": "Legacy Frontend System Context", "endpoint": "system_context", "status": "ok"}
-            ],
-            "warnings": warnings + ["RAG retrieval failed; using legacy system_context fallback."],
-        }
-        used_legacy_context = True
-
-    if retrieval.get("summary") or retrieval.get("raw") or retrieval.get("sources"):
-        context_block = build_rag_context(intent_info, retrieval)
-    else:
-        context_block = build_no_data_context(intent_info)
-
-    # See the identical comment in /chat above.
-    grounding_context = merge_grounding_context(retrieval, personal)
-
-    metadata = {
-        "intent": intent_info.get("intent"),
-        "context_sources": retrieval.get("sources") or [],
-        "retrieval_warnings": retrieval.get("warnings") or [],
-    }
-
-    history_hash = ""
-    if req.conversation_history:
-        hist_text = "|".join(m.content[:100] for m in req.conversation_history[-3:])
-        history_hash = hashlib.md5(hist_text.encode()).hexdigest()[:8]
-    auth_hash = hashlib.md5((auth_header or "anonymous").encode()).hexdigest()[:8]
-    history_hash = f"{history_hash}:{auth_hash}:{intent_info.get('intent') or 'unknown'}"
-
-    is_action_request = _wants_agent_action(req.message)
-    is_personal_query = _is_personal_query(req.message)
-    skip_cache = is_action_request or is_personal_query
-    cached_reply = None if skip_cache else response_cache.get(req.message, history_hash)
-
-    persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
-    if personal.get("summary"):
-        persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
-    system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
-    messages = [{"role": "system", "content": system_content}]
-    for msg in req.conversation_history[-10:]:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": req.message.strip()})
-
-    async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
-        pending_action_data = None
-        if is_action_request and user_ctx is None:
-            reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
-            return reply_text, None
-        if user_ctx is not None:
-            try:
-                planned = await plan_agent_action(req.message, intent_info, retrieval, user_ctx, auth_header=auth_header)
-                if planned is not None:
-                    temp_action = _make_temp_action_for_check(planned)
-                    if not can_confirm_action(user_ctx, temp_action):
-                        reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
-                    else:
-                        action = await create_pending_action(
-                            action_type=planned["type"],
-                            summary=planned["summary"],
-                            payload=planned["payload"],
-                            risk=planned["risk"],
-                            sources=planned.get("sources", []),
-                            intent=planned.get("intent"),
-                            created_from_message=req.message,
-                            warnings=planned.get("warnings", []),
-                            requires_review=planned.get("requires_review", False),
-                            user_context=user_ctx,
-                        )
-                        pending_action_data = action.model_dump()
-                        reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
-                        asyncio.ensure_future(push_ai_action_event(
-                            "ai_action:created",
-                            action.action_id,
-                            action.type,
-                            user_ctx.user_id if user_ctx else None,
-                            {"summary": action.summary, "risk": action.risk},
-                        ))
-            except Exception as exc:
-                logger.warning("Agent planning failed (non-fatal): %s", exc)
-        return reply_text, pending_action_data
+    turn = await _prepare_chat_turn(request, req)
 
     async def event_generator():
-        if abstain:
-            yield _sse("token", {"text": GENERAL_QUERY_ABSTENTION_REPLY})
-            yield _sse("done", {
-                "reply": GENERAL_QUERY_ABSTENTION_REPLY, "ai_provider": "abstention",
-                "intent": intent_info.get("intent"), "context_sources": [], "retrieval_warnings": [],
-                "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
-                "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
-            })
+        if turn["abstain"] or turn["cached_reply"]:
+            payload = _chat_abstention_payload(turn) if turn["abstain"] else _chat_cached_payload(turn)
+            yield _sse("token", {"text": payload["reply"]})
+            yield _sse("done", payload)
             return
 
-        if cached_reply:
-            yield _sse("token", {"text": cached_reply})
-            yield _sse("done", {"reply": cached_reply, "ai_provider": "cached", **metadata})
-            return
-
-        full_text = ""
-        provider = "fallback"
-        reply, ok = await _chat_with_text_llm(messages)
-        if ok and reply:
-            full_text = reply
-            provider = _get_text_llm_provider().name
-            yield _sse("token", {"text": full_text})
-
-        if not full_text:
-            full_text = build_fallback_reply(intent_info, retrieval, used_legacy_context)
-            provider = "fallback"
-            yield _sse("token", {"text": full_text})
-
-        reply_with_sources = ensure_source_line(full_text, retrieval.get("sources") or [])
-        grounding_warning = (
-            verify_numeric_grounding(reply_with_sources, grounding_context) if provider != "fallback" else None
-        )
-        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-
-        if not pending_action_data and not skip_cache and provider != "fallback":
-            response_cache.set(req.message, reply_with_sources, history_hash)
-
-        final_meta = dict(metadata)
-        if grounding_warning:
-            final_meta["retrieval_warnings"] = [*final_meta["retrieval_warnings"], grounding_warning]
-        if pending_action_data:
-            final_meta["pending_action"] = pending_action_data
-
-        yield _sse("done", {"reply": reply_with_sources, "ai_provider": provider, **final_meta})
+        streamed, provider = "", None
+        try:
+            async for kind, value in _stream_chat_reply(turn["messages"]):
+                if kind == "delta":
+                    streamed += value
+                    yield _sse("token", {"text": value})
+                else:
+                    provider = value
+        except Exception as exc:  # noqa: BLE001 - answered below without streaming
+            logger.warning("chat stream failed (%s); answering without streaming", type(exc).__name__)
+            provider = None
+        if provider and streamed.strip():
+            text = streamed.strip()
+        else:
+            # Nothing usable streamed: the non-streaming call (retry + fallback model,
+            # then the rule-based reply). `done` replaces any partial text already shown.
+            reply, ok = await _chat_with_text_llm(turn["messages"])
+            text, provider = _chat_draft(turn, reply, ok)
+            yield _sse("token", {"text": text})
+        yield _sse("done", await _finish_chat_reply(turn, text, provider))
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
