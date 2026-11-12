@@ -15,6 +15,7 @@ const FUNDING_TEXT = {
   PARTIAL: 'Được cấp một phần',
   UNFUNDED: 'Chưa được cấp ngân sách',
   NOT_NEEDED: 'Kế hoạch ngân sách không cần nhập',
+  NO_PRICE: 'Chưa có đơn giá nên chưa được cấp',
 } as const;
 
 function Fact({ label, value }: { label: string; value: ReactNode }) {

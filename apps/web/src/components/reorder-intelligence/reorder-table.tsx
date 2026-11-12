@@ -48,7 +48,10 @@ function QtyNote({ line, selected, hasBudget }: { line: PlanLine; selected: bool
     return <span className="text-red-600 dark:text-red-400">Nhập số nguyên từ 1 đến {formatCount(MAX_ORDER_QTY)}</span>;
   }
   if (line.qty === null) {
-    return <span className={selected ? 'text-red-600 dark:text-red-400' : undefined}>{selected ? 'Nhập số lượng để đặt' : 'Không cần nhập'}</span>;
+    if (selected) return <span className="text-red-600 dark:text-red-400">Nhập số lượng để đặt</span>;
+    if (funding === 'UNFUNDED') return <span>Chưa được cấp ngân sách</span>;
+    if (funding === 'NO_PRICE') return <span className="text-amber-700 dark:text-amber-400">Cần bổ sung đơn giá để được cấp</span>;
+    return <span>Không cần nhập</span>;
   }
   const parts: string[] = [];
   if (line.manual) parts.push(`Đã chỉnh · gốc ${formatCount(line.systemQty)}`);
@@ -58,6 +61,7 @@ function QtyNote({ line, selected, hasBudget }: { line: PlanLine; selected: bool
     if (funding === 'PARTIAL') parts.push(`Cấp ${formatCount(item.funded_qty ?? 0)}/${formatCount(cap)}`);
     if (funding === 'UNFUNDED') parts.push('Chưa được cấp');
     if (funding === 'NOT_NEEDED') parts.push('Ngân sách: không cần');
+    if (funding === 'NO_PRICE') parts.push('Chưa có đơn giá');
   }
   return (
     <>

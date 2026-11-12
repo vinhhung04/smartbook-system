@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CircleCheck, CircleDashed, CircleSlash, Layers, Loader2, PackagePlus, PieChart } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleSlash, Layers, Loader2, PackagePlus, PieChart, Tag } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { ReorderSuggestionsData } from '@/services/analytics';
@@ -9,6 +9,7 @@ import {
   formatCount,
   formatDateTime,
   formatVnd,
+  overFundedQty,
   sortByUrgency,
   totalLines,
   URGENCY_ORDER,
@@ -34,6 +35,7 @@ const FUNDING_FILTERS: Array<{ value: FundingFilter; label: string; icon?: typeo
   { value: 'PARTIAL', label: 'Cấp một phần', icon: PieChart },
   { value: 'UNFUNDED', label: 'Chưa được cấp', icon: CircleDashed },
   { value: 'NOT_NEEDED', label: 'Không cần nhập', icon: CircleSlash },
+  { value: 'NO_PRICE', label: 'Chưa có đơn giá', icon: Tag },
 ];
 
 export interface ReorderWorkspaceProps {
@@ -78,7 +80,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
   );
   const urgencyCounts = useMemo(() => countByUrgency(items, leadDays), [items, leadDays]);
   const fundingCounts = useMemo(() => {
-    const counts: Record<FundingStatus, number> = { FULL: 0, PARTIAL: 0, UNFUNDED: 0, NOT_NEEDED: 0 };
+    const counts: Record<FundingStatus, number> = { FULL: 0, PARTIAL: 0, UNFUNDED: 0, NOT_NEEDED: 0, NO_PRICE: 0 };
     for (const line of lines) if (line.funding) counts[line.funding] += 1;
     return counts;
   }, [lines]);
@@ -91,6 +93,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
     ? totalLines(selectedLines.map((line) => ({ qty: line.qty, unitCost: line.item.unit_cost })))
     : null;
   const hasManualEdits = lines.some((line) => line.manual);
+  const outsideLimit = data?.budget?.funded_lines_outside_limit ?? 0;
   const missingPriceCount = lines.filter((line) => line.item.unit_cost <= 0 && line.item.suggested_reorder_qty > 0).length;
 
   // "Select all" takes the visible rows that have a quantity to order; rows the
@@ -176,7 +179,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
 
           {/* Decision summary: each figure names the scope it counts. */}
           <Panel aria-label="Tóm tắt quyết định" className={SUMMARY_GRID}>
-            <Figure label="Đầu sách đã phân tích" value={formatCount(data.summary.total_candidates)} hint={`đang tải top ${formatCount(items.length)} theo ưu tiên`} />
+            <Figure label="Đầu sách đã phân tích" value={formatCount(data.summary.total_candidates)} hint={outsideLimit ? `đang tải top ${formatCount(items.length - outsideLimit)} theo ưu tiên + ${formatCount(outsideLimit)} dòng được cấp ngân sách` : `đang tải top ${formatCount(items.length)} theo ưu tiên`} />
             <Figure label="Đã hết hàng" value={formatCount(urgencyCounts.OUT)} unit="đầu sách" tone={urgencyCounts.OUT ? 'critical' : 'muted'} hint={`trong ${formatCount(items.length)} đề xuất đã tải`} />
             <Figure label="Sẽ hết trước khi hàng về" value={formatCount(urgencyCounts.BEFORE_RESTOCK)} unit="đầu sách" tone={urgencyCounts.BEFORE_RESTOCK ? 'warning' : 'muted'} hint={`hết trước thời gian chờ hàng của sách, trong ${formatCount(items.length)} đề xuất`} />
             <Figure label="Tổng số lượng đề xuất" value={formatCount(data.summary.estimated_total_reorder_qty)} unit="bản" hint={`cho toàn bộ ${formatCount(data.summary.total_candidates)} đầu sách, chưa áp ngân sách`} />
@@ -263,6 +266,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
             <SelectionActionBar
               totals={selection}
               budgetVnd={data.budget?.budget_vnd ?? null}
+              overFunded={hasBudget ? overFundedQty(selectedLines) : 0}
               loadedCount={lines.length}
               selectableUnselected={selectableUnselected}
               onSelectAllLoaded={() => setSelected(lines.filter((line) => line.qty !== null).map((line) => line.item.variant_id), true)}

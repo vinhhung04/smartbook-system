@@ -183,6 +183,11 @@ export type ReorderSuggestionsData = {
     partially_funded_lines?: number;
     /** Every re-sized line funded in full: what this budget mode would need. */
     capped_need_cost?: number;
+    /** Lines the plan needs but cannot fund: the catalog has no unit cost for them. */
+    unpriced_lines?: number;
+    unpriced_qty?: number;
+    /** Funded lines ranked below `limit`, returned after the top-`limit` items. */
+    funded_lines_outside_limit?: number;
     /** Share of the modelled lead-time demand the funded copies serve, 0-100. */
     expected_service_pct?: number | null;
     funding_order?: string;
