@@ -15,7 +15,7 @@
 7. Chatbot không còn từ chối nhầm câu hỏi chính sách của bạn đọc (định tuyến sai sang analytics bị chặn); tên sách trong phiếu mượn của bạn đọc không còn hiển thị `"?"`.
 8. Shared AI Core: `ai_core/` (policy, tools, prompts, observability) được cả hai trải nghiệm dùng thật; tool đọc có một đường thực thi duy nhất có kiểm tra, timeout, log; prompt có phiên bản; log có `request_id` từ gateway.
 
-**Còn tồn tại** (chi tiết ở mục H): một số lỗi phân loại câu hỏi của NLU; 1/4 câu "gần nghĩa" vẫn khẳng định phủ định; OpenRouter trả 429 làm `/chat/stream` rơi về chế độ không stream lúc kiểm tra; rate limit/cache trong bộ nhớ một process; executor ghi vào inventory chỉ kiểm bằng HTTP giả lập.
+**Còn tồn tại** (chi tiết ở mục H): 8/79 câu chính sách trong bộ eval vẫn chưa được nhận diện là câu hỏi quy định (đã sửa phần lớn ngày 2026-11-13, xem `docs/AI/RAG_PIPELINE.md`); 1/4 câu "gần nghĩa" vẫn khẳng định phủ định; OpenRouter trả 429 làm `/chat/stream` rơi về chế độ không stream lúc kiểm tra; rate limit/cache trong bộ nhớ một process; executor ghi vào inventory chỉ kiểm bằng HTTP giả lập.
 
 ## B. Khắc phục quan trọng (Phase A)
 
@@ -127,7 +127,7 @@ Không thay đổi UI/UX ngoài nhãn và thông điệp cho trạng thái mới
 
 | Rủi ro | Mức | Hướng xử lý |
 |---|---|---|
-| NLU xếp sai một số câu hỏi chính sách (vd hạng thẻ → tìm sách) | Trung bình | Thêm từ khóa chính sách vào bộ phân loại luật hoặc cho mọi intent tra thêm FAQ khi kết quả nghiệp vụ rỗng; đo bằng `eval_chat_answers.py` |
+| NLU xếp sai câu hỏi chính sách (vd hạng thẻ → tìm sách) — **đã giảm** 2026-11-13: `is_policy_question` bắt 71/79, nhầm 0/316; `ans-full-01` nay đúng | Thấp | 8 câu còn lọt đi theo đường cũ; bổ sung tín hiệu khi có câu mới, `test_policy_routing.py` giữ ngưỡng |
 | Câu hỏi nửa có nửa không bị từ chối cả câu khi truy xuất `NO_EVIDENCE` | Trung bình | Tách câu hỏi nhiều ý trước khi truy xuất |
 | Mô hình đôi khi khẳng định phủ định ("không thể … qua SMS") | Thấp–Trung bình | Kiểm tra hậu kỳ cụm phủ định khi kết quả `UNCERTAIN` |
 | OpenRouter 429 làm chatbot mất stream | Trung bình (vận hành) | Retry stream một lần có backoff, hoặc nâng hạn mức API key |

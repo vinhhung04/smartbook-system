@@ -20,6 +20,7 @@ from cache import SummaryCache
 from llm_provider import get_openrouter_provider, TEXT_MODEL
 from intent import (
     detect_intent,
+    is_policy_question,
     normalize_text,
     DASHBOARD_SUMMARY_QUERY,
     LOW_STOCK_QUERY,
@@ -202,6 +203,34 @@ def _validate_time_range(tr: Any) -> dict | None:
     return None
 
 
+# Someone asking the assistant to DO something ("đặt giữ giúp tôi cuốn X",
+# "tạo cho tôi phiếu nhập") - narrower than _ACTION_SURFACE_SIGNALS, whose
+# substrings also match questions ABOUT those operations ("đặt chỗ giữ bao lâu").
+_ACTION_REQUEST_MARKERS = (
+    "giup", "lam on", "hay tao", "hay lap", "tao cho", "lap cho", "toi muon dat", "toi muon giu", "toi muon tao",
+    "toi muon lap", "cho toi dat", "cho toi muon",
+)
+
+
+def _policy_shape(message: str) -> dict:
+    """A question about the library's rules or procedures: answered from the
+    documents (GENERAL_QUERY -> FAQ retrieval), never from the statistics the
+    topic word ("phạt", "quá hạn", "đặt sách") would otherwise route it to."""
+    return {
+        "intent": GENERAL_QUERY,
+        "confidence": 0.9,
+        "query": message.strip(),
+        "time_range": None,
+        "granularity": "day",
+        "wants_action": False,
+        "action_type": None,
+        "entities": _empty_entities(),
+        "secondary_intents": [],
+        "source": "rule_policy",
+        "reason": "Cau hoi ve quy dinh/quy trinh: tra tai lieu, khong lay so lieu.",
+    }
+
+
 def _rule_to_nlu_shape(rule_result: dict, message: str) -> dict:
     """Convert detect_intent() output to stable NLU schema WITHOUT action inference.
 
@@ -376,6 +405,13 @@ async def classify_user_message(
     rule_result = detect_intent(message)
     rule_confidence = rule_result.get("confidence", 0.35)
     normalized = normalize_text(message)
+
+    # A policy question goes to the documents before any keyword intent or the
+    # LLM classifier can file it under statistics - unless it asks for an action.
+    if is_policy_question(message) and not any(marker in normalized for marker in _ACTION_REQUEST_MARKERS):
+        shape = _policy_shape(message)
+        _nlu_cache.set(cache_key, shape)
+        return shape
 
     # Fast path: ONLY when confidence is high, message is simple, AND there is
     # no surface action signal (action messages need LLM for entity extraction).

@@ -62,6 +62,15 @@ Sau khi trả lời: `verify_numeric_grounding` cảnh báo mọi con số khôn
 
 Bạn đọc (CUSTOMER) không được xem analytics toàn hệ thống. Khi NLU xếp câu hỏi chính sách của họ vào một intent analytics (ví dụ "Phí phạt tính thế nào?" → `FINE_SUMMARY_QUERY`), chatbot vẫn tra **tài liệu** (không gửi token của họ tới analytics), còn dữ liệu cá nhân của họ đến từ ngữ cảnh cá nhân.
 
+### Phân biệt câu hỏi chính sách và câu hỏi dữ liệu (2026-11-13)
+
+Intent theo từ khóa khớp chủ đề ("phạt", "quá hạn", "đặt sách") nên câu hỏi về **quy định** bị đưa sang thống kê. Hai bộ nhận diện trong `intent.py`, chỉ dùng cho chatbot (Decision Assistant không đổi):
+
+- `is_policy_question`: có dấu hiệu hỏi quy định ("như thế nào", "tối đa", "có … không", "quy định"…) **và** không có dấu hiệu hỏi dữ liệu hiện tại ("hiện có", "của tôi", "tháng này", "danh sách", "sách nào"…). `nlu.classify_user_message` đưa câu đó thẳng vào `GENERAL_QUERY` (tra tài liệu, `source: rule_policy`), không gọi LLM phân loại. Câu nhờ thao tác ("giúp", "đặt giữ cho tôi"…) không bị chuyển.
+- `asks_about_own_data`: câu hỏi về dữ liệu của chính người dùng ("Tôi đang mượn những sách nào?"). Cổng từ chối `NO_EVIDENCE` không chặn câu này khi ngữ cảnh cá nhân đã tải được, vì câu trả lời nằm ở dữ liệu cá nhân chứ không ở tài liệu.
+
+Đo trên bộ eval có sẵn (test `test_policy_routing.py` giữ ngưỡng): bắt 71/79 câu chính sách của `rag_dataset`, nhận nhầm 0/316 câu dữ liệu (sách, copilot, tồn kho thấp). Câu chính sách còn lọt (8 câu) đi theo đường cũ.
+
 ## Đánh giá
 
 - Truy xuất: `eval/eval_rag.py` trên `eval/rag_dataset.json` (226 câu: 107 sách, 119 tài liệu nội bộ, 92 câu không có đáp án).
@@ -90,3 +99,5 @@ Kho tài liệu lớn hơn làm câu ngoài phạm vi dễ "gần giống" một
 | Câu chứa khẳng định bị cấm (quy định bịa, "không hỗ trợ" sai) | 0 |
 | Trích dẫn: precision / đủ | 0,639 / 0,9 |
 | Có cảnh báo grounding số | 0,125 |
+
+Sau khi sửa phân loại (2026-11-13, `chat_answers_20261112_192035`, giờ UTC): 28/32. `ans-full-01` (hạng Bạc Sĩ, trước bị xếp thành tìm sách) nay đúng; `ans-part-03`, `ans-part-04`, `ans-near-02` vẫn sai như trước; `ans-near-04` sai ở lần này nhưng cùng 3 tài liệu được truy xuất như lần đúng trước đó, và khi hỏi lại trên cả image mới lẫn cũ đều trả lời đúng — dao động của LLM, không do định tuyến. Từ chối nhầm câu có đáp án: 0; khẳng định bị cấm: 0. Lần chạy `190352` (trước khi sửa cổng từ chối) có `ans-dyn-01` bị từ chối nhầm — đó là lỗi `asks_about_own_data` sửa.

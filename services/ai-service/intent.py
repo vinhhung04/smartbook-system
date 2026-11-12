@@ -65,6 +65,58 @@ def is_information_seeking(message: str) -> bool:
     return _contains_any(normalize_text(text), _QUESTION_MARKERS)
 
 
+# A POLICY question asks how the library works ("phí phạt tính thế nào", "có
+# được ... không", "bao lâu", "đúng không"); a DATA question asks about the
+# current state ("có bao nhiêu phiếu quá hạn", "tôi có khoản phạt nào", "kho
+# nào thiếu sách"). The keyword intents below match the topic word ("phạt",
+# "quá hạn", "đặt sách") and cannot tell the two apart, so a policy question
+# was answered with fine/loan statistics instead of the library's documents.
+_POLICY_CUES = [
+    "nhu the nao", "the nao", "lam sao", "lam the nao", "lam gi", "bang cach nao", "quy dinh", "chinh sach",
+    "toi da", "duoc phep", "co duoc", "duoc khong", "co the", "co bi", "bi phat", "bao lau", "dung khong",
+    "phai khong", "co dung", "khac nhau", "la gi", "gom nhung", "nhung loai", "nhung ai", "ai duoc", "khi nao",
+    "neu ", "den bao nhieu", "phai den", "muc phat", "muc phi", "phi den", "hang the", "the doc",
+    "bac si", "vang hoang", "thuong de", "chua cap nhat", "co nhung", "ra sao", "kieu gi", "bi sao",
+    "nhung gi", "nhung buoc", "mot luc", "ngay nao", "may gio", "dia chi", "may lop", "nghia vu", "ai duyet",
+    "cho ai", "hang thanh vien", "thanh vien moi", "menh gia", "goi thanh vien", "dang ky", "co can",
+]
+# "có ... không" (yes/no about a rule or a service), kept short so it stays one clause
+_YES_NO = re.compile(r"\bco\b[^?.!]{1,60}\bkhong\b")
+# Any of these makes it a question about current data, whatever else it says.
+_DATA_CUES = [
+    "hien co", "hien tai co", "hien dang", "bao nhieu phieu", "bao nhieu dau sach", "bao nhieu cuon dang",
+    "danh sach", "thong ke", "tong ", "tinh hinh", "hom nay", "hom qua", "tuan nay", "tuan truoc", "thang nay",
+    "thang truoc", "nam nay", "gan day", "cua toi", "toi dang", "toi co sach", "toi co khoan", "toi co phieu",
+    "toi con ", "dang cho", "nao dang", "nao qua han", "nao ton", "nao sap", "sach nao", "kho nao", "dau sach nao",
+    "loan nao", "phieu nao", "reservation nao", "khach nao", "cuon nao", "top ", "xep hang", "so sanh", "xu huong",
+    "bieu do", "du bao", "ngan sach", "trieu", "tim sach", "co sach", "isbn 97", "tac gia", "tac pham", "rui ro",
+    "ton kho thap", "het hang nhat", "kpi", "dashboard", "chi nhanh district", "kho ha noi", "kho hcm",
+    "tieu thuyet", "truyen nao", "tap tho", "pheu", "dang the nao", "so voi", "luot muon", "giam so", "so phieu",
+    "can nhap", "cho hang",
+    # "có <sách X> không" is a catalog lookup; "có nên ..." asks for advice on the data
+    "co cuon", "co bo ", "co truyen", "truyen tranh", "co giao trinh", "co nen", "nen nhap", "thanh ly",
+    "dang thieu", "ton lau", "ton kho lau", "liet ke", "khach hang qua han",
+]
+
+
+def is_policy_question(message: str) -> bool:
+    """True for a question about the library's rules or procedures (answered
+    from the documents), False for one about current data or anything else."""
+    normalized = normalize_text(message)
+    asks_policy = _contains_any(normalized, _POLICY_CUES) or bool(_YES_NO.search(normalized))
+    return asks_policy and not _contains_any(normalized, _DATA_CUES)
+
+
+_SELF_REFERENCE = re.compile(r"\btoi\b|\bcua minh\b|\bminh (?:dang|co|da|con)\b")
+
+
+def asks_about_own_data(message: str) -> bool:
+    """'Tôi đang mượn những sách nào?' - answered from the user's own records,
+    not from the documents. A rule question about oneself ('Tôi được mượn tối
+    đa bao nhiêu cuốn?') is still a policy question."""
+    return bool(_SELF_REFERENCE.search(normalize_text(message))) and not is_policy_question(message)
+
+
 def _iso_date(value: datetime) -> str:
     return value.date().isoformat()
 

@@ -66,6 +66,26 @@ class ChatAbstentionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["reply"], "Xin chào! Tôi có thể giúp gì?")
         self.assertNotEqual(result.get("ai_provider"), "abstention")
 
+    async def test_question_about_own_records_reaches_the_llm_when_they_were_loaded(self):
+        # "Tôi đang mượn những sách nào?" is GENERAL_QUERY to NLU; the documents
+        # have no answer but the reader's loans are in the personal context.
+        personal = {"role": "CUSTOMER", "persona": "x", "summary": "Sách đang mượn: Clean Code"}
+        with patch("main.build_user_personal_context", new=AsyncMock(return_value=personal)), \
+             patch("main.retrieve_context", new=AsyncMock(return_value=NO_EVIDENCE_RETRIEVAL)), \
+             patch("main._chat_with_text_llm", new=AsyncMock(return_value=("Bạn đang mượn Clean Code.", True))), \
+             patch("main._get_text_llm_provider", return_value=SimpleNamespace(name="openrouter")):
+            result = await main.chat(_fake_request(), ChatRequest(message="Tôi đang mượn những sách nào?"))
+        self.assertNotEqual(result.get("ai_provider"), "abstention")
+
+        # without loaded records, or for a rule question about oneself, it still abstains
+        for summary, message in (("", "Tôi đang mượn những sách nào?"),
+                                 ("Sách đang mượn: Clean Code", "Tôi có được mượn sách nói không?")):
+            with patch("main.build_user_personal_context", new=AsyncMock(return_value={**personal, "summary": summary})), \
+                 patch("main.retrieve_context", new=AsyncMock(return_value=NO_EVIDENCE_RETRIEVAL)), \
+                 patch("main._chat_with_text_llm", new=AsyncMock(side_effect=AssertionError("LLM must not be called"))):
+                result = await main.chat(_fake_request(), ChatRequest(message=message))
+            self.assertEqual(result["ai_provider"], "abstention", message)
+
     async def test_confident_match_never_abstains(self):
         confident_retrieval = {
             **NO_EVIDENCE_RETRIEVAL, "retrieval_status": confidence.CONFIDENT_MATCH,

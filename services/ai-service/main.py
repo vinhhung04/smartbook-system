@@ -31,6 +31,7 @@ from intent import (
     REORDER_SUGGESTION_QUERY,
     RESERVATION_QUERY,
     TOP_BORROWED_BOOKS_QUERY,
+    asks_about_own_data,
     detect_intent,
     is_information_seeking,
     normalize_text,
@@ -3741,11 +3742,13 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
     # NO_EVIDENCE on an information-seeking GENERAL_QUERY: skip the LLM entirely
     # instead of handing it an empty [RAG CONTEXT] and hoping the prompt rules
     # stop it from inventing an answer. A greeting/small-talk message with the
-    # same decision (is_information_seeking() false) still reaches the LLM.
+    # same decision (is_information_seeking() false) still reaches the LLM, and
+    # so does a question about the user's own records when they were loaded.
     if (
         intent_info.get("intent") == GENERAL_QUERY
         and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
         and is_information_seeking(req.message)
+        and not (personal.get("summary") and asks_about_own_data(req.message))
     ):
         turn["abstain"] = True
         return turn
