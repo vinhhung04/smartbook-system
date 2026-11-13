@@ -18,7 +18,9 @@ const LIVE = process.env.E2E_LIVE_BOOK_SOURCES === '1';
 const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:3000';
 const CODE = '8935212359658';
 const TITLE = 'Bé ngoan học lễ phép';
-const UNKNOWN_CODE = '8935270704704';
+// A made-up code (valid checksum): a real book's code can start being sold, as
+// 8935270704704 (Đắc Nhân Tâm, Fahasa) did. No source carried this one on 2026-11-13.
+const UNKNOWN_CODE = '8939999999991';
 
 test.describe.configure({ mode: 'serial' });
 test.skip(!LIVE, 'Live sources: set E2E_LIVE_BOOK_SOURCES=1 (needs ai-service + internet; writes one book)');
@@ -221,12 +223,14 @@ test('7. mã Văn Lang: chỉ mục mã vạch tìm được ở Vòng 1, đọc
 test('8. mã Fahasa: tìm trang qua web search, đọc bảng thông số', async () => {
   test.setTimeout(150_000);
   await openAiImport();
-  // "Đắc Nhân Tâm" (AZ Việt Nam, 2023) - only Fahasa carries this code. Fahasa depends on
-  // web search to find the page and on Cloudflare letting plain HTTP through: if this
-  // fails, check the `fahasa` source status (NOT_FOUND / PAUSED) before blaming the code.
+  // "Đắc Nhân Tâm" (AZ Việt Nam, 2023). AZ Việt Nam's own store lists it too since
+  // 2026-11-13 and comes first in round 1, so Fahasa may answer in round 2 instead.
+  // Fahasa depends on web search to find the page and on Cloudflare letting plain HTTP
+  // through: if this fails, check the `fahasa` source status (NOT_FOUND / PAUSED) first.
   const lookup = await lookUp('8935325011894');
   expect(lookup.found).toBe(true);
-  expect(lookup.verification!.round1.matchedSource).toBe('fahasa');
+  expect(['fahasa', 'azVietnam']).toContain(lookup.verification!.round1.matchedSource);
+  expect(lookup.sources!.find((s) => s.name === 'fahasa')).toMatchObject({ status: 'SUCCESS', verification: 'CODE_MATCH' });
 
   await showPane('Metadata');
   await expect(page.locator('#title')).toHaveValue(/Đắc Nhân Tâm/);
