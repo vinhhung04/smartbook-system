@@ -1,7 +1,6 @@
-const { PrismaClient } = require("@prisma/client");
 const crypto = require("node:crypto");
 
-const prisma = new PrismaClient();
+const { prisma } = require("../lib/prisma");
 
 const { parseId, toInt, normalizeText, normalizeIsbn13 } = require("../utils/validation");
 const { claimApprovedOrderForDispatch } = require("../services/purchase-order-dispatch.service");

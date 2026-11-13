@@ -1,6 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
 
-const prisma = new PrismaClient();
+const { prisma } = require("../lib/prisma");
 
 const { SHIPPING_LOCATION_TYPE } = require("../utils/constants");
 const {

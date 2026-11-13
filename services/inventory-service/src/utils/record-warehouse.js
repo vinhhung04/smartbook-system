@@ -9,9 +9,8 @@
  * - packing task            -> packing_tasks.warehouse_id
  * - location (compartment)  -> locations.warehouse_id
  */
-const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function idOf(value) {

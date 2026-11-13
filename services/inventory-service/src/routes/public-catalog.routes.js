@@ -1,8 +1,7 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const { createPublicCatalog } = require('../services/public-catalog.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 const catalog = createPublicCatalog(prisma);
 
 // Anonymous, read-only catalog for the public website. Mounted before the /api

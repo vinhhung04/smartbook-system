@@ -1,8 +1,8 @@
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { Prisma } = require('@prisma/client');
 const { canonicalKey, reconcileMetadata, exactAuthorityFields } = require('../services/authority-normalization.service');
 const { normalizeIsbn13, normalizeIsbn10, normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, normalizePageCount, normalizeKeywords } = require('../services/catalog-metadata.validation');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 const { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady, initialDecisionStatuses } = require('../services/metadata-provenance.service');
 // Only authors/publisher/categories are matched against a catalog authority (see reconcileMetadata) and
 // surfaced for staff review in AuthorityReviewPanel. The rest are plain passthrough fields with nothing

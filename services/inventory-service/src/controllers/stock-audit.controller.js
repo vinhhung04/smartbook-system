@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 const { parseId, toInt, normalizeText, normalizeOptionalUserId } = require('../utils/validation');
 const { buildStockBalanceFilter, createAuditWithLines } = require('../services/stock-audit-creation.service');
 const { claimSubmittedAuditForApproval } = require('../services/stock-audit-approval.service');
@@ -15,7 +14,7 @@ const {
 // assign / count / submit / cancel, and re-read without cache to approve
 // (approval posts stock adjustments to that warehouse).
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 function createAuditNumber(baseTimestamp) {
   const suffix = Math.random().toString(36).slice(2, 7).toUpperCase();

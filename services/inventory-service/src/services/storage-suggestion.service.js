@@ -12,7 +12,6 @@
  * calibrated ML probability and must not be presented to users as one.
  */
 
-const { PrismaClient } = require('@prisma/client');
 const { toInt } = require('../utils/validation');
 const {
   VALID_SUGGESTION_MODES,
@@ -22,7 +21,7 @@ const {
   getLocationCapacityContextBatch,
 } = require('./location-capacity.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const CONFIDENCE_THRESHOLDS = {
   HIGH: 80,

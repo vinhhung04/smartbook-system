@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
 const rabbitmq = require('../lib/rabbitmq');
 const { setOutboxPending, outboxFailedCounter } = require('../lib/metrics');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 // event_types this job publishes to the broker. Deliberately separate from
 // borrow-service's reservation-reconciliation.job.js, which polls the SAME

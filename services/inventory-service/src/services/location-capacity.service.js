@@ -13,10 +13,9 @@
  * pass a `tx` from inside a `prisma.$transaction(...)` block.
  */
 
-const { PrismaClient } = require('@prisma/client');
 const { MAX_COMPARTMENT_CAPACITY } = require('../utils/constants');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const VALID_SUGGESTION_MODES = ['RECEIVING', 'PUTAWAY', 'RELOCATION', 'AI_IMPORT'];
 
