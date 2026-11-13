@@ -71,12 +71,12 @@ async function getBookRatingStats(req, res) {
   try {
     const bookIds = req.query.bookIds;
     if (!bookIds) {
-      return res.status(400).json({ message: 'bookIds query parameter is required' });
+      return res.status(400).json({ message: 'Thiếu tham số bookIds' });
     }
 
     const ids = String(bookIds).split(',').map((id) => id.trim()).filter(Boolean);
     if (ids.length === 0 || ids.length > 100) {
-      return res.status(400).json({ message: 'Provide 1-100 bookIds' });
+      return res.status(400).json({ message: 'Cần từ 1 đến 100 bookIds' });
     }
 
     const results = await prisma.book_reviews.groupBy({
@@ -108,22 +108,22 @@ async function createOrUpdateMyReview(req, res) {
     // The JWT carries the auth user id, not the customer id (see getMyReviews).
     const { ensureCurrentCustomer } = require('./customer.controller');
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     const customerId = customer.id;
 
     const { book_id, rating, comment } = req.body;
     if (!book_id) {
-      return res.status(400).json({ message: 'book_id is required' });
+      return res.status(400).json({ message: 'Thiếu book_id' });
     }
     if (!UUID_PATTERN.test(String(book_id))) {
-      return res.status(400).json({ message: 'book_id must be a valid UUID' });
+      return res.status(400).json({ message: 'book_id phải là UUID hợp lệ' });
     }
     const numRating = Number(rating);
     if (!Number.isInteger(numRating) || numRating < 1 || numRating > 5) {
-      return res.status(400).json({ message: 'rating must be an integer between 1 and 5' });
+      return res.status(400).json({ message: 'rating phải là số nguyên từ 1 đến 5' });
     }
     if (comment !== undefined && comment !== null && typeof comment !== 'string') {
-      return res.status(400).json({ message: 'comment must be a string' });
+      return res.status(400).json({ message: 'comment phải là chuỗi ký tự' });
     }
     const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
     if (normalizedComment.length > MAX_COMMENT_LENGTH) {
@@ -180,7 +180,7 @@ async function getMyReviews(req, res) {
   try {
     const { ensureCurrentCustomer } = require('./customer.controller');
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const reviews = await prisma.book_reviews.findMany({
       where: { customer_id: customer.id },
@@ -200,7 +200,7 @@ async function getMyReviewForBook(req, res) {
     // The JWT carries the auth user id, not the customer id (see getMyReviews).
     const { ensureCurrentCustomer } = require('./customer.controller');
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     const customerId = customer.id;
 
     const { bookId } = req.params;
@@ -232,7 +232,7 @@ async function deleteMyReview(req, res) {
     // The JWT carries the auth user id, not the customer id (see getMyReviews).
     const { ensureCurrentCustomer } = require('./customer.controller');
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     const customerId = customer.id;
 
     const { bookId } = req.params;
@@ -247,7 +247,7 @@ async function deleteMyReview(req, res) {
     });
 
     if (!existing) {
-      return res.status(404).json({ message: 'Review not found' });
+      return res.status(404).json({ message: 'Không tìm thấy đánh giá' });
     }
 
     await prisma.book_reviews.delete({
@@ -287,7 +287,7 @@ async function getPublicReviewsByBook(req, res) {
   try {
     const { bookId } = req.params;
     if (!UUID_PATTERN.test(String(bookId || ''))) {
-      return res.status(400).json({ message: 'Invalid book id' });
+      return res.status(400).json({ message: 'Mã sách không hợp lệ' });
     }
     const page = Math.max(1, Number(req.query.page) || 1);
     const pageSize = Math.min(20, Math.max(1, Number(req.query.pageSize) || 10));

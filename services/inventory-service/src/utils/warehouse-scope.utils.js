@@ -80,7 +80,7 @@ async function requireAccess(req, res, warehouseId, check, verb, options) {
     throw error;
   }
   res.status(403).json({
-    message: `You do not have ${verb} access to this warehouse`,
+    message: `Bạn không có quyền truy cập kho này (${verb})`,
     code: 'WAREHOUSE_ACCESS_DENIED',
   });
   return false;

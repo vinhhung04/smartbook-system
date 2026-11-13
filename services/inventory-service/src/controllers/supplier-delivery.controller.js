@@ -123,14 +123,14 @@ async function getSupplierDeliveries(req, res) {
 
 async function getSupplierDeliveryById(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid supplier delivery id" });
+  if (!id) return res.status(400).json({ message: "Mã lần giao hàng của nhà cung cấp không hợp lệ" });
 
   try {
     const invoice = await prisma.supplier_delivery_invoices.findUnique({
       where: { id },
       include: invoiceInclude(),
     });
-    if (!invoice) return res.status(404).json({ message: "Supplier delivery invoice not found" });
+    if (!invoice) return res.status(404).json({ message: "Không tìm thấy hóa đơn giao hàng của nhà cung cấp" });
 
     const canRead = await requireWarehouseReadAccess(req, res, invoice.purchase_orders?.warehouse_id);
     if (!canRead) return;
@@ -148,9 +148,9 @@ async function createSupplierDelivery(req, res) {
   const invoiceNumber = normalizeText(req.body?.invoice_number);
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
-  if (!purchaseOrderId) return res.status(400).json({ message: "purchase_order_id is required" });
-  if (!invoiceNumber) return res.status(400).json({ message: "invoice_number is required" });
-  if (items.length === 0) return res.status(400).json({ message: "items is required" });
+  if (!purchaseOrderId) return res.status(400).json({ message: "Thiếu purchase_order_id" });
+  if (!invoiceNumber) return res.status(400).json({ message: "Thiếu invoice_number" });
+  if (items.length === 0) return res.status(400).json({ message: "Thiếu items" });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -158,14 +158,14 @@ async function createSupplierDelivery(req, res) {
         where: { id: purchaseOrderId },
         include: { purchase_order_items: true },
       });
-      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (!po) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn đặt hàng" };
 
       if (!(await canWriteWarehouse(req.user, po.warehouse_id))) {
-        return { invalid: true, statusCode: 403, message: "You do not have write access to this warehouse" };
+        return { invalid: true, statusCode: 403, message: "Bạn không có quyền thao tác trên kho này" };
       }
 
       if (!["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(po.status)) {
-        return { invalid: true, message: "Purchase order must be sent to supplier before supplier invoice can be created" };
+        return { invalid: true, message: "Đơn đặt hàng phải được gửi cho nhà cung cấp trước khi tạo hóa đơn nhà cung cấp" };
       }
 
       const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
@@ -179,14 +179,14 @@ async function createSupplierDelivery(req, res) {
         const poItem = poItemId ? poItemsById.get(poItemId) : poItemsByVariant.get(String(variantId));
         const invoicedQty = toInt(rawLine?.invoiced_qty);
         const unitCost = Number(rawLine?.unit_cost);
-        if (!poItem) return { invalid: true, message: "Invoice item variant does not belong to purchase order" };
-        if (variantId && variantId !== poItem.variant_id) return { invalid: true, message: "purchase_order_item_id and variant_id do not match" };
-        if (!invoicedQty || invoicedQty <= 0) return { invalid: true, message: "Each invoice item must include invoiced_qty > 0" };
-        if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Each invoice item must include unit_cost >= 0" };
-        if (seen.has(poItem.variant_id)) return { invalid: true, message: "Duplicate variant in invoice items" };
+        if (!poItem) return { invalid: true, message: "Ấn bản trong hóa đơn không thuộc đơn đặt hàng" };
+        if (variantId && variantId !== poItem.variant_id) return { invalid: true, message: "purchase_order_item_id và variant_id không khớp nhau" };
+        if (!invoicedQty || invoicedQty <= 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có invoiced_qty > 0" };
+        if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
+        if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
         seen.add(poItem.variant_id);
         const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
-        if (invoicedQty > remainingQty) return { invalid: true, message: "Invoice quantity cannot exceed remaining purchase order quantity" };
+        if (invoicedQty > remainingQty) return { invalid: true, message: "Số lượng hóa đơn không được vượt số lượng còn lại của đơn đặt hàng" };
         invoiceItems.push({
           purchase_order_item_id: poItem.id,
           variant_id: poItem.variant_id,
@@ -227,7 +227,7 @@ async function createSupplierDelivery(req, res) {
     if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
     return res.status(201).json({ message: "Supplier delivery invoice created", data: result.data });
   } catch (error) {
-    if (error.code === "P2002") return res.status(409).json({ message: "Supplier invoice number already exists for this supplier" });
+    if (error.code === "P2002") return res.status(409).json({ message: "Số hóa đơn này đã tồn tại với nhà cung cấp" });
     console.error("Error while creating supplier delivery:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -240,10 +240,10 @@ async function createGoodsReceiptFromInvoice(req, res) {
   const note = normalizeText(req.body?.note);
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
 
-  if (!invoiceId) return res.status(400).json({ message: "Invalid supplier delivery id" });
+  if (!invoiceId) return res.status(400).json({ message: "Mã lần giao hàng của nhà cung cấp không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
-  if (!warehouseId) return res.status(400).json({ message: "warehouse_id is required" });
-  if (items.length === 0) return res.status(400).json({ message: "items is required" });
+  if (!warehouseId) return res.status(400).json({ message: "Thiếu warehouse_id" });
+  if (items.length === 0) return res.status(400).json({ message: "Thiếu items" });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -254,18 +254,18 @@ async function createGoodsReceiptFromInvoice(req, res) {
           supplier_delivery_invoice_items: true,
         },
       });
-      if (!invoice) return { invalid: true, statusCode: 404, message: "Supplier delivery invoice not found" };
+      if (!invoice) return { invalid: true, statusCode: 404, message: "Không tìm thấy hóa đơn giao hàng của nhà cung cấp" };
       const po = invoice.purchase_orders;
 
       if (!(await canWriteWarehouse(req.user, po.warehouse_id))) {
-        return { invalid: true, statusCode: 403, message: "You do not have write access to this warehouse" };
+        return { invalid: true, statusCode: 403, message: "Bạn không có quyền thao tác trên kho này" };
       }
 
       if (!RECEIVABLE_PO_STATUSES.includes(po.status)) {
-        return { invalid: true, message: "Purchase order is not ready for supplier receiving" };
+        return { invalid: true, message: "Đơn đặt hàng chưa sẵn sàng để nhận hàng từ nhà cung cấp" };
       }
       if (warehouseId !== po.warehouse_id) {
-        return { invalid: true, message: "warehouse_id must match purchase order warehouse" };
+        return { invalid: true, message: "warehouse_id phải trùng kho của đơn đặt hàng" };
       }
 
       const invoiceItemsById = new Map(invoice.supplier_delivery_invoice_items.map((item) => [String(item.id), item]));
@@ -279,22 +279,22 @@ async function createGoodsReceiptFromInvoice(req, res) {
         const invoiceItem = invoiceItemsById.get(String(invoiceItemId));
         const deliveredQty = toInt(rawLine?.delivered_qty ?? rawLine?.quantity);
         const unitCost = Number(rawLine?.unit_cost ?? invoiceItem?.unit_cost ?? 0);
-        if (!invoiceItem) return { invalid: true, message: "invoice_item_id is invalid" };
-        if (!deliveredQty || deliveredQty <= 0) return { invalid: true, message: "Each receipt item must include delivered_qty > 0" };
-        if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Each receipt item must include unit_cost >= 0" };
-        if (seen.has(invoiceItem.variant_id)) return { invalid: true, message: "Duplicate variant in goods receipt items" };
+        if (!invoiceItem) return { invalid: true, message: "invoice_item_id không hợp lệ" };
+        if (!deliveredQty || deliveredQty <= 0) return { invalid: true, message: "Mỗi dòng phiếu nhập phải có delivered_qty > 0" };
+        if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng phiếu nhập phải có unit_cost >= 0" };
+        if (seen.has(invoiceItem.variant_id)) return { invalid: true, message: "Phiếu nhập kho có ấn bản bị lặp" };
         seen.add(invoiceItem.variant_id);
 
         const poItem = poItemsById.get(String(invoiceItem.purchase_order_item_id));
         if (!poItem || poItem.variant_id !== invoiceItem.variant_id) {
-          return { invalid: true, message: "Invoice item variant does not belong to purchase order" };
+          return { invalid: true, message: "Ấn bản trong hóa đơn không thuộc đơn đặt hàng" };
         }
         const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
         if (deliveredQty > remainingQty) {
-          return { invalid: true, message: "Cannot receive more than remaining purchase order quantity" };
+          return { invalid: true, message: "Không thể nhận vượt số lượng còn lại của đơn đặt hàng" };
         }
         if (deliveredQty > Number(invoiceItem.invoiced_qty || 0)) {
-          return { invalid: true, message: "Cannot receive more than supplier invoiced quantity" };
+          return { invalid: true, message: "Không thể nhận vượt số lượng trên hóa đơn của nhà cung cấp" };
         }
 
         const locationId = parseId(rawLine?.location_id);
@@ -327,7 +327,7 @@ async function createGoodsReceiptFromInvoice(req, res) {
           where: { id: { in: locationIds }, warehouse_id: po.warehouse_id, is_active: true },
         });
         if (locationCount !== locationIds.length) {
-          return { invalid: true, message: "One or more location_id values are invalid for this warehouse" };
+          return { invalid: true, message: "Có location_id không hợp lệ với kho này" };
         }
       }
 

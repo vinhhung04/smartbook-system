@@ -20,7 +20,7 @@ async function createVnpayTopup(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     if (!isAllowedTopupAmount(req.body?.amount)) {
@@ -78,13 +78,13 @@ async function getVnpayTopupStatus(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const txnRef = String(req.params.txnRef || '').trim();
     const intent = await prisma.wallet_topup_intents.findUnique({ where: { txn_ref: txnRef } });
     if (!intent || intent.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Top-up not found' });
+      return res.status(404).json({ message: 'Không tìm thấy giao dịch nạp tiền' });
     }
 
     // Reported as expired but not stored: a reader who paid just before the link expired

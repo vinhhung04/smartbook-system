@@ -1,4 +1,4 @@
-import { AlertTriangle, BadgeCheck, CheckCircle2, Circle, ImageIcon, PencilLine, ScanText } from "lucide-react";
+import { AlertTriangle, BadgeCheck, CheckCircle2, Circle, PencilLine, ScanText } from "lucide-react";
 import type { LookupBookByIsbnResponse } from "@/services/ai";
 import { CoverPreview } from "./field";
 import type { EditableBookForm, ReviewSignalData } from "./types";
@@ -19,14 +19,12 @@ export function BookProfileAside({
   form,
   signals,
   reviewIssueCount,
-  onThumbnailChange,
   onFocusField,
 }: {
   lookup: LookupBookByIsbnResponse;
   form: EditableBookForm;
   signals: ReviewSignalData[];
   reviewIssueCount: number;
-  onThumbnailChange: (value: string) => void;
   onFocusField: (fieldId: string) => void;
 }) {
   const completeCount = signals.filter((signal) => signal.complete).length;
@@ -121,18 +119,6 @@ export function BookProfileAside({
               </li>
             ))}
           </ul>
-        </div>
-        <div className="w-full lg:max-w-[280px]">
-          <label htmlFor="thumbnail" className="mb-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            <ImageIcon className="h-3.5 w-3.5" aria-hidden="true" /> URL ảnh bìa
-          </label>
-          <input
-            id="thumbnail"
-            value={form.thumbnail}
-            onChange={(event) => onThumbnailChange(event.target.value)}
-            placeholder="https://…"
-            className="h-9 w-full rounded-lg border border-border bg-input-background px-3 text-[13px] text-foreground outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25"
-          />
         </div>
       </div>
 

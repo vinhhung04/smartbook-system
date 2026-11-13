@@ -39,7 +39,7 @@ async function getWarehouseById(req, res) {
   const id = parseId(req.params.id);
 
   if (!id) {
-    return res.status(400).json({ message: 'Invalid warehouse id' });
+    return res.status(400).json({ message: 'Mã kho không hợp lệ' });
   }
 
   try {
@@ -56,7 +56,7 @@ async function getWarehouseById(req, res) {
     });
 
     if (!warehouse) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     return res.json(warehouse);
@@ -87,7 +87,7 @@ async function createWarehouse(req, res) {
   const { name, code, warehouse_type, address_line1 } = req.body;
 
   if (!name || !code) {
-    return res.status(400).json({ message: 'name and code are required' });
+    return res.status(400).json({ message: 'Cần có đủ name và code' });
   }
   const contact = parseBranchContact(req.body);
   if (contact.error) {
@@ -170,7 +170,7 @@ async function updateWarehouse(req, res) {
   const id = parseId(req.params.id);
 
   if (!id) {
-    return res.status(400).json({ message: 'Invalid warehouse id' });
+    return res.status(400).json({ message: 'Mã kho không hợp lệ' });
   }
 
   const { name, code, warehouse_type, address_line1 } = req.body;
@@ -182,7 +182,7 @@ async function updateWarehouse(req, res) {
   try {
     const exists = await prisma.warehouses.findUnique({ where: { id } });
     if (!exists) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     const warehouse = await prisma.warehouses.update({
@@ -207,13 +207,13 @@ async function deleteWarehouse(req, res) {
   const id = parseId(req.params.id);
 
   if (!id) {
-    return res.status(400).json({ message: 'Invalid warehouse id' });
+    return res.status(400).json({ message: 'Mã kho không hợp lệ' });
   }
 
   try {
     const exists = await prisma.warehouses.findUnique({ where: { id } });
     if (!exists) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     const [
@@ -258,7 +258,7 @@ async function deleteWarehouse(req, res) {
 
     if (conflicts.length > 0) {
       return res.status(409).json({
-        message: 'Cannot delete warehouse because it is referenced by existing records',
+        message: 'Không thể xóa kho vì đang được dữ liệu khác tham chiếu',
         conflicts,
       });
     }

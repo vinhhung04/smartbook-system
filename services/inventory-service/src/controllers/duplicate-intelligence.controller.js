@@ -44,7 +44,7 @@ async function check(req, res) {
 async function getReview(req, res) {
   try {
     const data = await prisma.duplicate_review_drafts.findUnique({ where: { id: req.params.id } });
-    return data ? res.json({ data }) : res.status(404).json({ message: 'Duplicate review not found' });
+    return data ? res.json({ data }) : res.status(404).json({ message: 'Không tìm thấy mục rà soát trùng lặp' });
   } catch (error) {
     console.error('Unable to load duplicate review', error);
     return res.status(500).json({ message: 'Unable to load duplicate review' });
@@ -73,35 +73,35 @@ async function assertUniqueVariant(tx, data) {
     ...(data.isbn10 ? [{ isbn10: data.isbn10 }] : []),
     ...(data.internal_barcode ? [{ internal_barcode: data.internal_barcode }] : []),
   ] } });
-  if (existing) { const error = new Error('ISBN, barcode, or SKU already belongs to an existing variant'); error.statusCode = 409; throw error; }
+  if (existing) { const error = new Error('ISBN, barcode hoặc SKU đã thuộc về một ấn bản có sẵn'); error.statusCode = 409; throw error; }
 }
 
 async function decide(req, res) {
   const { action, selectedBookId, selectedVariantId, variant = {} } = req.body || {};
-  if (!ACTIONS.includes(action)) return res.status(400).json({ message: 'Unsupported duplicate review action' });
+  if (!ACTIONS.includes(action)) return res.status(400).json({ message: 'Thao tác rà soát trùng không được hỗ trợ' });
   try {
     const response = await prisma.$transaction(async (tx) => {
       const draft = await tx.duplicate_review_drafts.findUnique({ where: { id: req.params.id } });
-      if (!draft) { const error = new Error('Duplicate review not found'); error.statusCode = 404; throw error; }
+      if (!draft) { const error = new Error('Không tìm thấy mục rà soát trùng lặp'); error.statusCode = 404; throw error; }
       const input = draft.input_metadata || {};
       let selectedBook = null;
       let selectedVariant = null;
       if (action === 'LINK_EXISTING_VARIANT') {
-        if (draft.classification !== 'EXACT_DUPLICATE' || !selectedVariantId) { const error = new Error('Exact duplicate and selectedVariantId are required to link an existing variant'); error.statusCode = 400; throw error; }
+        if (draft.classification !== 'EXACT_DUPLICATE' || !selectedVariantId) { const error = new Error('Chỉ liên kết được với ấn bản có sẵn khi là bản trùng chính xác và có selectedVariantId'); error.statusCode = 400; throw error; }
         const candidateVariantIds = (Array.isArray(draft.candidates) ? draft.candidates : []).flatMap((candidate) => Array.isArray(candidate.variantIds) ? candidate.variantIds : []);
-        if (!candidateVariantIds.includes(selectedVariantId)) { const error = new Error('Selected variant is not a duplicate review candidate'); error.statusCode = 400; throw error; }
+        if (!candidateVariantIds.includes(selectedVariantId)) { const error = new Error('Ấn bản đã chọn không nằm trong danh sách rà soát trùng'); error.statusCode = 400; throw error; }
         selectedVariant = await tx.book_variants.findUnique({ where: { id: selectedVariantId } });
-        if (!selectedVariant) { const error = new Error('Selected variant not found'); error.statusCode = 404; throw error; }
+        if (!selectedVariant) { const error = new Error('Không tìm thấy ấn bản đã chọn'); error.statusCode = 404; throw error; }
         selectedBook = await tx.books.findUnique({ where: { id: selectedVariant.book_id } });
       } else if (action === 'CREATE_VARIANT_FOR_EDITION') {
-        if (!selectedBookId) { const error = new Error('selectedBookId is required'); error.statusCode = 400; throw error; }
+        if (!selectedBookId) { const error = new Error('Thiếu selectedBookId'); error.statusCode = 400; throw error; }
         selectedBook = await tx.books.findUnique({ where: { id: selectedBookId } });
-        if (!selectedBook) { const error = new Error('Selected edition not found'); error.statusCode = 404; throw error; }
+        if (!selectedBook) { const error = new Error('Không tìm thấy ấn bản đã chọn'); error.statusCode = 404; throw error; }
         const data = variantData(input, variant); await assertUniqueVariant(tx, data);
         selectedVariant = await tx.book_variants.create({ data: { ...data, book_id: selectedBook.id } });
       } else if (action === 'CREATE_NEW_EDITION' || action === 'CREATE_NEW_TITLE') {
         const existing = selectedBookId ? await tx.books.findUnique({ where: { id: selectedBookId } }) : null;
-        if (action === 'CREATE_NEW_EDITION' && !existing) { const error = new Error('selectedBookId is required for a new edition'); error.statusCode = 400; throw error; }
+        if (action === 'CREATE_NEW_EDITION' && !existing) { const error = new Error('Cần selectedBookId khi tạo ấn bản mới'); error.statusCode = 400; throw error; }
         let workGroupId = existing?.work_group_id || null;
         if (!workGroupId) {
           const work = await tx.book_work_groups.create({ data: { canonical_title: input.title || existing?.title || 'Untitled', normalized_title: canonicalKey(input.title || existing?.title || 'Untitled') } });

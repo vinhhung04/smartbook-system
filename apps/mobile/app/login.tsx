@@ -10,13 +10,9 @@ import { BrandMark } from '../src/components/BrandMark';
 import { getApiConfigError } from '../src/api/config';
 import { Button, InlineAlert, PasswordField, TextField, ThemeProvider, brand, fontFamily, loginTheme, radii, space } from '../src/design-system';
 
-// auth-service answers in English; the people holding the phone read Vietnamese.
+// auth-service answers a failed login (401) in English; the people holding the phone read Vietnamese.
 const LOGIN_ERRORS: Record<string, string> = {
   'Invalid credentials': 'Sai tài khoản hoặc mật khẩu.',
-  'User is not active': 'Tài khoản đang bị khóa hoặc chưa được kích hoạt. Liên hệ quản trị viên.',
-  'Account locked due to too many failed login attempts. Contact an administrator.':
-    'Tài khoản đã bị khóa do nhập sai mật khẩu quá nhiều lần. Liên hệ quản trị viên.',
-  'Identifier and password are required': 'Vui lòng nhập tài khoản và mật khẩu.',
 };
 
 function describeLoginError(err: unknown): string {

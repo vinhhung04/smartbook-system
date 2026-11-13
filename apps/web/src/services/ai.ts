@@ -1,5 +1,6 @@
 import type { AiVerification } from '@/lib/copilot-verification';
 import { aiAPI, getToken } from './http-clients';
+import { postWithProgress, type LookupProgressEvent } from './lookup-progress-stream';
 
 export interface RecommendationResponse {
   recommendations: Array<{
@@ -704,6 +705,18 @@ export const aiService = {
     });
     return response.data;
   },
+
+  /** Same lookup as enrichBookAfterIsbn, with live progress events (SSE). Throws
+   *  ProgressStreamUnavailable when the channel cannot deliver a result, so the
+   *  caller can fall back to enrichBookAfterIsbn. */
+  enrichBookAfterIsbnWithProgress: async (
+    payload: EnrichBookAfterIsbnRequest,
+    options: { signal: AbortSignal; onProgress: (event: LookupProgressEvent) => void },
+  ): Promise<EnrichBookAfterIsbnResponse> => postWithProgress<EnrichBookAfterIsbnResponse>(
+    '/enrich-book-after-isbn/stream',
+    { isbn: payload.isbn, existingCategories: payload.existingCategories || [], verifiedMetadata: payload.verifiedMetadata },
+    options,
+  ),
 
   generateSummaryVi: async (payload: SummaryViRequest): Promise<SummaryViResponse> => {
     const response = await aiAPI.post('/generate-summary-vi', payload);

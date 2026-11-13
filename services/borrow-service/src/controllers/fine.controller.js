@@ -136,7 +136,7 @@ async function listFines(req, res) {
 async function getFineById(req, res) {
   const fineId = String(req.params.id || '').trim();
   if (!isUuid(fineId)) {
-    return res.status(400).json({ message: 'Invalid fine id' });
+    return res.status(400).json({ message: 'Mã khoản phạt không hợp lệ' });
   }
 
   try {
@@ -160,7 +160,7 @@ async function getFineById(req, res) {
     });
 
     if (!fine) {
-      return res.status(404).json({ message: 'Fine not found' });
+      return res.status(404).json({ message: 'Không tìm thấy khoản phạt' });
     }
 
     return res.json({ data: summarizeFine(fine) });
@@ -175,18 +175,18 @@ async function recordFinePayment(req, res) {
   const actorUserId = req.user?.id || null;
 
   if (!isUuid(fineId)) {
-    return res.status(400).json({ message: 'Invalid fine id' });
+    return res.status(400).json({ message: 'Mã khoản phạt không hợp lệ' });
   }
 
   const paymentMethod = String(req.body?.payment_method || 'CASH').trim().toUpperCase();
   const allowedMethods = new Set(['CASH', 'CARD', 'TRANSFER', 'EWALLET']);
   if (!allowedMethods.has(paymentMethod)) {
-    return res.status(400).json({ message: 'payment_method must be one of CASH, CARD, TRANSFER, EWALLET' });
+    return res.status(400).json({ message: 'payment_method phải là một trong CASH, CARD, TRANSFER, EWALLET' });
   }
 
   const requestedAmount = Number(req.body?.amount);
   if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-    return res.status(400).json({ message: 'amount must be a positive number' });
+    return res.status(400).json({ message: 'amount phải là số dương' });
   }
 
   try {
@@ -200,11 +200,11 @@ async function recordFinePayment(req, res) {
       });
 
       if (!fine) {
-        return { code: 404, payload: { message: 'Fine not found' } };
+        return { code: 404, payload: { message: 'Không tìm thấy khoản phạt' } };
       }
 
       if (fine.status === 'PAID' || fine.status === 'WAIVED') {
-        return { code: 409, payload: { message: `Cannot pay fine with status ${fine.status}` } };
+        return { code: 409, payload: { message: `Không thể thanh toán khoản phạt ở trạng thái ${fine.status}` } };
       }
 
       const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + normalizeMoney(item.amount), 0);
@@ -215,7 +215,7 @@ async function recordFinePayment(req, res) {
         return {
           code: 409,
           payload: {
-            message: 'amount exceeds remaining fine balance',
+            message: 'amount vượt số tiền phạt còn lại',
             detail: { remaining_balance: normalizeMoney(remaining) },
           },
         };
@@ -311,7 +311,7 @@ async function waiveFine(req, res) {
   const actorUserId = req.user?.id || null;
 
   if (!isUuid(fineId)) {
-    return res.status(400).json({ message: 'Invalid fine id' });
+    return res.status(400).json({ message: 'Mã khoản phạt không hợp lệ' });
   }
 
   try {
@@ -322,22 +322,22 @@ async function waiveFine(req, res) {
       });
 
       if (!fine) {
-        return { code: 404, payload: { message: 'Fine not found' } };
+        return { code: 404, payload: { message: 'Không tìm thấy khoản phạt' } };
       }
 
       if (fine.status === 'PAID') {
-        return { code: 409, payload: { message: 'Cannot waive a fully paid fine' } };
+        return { code: 409, payload: { message: 'Không thể miễn giảm khoản phạt đã thanh toán đủ' } };
       }
 
       const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + normalizeMoney(item.amount), 0);
       const remaining = Math.max(0, normalizeMoney(fine.amount) - normalizeMoney(fine.waived_amount) - paidSoFar);
       if (remaining <= 0) {
-        return { code: 409, payload: { message: 'Fine is already fully settled' } };
+        return { code: 409, payload: { message: 'Khoản phạt đã được thanh toán đủ' } };
       }
 
       const requestedWaive = req.body?.amount == null ? remaining : Number(req.body.amount);
       if (!Number.isFinite(requestedWaive) || requestedWaive <= 0) {
-        return { code: 400, payload: { message: 'amount must be a positive number' } };
+        return { code: 400, payload: { message: 'amount phải là số dương' } };
       }
 
       const waiveAmount = normalizeMoney(requestedWaive);
@@ -345,7 +345,7 @@ async function waiveFine(req, res) {
         return {
           code: 409,
           payload: {
-            message: 'amount exceeds remaining fine balance',
+            message: 'amount vượt số tiền phạt còn lại',
             detail: { remaining_balance: normalizeMoney(remaining) },
           },
         };

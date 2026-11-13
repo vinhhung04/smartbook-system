@@ -26,7 +26,7 @@ async function getLowStockByWarehouse(req, res) {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
 
   if (warehouseId && !UUID_RE.test(String(warehouseId).trim())) {
-    return res.status(400).json({ message: 'Invalid warehouse_id' });
+    return res.status(400).json({ message: 'warehouse_id không hợp lệ' });
   }
 
   try {

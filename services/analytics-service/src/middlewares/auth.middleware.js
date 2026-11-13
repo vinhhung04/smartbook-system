@@ -42,7 +42,7 @@ function authorizeAnyPermission(permissions = []) {
     const allowed = permissions.some((permission) => userPermissions.has(permission));
 
     if (!allowed) {
-      return res.status(403).json({ message: 'Insufficient permission' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     return next();

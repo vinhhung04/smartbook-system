@@ -157,16 +157,16 @@ async function createCustomer(req, res) {
   const actorUserId = req.user?.id || null;
 
   if (!full_name || String(full_name).trim().length < 2) {
-    return res.status(400).json({ message: 'full_name is required and must be at least 2 chars' });
+    return res.status(400).json({ message: 'Họ tên (full_name) là bắt buộc và phải có ít nhất 2 ký tự' });
   }
 
   const resolvedStatus = status || 'ACTIVE';
   if (!['ACTIVE', 'SUSPENDED', 'BLOCKED', 'INACTIVE'].includes(resolvedStatus)) {
-    return res.status(400).json({ message: 'Invalid status' });
+    return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
   }
 
   if (email && !isValidEmail(email)) {
-    return res.status(400).json({ message: 'Invalid email format' });
+    return res.status(400).json({ message: 'Email không đúng định dạng' });
   }
 
   try {
@@ -226,7 +226,7 @@ async function createCustomer(req, res) {
     return res.status(201).json({ data: created });
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Email, phone or customer_code already exists' });
+      return res.status(409).json({ message: 'Email, số điện thoại hoặc customer_code đã tồn tại' });
     }
     console.error('Error while creating customer:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -236,7 +236,7 @@ async function createCustomer(req, res) {
 async function getCustomerById(req, res) {
   const id = parseId(req.params.id);
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid customer id' });
+    return res.status(400).json({ message: 'Mã bạn đọc không hợp lệ' });
   }
 
   try {
@@ -253,7 +253,7 @@ async function getCustomerById(req, res) {
     });
 
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     return res.json({ data: customer });
@@ -268,17 +268,17 @@ async function updateCustomer(req, res) {
   const actorUserId = req.user?.id || null;
 
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid customer id' });
+    return res.status(400).json({ message: 'Mã bạn đọc không hợp lệ' });
   }
 
   const { full_name, email, phone, birth_date, address, status } = req.body;
 
   if (status && !['ACTIVE', 'SUSPENDED', 'BLOCKED', 'INACTIVE'].includes(status)) {
-    return res.status(400).json({ message: 'Invalid status' });
+    return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
   }
 
   if (email !== undefined && email && !isValidEmail(email)) {
-    return res.status(400).json({ message: 'Invalid email format' });
+    return res.status(400).json({ message: 'Email không đúng định dạng' });
   }
 
   try {
@@ -313,13 +313,13 @@ async function updateCustomer(req, res) {
     });
 
     if (!updated) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     return res.json({ data: updated });
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Email or phone already exists' });
+      return res.status(409).json({ message: 'Email hoặc số điện thoại đã tồn tại' });
     }
     console.error('Error while updating customer:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -355,18 +355,18 @@ async function getActiveMembership(req, res) {
   const id = parseId(req.params.id);
 
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid customer id' });
+    return res.status(400).json({ message: 'Mã bạn đọc không hợp lệ' });
   }
 
   try {
     const customer = await prisma.customers.findUnique({ where: { id } });
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     const membershipInfo = await resolveActiveMembership(prisma, id);
     if (!membershipInfo) {
-      return res.status(404).json({ message: 'Active membership not found' });
+      return res.status(404).json({ message: 'Không tìm thấy thẻ thành viên còn hiệu lực' });
     }
 
     const activeLoanCount = await prisma.loan_transactions.count({
@@ -386,19 +386,19 @@ async function getActiveMembership(req, res) {
 async function renewMembership(req, res) {
   const id = parseId(req.params.id);
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid customer id' });
+    return res.status(400).json({ message: 'Mã bạn đọc không hợp lệ' });
   }
 
   // Omitted: the plan's own duration_days (resolved below once the plan is known).
   const requestedDuration = req.body?.duration_days == null ? null : Number(req.body.duration_days);
   if (requestedDuration !== null && (!Number.isInteger(requestedDuration) || requestedDuration <= 0)) {
-    return res.status(400).json({ message: 'duration_days must be a positive integer' });
+    return res.status(400).json({ message: 'duration_days phải là số nguyên dương' });
   }
 
   try {
     const customer = await prisma.customers.findUnique({ where: { id } });
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     const currentMembership = await prisma.customer_memberships.findFirst({
@@ -408,15 +408,15 @@ async function renewMembership(req, res) {
 
     const planId = req.body?.plan_id ? String(req.body.plan_id) : currentMembership?.plan_id;
     if (!planId) {
-      return res.status(400).json({ message: 'plan_id is required when the customer has no prior membership' });
+      return res.status(400).json({ message: 'Cần plan_id khi bạn đọc chưa từng có thẻ thành viên' });
     }
     if (!isUuid(planId)) {
-      return res.status(400).json({ message: 'plan_id must be a valid UUID' });
+      return res.status(400).json({ message: 'plan_id phải là UUID hợp lệ' });
     }
 
     const plan = await prisma.membership_plans.findUnique({ where: { id: planId } });
     if (!plan || !plan.is_active) {
-      return res.status(404).json({ message: 'Membership plan not found or inactive' });
+      return res.status(404).json({ message: 'Không tìm thấy gói thành viên hoặc gói đã ngừng hoạt động' });
     }
 
     const startDate = resolveRenewalStart(currentMembership?.end_date || null);
@@ -466,7 +466,7 @@ async function getMyProfile(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const withPrefs = await prisma.customers.findUnique({
@@ -487,7 +487,7 @@ async function updateMyProfile(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const { full_name, phone, birth_date, address } = req.body || {};
@@ -535,7 +535,7 @@ async function updateMyProfile(req, res) {
     });
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Phone already exists' });
+      return res.status(409).json({ message: 'Số điện thoại này đã được dùng cho tài khoản khác' });
     }
     console.error('Error while updating own profile:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -546,12 +546,12 @@ async function getMyMembership(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const membershipInfo = await resolveActiveMembership(prisma, customer.id);
     if (!membershipInfo) {
-      return res.status(404).json({ message: 'Active membership not found' });
+      return res.status(404).json({ message: 'Không tìm thấy thẻ thành viên còn hiệu lực' });
     }
 
     const activeLoanCount = await prisma.loan_transactions.count({
@@ -581,7 +581,7 @@ async function provisionCustomerFromAuth(req, res) {
   const userId = String(req.body?.user_id || '').trim();
 
   if (!email || !full_name) {
-    return res.status(400).json({ message: 'email and full_name are required' });
+    return res.status(400).json({ message: 'Cần có đủ email và full_name' });
   }
 
   try {
@@ -618,7 +618,7 @@ async function provisionCustomerFromAuth(req, res) {
     return res.status(201).json({ data: created, created: true });
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Customer profile already exists' });
+      return res.status(409).json({ message: 'Hồ sơ bạn đọc đã tồn tại' });
     }
     console.error('Error while provisioning customer:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -628,12 +628,12 @@ async function provisionCustomerFromAuth(req, res) {
 async function resolveCustomerByAuth(req, res) {
   const internalKey = process.env.INTERNAL_SERVICE_KEY || '';
   if (!internalKey || req.headers['x-internal-service-key'] !== internalKey) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
 
   const { email, user_id } = req.query;
   if (!email && !user_id) {
-    return res.status(400).json({ message: 'email or user_id is required' });
+    return res.status(400).json({ message: 'Cần có email hoặc user_id' });
   }
 
   try {
@@ -655,7 +655,7 @@ async function resolveCustomerByAuth(req, res) {
     }
 
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     return res.json({ customer_id: customer.id });

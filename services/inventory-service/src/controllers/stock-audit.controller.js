@@ -113,7 +113,7 @@ async function getStockAudits(req, res) {
 
 async function getStockAuditById(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Invalid stock audit id' });
+  if (!id) return res.status(400).json({ message: 'Mã phiếu kiểm kê không hợp lệ' });
 
   try {
     const audit = await prisma.stock_audits.findUnique({
@@ -129,13 +129,13 @@ async function getStockAuditById(req, res) {
       },
     });
 
-    if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
     if (!(await requireWarehouseReadAccess(req, res, audit.warehouse_id))) return undefined;
 
     const manager = isManager(req);
     const userId = req.user?.id || req.user?.sub;
     if (!manager && audit.assigned_to_user_id !== userId) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     return res.json({ data: auditSummary(audit, true) });
@@ -154,7 +154,7 @@ async function createStockAudit(req, res) {
   const userId = req.user?.id || req.user?.sub;
 
   if (!warehouseId) {
-    return res.status(400).json({ message: 'warehouse_id is required' });
+    return res.status(400).json({ message: 'Thiếu warehouse_id' });
   }
 
   try {
@@ -184,12 +184,12 @@ async function assignStockAudit(req, res) {
   const assignedToUserId = normalizeOptionalUserId(req.body?.assigned_to_user_id);
 
   if (!id || !assignedToUserId) {
-    return res.status(400).json({ message: 'stock audit id and assigned_to_user_id are required' });
+    return res.status(400).json({ message: 'Cần có đủ mã phiếu kiểm kê và assigned_to_user_id' });
   }
 
   try {
     const existing = await prisma.stock_audits.findUnique({ where: { id }, select: { warehouse_id: true } });
-    if (!existing) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!existing) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
     if (!(await requireWarehouseWriteAccess(req, res, existing.warehouse_id))) return undefined;
     if (!(await requireAssignableUser(res, assignedToUserId, existing.warehouse_id))) return undefined;
 
@@ -229,20 +229,20 @@ async function submitLineCount(req, res) {
   const countedQty = toInt(req.body?.counted_qty);
 
   if (!id || !lineId || countedQty === null || countedQty < 0) {
-    return res.status(400).json({ message: 'counted_qty (>= 0) is required' });
+    return res.status(400).json({ message: 'Thiếu counted_qty (>= 0)' });
   }
 
   try {
     const audit = await prisma.stock_audits.findUnique({ where: { id } });
-    if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
-    if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Forbidden' });
+    if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
+    if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
     if (!['DRAFT', 'IN_PROGRESS'].includes(audit.status)) {
       return res.status(400).json({ message: 'Phiếu kiểm kê không còn ở trạng thái có thể nhập số lượng' });
     }
 
     const line = await prisma.stock_audit_lines.findFirst({ where: { id: lineId, stock_audit_id: id } });
-    if (!line) return res.status(404).json({ message: 'Stock audit line not found' });
+    if (!line) return res.status(404).json({ message: 'Không tìm thấy dòng kiểm kê' });
 
     const updated = await prisma.stock_audit_lines.update({
       where: { id: lineId },
@@ -265,15 +265,15 @@ async function submitLineCount(req, res) {
 
 async function submitStockAudit(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Invalid stock audit id' });
+  if (!id) return res.status(400).json({ message: 'Mã phiếu kiểm kê không hợp lệ' });
 
   try {
     const audit = await prisma.stock_audits.findUnique({
       where: { id },
       include: { stock_audit_lines: { select: { counted_qty: true } } },
     });
-    if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
-    if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Forbidden' });
+    if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
+    if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
     if (!['DRAFT', 'IN_PROGRESS'].includes(audit.status)) {
       return res.status(400).json({ message: 'Phiếu kiểm kê đã được nộp trước đó' });
@@ -298,12 +298,12 @@ async function submitStockAudit(req, res) {
 
 async function approveStockAudit(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Invalid stock audit id' });
+  if (!id) return res.status(400).json({ message: 'Mã phiếu kiểm kê không hợp lệ' });
   const reviewerId = req.user?.id || req.user?.sub || null;
 
   try {
     const preCheck = await prisma.stock_audits.findUnique({ where: { id } });
-    if (!preCheck) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!preCheck) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
     if (!(await requireWarehouseWriteAccess(req, res, preCheck.warehouse_id, { fresh: true }))) return undefined;
     if (!['SUBMITTED', 'COMPLETED'].includes(preCheck.status)) {
       return res.status(400).json({ message: 'Chỉ có thể duyệt phiếu kiểm kê đã được nộp' });
@@ -432,11 +432,11 @@ async function approveStockAudit(req, res) {
 
 async function cancelStockAudit(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: 'Invalid stock audit id' });
+  if (!id) return res.status(400).json({ message: 'Mã phiếu kiểm kê không hợp lệ' });
 
   try {
     const audit = await prisma.stock_audits.findUnique({ where: { id } });
-    if (!audit) return res.status(404).json({ message: 'Stock audit not found' });
+    if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
     if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
     if (['COMPLETED', 'CANCELLED'].includes(audit.status)) {
       return res.status(400).json({ message: 'Phiếu kiểm kê đã kết thúc, không thể hủy' });

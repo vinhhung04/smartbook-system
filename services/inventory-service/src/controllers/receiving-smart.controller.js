@@ -239,7 +239,7 @@ async function matchItems(req, res) {
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      message: "Invalid payload: items must be a non-empty array"
+      message: "Dữ liệu không hợp lệ: items phải là mảng không rỗng"
     });
   }
 
@@ -328,14 +328,14 @@ async function createDraft(req, res) {
 
   // Validation
   if (!warehouse_id) {
-    return res.status(400).json({ message: "warehouse_id is required" });
+    return res.status(400).json({ message: "Thiếu warehouse_id" });
   }
   if (!actorId(req)) {
     return res.status(401).json({ message: "Invalid current user context" });
   }
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      message: "items must be a non-empty array"
+      message: "items phải là mảng không rỗng"
     });
   }
 
@@ -401,7 +401,7 @@ async function getDraft(req, res) {
   const draftId = parseId(req.params.id);
 
   if (!draftId) {
-    return res.status(400).json({ message: "Invalid draft id" });
+    return res.status(400).json({ message: "Mã bản nháp không hợp lệ" });
   }
 
   try {
@@ -429,7 +429,7 @@ async function getDraft(req, res) {
     });
 
     if (!draft) {
-      return res.status(404).json({ message: "Draft not found" });
+      return res.status(404).json({ message: "Không tìm thấy bản nháp" });
     }
     if (!(await requireWarehouseReadAccess(req, res, draft.warehouse_id))) return undefined;
 
@@ -509,14 +509,14 @@ async function updateDraft(req, res) {
   const draftId = parseId(req.params.id);
 
   if (!draftId) {
-    return res.status(400).json({ message: "Invalid draft id" });
+    return res.status(400).json({ message: "Mã bản nháp không hợp lệ" });
   }
 
   const { items } = req.body;
 
   if (!items || !Array.isArray(items)) {
     return res.status(400).json({
-      message: "items must be an array",
+      message: "items phải là mảng",
     });
   }
 
@@ -526,13 +526,13 @@ async function updateDraft(req, res) {
     });
 
     if (!draft) {
-      return res.status(404).json({ message: "Draft not found" });
+      return res.status(404).json({ message: "Không tìm thấy bản nháp" });
     }
 
     if (!(await requireWarehouseWriteAccess(req, res, draft.warehouse_id))) return undefined;
     if (draft.status !== "DRAFT") {
       return res.status(400).json({
-        message: "Can only update DRAFT drafts",
+        message: "Chỉ cập nhật được bản nháp ở trạng thái DRAFT",
       });
     }
 
@@ -589,7 +589,7 @@ async function convertDraft(req, res) {
   const user_id = actorId(req);
 
   if (!draftId) {
-    return res.status(400).json({ message: "Invalid draft id" });
+    return res.status(400).json({ message: "Mã bản nháp không hợp lệ" });
   }
   if (!user_id) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -604,13 +604,13 @@ async function convertDraft(req, res) {
     });
 
     if (!draft) {
-      return res.status(404).json({ message: "Draft not found" });
+      return res.status(404).json({ message: "Không tìm thấy bản nháp" });
     }
 
     if (!(await requireWarehouseWriteAccess(req, res, draft.warehouse_id, { fresh: true }))) return undefined;
     if (draft.status !== "DRAFT") {
       return res.status(400).json({
-        message: `Cannot convert draft with status: ${draft.status}`,
+        message: `Không thể chuyển bản nháp ở trạng thái: ${draft.status}`,
       });
     }
 
@@ -621,7 +621,7 @@ async function convertDraft(req, res) {
 
     if (validItems.length === 0) {
       return res.status(400).json({
-        message: "No items with matched variants to convert",
+        message: "Không có dòng hàng nào khớp ấn bản để chuyển đổi",
       });
     }
 
@@ -704,7 +704,7 @@ async function cancelDraft(req, res) {
   const draftId = parseId(req.params.id);
 
   if (!draftId) {
-    return res.status(400).json({ message: "Invalid draft id" });
+    return res.status(400).json({ message: "Mã bản nháp không hợp lệ" });
   }
 
   try {
@@ -713,13 +713,13 @@ async function cancelDraft(req, res) {
     });
 
     if (!draft) {
-      return res.status(404).json({ message: "Draft not found" });
+      return res.status(404).json({ message: "Không tìm thấy bản nháp" });
     }
 
     if (!(await requireWarehouseWriteAccess(req, res, draft.warehouse_id))) return undefined;
     if (draft.status !== "DRAFT") {
       return res.status(400).json({
-        message: "Can only cancel DRAFT drafts",
+        message: "Chỉ hủy được bản nháp ở trạng thái DRAFT",
       });
     }
 

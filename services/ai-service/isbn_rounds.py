@@ -28,6 +28,7 @@ from typing import Awaitable, Callable
 import httpx
 
 import isbn_matching
+import isbn_progress as progress  # observation only: no-op unless a request opened a progress stream
 
 logger = logging.getLogger(__name__)
 
@@ -238,21 +239,28 @@ async def run_round1(providers: list[BookProvider], code: str, targets: set[str]
         if parallel.disabled_reason or (not valid_isbn and not parallel.accepts_raw_barcode):
             return
         lane = asyncio.create_task(call_with_retry(parallel, lambda client: parallel.by_code(client, code)))
+        progress.source_started(1, parallel.name, "code")
 
+    def record(outcome: dict) -> None:
+        outcomes.append(outcome)
+        progress.source_done(outcome)
+
+    progress.stage("round1", "started", order=[p.name for p in providers] + ([parallel.name] if parallel else []))
     if parallel_after is None:
         start_lane()
     for provider in providers:
         if identity:
-            outcomes.append(_skipped(provider.name, "ROUND1_ALREADY_MATCHED"))
+            record(_skipped(provider.name, "ROUND1_ALREADY_MATCHED"))
             continue
         if provider.disabled_reason:
-            outcomes.append(_skipped(provider.name, provider.disabled_reason, "DISABLED"))
+            record(_skipped(provider.name, provider.disabled_reason, "DISABLED"))
         elif not valid_isbn and not provider.accepts_raw_barcode:
-            outcomes.append(_skipped(provider.name, "CODE_NOT_SUPPORTED"))
+            record(_skipped(provider.name, "CODE_NOT_SUPPORTED"))
         else:
+            progress.source_started(1, provider.name, "code")
             call = await call_with_retry(provider, lambda client, p=provider: p.by_code(client, code))
             data, outcome = _code_result(provider, call, 1, targets)
-            outcomes.append(outcome)
+            record(outcome)
             if data:
                 identity, identity_data = provider.name, data
         if provider.name == parallel_after:
@@ -261,17 +269,19 @@ async def run_round1(providers: list[BookProvider], code: str, targets: set[str]
 
     if parallel is not None and lane is None:
         if parallel.disabled_reason:
-            outcomes.append(_skipped(parallel.name, parallel.disabled_reason, "DISABLED"))
+            record(_skipped(parallel.name, parallel.disabled_reason, "DISABLED"))
         elif identity == parallel_after:
-            outcomes.append(_skipped(parallel.name, "BOOK_IN_CATALOG"))
+            record(_skipped(parallel.name, "BOOK_IN_CATALOG"))
         else:
-            outcomes.append(_skipped(parallel.name, "CODE_NOT_SUPPORTED"))
+            record(_skipped(parallel.name, "CODE_NOT_SUPPORTED"))
     elif lane is not None and identity is None:
         data, outcome = _code_result(parallel, await lane, 1, targets)
-        outcomes.append(outcome)
+        record(outcome)
         if data:
             identity, identity_data = parallel.name, data
         lane = None
+    # A lane still running here (a sequential source matched) reports in Round 2.
+    progress.stage("round1", "done", matchedSource=identity)
     return {"identity": identity, "data": identity_data, "outcomes": outcomes,
             "parallelTask": lane, "parallelProvider": parallel}
 
@@ -297,6 +307,7 @@ async def _round2_provider(provider: BookProvider, identity: dict, code: str, ta
     last_call, rejected_url = {"durationMs": 0, "attempts": 0}, None
     total_ms, total_attempts = 0, 0
     if ask_code and provider.by_code:
+        progress.source_started(2, provider.name, "code")
         call = await call_with_retry(provider, lambda client: provider.by_code(client, code))
         total_ms, total_attempts, last_call = call["durationMs"], call["attempts"], call
         data = call["value"] if call["status"] == "OK" else None
@@ -312,6 +323,7 @@ async def _round2_provider(provider: BookProvider, identity: dict, code: str, ta
         return None, _outcome(provider.name, 2, "code", last_call, "NOT_FOUND")
 
     author = (identity.get("authors") or [None])[0]
+    progress.source_started(2, provider.name, "title")
     call = await call_with_retry(provider, lambda client: provider.by_title(client, identity["title"], author))
     call = {**call, "durationMs": total_ms + call["durationMs"], "attempts": total_attempts + call["attempts"]}
     if call["status"] != "OK":
@@ -349,17 +361,25 @@ async def run_round2(providers: list[BookProvider], round1: dict, code: str, tar
     metadata = {identity_name: identity}
     outcomes: list[dict] = []
     tasks, names = [], []
+
+    async def reported(coro):
+        data, outcome = await coro
+        progress.source_done(outcome)
+        return data, outcome
+
+    disabled = []
     for provider in providers:
         if provider.name == identity_name:
             continue
         if provider.disabled_reason:
-            outcomes.append({"source": provider.name, "round": 2, "query": "-", "status": "DISABLED",
+            disabled.append({"source": provider.name, "round": 2, "query": "-", "status": "DISABLED",
                              "reason": provider.disabled_reason, "durationMs": 0, "attempts": 0})
+            outcomes.append(disabled[-1])
             continue
         ask_code = provider.name not in asked_by_code
         if not ask_code and not provider.by_title:
             continue  # already asked by code in Round 1 and has no title search
-        tasks.append(_round2_provider(provider, identity, code, targets, ask_code))
+        tasks.append(reported(_round2_provider(provider, identity, code, targets, ask_code)))
         names.append(provider.name)
     lane, lane_provider = round1.get("parallelTask"), round1.get("parallelProvider")
     if lane is not None:
@@ -368,8 +388,11 @@ async def run_round2(providers: list[BookProvider], round1: dict, code: str, tar
             if data:
                 data = isbn_matching.align_title(identity.get("title"), data)
             return data, outcome
-        tasks.append(lane_result())
+        tasks.append(reported(lane_result()))
         names.append(lane_provider.name)
+    progress.stage("round2", "started", sources=names, identifiedBy=identity_name)
+    for outcome in disabled:
+        progress.source_done(outcome)
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for name, result in zip(names, results):
         if isinstance(result, BaseException):  # defensive: _round2_provider never raises
@@ -380,6 +403,7 @@ async def run_round2(providers: list[BookProvider], round1: dict, code: str, tar
         outcomes.append(outcome)
         if data:
             metadata[name] = data
+    progress.stage("round2", "done", found=len(metadata) - 1)
     return {"metadata": metadata, "outcomes": outcomes}
 
 

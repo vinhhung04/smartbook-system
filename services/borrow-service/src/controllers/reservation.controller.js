@@ -97,7 +97,7 @@ async function listReservations(req, res) {
 async function getReservationById(req, res) {
   const id = parseId(req.params.id);
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid reservation id' });
+    return res.status(400).json({ message: 'Mã đặt trước không hợp lệ' });
   }
 
   try {
@@ -118,7 +118,7 @@ async function getReservationById(req, res) {
     });
 
     if (!reservation) {
-      return res.status(404).json({ message: 'Reservation not found' });
+      return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
 
     return res.json({ data: reservation });
@@ -135,39 +135,39 @@ async function createReservation(req, res) {
   const idempotencyKey = parseIdempotencyKey(req);
 
   if (!customer_id || !variant_id || !warehouse_id) {
-    return res.status(400).json({ message: 'customer_id, variant_id and warehouse_id are required' });
+    return res.status(400).json({ message: 'Cần có đủ customer_id, variant_id và warehouse_id' });
   }
 
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for reservation creation' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi tạo đặt trước' });
   }
 
   if (![customer_id, variant_id, warehouse_id].every(isUuid)) {
-    return res.status(400).json({ message: 'customer_id, variant_id and warehouse_id must be valid UUID values' });
+    return res.status(400).json({ message: 'customer_id, variant_id và warehouse_id phải là UUID hợp lệ' });
   }
 
   if (pickup_location_id && !isUuid(pickup_location_id)) {
-    return res.status(400).json({ message: 'pickup_location_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'pickup_location_id phải là UUID hợp lệ (nếu có)' });
   }
 
   const normalizedQuantity = Number.parseInt(String(quantity || '1'), 10);
   if (!Number.isInteger(normalizedQuantity) || normalizedQuantity <= 0) {
-    return res.status(400).json({ message: 'quantity must be a positive integer' });
+    return res.status(400).json({ message: 'quantity phải là số nguyên dương' });
   }
 
   const normalizedSource = source_channel || 'WEB';
   if (!['WEB', 'MOBILE', 'COUNTER', 'ADMIN'].includes(normalizedSource)) {
-    return res.status(400).json({ message: 'Invalid source_channel' });
+    return res.status(400).json({ message: 'source_channel không hợp lệ' });
   }
 
   try {
     const customer = await prisma.customers.findUnique({ where: { id: customer_id } });
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     if (customer.status !== 'ACTIVE') {
-      return res.status(409).json({ message: 'Customer is not eligible: status must be ACTIVE' });
+      return res.status(409).json({ message: 'Bạn đọc không đủ điều kiện: trạng thái phải là ACTIVE' });
     }
 
     if (Number(customer.total_fine_balance) > 0) {
@@ -179,7 +179,7 @@ async function createReservation(req, res) {
 
     const membershipInfo = await resolveActiveMembership(prisma, customer_id);
     if (!membershipInfo) {
-      return res.status(409).json({ message: 'Customer does not have active membership' });
+      return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
     const [activeLoanCount, activeReservationCount] = await Promise.all([
@@ -200,7 +200,7 @@ async function createReservation(req, res) {
 
     if (activeLoanCount + activeReservationCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
-        message: 'Customer exceeded max active loans limit by membership plan',
+        message: 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên',
         detail: {
           max_active_loans: membershipInfo.limits.max_active_loans,
           active_loan_count: activeLoanCount,
@@ -220,7 +220,7 @@ async function createReservation(req, res) {
         && existingByIdempotency.quantity === normalizedQuantity;
 
       if (!samePayload) {
-        return res.status(409).json({ message: 'Idempotency-Key already used with a different payload' });
+        return res.status(409).json({ message: 'Idempotency-Key đã được dùng cho một yêu cầu có nội dung khác' });
       }
 
       return res.status(200).json({ data: existingByIdempotency, idempotent: true });
@@ -282,7 +282,7 @@ async function createReservation(req, res) {
           }),
         ]);
         if (recheckLoanCount + recheckReservationCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
-          const limitError = new Error('Customer exceeded max active loans limit by membership plan');
+          const limitError = new Error('Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên');
           limitError.status = 409;
           throw limitError;
         }
@@ -389,11 +389,11 @@ async function cancelReservation(req, res) {
   const idempotencyKey = parseIdempotencyKey(req);
 
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid reservation id' });
+    return res.status(400).json({ message: 'Mã đặt trước không hợp lệ' });
   }
 
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for reservation cancellation' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi hủy đặt trước' });
   }
 
   try {
@@ -448,7 +448,7 @@ async function cancelReservation(req, res) {
     });
 
     if (updated.notFound) {
-      return res.status(404).json({ message: 'Reservation not found' });
+      return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
 
     if (updated.conflict) {
@@ -511,15 +511,15 @@ async function confirmReservation(req, res) {
   const idempotencyKey = parseIdempotencyKey(req);
 
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid reservation id' });
+    return res.status(400).json({ message: 'Mã đặt trước không hợp lệ' });
   }
 
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for reservation confirmation' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi xác nhận đặt trước' });
   }
 
   if (!['CONFIRMED', 'READY_FOR_PICKUP'].includes(nextStatus)) {
-    return res.status(400).json({ message: 'status must be CONFIRMED or READY_FOR_PICKUP' });
+    return res.status(400).json({ message: 'status phải là CONFIRMED hoặc READY_FOR_PICKUP' });
   }
 
   try {
@@ -530,7 +530,7 @@ async function confirmReservation(req, res) {
       await tx.$queryRawUnsafe('SELECT id FROM loan_reservations WHERE id::text = $1 FOR UPDATE', id);
       const existing = await tx.loan_reservations.findUnique({ where: { id } });
       if (!existing) {
-        return { code: 404, payload: { message: 'Reservation not found' } };
+        return { code: 404, payload: { message: 'Không tìm thấy đặt trước' } };
       }
 
       if (existing.status === nextStatus && (nextStatus !== 'READY_FOR_PICKUP' || existing.pickup_code)) {
@@ -545,14 +545,14 @@ async function confirmReservation(req, res) {
       if (!canMoveToNextStatus) {
         return {
           code: 409,
-          payload: { message: `Cannot confirm reservation from status ${existing.status}` },
+          payload: { message: `Không thể xác nhận đặt trước ở trạng thái ${existing.status}` },
         };
       }
 
       if (new Date(existing.expires_at).getTime() <= Date.now()) {
         return {
           code: 409,
-          payload: { message: 'Reservation already expired and cannot be confirmed' },
+          payload: { message: 'Đặt trước đã hết hạn, không thể xác nhận' },
         };
       }
 

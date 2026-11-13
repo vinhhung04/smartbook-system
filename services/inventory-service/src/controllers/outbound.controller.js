@@ -447,7 +447,7 @@ async function getOutboundOrderDetail(req, res) {
   const taskId = parseId(req.params.taskId);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid taskType or taskId" });
+    return res.status(400).json({ message: "taskType hoặc taskId không hợp lệ" });
   }
 
   try {
@@ -474,13 +474,13 @@ async function getOutboundOrderDetail(req, res) {
       });
 
       if (!order)
-        return res.status(404).json({ message: "Outbound order not found" });
+        return res.status(404).json({ message: "Không tìm thấy phiếu xuất kho" });
 
       // Prefer outbound_assigned_user_id; fall back to processed_by_user_id for old data
       const effectiveAssignee =
         order.outbound_assigned_user_id || order.processed_by_user_id;
       if (!canAccessAssignedTask(req.user || {}, effectiveAssignee)) {
-        return res.status(403).json({ message: "Forbidden" });
+        return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
       }
       if (!(await requireWarehouseReadAccess(req, res, order.warehouse_id))) return undefined;
 
@@ -636,13 +636,13 @@ async function getOutboundOrderDetail(req, res) {
     });
 
     if (!order)
-      return res.status(404).json({ message: "Transfer order not found" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu chuyển kho" });
 
     // Prefer outbound_assigned_user_id; fall back to shipped_by_user_id for old data
     const effectiveAssignee =
       order.outbound_assigned_user_id || order.shipped_by_user_id;
     if (!canAccessAssignedTask(req.user || {}, effectiveAssignee)) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
     if (!(await requireWarehouseReadAccess(req, res, order.from_warehouse_id))) return undefined;
 
@@ -726,15 +726,15 @@ async function assignOutboundTask(req, res) {
   const actorUserId = parseId(req.user?.id || req.user?.sub);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid taskType or taskId" });
+    return res.status(400).json({ message: "taskType hoặc taskId không hợp lệ" });
   }
   if (!assignedUserId) {
-    return res.status(400).json({ message: "outbound_assigned_user_id is required" });
+    return res.status(400).json({ message: "Thiếu outbound_assigned_user_id" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
   if (!scope.canManageAssignment) {
-    return res.status(403).json({ message: "Only manager or admin can assign outbound tasks" });
+    return res.status(403).json({ message: "Chỉ quản lý hoặc quản trị viên được giao công việc xuất kho" });
   }
 
   try {
@@ -743,11 +743,11 @@ async function assignOutboundTask(req, res) {
         where: { id: taskId },
         select: { id: true, outbound_number: true, status: true, warehouse_id: true },
       });
-      if (!order) return res.status(404).json({ message: "Outbound order not found" });
+      if (!order) return res.status(404).json({ message: "Không tìm thấy phiếu xuất kho" });
       if (!(await requireAssignableUser(res, assignedUserId, order.warehouse_id))) return undefined;
       const ASSIGNABLE_STATUSES = ["APPROVED", "PICKING", "PARTIAL_PICKED", "REPICKING", "READY_FOR_OUTBOUND", "READY_TO_SHIP"];
       if (!ASSIGNABLE_STATUSES.includes(order.status)) {
-        return res.status(400).json({ message: "Order must be in an active picking status to assign" });
+        return res.status(400).json({ message: "Phiếu phải đang ở trạng thái lấy hàng mới giao việc được" });
       }
 
       await prisma.outbound_orders.update({
@@ -777,10 +777,10 @@ async function assignOutboundTask(req, res) {
       where: { id: taskId },
       select: { id: true, transfer_number: true, status: true, from_warehouse_id: true },
     });
-    if (!order) return res.status(404).json({ message: "Transfer order not found" });
+    if (!order) return res.status(404).json({ message: "Không tìm thấy phiếu chuyển kho" });
     if (!(await requireAssignableUser(res, assignedUserId, order.from_warehouse_id))) return undefined;
     if (order.status !== "READY_FOR_OUTBOUND") {
-      return res.status(400).json({ message: "Transfer order must be READY_FOR_OUTBOUND to assign" });
+      return res.status(400).json({ message: "Phiếu chuyển kho phải ở trạng thái READY_FOR_OUTBOUND mới giao việc được" });
     }
 
     await prisma.transfer_orders.update({
@@ -817,7 +817,7 @@ async function confirmOutbound(req, res) {
   const scanCode = normalizeText(req.body?.scan_code);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid taskType or taskId" });
+    return res.status(400).json({ message: "taskType hoặc taskId không hợp lệ" });
   }
 
   if (!rawActor) {
@@ -854,13 +854,13 @@ async function confirmOutbound(req, res) {
             return {
               invalid: true,
               statusCode: 404,
-              message: "Outbound order not found",
+              message: "Không tìm thấy phiếu xuất kho",
             };
           if (!["READY_FOR_OUTBOUND", "READY_TO_SHIP", "REPICKING"].includes(order.status)) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "Outbound order must be READY_TO_SHIP (or READY_FOR_OUTBOUND) to confirm",
+              message: "Phiếu xuất kho phải ở trạng thái READY_TO_SHIP (hoặc READY_FOR_OUTBOUND) mới xác nhận được",
             };
           }
 
@@ -928,7 +928,7 @@ async function confirmOutbound(req, res) {
                 return {
                   invalid: true,
                   statusCode: 403,
-                  message: "Task must be assigned to current warehouse staff",
+                  message: "Công việc phải được giao cho nhân viên kho hiện tại",
                 };
               }
             } else {
@@ -937,7 +937,7 @@ async function confirmOutbound(req, res) {
                 return {
                   invalid: true,
                   statusCode: 403,
-                  message: "Task must be assigned to current warehouse staff",
+                  message: "Công việc phải được giao cho nhân viên kho hiện tại",
                 };
               }
             }
@@ -951,7 +951,7 @@ async function confirmOutbound(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "scan_code does not match outbound order number",
+              message: "scan_code không khớp số phiếu xuất kho",
             };
           }
 
@@ -1038,7 +1038,7 @@ async function confirmOutbound(req, res) {
                 statusCode: 409,
                 code: "CONCURRENCY_CONFLICT",
                 message:
-                  "Shipping stock changed. Please reload before outbound.",
+                  "Tồn kho xuất hàng vừa thay đổi. Vui lòng tải lại trước khi xuất kho.",
               };
             }
 
@@ -1068,7 +1068,7 @@ async function confirmOutbound(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "No picked quantity to outbound",
+              message: "Chưa có số lượng đã lấy để xuất kho",
             };
           }
 
@@ -1164,13 +1164,13 @@ async function confirmOutbound(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Transfer order not found",
+            message: "Không tìm thấy phiếu chuyển kho",
           };
         if (!["READY_FOR_OUTBOUND", "REPICKING"].includes(order.status)) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Transfer order must be READY_FOR_OUTBOUND to confirm",
+            message: "Phiếu chuyển kho phải ở trạng thái READY_FOR_OUTBOUND mới xác nhận được",
           };
         }
 
@@ -1209,7 +1209,7 @@ async function confirmOutbound(req, res) {
               return {
                 invalid: true,
                 statusCode: 403,
-                message: "Task must be assigned to current warehouse staff",
+                message: "Công việc phải được giao cho nhân viên kho hiện tại",
               };
             }
           } else {
@@ -1218,7 +1218,7 @@ async function confirmOutbound(req, res) {
               return {
                 invalid: true,
                 statusCode: 403,
-                message: "Task must be assigned to current warehouse staff",
+                message: "Công việc phải được giao cho nhân viên kho hiện tại",
               };
             }
           }
@@ -1232,7 +1232,7 @@ async function confirmOutbound(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "scan_code does not match transfer order number",
+            message: "scan_code không khớp số phiếu chuyển kho",
           };
         }
 
@@ -1323,7 +1323,7 @@ async function confirmOutbound(req, res) {
               invalid: true,
               statusCode: 409,
               code: "CONCURRENCY_CONFLICT",
-              message: "Shipping stock changed. Please reload before outbound.",
+              message: "Tồn kho xuất hàng vừa thay đổi. Vui lòng tải lại trước khi xuất kho.",
             };
           }
 
@@ -1351,7 +1351,7 @@ async function confirmOutbound(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "No picked quantity to outbound",
+            message: "Chưa có số lượng đã lấy để xuất kho",
           };
         }
 
@@ -1488,7 +1488,7 @@ async function confirmOutbound(req, res) {
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:
-          "Data changed during outbound confirmation. Please reload and try again.",
+          "Dữ liệu đã thay đổi trong lúc xác nhận xuất kho. Vui lòng tải lại và thử lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }
@@ -1510,7 +1510,7 @@ async function claimSelfOutboundTask(req, res) {
   const taskId = parseId(req.params.taskId);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid taskType or taskId" });
+    return res.status(400).json({ message: "taskType hoặc taskId không hợp lệ" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
@@ -1536,7 +1536,7 @@ async function claimSelfOutboundTask(req, res) {
         });
 
         if (!order) {
-          return { invalid: true, statusCode: 404, message: "Outbound order not found" };
+          return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu xuất kho" };
         }
         if (order.outbound_assigned_user_id && order.outbound_assigned_user_id !== currentUserId) {
           return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
@@ -1545,7 +1545,7 @@ async function claimSelfOutboundTask(req, res) {
           return { data: { task_type: "outbound", task_id: taskId, status: order.status } };
         }
         if (!CLAIMABLE_OUTBOUND_STATUSES.includes(order.status)) {
-          return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+          return { invalid: true, statusCode: 400, message: "Công việc này không thể tự nhận" };
         }
 
         await tx.outbound_orders.update({
@@ -1583,7 +1583,7 @@ async function claimSelfOutboundTask(req, res) {
       });
 
       if (!order) {
-        return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+        return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu chuyển kho" };
       }
       if (order.outbound_assigned_user_id && order.outbound_assigned_user_id !== currentUserId) {
         return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
@@ -1592,7 +1592,7 @@ async function claimSelfOutboundTask(req, res) {
         return { data: { task_type: "transfer", task_id: taskId, status: order.status } };
       }
       if (order.status !== "READY_FOR_OUTBOUND") {
-        return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+        return { invalid: true, statusCode: 400, message: "Công việc này không thể tự nhận" };
       }
 
       await tx.transfer_orders.update({

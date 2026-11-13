@@ -14,7 +14,7 @@ const prisma = new PrismaClient();
 function listCorpusBooks(db) {
   return async (req, res) => {
     if (!isValidInternalKey(req.headers['x-internal-service-key'], process.env.INTERNAL_SERVICE_KEY)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     const page = parseCorpusPageParams(req.query);
@@ -68,10 +68,10 @@ function listCorpusBooks(db) {
 function findCatalogBookByCode(db) {
   return async (req, res) => {
     if (!isValidInternalKey(req.headers['x-internal-service-key'], process.env.INTERNAL_SERVICE_KEY)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
     const code = normalizeCatalogCode(req.params.code);
-    if (!code) return res.status(400).json({ message: 'code must be an ISBN-10, ISBN-13 or EAN-13' });
+    if (!code) return res.status(400).json({ message: 'code phải là ISBN-10, ISBN-13 hoặc EAN-13' });
 
     try {
       const variant = await db.book_variants.findFirst({
@@ -90,7 +90,7 @@ function findCatalogBookByCode(db) {
           },
         },
       });
-      if (!variant) return res.status(404).json({ message: 'Not found' });
+      if (!variant) return res.status(404).json({ message: 'Không tìm thấy' });
       return res.json(mapCatalogRecord(variant));
     } catch (error) {
       console.error('Unable to look up catalog book by code', error);

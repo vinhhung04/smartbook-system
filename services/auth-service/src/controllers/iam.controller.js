@@ -173,7 +173,7 @@ async function listUsers(req, res) {
     const warehouseId = normalizeText(req.query.warehouse_id).toLowerCase();
     if (warehouseId) {
       if (!isValidUuid(warehouseId)) {
-        return res.status(400).json({ message: 'warehouse_id must be a UUID' });
+        return res.status(400).json({ message: 'warehouse_id phải là UUID' });
       }
       params.push(warehouseId);
       conditions.push(`EXISTS (SELECT 1 FROM user_warehouse_scopes fs WHERE fs.user_id = u.id AND fs.warehouse_id = $${params.length}::uuid)`);
@@ -227,31 +227,31 @@ async function createUser(req, res) {
     const isSuperuser = req.user?.is_superuser === true ? Boolean(req.body?.is_superuser) : false;
 
     if (!username) {
-      return res.status(400).json({ message: 'username is required' });
+      return res.status(400).json({ message: 'Thiếu tên đăng nhập (username)' });
     }
 
     if (!fullName) {
-      return res.status(400).json({ message: 'full_name is required' });
+      return res.status(400).json({ message: 'Thiếu họ tên (full_name)' });
     }
 
     if (!email) {
-      return res.status(400).json({ message: 'email is required' });
+      return res.status(400).json({ message: 'Thiếu email' });
     }
 
     if (!validateEmail(email)) {
-      return res.status(400).json({ message: 'Invalid email format' });
+      return res.status(400).json({ message: 'Email không đúng định dạng' });
     }
 
     if (!password) {
-      return res.status(400).json({ message: 'password is required' });
+      return res.status(400).json({ message: 'Thiếu mật khẩu (password)' });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 6 ký tự' });
     }
 
     if (!validateStatus(status)) {
-      return res.status(400).json({ message: 'Invalid status' });
+      return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
     }
 
     // Warehouse assignment at creation (same rules as PUT /iam/users/:id/warehouse-scopes):
@@ -371,13 +371,13 @@ async function createUser(req, res) {
       return res.status(503).json({ message: error.message, code: error.code });
     }
     if (error.message === 'CONFLICT_USER') {
-      return res.status(409).json({ message: 'Email or username already exists' });
+      return res.status(409).json({ message: 'Email hoặc tên đăng nhập đã tồn tại' });
     }
     if (error.message === 'INVALID_ROLE_IDS') {
-      return res.status(400).json({ message: 'One or more role_ids are invalid' });
+      return res.status(400).json({ message: 'Có role_ids không hợp lệ' });
     }
     if (error.message === 'INVALID_ROLE_CODES') {
-      return res.status(400).json({ message: 'One or more role_codes are invalid' });
+      return res.status(400).json({ message: 'Có role_codes không hợp lệ' });
     }
     console.error('createUser error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -389,7 +389,7 @@ async function updateUser(req, res) {
     const userId = normalizeText(req.params.id);
 
     if (!userId) {
-      return res.status(400).json({ message: 'User id is required' });
+      return res.status(400).json({ message: 'Thiếu mã người dùng (user id)' });
     }
 
     const payload = req.body || {};
@@ -401,7 +401,7 @@ async function updateUser(req, res) {
     if (payload.full_name !== undefined) {
       const fullName = normalizeText(payload.full_name);
       if (!fullName) {
-        return res.status(400).json({ message: 'full_name is required' });
+        return res.status(400).json({ message: 'Thiếu họ tên (full_name)' });
       }
       params.push(fullName);
       updates.push(`full_name = $${params.length}`);
@@ -415,7 +415,7 @@ async function updateUser(req, res) {
     if (payload.status !== undefined) {
       nextStatus = normalizeText(payload.status).toUpperCase();
       if (!validateStatus(nextStatus)) {
-        return res.status(400).json({ message: 'Invalid status' });
+        return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
       }
       params.push(nextStatus);
       updates.push(`status = $${params.length}`);
@@ -424,10 +424,10 @@ async function updateUser(req, res) {
     if (payload.email !== undefined) {
       nextEmail = normalizeEmail(payload.email);
       if (!nextEmail) {
-        return res.status(400).json({ message: 'email is required' });
+        return res.status(400).json({ message: 'Thiếu email' });
       }
       if (!validateEmail(nextEmail)) {
-        return res.status(400).json({ message: 'Invalid email format' });
+        return res.status(400).json({ message: 'Email không đúng định dạng' });
       }
       params.push(nextEmail);
       updates.push(`email = $${params.length}`);
@@ -439,7 +439,7 @@ async function updateUser(req, res) {
     let enablingEmailOtp = false;
     if (payload.email_otp_2fa_enabled !== undefined) {
       if (typeof payload.email_otp_2fa_enabled !== 'boolean') {
-        return res.status(400).json({ message: 'email_otp_2fa_enabled must be a boolean' });
+        return res.status(400).json({ message: 'email_otp_2fa_enabled phải là true hoặc false' });
       }
       enablingEmailOtp = payload.email_otp_2fa_enabled;
       params.push(payload.email_otp_2fa_enabled);
@@ -449,7 +449,7 @@ async function updateUser(req, res) {
     let nextPrimaryWarehouseId;
     if (payload.primary_warehouse_id !== undefined) {
       if (!isValidUuid(userId)) {
-        return res.status(400).json({ message: 'User id must be a UUID' });
+        return res.status(400).json({ message: 'User id phải là UUID' });
       }
       try {
         nextPrimaryWarehouseId = normalizePrimaryInput(payload.primary_warehouse_id);
@@ -463,7 +463,7 @@ async function updateUser(req, res) {
     const roleIdsInput = payload.role_ids !== undefined || payload.role_codes !== undefined;
 
     if (!updates.length && !roleIdsInput) {
-      return res.status(400).json({ message: 'No fields to update' });
+      return res.status(400).json({ message: 'Không có trường nào để cập nhật' });
     }
 
     const updatedUser = await prisma.$transaction(async (tx) => {
@@ -571,22 +571,22 @@ async function updateUser(req, res) {
     return res.json({ message: 'User updated', data: updatedUser });
   } catch (error) {
     if (error.message === 'USER_NOT_FOUND') {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     }
     if (error.message === 'PRIMARY_NOT_IN_SCOPE') {
       return res.status(400).json({ message: 'Kho chính phải là một trong các kho được phân công', code: 'PRIMARY_NOT_IN_SCOPE' });
     }
     if (error.message === 'CONFLICT_USER') {
-      return res.status(409).json({ message: 'Email or username already exists' });
+      return res.status(409).json({ message: 'Email hoặc tên đăng nhập đã tồn tại' });
     }
     if (error.message === 'EMAIL_NOT_VERIFIED') {
       return res.status(400).json({ message: 'Xác thực email của tài khoản trước khi bật mã đăng nhập qua email', code: 'EMAIL_NOT_VERIFIED' });
     }
     if (error.message === 'INVALID_ROLE_IDS') {
-      return res.status(400).json({ message: 'One or more role_ids are invalid' });
+      return res.status(400).json({ message: 'Có role_ids không hợp lệ' });
     }
     if (error.message === 'INVALID_ROLE_CODES') {
-      return res.status(400).json({ message: 'One or more role_codes are invalid' });
+      return res.status(400).json({ message: 'Có role_codes không hợp lệ' });
     }
     console.error('updateUser error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -641,7 +641,7 @@ async function createRole(req, res) {
     const permissionIds = uniqueStringArray(req.body?.permission_ids);
 
     if (!code || !name) {
-      return res.status(400).json({ message: 'code and name are required' });
+      return res.status(400).json({ message: 'Cần có đủ code và name' });
     }
 
     const role = await prisma.$transaction(async (tx) => {
@@ -685,7 +685,7 @@ async function createRole(req, res) {
     return res.status(201).json({ message: 'Role created', data: role });
   } catch (error) {
     if (error.message === 'CONFLICT_ROLE') {
-      return res.status(409).json({ message: 'Role code already exists' });
+      return res.status(409).json({ message: 'Mã vai trò đã tồn tại' });
     }
     console.error('createRole error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -713,7 +713,7 @@ async function updateRolePermissions(req, res) {
     const permissionIds = uniqueStringArray(req.body?.permission_ids);
 
     if (!roleId) {
-      return res.status(400).json({ message: 'Role id is required' });
+      return res.status(400).json({ message: 'Thiếu mã vai trò (role id)' });
     }
 
     const affectedUserIds = await prisma.$transaction(async (tx) => {
@@ -751,7 +751,7 @@ async function updateRolePermissions(req, res) {
     return res.json({ message: 'Role permissions updated' });
   } catch (error) {
     if (error.message === 'ROLE_NOT_FOUND') {
-      return res.status(404).json({ message: 'Role not found' });
+      return res.status(404).json({ message: 'Không tìm thấy vai trò' });
     }
     console.error('updateRolePermissions error:', error);
     return res.status(500).json({ message: 'Internal server error' });

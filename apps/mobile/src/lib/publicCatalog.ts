@@ -88,18 +88,18 @@ export function toCustomerCatalogBook(book: PublicCatalogBook): CustomerCatalogB
 }
 
 const STOCK_CHANGED_MESSAGES = [
-  'Insufficient available stock',
-  'Insufficient available stock to reserve',
-  'Selected warehouse is not a valid pickup location',
-  'Reservation stock changed concurrently; retry',
+  'Không đủ tồn kho khả dụng',
+  'Không đủ tồn kho khả dụng để đặt trước',
+  'Chi nhánh đã chọn không phải điểm nhận sách hợp lệ',
+  'Tồn kho vừa thay đổi do có yêu cầu đồng thời, vui lòng thử lại',
 ];
 
+// Staff-worded backend messages, rephrased for the reader holding the phone.
 const RESERVATION_ERROR_MESSAGES: Record<string, string> = {
-  'Customer exceeded max active loans limit by membership plan':
+  'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên':
     'Bạn đã đạt số sách tối đa theo gói thẻ (tính cả sách đang mượn và đang đặt trước).',
-  'Customer does not have active membership': 'Thẻ bạn đọc của bạn chưa có hiệu lực hoặc đã hết hạn.',
-  'Customer is not eligible: status must be ACTIVE': 'Tài khoản bạn đọc đang bị tạm khóa, vui lòng liên hệ thư viện.',
-  'Variant is not borrowable': 'Ấn bản này hiện không cho mượn.',
+  'Bạn đọc chưa có thẻ thành viên còn hiệu lực': 'Thẻ bạn đọc của bạn chưa có hiệu lực hoặc đã hết hạn.',
+  'Bạn đọc không đủ điều kiện: trạng thái phải là ACTIVE': 'Tài khoản bạn đọc đang bị tạm khóa, vui lòng liên hệ thư viện.',
 };
 
 /** Vietnamese text for a failed reservation. `refresh` means stock changed under the reader

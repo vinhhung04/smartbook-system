@@ -84,7 +84,7 @@ const WH = {
   INACTIVE_BRANCH: 'aaaaaaaa-0000-4000-8000-000000000005',
   MISSING: 'aaaaaaaa-0000-4000-8000-0000000000ff',
 };
-const INVALID_MESSAGE = 'Selected warehouse is not a valid pickup location';
+const INVALID_MESSAGE = 'Chi nhánh đã chọn không phải điểm nhận sách hợp lệ';
 
 function resetState() {
   const warehouse = (id, warehouse_type, is_active = true) => ({ id, warehouse_type, is_active });

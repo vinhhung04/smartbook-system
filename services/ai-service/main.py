@@ -1908,6 +1908,7 @@ from isbn_targeted import MAX_ROUNDS, PROVIDER_MIN_SECONDS, ProviderLedger, plan
 import isbn_fusion  # noqa: E402
 import isbn_matching  # noqa: E402
 import isbn_rounds  # noqa: E402
+import isbn_progress  # noqa: E402
 import bookstore_providers  # noqa: E402
 import isbn_cache_store  # noqa: E402
 import ai_web_search  # noqa: E402
@@ -2624,9 +2625,13 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     raw_barcode = re.sub(r"[^0-9]", "", raw_isbn)
     is_barcode_candidate = len(raw_barcode) in (10, 13)
     if validation_error and not (is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP):
+        isbn_progress.stage("validate", "failed", kind="INVALID", length=len(raw_barcode))
         return _manual_entry_response(raw_isbn, None, validation_error)
+    isbn_progress.stage("validate", "done", code=isbn13 or raw_barcode,
+                        kind="BARCODE" if validation_error else ("ISBN10" if len(raw_barcode) == 10 else "ISBN13"))
 
     if not validation_error and ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:
+        isbn_progress.stage("retrieval", "started", mode="field-level")
         try:
             return await _run_field_level_lookup(raw_isbn, isbn13, isbn10, bool(req.generateVietnameseSummary))
         except Exception:
@@ -2974,10 +2979,12 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     if cache_key:
         cached = isbn_lookup_cache.get(cache_key)
         if cached is not None:
+            isbn_progress.stage("cache", "done", hit=True, store="memory")
             return cached
     stored, stored_fresh = await isbn_cache_store.get(cache_key) if cache_key else (None, False)
     if stored is not None and stored_fresh:
         isbn_lookup_cache.set(cache_key, stored, ttl_seconds=_isbn_cache_ttl(stored))
+        isbn_progress.stage("cache", "done", hit=True, store="persistent")
         return stored
 
     started_at = time.perf_counter()
@@ -2988,6 +2995,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     rounds = result.pop("_rounds", None)
     source_statuses = (_round_source_statuses(round_statuses) if round_statuses is not None
                        else _build_source_statuses(result, started_at, trace))
+    isbn_progress.stage("fusion", "started", sources=sum(1 for data in provider_metadata.values() if data))
     intelligence = _build_isbn_intelligence(provider_metadata, source_statuses)
     result.pop("_providerOutcomes", None)
     for source in intelligence["sources"]:
@@ -3007,6 +3015,10 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     _attach_coverage_fields(result, intelligence, trace)
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
     _log_isbn_lookup(result, trace)
+    coverage = result.get("metadataCoverage") or {}
+    isbn_progress.stage("fusion", "done", found=bool(result.get("found")),
+                        conflicts=len(result.get("conflicts") or []),
+                        foundFields=coverage.get("foundFields"), totalFields=coverage.get("totalFields"))
 
     if cache_key and result.get("found"):
         ttl = _isbn_cache_ttl(result)
@@ -3015,6 +3027,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     elif stored is not None:
         # Re-lookup found nothing (sources down or blocking): keep the last verified result.
         logger.info("ISBN %s: re-lookup found nothing, serving the stored result", req.isbn)
+        isbn_progress.stage("cache", "done", hit=True, store="persistent", fallback=True)
         return {**stored, "servedFromStore": True}
     return result
 
@@ -3040,6 +3053,7 @@ async def metadata_extraction_service(input):
                           ENABLE_MARKETPLACE_LOOKUP, ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL, 'extract-v1'])
     cached = isbn_lookup_cache.get(key)
     if cached:
+        isbn_progress.stage("cache", "done", hit=True, store="memory")
         result = deepcopy(cached)
         result['intelligence']['cacheHit'] = True
         return result
@@ -3062,8 +3076,10 @@ async def metadata_extraction_service(input):
         provider = _get_text_llm_provider()
     except ValueError:
         provider = None
+    isbn_progress.stage("pipeline", "started", documents=len(docs))
     bundle = await run_pipeline(docs, target, provider, budget=max(.01, 60 - (time.monotonic() - began)))
     bundle['warnings'].extend(warnings)
+    isbn_progress.stage("pipeline", "done", warnings=len(bundle['warnings']))
     bundle['processingTimeMs'] = int((time.monotonic() - began) * 1000)
     result = legacy_projection(bundle)
     if result['found']:
@@ -3248,7 +3264,9 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         isbn=req.isbn,
         generateVietnameseSummary=False,
     ))
+    isbn_progress.stage("authority", "started")
     authority, authority_warning = await _normalize_with_catalog_authority(lookup)
+    isbn_progress.stage("authority", "done", ok=authority is not None)
     verified = req.verifiedMetadata if isinstance(req.verifiedMetadata, dict) else (authority or {}).get("normalized")
     ai_lookup = {**lookup, **({
         "title": verified.get("title", lookup.get("title")),
@@ -3260,7 +3278,9 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         "pageCount": verified.get("pageCount", lookup.get("pageCount")),
         "description": verified.get("description", lookup.get("description")),
     } if isinstance(verified, dict) else {})}
+    isbn_progress.stage("ai", "started")
     suggestions = await _build_post_isbn_ai_suggestions(ai_lookup, req.existingCategories or [])
+    isbn_progress.stage("ai", "done", provider=suggestions.get("provider") or "none")
     if authority_warning:
         suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [authority_warning]
     gap_warning = _residual_gap_warning(lookup)
@@ -3277,6 +3297,23 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         "qualityWarnings": (authority or {}).get("qualityWarnings", [authority_warning] if authority_warning else []),
         "explanation": {"authority": "Inventory Service deterministic authority normalization", "aiInput": "verified metadata only"},
     }
+
+
+# Same lookup as /enrich-book-after-isbn, streamed: `progress` events as each
+# stage and source starts/finishes, then one `result` event carrying exactly the
+# JSON the plain endpoint returns (or one sanitized `error`). The plain endpoint
+# is unchanged and remains the client's fallback.
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+@app.post("/enrich-book-after-isbn/stream")
+async def enrich_book_after_isbn_stream(req: EnrichBookAfterIsbnRequest, request: Request):
+    from catalog_access import catalog_access_error
+    denied = await catalog_access_error(request.headers.get("authorization"))
+    if denied:
+        raise HTTPException(*denied)
+    return StreamingResponse(isbn_progress.stream(lambda: enrich_book_after_isbn(req)),
+                             media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 # ────────────────────────────────────────────────────────────────────────────────

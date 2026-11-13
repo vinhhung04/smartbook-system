@@ -65,7 +65,7 @@ function fieldsForApply(formField: string): Array<keyof EditableBookForm> {
 
 function ValueBlock({ label, value, emphasis = false, clamp = false }: { label: string; value: string; emphasis?: boolean; clamp?: boolean }) {
   return (
-    <div className={`min-w-0 rounded-lg px-3 py-2 ${emphasis ? "bg-violet-50/70 dark:bg-violet-500/[0.07]" : "bg-muted/40"}`}>
+    <div className={`min-w-0 rounded-lg px-3 py-2 ${emphasis ? "bg-[#f4f4f4] ring-1 ring-black/[0.04] dark:bg-white/[0.04] dark:ring-white/[0.06]" : "bg-muted/40"}`}>
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       <p className={`mt-0.5 whitespace-pre-wrap break-words text-[13px] ${value ? "text-foreground" : "italic text-muted-foreground"} ${clamp ? "line-clamp-4" : ""}`}>
         {value || "(trống)"}
@@ -196,7 +196,7 @@ function ProposalRow({
             type="button"
             disabled={disabled}
             onClick={() => onApply(fields, proposal.value!, label)}
-            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-violet-300 bg-card px-3 text-[12.5px] font-semibold text-violet-700 transition-colors hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-55 dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/10"
+            className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-[#ececec] px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-[#e2e2e2] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-55 dark:bg-white/10 dark:hover:bg-white/15"
           >
             Áp dụng {label.toLowerCase()}
           </button>

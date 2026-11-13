@@ -1082,7 +1082,7 @@ async function claimPickingTask(req, res) {
   const requestedPickerUserId = parseId(req.body?.picker_user_id);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid task type or task id" });
+    return res.status(400).json({ message: "Loại công việc hoặc mã công việc không hợp lệ" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
@@ -1097,14 +1097,14 @@ async function claimPickingTask(req, res) {
   if (!scope.canManageAssignment && pickerUserId !== currentUserId) {
     return res
       .status(403)
-      .json({ message: "You can only claim task for yourself" });
+      .json({ message: "Bạn chỉ có thể tự nhận công việc cho chính mình" });
   }
 
   // handing the task to someone else: that picker must be able to work there
   if (pickerUserId !== currentUserId) {
     const warehouseId = await taskOrderWarehouse(taskType)(req);
     if (warehouseId === undefined) {
-      return res.status(404).json({ message: "Task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc" });
     }
     if (!(await requireAssignableUser(res, pickerUserId, warehouseId))) return undefined;
   }
@@ -1126,13 +1126,13 @@ async function claimPickingTask(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Outbound order not found",
+            message: "Không tìm thấy phiếu xuất kho",
           };
         if (!OUTBOUND_READY_STATUS.includes(order.status)) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Outbound order is not ready for picking",
+            message: "Phiếu xuất kho chưa sẵn sàng để lấy hàng",
           };
         }
 
@@ -1144,14 +1144,14 @@ async function claimPickingTask(req, res) {
           return {
             invalid: true,
             statusCode: 409,
-            message: "Task is already assigned to another picker",
+            message: "Công việc đã được giao cho người lấy hàng khác",
           };
         }
         if (!scope.canManageAssignment && !order.processed_by_user_id) {
           return {
             invalid: true,
             statusCode: 403,
-            message: "Task must be assigned before warehouse staff can update it",
+            message: "Công việc phải được giao trước khi nhân viên kho cập nhật",
           };
         }
 
@@ -1219,13 +1219,13 @@ async function claimPickingTask(req, res) {
         return {
           invalid: true,
           statusCode: 404,
-          message: "Transfer order not found",
+          message: "Không tìm thấy phiếu chuyển kho",
         };
       if (!TRANSFER_READY_STATUS.includes(order.status)) {
         return {
           invalid: true,
           statusCode: 400,
-          message: "Transfer order is not ready for picking",
+          message: "Phiếu chuyển kho chưa sẵn sàng để lấy hàng",
         };
       }
 
@@ -1237,14 +1237,14 @@ async function claimPickingTask(req, res) {
         return {
           invalid: true,
           statusCode: 409,
-          message: "Task is already assigned to another picker",
+          message: "Công việc đã được giao cho người lấy hàng khác",
         };
       }
       if (!scope.canManageAssignment && !order.shipped_by_user_id) {
         return {
           invalid: true,
           statusCode: 403,
-          message: "Task must be assigned before warehouse staff can update it",
+          message: "Công việc phải được giao trước khi nhân viên kho cập nhật",
         };
       }
 
@@ -1297,7 +1297,7 @@ async function getPickingTaskDetail(req, res) {
   const currentLocationInput = normalizeText(req.query.current_location_input);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid task type or task id" });
+    return res.status(400).json({ message: "Loại công việc hoặc mã công việc không hợp lệ" });
   }
 
   try {
@@ -1337,11 +1337,11 @@ async function getPickingTaskDetail(req, res) {
       });
 
       if (!order) {
-        return res.status(404).json({ message: "Outbound order not found" });
+        return res.status(404).json({ message: "Không tìm thấy phiếu xuất kho" });
       }
 
       if (!canAccessTask(req.user || {}, order.processed_by_user_id)) {
-        return res.status(403).json({ message: "Forbidden" });
+        return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
       }
       if (!(await requireWarehouseReadAccess(req, res, order.warehouse_id))) return undefined;
 
@@ -1575,11 +1575,11 @@ async function getPickingTaskDetail(req, res) {
     });
 
     if (!order) {
-      return res.status(404).json({ message: "Transfer order not found" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu chuyển kho" });
     }
 
     if (!canAccessTask(req.user || {}, order.shipped_by_user_id)) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
     // Picking a transfer happens in its source warehouse.
     if (!(await requireWarehouseReadAccess(req, res, order.from_warehouse_id))) return undefined;
@@ -1799,18 +1799,18 @@ async function confirmPickerPresence(req, res) {
     return res
       .status(400)
       .json({
-        message: "taskType, taskId and current_location_input are required",
+        message: "Cần có đủ taskType, taskId và current_location_input",
       });
   }
 
   try {
     const task = await getTaskWarehouse(taskType, taskId);
     if (!task) {
-      return res.status(404).json({ message: "Task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc" });
     }
 
     if (!canAccessTask(req.user || {}, task.assigned_picker_user_id)) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
 
     const locationOrFilters = [
@@ -1839,7 +1839,7 @@ async function confirmPickerPresence(req, res) {
     if (!location) {
       return res.status(400).json({
         message:
-          "Current location does not belong to task warehouse or is inactive",
+          "Vị trí hiện tại không thuộc kho của công việc hoặc đã ngừng hoạt động",
       });
     }
 
@@ -1877,7 +1877,7 @@ async function lookupVariantByBarcode(req, res) {
   const barcode = normalizeText(req.query.barcode);
 
   if (!barcode) {
-    return res.status(400).json({ message: "barcode is required" });
+    return res.status(400).json({ message: "Thiếu mã vạch (barcode)" });
   }
 
   try {
@@ -1971,7 +1971,7 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
     ) {
       return {
         invalid: true,
-        message: "Source location is invalid for this warehouse",
+        message: "Vị trí nguồn không hợp lệ với kho này",
       };
     }
 
@@ -2024,7 +2024,7 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
       return {
         invalid: true,
         message:
-          "No pickable source location has available stock for this line",
+          "Không có vị trí lấy hàng nào còn tồn khả dụng cho dòng này",
       };
     }
 
@@ -2087,7 +2087,7 @@ async function resolveExpectedSourceLocation(tx, taskType, line, warehouseId) {
   if (!balance || !balance.locations) {
     return {
       invalid: true,
-      message: "No pickable source location has available stock for this line",
+      message: "Không có vị trí lấy hàng nào còn tồn khả dụng cho dòng này",
     };
   }
 
@@ -2134,24 +2134,24 @@ async function confirmPickingLine(req, res) {
   if (!taskType || !taskId || !lineId) {
     return res
       .status(400)
-      .json({ message: "Invalid task type, task id or line id" });
+      .json({ message: "Loại công việc, mã công việc hoặc mã dòng không hợp lệ" });
   }
 
   if (quantity === null || quantity <= 0) {
-    return res.status(400).json({ message: "quantity must be > 0" });
+    return res.status(400).json({ message: "quantity phải > 0" });
   }
 
   if (!scannedLocationInput) {
     return res
       .status(400)
-      .json({ message: "scanned_location_input is required" });
+      .json({ message: "Thiếu scanned_location_input" });
   }
 
   if (!scannedProductBarcode && !scannedVariantId) {
     return res
       .status(400)
       .json({
-        message: "scanned_product_barcode or scanned_variant_id is required",
+        message: "Cần có scanned_product_barcode hoặc scanned_variant_id",
       });
   }
 
@@ -2194,13 +2194,13 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 404,
-              message: "Outbound order not found",
+              message: "Không tìm thấy phiếu xuất kho",
             };
           if (!OUTBOUND_READY_STATUS.includes(order.status)) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "Outbound order is not ready for picking",
+              message: "Phiếu xuất kho chưa sẵn sàng để lấy hàng",
             };
           }
 
@@ -2212,14 +2212,14 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 403,
-              message: "Task is assigned to another picker",
+              message: "Công việc đang được giao cho người lấy hàng khác",
             };
           }
           if (!scope.canManageAssignment && !order.processed_by_user_id) {
             return {
               invalid: true,
               statusCode: 403,
-              message: "Task must be assigned before warehouse staff can update it",
+              message: "Công việc phải được giao trước khi nhân viên kho cập nhật",
             };
           }
 
@@ -2253,7 +2253,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 404,
-              message: "Line not found in outbound task",
+              message: "Không tìm thấy dòng trong công việc xuất kho",
             };
           }
 
@@ -2265,7 +2265,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 409,
-              message: "Line is already fully picked",
+              message: "Dòng này đã lấy đủ hàng",
             };
           }
 
@@ -2273,7 +2273,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "quantity exceeds line remaining quantity",
+              message: "quantity vượt số lượng còn lại của dòng",
             };
           }
 
@@ -2340,7 +2340,7 @@ async function confirmPickingLine(req, res) {
               return {
                 invalid: true,
                 statusCode: 400,
-                message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
+                message: `Sai vị trí. Cần quét ${expectedLocation.location_code}`,
               };
             }
           }
@@ -2363,7 +2363,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "Sai san pham cho line hien tai",
+              message: "Sai sản phẩm cho dòng hiện tại",
             };
           }
 
@@ -2377,7 +2377,7 @@ async function confirmPickingLine(req, res) {
               return {
                 invalid: true,
                 statusCode: 400,
-                message: "Barcode san pham khong hop le",
+                message: "Barcode sản phẩm không hợp lệ",
               };
             }
 
@@ -2386,7 +2386,7 @@ async function confirmPickingLine(req, res) {
                 invalid: true,
                 statusCode: 400,
                 code: "AMBIGUOUS_PRODUCT",
-                message: "Barcode trung nhieu SKU, vui long chon dung san pham",
+                message: "Barcode trùng nhiều SKU, vui lòng chọn đúng sản phẩm",
               };
             }
 
@@ -2410,7 +2410,7 @@ async function confirmPickingLine(req, res) {
               return {
                 invalid: true,
                 statusCode: 400,
-                message: "Sai san pham cho line hien tai",
+                message: "Sai sản phẩm cho dòng hiện tại",
               };
             }
           }
@@ -2446,7 +2446,7 @@ async function confirmPickingLine(req, res) {
               statusCode: 409,
               code: "CONCURRENCY_CONFLICT",
               message:
-                "So luong available da thay doi. Vui long reload va thao tac lai.",
+                "Số lượng available đã thay đổi. Vui lòng tải lại và thao tác lại.",
             };
           }
 
@@ -2493,7 +2493,7 @@ async function confirmPickingLine(req, res) {
               statusCode: 409,
               code: "CONCURRENCY_CONFLICT",
               message:
-                "So luong on_hand da thay doi. Vui long reload va thao tac lai.",
+                "Số lượng on_hand đã thay đổi. Vui lòng tải lại và thao tác lại.",
             };
           }
 
@@ -2503,7 +2503,7 @@ async function confirmPickingLine(req, res) {
               statusCode: 409,
               code: "CONCURRENCY_CONFLICT",
               message:
-                "So luong available da thay doi. Vui long reload va thao tac lai.",
+                "Số lượng available đã thay đổi. Vui lòng tải lại và thao tác lại.",
             };
           }
 
@@ -2862,13 +2862,13 @@ async function confirmPickingLine(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Transfer order not found",
+            message: "Không tìm thấy phiếu chuyển kho",
           };
         if (!TRANSFER_READY_STATUS.includes(order.status)) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Transfer order is not ready for picking",
+            message: "Phiếu chuyển kho chưa sẵn sàng để lấy hàng",
           };
         }
 
@@ -2880,14 +2880,14 @@ async function confirmPickingLine(req, res) {
           return {
             invalid: true,
             statusCode: 403,
-            message: "Task is assigned to another picker",
+            message: "Công việc đang được giao cho người lấy hàng khác",
           };
         }
         if (!scope.canManageAssignment && !order.shipped_by_user_id) {
           return {
             invalid: true,
             statusCode: 403,
-            message: "Task must be assigned before warehouse staff can update it",
+            message: "Công việc phải được giao trước khi nhân viên kho cập nhật",
           };
         }
 
@@ -2921,7 +2921,7 @@ async function confirmPickingLine(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Line not found in transfer task",
+            message: "Không tìm thấy dòng trong công việc chuyển kho",
           };
         }
 
@@ -2933,7 +2933,7 @@ async function confirmPickingLine(req, res) {
           return {
             invalid: true,
             statusCode: 409,
-            message: "Line is already fully picked",
+            message: "Dòng này đã lấy đủ hàng",
           };
         }
 
@@ -2941,7 +2941,7 @@ async function confirmPickingLine(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "quantity exceeds line remaining quantity",
+            message: "quantity vượt số lượng còn lại của dòng",
           };
         }
 
@@ -3006,7 +3006,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: `Sai vi tri. Can scan ${expectedLocation.location_code}`,
+              message: `Sai vị trí. Cần quét ${expectedLocation.location_code}`,
             };
           }
         }
@@ -3029,7 +3029,7 @@ async function confirmPickingLine(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Sai san pham cho line hien tai",
+            message: "Sai sản phẩm cho dòng hiện tại",
           };
         }
 
@@ -3043,7 +3043,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "Barcode san pham khong hop le",
+              message: "Barcode sản phẩm không hợp lệ",
             };
           }
 
@@ -3052,7 +3052,7 @@ async function confirmPickingLine(req, res) {
               invalid: true,
               statusCode: 400,
               code: "AMBIGUOUS_PRODUCT",
-              message: "Barcode trung nhieu SKU, vui long chon dung san pham",
+              message: "Barcode trùng nhiều SKU, vui lòng chọn đúng sản phẩm",
             };
           }
 
@@ -3076,7 +3076,7 @@ async function confirmPickingLine(req, res) {
             return {
               invalid: true,
               statusCode: 400,
-              message: "Sai san pham cho line hien tai",
+              message: "Sai sản phẩm cho dòng hiện tại",
             };
           }
         }
@@ -3112,7 +3112,7 @@ async function confirmPickingLine(req, res) {
             statusCode: 409,
             code: "CONCURRENCY_CONFLICT",
             message:
-              "So luong available da thay doi. Vui long reload va thao tac lai.",
+              "Số lượng available đã thay đổi. Vui lòng tải lại và thao tác lại.",
           };
         }
 
@@ -3342,7 +3342,7 @@ async function confirmPickingLine(req, res) {
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:
-          "Data changed during confirmation. Please reload and try again.",
+          "Dữ liệu đã thay đổi trong lúc xác nhận. Vui lòng tải lại và thử lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }
@@ -3358,7 +3358,7 @@ async function cancelTransferReturn(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid transfer task id" });
+    return res.status(400).json({ message: "Mã công việc chuyển kho không hợp lệ" });
   }
 
   if (!actorUserId) {
@@ -3387,7 +3387,7 @@ async function cancelTransferReturn(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Transfer order not found",
+            message: "Không tìm thấy phiếu chuyển kho",
           };
         }
 
@@ -3396,7 +3396,7 @@ async function cancelTransferReturn(req, res) {
             invalid: true,
             statusCode: 400,
             message:
-              "Only READY_FOR_OUTBOUND transfer can be cancelled for return",
+              "Chỉ phiếu chuyển ở trạng thái READY_FOR_OUTBOUND mới hủy để hoàn kho được",
           };
         }
 
@@ -3416,7 +3416,7 @@ async function cancelTransferReturn(req, res) {
           return {
             invalid: true,
             statusCode: 409,
-            message: "No picked quantity found in transfer order",
+            message: "Phiếu chuyển kho chưa có số lượng đã lấy",
           };
         }
 
@@ -3474,7 +3474,7 @@ async function cancelTransferReturn(req, res) {
               statusCode: 409,
               code: "CONCURRENCY_CONFLICT",
               message:
-                "Shipping stock changed. Please reload and retry cancel return.",
+                "Tồn kho xuất hàng vừa thay đổi. Vui lòng tải lại rồi thử hủy để hoàn kho lại.",
             };
           }
 
@@ -3641,7 +3641,7 @@ async function cancelTransferReturn(req, res) {
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:
-          "Data changed during cancel return. Please reload and try again.",
+          "Dữ liệu đã thay đổi trong lúc hủy để hoàn kho. Vui lòng tải lại và thử lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }
@@ -3657,7 +3657,7 @@ async function cancelOutboundReturn(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid outbound task id" });
+    return res.status(400).json({ message: "Mã công việc xuất kho không hợp lệ" });
   }
 
   if (!actorUserId) {
@@ -3686,7 +3686,7 @@ async function cancelOutboundReturn(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Outbound order not found",
+            message: "Không tìm thấy phiếu xuất kho",
           };
         }
 
@@ -3695,7 +3695,7 @@ async function cancelOutboundReturn(req, res) {
             invalid: true,
             statusCode: 400,
             message:
-              "Only READY_FOR_OUTBOUND outbound can be cancelled for return",
+              "Chỉ phiếu xuất ở trạng thái READY_FOR_OUTBOUND mới hủy để hoàn kho được",
           };
         }
 
@@ -3715,7 +3715,7 @@ async function cancelOutboundReturn(req, res) {
           return {
             invalid: true,
             statusCode: 409,
-            message: "No picked quantity found in outbound order",
+            message: "Phiếu xuất kho chưa có số lượng đã lấy",
           };
         }
 
@@ -3771,7 +3771,7 @@ async function cancelOutboundReturn(req, res) {
               statusCode: 409,
               code: "CONCURRENCY_CONFLICT",
               message:
-                "Shipping stock changed. Please reload and retry cancel return.",
+                "Tồn kho xuất hàng vừa thay đổi. Vui lòng tải lại rồi thử hủy để hoàn kho lại.",
             };
           }
 
@@ -3930,7 +3930,7 @@ async function cancelOutboundReturn(req, res) {
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:
-          "Data changed during cancel return. Please reload and try again.",
+          "Dữ liệu đã thay đổi trong lúc hủy để hoàn kho. Vui lòng tải lại và thử lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }
@@ -3953,7 +3953,7 @@ async function ensureRepicksEndpoint(req, res) {
 async function declareOutboundShortage(req, res) {
   const taskId = parseId(req.params.taskId);
   if (!taskId) {
-    return res.status(400).json({ message: 'taskId is required' });
+    return res.status(400).json({ message: 'Thiếu taskId' });
   }
 
   try {
@@ -3979,7 +3979,7 @@ async function declareOutboundShortage(req, res) {
       if (!order) return { notFound: true };
 
       if (!['PICKING', 'APPROVED'].includes(order.status)) {
-        return { invalid: true, message: `Order status is ${order.status}, expected PICKING or APPROVED` };
+        return { invalid: true, message: `Phiếu đang ở trạng thái ${order.status}, cần ở PICKING hoặc APPROVED` };
       }
 
       if (!canAccessTask(req.user || {}, order.processed_by_user_id)) {
@@ -3995,14 +3995,14 @@ async function declareOutboundShortage(req, res) {
       });
 
       if (items.length === 0) {
-        return { invalid: true, message: 'Order has no items' };
+        return { invalid: true, message: 'Phiếu không có dòng hàng nào' };
       }
 
       const hasShortage = items.some(
         (i) => calculateLineRemaining(i.quantity, i.processed_qty) > 0,
       );
       if (!hasShortage) {
-        return { invalid: true, message: 'All items are fully picked. No shortage to declare.' };
+        return { invalid: true, message: 'Tất cả dòng hàng đã lấy đủ. Không có thiếu hàng để khai báo.' };
       }
 
       // Nothing picked yet means there is no partial pick to top up: a bin that is empty
@@ -4091,8 +4091,8 @@ async function declareOutboundShortage(req, res) {
       return { success: true, repick: repickResult };
     });
 
-    if (result.notFound) return res.status(404).json({ message: 'Outbound order not found' });
-    if (result.forbidden) return res.status(403).json({ message: 'Forbidden' });
+    if (result.notFound) return res.status(404).json({ message: 'Không tìm thấy phiếu xuất kho' });
+    if (result.forbidden) return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     if (result.invalid) return res.status(400).json({ message: result.message });
 
     return res.status(201).json({
@@ -4109,7 +4109,7 @@ async function declareOutboundShortage(req, res) {
 async function declareTransferShortage(req, res) {
   const taskId = parseId(req.params.taskId);
   if (!taskId) {
-    return res.status(400).json({ message: 'taskId is required' });
+    return res.status(400).json({ message: 'Thiếu taskId' });
   }
 
   try {
@@ -4136,7 +4136,7 @@ async function declareTransferShortage(req, res) {
       if (!order) return { notFound: true };
 
       if (!['PICKING', 'APPROVED'].includes(order.status)) {
-        return { invalid: true, message: `Transfer order status is ${order.status}, expected PICKING or APPROVED` };
+        return { invalid: true, message: `Phiếu chuyển kho đang ở trạng thái ${order.status}, cần ở PICKING hoặc APPROVED` };
       }
 
       if (!canAccessTask(req.user || {}, order.shipped_by_user_id)) {
@@ -4151,11 +4151,11 @@ async function declareTransferShortage(req, res) {
         },
       });
 
-      if (items.length === 0) return { invalid: true, message: 'Transfer order has no items' };
+      if (items.length === 0) return { invalid: true, message: 'Phiếu chuyển kho không có dòng hàng nào' };
 
       const hasShortage = items.some((i) => i.quantity - (i.shipped_qty || 0) > 0);
       if (!hasShortage) {
-        return { invalid: true, message: 'All items are fully shipped. No shortage to declare.' };
+        return { invalid: true, message: 'Tất cả dòng hàng đã xuất đủ. Không có thiếu hàng để khai báo.' };
       }
 
       const totalShipped = items.reduce((sum, i) => sum + Number(i.shipped_qty || 0), 0);
@@ -4238,8 +4238,8 @@ async function declareTransferShortage(req, res) {
       return { success: true, repick: repickResult };
     });
 
-    if (result.notFound) return res.status(404).json({ message: 'Transfer order not found' });
-    if (result.forbidden) return res.status(403).json({ message: 'Forbidden' });
+    if (result.notFound) return res.status(404).json({ message: 'Không tìm thấy phiếu chuyển kho' });
+    if (result.forbidden) return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     if (result.invalid) return res.status(400).json({ message: result.message });
 
     return res.status(201).json({
@@ -4317,12 +4317,12 @@ async function getPickingTaskChildren(req, res) {
   const pickingTaskId = parseId(req.params.pickingTaskId);
 
   if (!pickingTaskId) {
-    return res.status(400).json({ message: "Invalid pickingTaskId" });
+    return res.status(400).json({ message: "pickingTaskId không hợp lệ" });
   }
 
   try {
     const parent = await prisma.picking_tasks.findUnique({ where: { id: pickingTaskId }, select: { warehouse_id: true } });
-    if (!parent) return res.status(404).json({ message: "Picking task not found" });
+    if (!parent) return res.status(404).json({ message: "Không tìm thấy công việc lấy hàng" });
     if (!(await requireWarehouseReadAccess(req, res, parent.warehouse_id))) return undefined;
     const children = await prisma.picking_tasks.findMany({
       where: { parent_id: pickingTaskId },
@@ -4363,7 +4363,7 @@ async function claimSelfPickingTask(req, res) {
   const taskId = parseId(req.params.taskId);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid task type or task id" });
+    return res.status(400).json({ message: "Loại công việc hoặc mã công việc không hợp lệ" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
@@ -4392,7 +4392,7 @@ async function claimSelfPickingTask(req, res) {
         });
 
         if (!order) {
-          return { invalid: true, statusCode: 404, message: "Outbound order not found" };
+          return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu xuất kho" };
         }
         if (order.processed_by_user_id && order.processed_by_user_id !== currentUserId) {
           return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
@@ -4401,7 +4401,7 @@ async function claimSelfPickingTask(req, res) {
           return { data: { task_type: "outbound", task_id: taskId, status: order.status } };
         }
         if (order.status !== "APPROVED") {
-          return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+          return { invalid: true, statusCode: 400, message: "Công việc này không thể tự nhận" };
         }
 
         const updated = await tx.outbound_orders.update({
@@ -4464,7 +4464,7 @@ async function claimSelfPickingTask(req, res) {
       });
 
       if (!order) {
-        return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+        return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu chuyển kho" };
       }
       if (order.shipped_by_user_id && order.shipped_by_user_id !== currentUserId) {
         return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
@@ -4473,7 +4473,7 @@ async function claimSelfPickingTask(req, res) {
         return { data: { task_type: "transfer", task_id: taskId, status: order.status } };
       }
       if (order.status !== "APPROVED") {
-        return { invalid: true, statusCode: 400, message: "Task is not available for self-claim" };
+        return { invalid: true, statusCode: 400, message: "Công việc này không thể tự nhận" };
       }
 
       const updated = await tx.transfer_orders.update({

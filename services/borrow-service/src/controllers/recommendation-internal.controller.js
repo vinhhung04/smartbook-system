@@ -37,7 +37,7 @@ function toEvents(loanItems, wishlists, reviews) {
 async function getRecommendationInteractions(req, res) {
   const internalKey = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
   if (!internalKey || req.headers['x-internal-service-key'] !== internalKey) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
   const since = sinceDate(req.query?.since_days);
   try {

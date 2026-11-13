@@ -65,6 +65,25 @@ export function normalizeIsbnInput(value: string): string {
   return cleaned;
 }
 
+export type CodeKind = "ISBN13" | "ISBN10" | "EAN13" | "BAD_CHECKSUM_13" | "BAD_CHECKSUM_10" | "WRONG_LENGTH" | "EMPTY";
+
+/** Advisory shape check shown while typing (the backend makes the real decision):
+ *  ISBN-13 = EAN-13 with a 978/979 prefix; other valid EAN-13s are retail barcodes. */
+export function classifyCode(raw: string): { kind: CodeKind; digits: string } {
+  const digits = normalizeIsbnInput(raw);
+  if (!digits) return { kind: "EMPTY", digits };
+  if (digits.length === 13 && /^\d{13}$/.test(digits)) {
+    const sum = digits.slice(0, 12).split("").reduce((acc, d, i) => acc + Number(d) * (i % 2 ? 3 : 1), 0);
+    if ((10 - (sum % 10)) % 10 !== Number(digits[12])) return { kind: "BAD_CHECKSUM_13", digits };
+    return { kind: /^97[89]/.test(digits) ? "ISBN13" : "EAN13", digits };
+  }
+  if (digits.length === 10 && /^\d{9}[\dX]$/.test(digits)) {
+    const sum = digits.split("").reduce((acc, d, i) => acc + (d === "X" ? 10 : Number(d)) * (10 - i), 0);
+    return { kind: sum % 11 === 0 ? "ISBN10" : "BAD_CHECKSUM_10", digits };
+  }
+  return { kind: "WRONG_LENGTH", digits };
+}
+
 export function parsePublishYear(publishedDate: string): number | undefined {
   const matched = String(publishedDate || "").match(/\b(\d{4})\b/);
   if (!matched) return undefined;

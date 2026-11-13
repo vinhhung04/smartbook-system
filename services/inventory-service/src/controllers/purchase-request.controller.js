@@ -28,10 +28,10 @@ async function createPurchaseRequest(req, res) {
   const { warehouse_id, book_variant_id, book_title_hint, quantity_requested, reason, note } = req.body;
 
   if (!warehouse_id) {
-    return res.status(400).json({ message: 'warehouse_id is required' });
+    return res.status(400).json({ message: 'Thiếu warehouse_id' });
   }
   if (!quantity_requested || quantity_requested < 1) {
-    return res.status(400).json({ message: 'quantity_requested must be at least 1' });
+    return res.status(400).json({ message: 'quantity_requested phải ít nhất là 1' });
   }
 
   const validReasons = ['LOW_STOCK', 'CUSTOMER_REQUEST', 'DAMAGED', 'LOST', 'OTHER'];
@@ -40,7 +40,7 @@ async function createPurchaseRequest(req, res) {
   try {
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
     if (!warehouse) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     // Enforce warehouse write scope. Note: if user_warehouse_scopes table has no entries
@@ -51,7 +51,7 @@ async function createPurchaseRequest(req, res) {
     if (book_variant_id) {
       const variant = await prisma.book_variants.findUnique({ where: { id: book_variant_id } });
       if (!variant) {
-        return res.status(404).json({ message: 'Book variant not found' });
+        return res.status(404).json({ message: 'Không tìm thấy ấn bản sách' });
       }
     }
 
@@ -169,11 +169,11 @@ async function getPurchaseRequestById(req, res) {
     });
 
     if (!request) {
-      return res.status(404).json({ message: 'Purchase request not found' });
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu mua hàng' });
     }
 
     if (!isManager && request.created_by_user_id !== userId) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
     // A manager reads other people's requests only in warehouses they may read.
     if (request.created_by_user_id !== userId && !(await requireWarehouseReadAccess(req, res, request.warehouse_id))) {
@@ -193,12 +193,12 @@ async function approvePurchaseRequest(req, res) {
   try {
     const request = await prisma.purchase_requests.findUnique({ where: { id: req.params.id } });
     if (!request) {
-      return res.status(404).json({ message: 'Purchase request not found' });
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu mua hàng' });
     }
     // Deciding on a request writes in its warehouse: write scope required there.
     if (!(await requireWarehouseWriteAccess(req, res, request.warehouse_id))) return undefined;
     if (request.status !== 'PENDING') {
-      return res.status(400).json({ message: `Cannot approve a request with status ${request.status}` });
+      return res.status(400).json({ message: `Không thể duyệt yêu cầu ở trạng thái ${request.status}` });
     }
 
     const updated = await prisma.purchase_requests.update({
@@ -232,11 +232,11 @@ async function rejectPurchaseRequest(req, res) {
   try {
     const request = await prisma.purchase_requests.findUnique({ where: { id: req.params.id } });
     if (!request) {
-      return res.status(404).json({ message: 'Purchase request not found' });
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu mua hàng' });
     }
     if (!(await requireWarehouseWriteAccess(req, res, request.warehouse_id))) return undefined;
     if (request.status !== 'PENDING') {
-      return res.status(400).json({ message: `Cannot reject a request with status ${request.status}` });
+      return res.status(400).json({ message: `Không thể từ chối yêu cầu ở trạng thái ${request.status}` });
     }
 
     const updated = await prisma.purchase_requests.update({
@@ -273,13 +273,13 @@ async function withdrawPurchaseRequest(req, res) {
   try {
     const request = await prisma.purchase_requests.findUnique({ where: { id: req.params.id } });
     if (!request) {
-      return res.status(404).json({ message: 'Purchase request not found' });
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu mua hàng' });
     }
     if (request.created_by_user_id !== userId) {
-      return res.status(403).json({ message: 'You can only withdraw your own purchase request' });
+      return res.status(403).json({ message: 'Bạn chỉ có thể rút yêu cầu mua hàng của chính mình' });
     }
     if (request.status !== 'PENDING') {
-      return res.status(400).json({ message: `Cannot withdraw a request with status ${request.status}` });
+      return res.status(400).json({ message: `Không thể rút yêu cầu ở trạng thái ${request.status}` });
     }
 
     const updated = await prisma.purchase_requests.update({
@@ -315,14 +315,14 @@ async function convertPurchaseRequestToPO(req, res) {
       where: { id: req.params.id },
     });
     if (!request) {
-      return res.status(404).json({ message: 'Purchase request not found' });
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu mua hàng' });
     }
     if (!(await requireWarehouseWriteAccess(req, res, request.warehouse_id))) return undefined;
     if (request.status !== 'APPROVED') {
-      return res.status(400).json({ message: `Request must be APPROVED before converting (current: ${request.status})` });
+      return res.status(400).json({ message: `Yêu cầu phải ở trạng thái APPROVED trước khi chuyển (hiện tại: ${request.status})` });
     }
     if (request.purchase_order_id || request.status === 'CONVERTED') {
-      return res.status(400).json({ message: 'Request has already been converted to a Purchase Order' });
+      return res.status(400).json({ message: 'Yêu cầu đã được chuyển thành đơn đặt hàng' });
     }
     const { supplier_id, book_variant_id: overrideVariantId } = req.body;
 
@@ -332,20 +332,20 @@ async function convertPurchaseRequestToPO(req, res) {
       return res.status(400).json({ message: 'Vui lòng chọn biến thể sách cụ thể để tạo đơn đặt hàng' });
     }
     if (!supplier_id) {
-      return res.status(400).json({ message: 'supplier_id is required' });
+      return res.status(400).json({ message: 'Thiếu supplier_id' });
     }
 
     const supplier = await prisma.suppliers.findUnique({ where: { id: supplier_id } });
     if (!supplier) {
-      return res.status(404).json({ message: 'Supplier not found' });
+      return res.status(404).json({ message: 'Không tìm thấy nhà cung cấp' });
     }
     if (supplier.status && supplier.status !== 'ACTIVE') {
-      return res.status(400).json({ message: 'Supplier is not active' });
+      return res.status(400).json({ message: 'Nhà cung cấp đang ngừng hoạt động' });
     }
 
     const variant = await prisma.book_variants.findUnique({ where: { id: resolvedVariantId } });
     if (!variant) {
-      return res.status(400).json({ message: 'Book variant no longer exists' });
+      return res.status(400).json({ message: 'Ấn bản sách không còn tồn tại' });
     }
 
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');

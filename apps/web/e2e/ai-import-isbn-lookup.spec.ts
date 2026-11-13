@@ -36,6 +36,21 @@ let identifiedBy: string | null = null;
 // One login for the whole file: the auth limiter allows 10 logins / 15 min / IP.
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   page = await (await browser.newContext()).newPage();
+  // A streamed (SSE) body cannot be read back through the DevTools protocol, so the page
+  // keeps a copy: response.clone() is read in parallel and never slows the stream the app reads.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __lookupStreams: string[] };
+    w.__lookupStreams = [];
+    const original = window.fetch.bind(window);
+    window.fetch = async (...args: Parameters<typeof fetch>) => {
+      const response = await original(...args);
+      const url = String(args[0] instanceof Request ? args[0].url : args[0]);
+      if (url.includes('/enrich-book-after-isbn/stream') && response.ok) {
+        response.clone().text().then((text) => w.__lookupStreams.push(text)).catch(() => {});
+      }
+      return response;
+    };
+  });
   await loginStaff(page, 'manager01');
 });
 
@@ -48,18 +63,35 @@ async function openAiImport() {
   await expect(page.getByPlaceholder('ISBN-10 hoặc ISBN-13')).toBeVisible();
 }
 
-/** Narrow screens split the workspace into tabs; wide ones show both panes side by side. */
-async function showPane(name: 'Thông tin sách' | 'Kiểm duyệt') {
+/** Narrow screens put every pane in tabs; wide ones keep the metadata open beside a tabbed panel. */
+async function showPane(name: 'Metadata' | 'Nguồn' | 'Kiểm duyệt') {
   const tab = page.getByRole('tab', { name: new RegExp('^' + name) });
   if (await tab.count()) await tab.first().click();
 }
 
-async function lookUp(code: string): Promise<Lookup> {
+/** The page asks the SSE endpoint (live progress, then one `result` event) and falls back
+ *  to the plain JSON endpoint; either way this returns the lookup and the progress seen. */
+type Progress = { type: string; stage?: string; source?: string; state?: string };
+async function lookUp(code: string): Promise<Lookup & { progress: Progress[] }> {
   await page.getByPlaceholder('ISBN-10 hoặc ISBN-13').fill(code);
-  const response = page.waitForResponse(
-    (r) => r.url().includes('/enrich-book-after-isbn') && r.request().method() === 'POST', { timeout: 90_000 });
+  const seen = await page.evaluate(() => (window as unknown as { __lookupStreams: string[] }).__lookupStreams.length);
+  const streamed = page.waitForFunction((count) => {
+    const streams = (window as unknown as { __lookupStreams: string[] }).__lookupStreams;
+    return streams.length > count ? streams[streams.length - 1] : null;
+  }, seen, { timeout: 90_000 }).then((handle) => handle.jsonValue() as Promise<string>);
+  const plain = page.waitForResponse((r) => r.url().endsWith('/enrich-book-after-isbn') && r.request().method() === 'POST', { timeout: 90_000 })
+    .then((r) => r.text());
   await page.getByRole('button', { name: 'Tra cứu', exact: true }).click();
-  return (await (await response).json()).lookup as Lookup;
+  const body = await Promise.any([streamed, plain]);
+  if (!body.trimStart().startsWith('{')) {
+    const events = body.split(/\r?\n\r?\n/).map((block) => ({
+      event: /^event: (.*)$/m.exec(block)?.[1], data: /^data: (.*)$/m.exec(block)?.[1],
+    }));
+    const result = events.find((e) => e.event === 'result');
+    expect(result, 'the progress stream ends with one result event').toBeTruthy();
+    return { ...(JSON.parse(result!.data!).lookup as Lookup), progress: events.filter((e) => e.event === 'progress').map((e) => JSON.parse(e.data!) as Progress) };
+  }
+  return { ...(JSON.parse(body).lookup as Lookup), progress: [] };
 }
 
 test('1. tra mã có gạch ngang: Vòng 1 khớp đúng mã, Vòng 2 đối chiếu, form điền đủ', async () => {
@@ -77,10 +109,15 @@ test('1. tra mã có gạch ngang: Vòng 1 khớp đúng mã, Vòng 2 đối chi
     { status: 'SUCCESS', round: 1, verification: 'CODE_MATCH' });
   expect(lookup.verification!.round2Ran).toBe(true);
   expect(lookup.verification!.totalSourcesChecked).toBeGreaterThanOrEqual(5);
+  // Live progress reached the browser: per source, unless the answer came from the cache (no source asked).
+  expect(lookup.progress.length, 'progress events reached the browser').toBeGreaterThan(0);
+  if (!lookup.progress.some((e) => e.stage === 'cache')) {
+    expect(lookup.progress.filter((e) => e.type === 'source' && e.state === 'done').length).toBeGreaterThanOrEqual(5);
+  }
   test.info().annotations.push({ type: 'sources',
     description: `round1=${identifiedBy}; found=${lookup.verification!.foundSources.join(',')}` });
 
-  await showPane('Thông tin sách');
+  await showPane('Metadata');
   await expect(page.locator('#translator')).toHaveValue(/Hà Giang/);
   await expect(page.locator('#publisher')).toHaveValue('NXB Hà Nội');
   await expect(page.locator('#pageCount')).toHaveValue('10');
@@ -90,10 +127,13 @@ test('1. tra mã có gạch ngang: Vòng 1 khớp đúng mã, Vòng 2 đối chi
   await expect(cover).toBeVisible();
   await expect.poll(() => cover.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
 
-  await showPane('Kiểm duyệt');
-  await page.getByText('Đối chiếu nguồn dữ liệu', { exact: true }).click();
-  await page.getByText(/nguồn đã được kiểm tra/).click();
-  await expect(page.getByText(/: SUCCESS · khớp mã \(vòng 1\)/)).toBeVisible();
+  // The source that identified the book, with its round and verification, in the Sources pane.
+  await showPane('Nguồn');
+  const identifying = page.getByTestId(`source-row-${identifiedBy}`);
+  await expect(identifying).toContainText('Tìm thấy');
+  await expect(identifying).toContainText('Vòng 1');
+  await expect(identifying).toContainText('Khớp mã chính xác');
+  await expect(page.getByText(/Sách được xác định bởi/)).toBeVisible();
 });
 
 test('2. lưu sách vào kho sau khi duyệt chuẩn hóa', async () => {
@@ -164,7 +204,7 @@ test('7. mã Văn Lang: chỉ mục mã vạch tìm được ở Vòng 1, đọc
   expect(lookup.verification!.round1.matchedSource).toBe('vanLang');
   expect(lookup.sources!.find((s) => s.name === 'vanLang')).toMatchObject({ status: 'SUCCESS', verification: 'CODE_MATCH' });
 
-  await showPane('Thông tin sách');
+  await showPane('Metadata');
   await expect(page.locator('#title')).toHaveValue('Phật Giáo Có Là Tôn Giáo Không?');
   await expect(page.locator('#authors')).toHaveValue('Alan Watts');
   await expect(page.locator('#translator')).toHaveValue('Hạnh Duyên');
@@ -188,7 +228,7 @@ test('8. mã Fahasa: tìm trang qua web search, đọc bảng thông số', asyn
   expect(lookup.found).toBe(true);
   expect(lookup.verification!.round1.matchedSource).toBe('fahasa');
 
-  await showPane('Thông tin sách');
+  await showPane('Metadata');
   await expect(page.locator('#title')).toHaveValue(/Đắc Nhân Tâm/);
   await expect(page.locator('#authors')).toHaveValue(/Dale Carnegie/);
   await expect(page.locator('#translator')).toHaveValue('Tín Nghĩa');
@@ -211,7 +251,7 @@ test('9. mã IPM: chỉ mục nhà phát hành tìm được sách mới mà web
   expect(lookup.found).toBe(true);
   expect(lookup.verification!.round1.matchedSource).toBe('ipm');
 
-  await showPane('Thông tin sách');
+  await showPane('Metadata');
   await expect(page.locator('#title')).toHaveValue('Your Name');
   await expect(page.locator('#authors')).toHaveValue('Shinkai Makoto');
   await expect(page.locator('#publisher')).toHaveValue('Hồng Đức');

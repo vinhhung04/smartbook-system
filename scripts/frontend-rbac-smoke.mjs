@@ -70,7 +70,7 @@ async function runStaticSmoke() {
   expect('CUSTOMER home path is customer portal', rbac.includes('role === "CUSTOMER"') && rbac.includes('return "/customer"'));
   expect('ADMIN home path is users', rbac.includes('role === "ADMIN"') && rbac.includes('return "/users"'));
 
-  expect('login uses role home redirect', login.includes('getHomePathForUser(loginData.user)'));
+  expect('login uses role home redirect', login.includes('getHomePathForUser(data.user)'));
   expect('staff task route exists', routes.includes('path: "my-warehouse-tasks"') && routes.includes('ROUTE_ACCESS.staffTasks'));
   expect('staff receiving draft route exists', routes.includes('path: "orders/new"') && routes.includes('ROUTE_ACCESS.staffTaskProgress'));
   expect('direct purchase order create route guarded', routes.includes('path: "purchase-orders/new"') && routes.includes('ROUTE_ACCESS.purchaseWrite'));
@@ -157,7 +157,7 @@ async function runStaticSmoke() {
   expect('picking page uses canManageReceiving helper', picking.includes('canManageReceiving(currentUser)') && !/currentUserRoles\.includes\("ADMIN"\)/.test(picking));
   expect('exception-reports manager page uses React.Fragment key', exceptionReportsPage.includes('React.Fragment'));
   expect('my-exception-reports task dropdown not UUID text input', !myExceptionReports.includes('"UUID hoặc mã task"') && !myExceptionReports.includes('"UUID hoac ma task"'));
-  expect('my-warehouse-tasks has Bao cao exception button', myTasks.includes('handleReportException') && myTasks.includes('OPERATIONAL_TYPES'));
+  expect('my-warehouse-tasks has Bao cao exception button', myTasks.includes('handleReportException') && myTasks.includes('REPORTABLE_TYPES'));
 }
 
 async function run() {
