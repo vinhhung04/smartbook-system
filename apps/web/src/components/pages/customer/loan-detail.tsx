@@ -3,13 +3,14 @@ import { NavLink, useParams } from 'react-router';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { customerCatalogService } from '@/services/customer-catalog';
 import { getApiErrorMessage } from '@/services/api';
+import { authService } from '@/services/auth';
 import { toast } from 'sonner';
 import { ChevronLeft, Printer } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { getStatusTone } from './_shared/customer-status';
-import { printLoanReceipt } from '@/lib/print-utils';
+import { LoanReceiptPrintSheet } from '../loan-receipt-print-sheet';
 import { getBorrowLabel } from '@/lib/status-registry';
 
 export function CustomerLoanDetailPage() {
@@ -93,6 +94,19 @@ export function CustomerLoanDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+      <LoanReceiptPrintSheet
+        loanNumber={loan.loan_number}
+        statusLabel={tone.label}
+        customerName={loan.customers?.full_name || authService.getCurrentUser()?.full_name || 'Bạn đọc'}
+        borrowDate={loan.borrow_date}
+        dueDate={loan.due_date}
+        totalItems={loan.total_items ?? items.length}
+        items={items.map((item) => ({
+          title: getBookTitle(item),
+          dueDate: item.due_date,
+          statusLabel: getStatusTone(item.status).label,
+        }))}
+      />
       <NavLink to="/customer/loans" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
         <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Quay lại phiếu mượn
       </NavLink>
@@ -103,7 +117,7 @@ export function CustomerLoanDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
+              onClick={() => window.print()}
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-muted"
             >
               <Printer className="h-4 w-4" aria-hidden="true" /> In phiếu

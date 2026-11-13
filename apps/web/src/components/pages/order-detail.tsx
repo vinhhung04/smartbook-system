@@ -14,8 +14,11 @@ import { authService } from "@/services/auth";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { canManageReceiving, canViewUnitCost, canViewLocationCode } from "@/lib/rbac";
 import { exportToCsv } from "@/lib/export-utils";
+import { GoodsReceiptPrintSheet } from "./goods-receipt-print-sheet";
+import { formatCurrency, formatDate } from "./goods-receipt-format";
+import { GoodsReceiptProcurementPanel } from "@/components/procurement/goods-receipt-procurement-panel";
 
-interface ReceiptDetailItem {
+export interface ReceiptDetailItem {
   id: string;
   barcode: string | null;
   book_title: string;
@@ -26,7 +29,7 @@ interface ReceiptDetailItem {
   line_total: number;
 }
 
-interface InvoiceItem {
+export interface InvoiceItem {
   id: string;
   variant_id: string;
   title: string | null;
@@ -36,7 +39,7 @@ interface InvoiceItem {
   invoiced_qty: number;
 }
 
-interface EmbeddedInvoice {
+export interface EmbeddedInvoice {
   id: string;
   invoice_number: string;
   supplier_name: string | null;
@@ -45,7 +48,7 @@ interface EmbeddedInvoice {
   items: InvoiceItem[];
 }
 
-interface ReceiptDetail {
+export interface ReceiptDetail {
   id: string;
   receipt_number: string;
   purchase_order_id?: string | null;
@@ -61,22 +64,6 @@ interface ReceiptDetail {
   received_by_user_id?: string | null;
   items: ReceiptDetailItem[];
   invoice?: EmbeddedInvoice | null;
-}
-
-function formatCurrency(value: number): string {
-  return `${value.toLocaleString("vi-VN")} VND`;
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("vi-VN", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export function OrderDetailPage() {
@@ -229,6 +216,11 @@ export function OrderDetailPage() {
   };
 
   const totalQty = useMemo(() => receipt?.items?.reduce((s, i) => s + i.quantity, 0) || 0, [receipt]);
+  const receiverName = useMemo(() => {
+    if (!receipt?.received_by_user_id) return null;
+    const staff = warehouseStaff.find((s) => s.id === receipt.received_by_user_id);
+    return staff?.full_name || staff?.username || null;
+  }, [receipt, warehouseStaff]);
   const isVerified = useMemo(
     () => Boolean(receipt && receipt.items.length > 0 && receipt.items.every((i) => i.actual_quantity !== null)),
     [receipt],
@@ -263,6 +255,13 @@ export function OrderDetailPage() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+      <GoodsReceiptPrintSheet
+        receipt={receipt}
+        totalQty={totalQty}
+        showLocation={showLocation}
+        showUnitCost={showUnitCost}
+        receiverName={receiverName}
+      />
       {showManageReceiving ? (
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -540,6 +539,7 @@ export function OrderDetailPage() {
           </motion.div>
         </div>
       </div>
+      {receipt.purchase_order_id ? <GoodsReceiptProcurementPanel receiptId={receipt.id} /> : null}
       {/* Staff verification scan bar — shown for ANY DRAFT GR, not restricted to invoice GRs */}
       {receipt.status === "DRAFT" && !receipt.invoice && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>

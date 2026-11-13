@@ -11,3 +11,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Printing a document (e.g. "In phiếu") hides the whole app shell; the page's
+   own print-only sheet (portaled to document.body, see GoodsReceiptPrintSheet)
+   is the only thing left on the printed page. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  #root {
+    display: none !important;
+  }
+}
