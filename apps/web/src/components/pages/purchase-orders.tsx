@@ -1,13 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router";
-import { CheckSquare, ChevronRight, ClipboardList, Plus, RefreshCw, X } from "lucide-react";
+import { CheckSquare, ClipboardList, Plus, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 import { purchaseOrderService, type PurchaseOrderStatus, type PurchaseOrderSummary } from "@/services/purchase-order";
 import { supplierService, type Supplier } from "@/services/supplier";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
 import { getApiErrorMessage } from "@/services/api";
 import { StatusBadge } from "@/components/status-badge";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
@@ -38,26 +37,26 @@ const VIEW_OPTIONS: { value: "all" | "my" | "approval"; label: string }[] = [
 
 // The real PO happy path — draft through received. Off-ramp statuses (rejected,
 // cancelled, shortage-reported) don't get force-fit onto this trail; they show
-// only their status badge, since a linear dot trail would misrepresent them.
+// only their status badge, since a linear trail would misrepresent them.
 const STAGE_SEQUENCE: PurchaseOrderStatus[] = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "RECEIVED"];
 const STAGE_OFF_RAMP = new Set(["REJECTED", "CANCELLED", "SHORTAGE_REPORTED"]);
 
-function PoStageDots({ status }: { status: PurchaseOrderStatus }) {
+/** Six segments for the happy path; filled up to the current stage, the last one amber while partly received. */
+function PoStageTrack({ status }: { status: PurchaseOrderStatus }) {
   if (STAGE_OFF_RAMP.has(status)) return null;
   const isPartial = status === "PARTIALLY_RECEIVED";
   const currentIdx = isPartial ? 4 : STAGE_SEQUENCE.indexOf(status);
   return (
-    <div className="flex items-center gap-1" title={`Tiến trình: ${purchaseOrderStatusLabel(isPartial ? "SUPPLIER_CONFIRMED" : status)}`} aria-hidden="true">
+    <div className="flex w-24 gap-0.5" title={`Bước ${Math.min(currentIdx + 1, 6)}/6 của quy trình`} aria-hidden="true">
       {STAGE_SEQUENCE.map((stage, i) => {
-        const tone = isPartial && i === 5 ? "bg-amber-500" : i <= currentIdx ? "bg-emerald-500" : "bg-muted";
-        return <span key={stage} className={`h-1.5 w-1.5 rounded-full ${tone}`} />;
+        const tone = isPartial && i === 5 ? "bg-amber-500" : i <= currentIdx ? "bg-primary/70" : "bg-muted";
+        return <span key={stage} className={`h-1 flex-1 rounded-full ${tone}`} />;
       })}
     </div>
   );
 }
 
-// Pipeline filter: the flow in order, then the statuses that leave it.
-// `attention` marks stages where someone on our side has to act.
+// Every status the list can filter by; counts are fetched for each.
 const PIPELINE: { status: PurchaseOrderStatus; label: string; attention?: boolean }[] = [
   { status: "DRAFT", label: "Nháp" },
   { status: "PENDING_APPROVAL", label: "Chờ duyệt", attention: true },
@@ -73,6 +72,15 @@ const CLOSED: { status: PurchaseOrderStatus; label: string }[] = [
   { status: "CANCELLED", label: "Đã hủy" },
 ];
 const COUNTED_STATUSES = [...PIPELINE, ...CLOSED].map((stage) => stage.status);
+const STAGE_LABEL = new Map<string, string>([...PIPELINE, ...CLOSED].map((stage) => [stage.status, stage.label]));
+const ATTENTION_STATUSES = PIPELINE.filter((stage) => stage.attention).map((stage) => stage.status);
+
+// The status rail groups by who has to move next, not by pipeline order: what waits on us first.
+const RAIL_GROUPS: { title: string; statuses: PurchaseOrderStatus[] }[] = [
+  { title: "Cần xử lý", statuses: ATTENTION_STATUSES },
+  { title: "Đang tiến hành", statuses: ["DRAFT", "SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED"] },
+  { title: "Đã đóng", statuses: ["RECEIVED", "REJECTED", "CANCELLED"] },
+];
 
 const FINISHED_STATUSES = new Set(["RECEIVED", "REJECTED", "CANCELLED"]);
 
@@ -241,7 +249,18 @@ export function PurchaseOrdersPage() {
     void loadCounts();
   };
 
-  const pipelineButton = (value: string, label: string, count: number | null, attention = false) => {
+  // The header says what waits on us, in words, straight from the status counts.
+  const lede = (() => {
+    if (!counts || totalCount === null) return "Đang đếm đơn theo trạng thái...";
+    const waiting = ATTENTION_STATUSES
+      .filter((s) => (counts[s] ?? 0) > 0)
+      .map((s) => `${counts[s]} đơn ${(STAGE_LABEL.get(s) || s).toLowerCase()}`);
+    return waiting.length > 0
+      ? `${totalCount} đơn. Cần xử lý: ${waiting.join(", ")}.`
+      : `${totalCount} đơn. Không có đơn nào đang chờ xử lý.`;
+  })();
+
+  const railItem = (value: string, label: string, count: number | null, attention = false, compact = false) => {
     const active = status === value;
     return (
       <button
@@ -250,34 +269,37 @@ export function PurchaseOrdersPage() {
         onClick={() => selectStatus(value)}
         aria-pressed={active}
         className={cn(
-          "group relative flex flex-1 shrink-0 flex-col items-start rounded-lg border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "flex items-center justify-between gap-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          compact ? "shrink-0 rounded-full border px-3.5 py-1.5" : "w-full rounded-lg px-3 py-2",
           active
-            ? "border-primary/30 bg-primary/[0.06] text-primary dark:border-primary/40 dark:bg-primary/15"
-            : "border-transparent hover:border-border hover:bg-muted/50",
+            ? compact ? "border-primary/30 bg-primary/[0.08] text-primary" : "bg-primary/[0.08] text-primary"
+            : compact ? "border-border bg-card text-foreground hover:bg-muted/60" : "text-foreground hover:bg-muted/60",
         )}
       >
-        <span className={cn("font-serif text-[20px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>
+        <span className={cn("whitespace-nowrap text-[13px]", active ? "font-semibold" : "font-medium")}>{label}</span>
+        <span
+          className={cn(
+            "min-w-6 rounded-full px-1.5 text-center text-[12px] tabular-nums",
+            attention && count ? "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : active ? "text-primary" : "text-muted-foreground",
+          )}
+        >
           {count ?? "–"}
-        </span>
-        <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11px]", active ? "font-medium" : "text-muted-foreground")}>
-          {attention && !!count && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="cần xử lý" />}
-          {label}
         </span>
       </button>
     );
   };
 
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={ClipboardList}
           title="Đơn đặt hàng"
-          description="Lập đơn đặt hàng, phê duyệt và đối soát nhập hàng"
+          description={lede}
           actions={
             <>
-              <Button variant="outline" size="sm" onClick={() => { void load(); void loadCounts(); }} disabled={loading}>
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <Button variant="ghost" size="sm" onClick={() => { void load(); void loadCounts(); }} disabled={loading}>
+                <RefreshCw className={`h-3.5 w-3.5 motion-reduce:animate-none ${loading ? "animate-spin" : ""}`} />
                 Làm mới
               </Button>
               {canCreatePurchaseOrder ? (
@@ -294,227 +316,236 @@ export function PurchaseOrdersPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="flex items-center gap-0.5 overflow-x-auto p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo trạng thái">
-            {pipelineButton("ALL", "Tất cả", totalCount)}
-            <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
-            {PIPELINE.map((stage, i) => (
-              <Fragment key={stage.status}>
-                {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />}
-                {pipelineButton(stage.status, stage.label, counts?.[stage.status] ?? null, stage.attention)}
-              </Fragment>
-            ))}
-            <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
-            {CLOSED.map((stage) => pipelineButton(stage.status, stage.label, counts?.[stage.status] ?? null))}
-          </div>
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="Tìm mã PO, nhà cung cấp, kho..."
-              filters={
-                <>
-                  <Select value={supplierId || "__all__"} onValueChange={(v) => { setSupplierId(v === "__all__" ? "" : v); setPage(1); }}>
-                    <SelectTrigger size="sm" className="w-[180px]" aria-label="Nhà cung cấp">
-                      <SelectValue placeholder="Tất cả nhà cung cấp" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Tất cả nhà cung cấp</SelectItem>
-                      {suppliers.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={warehouseId || "__all__"} onValueChange={(v) => { setWarehouseId(v === "__all__" ? "" : v); setPage(1); }}>
-                    <SelectTrigger size="sm" className="w-[170px]" aria-label="Kho nhận">
-                      <SelectValue placeholder="Tất cả kho" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Tất cả kho</SelectItem>
-                      {warehouses.map((warehouse) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {hasFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-                      <X className="h-3.5 w-3.5" />Xóa lọc
-                    </Button>
+        <div className="@container">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[220px_minmax(0,1fr)]">
+            {/* Status rail: a sticky column when there is room, a row of chips when there is not. */}
+            <nav aria-label="Lọc theo trạng thái" className="hidden rounded-2xl border border-border bg-card p-3 @4xl:sticky @4xl:top-4 @4xl:block">
+              {railItem("ALL", "Tất cả đơn", totalCount)}
+              {RAIL_GROUPS.map((group) => (
+                <div key={group.title} className="mt-3 border-t border-border pt-3">
+                  <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">{group.title}</p>
+                  {group.statuses.map((s) =>
+                    railItem(s, STAGE_LABEL.get(s) || s, counts?.[s] ?? null, ATTENTION_STATUSES.includes(s)),
                   )}
-                </>
-              }
-              actions={
+                </div>
+              ))}
+            </nav>
+            <nav aria-label="Lọc theo trạng thái" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl:hidden">
+              {railItem("ALL", "Tất cả", totalCount, false, true)}
+              {RAIL_GROUPS.flatMap((group) => group.statuses).map((s) =>
+                railItem(s, STAGE_LABEL.get(s) || s, counts?.[s] ?? null, ATTENTION_STATUSES.includes(s), true),
+              )}
+            </nav>
+
+            <section aria-label="Danh sách đơn" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-1 pt-4">
+                <h2 className="font-serif text-[18px] font-semibold tracking-tight">
+                  {status === "ALL" ? "Tất cả đơn" : STAGE_LABEL.get(status) || status}
+                </h2>
                 <SegmentedControl
                   options={VIEW_OPTIONS}
                   value={view}
                   onChange={(v) => { setView(v); setPage(1); }}
                   layoutId="po-view-segmented"
                 />
-              }
-            />
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Tìm mã PO, nhà cung cấp, kho"
+                  filters={
+                    <>
+                      <Select value={supplierId || "__all__"} onValueChange={(v) => { setSupplierId(v === "__all__" ? "" : v); setPage(1); }}>
+                        <SelectTrigger size="sm" className="w-[180px]" aria-label="Nhà cung cấp">
+                          <SelectValue placeholder="Tất cả nhà cung cấp" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">Tất cả nhà cung cấp</SelectItem>
+                          {suppliers.map((supplier) => <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={warehouseId || "__all__"} onValueChange={(v) => { setWarehouseId(v === "__all__" ? "" : v); setPage(1); }}>
+                        <SelectTrigger size="sm" className="w-[170px]" aria-label="Kho nhận">
+                          <SelectValue placeholder="Tất cả kho" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">Tất cả kho</SelectItem>
+                          {warehouses.map((warehouse) => <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {hasFilters && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                          <X className="h-3.5 w-3.5" />Xóa lọc
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              </div>
+
+              <Table className="table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-10 pl-4">
+                      {selectablePendingRows.length > 0 && (
+                        <Checkbox checked={allSelectableChecked} onCheckedChange={(checked) => toggleAllSelectable(checked === true)} aria-label="Chọn tất cả đơn chờ duyệt" />
+                      )}
+                    </TableHead>
+                    {[
+                      { label: "Nhà cung cấp và đơn", className: "" },
+                      { label: "Tiến trình", className: "hidden w-[168px] @xl:table-cell" },
+                      { label: "Hẹn giao", className: "hidden w-[116px] @3xl:table-cell" },
+                      { label: "Đã nhận", className: "hidden w-[132px] @2xl:table-cell" },
+                      { label: "Giá trị", className: "hidden w-[120px] pr-5 text-right @5xl:table-cell" },
+                    ].map((heading) => (
+                      <TableHead key={heading.label} className={cn("px-3 text-[12px] font-medium text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <SkeletonTableRow columns={6} rows={5} />
+                  ) : rows.length === 0 ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={6} className="whitespace-normal py-12">
+                        {hasFilters ? (
+                          <EmptyState
+                            variant="no-data"
+                            title="Không có đơn phù hợp"
+                            description="Thử bỏ bớt bộ lọc hoặc đổi từ khóa tìm kiếm"
+                            action={<Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button>}
+                          />
+                        ) : (
+                          <EmptyState variant="no-data" title="Chưa có đơn đặt hàng" description="Tạo PO để bắt đầu quy trình phê duyệt và đối soát nhập hàng" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : rows.map((row) => {
+                    const ordered = Number(row.total_ordered_qty) || 0;
+                    const received = Number(row.total_received_qty) || 0;
+                    const receivedPct = ordered > 0 ? Math.min(100, Math.round((received / ordered) * 100)) : 0;
+                    const barTone = received > ordered ? "bg-red-500" : received > 0 && received < ordered ? "bg-amber-500" : "bg-emerald-500";
+                    const warehouse = row.warehouse_code || row.warehouse_name;
+                    const hint = nextStepHint(row);
+                    const overdue = daysOverdue(row);
+                    const selected = selectedIds.has(row.id);
+                    return (
+                      <TableRow
+                        key={row.id}
+                        onClick={() => navigate(`/purchase-orders/${row.id}`)}
+                        className={cn("cursor-pointer", selected && "bg-primary/[0.06]")}
+                      >
+                        <TableCell className="pl-4 align-top pt-4" onClick={(event) => event.stopPropagation()}>
+                          {row.status === "PENDING_APPROVAL" && (
+                            <Checkbox checked={selected} onCheckedChange={(checked) => toggleRow(row.id, checked === true)} aria-label={`Chọn ${row.po_number}`} />
+                          )}
+                        </TableCell>
+                        <TableCell className="px-3 py-3.5">
+                          <p className="truncate text-[14px] font-semibold text-foreground" title={row.supplier_name || undefined}>{row.supplier_name || "Chưa có nhà cung cấp"}</p>
+                          <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+                            <NavLink
+                              to={`/purchase-orders/${row.id}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="truncate rounded font-mono text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            >
+                              {row.po_number}
+                            </NavLink>
+                            {warehouse ? <span className="shrink-0">về {warehouse}</span> : null}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 @xl:hidden">
+                            <StatusBadge label={purchaseOrderStatusLabel(row.status)} variant={getStatusVariant("purchaseOrder", row.status)} dot />
+                            {hint && <span className={cn("text-[12px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>{hint.text}</span>}
+                            <span className="text-[12px] tabular-nums text-muted-foreground">Nhận {received}/{ordered}</span>
+                            {overdue > 0 && <span className="text-[12px] font-medium text-red-600 dark:text-red-400">Trễ {overdue} ngày</span>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 @xl:table-cell">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <StatusBadge label={purchaseOrderStatusLabel(row.status)} variant={getStatusVariant("purchaseOrder", row.status)} dot />
+                            <PoStageTrack status={row.status} />
+                            {hint && (
+                              <span className={cn("max-w-full truncate text-[12px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
+                                {hint.text}
+                              </span>
+                            )}
+                            {overdue > 0 && (
+                              <span className="text-[12px] font-medium text-red-600 @3xl:hidden dark:text-red-400">Trễ {overdue} ngày</span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 text-[13px] @3xl:table-cell">
+                          {row.expected_date ? (
+                            <>
+                              <p className={cn("tabular-nums", overdue > 0 ? "font-semibold text-red-600 dark:text-red-400" : "text-foreground")}>{formatDate(row.expected_date)}</p>
+                              {overdue > 0 && <p className="text-[12px] font-medium text-red-600 dark:text-red-400">Trễ {overdue} ngày</p>}
+                            </>
+                          ) : (
+                            <p className="text-muted-foreground">Chưa hẹn</p>
+                          )}
+                          <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">Đặt {formatDate(row.order_date)}</p>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 @2xl:table-cell">
+                          <p className="text-[13px] font-semibold tabular-nums">
+                            {received}<span className="font-normal text-muted-foreground"> / {ordered} cuốn</span>
+                          </p>
+                          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã nhận ${receivedPct}%`}>
+                            <div className={cn("h-full rounded-full", barTone)} style={{ width: `${receivedPct}%` }} />
+                          </div>
+                          <p className="mt-1 text-[12px] text-muted-foreground">{row.item_count} dòng sách</p>
+                          <p className="text-[12px] tabular-nums text-muted-foreground @5xl:hidden">{formatCurrency(row.total_amount)}</p>
+                        </TableCell>
+                        <TableCell className={cn("hidden px-3 py-3.5 pr-5 text-right text-[13px] tabular-nums @5xl:table-cell", Number(row.total_amount) === 0 && "text-muted-foreground")}>
+                          {formatCurrency(row.total_amount)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <div className="flex flex-col gap-2 border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span aria-live="polite">
+                  {totalRows > 0
+                    ? `Hiển thị ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, totalRows)} trong ${totalRows} đơn`
+                    : "Không có đơn"}
+                </span>
+                {totalPages > 1 && (
+                  <Pagination className="mx-0 w-auto justify-end">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={(event) => { event.preventDefault(); if (page > 1) setPage(page - 1); }}
+                          className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                      {getPaginationRange(page, totalPages).map((item, i) => (
+                        <PaginationItem key={`${item}-${i}`}>
+                          {typeof item === "number" ? (
+                            <PaginationLink isActive={item === page} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
+                              {item}
+                            </PaginationLink>
+                          ) : (
+                            <PaginationEllipsis />
+                          )}
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={(event) => { event.preventDefault(); if (page < totalPages) setPage(page + 1); }}
+                          className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                )}
+              </div>
+            </section>
           </div>
         </div>
       </FadeItem>
 
-      <FadeItem>
-        <SectionCard noPadding>
-          <Table className="table-fixed">
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="w-10">
-                  {selectablePendingRows.length > 0 && (
-                    <Checkbox checked={allSelectableChecked} onCheckedChange={(checked) => toggleAllSelectable(checked === true)} aria-label="Chọn tất cả đơn chờ duyệt" />
-                  )}
-                </TableHead>
-                {[
-                  { label: "Đơn hàng", className: "" },
-                  { label: "Trạng thái", className: "hidden w-[190px] sm:table-cell" },
-                  { label: "Ngày", className: "hidden w-[150px] lg:table-cell" },
-                  { label: "Nhận hàng", className: "hidden w-[150px] sm:table-cell" },
-                  { label: "Tổng tiền", className: "hidden w-[140px] text-right xl:table-cell" },
-                ].map((heading) => (
-                  <TableHead key={heading.label} className={cn("px-3 text-[12px] text-muted-foreground", heading.className)}>{heading.label}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <SkeletonTableRow columns={6} rows={5} />
-              ) : rows.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="whitespace-normal py-12">
-                    {hasFilters ? (
-                      <EmptyState
-                        variant="no-data"
-                        title="Không có đơn phù hợp"
-                        description="Thử bỏ bớt bộ lọc hoặc đổi từ khóa tìm kiếm"
-                        action={<Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button>}
-                      />
-                    ) : (
-                      <EmptyState variant="no-data" title="Chưa có đơn đặt hàng" description="Tạo PO để bắt đầu quy trình phê duyệt và đối soát nhập hàng" />
-                    )}
-                  </TableCell>
-                </TableRow>
-              ) : rows.map((row) => {
-                const ordered = Number(row.total_ordered_qty) || 0;
-                const received = Number(row.total_received_qty) || 0;
-                const receivedPct = ordered > 0 ? Math.min(100, Math.round((received / ordered) * 100)) : 0;
-                const barTone = received > ordered ? "bg-red-500" : received > 0 && received < ordered ? "bg-amber-500" : "bg-emerald-500";
-                const warehouse = row.warehouse_code || row.warehouse_name;
-                const hint = nextStepHint(row);
-                const overdue = daysOverdue(row);
-                const selected = selectedIds.has(row.id);
-                return (
-                  <TableRow
-                    key={row.id}
-                    onClick={() => navigate(`/purchase-orders/${row.id}`)}
-                    className={cn("cursor-pointer", selected && "bg-indigo-50/60 dark:bg-indigo-500/10")}
-                  >
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      {row.status === "PENDING_APPROVAL" && (
-                        <Checkbox checked={selected} onCheckedChange={(checked) => toggleRow(row.id, checked === true)} aria-label={`Chọn ${row.po_number}`} />
-                      )}
-                    </TableCell>
-                    <TableCell className="px-3 py-3">
-                      <NavLink
-                        to={`/purchase-orders/${row.id}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="block truncate rounded font-mono text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-indigo-400 dark:hover:text-indigo-300"
-                      >
-                        {row.po_number}
-                      </NavLink>
-                      <p className="truncate text-[12px] text-foreground/80" title={row.supplier_name || undefined}>{row.supplier_name || "-"}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {warehouse ? `→ ${warehouse}` : null}
-                        <span className="sm:hidden">{warehouse ? " · " : ""}Nhận {received}/{ordered} · {formatCurrency(row.total_amount)}</span>
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                        <StatusBadge label={purchaseOrderStatusLabel(row.status)} variant={getStatusVariant("purchaseOrder", row.status)} dot />
-                        {hint && <span className={cn("text-[11px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>{hint.text}</span>}
-                        {overdue > 0 && <span className="text-[11px] font-medium text-red-600 dark:text-red-400">Trễ {overdue} ngày</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden px-3 py-3 sm:table-cell">
-                      <div className="flex flex-col items-start gap-1.5">
-                        <StatusBadge label={purchaseOrderStatusLabel(row.status)} variant={getStatusVariant("purchaseOrder", row.status)} dot />
-                        <div className="flex items-center gap-2">
-                          <PoStageDots status={row.status} />
-                          {hint && (
-                            <span className={cn("truncate text-[11px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
-                              {hint.text}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden px-3 py-3 text-[12px] lg:table-cell">
-                      <p className="text-muted-foreground">Đặt {formatDate(row.order_date)}</p>
-                      {row.expected_date ? (
-                        <>
-                          <p className={cn(overdue > 0 ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground")}>Hẹn {formatDate(row.expected_date)}</p>
-                          {overdue > 0 && (
-                            <span className="mt-1 inline-flex rounded-full bg-red-50 px-1.5 py-px text-[10px] font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400">Trễ {overdue} ngày</span>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-muted-foreground/70">Chưa hẹn ngày giao</p>
-                      )}
-                    </TableCell>
-                    <TableCell className="hidden px-3 py-3 sm:table-cell">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="text-[13px] font-semibold tabular-nums">{received}<span className="font-normal text-muted-foreground"> / {ordered}</span></p>
-                        <span className="text-[11px] text-muted-foreground">{row.item_count} dòng</span>
-                      </div>
-                      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã nhận ${receivedPct}%`}>
-                        <div className={cn("h-full rounded-full", barTone)} style={{ width: `${receivedPct}%` }} />
-                      </div>
-                      <p className="mt-1 font-mono text-[11px] text-muted-foreground xl:hidden">{formatCurrency(row.total_amount)}</p>
-                    </TableCell>
-                    <TableCell className={cn("hidden px-3 py-3 text-right font-mono text-[12px] tabular-nums xl:table-cell", Number(row.total_amount) === 0 && "text-muted-foreground")}>
-                      {formatCurrency(row.total_amount)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="flex flex-col gap-2 border-t border-border px-5 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {totalRows > 0
-                ? `Hiển thị ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, totalRows)} trong ${totalRows} đơn`
-                : "Không có đơn"}
-            </span>
-            {totalPages > 1 && (
-              <Pagination className="mx-0 w-auto justify-end">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={(event) => { event.preventDefault(); if (page > 1) setPage(page - 1); }}
-                      className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                  {getPaginationRange(page, totalPages).map((item, i) => (
-                    <PaginationItem key={`${item}-${i}`}>
-                      {typeof item === "number" ? (
-                        <PaginationLink isActive={item === page} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
-                          {item}
-                        </PaginationLink>
-                      ) : (
-                        <PaginationEllipsis />
-                      )}
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={(event) => { event.preventDefault(); if (page < totalPages) setPage(page + 1); }}
-                      className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </div>
-        </SectionCard>
-      </FadeItem>
-
       {selectedIds.size > 0 && (
-        <div className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5 text-[13px] shadow-lg">
+        <div role="region" aria-label="Thao tác hàng loạt" className="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full items-center gap-3 rounded-full border border-border bg-card py-2 pl-5 pr-2 text-[13px] shadow-[0_18px_40px_-22px_rgba(15,23,42,0.45)]">
           <span className="font-medium">Đã chọn {selectedIds.size} đơn chờ duyệt</span>
           <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>Bỏ chọn</Button>
           <Button size="sm" onClick={() => setConfirmBulkApprove(true)}>

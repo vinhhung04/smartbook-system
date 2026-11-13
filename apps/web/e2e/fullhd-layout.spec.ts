@@ -12,7 +12,7 @@ const FULL_HD_VIEWPORTS = [
   { name: 'Full HD 150%', width: 1280, height: 595 },
 ] as const;
 
-const STAFF_ROUTES = ['/dashboard', '/receiving-smart', '/purchase-requests', '/exception-reports', '/borrow/fines', '/shelves', '/warehouses'];
+const STAFF_ROUTES = ['/dashboard', '/receiving-smart', '/purchase-requests', '/exception-reports', '/borrow/fines', '/shelves', '/warehouses', '/purchase-orders'];
 const CUSTOMER_ROUTES = ['/customer', '/customer/fines', '/customer/membership', '/customer/notifications'];
 const PUBLIC_ROUTES = ['/', '/books', '/branches'];
 
