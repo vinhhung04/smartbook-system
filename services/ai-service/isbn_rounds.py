@@ -20,11 +20,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import ssl
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Awaitable, Callable
 
+import certifi
 import httpx
 
 import isbn_matching
@@ -48,6 +50,11 @@ class SourcePaused(RuntimeError):
     """Raised by a provider that must not be called right now (e.g. its spending
     limit is reached). Reported as PAUSED with the message, never retried."""
 
+
+# One TLS context for every provider call. Building it (loading the CA bundle)
+# is synchronous and took 0.4-0.7 s per client on Windows, blocking the event
+# loop - so the "parallel" AI lane waited on the sequential providers.
+_SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
 
 _host_next_slot: dict[str, float] = {}
 _host_locks: dict[str, asyncio.Lock] = {}
@@ -148,7 +155,7 @@ async def call_with_retry(provider: BookProvider, make_call: Callable[[httpx.Asy
     for attempt in range(provider.retries + 1):
         attempts = attempt + 1
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(provider.timeout), headers=headers,
+            async with httpx.AsyncClient(timeout=httpx.Timeout(provider.timeout), headers=headers, verify=_SSL_CONTEXT,
                                          follow_redirects=True, event_hooks={"request": [_throttle]}) as client:
                 value = await asyncio.wait_for(make_call(client), timeout=provider.timeout)
             _breakers.pop(provider.name, None)
