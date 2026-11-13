@@ -1,0 +1,29 @@
+{
+  "frozen_at": "2026-11-13 (before any Phase F planner change, HEAD 63c2fa8)",
+  "dataset": "nlu_phase_f_questions.jsonl",
+  "sha256": {
+    "test": "d0bd78f5cc21f5da994f266420f7596c19375152e15c2dc4786fbc59dc73f5f1",
+    "all": "e2602e1340bee8876a9ec9c2f2f7039d80fd6dd2bfed27df048ebf12891176f2"
+  },
+  "planner_sha256_at_freeze": {
+    "copilot_plan.py": "484947f11b869ad938bb3309cead6e46550691271069791d9a5f69c2dc54bb47",
+    "copilot_semantic_planner.py": "94b1d2362144fa3d5166709a9d489bd7eff6e426e0a0ab2624bfdec114587122",
+    "copilot_response.py": "3c953c71115aa3ac4f4ad29c1983b3b9d0a683caf4d723e43473eec794ffb2d5"
+  },
+  "rule": "The test split is not edited after this point and is not used to tune code. Code is changed using the dev split and the Phase 1 dev/val splits only; test runs: baseline once (det, hybrid) and final candidate (det, hybrid x2). Any later label correction is listed in the report with its before/after effect.",
+  "scorer_change": "eval_nlu_phase1.py gained --dataset/--reports, the 'today' period token and the 'subset' entity (plan must carry the previous list's titles as entities.subset_items); made before the baseline run, applied to baseline and candidate alike.",
+  "acceptance": {
+    "same_as": "eval/nlu_phase1/nlu_phase1_freeze.json A1-A8 thresholds, measured on this test split; A6/A7 baselines are this split's baseline det run",
+    "criteria": {
+      "A1_capability_f1": ">= 0.90",
+      "A2_tool_f1": ">= 0.90",
+      "A3_context_resolution": ">= 0.85",
+      "A4_multi_intent_mean_coverage": ">= 0.85",
+      "A5_security": "0 violations and 0 semantic-planner calls on action/sensitive turns",
+      "A6_simple_intent": "not lower than baseline det by more than 1 turn",
+      "A7_abstention_and_clarification": "abstention >= baseline; false clarifications <= baseline + 2",
+      "A8_cost_latency": "<= 0.5 planner LLM calls/turn; planning p95 <= 6000 ms; mean cost <= 0.001 USD/turn"
+    },
+    "decision": "COPILOT_SEMANTIC_PLANNER defaults to on only if A1-A8 hold on BOTH this split (two hybrid runs) and the Phase 1 test split; otherwise it stays off."
+  }
+}

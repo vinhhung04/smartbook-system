@@ -24,33 +24,9 @@ _ROLE_PRIORITY = [
     "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER",
 ]
 
-_ROLE_ENDPOINTS: dict[str, list[str]] = {
-    "CUSTOMER": [
-        "/borrow/my/loans",
-        "/borrow/my/reservations",
-        "/borrow/my/fines",
-        "/borrow/my/membership",
-        "/borrow/my/account",  # wallet: fetched only when asked about (select_personal_topics)
-    ],
-    "WAREHOUSE_STAFF": [
-        "/api/my-warehouse-tasks",
-        "/api/picking/tasks",
-        "/api/putaway/receipts",
-        "/api/my-exception-reports",
-    ],
-    "WAREHOUSE_MANAGER": [
-        "/analytics/dashboard/kpis",
-        "/analytics/warehouse-stock-risk",
-        "/api/my-warehouse-tasks",
-    ],
-    "ADMIN": [
-        "/analytics/dashboard/kpis",
-        "/analytics/warehouse-stock-risk",
-        "/api/my-warehouse-tasks",
-    ],
-    "LIBRARIAN": ["/borrow/loans", "/borrow/reservations", "/borrow/fines"],
-    "SUPPLIER": [],
-}
+# Which personal endpoints a user may read is decided by the capability
+# registry (ai_core.capabilities.personal_endpoints): the union over ALL the
+# user's roles AND permissions, not one "primary" role (Phase F1).
 
 _ROLE_PERSONAS: dict[str, str] = {
     "CUSTOMER": (
@@ -76,7 +52,8 @@ _ROLE_PERSONAS: dict[str, str] = {
     ),
     "SUPPLIER": (
         "Bạn đang hỗ trợ nhà cung cấp {name}. "
-        "Chỉ xem dữ liệu liên quan đến supplier của họ."
+        "Chỉ dùng dữ liệu đơn hàng của chính nhà cung cấp này (đã được hệ thống lọc theo tài khoản). "
+        "Không có quyền xem tồn kho, analytics nội bộ hay dữ liệu nhà cung cấp khác."
     ),
     "anonymous": (
         "Người dùng chưa đăng nhập. "
@@ -92,8 +69,9 @@ _ENDPOINT_TOPIC: dict[str, str] = {
     "/borrow/my/fines": "fines", "/borrow/my/membership": "membership", "/borrow/my/account": "wallet",
     "/borrow/loans": "loans", "/borrow/reservations": "reservations", "/borrow/fines": "fines",
     "/api/my-warehouse-tasks": "tasks", "/api/picking/tasks": "tasks", "/api/putaway/receipts": "tasks",
-    "/api/my-exception-reports": "tasks",
+    "/api/exception-reports/my": "tasks",
     "/analytics/dashboard/kpis": "analytics", "/analytics/warehouse-stock-risk": "stock",
+    "/api/supplier-account/orders": "supplier_orders",
 }
 
 _INTENT_TOPICS: dict[str, set[str]] = {
@@ -121,6 +99,8 @@ _TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
               "putaway", "nhan hang", "kiem ke", "ngoai le", "duoc giao"),
     "analytics": ("tong quan", "kpi", "chi so", "bao cao"),
     "stock": ("ton kho", "het hang", "sap het", "nhap them"),
+    "supplier_orders": ("don hang", "don dat hang", "purchase order", "giao hang", "hoa don", "bao thieu",
+                        "thieu hang", "xac nhan don", "phieu giao", "giao du", "da giao", "cho xac nhan"),
 }
 # An explicit request for one's whole account loads every topic of the role.
 _WHOLE_ACCOUNT = ("tai khoan cua toi", "thong tin cua toi", "ho so cua toi", "tinh hinh cua toi",
@@ -153,7 +133,8 @@ ANALYTICS_BLOCKED_ROLES: frozenset[str] = frozenset({"CUSTOMER", "SUPPLIER"})
 
 
 def get_primary_role(user_ctx: Any) -> str:
-    """Return the highest-priority canonical role for the user context object."""
+    """The highest-priority canonical role - for the persona text only. Which
+    data is read comes from ai_core.capabilities (all roles AND permissions)."""
     raw = [r.upper() for r in (getattr(user_ctx, "roles", None) or [])]
     roles = [_LEGACY_ROLE_MAP.get(r, r) for r in raw]
     for role in _ROLE_PRIORITY:
@@ -377,6 +358,36 @@ def _fmt_exception_reports(data: Any) -> str:
     return "\n".join(lines)
 
 
+def _fmt_supplier_orders(data: Any) -> str:
+    """GET /api/supplier-account/orders - already filtered by inventory-service
+    to the supplier linked to the caller's account (findAuthenticatedSupplier)."""
+    payload = data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), dict) else data
+    orders = payload.get("orders") if isinstance(payload, dict) else None
+    if not isinstance(orders, list) or not orders:
+        return "Nhà cung cấp chưa có đơn đặt hàng nào trên hệ thống."
+    name = ((payload.get("supplier") or {}).get("name")) if isinstance(payload, dict) else None
+    lines = [f"📦 Đơn đặt hàng của {name or 'nhà cung cấp'} ({len(orders)} đơn):"]
+    for order in orders[:8]:
+        po = order.get("purchase_order") or {}
+        dispatch = order.get("dispatch") or {}
+        items = po.get("items") or []
+        remaining = sum(_n(i.get("remaining_qty")) for i in items)
+        ordered = sum(_n(i.get("ordered_qty")) for i in items)
+        invoices = order.get("invoices") or []
+        shortages = [r for r in order.get("shortage_reports") or []
+                     if str(r.get("status", "")).upper() not in ("RESOLVED", "CLOSED", "ACKNOWLEDGED")]
+        line = (f"  - {po.get('po_number') or '?'} [{po.get('status') or '?'}], gửi NCC: {dispatch.get('status') or '?'}, "
+                f"{len(items)} dòng, đặt {int(ordered)} cuốn, còn chờ giao {int(remaining)} cuốn")
+        if po.get("expected_date"):
+            line += f", dự kiến {str(po['expected_date'])[:10]}"
+        if invoices:
+            line += f", {len(invoices)} hóa đơn giao hàng"
+        if shortages:
+            line += f", {len(shortages)} báo thiếu chưa xử lý"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _fmt_borrow_loans_all(data: Any) -> str:
     """For LIBRARIAN: all system loans."""
     items = _normalise_to_items(data)
@@ -442,7 +453,8 @@ _ENDPOINT_FORMATTERS: dict[str, Any] = {
     "/api/my-warehouse-tasks":  _fmt_warehouse_tasks,
     "/api/picking/tasks":       _fmt_picking,
     "/api/putaway/receipts":    _fmt_putaway,
-    "/api/my-exception-reports": _fmt_exception_reports,
+    "/api/exception-reports/my": _fmt_exception_reports,
+    "/api/supplier-account/orders": _fmt_supplier_orders,
     "/borrow/loans":            _fmt_borrow_loans_all,
     "/borrow/fines":            _fmt_borrow_fines_all,
     "/borrow/reservations":     _fmt_reservations_all,
@@ -493,6 +505,8 @@ async def build_user_personal_context(
             "warnings": [],
         }
 
+    from ai_core import capabilities
+
     role = get_primary_role(user_ctx)
     name = (
         getattr(user_ctx, "username", None)
@@ -500,10 +514,14 @@ async def build_user_personal_context(
         or "bạn"
     )
     persona = _ROLE_PERSONAS.get(role, _ROLE_PERSONAS["anonymous"]).format(name=name)
+    other_roles = [r for r in capabilities.roles_of(user_ctx) if r != role and r in capabilities.ROLE_LABELS]
+    if other_roles:
+        persona += (" Người dùng còn có vai trò: " + ", ".join(capabilities.ROLE_LABELS[r] for r in other_roles)
+                    + " — mỗi loại dữ liệu chỉ dùng khi có quyền tương ứng.")
 
     topics = select_personal_topics(message if message is not None else intent_info.get("query"),
                                     intent_info.get("intent"))
-    endpoints = [ep for ep in _ROLE_ENDPOINTS.get(role, []) if _ENDPOINT_TOPIC.get(ep) in topics]
+    endpoints = [ep for ep in capabilities.personal_endpoints(user_ctx) if _ENDPOINT_TOPIC.get(ep) in topics]
     if not topics:
         # Nothing personal was asked: no personal data is fetched or prompted.
         return {"role": role, "persona": persona, "summary": "", "sources": [], "warnings": [], "topics": []}

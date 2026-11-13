@@ -1,0 +1,777 @@
+{
+ "run_at": "2026-11-13T13:26:15+0700",
+ "summary": {
+  "cases": 33,
+  "http_errors": 0,
+  "evidence_coverage": "24/25",
+  "claims_with_verdict": 157,
+  "claim_support_rate": 0.516,
+  "unsupported_claim_rate": 0.006,
+  "contradicted_claims": 0,
+  "unverifiable_rate": 0.478,
+  "citation_precision": "26/60",
+  "citation_recall": "26/30",
+  "abstention_accuracy": "4/8",
+  "passed_with_unsupported": 0,
+  "status_distribution": {
+   "NO_EVIDENCE": 5,
+   "PARTIAL": 25,
+   "PASSED": 2,
+   "WARNING": 1
+  },
+  "latency_ms_p50": 4079
+ },
+ "rows": [
+  {
+   "id": "ans-full-01",
+   "category": "full_evidence",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 4073,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "membership-loan-limit",
+    "renewal-count",
+    "membership-plans-overview"
+   ],
+   "expected_docs": [
+    "membership-plans-overview",
+    "membership-loan-limit"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-full-02",
+   "category": "full_evidence",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 15492,
+   "status": "PARTIAL",
+   "evidence": 1,
+   "docs": [
+    "account-security"
+   ],
+   "expected_docs": [
+    "account-security"
+   ],
+   "verdicts": [
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-full-03",
+   "category": "full_evidence",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 3080,
+   "status": "PARTIAL",
+   "evidence": 2,
+   "docs": [
+    "wallet-vnpay",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "wallet-vnpay"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-full-04",
+   "category": "full_evidence",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 4889,
+   "status": "PARTIAL",
+   "evidence": 2,
+   "docs": [
+    "warehouse-operations",
+    "goods-receipt-process"
+   ],
+   "expected_docs": [
+    "warehouse-operations"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-part-01",
+   "category": "partial_evidence",
+   "expect": "partial",
+   "http": 200,
+   "latency_ms": 4966,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "branches-opening-hours",
+    "ai-assistant-scope",
+    "reader-features"
+   ],
+   "expected_docs": [
+    "branches-opening-hours"
+   ],
+   "verdicts": [
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-part-02",
+   "category": "partial_evidence",
+   "expect": "partial",
+   "http": 200,
+   "latency_ms": 5670,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ],
+   "expected_docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-part-03",
+   "category": "partial_evidence",
+   "expect": "partial",
+   "http": 200,
+   "latency_ms": 3098,
+   "status": "NO_EVIDENCE",
+   "evidence": 0,
+   "docs": [],
+   "expected_docs": [
+    "roles-permissions"
+   ],
+   "verdicts": [],
+   "provider": "abstention"
+  },
+  {
+   "id": "ans-part-04",
+   "category": "partial_evidence",
+   "expect": "partial",
+   "http": 200,
+   "latency_ms": 5297,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-none-01",
+   "category": "no_evidence",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 885,
+   "status": "NO_EVIDENCE",
+   "evidence": 0,
+   "docs": [],
+   "expected_docs": [],
+   "verdicts": [],
+   "provider": "abstention"
+  },
+  {
+   "id": "ans-none-02",
+   "category": "no_evidence",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 3657,
+   "status": "NO_EVIDENCE",
+   "evidence": 0,
+   "docs": [],
+   "expected_docs": [],
+   "verdicts": [],
+   "provider": "abstention"
+  },
+  {
+   "id": "ans-none-03",
+   "category": "no_evidence",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 2689,
+   "status": "NO_EVIDENCE",
+   "evidence": 0,
+   "docs": [],
+   "expected_docs": [],
+   "verdicts": [],
+   "provider": "abstention"
+  },
+  {
+   "id": "ans-none-04",
+   "category": "no_evidence",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 3012,
+   "status": "NO_EVIDENCE",
+   "evidence": 0,
+   "docs": [],
+   "expected_docs": [],
+   "verdicts": [],
+   "provider": "abstention"
+  },
+  {
+   "id": "ans-false-01",
+   "category": "false_premise",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 8412,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "fine-calculation",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "fine-calculation",
+    "membership-plans-overview"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-false-02",
+   "category": "false_premise",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 2026,
+   "status": "PARTIAL",
+   "evidence": 1,
+   "docs": [
+    "account-security"
+   ],
+   "expected_docs": [
+    "account-security"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-false-03",
+   "category": "false_premise",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 7472,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "membership-loan-limit",
+    "renewal-count",
+    "membership-plans-overview"
+   ],
+   "expected_docs": [
+    "membership-plans-overview",
+    "membership-loan-limit"
+   ],
+   "verdicts": [
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-false-04",
+   "category": "false_premise",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 4008,
+   "status": "PASSED",
+   "evidence": 3,
+   "docs": [
+    "fines-payment",
+    "wallet-vnpay",
+    "account-security"
+   ],
+   "expected_docs": [
+    "wallet-vnpay",
+    "fines-payment"
+   ],
+   "verdicts": [
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-contra-01",
+   "category": "contradicts_kb",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 7105,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "lost-item-fee",
+    "book-care"
+   ],
+   "expected_docs": [
+    "lost-item-fee"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-contra-02",
+   "category": "contradicts_kb",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 4651,
+   "status": "PARTIAL",
+   "evidence": 2,
+   "docs": [
+    "wallet-vnpay",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "wallet-vnpay"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-contra-03",
+   "category": "contradicts_kb",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 3762,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "fines-payment",
+    "lost-item-fee"
+   ],
+   "expected_docs": [
+    "fines-payment",
+    "membership-plans-overview"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-contra-04",
+   "category": "contradicts_kb",
+   "expect": "correct_premise",
+   "http": 200,
+   "latency_ms": 6450,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-dyn-01",
+   "category": "dynamic_data",
+   "expect": "dynamic",
+   "http": 200,
+   "latency_ms": 6688,
+   "status": "PARTIAL",
+   "evidence": 5,
+   "docs": [
+    "membership-plans-overview",
+    "borrowing-process",
+    "reader-features"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-dyn-02",
+   "category": "dynamic_data",
+   "expect": "dynamic",
+   "http": 200,
+   "latency_ms": 3556,
+   "status": "PARTIAL",
+   "evidence": 2,
+   "docs": [
+    "fines-payment"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-dyn-03",
+   "category": "dynamic_data",
+   "expect": "dynamic",
+   "http": 200,
+   "latency_ms": 1128,
+   "status": "PASSED",
+   "evidence": 1,
+   "docs": [],
+   "expected_docs": [],
+   "verdicts": [
+    "SUPPORTED",
+    "SUPPORTED"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-dyn-04",
+   "category": "dynamic_data",
+   "expect": "dynamic",
+   "http": 200,
+   "latency_ms": 10985,
+   "status": "WARNING",
+   "evidence": 7,
+   "docs": [
+    "warehouse-operations",
+    "branches-opening-hours"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "UNSUPPORTED",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-multi-01",
+   "category": "multi_source",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 3844,
+   "status": "PARTIAL",
+   "evidence": 5,
+   "docs": [
+    "fine-calculation",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "fine-calculation",
+    "membership-plans-overview"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-multi-02",
+   "category": "multi_source",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 1627,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "renewal-count",
+    "membership-loan-limit",
+    "membership-plans-overview"
+   ],
+   "expected_docs": [
+    "renewal-count"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-multi-03",
+   "category": "multi_source",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 1540,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "expected_docs": [
+    "lost-item-fee"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-multi-04",
+   "category": "multi_source",
+   "expect": "answer",
+   "http": 200,
+   "latency_ms": 1793,
+   "status": "PARTIAL",
+   "evidence": 5,
+   "docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ],
+   "expected_docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  },
+  {
+   "id": "ans-near-01",
+   "category": "near_miss",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 5848,
+   "status": "PARTIAL",
+   "evidence": 5,
+   "docs": [
+    "reader-features",
+    "branches-opening-hours",
+    "membership-plans-overview"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-near-02",
+   "category": "near_miss",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 4079,
+   "status": "PARTIAL",
+   "evidence": 3,
+   "docs": [
+    "renewal-count",
+    "membership-plans-overview"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED",
+    "SUPPORTED"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-near-03",
+   "category": "near_miss",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 9097,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "reader-features",
+    "borrowing-process",
+    "membership-plans-overview"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-near-04",
+   "category": "near_miss",
+   "expect": "abstain",
+   "http": 200,
+   "latency_ms": 6161,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "membership-plans-overview",
+    "book-care",
+    "reader-features"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "SUPPORTED",
+    "UNVERIFIABLE"
+   ],
+   "provider": "openrouter"
+  },
+  {
+   "id": "ans-dyn-05",
+   "category": "dynamic_data",
+   "expect": "dynamic",
+   "http": 200,
+   "latency_ms": 5421,
+   "status": "PARTIAL",
+   "evidence": 4,
+   "docs": [
+    "fines-payment",
+    "renewal-count"
+   ],
+   "expected_docs": [],
+   "verdicts": [
+    "UNVERIFIABLE",
+    "UNVERIFIABLE",
+    "UNVERIFIABLE"
+   ],
+   "provider": "fallback"
+  }
+ ]
+}

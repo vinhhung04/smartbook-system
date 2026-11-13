@@ -75,10 +75,10 @@ from agent_store import (
     release_stale_confirmed_actions,
     resolve_reconciliation,
 )
-from ai_core import policy as ai_policy, prompts as ai_prompts, tools as ai_tools
+from ai_core import capabilities as ai_capabilities, policy as ai_policy, prompts as ai_prompts, tools as ai_tools
 from ai_core.observability import RequestIdMiddleware
 from ai_core.policy import get_user_context, is_admin, can_confirm_action, require_can_confirm_action, require_verified_session
-from user_personal_context import build_user_personal_context, get_primary_role, ANALYTICS_BLOCKED_ROLES
+from user_personal_context import build_user_personal_context, get_primary_role
 from agent_executor import execute_agent_action
 from agent_schemas import ConfirmActionRequest, CancelActionRequest, ConfirmActionResponse
 from agent_actions import (
@@ -125,6 +125,8 @@ from routes_actions import router as actions_router
 from ai_core.prompts import CHAT_SYSTEM_PROMPT, GENERAL_QUERY_ABSTENTION_REPLY, ROLE_BASED_RULES
 from routes_conversations import ASSISTANT_PERMISSIONS, ASSISTANT_ROLES, can_use_assistant, router as conversations_router
 from routes_cover_search import router as cover_search_router
+from routes_ai_experience import image_prompt_block, resolve_turn_image, router as ai_experience_router
+from ai_core import explainability as ai_explainability
 from routes_public_discover import router as public_discover_router
 from prometheus_fastapi_instrumentator import Instrumentator
 from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
@@ -150,6 +152,7 @@ app.add_middleware(
 app.include_router(actions_router)
 app.include_router(conversations_router)
 app.include_router(cover_search_router)
+app.include_router(ai_experience_router)
 app.include_router(public_discover_router)
 
 Instrumentator().instrument(app).expose(app)
@@ -3523,11 +3526,20 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: list[ChatMessage] = []
     system_context: dict | None = None
+    # Phase F3 (optional, additive): a photo identified by /vision/identify.
+    # Only the server-side, owner-bound context is used; book_id must be one
+    # of that photo's verified candidates (routes_ai_experience.resolve_turn_image).
+    attachment_id: str | None = None
+    book_id: str | None = None
+    image_turn: bool = False
 
 
 class AssistantRequest(BaseModel):
     message: str
     conversation_id: str | None = None
+    attachment_id: str | None = None
+    book_id: str | None = None
+    image_turn: bool = False
 
 
 class AssistantToolCall(BaseModel):
@@ -3580,6 +3592,10 @@ class AssistantResponse(BaseModel):
     # what-if - options, pros / cons, risks, assumptions, conditional
     # recommendation - built from tool data only (copilot_decision).
     decision: dict | None = None
+    # Phase F (optional, additive): the unified evidence contract shared with
+    # /chat (ai_core.explainability) and the photo context the turn used.
+    explainability: dict | None = None
+    image_context: dict | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3718,12 +3734,16 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
 
     intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
     personal = await build_user_personal_context(user_ctx, intent_info, auth_header, req.message.strip())
+    image_ctx = await resolve_turn_image(req.attachment_id, req.book_id, req.image_turn, user_ctx, req.message.strip())
+    image_used = bool(image_ctx and image_ctx.get("used"))
 
     # CUSTOMER and SUPPLIER must not see system-wide analytics; their personal
     # context (loans, fines, tasks) already comes from build_user_personal_context.
     # Exception (ANALYTICS_BLOCK_EXEMPT_INTENTS): BOOK_SEARCH_QUERY so customers can still
     # look up catalog books, and GENERAL_QUERY so they reach the FAQ semantic search.
-    _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
+    # Phase F1: decided from ALL roles AND permissions (ai_core.capabilities),
+    # not the persona's primary role. Anonymous keeps the previous behaviour.
+    _blocked = user_ctx is not None and not ai_capabilities.allows(user_ctx, "analytics.chat")
     _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
     if _blocked and not _is_exempt_intent:
         # No system-wide analytics for them - but a policy question NLU filed
@@ -3737,7 +3757,8 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
         retrieval = await retrieve_context(intent_info, auth_header)
 
     turn = {"message": req.message, "auth_header": auth_header, "user_ctx": user_ctx,
-            "intent_info": intent_info, "retrieval": retrieval, "abstain": False}
+            "intent_info": intent_info, "retrieval": retrieval, "abstain": False,
+            "personal": personal, "image_ctx": image_ctx}
 
     # NO_EVIDENCE on an information-seeking GENERAL_QUERY: skip the LLM entirely
     # instead of handing it an empty [RAG CONTEXT] and hoping the prompt rules
@@ -3749,6 +3770,7 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
         and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
         and is_information_seeking(req.message)
         and not (personal.get("summary") and asks_about_own_data(req.message))
+        and not image_used  # the recognised photo is the evidence of this turn
     ):
         turn["abstain"] = True
         return turn
@@ -3789,12 +3811,13 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
 
     # Bypass cache for action requests and personal queries (data is user-specific).
     is_action_request = _wants_agent_action(req.message)
-    skip_cache = is_action_request or _is_personal_query(req.message)
+    skip_cache = is_action_request or _is_personal_query(req.message) or bool(image_ctx)
 
     persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
     if personal.get("summary"):
         persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
-    system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
+    system_content = (CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
+                      + image_prompt_block(image_ctx))
     messages = [{"role": "system", "content": system_content}]
     for msg in req.conversation_history[-10:]:
         messages.append({"role": msg.role, "content": msg.content})
@@ -3811,6 +3834,7 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
             "intent": intent_info.get("intent"),
             "context_sources": retrieval.get("sources") or [],
             "retrieval_warnings": retrieval.get("warnings") or [],
+            **({"image_context": _public_image_context(image_ctx)} if image_ctx else {}),
         },
         "history_hash": history_hash,
         "is_action_request": is_action_request,
@@ -3819,6 +3843,22 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
         "messages": messages,
     })
     return turn
+
+
+def _public_image_context(ctx: dict | None) -> dict | None:
+    """What the client is told about the photo this turn used."""
+    if not ctx:
+        return None
+    return {"attachment_id": ctx["attachment_id"], "used": ctx["used"], "status": ctx["status"],
+            "book": ctx.get("book"), "availability": ctx.get("availability"),
+            "candidates": ctx.get("candidates") or []}
+
+
+def _chat_explainability(turn: dict, reply: str, abstained: bool = False) -> dict:
+    image = turn.get("image_ctx")
+    return ai_explainability.for_chat(
+        reply, turn["message"], turn["retrieval"], turn.get("grounding_context") or turn["retrieval"],
+        turn.get("personal"), image if (image or {}).get("used") else None, abstained=abstained)
 
 
 def _chat_abstention_payload(turn: dict) -> dict:
@@ -3830,11 +3870,13 @@ def _chat_abstention_payload(turn: dict) -> dict:
         "retrieval_warnings": [],
         "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
         "retrievalConfidence": turn["retrieval"].get("retrieval_confidence", 0.0),
+        "explainability": _chat_explainability(turn, GENERAL_QUERY_ABSTENTION_REPLY, abstained=True),
     }
 
 
 def _chat_cached_payload(turn: dict) -> dict:
-    return {"reply": turn["cached_reply"], "ai_provider": "cached", **turn["metadata"]}
+    return {"reply": turn["cached_reply"], "ai_provider": "cached", **turn["metadata"],
+            "explainability": _chat_explainability(turn, turn["cached_reply"])}
 
 
 async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dict | None]:
@@ -3902,7 +3944,8 @@ async def _finish_chat_reply(turn: dict, text: str, provider: str) -> dict:
     if not pending_action_data and not turn["skip_cache"] and provider != "fallback":
         response_cache.set(turn["message"], reply_with_sources, turn["history_hash"])
 
-    result = {"reply": reply_with_sources, "ai_provider": provider, **turn["metadata"]}
+    result = {"reply": reply_with_sources, "ai_provider": provider, **turn["metadata"],
+              "explainability": _chat_explainability(turn, reply_with_sources)}
     if grounding_warning:
         result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
     if pending_action_data:
@@ -4486,6 +4529,9 @@ def _assistant_payload(
         "verification": extras.get("verification"),
         "decision": extras.get("decision"),
     }
+    if extras.get("image_context"):
+        payload["image_context"] = extras["image_context"]
+    payload["explainability"] = ai_explainability.for_assistant(payload)
     if debug is not None:
         payload["debug"] = debug
     return payload
@@ -4660,6 +4706,7 @@ async def _finalize_assistant_turn(
     messages: list[dict], provider, call_usage: list[dict], plan, state: dict | None, warehouses: list[dict],
     user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str | None,
     plan_note_text: str = "", viz_now: datetime | None = None, context_cache_key: str | None = None,
+    image_ctx: dict | None = None,
 ) -> dict:
     """Everything after the tool loop, shared by both endpoints: one grounding
     retry, the reorder pending action (still confirmation-gated), the
@@ -4843,6 +4890,8 @@ async def _finalize_assistant_turn(
     extras["faithfulness"] = faithfulness
     extras["verification"] = verification
     extras["decision"] = copilot_decision.build(plan, collected_data, verification)
+    if image_ctx:
+        extras["image_context"] = _public_image_context(image_ctx)
     new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
     metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras,
                 "warehouse_ids": sorted(warehouse_scope.warehouse_ids_in(collected_data))}
@@ -4891,11 +4940,17 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     await _enforce_rate_limit(request, user_ctx)
     if not _assistant_can_access(user_ctx):
         raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
+    # Every READ tool of this turn is checked against the caller's capabilities
+    # (ai_core.tools.run_read_tool) - defence in depth behind the gate above.
+    ai_tools.CALLER.set(user_ctx)
 
     message_text = req.message.strip()
+    image_ctx = await resolve_turn_image(req.attachment_id, req.book_id, req.image_turn, user_ctx, message_text)
     conversation = await _resolve_owned_conversation(req.conversation_id, user_ctx, message_text)
     conversation_id_str = str(conversation.conversation_id)
     partition = await _access_fingerprint(user_ctx)
+    if image_ctx:
+        partition = None  # a turn about a photo is never served from, or written to, the answer cache
     copilot_tools.CACHE_PARTITION.set(partition)
     history, state = await _load_conversation_context(conversation)
     cache_key = _assistant_cache_key(conversation_id_str, message_text, partition) if partition else None
@@ -4905,7 +4960,7 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
         "auth_header": auth_header, "user_ctx": user_ctx, "message_text": message_text,
         "conversation": conversation, "conversation_id_str": conversation_id_str, "cache_key": cache_key,
         "context_cache_key": context_cache_key, "cache_partition": partition,
-        "cached": _cache_lookup(cache_key, context_cache_key),
+        "cached": _cache_lookup(cache_key, context_cache_key), "image_ctx": image_ctx,
     }
     cached = turn["cached"]
     if cached is not None and not await warehouse_scope.can_view(
@@ -4914,7 +4969,12 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if turn["cached"] is not None:
         return turn
 
-    plan, warehouses = await _plan_assistant_turn(message_text, state, auth_header)
+    image_book = (image_ctx or {}).get("book") if (image_ctx or {}).get("used") else None
+    # The recognised title is handed to the planner as a quoted title, so "sách
+    # này" plans the same tools as naming the book (copilot_plan._book_title_in).
+    planner_text = f'{message_text} (sách "{image_book["title"]}")' if image_book and image_book.get("title") \
+        else message_text
+    plan, warehouses = await _plan_assistant_turn(planner_text, state, auth_header)
     turn.update({"history": history, "state": state, "plan": plan, "warehouses": warehouses})
     if plan.clarification_needed:
         return turn
@@ -4924,7 +4984,7 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if viz_mode in ("retype", "render"):
         return turn  # _visualization_turn persists both sides, no LLM
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
-    turn["plan_note"] = copilot_response.plan_note(plan)
+    turn["plan_note"] = copilot_response.plan_note(plan) + image_prompt_block(image_ctx)
     snapshot = turn.get("snapshot")
     if viz_mode == "explain" and snapshot and snapshot.get("data"):
         turn["viz_now"] = _snapshot_time(snapshot)
@@ -5031,7 +5091,7 @@ async def assistant(request: Request, req: AssistantRequest):
         state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
         conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
         context_cache_key=turn.get("context_cache_key"),
-        plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
+        plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"), image_ctx=turn.get("image_ctx"),
     )
     return AssistantResponse(**payload)
 
@@ -5160,7 +5220,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
             conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
             context_cache_key=turn.get("context_cache_key"),
-            plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
+            plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"), image_ctx=turn.get("image_ctx"),
         )
         yield _sse("done", _validated_payload(payload))
 

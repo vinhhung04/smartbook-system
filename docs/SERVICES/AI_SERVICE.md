@@ -61,6 +61,10 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /explain-storage-suggestion | Viết lại giải thích cho gợi ý vị trí lưu kho |
 | POST | /find-book-by-cover | Tìm sách bằng ảnh bìa (CLIP local + OCR OpenRouter) |
 | POST | /find-book-by-cover/reindex | Index lại gallery bìa sách (`ai_cover_embeddings`) |
+| GET | /capabilities | (Phase F) Trải nghiệm AI theo vai trò của người gọi: `experience`, `persona`, `capabilities`, `starter_questions`, `multimodal` (`ai_core/capabilities.py`). Ẩn danh → năng lực công khai |
+| POST | /vision/identify | (Phase F) Nhận diện sách từ ảnh bìa cho hội thoại: SSE trạng thái thật (`?stream=false` → JSON). Cần đăng nhập + quyền đọc catalog + `external_processing_ack=true`; trả `attachment_id` dùng cho `/chat` và `/assistant` (trường tùy chọn `attachment_id`, `book_id`, `image_turn`). Xem `docs/AI/PHASE_F_MULTIMODAL.md` |
+
+Phase F (2026-11-13) còn thêm trường tùy chọn `explainability` (hợp đồng bằng chứng thống nhất, `docs/AI/PHASE_F_EXPLAINABILITY.md`) và `image_context` vào phản hồi `/chat`, `/chat/stream` (sự kiện `done`), `/assistant`, `/assistant/stream`. Biến môi trường mới (đều có mặc định): `AI_IMAGE_MAX_BYTES` (8 MB), `AI_IMAGE_MAX_PIXELS` (40 triệu), `AI_IMAGE_NORMALIZED_MAX_SIDE` (1600), `VISION_RATE_PER_MINUTE` (6), `VISION_RATE_PER_HOUR` (40), `COVER_VISUAL_TIMEOUT_SECONDS` (15), `VISION_CONTEXT_TTL_SECONDS` (1800), `VISION_TEXT_STRONG` (0.9), `VISION_VISUAL_MARGIN` (0.10). `/find-book-by-cover` nay từ chối file không phải ảnh raster thật (415) và > 8 MB (413).
 | GET | /metadata-intelligence/capabilities | Khả năng của Metadata Intelligence V2 |
 | POST | /metadata-intelligence/extract | Trích xuất metadata (chỉ khi `ENABLE_METADATA_INTELLIGENCE_V2=true`) |
 | GET | /public/discover | "Không biết nên đọc gì?" — tìm sách theo mô tả tự nhiên cho khách chưa đăng nhập (gateway `/public/discover`, có rate limit riêng) |
@@ -363,7 +367,8 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | TOOL_TOTAL_TIMEOUT_SECONDS | 30 | Thời gian tối đa của một lần gọi tool đọc (kể cả tool tổng hợp) — `ai_core/tools.py` |
 | TRUST_GATEWAY_CLIENT_IP | true | Tin header `x-smartbook-client-ip` do gateway đặt để giới hạn tốc độ người dùng ẩn danh theo IP thật. Chỉ đúng khi ai-service chỉ truy cập được qua gateway |
 | INTERNAL_DOC_DIR | `corpus/` trong image | Thư mục tài liệu INTERNAL_DOC; mount volume vào đây để sửa tài liệu rồi gọi `/internal/corpus-sync` |
-| COPILOT_SEMANTIC_PLANNER | off | Phase 1: khi kế hoạch của planner luật có dấu hiệu thiếu (diễn đạt gián tiếp, câu nhiều ý), hỏi LLM một bản đọc có cấu trúc rồi backend kiểm tra và lập kế hoạch lại (`copilot_semantic_planner.py`). Mặc định tắt — xem `docs/ANALYSIS/AI_COPILOT_SEMANTIC_UNDERSTANDING.md` |
+| COPILOT_SEMANTIC_PLANNER | on | Phase 1: khi kế hoạch của planner luật có dấu hiệu thiếu (diễn đạt gián tiếp, câu nhiều ý), hỏi LLM một bản đọc có cấu trúc rồi backend kiểm tra và lập kế hoạch lại (`copilot_semantic_planner.py`). Bật mặc định từ Phase F (đạt A1–A8 trên hai bộ test đóng băng — `docs/AI/PHASE_F_BENCHMARK_REPORT.md` §2); đặt `off` để quay lại planner luật |
+| OPENROUTER_RATE_LIMIT_RETRY_MAX_SECONDS | 2 | Phase F: khi OpenRouter trả 429, chờ theo `Retry-After` (tối đa giá trị này) trước lần retry duy nhất — cho cả lời gọi thường và stream |
 | COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS | 5 | Thời gian chờ tối đa cho lần gọi LLM lập kế hoạch; quá hạn thì dùng kế hoạch của luật |
 | OPENROUTER_EMBED_MODEL | qwen/qwen3-embedding-8b | Model embedding cho semantic FAQ + book search |
 | OPENROUTER_EMBED_DIMENSIONS | 768 | Số chiều gửi kèm trong request OpenRouter để khớp cột `vector(768)` trong `ai_document_chunks` — model này mặc định trả 4096 chiều, không được bỏ |

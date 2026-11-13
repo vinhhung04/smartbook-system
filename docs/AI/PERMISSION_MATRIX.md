@@ -92,3 +92,10 @@ Phạm vi lấy từ auth-service `GET /internal/users/{id}/warehouse-scopes` (k
 | Tool injection (tool lạ, tham số lạ) | `test_ai_core.RunReadToolTest` |
 | Chèn system prompt qua lịch sử | `test_chat_pipeline.test_history_accepts_only_conversational_roles` |
 | Giả mạo IP | `test_ai_core.RateLimitKeyTest`, `gateway-contract.test.js` |
+
+## Phase F (2026-11-13): capability registry
+
+Từ Phase F, dữ liệu cá nhân chatbot đọc, câu hỏi gợi ý và tool assistant được quyết định bởi `ai_core/capabilities.py`:
+hợp của **mọi** role AND permission người dùng có (không còn theo primary role), registry không bao giờ rộng hơn cổng backend.
+SUPPLIER có chatbot trên `/supplier`, chỉ đọc `GET /api/supplier-account/orders` (inventory lọc theo nhà cung cấp của tài khoản), không có nhận diện ảnh
+(không có quyền đọc catalog). Cổng Decision Assistant không đổi. Chi tiết và bằng chứng: `PHASE_F_ROLE_CAPABILITY_MATRIX.md`.

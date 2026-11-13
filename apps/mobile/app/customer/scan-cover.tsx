@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 
 import * as coverSearchApi from '../../src/api/coverSearch';
-import type { CoverSearchCandidate } from '../../src/api/coverSearch';
+import type { BookRecognition, RecognitionCandidate } from '../../src/api/coverSearch';
 import { isAbortError } from '../../src/api/client';
 import { ApiError } from '../../src/auth/auth-context';
 import { PhotoCaptureModal } from '../../src/scanner/PhotoCaptureModal';
 import { BookCover } from '../../src/components/customer/BookCover';
 import { Button, EmptyState, InlineAlert, PressableScale, ScreenHeader, StatusBadge, fontFamily, radii, space, useTheme, type Tone } from '../../src/design-system';
 
-/** How sure the match is, in words as well as a percentage. */
-function confidenceView(confidence: number): { tone: Tone; label: string } {
-  const pct = `${Math.round(confidence * 100)}%`;
-  if (confidence >= 0.85) return { tone: 'success', label: `Rất khớp, ${pct}` };
-  if (confidence >= 0.65) return { tone: 'warning', label: `Có thể khớp, ${pct}` };
-  return { tone: 'neutral', label: `Ít khớp, ${pct}` };
-}
+// Phase F: the result is a decision on measured evidence (/ai/vision/identify), shown in
+// words. Similarity scores are not calibrated probabilities, so no percentage is shown.
+const STATUS_VIEW: Record<BookRecognition['status'], { tone: Tone; label: string }> = {
+  IDENTIFIED: { tone: 'success', label: 'Đã nhận diện' },
+  AMBIGUOUS: { tone: 'warning', label: 'Nhiều khả năng — hãy chọn đúng sách' },
+  NO_MATCH: { tone: 'neutral', label: 'Không đủ bằng chứng để nhận diện' },
+};
+const BASIS_LABEL: Record<RecognitionCandidate['match_basis'], string> = {
+  BOTH_SIGNALS: 'Khớp chữ + hình ảnh bìa',
+  TEXT_ONLY: 'Khớp chữ trên bìa',
+  VISUAL_ONLY: 'Khớp hình ảnh bìa',
+};
+export const EXTERNAL_PROCESSING_NOTICE =
+  'Ảnh bìa được gửi tới nhà cung cấp AI bên ngoài để đọc chữ; SmartBook không lưu ảnh và không gửi kèm thông tin tài khoản. Chỉ chụp bìa sách.';
 
 // The server runs visual matching and OCR in parallel and answers once, with no
 // progress signal — so both rows stay "in progress" until that answer arrives.
@@ -75,8 +83,10 @@ export default function CustomerScanCoverScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
-  const [candidates, setCandidates] = useState<CoverSearchCandidate[]>([]);
+  const [candidates, setCandidates] = useState<RecognitionCandidate[]>([]);
   const [ocrTitle, setOcrTitle] = useState<string | null>(null);
+  const [recognition, setRecognition] = useState<BookRecognition | null>(null);
+  const [whyOpen, setWhyOpen] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Each search gets an id + AbortController: retaking the photo or leaving the screen
@@ -115,14 +125,17 @@ export default function CustomerScanCoverScreen() {
     elapsedTimerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
 
     try {
-      const result = await coverSearchApi.findBookByCover(photoDataUrl, controller.signal);
+      const result = await coverSearchApi.identifyBookByPhoto(photoDataUrl, controller.signal);
       if (!isCurrent()) return;
+      setRecognition(result);
+      setWhyOpen(false);
       setCandidates(result.candidates);
-      setOcrTitle(result.signals.ocr_extracted?.title ?? null);
+      setOcrTitle(result.ocr.title ?? null);
       setSearched(true);
     } catch (err) {
       if (!isCurrent() || isAbortError(err)) return;
       setCandidates([]);
+      setRecognition(null);
       setSearched(true);
       setError(describeSearchError(err));
     } finally {
@@ -131,6 +144,20 @@ export default function CustomerScanCoverScreen() {
         setIsSearching(false);
         requestRef.current.controller = null;
       }
+    }
+  }
+
+  // Phase F: an existing photo from the library, same pipeline as the camera.
+  // Opening the library needs no permission (Expo SDK 58 docs); it must start from a tap.
+  async function handlePickFromLibrary() {
+    try {
+      const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8, base64: true });
+      const asset = picked.canceled ? null : picked.assets[0];
+      if (!asset?.base64) return;
+      await handleCaptured(`data:image/jpeg;base64,${asset.base64}`);
+    } catch {
+      setError('Không mở được thư viện ảnh. Bạn có thể chụp ảnh bìa thay thế.');
+      setSearched(true);
     }
   }
 
@@ -172,6 +199,8 @@ export default function CustomerScanCoverScreen() {
               ))}
             </View>
             <Button label="Chụp ảnh bìa sách" icon="camera" onPress={() => setCameraOpen(true)} />
+            <Button label="Chọn ảnh từ thư viện" icon="images-outline" variant="secondary" onPress={() => void handlePickFromLibrary()} />
+            <Text style={type.caption}>{EXTERNAL_PROCESSING_NOTICE}</Text>
           </View>
         ) : isSearching ? (
           <View style={{ flex: 1, padding: space.lg, gap: space.xl }}>
@@ -192,7 +221,7 @@ export default function CustomerScanCoverScreen() {
         ) : (
           <FlatList
             data={error ? [] : candidates}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.book_id}
             contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: space.xxl }}
             ListHeaderComponent={
               <View style={{ gap: space.md, marginBottom: space.sm }}>
@@ -200,10 +229,34 @@ export default function CustomerScanCoverScreen() {
                   {photoPreview ? <Image source={{ uri: photoPreview }} style={{ width: 56, height: 76, borderRadius: radii.xs, backgroundColor: colors.surfaceRaised }} accessibilityLabel="Ảnh bìa đã chụp" /> : null}
                   <View style={{ flex: 1, gap: space.xs }}>
                     <Text style={type.heading}>{error ? 'Chưa tìm được' : candidates.length > 0 ? `${candidates.length} sách có thể khớp` : 'Không có sách khớp'}</Text>
+                    {recognition && !error ? <StatusBadge tone={STATUS_VIEW[recognition.status].tone} label={STATUS_VIEW[recognition.status].label} /> : null}
                     {ocrTitle ? <Text style={type.caption} numberOfLines={2}>Đọc được trên bìa: {ocrTitle}</Text> : null}
                   </View>
                 </View>
-                <Button label="Chụp ảnh khác" icon="camera-outline" variant="secondary" size="md" onPress={() => setCameraOpen(true)} />
+                {recognition && !error ? (
+                  <View style={{ gap: space.xs }}>
+                    <Pressable onPress={() => setWhyOpen((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: whyOpen }}
+                      style={{ minHeight: 44, justifyContent: 'center' }}>
+                      <Text style={[type.callout, { color: colors.primary }]}>{whyOpen ? 'Ẩn giải thích' : 'Vì sao có kết quả này?'}</Text>
+                    </Pressable>
+                    {whyOpen ? (
+                      <View style={{ gap: space.xs, padding: space.md, borderRadius: radii.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
+                        {[...recognition.explanation.facts, ...recognition.explanation.inferences, ...recognition.explanation.unknowns,
+                          ...recognition.explanation.limitations].map((line) => (
+                          <Text key={line} style={type.caption}>• {line}</Text>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: 'row', gap: space.sm }}>
+                  <View style={{ flex: 1 }}>
+                    <Button label="Chụp ảnh khác" icon="camera-outline" variant="secondary" size="md" onPress={() => setCameraOpen(true)} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button label="Ảnh có sẵn" icon="images-outline" variant="secondary" size="md" onPress={() => void handlePickFromLibrary()} />
+                  </View>
+                </View>
                 {error ? <InlineAlert message={error} actionLabel="Thử lại với ảnh này" onAction={handleRetry} /> : null}
               </View>
             }
@@ -213,21 +266,27 @@ export default function CustomerScanCoverScreen() {
               ) : undefined
             }
             renderItem={({ item }) => {
-              const confidence = confidenceView(item.confidence);
+              const author = item.authors.join(', ') || null;
+              const avail = item.availability;
+              const availLabel = avail
+                ? avail.available_quantity ? `${avail.available_quantity} bản sẵn sàng${avail.branches[0] ? ` · ${avail.branches.map((b) => `${b.name}: ${b.available_quantity}`).join('; ')}` : ''}` : 'Chưa có bản sẵn sàng'
+                : null;
               return (
                 <PressableScale
-                  onPress={() => router.push(`/customer/book/${item.id}`)}
+                  onPress={() => router.push(`/customer/book/${item.book_id}`)}
                   scale={false}
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.title}, ${item.author ?? 'chưa rõ tác giả'}, ${confidence.label}`}
+                  accessibilityLabel={`${item.title}, ${author ?? 'chưa rõ tác giả'}, ${BASIS_LABEL[item.match_basis]}`}
                   style={{ flexDirection: 'row', gap: space.md, padding: space.md, borderRadius: radii.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}
                   pressedStyle={{ backgroundColor: colors.surfaceRaised }}
                 >
-                  <BookCover title={item.title} author={item.author} category={item.category} coverImageUrl={item.cover_image_url} width={64} />
+                  <BookCover title={item.title ?? ''} author={author} coverImageUrl={item.cover_image_url} width={64} />
                   <View style={{ flex: 1, justifyContent: 'center', gap: 6 }}>
                     <Text style={{ fontFamily: fontFamily.serif, fontSize: 17, lineHeight: 22, color: colors.textPrimary }} numberOfLines={2}>{item.title}</Text>
-                    <Text style={type.caption} numberOfLines={1}>{item.author ?? 'Chưa rõ tác giả'}</Text>
-                    <StatusBadge tone={confidence.tone} label={confidence.label} icon={confidence.tone === 'success' ? 'checkmark-circle' : 'help-circle'} />
+                    <Text style={type.caption} numberOfLines={1}>{author ?? 'Chưa rõ tác giả'}</Text>
+                    <StatusBadge tone={item.match_basis === 'BOTH_SIGNALS' ? 'success' : 'neutral'} label={BASIS_LABEL[item.match_basis]} icon={null} />
+                    {item.visual_similarity != null ? <Text style={type.caption}>Độ tương đồng ảnh {item.visual_similarity.toFixed(2)} (không phải xác suất)</Text> : null}
+                    {availLabel ? <Text style={type.caption} numberOfLines={2}>{availLabel}</Text> : null}
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.textMuted} style={{ alignSelf: 'center' }} />
                 </PressableScale>

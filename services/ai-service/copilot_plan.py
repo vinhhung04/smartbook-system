@@ -589,6 +589,12 @@ _TITLE_DEMAND = _R(r"\b(nhu cau|luot muon|ton kho|xu huong|duoc muon|it muon|muo
 _TREND_QUESTION = _R(r"\b(tang hay giam|giam hay tang|co (dang )?(tang|giam)( khong| ko)?|dang (tang|giam) (khong|ko|ha))\b")
 _DEICTIC_BOOK = _R(r"\b(cuon|quyen|sach|dau sach|tua) (do|nay|kia|ay|vua roi|tren)\b")
 _DEICTIC_GENERIC = _R(r"\bcai (do|kia|nay|ay)\b")
+# Phase F: "trong số đó", "những cuốn đó", "các sách này": the LIST shown last turn,
+# not one book - the plan carries that list (entities.subset_items).
+_SUBSET_REF = _R(r"\btrong (so|danh sach) (do|nay|tren|vua roi|ay)\b"
+                 r"|\b(nhung|cac) (cuon|quyen|sach|dau sach|tua sach|tua) (do|nay|tren|vua roi|vua liet ke|ay|kia)\b")
+_TOP_LIST_TOOLS = {"get_top_books", "compare_top_books", "analyze_demand_vs_stock"}
+_LIST_QUESTION = _R(r"\b(sach|cuon|quyen|dau sach|tua sach) (gi|nao)\b|\b(nhung|cac) (sach|dau sach|cuon)\b")
 # "cuốn đầu tiên" points at one item; "3 cuốn đầu" is a limit, not a reference.
 _ORDINAL_BOOK = _R(r"(?<!\d )\b(cuon|quyen|sach|dau sach)\s*(dau tien|thu nhat|so 1|thu (\d|hai|ba))\b")
 # Personal data the copilot never hands out, whatever the role.
@@ -623,6 +629,25 @@ def resolve_warehouses(text: str, warehouses: list[dict]) -> dict:
     ambiguous: list[dict] = []
     taken: set[str] = set()
     covered: list[tuple[int, int]] = []
+
+    # Phase F: "chi nhánh <thành phố>" naming several branches (two in Hà Nội,
+    # three in HCM) is asked about, not guessed - even when one warehouse's
+    # short name equals the city ("Kho Ha Noi" for "chi nhánh Hà Nội").
+    for m in re.finditer(r"\bchi nhanh ([a-z0-9]+(?: [a-z0-9]+){0,2})", text):
+        words = m.group(1).split()
+        for n in range(len(words), 0, -1):
+            hint = " ".join(words[:n])
+            if hint in _HINT_STOP:
+                continue
+            branches = [w for w in warehouses if _wh_norm(w.get("name", "")).startswith("chi nhanh ")
+                        and (f" {hint} " in f" {_wh_norm(w.get('name', ''))} "
+                             or f" {hint} " in f" {_wh_norm(w.get('code', ''))} ")]
+            if not branches:
+                continue
+            if len(branches) >= 2 and not any(_wh_norm(w.get("name", "")) == f"chi nhanh {hint}" for w in branches):
+                ambiguous = branches
+                covered.append((m.start(), m.end()))
+            break
 
     aliases: list[tuple[str, dict]] = []
     for w in warehouses:
@@ -857,6 +882,9 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     viz = detect_visualization(text)
     budget_delta = parse_budget_delta(text)
     book_ref = _DEICTIC_BOOK.search(text)
+    subset_ref = _SUBSET_REF.search(text)
+    if subset_ref and _LIST_QUESTION.search(text[:subset_ref.start()]):
+        subset_ref = None  # "…nhập sách gì, và những sách đó…": the list asked for in THIS question
     if book_ref and detect_capabilities(text[:book_ref.start()]):
         # "Nhập sách gì với 15 triệu, và những sách đó có được mượn nhiều không?":
         # "đó" points back inside this question, not at the previous turn.
@@ -936,7 +964,8 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     entity_only = not caps and bool(periods or named_warehouses or budgets or limit or budget_pct is not None)
     entity_only = entity_only or (REORDER in caps and has_state and not budgets and set(caps) == {REORDER}
                                   and bool(budget_pct is not None or lead_time_delay or keep_service or least_risk))
-    referential = deictic_warehouse or deictic_book or deictic_generic or bool(ordinal_book) or "trong so do" in text
+    referential = deictic_warehouse or deictic_book or deictic_generic or bool(ordinal_book) or "trong so do" in text \
+        or bool(subset_ref)
     bare_why = text.strip(" ?") in ("tai sao", "vi sao", "ly do", "tai sao vay", "vi sao vay", "sao vay")
     # Warehouses carried from earlier turns must still be visible to this user
     # NOW (scope may have been revoked since): the previous state is a pointer,
@@ -945,8 +974,12 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     recent_whs = _still_visible(state.get("recent_warehouses") or state.get("warehouses"), warehouses)
     two_back = not named_warehouses and bool(_TWO_WAREHOUSES.search(text)) and len(recent_whs) >= 2
     remaining = not named_warehouses and bool(_REMAINING_WAREHOUSE.search(text))
+    if not named_warehouses and not remaining and re.search(r"\b(kho|chi nhanh) kia\b", text) \
+            and len(prev_whs) == 2 and state.get("focus_warehouse"):
+        # "Còn kho kia thì sao?" right after one of two warehouses was singled out: the other one
+        remaining = True
     which_more = not named_warehouses and bool(_WHICH_MORE.search(text)) and len(prev_whs) >= 2 \
-        and set(caps) <= WAREHOUSE_AWARE
+        and set(caps) <= WAREHOUSE_AWARE | {TOP_BORROWED, REORDER} and bool(set(caps) & WAREHOUSE_AWARE)
     is_followup = has_state and (looks_followup or entity_only or referential or bare_why or style_only or viz_only
                                  or (not caps and analysis in (CAUSAL, COMPARISON, WHAT_IF, DECISION))
                                  or (least_risk and not caps) or two_back or remaining or which_more
@@ -1055,8 +1088,16 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         if index < len(items):
             focus_item = items[index]
             carried.append("focus_item")
-    elif (deictic_book or "trong so do" in text) and state.get("last_items"):
+    elif (deictic_book or "trong so do" in text or subset_ref) and state.get("last_items"):
         carried.append("last_items")
+    subset_items: list[dict] = []
+    if subset_ref and not focus_item and state.get("last_items"):
+        subset_items = [dict(i) for i in state["last_items"][:10] if isinstance(i, dict)]
+        if WAREHOUSE_RISK in caps and TOP_BORROWED not in caps \
+                and set(state.get("tools") or []) & _TOP_LIST_TOOLS:
+            # "Những cuốn đó còn đủ tồn kho không?" after a top-borrowed list: the stock
+            # position of THOSE titles (analyze_demand_vs_stock), not every warehouse's risk
+            caps.append(TOP_BORROWED)
 
     # ── clarification ───────────────────────────────────────────────────────
     question: str | None = None
@@ -1211,6 +1252,8 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             args = period_args(current, now) if current else {}
             if limit:
                 args["limit"] = limit
+            elif subset_items:
+                args["limit"] = 50  # enough rows to place each listed title, not just the top 10
             add("get_top_books", args)
         capset.discard(TOP_BORROWED)
     if REORDER in capset:
@@ -1334,6 +1377,7 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         "warehouses": named_warehouses,
         "book_title": book_title,
         "focus_item": focus_item,
+        "subset_items": subset_items,
         "budgets_vnd": budgets,
         "budget_change_pct": budget_pct,
     }

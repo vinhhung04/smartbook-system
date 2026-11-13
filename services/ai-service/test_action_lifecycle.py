@@ -13,6 +13,9 @@ Lifecycle under test:
 from __future__ import annotations
 
 import asyncio
+import os
+import shutil
+import tempfile
 import unittest
 from datetime import timedelta
 from types import SimpleNamespace
@@ -21,7 +24,6 @@ from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
 import agent_store
 import main
@@ -44,8 +46,13 @@ def _request(token: str) -> SimpleNamespace:
 
 class ActionLifecycleTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.engine = create_async_engine("sqlite+aiosqlite:///:memory:",
-                                          connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        # A file database, one connection per session: with an in-memory DB on a
+        # StaticPool every session shared ONE connection, so the test's own status
+        # read closing its session rolled back a concurrent confirm's uncommitted
+        # claim (the old flake of test_two_concurrent_confirms_execute_once).
+        self._db_dir = tempfile.mkdtemp(prefix="ai-actions-")
+        self.engine = create_async_engine(f"sqlite+aiosqlite:///{os.path.join(self._db_dir, 'actions.db')}",
+                                          connect_args={"timeout": 30})
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         sessions = async_sessionmaker(self.engine, expire_on_commit=False)
@@ -65,6 +72,7 @@ class ActionLifecycleTest(unittest.IsolatedAsyncioTestCase):
         for p in self._patches:
             p.stop()
         await self.engine.dispose()
+        shutil.rmtree(self._db_dir, ignore_errors=True)
 
     async def _action(self, action_type="CREATE_STAFF_TASK_DRAFT", user=OWNER, payload=None):
         return await agent_store.create_pending_action(

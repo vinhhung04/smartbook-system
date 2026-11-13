@@ -93,7 +93,8 @@ class PersonalContextFetchTest(unittest.IsolatedAsyncioTestCase):
     async def test_whole_account_request_loads_the_roles_endpoints_only(self):
         await upc.build_user_personal_context(READER, {"intent": "GENERAL_QUERY"}, "Bearer reader",
                                               "Cho tôi xem tình hình tài khoản của tôi")
-        self.assertEqual(sorted(self.fetched), sorted(upc._ROLE_ENDPOINTS["CUSTOMER"]))
+        from ai_core import capabilities
+        self.assertEqual(sorted(self.fetched), sorted(capabilities.personal_endpoints(READER)))
         self.assertFalse(any(ep.startswith("/analytics") for ep in self.fetched))
 
 

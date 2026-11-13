@@ -19,7 +19,8 @@ what the rules read from the user's own words (amounts, titles, named
 warehouses, periods). Write requests never reach it. Any failure - no
 provider, timeout, invalid JSON, nothing usable - returns the rule plan.
 
-Feature flag: COPILOT_SEMANTIC_PLANNER=on|off (default off),
+Feature flag: COPILOT_SEMANTIC_PLANNER=on|off (default on since Phase F: A1-A8 held on both
+frozen test sets, docs/AI/PHASE_F_BENCHMARK_REPORT.md §2; set off to roll back),
 COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS (default 5).
 """
 from __future__ import annotations
@@ -39,7 +40,7 @@ from cache import SummaryCache
 
 logger = logging.getLogger("uvicorn.error")
 
-ENABLED = os.getenv("COPILOT_SEMANTIC_PLANNER", "off").strip().lower() in ("on", "1", "true")
+ENABLED = os.getenv("COPILOT_SEMANTIC_PLANNER", "on").strip().lower() in ("on", "1", "true")
 TIMEOUT_SECONDS = float(os.getenv("COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS", "5"))
 MAX_TOKENS = 450
 MAX_CAPABILITIES = 4
@@ -123,6 +124,13 @@ def _clause_covered(clause: str, warehouses: list[dict]) -> bool:
     date is read, "phiếu mượn mới" is not)."""
     if cp.detect_capabilities(clause) or cp.detect_style(clause) or cp.detect_visualization(clause)["requested"]:
         return True
+    # Phase F: an analysis verb applied to a named warehouse or period ("so sánh
+    # kho Hà Nội", "vì sao tháng này") is understood - routing it only cost ~2.6 s
+    # and ended keep_rules:no_new_information (Phase 1 report §9.4).
+    if cp.detect_analysis(clause) in (cp.COMPARISON, cp.CAUSAL) and (
+            cp.resolve_warehouses(clause, warehouses)["warehouses"]
+            or cp.parse_periods(clause, datetime.now(cp.VN_TZ).date())):
+        return True
     rest = _ENTITY_WORDS.sub(" ", clause)
     for w in cp.resolve_warehouses(clause, warehouses)["warehouses"]:
         rest = rest.replace(cp._wh_norm(w.get("name") or ""), " ")
@@ -147,11 +155,26 @@ def guarded(plan: cp.QueryPlan, text: str) -> str | None:
         return "action"
     if plan.requested_analysis == "out_of_scope":
         return "out_of_scope"
-    if plan.clarification_needed:
+    if plan.clarification_needed and not metric_clarification(plan, text):
         return "rule_clarification"  # a missing referent is asked about, never guessed
     if {"previous_turn", "visualization"} & set(plan.carried_over):
         return "presentation_followup"  # same data, new presentation
     return None
+
+
+# Clarifications the rules ask because no METRIC was recognised ("so sánh chỉ số
+# nào?", "phân tích nội dung nào?") - unlike a missing warehouse or book, the
+# meaning may be in the words ("mọi người dạo này có mượn sách nhiều hơn
+# không?"), so a semantic reading is allowed when the question has content.
+_METRIC_CLARIFICATIONS = ("Bạn muốn so sánh chỉ số nào", "Bạn muốn tôi phân tích nội dung nào")
+# Verbs that ask for an analysis but name no metric ("so sánh với kỳ trước").
+_ANALYSIS_WORDS = re.compile(r"\b(so sanh|phan tich|giai thich|kiem tra|ky|xem|bao cao)\b")
+
+
+def metric_clarification(plan: cp.QueryPlan, text: str) -> bool:
+    question = plan.clarification_question or ""
+    rest = _ANALYSIS_WORDS.sub(" ", _ENTITY_WORDS.sub(" ", text))
+    return question.startswith(_METRIC_CLARIFICATIONS) and len(_content_words(rest)) >= 3
 
 
 def assess(plan: cp.QueryPlan, text: str, warehouses: list[dict]) -> list[str]:
@@ -164,6 +187,8 @@ def assess(plan: cp.QueryPlan, text: str, warehouses: list[dict]) -> list[str]:
     if guarded(plan, text):
         return []
     reasons = []
+    if plan.clarification_needed:
+        return ["metric_clarification"]  # guarded() let it through: the metric may be in the words
     if not plan.capabilities:
         if len(_content_words(text)) >= 2:
             reasons.append("no_capability")

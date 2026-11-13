@@ -23,9 +23,11 @@ import inspect
 import logging
 import os
 import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from agent_actions import ACTION_CONFIG, DANGEROUS_ACTION_DENYLIST
+from ai_core import capabilities
 from ai_core.observability import current_request_id
 from tool_registry import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 
@@ -72,6 +74,11 @@ def _action_specs() -> dict[str, ToolSpec]:
     }
 
 
+# The verified user of the current request (set by the assistant prologue).
+# When set, a tool outside their capabilities (ai_core.capabilities.tool_allowed)
+# is refused like an unknown one.
+CALLER: ContextVar = ContextVar("ai_tool_caller", default=None)
+
 READ_TOOLS = _read_specs()
 ACTION_TOOLS = _action_specs()
 FORBIDDEN_ACTIONS = frozenset(DANGEROUS_ACTION_DENYLIST)
@@ -115,6 +122,10 @@ async def run_read_tool(name: str, args: dict, auth_header: str | None) -> dict:
     if tool_fn is None or name not in READ_TOOLS:
         logger.warning("tool_call request_id=%s name=%s rejected=unknown_tool", current_request_id(), name)
         return {"error": f"Unknown tool: {name}"}
+    caller = CALLER.get()
+    if caller is not None and not capabilities.tool_allowed(caller, name):
+        logger.warning("tool_call request_id=%s name=%s rejected=not_allowed", current_request_id(), name)
+        return {"error": f"Tool {name} không thuộc quyền của bạn."}
     kept, dropped = _valid_arguments(name, tool_fn, args)
     started = time.perf_counter()
     try:

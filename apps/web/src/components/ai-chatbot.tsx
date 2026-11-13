@@ -12,6 +12,14 @@ import { toast } from 'sonner';
 import { ActionCard } from './ai-action-card';
 import { onChatbotAsk } from '@/lib/chatbot-bus';
 import { useMemo } from 'react';
+import {
+  aiExperienceService, AiHttpError, type AiCapabilities, type AiExplainability, type BookRecognition,
+  type RecognitionCandidate, type TurnImage,
+} from '@/services/ai-experience';
+import { usePhotoAttachment, STAGE_LABEL } from './ai-experience/use-photo-attachment';
+import { PhotoAttachButton, PhotoPreview } from './ai-experience/photo-composer';
+import { BookRecognitionCard } from './ai-experience/book-recognition-card';
+import { EvidencePanel } from './ai-experience/evidence-panel';
 
 interface UIMessage {
   id: number;
@@ -23,7 +31,19 @@ interface UIMessage {
   context_sources?: any[];
   retrieval_warnings?: string[];
   suggestions?: string[];
+  // Phase F (no image data is ever stored here - only the recognised references)
+  hasPhoto?: boolean;
+  recognition?: BookRecognition;
+  pendingQuestion?: string;
+  chosenBookId?: string | null;
+  explainability?: AiExplainability | null;
 }
+
+const DEFAULT_PHOTO_QUESTION = 'Đây là sách gì? Thư viện còn không?';
+const EXPERIENCE_LABEL: Record<string, string> = {
+  reader: 'Trợ lý độc giả', warehouse_work: 'Trợ lý công việc kho', library_operations: 'Trợ lý nghiệp vụ thư viện',
+  supplier: 'Trợ lý nhà cung cấp', decision_assistant: 'Trợ lý quản lý', general: 'Trợ lý', anonymous: 'Trợ lý',
+};
 
 // ── Chat history persistence (localStorage, per-user, survives page reload) ───
 
@@ -99,7 +119,7 @@ function getRoleSuggestions(user: AuthUser | null): string[] {
   }
 }
 
-function getPageSuggestions(pathname: string, user: AuthUser | null): string[] | null {
+function getPageSuggestions(pathname: string, user: AuthUser | null, starters?: string[]): string[] | null {
   if (pathname.includes('/picking')) return [
     'Task lấy hàng nào đang chờ tôi?',
     'Hướng dẫn quy trình quét barcode.',
@@ -150,7 +170,8 @@ function getPageSuggestions(pathname: string, user: AuthUser | null): string[] |
   if (pathname.includes('/customer/reservations')) return [
     'Đặt trước nào của tôi đã sẵn sàng nhận?',
   ];
-  return getRoleSuggestions(user);
+  // Phase F: starters built by the backend from the capabilities the user holds.
+  return starters && starters.length > 0 ? starters : getRoleSuggestions(user);
 }
 
 function getWelcomeGreeting(user: AuthUser | null): string {
@@ -410,6 +431,18 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
   // late reply never lands in a cleared chat and the server stops generating.
   const streamRef = useRef<AbortController | null>(null);
   useEffect(() => () => streamRef.current?.abort(), []);
+  const [caps, setCaps] = useState<AiCapabilities | null>(null);
+  const photo = usePhotoAttachment();
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
+  // The recognised book later questions may refer to ("sách này"); the server
+  // decides whether a question really refers to it.
+  const [activeImage, setActiveImage] = useState<{ attachment_id: string; book_id?: string | null; title?: string | null } | null>(null);
+  const lastPhotoQuestion = useRef('');
+
+  useEffect(() => {
+    if (!open || caps) return;
+    aiExperienceService.getCapabilities().then(setCaps).catch(() => setCaps(null));
+  }, [open, caps]);
 
   useEffect(() => {
     saveStoredMessages(currentUser?.id || 'anon', messages);
@@ -444,14 +477,13 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     return messages.map((m) => ({ role: m.role, content: m.text }));
   }, [messages]);
 
-  const sendMessage = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || loading) return;
-
+  const streamReply = async (trimmed: string, image?: TurnImage, addUser = true) => {
     setShowSuggestions(false);
-    const userMsg: UIMessage = { id: ++messageIdRef.current, role: 'user', text: trimmed };
-    setMessages((prev) => [...prev, userMsg]);
-    setInput('');
+    if (addUser) {
+      const userMsg: UIMessage = { id: ++messageIdRef.current, role: 'user', text: trimmed };
+      setMessages((prev) => [...prev, userMsg]);
+      setInput('');
+    }
     setLoading(true);
 
     const history = buildHistory();
@@ -465,6 +497,7 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
 
     await aiService.chatStream(trimmed, history, systemContext, {
       signal: controller.signal,
+      image,
       onToken: (chunk) => {
         if (!started) {
           started = true;
@@ -487,6 +520,7 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
           intent: resp.intent,
           context_sources: resp.context_sources,
           retrieval_warnings: resp.retrieval_warnings,
+          explainability: resp.explainability ?? null,
         };
         setMessages((prev) =>
           started
@@ -494,9 +528,13 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
             : [...prev, { id: botMsgId, role: 'assistant', ...finalFields }],
         );
       },
-      onError: () => {
+      onError: (err) => {
         setLoading(false);
-        const errorText = 'AI tạm thời không khả dụng. Các nghiệp vụ thư viện và kho vẫn hoạt động bình thường.';
+        const photoGone = err instanceof AiHttpError && (err.status === 410 || err.status === 400) && image;
+        if (photoGone) setActiveImage(null);
+        const errorText = photoGone
+          ? (err as AiHttpError).message
+          : 'AI tạm thời không khả dụng. Các nghiệp vụ thư viện và kho vẫn hoạt động bình thường.';
         setMessages((prev) =>
           started
             ? prev.map((m) => (m.id === botMsgId ? { ...m, text: errorText } : m))
@@ -506,6 +544,49 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
       },
     });
     if (streamRef.current === controller) streamRef.current = null;
+  };
+
+  const runPhoto = async (question: string) => {
+    lastPhotoQuestion.current = question;
+    setLoading(true);
+    const rec = await photo.identify();
+    setLoading(false);
+    if (!rec) return; // the preview shows the error and a retry button
+    photo.clear();
+    const top = rec.candidates[0];
+    setMessages((prev) => [...prev, {
+      id: ++messageIdRef.current, role: 'assistant', text: rec.explanation.summary, recognition: rec,
+      pendingQuestion: question, chosenBookId: rec.status === 'IDENTIFIED' ? top?.book_id : null,
+    }]);
+    if (rec.status === 'IDENTIFIED' && top) {
+      setActiveImage({ attachment_id: rec.attachment_id, book_id: top.book_id, title: top.title });
+      await streamReply(question, { attachment_id: rec.attachment_id, book_id: top.book_id, image_turn: true }, false);
+    } else {
+      setActiveImage(null);
+    }
+  };
+
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
+    if (loading) return;
+    if (photo.file) {
+      const question = trimmed || DEFAULT_PHOTO_QUESTION;
+      setShowSuggestions(false);
+      setMessages((prev) => [...prev, { id: ++messageIdRef.current, role: 'user', text: question, hasPhoto: true }]);
+      setInput('');
+      await runPhoto(question);
+      return;
+    }
+    if (!trimmed) return;
+    await streamReply(trimmed, activeImage ? { attachment_id: activeImage.attachment_id, book_id: activeImage.book_id } : undefined);
+  };
+
+  const chooseCandidate = (msgId: number, rec: BookRecognition, candidate: RecognitionCandidate) => {
+    if (loading) return;
+    setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, chosenBookId: candidate.book_id } : m)));
+    setActiveImage({ attachment_id: rec.attachment_id, book_id: candidate.book_id, title: candidate.title });
+    const question = messages.find((m) => m.id === msgId)?.pendingQuestion || DEFAULT_PHOTO_QUESTION;
+    void streamReply(question, { attachment_id: rec.attachment_id, book_id: candidate.book_id, image_turn: true }, false);
   };
 
   const ACTION_FOLLOWUP_SUGGESTIONS = useMemo<Record<string, string[]>>(() => ({
@@ -634,6 +715,8 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     setShowSuggestions(true);
     setSystemContext(undefined);
     setContextReady(true);
+    setActiveImage(null);
+    photo.clear();
   };
 
   const welcomeVisible = messages.length === 0 && !loading;
@@ -650,7 +733,7 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
               </div>
               <div>
                 <p className="text-white text-sm font-semibold leading-none">
-                  SmartBook AI Agent
+                  {caps ? `SmartBook AI · ${EXPERIENCE_LABEL[caps.experience] ?? 'Trợ lý'}` : 'SmartBook AI Agent'}
                 </p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   {contextReady ? (
@@ -712,8 +795,9 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
                   </p>
                 </div>
                 {showSuggestions && (() => {
-                  const suggestions = getPageSuggestions(window.location.pathname, currentUser);
-                  const isPageSpecific = suggestions !== getRoleSuggestions(currentUser);
+                  const starters = caps?.starter_questions;
+                  const suggestions = getPageSuggestions(window.location.pathname, currentUser, starters);
+                  const isPageSpecific = suggestions !== starters && suggestions !== getRoleSuggestions(currentUser);
                   return (
                     <div className="w-full space-y-1.5">
                       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-1">
@@ -756,8 +840,17 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
                         : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-bl-sm'
                     }`}
                   >
+                    {msg.hasPhoto && <span className="mb-0.5 block text-[10px] opacity-80">📷 Kèm ảnh bìa sách</span>}
                     <MessageText text={msg.text} />
                   </div>
+
+                  {msg.role === 'assistant' && msg.recognition && (
+                    <BookRecognitionCard recognition={msg.recognition} chosenBookId={msg.chosenBookId}
+                      onChoose={(c) => chooseCandidate(msg.id, msg.recognition!, c)}
+                      onRetake={() => attachButtonRef.current?.click()} />
+                  )}
+
+                  {msg.role === 'assistant' && !msg.recognition && <EvidencePanel explainability={msg.explainability} />}
 
                   {/* Action card — only on assistant messages */}
                   {msg.role === 'assistant' && msg.pending_action && (
@@ -825,8 +918,8 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
                 </div>
                 <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-1.5">
                   <Zap size={12} className="text-indigo-400 animate-pulse" />
-                  <span className="text-[11px] text-muted-foreground">
-                    Đang phân tích...
+                  <span className="text-[11px] text-muted-foreground" aria-live="polite">
+                    {photo.phase === 'working' && photo.stage ? STAGE_LABEL[photo.stage] : 'Đang phân tích...'}
                   </span>
                   {[0, 1, 2].map((i) => (
                     <span
@@ -854,8 +947,24 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
             </div>
           )}
 
+          {activeImage?.title && !photo.file && (
+            <div className="mx-3 mb-0 mt-2 flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] text-indigo-800">
+              <span className="truncate">Đang hỏi về sách trong ảnh: <strong>{activeImage.title}</strong></span>
+              <button type="button" onClick={() => setActiveImage(null)} aria-label="Ngừng hỏi về sách trong ảnh"
+                className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-indigo-500">
+                <X size={12} aria-hidden="true" />
+              </button>
+            </div>
+          )}
+          <PhotoPreview photo={photo} onReplace={() => attachButtonRef.current?.click()}
+            onRetry={() => void runPhoto(lastPhotoQuestion.current || DEFAULT_PHOTO_QUESTION)} />
+
           {/* Footer Input */}
           <div className="px-3 py-3 border-t border-gray-100 bg-white flex items-center gap-2 shrink-0">
+            {caps?.multimodal.enabled && (
+              <PhotoAttachButton photo={photo} maxBytes={caps.multimodal.max_bytes} notice={caps.multimodal.notice}
+                disabled={loading} buttonRef={attachButtonRef} />
+            )}
             <input
               ref={inputRef}
               type="text"
@@ -867,13 +976,15 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
                   void sendMessage(input);
                 }
               }}
-              placeholder="Hỏi về sách, tồn kho, hoặc tạo hành động..."
+              placeholder={photo.file ? 'Hỏi về sách trong ảnh (để trống để nhận diện)…' : 'Hỏi về sách, tồn kho, hoặc tạo hành động...'}
+              aria-label="Câu hỏi cho trợ lý AI"
               disabled={loading}
               className="flex-1 text-sm bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             />
             <button
               onClick={() => void sendMessage(input)}
-              disabled={!input.trim() || loading}
+              disabled={(!input.trim() && !photo.file) || loading}
+              aria-label="Gửi"
               className="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg transition-colors shrink-0"
             >
               <Send size={15} />

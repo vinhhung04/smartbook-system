@@ -1,5 +1,6 @@
 import type { AiVerification } from '@/lib/copilot-verification';
 import { aiAPI, getToken } from './http-clients';
+import { readHttpError, type AiExplainability, type BookAvailability, type TurnImage } from './ai-experience';
 
 export interface RecommendationResponse {
   recommendations: Array<{
@@ -345,6 +346,8 @@ export interface AssistantResponse extends AssistantExtras {
   evidence?: AiEvidenceItem[];
   retrieval_warnings?: string[];
   plan?: AssistantPlanSummary | null;
+  explainability?: AiExplainability | null;
+  image_context?: ImageContextSummary | null;
 }
 
 export interface PendingAction {
@@ -451,6 +454,17 @@ export interface ChatResponse {
   context_sources?: Array<{ name: string; endpoint?: string; status?: string }>;
   retrieval_warnings?: string[];
   pending_action?: PendingAction | null;
+  /** Phase F: the unified evidence contract and the photo this turn used (both optional). */
+  explainability?: AiExplainability | null;
+  image_context?: ImageContextSummary | null;
+}
+
+export interface ImageContextSummary {
+  attachment_id: string;
+  used: boolean;
+  status: string;
+  book?: { book_id: string; title: string | null; authors?: string[]; isbn?: string | null } | null;
+  availability?: BookAvailability | null;
 }
 
 export interface SystemContext {
@@ -645,6 +659,8 @@ export const aiService = {
       onStatus?: (stage: string) => void;
       /** Aborting stops the request quietly: no onError, no onDone. */
       signal?: AbortSignal;
+      /** Phase F: a photo identified by /vision/identify (server checks ownership). */
+      image?: TurnImage;
     },
   ): Promise<void> => {
     try {
@@ -660,10 +676,11 @@ export const aiService = {
         body: JSON.stringify({
           message,
           conversation_id: conversationId || null,
+          ...(handlers.image ?? {}),
         }),
       });
       if (!response.ok || !response.body) {
-        throw new Error(`Assistant stream request failed with status ${response.status}`);
+        throw await readHttpError(response, `Assistant stream request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -727,6 +744,8 @@ export const aiService = {
       onError: (error: unknown) => void;
       /** Aborting stops the request quietly: no onError, no onDone. */
       signal?: AbortSignal;
+      /** Phase F: a photo identified by /vision/identify (server checks ownership). */
+      image?: TurnImage;
     },
   ): Promise<void> => {
     try {
@@ -743,10 +762,11 @@ export const aiService = {
           message,
           conversation_history: conversationHistory,
           system_context: systemContext || null,
+          ...(handlers.image ?? {}),
         }),
       });
       if (!response.ok || !response.body) {
-        throw new Error(`Chat stream request failed with status ${response.status}`);
+        throw await readHttpError(response, `Chat stream request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUp, Lightbulb, Square } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '@/lib/gsap';
@@ -6,8 +6,8 @@ import type { SuggestionGroup } from './model';
 
 // The question box. Typing stays possible while an answer streams (the next
 // question can be drafted), sending does not: one request at a time, as the
-// chat flow requires. No attachment / voice / web-search buttons - the
-// assistant API has none of those.
+// chat flow requires. The only attachment is a book-cover photo (Phase F,
+// /vision/identify); no voice / web-search buttons - the API has none.
 
 const MAX_HEIGHT = 200;
 
@@ -23,13 +23,18 @@ interface AssistantComposerProps {
   blocked: boolean;
   /** Starter questions, offered once the conversation has begun. */
   suggestions?: SuggestionGroup[];
+  /** Phase F: the photo attach button and the pending-photo preview. */
+  attachSlot?: ReactNode;
+  previewSlot?: ReactNode;
+  /** A photo is pending: sending with an empty question identifies it. */
+  allowEmpty?: boolean;
 }
 
-export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, blocked, suggestions }: AssistantComposerProps) {
+export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, blocked, suggestions, attachSlot, previewSlot, allowEmpty }: AssistantComposerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const canSend = !sending && !blocked && value.trim().length > 0;
+  const canSend = !sending && !blocked && (value.trim().length > 0 || Boolean(allowEmpty));
 
   // Grow with the text up to MAX_HEIGHT, then scroll inside: no layout jump
   // above the box because the thread above simply gets shorter.
@@ -58,6 +63,7 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
       <form data-composer
         onSubmit={(event) => { event.preventDefault(); submit(); }}
         className="rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.14)] transition-[border-color,box-shadow] focus-within:border-primary/45 focus-within:shadow-[0_0_0_4px_color-mix(in_oklab,var(--primary)_12%,transparent),0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-none">
+        {previewSlot}
         <textarea
           ref={textareaRef}
           value={value}
@@ -77,6 +83,7 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
         />
         <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5">
           <div className="flex min-w-0 items-center gap-1">
+            {attachSlot}
             {suggestions && suggestions.length > 0 && (
               <Popover open={suggestOpen} onOpenChange={setSuggestOpen}>
                 <PopoverTrigger asChild>

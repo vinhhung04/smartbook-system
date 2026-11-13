@@ -219,6 +219,31 @@ class ChatTests(unittest.TestCase):
         # primary tried twice (1 retry on 5xx), then fallback once
         self.assertEqual(seen_models, ["qwen/qwen3.7-flash", "qwen/qwen3.7-flash", "qwen/qwen3.7-plus"])
 
+    def test_rate_limit_waits_as_asked_before_the_retry(self):
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) == 1:
+                return httpx.Response(429, headers={"retry-after": "30"}, json={"error": "rate limited"})
+            return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": "ok"}}],
+                                             "usage": {}})
+
+        slept = []
+
+        async def fake_sleep(seconds):
+            slept.append(seconds)
+
+        with _patch_async_client(handler), mock.patch.object(lp.asyncio, "sleep", new=fake_sleep):
+            result = _run(self.provider.chat([{"role": "user", "content": "hi"}], [], num_predict=50, timeout=5))
+        self.assertEqual(result.text, "ok")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(slept, [lp.RATE_LIMIT_RETRY_MAX_SECONDS])  # Retry-After 30 s, bounded
+
+    def test_server_error_retries_without_waiting(self):
+        self.assertEqual(lp._rate_limit_delay(httpx.HTTPStatusError(
+            "x", request=httpx.Request("POST", "http://x"), response=httpx.Response(503))), 0.0)
+
     def test_non_retryable_error_skips_same_model_retry(self):
         provider = lp.OpenRouterProvider(
             api_key="sk-fake", base_url="https://openrouter.ai/api/v1",
@@ -320,6 +345,29 @@ class AnalyzeImageTests(unittest.TestCase):
         with _patch_async_client(handler):
             with self.assertRaises(lp.VisionResponseError):
                 _run(self.provider.analyze_image(self.jpeg_bytes, "prompt", max_tokens=200, timeout=15))
+
+    def test_stream_waits_and_retries_once_on_rate_limit(self):
+        calls = []
+        sse = 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n'
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(1)
+            if len(calls) == 1:
+                return httpx.Response(429, headers={"retry-after": "1"}, json={"error": "rate limited"})
+            return httpx.Response(200, text=sse, headers={"content-type": "text/event-stream"})
+
+        slept = []
+
+        async def fake_sleep(seconds):
+            slept.append(seconds)
+
+        async def collect():
+            return [c.delta async for c in self.provider.chat_stream(
+                [{"role": "user", "content": "hi"}], [], num_predict=20, timeout=5) if c.delta]
+
+        with _patch_async_client(handler), mock.patch.object(lp.asyncio, "sleep", new=fake_sleep):
+            deltas = _run(collect())
+        self.assertEqual((deltas, len(calls), slept), (["ok"], 2, [1.0]))
 
     def test_upstream_error_propagates(self):
         def handler(request: httpx.Request) -> httpx.Response:

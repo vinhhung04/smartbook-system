@@ -88,7 +88,7 @@ export default function CustomerAssistantScreen() {
               </View>
               <Text style={type.title} accessibilityRole="header">Bạn muốn đọc gì?</Text>
               <Text style={type.body}>
-                Mô tả cuốn sách theo cách của bạn: chủ đề, thể loại, tác giả hay mục đích đọc. Trợ lý tìm theo ý nghĩa trong danh mục thư viện và chỉ gợi ý những cuốn thư viện đang có.
+                Mô tả cuốn sách theo cách của bạn: chủ đề, thể loại, tác giả hay mục đích đọc. Trợ lý tìm theo ý nghĩa trong danh mục thư viện và chỉ gợi ý những cuốn thư viện đang có. Có sẵn cuốn sách trong tay? Bấm biểu tượng máy ảnh để tìm bằng ảnh bìa.
               </Text>
               {turns.length === 0 ? (
                 <View style={{ gap: space.sm }}>
@@ -151,6 +151,16 @@ export default function CustomerAssistantScreen() {
         <View style={{ paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: Math.max(insets.bottom, space.md), gap: space.xs, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.surface }}>
           {inputError ? <Text style={{ fontFamily: fontFamily.medium, fontSize: 13.5, color: colors.danger }} accessibilityLiveRegion="polite">{inputError}</Text> : null}
           <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'flex-end' }}>
+            {/* Phase F: find a book from a cover photo (camera), with evidence and branch availability. */}
+            <Pressable
+              style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => router.push('/customer/scan-cover')}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Tìm sách bằng ảnh bìa"
+            >
+              <Ionicons name="camera-outline" size={22} color={colors.primary} />
+            </Pressable>
             <TextInput
               style={[
                 Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null,

@@ -228,6 +228,11 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
     whs = plan.entities.get("warehouses") or []
     if whs:
         lines.append("- Kho được hỏi: " + ", ".join(w.get("name") or "?" for w in whs) + ".")
+    subset = [str(i.get("title"))[:80] for i in plan.entities.get("subset_items") or [] if i.get("title")]
+    if subset:
+        lines.append("- Câu hỏi chỉ về các đầu sách vừa liệt kê ở lượt trước: " + "; ".join(f"\"{t}\"" for t in subset)
+                     + ". Chỉ trả lời trong phạm vi danh sách này; đầu sách nào không có trong dữ liệu lượt này thì nói rõ "
+                       "là chưa có số liệu, không suy đoán.")
     focus = plan.entities.get("focus_item")
     if focus and focus.get("title"):
         lines.append(f"- Đầu sách đang được nhắc tới (từ danh sách lượt trước): \"{str(focus['title'])[:80]}\".")

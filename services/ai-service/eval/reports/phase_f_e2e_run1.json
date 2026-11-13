@@ -1,0 +1,269 @@
+{
+ "run_at": "2026-11-13T13:13:31+0700",
+ "passed": 38,
+ "total": 39,
+ "identify_latency_ms_customer": 3658,
+ "sample_reply_photo_turn": "Dựa trên hình ảnh bạn gửi, đây là cuốn sách **Hoàng Tử Bé** của tác giả Antoine de Saint-Exupéry. ✅\n\nThư viện hiện còn **13 bản** sẵn sàng cho bạn mượn, phân bố tại các chi nhánh:\n- 🏭 Chi nhánh Hà Nội – Cầu Giấy: **5 bản**\n- 🏭 Chi Nhanh District 3: **4 bản**\n- 🏭 Chi nhánh Đà Nẵng: **4 bản**\n\n📚 Bạn có thể đặt mượn trực tiếp qua mục **Catalog** hoặc đến quầy thủ thư để mượn ngay.\n\nNguồn dữ liệu: Cat",
+ "checks": [
+  {
+   "check": "capabilities:ADMIN:experience",
+   "pass": true,
+   "detail": "decision_assistant"
+  },
+  {
+   "check": "capabilities:WAREHOUSE_MANAGER:experience",
+   "pass": true,
+   "detail": "decision_assistant"
+  },
+  {
+   "check": "capabilities:WAREHOUSE_STAFF:experience",
+   "pass": true,
+   "detail": "warehouse_work"
+  },
+  {
+   "check": "capabilities:LIBRARIAN:experience",
+   "pass": true,
+   "detail": "library_operations"
+  },
+  {
+   "check": "capabilities:CUSTOMER:experience",
+   "pass": true,
+   "detail": "reader"
+  },
+  {
+   "check": "capabilities:SUPPLIER:experience",
+   "pass": true,
+   "detail": "supplier"
+  },
+  {
+   "check": "capabilities:anonymous",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "capabilities:supplier_no_image",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "capabilities:customer_image",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "assistant_gate:WAREHOUSE_STAFF:403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "check": "assistant_gate:LIBRARIAN:403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "check": "assistant_gate:CUSTOMER:403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "check": "assistant_gate:SUPPLIER:403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "check": "supplier:chat_ok",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "supplier:no_internal_sources",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "check": "supplier:explainability_present",
+   "pass": true,
+   "detail": [
+    "reply",
+    "ai_provider",
+    "intent",
+    "context_sources",
+    "retrieval_warnings",
+    "explainability"
+   ]
+  },
+  {
+   "check": "supplier:no_inventory_or_analytics",
+   "pass": true,
+   "detail": [
+    "faq://branches-opening-hours",
+    "faq://warehouse-operations",
+    "/public/catalog/branches"
+   ]
+  },
+  {
+   "check": "customer:no_system_analytics",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "check": "staff:chat_ok",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "vision:supplier_403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "check": "vision:no_notice_428",
+   "pass": true,
+   "detail": 428
+  },
+  {
+   "check": "vision:svg_415",
+   "pass": true,
+   "detail": 415
+  },
+  {
+   "check": "vision:anonymous_401",
+   "pass": true,
+   "detail": 401
+  },
+  {
+   "check": "vision:customer_identifies_catalog_book",
+   "pass": true,
+   "detail": {
+    "status": "IDENTIFIED",
+    "top": "Hoàng Tử Bé",
+    "want": "Hoàng Tử Bé",
+    "http": 200
+   }
+  },
+  {
+   "check": "vision:no_probability_wording",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "vision_chat:customer_followup_ok",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "vision_chat:image_evidence",
+   "pass": true,
+   "detail": ""
+  },
+  {
+   "check": "vision_chat:second_followup_keeps_book",
+   "pass": true,
+   "detail": {
+    "attachment_id": "img_caEkcFHzMNdsJYSh6ob75Q",
+    "used": true,
+    "status": "IDENTIFIED",
+    "book": {
+     "book_id": "e6a5d831-d6b6-552f-8995-62448dcd2422",
+     "variant_id": "323f48fb-27b9-50a7-8f31-8a3f4cddaf37",
+     "title": "Hoàng Tử Bé",
+     "authors": [
+      "Antoine de Saint-Exupéry"
+     ],
+     "isbn": "TIKI-262590359",
+     "publisher": "Nhà Xuất Bản Kim Đồng",
+     "match_basis": "TEXT_ONLY"
+    },
+    "availability": {
+     "available_quantity": 13,
+     "availability_status": "AVAILABLE",
+     "branches": [
+      {
+       "name": "Chi nhánh Hà Nội – Cầu Giấy",
+       "available_quantity": 5
+      },
+      {
+       "name": "Chi Nhanh District 3",
+       "available_quantity": 4
+      },
+      {
+       "name": "Chi nhánh Đà Nẵng",
+       "available_quantity": 4
+      }
+     ],
+     "borrow_count": null,
+     "retrieved_at": "2026-11-13T06:12:56+0000"
+    },
+    "candidates": []
+   }
+  },
+  {
+   "check": "vision_chat:topic_switch_does_not_reuse",
+   "pass": true,
+   "detail": {
+    "attachment_id": "img_caEkcFHzMNdsJYSh6ob75Q",
+    "used": false,
+    "status": "IDENTIFIED",
+    "book": null,
+    "availability": null,
+    "candidates": []
+   }
+  },
+  {
+   "check": "vision_chat:other_user_410",
+   "pass": true,
+   "detail": 410
+  },
+  {
+   "check": "vision_chat:forged_book_400",
+   "pass": true,
+   "detail": 400
+  },
+  {
+   "check": "vision:WAREHOUSE_STAFF:identify",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "vision:LIBRARIAN:identify",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "vision:ADMIN:identify",
+   "pass": false,
+   "detail": 200
+  },
+  {
+   "check": "vision:WAREHOUSE_MANAGER:identify",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "vision_assistant:manager_ok",
+   "pass": true,
+   "detail": 200
+  },
+  {
+   "check": "assistant:explainability_contract",
+   "pass": true,
+   "detail": [
+    "version",
+    "evidence",
+    "claims",
+    "explanation",
+    "verification"
+   ]
+  },
+  {
+   "check": "revoked_token:capabilities_401",
+   "pass": true,
+   "detail": 401
+  },
+  {
+   "check": "revoked_token:vision_401",
+   "pass": true,
+   "detail": 401
+  }
+ ]
+}
