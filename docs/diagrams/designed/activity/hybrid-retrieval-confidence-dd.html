@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quy trình truy xuất lai có đánh giá độ tin cậy trước khi sinh câu trả lời</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 640px; line-height: 1.5; }
+    svg { width: 100%; min-width: 640px; max-width: 640px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Activity · UML · SmartBook</p>
+    <h1>Quy trình truy xuất lai có đánh giá độ tin cậy trước khi sinh câu trả lời</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 640 588" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="hybrid-retrieval-confidence-dd-title hybrid-retrieval-confidence-dd-desc">
+<title id="hybrid-retrieval-confidence-dd-title">Quy trình truy xuất lai có đánh giá độ tin cậy trước khi sinh câu trả lời</title>
+<desc id="hybrid-retrieval-confidence-dd-desc">Câu hỏi được tìm song song theo ngữ nghĩa và toàn văn, hợp nhất thứ hạng, đánh giá độ tin cậy rồi trả lời từ chối hoặc sinh câu trả lời có dẫn nguồn.</desc>
+<defs>
+  <marker id="hybrid-retrieval-confidence-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1f3864"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<path d="M 320.0 72.0 L 320.0 88.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 320.0 114.0 L 320.0 130.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 200.0 136.0 L 200.0 152.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 440.0 136.0 L 440.0 152.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 200.0 178.0 L 200.0 194.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 440.0 178.0 L 440.0 194.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 200.0 236.0 L 200.0 252.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 440.0 236.0 L 440.0 252.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 320.0 258.0 L 320.0 274.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 320.0 300.0 L 320.0 316.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 320.0 358.0 L 320.0 374.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 264.0 387.0 L 188.0 387.0 Q 180.0 387.0 180.0 395.0 L 180.0 416.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 376.0 387.0 L 452.0 387.0 Q 460.0 387.0 460.0 395.0 L 460.0 416.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 180.0 458.0 L 180.0 477.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 460.0 458.0 L 460.0 474.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<path d="M 460.0 500.0 L 460.0 516.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#hybrid-retrieval-confidence-dd-arrow)"/>
+<rect x="132.0" y="364.0" width="128" height="16" rx="2" fill="#ffffff"/>
+<text x="196.0" y="376.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Không có bằng chứng</text>
+<rect x="380.0" y="364.0" width="152" height="16" rx="2" fill="#ffffff"/>
+<text x="456.0" y="376.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tin cậy / chưa chắc chắn</text>
+<circle cx="320.0" cy="62.0" r="9" fill="#1f3864"/>
+<rect x="242.0" y="88.0" width="156" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="320.0" y="105.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Câu hỏi của người dùng</text>
+<rect x="100.0" y="130.0" width="440" height="6" rx="2" fill="#1f3864"/>
+<rect x="108.0" y="152.0" width="184" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="200.0" y="169.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Nhúng câu hỏi thành véc-tơ</text>
+<rect x="344.0" y="152.0" width="192" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="440.0" y="169.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Chuẩn hóa, bỏ dấu tiếng Việt</text>
+<rect x="120.0" y="194.0" width="160" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="200.0" y="211.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tìm kiếm ngữ nghĩa</text>
+<text x="200.0" y="227.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(cosine, chỉ mục HNSW)</text>
+<rect x="374.0" y="194.0" width="132" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="440.0" y="211.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tìm kiếm toàn văn</text>
+<text x="440.0" y="227.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(từ khóa)</text>
+<rect x="100.0" y="252.0" width="440" height="6" rx="2" fill="#1f3864"/>
+<rect x="236.0" y="274.0" width="168" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="320.0" y="291.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Hợp nhất thứ hạng (RRF)</text>
+<rect x="138.0" y="316.0" width="364" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="320.0" y="333.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Đánh giá độ tin cậy truy xuất</text>
+<text x="320.0" y="349.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(điểm chuẩn hóa, đồng thuận hai nhánh, luật khớp tuyệt đối)</text>
+<polygon points="264.0,387.0 276.0,374.0 364.0,374.0 376.0,387.0 364.0,400.0 276.0,400.0" fill="#f3f6fa" stroke="#1f3864" stroke-width="1.2"/>
+<text x="320.0" y="391.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Mức tin cậy?</text>
+<rect x="92.0" y="416.0" width="176" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="180.0" y="433.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Trả lời "chưa đủ thông tin</text>
+<text x="180.0" y="449.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">trong dữ liệu nội bộ"</text>
+<rect x="362.0" y="416.0" width="196" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="460.0" y="433.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Đưa tài liệu vào ngữ cảnh</text>
+<text x="460.0" y="449.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(đánh dấu nếu chưa chắc chắn)</text>
+<circle cx="180.0" cy="487.0" r="10" fill="#ffffff" stroke="#1f3864" stroke-width="1.4"/><circle cx="180.0" cy="487.0" r="6" fill="#1f3864"/>
+<rect x="350.0" y="474.0" width="220" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="460.0" y="491.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">LLM sinh câu trả lời có dẫn nguồn</text>
+<circle cx="460.0" cy="526.0" r="10" fill="#ffffff" stroke="#1f3864" stroke-width="1.4"/><circle cx="460.0" cy="526.0" r="6" fill="#1f3864"/>
+</svg>
+    </div>
+    <p class="note">Chép nguyên văn từ hình gốc của báo cáo (Hình 2.5); ký pháp UML, phong cách SmartBook.</p>
+  </div>
+</body>
+</html>

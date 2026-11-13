@@ -162,7 +162,7 @@ function NextStep({ tone, icon: Icon, title, description, children }: {
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Bước tiếp theo</p>
+          <p className="text-[12px] font-medium text-muted-foreground">Bước tiếp theo</p>
           <p className="text-[14px] font-semibold text-foreground">{title}</p>
           <p className="mt-0.5 text-[12px] text-muted-foreground">{description}</p>
         </div>
@@ -554,11 +554,11 @@ export function PurchaseOrderDetailPage() {
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow className="bg-muted/30">
-                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sách</TableHead>
-                      <TableHead className="w-[150px] text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Đã nhận / đặt</TableHead>
-                      <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Đơn giá</TableHead>
-                      <TableHead className="text-right text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Thành tiền</TableHead>
-                      <TableHead className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Đối soát</TableHead>
+                      <TableHead className="text-[12px] font-semibold text-muted-foreground">Sách</TableHead>
+                      <TableHead className="w-[150px] text-[12px] font-semibold text-muted-foreground">Đã nhận / đặt</TableHead>
+                      <TableHead className="text-right text-[12px] font-semibold text-muted-foreground">Đơn giá</TableHead>
+                      <TableHead className="text-right text-[12px] font-semibold text-muted-foreground">Thành tiền</TableHead>
+                      <TableHead className="text-[12px] font-semibold text-muted-foreground">Đối soát</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

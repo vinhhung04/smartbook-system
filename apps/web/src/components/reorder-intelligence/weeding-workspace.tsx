@@ -114,7 +114,7 @@ export function WeedingWorkspace({ data, loading, error, onRetry }: {
             <div role="region" aria-label="Bảng tồn kho lâu ngày" tabIndex={0} className="max-h-[min(72vh,760px)] overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
               <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-[13px]">
                 <caption className="sr-only">Sách tồn lâu theo kho, xếp theo giá trị tồn đọng</caption>
-                <thead className="sticky top-0 z-10 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                <thead className="sticky top-0 z-10 whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
                   <tr className="[&>th]:border-b [&>th]:border-border [&>th]:bg-muted/50 [&>th]:py-2.5">
                     <th scope="col" className="pl-4 pr-3">Sách · kho</th>
                     <th scope="col" className="w-[90px] px-3 text-right">Tồn</th>

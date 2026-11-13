@@ -241,7 +241,7 @@ export function CustomerDashboardPage() {
           {summary.map((item) => (
             <div key={item.label} className="min-w-0">
               <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
-              <dd className={cn('mt-1 truncate font-mono text-[22px] font-bold leading-none tabular-nums', item.tone)}>{item.value}</dd>
+              <dd className={cn('mt-1 truncate text-[22px] font-bold leading-none tabular-nums', item.tone)}>{item.value}</dd>
               {item.bar !== undefined ? (
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã dùng ${item.bar}% số suất mượn`}>
                   <div className="h-full rounded-full bg-indigo-500" style={{ width: `${item.bar}%` }} />

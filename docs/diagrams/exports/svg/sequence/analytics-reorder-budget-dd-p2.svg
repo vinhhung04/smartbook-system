@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 888" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="analytics-reorder-budget-dd-p2-title analytics-reorder-budget-dd-p2-desc" id="analytics-reorder-budget-dd-p2-root">
+<title id="analytics-reorder-budget-dd-p2-title">Đề xuất nhập hàng, phần 2: dự báo và phân bổ ngân sách</title>
+<desc id="analytics-reorder-budget-dd-p2-desc">Analytics Service đọc chỉ đọc borrow_db và inventory_db, dự báo nhu cầu, tính tồn an toàn, khi có ngân sách thì ước lượng vị thế tồn và cấp từng bản theo lợi ích biên, rồi trả bảng đề xuất để quản lý tạo đơn nháp.</desc>
+<defs>
+      <style>#analytics-reorder-budget-dd-p2-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #analytics-reorder-budget-dd-p2-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #analytics-reorder-budget-dd-p2-root .diagram-container { width: 100%; overflow-x: auto; }
+      #analytics-reorder-budget-dd-p2-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#analytics-reorder-budget-dd-p2-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="204" y="316" width="532" height="264" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="848" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="248" y1="104" x2="248" y2="848" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="420" y1="104" x2="420" y2="848" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="592" y1="104" x2="592" y2="848" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="716" y1="104" x2="716" y2="848" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="424" y1="164" x2="712" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow)"/>
+<line x1="424" y1="232" x2="588" y2="232" stroke="#222222" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow)"/>
+<line x1="424" y1="404" x2="588" y2="404" stroke="#222222" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow)"/>
+<line x1="424" y1="496" x2="712" y2="496" stroke="#222222" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow)"/>
+<line x1="416" y1="648" x2="252" y2="648" stroke="#000000" stroke-width="1.4" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow-accent)"/>
+<line x1="244" y1="716" x2="100" y2="716" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow)"/>
+<line x1="100" y1="768" x2="244" y2="768" stroke="#222222" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p2-analytics-reorder-budget-dd-p2-arrow)"/>
+<!-- labels -->
+<rect x="440" y="122" width="256" height="34" rx="2" fill="#ffffff"/>
+<text x="568.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> Chuỗi lượt mượn theo ngày, đặt giữ, yêu thích,</text>
+<text x="568.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đăng ký báo có sách</text>
+<rect x="434" y="174" width="144" height="50" rx="2" fill="#ffffff"/>
+<text x="506.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> Tồn khả dụng theo kho</text>
+<text x="506.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">được phép, đơn giá, lịch sử</text>
+<text x="506.0" y="219" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">giao hàng</text>
+<rect x="436" y="346" width="140" height="50" rx="2" fill="#f7f7f7"/>
+<text x="506.0" y="359" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> Số bản đang về =</text>
+<text x="506.0" y="375" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ordered_qty − received_</text>
+<text x="506.0" y="391" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">qty</text>
+<rect x="454" y="470" width="228" height="18" rx="2" fill="#f7f7f7"/>
+<text x="568.0" y="483" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> Phiếu mượn đang mở + lượt trả 365 ngày</text>
+<path d="M 204 316 H 244 V 328 L 236 336 H 204 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="221.0" y="331" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">opt</text>
+<rect x="252" y="317" width="148" height="18" rx="2" fill="#f7f7f7"/>
+<text x="258" y="331" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Có tham số budgetVnd]</text>
+<rect x="262" y="590" width="144" height="50" rx="2" fill="#ffffff"/>
+<text x="334.0" y="603" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> Danh sách đề xuất + lý</text>
+<text x="334.0" y="619" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">do + (funded_qty, budget_</text>
+<text x="334.0" y="635" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">plan, giả định)</text>
+<rect x="112" y="658" width="120" height="50" rx="2" fill="#ffffff"/>
+<text x="172.0" y="671" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> Bảng đề xuất, cấp</text>
+<text x="172.0" y="687" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đủ / cấp một phần /</text>
+<text x="172.0" y="703" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">chưa cấp</text>
+<rect x="112" y="726" width="120" height="34" rx="2" fill="#ffffff"/>
+<text x="172.0" y="739" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> Chọn dòng và tạo</text>
+<text x="172.0" y="755" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đơn đặt hàng nháp</text>
+<!-- notes -->
+<rect x="296" y="244" width="248" height="60" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="308" y="263" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Dự báo EWMA + xu hướng × hệ số mùa vụ,</text>
+<text x="308" y="279" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">thời gian chờ học từ lịch sử giao hàng,</text>
+<text x="308" y="295" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">tồn an toàn z·σ·√L, số lượng và mức ưu tiên</text>
+<rect x="360" y="416" width="292" height="44" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="372" y="435" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">(PO APPROVED / SENT_TO_SUPPLIER /</text>
+<text x="372" y="451" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">SUPPLIER_CONFIRMED / PARTIALLY_RECEIVED)</text>
+<rect x="224" y="508" width="392" height="60" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="236" y="527" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Kaplan–Meier ước lượng số bản dự kiến trả trong thời gian chờ,</text>
+<text x="236" y="543" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">vị thế tồn = khả dụng + đang về + dự kiến trả,</text>
+<text x="236" y="559" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">allocateMarginal: cấp từng bản theo P(D &gt; vị thế + k) / đơn giá</text>
+<rect x="116" y="780" width="264" height="44" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="128" y="799" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Hệ thống không tự tạo hay duyệt đơn đặt hàng,</text>
+<text x="128" y="815" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">đơn nháp đi qua quy trình duyệt thông thường</text>
+<!-- nodes -->
+<circle cx="96" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 96 56 V 72 M 85 61 H 107 M 96 72 L 87 84 M 96 72 L 105 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="96" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Quản lý kho</text>
+<rect x="204" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="248" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web App</text>
+<text x="248" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">Đề xuất nhập</text>
+<rect x="362" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="420" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Analytics</text>
+<text x="420" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">analytics-service</text>
+<path d="M 562.0 48 V 79 A 30.0 6 0 0 0 622.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="592" cy="48" rx="30.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="592" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">chỉ đọc</text>
+<text x="592" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">inventory_db</text>
+<path d="M 686.0 48 V 79 A 30.0 6 0 0 0 746.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="716" cy="48" rx="30.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="716" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">chỉ đọc</text>
+<text x="716" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">borrow_db</text>
+</svg>

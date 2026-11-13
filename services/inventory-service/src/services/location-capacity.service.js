@@ -73,6 +73,23 @@ async function getOccupancyByLocationIds(client, locationIds) {
   return map;
 }
 
+/**
+ * Sets `occupied_qty` on every node of a location tree: the copies on hand at
+ * that location plus everything below it, so a shelf or zone reads as the sum
+ * of its compartments. Mutates and returns the same nodes. This is the real
+ * fill; the `locations.available` column is not maintained by any stock flow.
+ */
+function rollUpOccupancy(nodes, occupiedByLocation) {
+  const visit = (node) => {
+    const own = Number(occupiedByLocation.get(node.id) || 0);
+    const below = (node.children || []).reduce((sum, child) => sum + visit(child), 0);
+    node.occupied_qty = own + below;
+    return node.occupied_qty;
+  };
+  (nodes || []).forEach(visit);
+  return nodes;
+}
+
 function buildCapacityContext(location, occupiedQty) {
   const effectiveCapacity = computeEffectiveCapacity(location.capacity_qty);
   return {
@@ -121,6 +138,7 @@ module.exports = {
   getEligibleLocationTypes,
   computeEffectiveCapacity,
   getOccupancyByLocationIds,
+  rollUpOccupancy,
   getLocationCapacityContext,
   getLocationCapacityContextBatch,
   isLocationEligibleForMode,

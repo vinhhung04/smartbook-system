@@ -59,7 +59,10 @@ export interface LocationNode {
   is_active: boolean;
   barcode?: string | null;
   capacity_qty?: number | null;
+  /** Legacy column, not maintained by any stock flow; read `occupied_qty` for the real fill. */
   available?: number | null;
+  /** Copies on hand here and in every location below (tree endpoint only). */
+  occupied_qty?: number;
   zone?: string | null;
   aisle?: string | null;
   shelf?: string | null;

@@ -96,7 +96,7 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
             <div className="space-y-4">
               {SHEET_GROUPS.map((group) => (
                 <section key={group.title}>
-                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.title}</h3>
+                  <h3 className="mb-1.5 text-[11px] font-semibold text-muted-foreground">{group.title}</h3>
                   <ul className="grid grid-cols-2 gap-2">
                     {group.items.map((item) => (
                       <li key={item.to}>

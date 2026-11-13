@@ -11,6 +11,7 @@ import { cn } from '@/components/ui/utils';
 import { toast } from 'sonner';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { BookCoverPlaceholder } from './_shared/book-cover-placeholder';
+import { visualEnhancementTokens } from './_shared/visual-enhancement-tokens';
 
 interface WishlistItem {
   id: string;
@@ -74,7 +75,7 @@ export function CustomerWishlistPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Sách yêu thích"
         subtitle={loading ? 'Đang tải...' : `${items.length} sách trong danh sách của bạn`}
@@ -94,9 +95,10 @@ export function CustomerWishlistPage() {
       ) : items.length === 0 ? (
         <EmptyState
           variant="no-data"
+          className={visualEnhancementTokens.emptyFrame}
           title="Chưa có sách yêu thích"
           description="Thêm sách vào danh sách từ danh mục để theo dõi và được báo khi sách có hàng."
-          action={<NavLink to="/customer/books" className="font-medium text-primary hover:underline">Xem danh mục sách</NavLink>}
+          action={<NavLink to="/customer/books" className={visualEnhancementTokens.primaryAction}>Xem danh mục sách</NavLink>}
         />
       ) : (
         <ul className="space-y-3">

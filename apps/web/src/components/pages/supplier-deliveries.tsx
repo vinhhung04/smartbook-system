@@ -195,7 +195,7 @@ function SupplierDeliveryListView() {
                     { label: "Trạng thái", className: "hidden w-[160px] sm:table-cell" },
                     { label: "Thao tác", className: "w-[130px] text-right" },
                   ].map((heading) => (
-                    <TableHead key={heading.label} className={cn("px-4 text-[11px] uppercase tracking-wider text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                    <TableHead key={heading.label} className={cn("px-4 text-[12px] text-muted-foreground", heading.className)}>{heading.label}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>

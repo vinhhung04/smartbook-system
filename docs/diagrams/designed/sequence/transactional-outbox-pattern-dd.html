@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mẫu Transactional Outbox bảo đảm sự kiện không bị mất khi phát bất đồng bộ</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Diagram Design · SmartBook</p>
+    <h1>Mẫu Transactional Outbox bảo đảm sự kiện không bị mất khi phát bất đồng bộ</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 744" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="transactional-outbox-pattern-dd-title transactional-outbox-pattern-dd-desc">
+<title id="transactional-outbox-pattern-dd-title">Mẫu Transactional Outbox bảo đảm sự kiện không bị mất khi phát bất đồng bộ</title>
+<desc id="transactional-outbox-pattern-dd-desc">Service ghi dữ liệu và sự kiện outbox trong cùng giao dịch; tác vụ phát định kỳ đọc outbox, publish lên broker, đánh dấu hoặc tăng số lần thử; service tiêu thụ kiểm tra inbox để bỏ trùng.</desc>
+<defs>
+  <marker id="transactional-outbox-pattern-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="transactional-outbox-pattern-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="transactional-outbox-pattern-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="transactional-outbox-pattern-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="272" y="444" width="224" height="140" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<line x1="280" y1="512" x2="488" y2="512" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="272" y="340" width="340" height="256" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<!-- lifelines -->
+<line x1="84" y1="104" x2="84" y2="704" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="292" y1="104" x2="292" y2="704" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="476" y1="104" x2="476" y2="704" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="592" y1="104" x2="592" y2="704" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="716" y1="104" x2="716" y2="704" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="88" y1="148" x2="288" y2="148" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="88" y1="184" x2="288" y2="184" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="88" y1="220" x2="288" y2="220" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="88" y1="256" x2="288" y2="256" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="472" y1="396" x2="296" y2="396" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="480" y1="432" x2="588" y2="432" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="472" y1="500" x2="296" y2="500" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="472" y1="572" x2="296" y2="572" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<line x1="596" y1="632" x2="712" y2="632" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<path d="M 712 644 H 688 Q 680 644 680 652 V 672 Q 680 680 688 680 H 710" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#transactional-outbox-pattern-dd-arrow)"/>
+<!-- labels -->
+<rect x="164" y="122" width="48" height="18" rx="2" fill="#ffffff"/>
+<text x="188.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">BEGIN</text>
+<rect x="116" y="158" width="144" height="18" rx="2" fill="#ffffff"/>
+<text x="188.0" y="171" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">cập nhật dữ liệu nghiệp vụ</text>
+<rect x="126" y="194" width="124" height="18" rx="2" fill="#ffffff"/>
+<text x="188.0" y="207" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ghi sự kiện vào outbox</text>
+<rect x="158" y="230" width="60" height="18" rx="2" fill="#ffffff"/>
+<text x="188.0" y="243" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">COMMIT</text>
+<rect x="322" y="370" width="124" height="18" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="383" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đọc sự kiện chưa phát</text>
+<rect x="510" y="406" width="48" height="18" rx="2" fill="#f7f7f7"/>
+<text x="534.0" y="419" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">publish</text>
+<rect x="334" y="474" width="100" height="18" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="487" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đánh dấu đã phát</text>
+<rect x="338" y="546" width="92" height="18" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="559" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">tăng số lần thử</text>
+<path d="M 272 444 H 312 V 456 L 304 464 H 272 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="289.0" y="459" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="320" y="445" width="84" height="18" rx="2" fill="#f7f7f7"/>
+<text x="326" y="459" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[thành công]</text>
+<rect x="284" y="517" width="68" height="18" rx="2" fill="#f7f7f7"/>
+<text x="290" y="531" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[thất bại]</text>
+<path d="M 272 340 H 320 V 352 L 312 360 H 272 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="293.0" y="355" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">loop</text>
+<rect x="328" y="341" width="60" height="18" rx="2" fill="#f7f7f7"/>
+<text x="334" y="355" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[định kỳ]</text>
+<rect x="618" y="606" width="72" height="18" rx="2" fill="#ffffff"/>
+<text x="654.0" y="619" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">giao sự kiện</text>
+<rect x="556" y="645" width="116" height="34" rx="2" fill="#ffffff"/>
+<text x="562" y="658.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">kiểm tra inbox,</text>
+<text x="562" y="674.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">bỏ qua sự kiện trùng</text>
+<!-- notes -->
+<rect x="232" y="268" width="120" height="60" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="244" y="287" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">dữ liệu và sự kiện</text>
+<text x="244" y="303" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">cùng thành công</text>
+<text x="244" y="319" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">hoặc cùng thất bại</text>
+<!-- nodes -->
+<rect x="40" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="84" y="69" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Service</text>
+<text x="84" y="86" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">nghiệp vụ</text>
+<path d="M 268.0 48 V 63 A 24.0 6 0 0 0 316.0 63 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="292" cy="48" rx="24.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="292" y="83" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">CSDL (nghiệp vụ</text>
+<text x="292" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">+ outbox)</text>
+<rect x="430" y="40" width="92" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="476" y="69" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Tác vụ</text>
+<text x="476" y="86" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">phát sự kiện</text>
+<path d="M 568.0 48 V 63 A 24.0 6 0 0 0 616.0 63 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="592" cy="48" rx="24.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="592" y="83" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Message</text>
+<text x="592" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">broker</text>
+<rect x="672" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="716" y="69" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Service</text>
+<text x="716" y="86" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">tiêu thụ</text>
+</svg>
+    </div>
+    <p class="note">Chép nguyên văn từ Hình 2.2 của báo cáo.</p>
+  </div>
+</body>
+</html>

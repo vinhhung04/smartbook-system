@@ -231,19 +231,19 @@ export function BorrowFinesPage() {
         <section aria-label="Tổng quan tiền phạt" className="grid grid-cols-1 gap-3 lg:grid-cols-3">
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-[12px] font-medium text-muted-foreground">Còn phải thu</p>
-            <p className={cn('mt-2 font-mono text-[24px] font-bold leading-none tabular-nums', totals && totals.outstanding > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40')}>
+            <p className={cn('mt-2 text-[24px] font-bold leading-none tabular-nums', totals && totals.outstanding > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-foreground/40')}>
               {totals ? formatVnd(totals.outstanding) : '-'}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-[12px] font-medium text-muted-foreground">Đã thu</p>
-            <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
+            <p className="mt-2 text-[24px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
               {totals ? formatVnd(totals.collected) : '-'}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-[12px] font-medium text-muted-foreground">Khoản chưa thu xong</p>
-            <p className="mt-2 font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">
+            <p className="mt-2 text-[24px] font-bold leading-none tabular-nums text-foreground">
               {totals ? totals.open_count.toLocaleString('vi-VN') : '-'}
               <span className="ml-1.5 text-[12px] font-normal text-muted-foreground">khoản</span>
             </p>
@@ -277,7 +277,7 @@ export function BorrowFinesPage() {
                   { label: 'Trạng thái', className: 'hidden w-[150px] lg:table-cell' },
                   { label: 'Thao tác', className: 'w-[190px] text-right' },
                 ].map((header) => (
-                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium text-muted-foreground', header.className)}>
                     {header.label}
                   </TableHead>
                 ))}
@@ -321,12 +321,12 @@ export function BorrowFinesPage() {
                         ) : null}
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 lg:hidden">
                           {badge}
-                          <span className={cn('font-mono text-xs md:hidden', remainingClass(fine.status, remaining))}>Còn {formatVnd(remaining)}</span>
+                          <span className={cn('text-xs md:hidden', remainingClass(fine.status, remaining))}>Còn {formatVnd(remaining)}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="hidden px-4 py-3 text-right font-mono text-sm tabular-nums text-muted-foreground xl:table-cell">{formatVnd(total)}</TableCell>
+                      <TableCell className="hidden px-4 py-3 text-right text-sm tabular-nums text-muted-foreground xl:table-cell">{formatVnd(total)}</TableCell>
                       <TableCell className="hidden px-4 py-3 md:table-cell">
-                        <div className="text-right font-mono text-sm tabular-nums">
+                        <div className="text-right text-sm tabular-nums">
                           <span className={remainingClass(fine.status, remaining)}>{formatVnd(remaining)}</span>
                         </div>
                         {total > 0 && (
@@ -399,17 +399,17 @@ export function BorrowFinesPage() {
               <div className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-muted/30 p-3">
                 <div>
                   <p className="text-[11px] text-muted-foreground">Tổng tiền phạt</p>
-                  <p className="font-mono text-sm font-semibold tabular-nums">{formatVnd(detailFine.amount)}</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatVnd(detailFine.amount)}</p>
                 </div>
                 <div>
                   <p className="text-[11px] text-muted-foreground">Đã trả</p>
-                  <p className="font-mono text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  <p className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                     {formatVnd(detailFine.summary?.paid_amount)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[11px] text-muted-foreground">Còn lại</p>
-                  <p className={cn('font-mono text-sm font-semibold tabular-nums', remainingClass(detailFine.status, Number(detailFine.summary?.remaining_balance || 0)))}>
+                  <p className={cn('text-sm font-semibold tabular-nums', remainingClass(detailFine.status, Number(detailFine.summary?.remaining_balance || 0)))}>
                     {formatVnd(detailFine.summary?.remaining_balance)}
                   </p>
                 </div>
@@ -422,7 +422,7 @@ export function BorrowFinesPage() {
                     {detailFine.fine_payments.map((payment) => (
                       <div key={payment.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
                         <div className="min-w-0">
-                          <p className="font-mono text-sm font-medium tabular-nums">{formatVnd(payment.amount)}</p>
+                          <p className="text-sm font-medium tabular-nums">{formatVnd(payment.amount)}</p>
                           <p className="text-[11px] text-muted-foreground">
                             {PAYMENT_METHOD_LABELS[payment.payment_method] ?? payment.payment_method} · {new Date(payment.paid_at).toLocaleString('vi-VN')}
                           </p>
@@ -481,7 +481,7 @@ export function BorrowFinesPage() {
 
               <p className="text-[12px] text-muted-foreground">
                 Còn lại{' '}
-                <span className="font-mono text-base font-semibold text-foreground">
+                <span className="tabular-nums text-base font-semibold text-foreground">
                   {formatVnd(paymentDialogFine.summary?.remaining_balance)}
                 </span>
               </p>
@@ -495,7 +495,7 @@ export function BorrowFinesPage() {
                     step="1000"
                     value={paymentForm.amount}
                     onChange={(event) => setPaymentForm((current) => ({ ...current, amount: event.target.value }))}
-                    className="font-mono"
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -555,7 +555,7 @@ export function BorrowFinesPage() {
 
               <p className="text-[12px] text-muted-foreground">
                 Còn lại{' '}
-                <span className="font-mono text-base font-semibold text-foreground">
+                <span className="tabular-nums text-base font-semibold text-foreground">
                   {formatVnd(waiveDialogFine.summary?.remaining_balance)}
                 </span>
               </p>
@@ -569,7 +569,7 @@ export function BorrowFinesPage() {
                     step="1000"
                     value={waiveForm.amount}
                     onChange={(event) => setWaiveForm((current) => ({ ...current, amount: event.target.value }))}
-                    className="font-mono"
+                    className="tabular-nums"
                   />
                 </div>
                 <div className="space-y-1.5">

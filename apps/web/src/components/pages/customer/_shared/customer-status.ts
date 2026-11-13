@@ -7,7 +7,7 @@ type StatusTone = {
 
 export function getStatusTone(status?: string | null): StatusTone {
   if (!status) {
-    return { label: 'Unknown', className: TONE_CLASSNAME.neutral };
+    return { label: 'Không rõ', className: TONE_CLASSNAME.neutral };
   }
 
   const normalized = status.toUpperCase();

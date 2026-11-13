@@ -358,7 +358,7 @@ export function CatalogPage() {
                 <TableHeader>
                   <TableRow className="bg-muted/30 hover:bg-muted/30">
                     <TableHead
-                      className="cursor-pointer select-none px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                      className="cursor-pointer select-none px-4 py-3 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                       onClick={() => toggleSort("title")}
                       aria-sort={sortField === "title" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     >
@@ -366,14 +366,14 @@ export function CatalogPage() {
                         Sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
                       </span>
                     </TableHead>
-                    <TableHead className="hidden w-[170px] px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground md:table-cell">
+                    <TableHead className="hidden w-[170px] px-4 py-3 text-[12px] text-muted-foreground md:table-cell">
                       Phân loại
                     </TableHead>
-                    <TableHead className="hidden w-[110px] px-4 py-3 text-right text-[11px] uppercase tracking-wider text-muted-foreground lg:table-cell">
+                    <TableHead className="hidden w-[110px] px-4 py-3 text-right text-[12px] text-muted-foreground lg:table-cell">
                       Giá
                     </TableHead>
                     <TableHead
-                      className="w-[110px] cursor-pointer select-none px-4 py-3 text-right text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                      className="w-[110px] cursor-pointer select-none px-4 py-3 text-right text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                       onClick={() => toggleSort("stock")}
                       aria-sort={sortField === "stock" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     >
@@ -382,7 +382,7 @@ export function CatalogPage() {
                       </span>
                     </TableHead>
                     <TableHead
-                      className="hidden w-[120px] cursor-pointer select-none px-4 py-3 text-[11px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground xl:table-cell"
+                      className="hidden w-[120px] cursor-pointer select-none px-4 py-3 text-[12px] text-muted-foreground transition-colors hover:text-foreground xl:table-cell"
                       onClick={() => toggleSort("updatedAt")}
                       aria-sort={sortField === "updatedAt" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     >

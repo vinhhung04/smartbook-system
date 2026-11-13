@@ -27,7 +27,6 @@ export function PublicBranchesPage() {
   return (
     <>
       <PageHero
-        eyebrow="Hệ thống thư viện"
         title="Tìm chi nhánh SmartBook gần bạn"
         description="Xem địa chỉ và khám phá sách đang có tại từng chi nhánh. Đặt trước trực tuyến rồi đến chi nhánh bạn chọn để nhận sách."
       />

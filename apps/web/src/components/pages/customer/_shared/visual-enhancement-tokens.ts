@@ -10,5 +10,8 @@ export const visualEnhancementTokens = {
     warning: 'border-amber-200 bg-amber-50/80 text-amber-900',
     critical: 'border-rose-200 bg-rose-50/80 text-rose-900',
   },
+  emptyFrame: 'rounded-[14px] border border-dashed border-border bg-card py-14',
+  primaryAction: 'inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
+  secondaryAction: 'inline-flex items-center gap-2 rounded-xl border border-input bg-card px-4 py-2 text-[13px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
   accentGlow: 'bg-[radial-gradient(circle_at_20%_0%,rgba(59,130,246,0.16),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.14),transparent_42%)]',
 };

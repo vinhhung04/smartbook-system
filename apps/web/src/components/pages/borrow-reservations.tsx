@@ -249,7 +249,7 @@ export function BorrowReservationsPage() {
                   { label: 'Trạng thái', className: 'hidden w-[190px] md:table-cell' },
                   { label: 'Thao tác', className: 'w-[150px] text-right' },
                 ].map((header) => (
-                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium text-muted-foreground', header.className)}>
                     {header.label}
                   </TableHead>
                 ))}

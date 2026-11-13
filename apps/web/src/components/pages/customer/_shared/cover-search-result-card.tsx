@@ -35,10 +35,10 @@ export function CoverSearchResultCard({ candidate, onReserve, reserving = false 
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="max-w-[70%] truncate rounded-[8px] border border-border bg-muted/90 px-2 py-1 text-[10px] uppercase tracking-[0.05em] text-muted-foreground">
+        <span className="max-w-[70%] truncate rounded-[8px] border border-border bg-muted/90 px-2 py-1 text-[10px] text-muted-foreground">
           {candidate.category || 'Chưa phân loại'}
         </span>
-        <StatusBadge status={isAvailable ? 'ACTIVE' : 'OUT_OF_STOCK'} />
+        <StatusBadge status={isAvailable ? 'AVAILABLE' : 'OUT_OF_STOCK'} />
       </div>
 
       <h3 className="mt-2 line-clamp-2 text-[14px] text-foreground" style={{ fontWeight: 700 }}>

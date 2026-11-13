@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 868" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-copilot-query-verification-dd-p2-title ai-copilot-query-verification-dd-p2-desc" id="ai-copilot-query-verification-dd-p2-root">
+<title id="ai-copilot-query-verification-dd-p2-title">Trợ lý AI, phần 2: bằng chứng, sinh câu trả lời và kiểm chứng</title>
+<desc id="ai-copilot-query-verification-dd-p2-desc">AI Service gọi các công cụ phân tích bằng JWT người dùng, dựng bằng chứng và đặc tả biểu đồ, nhờ LLM viết câu trả lời rồi kiểm chứng tất định: sinh lại tối đa một lần, lược câu sai hoặc cho qua.</desc>
+<defs>
+      <style>#ai-copilot-query-verification-dd-p2-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #ai-copilot-query-verification-dd-p2-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #ai-copilot-query-verification-dd-p2-root .diagram-container { width: 100%; overflow-x: auto; }
+      #ai-copilot-query-verification-dd-p2-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#ai-copilot-query-verification-dd-p2-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="68" y="124" width="484" height="140" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<rect x="168" y="492" width="564" height="312" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<line x1="176" y1="652" x2="724" y2="652" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<line x1="176" y1="728" x2="724" y2="728" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- lifelines -->
+<line x1="88" y1="104" x2="88" y2="828" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="352" y1="104" x2="352" y2="828" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="532" y1="104" x2="532" y2="828" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="712" y1="104" x2="712" y2="828" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="348" y1="180" x2="92" y2="180" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-link)"/>
+<line x1="92" y1="216" x2="528" y2="216" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-link)"/>
+<line x1="528" y1="252" x2="356" y2="252" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow)"/>
+<line x1="356" y1="372" x2="708" y2="372" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-link)"/>
+<line x1="708" y1="408" x2="356" y2="408" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow)"/>
+<line x1="356" y1="548" x2="708" y2="548" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow-link)"/>
+<line x1="708" y1="584" x2="356" y2="584" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-copilot-query-verification-dd-p2-ai-copilot-query-verification-dd-p2-arrow)"/>
+<!-- labels -->
+<rect x="106" y="154" width="228" height="18" rx="2" fill="#f7f7f7"/>
+<text x="220.0" y="167" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> GET /analytics/... bằng JWT người dùng</text>
+<rect x="188" y="190" width="244" height="18" rx="2" fill="#f7f7f7"/>
+<text x="310.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> Chuyển tiếp, kiểm tra quyền và phạm vi kho</text>
+<rect x="378" y="226" width="128" height="18" rx="2" fill="#f7f7f7"/>
+<text x="442.0" y="239" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> Dữ liệu có cấu trúc</text>
+<path d="M 68 124 H 108 V 136 L 100 144 H 68 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="85.0" y="139" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">par</text>
+<rect x="116" y="125" width="192" height="18" rx="2" fill="#f7f7f7"/>
+<text x="122" y="139" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Gọi các công cụ trong kế hoạch]</text>
+<rect x="374" y="346" width="316" height="18" rx="2" fill="#ffffff"/>
+<text x="532.0" y="359" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> Sinh câu trả lời từ bằng chứng (không được tự vẽ biểu đồ)</text>
+<rect x="466" y="382" width="132" height="18" rx="2" fill="#ffffff"/>
+<text x="532.0" y="395" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> Bản nháp câu trả lời</text>
+<rect x="468" y="522" width="128" height="18" rx="2" fill="#f7f7f7"/>
+<text x="532.0" y="535" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> Sinh lại tối đa 1 lần</text>
+<rect x="482" y="558" width="100" height="18" rx="2" fill="#f7f7f7"/>
+<text x="532.0" y="571" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">14.</tspan> Bản nháp mới</text>
+<path d="M 168 492 H 208 V 504 L 200 512 H 168 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="185.0" y="507" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="216" y="493" width="224" height="18" rx="2" fill="#f7f7f7"/>
+<text x="222" y="507" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Lỗi nghiêm trọng có căn cứ chính xác]</text>
+<rect x="180" y="657" width="172" height="18" rx="2" fill="#f7f7f7"/>
+<text x="186" y="671" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Lỗi chỉ ở nhận định suy luận]</text>
+<rect x="180" y="733" width="124" height="18" rx="2" fill="#f7f7f7"/>
+<text x="186" y="747" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Không phát hiện lỗi]</text>
+<!-- notes -->
+<rect x="64" y="276" width="492" height="60" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="76" y="295" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Bảng bằng chứng (evidence sheet), giải thích FACT /</text>
+<text x="76" y="311" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">INFERENCE / ASSUMPTION / UNKNOWN, đặc tả biểu đồ</text>
+<text x="76" y="327" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">line/bar/area/pie/kpi/table dựng từ dữ liệu công cụ</text>
+<rect x="64" y="420" width="492" height="60" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="76" y="439" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Kiểm chứng Layer 1 tất định: đối chiếu số liệu, kỳ, xếp hạng,</text>
+<text x="76" y="455" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">ngân sách, NO_DATA, diễn đạt quá mức</text>
+<text x="76" y="471" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">(Layer 2+3 trích claim bằng LLM: cờ COPILOT_SEMANTIC_CLAIMS, mặc định off)</text>
+<rect x="228" y="596" width="248" height="44" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="240" y="615" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Vẫn lỗi → BLOCKED: trả câu dựng từ dữ liệu,</text>
+<text x="240" y="631" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">không đề xuất hành động</text>
+<rect x="188" y="688" width="324" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="200" y="707" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Lược bỏ câu sai, trạng thái WARNING, safe_to_act = false</text>
+<rect x="220" y="764" width="260" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="232" y="783" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">PASSED (hoặc REPAIRED nếu sửa số an toàn)</text>
+<!-- nodes -->
+<rect x="38" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="88" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="88" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="308" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="352" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">AI Service</text>
+<text x="352" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FastAPI</text>
+<rect x="486" y="40" width="92" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="532" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Analytics</text>
+<text x="532" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">Inventory API</text>
+<rect x="666" y="40" width="92" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="712" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">OpenRouter</text>
+<text x="712" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">Qwen</text>
+</svg>

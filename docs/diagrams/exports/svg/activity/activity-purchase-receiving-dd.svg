@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 1216" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="activity-purchase-receiving-dd-title activity-purchase-receiving-dd-desc" id="activity-purchase-receiving-dd-root">
+<title id="activity-purchase-receiving-dd-title">Sơ đồ hoạt động quy trình mua hàng, nhận hàng và nhập kho</title>
+<desc id="activity-purchase-receiving-dd-desc">Từ yêu cầu mua hàng, duyệt và gửi đơn, nhà cung cấp giao hàng, kiểm đếm, ghi sổ nhập kho, xử lý thiếu hàng và xếp kệ.</desc>
+<defs>
+      <style>#activity-purchase-receiving-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #activity-purchase-receiving-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #activity-purchase-receiving-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #activity-purchase-receiving-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#activity-purchase-receiving-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1f3864"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="40" y="40" width="720" height="1136" fill="#ffffff" stroke="#475569" stroke-width="1"/>
+<rect x="40" y="40" width="720" height="40" fill="#f3f6fa" stroke="#475569" stroke-width="1"/>
+<line x1="198.0" y1="40" x2="198.0" y2="1176" stroke="#c5cedb" stroke-width="1"/>
+<line x1="382.4" y1="40" x2="382.4" y2="1176" stroke="#c5cedb" stroke-width="1"/>
+<line x1="584.4" y1="40" x2="584.4" y2="1176" stroke="#c5cedb" stroke-width="1"/>
+<text x="119.02439024390245" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Nhân viên kho</text>
+<text x="290.2439024390244" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Quản lý kho</text>
+<text x="483.41463414634154" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Hệ thống</text>
+<text x="672.1951219512196" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Nhà cung cấp</text>
+<path d="M 119.0 112.0 L 119.0 128.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 119.0 170.0 L 119.0 173.0 Q 119.0 176.0 122.0 176.0 L 282.2 176.0 Q 290.2 176.0 290.2 181.0 L 290.2 186.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 290.2 228.0 L 290.2 244.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 290.2 286.0 L 290.2 302.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 290.2 328.0 L 290.2 331.0 Q 290.2 334.0 293.2 334.0 L 475.4 334.0 Q 483.4 334.0 483.4 339.0 L 483.4 344.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 386.0 L 483.4 389.0 Q 483.4 392.0 486.4 392.0 L 664.2 392.0 Q 672.2 392.0 672.2 397.0 L 672.2 402.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 672.2 428.0 L 672.2 444.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 672.2 470.0 L 672.2 473.0 Q 672.2 476.0 669.2 476.0 L 298.2 476.0 Q 290.2 476.0 290.2 481.0 L 290.2 486.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 290.2 544.0 L 290.2 547.0 Q 290.2 550.0 287.2 550.0 L 127.0 550.0 Q 119.0 550.0 119.0 555.0 L 119.0 560.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 119.0 602.0 L 119.0 605.0 Q 119.0 608.0 122.0 608.0 L 282.2 608.0 Q 290.2 608.0 290.2 613.0 L 290.2 618.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 290.2 644.0 L 290.2 647.0 Q 290.2 650.0 293.2 650.0 L 475.4 650.0 Q 483.4 650.0 483.4 655.0 L 483.4 660.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 702.0 L 483.4 718.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 760.0 L 483.4 776.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 549.4 739.0 L 573.4 739.0 Q 581.4 739.0 581.4 747.0 L 581.4 952.0 Q 581.4 960.0 573.4 960.0 L 493.4 960.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 802.0 L 483.4 805.0 Q 483.4 808.0 480.4 808.0 L 298.2 808.0 Q 290.2 808.0 290.2 813.0 L 290.2 818.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 290.2 860.0 L 290.2 863.0 Q 290.2 866.0 293.2 866.0 L 575.4 866.0 A 6 6 0 0 0 587.4 866.0 L 664.2 866.0 Q 672.2 866.0 672.2 871.0 L 672.2 876.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 672.2 934.0 L 672.2 937.0 Q 672.2 940.0 669.2 940.0 L 587.4 940.0 A 6 6 0 0 1 575.4 940.0 L 491.4 940.0 Q 483.4 940.0 483.4 945.0 L 483.4 950.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 970.0 L 483.4 986.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 1028.0 L 483.4 1031.0 Q 483.4 1034.0 480.4 1034.0 L 127.0 1034.0 Q 119.0 1034.0 119.0 1039.0 L 119.0 1044.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 119.0 1086.0 L 119.0 1089.0 Q 119.0 1092.0 122.0 1092.0 L 475.4 1092.0 Q 483.4 1092.0 483.4 1097.0 L 483.4 1102.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<path d="M 483.4 1128.0 L 483.4 1144.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-purchase-receiving-dd-activity-purchase-receiving-dd-arrow)"/>
+<rect x="491.41463414634154" y="760.0" width="24" height="16" rx="2" fill="#ffffff"/>
+<text x="503.41463414634154" y="772.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">có</text>
+<rect x="531.4146341463415" y="761.0" width="44" height="16" rx="2" fill="#ffffff"/>
+<text x="553.4146341463415" y="773.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">không</text>
+<circle cx="119.02439024390245" cy="102.0" r="9" fill="#1f3864"/>
+<rect x="57.024390243902445" y="128.0" width="124" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="119.02439024390245" y="145.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tạo yêu cầu mua</text>
+<text x="119.02439024390245" y="161.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">hàng</text>
+<rect x="212.2439024390244" y="186.0" width="156" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="290.2439024390244" y="203.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Duyệt yêu cầu, chuyển</text>
+<text x="290.2439024390244" y="219.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">thành đơn đặt hàng</text>
+<rect x="216.2439024390244" y="244.0" width="148" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="290.2439024390244" y="261.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Trình duyệt và duyệt</text>
+<text x="290.2439024390244" y="277.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">đơn đặt hàng</text>
+<rect x="206.2439024390244" y="302.0" width="168" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="290.2439024390244" y="319.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Gửi đơn cho nhà cung cấp</text>
+<rect x="393.41463414634154" y="344.0" width="180" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="483.41463414634154" y="361.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tạo liên kết cổng nhà cung</text>
+<text x="483.41463414634154" y="377.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">cấp, ghi sự kiện vào outbox</text>
+<rect x="594.1951219512196" y="402.0" width="156" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="672.1951219512196" y="419.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Xác nhận đơn đặt hàng</text>
+<rect x="598.1951219512196" y="444.0" width="148" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="672.1951219512196" y="461.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Gửi hóa đơn giao hàng</text>
+<rect x="210.2439024390244" y="486.0" width="160" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="290.2439024390244" y="503.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Lập phiếu nhập nháp từ</text>
+<text x="290.2439024390244" y="519.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">hóa đơn, giao nhân viên</text>
+<text x="290.2439024390244" y="535.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">kiểm đếm</text>
+<rect x="47.024390243902445" y="560.0" width="144" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="119.02439024390245" y="577.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Kiểm đếm hàng thực</text>
+<text x="119.02439024390245" y="593.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">nhận</text>
+<rect x="228.2439024390244" y="618.0" width="124" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="290.2439024390244" y="635.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Ghi sổ phiếu nhập</text>
+<rect x="391.41463414634154" y="660.0" width="184" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="483.41463414634154" y="677.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Cộng tồn, ghi biến động kho,</text>
+<text x="483.41463414634154" y="693.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">cập nhật trạng thái đơn</text>
+<polygon points="417.41463414634154,739.0 429.41463414634154,718.0 537.4146341463415,718.0 549.4146341463415,739.0 537.4146341463415,760.0 429.41463414634154,760.0" fill="#f3f6fa" stroke="#1f3864" stroke-width="1.2"/>
+<text x="483.41463414634154" y="735.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Thực nhận ít hơn</text>
+<text x="483.41463414634154" y="751.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">hóa đơn?</text>
+<rect x="401.41463414634154" y="776.0" width="164" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="483.41463414634154" y="793.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Sinh báo cáo thiếu hàng</text>
+<rect x="206.2439024390244" y="818.0" width="168" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="290.2439024390244" y="835.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Gửi báo cáo cho nhà cung</text>
+<text x="290.2439024390244" y="851.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">cấp</text>
+<rect x="592.1951219512196" y="876.0" width="160" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="672.1951219512196" y="893.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Xác nhận và gửi hóa đơn</text>
+<text x="672.1951219512196" y="909.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">giao bù hoặc báo không</text>
+<text x="672.1951219512196" y="925.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">thể giao</text>
+<polygon points="483.41463414634154,950.0 493.41463414634154,960.0 483.41463414634154,970.0 473.41463414634154,960.0" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<rect x="411.41463414634154" y="986.0" width="144" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="483.41463414634154" y="1003.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tạo công việc xếp kệ</text>
+<text x="483.41463414634154" y="1019.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">kèm gợi ý vị trí</text>
+<rect x="49.024390243902445" y="1044.0" width="140" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="119.02439024390245" y="1061.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Quét vị trí và sách,</text>
+<text x="119.02439024390245" y="1077.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">xác nhận xếp kệ</text>
+<rect x="401.41463414634154" y="1102.0" width="164" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="483.41463414634154" y="1119.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Cập nhật tồn theo vị trí</text>
+<circle cx="483.41463414634154" cy="1154.0" r="10" fill="#ffffff" stroke="#1f3864" stroke-width="1.4"/><circle cx="483.41463414634154" cy="1154.0" r="6" fill="#1f3864"/>
+</svg>

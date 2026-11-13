@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quy trình CI/CD từ mã nguồn đến VPS production</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · Diagram Design · SmartBook</p>
+    <h1>Quy trình CI/CD từ mã nguồn đến VPS production</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 1048" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="deploy-ci-cd-pipeline-dd-title deploy-ci-cd-pipeline-dd-desc">
+<title id="deploy-ci-cd-pipeline-dd-title">Quy trình CI/CD từ mã nguồn đến VPS production</title>
+<desc id="deploy-ci-cd-pipeline-dd-desc">ci.yml kiểm tra mọi nhánh; khi hợp nhất vào production, deploy-production.yml kiểm tra lại, build 7 image lên GHCR và SSH vào VPS, nơi deploy.sh sao lưu, kéo image, chạy migrate và tự rollback nếu healthcheck không đạt.</desc>
+<defs>
+  <marker id="deploy-ci-cd-pipeline-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker>
+  <marker id="deploy-ci-cd-pipeline-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#b45309"/></marker>
+  <marker id="deploy-ci-cd-pipeline-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2f5597"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- zones -->
+<rect x="40" y="40" width="320" height="452" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="62" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">1. ci.yml – mọi nhánh, pull request</text>
+<rect x="40" y="548" width="320" height="424" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="570" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">2. deploy-production.yml –</text>
+<text x="56" y="588" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">nhánh production</text>
+<rect x="400" y="40" width="360" height="700" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="416" y="62" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">3. VPS – deploy/scripts/deploy.sh</text>
+<!-- arrows -->
+<path d="M 200 124 V 143" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 204 V 223" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 268 V 287" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 348 V 367" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 412 V 431" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 492 V 547" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 684 V 703" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 780 V 799" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 200 860 V 879" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 360 620 H 399" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 580 140 V 159" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 580 220 V 239" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 580 300 V 319" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 580 408 V 443" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<path d="M 684 364 H 744 Q 752 364 752 372 V 566 Q 752 574 744 574 H 745" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deploy-ci-cd-pipeline-dd-arrow)"/>
+<!-- labels -->
+<rect x="212" y="510" width="152" height="18" rx="2" fill="#ffffff"/>
+<text x="288.0" y="523" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">hợp nhất vào production</text>
+<rect x="540" y="417" width="28" height="18" rx="2" fill="#ffffff"/>
+<text x="554.0" y="430" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Có</text>
+<rect x="688" y="338" width="48" height="18" rx="2" fill="#ffffff"/>
+<text x="712.0" y="351" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Không</text>
+<!-- nodes -->
+<rect x="56" y="80" width="288" height="44" rx="6" fill="#ffffff"/>
+<rect x="56" y="80" width="288" height="44" rx="6" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<text x="200.0" y="107.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Push mã / mở pull request</text>
+<rect x="56" y="144" width="288" height="60" rx="6" fill="#ffffff"/>
+<rect x="56" y="144" width="288" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="171.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Kiểm tra toàn workspace</text>
+<text x="200.0" y="189.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">lint, typecheck, build, unit test</text>
+<rect x="56" y="224" width="288" height="44" rx="6" fill="#ffffff"/>
+<rect x="56" y="224" width="288" height="44" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="251.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Prisma schema 3 service</text>
+<rect x="56" y="288" width="288" height="60" rx="6" fill="#ffffff"/>
+<rect x="56" y="288" width="288" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="315.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Kiểm tra cấu hình</text>
+<text x="200.0" y="333.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Docker Compose</text>
+<rect x="56" y="368" width="288" height="44" rx="6" fill="#ffffff"/>
+<rect x="56" y="368" width="288" height="44" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="395.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Kiểm thử tích hợp trên Docker</text>
+<rect x="56" y="432" width="288" height="44" rx="6" fill="#ffffff"/>
+<rect x="56" y="432" width="288" height="44" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="459.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Kiểm thử E2E Playwright</text>
+<rect x="56" y="608" width="288" height="76" rx="6" fill="#ffffff"/>
+<rect x="56" y="608" width="288" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="635.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Job test (cổng chặn): lint, typecheck,</text>
+<text x="200.0" y="653.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">build, test Node/Web/AI,</text>
+<text x="200.0" y="669.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">kiểm tra compose.prod.yml</text>
+<rect x="56" y="704" width="288" height="76" rx="6" fill="#ffffff"/>
+<rect x="56" y="704" width="288" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="731.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Job build: ma trận 7 image</text>
+<text x="200.0" y="749.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">web, api-gateway, auth, inventory,</text>
+<text x="200.0" y="765.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">borrow, analytics, ai</text>
+<rect x="56" y="800" width="288" height="60" rx="6" fill="#ffffff"/>
+<rect x="56" y="800" width="288" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="827.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Đẩy lên GHCR</text>
+<text x="200.0" y="845.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">tag = commit SHA và production</text>
+<rect x="56" y="880" width="288" height="60" rx="6" fill="#ffffff"/>
+<rect x="56" y="880" width="288" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="200.0" y="907.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Job deploy (môi trường production)</text>
+<text x="200.0" y="925.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">SSH với host key được ghim</text>
+<rect x="416" y="80" width="328" height="60" rx="6" fill="#ffffff"/>
+<rect x="416" y="80" width="328" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="580.0" y="107.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">pg_dump trước khi deploy</text>
+<text x="580.0" y="125.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(giữ 5 bản predeploy)</text>
+<rect x="416" y="160" width="328" height="60" rx="6" fill="#ffffff"/>
+<rect x="416" y="160" width="328" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="580.0" y="187.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">docker compose pull</text>
+<text x="580.0" y="205.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">IMAGE_TAG = SHA</text>
+<rect x="416" y="240" width="328" height="60" rx="6" fill="#ffffff"/>
+<rect x="416" y="240" width="328" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="580.0" y="267.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">up -d --wait</text>
+<text x="580.0" y="285.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">prisma migrate deploy</text>
+<polygon points="580,320 684,364 580,408 476,364" fill="#ffffff"/>
+<polygon points="580,320 684,364 580,408 476,364" fill="rgba(180,83,9,0.08)" stroke="#b45309" stroke-width="1.2"/>
+<text x="580" y="360" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Healthcheck và</text>
+<text x="580" y="378" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">smoke test đạt?</text>
+<rect x="416" y="444" width="328" height="76" rx="6" fill="#ffffff"/>
+<rect x="416" y="444" width="328" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="580.0" y="471.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Ghi state/releases.log,</text>
+<text x="580.0" y="489.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">giữ image 3 release gần nhất,</text>
+<text x="580.0" y="505.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">kiểm tra từ Internet</text>
+<rect x="416" y="544" width="328" height="60" rx="6" fill="#ffffff"/>
+<rect x="416" y="544" width="328" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="580.0" y="571.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Tự rollback về release trước</text>
+<text x="580.0" y="589.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(chỉ image, không đổi schema)</text>
+<rect x="416" y="628" width="328" height="60" rx="6" fill="#ffffff"/>
+<rect x="416" y="628" width="328" height="60" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="580.0" y="655.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Cron: backup.sh 02:30 hằng ngày</text>
+<text x="580.0" y="673.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(giữ 14 ngày), healthcheck.sh 5 phút</text>
+<!-- legend -->
+<line x1="40" y1="1000" x2="760" y2="1000" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<rect x="44" y="1014" width="20" height="12" rx="2" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<text x="72" y="1024" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Sự kiện kích hoạt</text>
+<rect x="188" y="1014" width="20" height="12" rx="2" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="216" y="1024" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Bước tự động</text>
+<rect x="308" y="1014" width="20" height="12" rx="2" fill="rgba(180,83,9,0.08)" stroke="#b45309" stroke-width="1"/>
+<text x="336" y="1024" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Điểm quyết định</text>
+<rect x="444" y="1014" width="20" height="12" rx="2" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="472" y="1024" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Tác vụ định kỳ</text>
+<line x1="572" y1="1020" x2="592" y2="1020" stroke="#475569" stroke-width="1.2"/>
+<text x="600" y="1024" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Thứ tự thực hiện</text>
+</svg>
+    </div>
+    <p class="note">Nguồn: <code>docs/diagrams/source/architecture/deploy-ci-cd-pipeline.mmd</code> (Hình 6.1), vẽ lại ở mức faithful.</p>
+  </div>
+</body>
+</html>

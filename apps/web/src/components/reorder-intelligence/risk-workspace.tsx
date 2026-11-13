@@ -246,7 +246,7 @@ export function RiskWorkspace({ config, data, rows, loading, error, onRetry }: {
             <div role="region" aria-label={`Bảng ${config.title.toLowerCase()}`} tabIndex={0} className="max-h-[min(72vh,760px)] overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
               <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-[13px]">
                 <caption className="sr-only">{config.title}, xếp theo điểm rủi ro giảm dần. Mở từng dòng để xem các yếu tố ảnh hưởng.</caption>
-                <thead className="sticky top-0 z-10 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                <thead className="sticky top-0 z-10 whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
                   <tr className="[&>th]:border-b [&>th]:border-border [&>th]:bg-muted/50 [&>th]:py-2.5">
                     <th scope="col" className="pl-4 pr-3">Bạn đọc · sách</th>
                     <th scope="col" className="w-[170px] px-3">{config.toLabel}</th>

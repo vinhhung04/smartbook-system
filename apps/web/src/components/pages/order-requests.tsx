@@ -668,7 +668,7 @@ export function OrderRequestsPage() {
                         { label: "Yêu cầu lúc", className: "hidden w-[150px] xl:table-cell" },
                         { label: "Thao tác", className: "w-[150px] text-right" },
                       ].map((head) => (
-                        <TableHead key={head.label} className={cn("px-4 text-[11px] uppercase tracking-wider text-muted-foreground", head.className)}>
+                        <TableHead key={head.label} className={cn("px-4 text-[12px] text-muted-foreground", head.className)}>
                           {head.label}
                         </TableHead>
                       ))}
@@ -1017,7 +1017,7 @@ export function OrderRequestsPage() {
                       {["Sản phẩm", "Số lượng", "Thao tác"].map((head) => (
                         <th
                           key={head}
-                          className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+                          className="px-4 py-3 text-left text-[12px] font-medium text-muted-foreground"
                         >
                           {head}
                         </th>

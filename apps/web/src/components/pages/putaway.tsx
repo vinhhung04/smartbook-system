@@ -11,6 +11,7 @@ import { canManageReceiving } from "@/lib/rbac";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/status-badge";
+import { getWarehouseTaskStatusLabel } from "@/lib/status-registry";
 import { PriorityBadge } from "@/components/ui/priority-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
@@ -188,7 +189,7 @@ export function PutawayPage() {
                     { label: "Phụ trách", className: cn("hidden lg:table-cell", showAssign ? "w-[330px]" : "w-[220px]") },
                     { label: "Thao tác", className: "w-[120px] text-right" },
                   ].map((header) => (
-                    <th key={header.label} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground", header.className)}>{header.label}</th>
+                    <th key={header.label} className={cn("px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground", header.className)}>{header.label}</th>
                   ))}
                 </tr>
               </thead>
@@ -279,7 +280,7 @@ export function PutawayPage() {
                             {[receipt.warehouse_code || receipt.warehouse_name, `${receipt.line_count} dòng`, formatDate(receipt.received_at || receipt.created_at)].filter(Boolean).join(" · ")}
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
-                            <StatusBadge label={receipt.status} variant={statusBadgeVariant(receipt.status)} dot />
+                            <StatusBadge label={getWarehouseTaskStatusLabel(receipt.status)} variant={statusBadgeVariant(receipt.status)} dot />
                             <PriorityBadge priority={priority} />
                           </div>
                           <p className="mt-1 text-[12px] text-muted-foreground md:hidden">Còn {receipt.remaining_quantity} quyển</p>
@@ -287,7 +288,7 @@ export function PutawayPage() {
                         </td>
                         <td className="hidden px-4 py-3 align-top sm:table-cell">
                           <div className="flex flex-col items-start gap-1.5">
-                            <StatusBadge label={receipt.status} variant={statusBadgeVariant(receipt.status)} dot />
+                            <StatusBadge label={getWarehouseTaskStatusLabel(receipt.status)} variant={statusBadgeVariant(receipt.status)} dot />
                             <PriorityBadge priority={priority} />
                           </div>
                         </td>

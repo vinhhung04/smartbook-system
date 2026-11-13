@@ -1,0 +1,40 @@
+---
+title: "Sơ đồ tuần tự: Đề xuất nhập hàng và phân bổ ngân sách"
+---
+%% Nguồn đối chiếu (nhánh hungg):
+%%   services/analytics-service/src/controllers/analytics.controller.js (getReorderSuggestions)
+%%   services/analytics-service/src/utils/forecast.js (EWMA α=0,35 + xu hướng), reorder-suggestion.js (hệ số mùa vụ [0,5; 2,0], z=1,645)
+%%   services/analytics-service/src/utils/lead-time.js (biến thể → nhà cung cấp → cam kết → 14 ngày, tối thiểu 3 quan sát)
+%%   services/analytics-service/src/utils/expected-returns.js (Kaplan–Meier, tối thiểu 30 lượt trả)
+%%   services/analytics-service/src/utils/budget-allocation.js (allocateMarginal, poissonTail)
+%%   services/analytics-service/src/middlewares/warehouse-scope.middleware.js
+%%   docs/ANALYSIS/REORDER_OPTIMIZATION_EVALUATION.md (mục 4: tích hợp production 2026-10-18)
+sequenceDiagram
+    autonumber
+    actor Q as Quản lý kho
+    participant W as Web App (Đề xuất nhập hàng)
+    participant G as API Gateway
+    participant AN as Analytics Service
+    participant IDB as inventory_db (chỉ đọc)
+    participant BDB as borrow_db (chỉ đọc)
+    participant AU as Auth Service
+
+    Q->>W: Chọn kỳ nhu cầu (7/30/90 ngày), nhập ngân sách (tùy chọn)
+    W->>G: GET /analytics/reorder-suggestions?budgetVnd=...
+    G->>AN: Chuyển tiếp kèm JWT
+    AN->>AU: Đọc phạm vi kho của người dùng (nội bộ, có bộ nhớ đệm)
+    break Không đọc được phạm vi kho
+        AN-->>W: 503 (fail-closed, không trả "mọi kho")
+    end
+    AN->>BDB: Chuỗi lượt mượn theo ngày, đặt giữ, yêu thích, đăng ký báo có sách
+    AN->>IDB: Tồn khả dụng theo kho được phép, đơn giá, lịch sử giao hàng
+    Note right of AN: Dự báo EWMA + xu hướng × hệ số mùa vụ,<br/>thời gian chờ học từ lịch sử giao hàng,<br/>tồn an toàn z·σ·√L, số lượng và mức ưu tiên
+    opt Có tham số budgetVnd
+        AN->>IDB: Số bản đang về = ordered_qty − received_qty<br/>(PO APPROVED / SENT_TO_SUPPLIER / SUPPLIER_CONFIRMED / PARTIALLY_RECEIVED)
+        AN->>BDB: Phiếu mượn đang mở + lượt trả 365 ngày
+        Note right of AN: Kaplan–Meier ước lượng số bản dự kiến trả trong thời gian chờ,<br/>vị thế tồn = khả dụng + đang về + dự kiến trả,<br/>allocateMarginal: cấp từng bản theo P(D > vị thế + k) / đơn giá
+    end
+    AN-->>W: Danh sách đề xuất + lý do + (funded_qty, budget_plan, giả định)
+    W-->>Q: Bảng đề xuất, cấp đủ / cấp một phần / chưa cấp
+    Q->>W: Chọn dòng và tạo đơn đặt hàng nháp
+    Note right of W: Hệ thống không tự tạo hay duyệt đơn đặt hàng,<br/>đơn nháp đi qua quy trình duyệt thông thường

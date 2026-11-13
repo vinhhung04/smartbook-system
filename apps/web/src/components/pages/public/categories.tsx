@@ -23,7 +23,6 @@ export function PublicCategoriesPage() {
   return (
     <>
       <PageHero
-        eyebrow="Thể loại"
         title="Khám phá theo thể loại"
         description={categories ? `${categories.length} thể loại đang có sách trong thư viện. Mỗi thẻ cho biết số đầu sách và số đang có trên kệ.` : 'Mọi thể loại đang có sách trong thư viện.'}
       />

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ tuần tự trả sách và tính phí phạt</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Diagram Design · SmartBook</p>
+    <h1>Sơ đồ tuần tự trả sách và tính phí phạt</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 776" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="borrow-loan-return-dd-title borrow-loan-return-dd-desc">
+<title id="borrow-loan-return-dd-title">Trả sách và tính phí phạt</title>
+<desc id="borrow-loan-return-dd-desc">Thủ thư ghi nhận trả sách; Borrow Service tính phí, nhờ Inventory đưa sách về khả dụng, cập nhật phiếu mượn, khoản phạt, nhật ký và thông báo.</desc>
+<defs>
+  <marker id="borrow-loan-return-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-loan-return-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-loan-return-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-loan-return-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- lifelines -->
+<line x1="84" y1="104" x2="84" y2="736" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="208" y1="104" x2="208" y2="736" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="336" y1="104" x2="336" y2="736" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="448" y1="104" x2="448" y2="736" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="592" y1="104" x2="592" y2="736" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="716" y1="104" x2="716" y2="736" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="88" y1="164" x2="204" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<line x1="212" y1="248" x2="332" y2="248" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow-link)"/>
+<line x1="340" y1="284" x2="444" y2="284" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow-link)"/>
+<line x1="452" y1="320" x2="712" y2="320" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<path d="M 452 332 H 476 Q 484 332 484 340 V 360 Q 484 368 476 368 H 454" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<line x1="452" y1="468" x2="588" y2="468" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow-link)"/>
+<line x1="588" y1="520" x2="452" y2="520" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<line x1="452" y1="572" x2="712" y2="572" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<line x1="452" y1="608" x2="712" y2="608" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<line x1="452" y1="660" x2="712" y2="660" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-loan-return-dd-arrow)"/>
+<line x1="444" y1="712" x2="212" y2="712" stroke="#000000" stroke-width="1.4" marker-end="url(#borrow-loan-return-dd-arrow-accent)"/>
+<!-- labels -->
+<rect x="96" y="122" width="100" height="34" rx="2" fill="#ffffff"/>
+<text x="146.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> chọn cuốn trả,</text>
+<text x="146.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ghi tình trạng</text>
+<rect x="228" y="174" width="88" height="66" rx="2" fill="#ffffff"/>
+<text x="272.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST</text>
+<text x="272.0" y="203" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/borrow/</text>
+<text x="272.0" y="219" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">loans/{id}/</text>
+<text x="272.0" y="235" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">return</text>
+<rect x="350" y="258" width="84" height="18" rx="2" fill="#ffffff"/>
+<text x="392.0" y="271" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> chuyển tiếp</text>
+<rect x="500" y="294" width="164" height="18" rx="2" fill="#ffffff"/>
+<text x="582.0" y="307" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> đọc loan_items, gói hội viên</text>
+<rect x="492" y="333" width="172" height="34" rx="2" fill="#ffffff"/>
+<text x="498" y="346.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">5. tính số ngày trễ; phí quá hạn,</text>
+<text x="498" y="362.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">mất, hư hỏng</text>
+<rect x="462" y="378" width="116" height="82" rx="2" fill="#ffffff"/>
+<text x="520.0" y="391" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> POST</text>
+<text x="520.0" y="407" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/borrow-</text>
+<text x="520.0" y="423" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">integration/</text>
+<text x="520.0" y="439" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">`loans/return` (trừ</text>
+<text x="520.0" y="455" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">sách mất)</text>
+<rect x="466" y="478" width="108" height="34" rx="2" fill="#ffffff"/>
+<text x="520.0" y="491" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> borrowed_qty →</text>
+<text x="520.0" y="507" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">available_qty</text>
+<rect x="468" y="530" width="228" height="34" rx="2" fill="#ffffff"/>
+<text x="582.0" y="543" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> cập nhật loan_items, loan_transactions</text>
+<text x="582.0" y="559" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">(RETURNED)</text>
+<rect x="470" y="582" width="224" height="18" rx="2" fill="#ffffff"/>
+<text x="582.0" y="595" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> tạo/cập nhật fines, total_fine_balance</text>
+<rect x="478" y="618" width="208" height="34" rx="2" fill="#ffffff"/>
+<text x="582.0" y="631" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> ghi borrow_audit_logs, customer_</text>
+<text x="582.0" y="647" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">notifications</text>
+<rect x="226" y="670" width="204" height="34" rx="2" fill="#ffffff"/>
+<text x="328.0" y="683" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> biên nhận trả sách + phí phạt (nếu</text>
+<text x="328.0" y="699" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">có)</text>
+<!-- nodes -->
+<circle cx="84" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 84 56 V 72 M 73 61 H 95 M 84 72 L 75 84 M 84 72 L 93 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="84" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Thủ thư</text>
+<rect x="164" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="208" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web UI</text>
+<text x="208" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web</text>
+<rect x="286" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="336" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="336" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="400" y="40" width="96" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="448" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Borrow</text>
+<text x="448" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">borrow-service</text>
+<rect x="534" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="592" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="592" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<path d="M 676.0 48 V 79 A 40.0 6 0 0 0 756.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="716" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="716" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="716" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">borrow_db</text>
+</svg>
+    </div>
+    <p class="note">Hình 4.9, bước 1–11 (chép từ hình gốc của báo cáo, giữ nguyên số bước).</p>
+  </div>
+</body>
+</html>

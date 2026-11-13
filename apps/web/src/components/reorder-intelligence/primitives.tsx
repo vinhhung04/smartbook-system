@@ -19,7 +19,7 @@ export function Panel({ className, children, ...props }: React.ComponentProps<'s
 }
 
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground', className)}>{children}</p>;
+  return <p className={cn('text-[12px] font-semibold text-muted-foreground', className)}>{children}</p>;
 }
 
 // Hairline-divided summary strip: 1px gaps over a border-colored panel; the last

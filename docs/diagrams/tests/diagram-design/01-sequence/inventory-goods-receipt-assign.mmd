@@ -1,0 +1,51 @@
+---
+title: "Phân công nhân viên cho phiếu nhập kho (PATCH /api/goods-receipts/:id/assign)"
+---
+%% Nguồn đối chiếu (nhánh feature/email-otp-auth, luồng đã có trên main):
+%%   apps/web/src/services/goods-receipt.ts (assign), apps/web/src/services/http-clients.ts (inventoryAPI)
+%%   apps/api-gateway/src/index.js (createProxyMiddleware pathFilter "/api" -> inventoryTarget)
+%%   services/inventory-service/src/index.js (authenticateToken, enforceRequestedWarehouseScope, /api/goods-receipts)
+%%   services/inventory-service/src/middlewares/auth.middleware.js (authenticateToken, authorizeManagerDecision)
+%%   packages/shared/runtime/token-revocation.cjs (revocationGuard)
+%%   services/inventory-service/src/middlewares/uuid-params.middleware.js (rejectInvalidUuidParams)
+%%   services/inventory-service/src/routes/goods-receipt.routes.js (PATCH /:id/assign)
+%%   services/inventory-service/src/controllers/goods-receipt.controller.js (assignGoodsReceipt)
+%%   packages/shared/runtime/warehouse-scope.cjs (canWrite, cache 30 s, GET /internal/users/:id/warehouse-scopes)
+%% Sơ đồ kiểm thử Diagram Design - không phải hình chính thức của báo cáo.
+sequenceDiagram
+    autonumber
+    actor QL as Quản lý kho
+    participant W as Web App (React)
+    participant G as API Gateway
+    participant I as Inventory Service
+    participant R as Redis
+    participant A as Auth Service
+    participant DB as PostgreSQL (inventory_db)
+
+    QL->>W: Chọn nhân viên nhận hàng cho phiếu nhập
+    W->>G: PATCH /api/goods-receipts/:id/assign<br/>{received_by_user_id} + Bearer JWT
+    G->>I: Chuyển tiếp /api/* (proxy, không kiểm tra JWT)
+    Note over I: authenticateToken: jwt.verify(JWT_SECRET)
+    I->>R: Kiểm tra token bị thu hồi (revocation.check)
+    R-->>I: Trạng thái phiên
+    Note over I: enforceRequestedWarehouseScope: body không có warehouse_id nên bỏ qua<br/>rejectInvalidUuidParams(:id)<br/>authorizeManagerDecision: WAREHOUSE_MANAGER hoặc ADMIN<br/>+ quyền inventory.operation.decide (superuser bỏ qua)
+    alt Token, UUID và quyền không hợp lệ
+        I-->>G: 401 thiếu/sai header, token bị thu hồi<br/>403 token hết hạn/không hợp lệ, thiếu vai trò/quyền<br/>400 :id không phải UUID<br/>503 chưa xác minh được phiên (Redis) với thao tác ghi
+        G-->>W: Chuyển nguyên phản hồi lỗi
+    else Hợp lệ: assignGoodsReceipt
+        Note over I: parseId(:id), parseId(received_by_user_id)<br/>thiếu một trong hai: 400
+        I->>DB: findUnique goods_receipts (warehouse_id)
+        DB-->>I: Phiếu nhập hoặc null (404)
+        I->>A: GET /internal/users/:id/warehouse-scopes<br/>x-internal-service-key (chỉ khi cache 30 s hết hạn)
+        A-->>I: Phạm vi kho (READ / WRITE / OPERATOR / FULL)
+        alt Không có quyền ghi trên kho của phiếu
+            I-->>G: 403 You do not have write access to this warehouse
+        else Có quyền ghi
+            I->>DB: UPDATE goods_receipts SET received_by_user_id, updated_at
+            I->>DB: INSERT inventory_audit_logs (GOODS_RECEIPT_ASSIGNED)
+            I-->>G: 200 Goods receipt assigned successfully
+        end
+        Note over I: Lỗi khác (kể cả Auth Service không phản hồi) rơi vào catch: 500,<br/>P2025: 404
+        G-->>W: Chuyển nguyên phản hồi
+    end
+    W-->>QL: Thông báo kết quả

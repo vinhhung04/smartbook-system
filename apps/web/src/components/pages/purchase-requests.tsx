@@ -23,7 +23,7 @@ import { getApiErrorMessage } from "@/services/api";
 import { purchaseRequestService, type PurchaseRequest } from "@/services/purchase-requests";
 import { supplierService, type Supplier } from "@/services/supplier";
 import { purchaseOrderService, type VariantSearchItem } from "@/services/purchase-order";
-import { getStatusVariant } from "@/lib/status-registry";
+import { getStatusVariant, PURCHASE_REQUEST_STATUS_LABELS } from "@/lib/status-registry";
 
 const REASONS: Record<string, string> = {
   LOW_STOCK: "Tồn kho thấp",
@@ -211,7 +211,7 @@ export function PurchaseRequestsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {STATUS_FILTERS.map((s) => (
-                      <SelectItem key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : s}</SelectItem>
+                      <SelectItem key={s} value={s}>{s === "ALL" ? "Tất cả trạng thái" : PURCHASE_REQUEST_STATUS_LABELS[s] ?? s}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -224,7 +224,7 @@ export function PurchaseRequestsPage() {
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
                   {["Mã yêu cầu", "Kho", "Sách / Gợi ý", "Số lượng", "Lý do", "Người tạo", "Trạng thái", "Tạo lúc", "Thao tác"].map((h) => (
-                    <TableHead key={h} className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</TableHead>
+                    <TableHead key={h} className="text-[12px] font-semibold text-muted-foreground">{h}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
@@ -260,7 +260,7 @@ export function PurchaseRequestsPage() {
                       <TableCell className="text-[12px] text-muted-foreground">{REASONS[req.reason] || req.reason}</TableCell>
                       <TableCell className="text-[11px] font-mono text-muted-foreground">{req.created_by_user_id.slice(-8)}</TableCell>
                       <TableCell>
-                        <StatusBadge label={req.status} variant={statusVariant(req.status)} dot />
+                        <StatusBadge label={PURCHASE_REQUEST_STATUS_LABELS[req.status] ?? req.status} variant={statusVariant(req.status)} dot />
                       </TableCell>
                       <TableCell className="text-[12px] text-muted-foreground">{formatDate(req.created_at)}</TableCell>
                       <TableCell className="text-[12px]">

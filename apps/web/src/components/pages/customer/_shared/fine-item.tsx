@@ -4,6 +4,7 @@ import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { formatCurrencyVnd, formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
+import { getBorrowLabel } from '@/lib/status-registry';
 
 interface FineItemProps {
   fine: any;
@@ -39,13 +40,13 @@ export function FineItem({ fine }: FineItemProps) {
     <div className={`rounded-xl border p-4 transition-shadow duration-200 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${toneClassName}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[14px] text-foreground" style={{ fontWeight: 700 }}>{fine.fine_type}</div>
+          <div className="text-[14px] text-foreground" style={{ fontWeight: 700 }}>{getBorrowLabel('fineType', fine.fine_type)}</div>
           <div className="mt-1 text-[12px] text-muted-foreground">Phát sinh ngày {formatDateTime(fine.issued_at)}</div>
           <div className="mt-1.5"><StatusBadge status={fine.status} /></div>
         </div>
         <div className="text-right">
           <div className="text-[12px] text-muted-foreground">Tổng {formatCurrencyVnd(fine.amount)}</div>
-          <div className={`mt-0.5 font-mono text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-rose-700 dark:text-rose-400' : 'text-foreground') : 'text-emerald-600 dark:text-emerald-400'}`} style={{ fontWeight: 700 }}>
+          <div className={`mt-0.5 text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-rose-700 dark:text-rose-400' : 'text-foreground') : 'text-emerald-600 dark:text-emerald-400'}`} style={{ fontWeight: 700 }}>
             {remaining > 0 ? `Còn ${formatCurrencyVnd(remaining)}` : 'Đã xong'}
           </div>
         </div>

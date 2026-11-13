@@ -62,7 +62,7 @@ export function CustomerProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+      <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8 *:max-w-3xl" aria-busy="true">
         <div className="h-20 animate-pulse rounded-xl border bg-card" />
         <div className="h-72 animate-pulse rounded-xl border bg-card" />
       </div>
@@ -70,14 +70,14 @@ export function CustomerProfilePage() {
   }
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 *:max-w-3xl">
         <EmptyState variant="error" title="Không tải được hồ sơ" description={error} action={<button onClick={() => void load()} className="font-medium text-primary hover:underline">Thử lại</button>} />
       </div>
     );
   }
   if (!profile) {
     return (
-      <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 *:max-w-3xl">
         <EmptyState variant="no-data" title="Không tìm thấy hồ sơ" description="Không thể tải hồ sơ. Vui lòng liên hệ hỗ trợ." />
       </div>
     );
@@ -86,7 +86,7 @@ export function CustomerProfilePage() {
   const initials = (profile.full_name || 'U').trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || '').join('') || 'U';
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8 *:max-w-3xl">
       <CustomerPageHeader title="Hồ sơ của tôi" subtitle="Thông tin cá nhân, thông báo và bảo mật tài khoản" />
 
       <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 sm:p-5">

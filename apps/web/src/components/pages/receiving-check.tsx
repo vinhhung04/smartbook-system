@@ -76,7 +76,7 @@ export function ReceivingCheckPage() {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   {["Mã phiếu", "Kho", "Số mặt hàng", "SL kế hoạch", "SL thực đếm", "Trạng thái KĐ", "Ngày tạo", ""].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">{h}</th>
                   ))}
                 </tr>
               </thead>

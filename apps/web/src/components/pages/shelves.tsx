@@ -66,7 +66,7 @@ function UtilizationBar({ value }: { value: number | null }) {
 
 function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[13px] text-foreground font-semibold">{compartment.code}</p>
@@ -92,7 +92,7 @@ function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem })
                 "Tồn hiện tại",
                 "Ngày nhập",
               ].map((header) => (
-                <th key={header} className="text-left text-[11px] text-muted-foreground px-3 py-2 uppercase tracking-wider font-medium">{header}</th>
+                <th key={header} className="text-left text-[12px] text-muted-foreground px-3 py-2 font-medium">{header}</th>
               ))}
             </tr>
           </thead>
@@ -406,8 +406,6 @@ export function ShelvesPage() {
           icon={Layers3}
           title="Quản lý kệ sách"
           description={`${shelves.length} kệ · ${totals.compartments} ngăn · ${formatQty(totals.occupied)} đang chứa`}
-          iconBg="bg-gradient-to-br from-cyan-100 to-blue-50 dark:from-cyan-500/20 dark:to-blue-500/10"
-          iconColor="text-cyan-700 dark:text-cyan-400"
         />
 
         <div className="grid grid-cols-3 gap-2.5 sm:min-w-[300px]">
@@ -464,7 +462,7 @@ export function ShelvesPage() {
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {["Kệ", "Kho", "Ngăn", "Đang chứa", "Sức chứa", "Khả dụng", "Tỷ lệ lấp đầy"].map((header) => (
-                  <th key={header} className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">{header}</th>
+                  <th key={header} className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">{header}</th>
                 ))}
               </tr>
             </thead>
@@ -527,15 +525,15 @@ export function ShelvesPage() {
           actions={detail?.shelf ? (
             <div className="grid grid-cols-3 gap-2 sm:min-w-[280px]">
               <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Đang chứa</p>
+                <p className="text-[11px] text-muted-foreground font-semibold">Đang chứa</p>
                 <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.occupiedQty)}</p>
               </div>
               <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Sức chứa</p>
+                <p className="text-[11px] text-muted-foreground font-semibold">Sức chứa</p>
                 <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.capacityQty)}</p>
               </div>
               <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Khả dụng</p>
+                <p className="text-[11px] text-muted-foreground font-semibold">Khả dụng</p>
                 <p className="text-[14px] text-emerald-700 dark:text-emerald-400 font-bold">{formatQty(detail.shelf.availableQty)}</p>
               </div>
             </div>

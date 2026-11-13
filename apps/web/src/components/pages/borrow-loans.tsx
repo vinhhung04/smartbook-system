@@ -246,7 +246,7 @@ export function BorrowLoansPage() {
           <SectionCard
             title="Yêu cầu gia hạn đang chờ"
             subtitle={`${renewalRequests.length} yêu cầu cần duyệt`}
-            className="border-l-4 border-l-amber-400"
+            className="border-amber-300 dark:border-amber-500/40"
           >
             <div className="space-y-3">
               {renewalRequests.map((request) => (
@@ -303,7 +303,7 @@ export function BorrowLoansPage() {
                   { label: 'Trạng thái', className: 'hidden w-[150px] md:table-cell' },
                   { label: 'Thao tác', className: 'w-[190px] text-right' },
                 ].map((header) => (
-                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium text-muted-foreground', header.className)}>
                     {header.label}
                   </TableHead>
                 ))}

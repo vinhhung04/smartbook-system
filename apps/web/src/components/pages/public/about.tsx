@@ -28,7 +28,6 @@ export function PublicAboutPage() {
   return (
     <>
       <PageHero
-        eyebrow="Về SmartBook"
         title="Thư viện nhiều chi nhánh, mở cho mọi người xem"
         description="Bạn có thể xem toàn bộ danh mục, số bản còn trên kệ ở từng chi nhánh và đánh giá của bạn đọc mà không cần tài khoản. Tài khoản bạn đọc chỉ cần khi bạn muốn đặt trước, lưu sách yêu thích, viết đánh giá hoặc theo dõi sách đang mượn."
       >

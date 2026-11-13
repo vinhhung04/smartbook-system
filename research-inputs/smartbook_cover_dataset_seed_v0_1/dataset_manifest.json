@@ -1,0 +1,22 @@
+{
+  "dataset_name": "SmartBook CLIP+Qwen Book Cover Retrieval Seed Dataset",
+  "version": "0.1-seed",
+  "created_utc": "2026-11-11T20:01:40.687510+00:00",
+  "record_count": 16,
+  "language_balance": {
+    "Vietnamese": 8,
+    "International_English": 8
+  },
+  "isbn_policy": "No ISBNs fabricated. All selected depicted editions predate routine ISBN assignment; ISBN-13 fields are blank with an explicit status.",
+  "ground_truth_policy": "Provisional source-verified title/author/edition labels; not yet checked against physical copies by independent annotators.",
+  "image_policy": "Online source cover images are gallery/reference assets. Controlled perturbations must be generated only from downloaded originals and separately labelled as synthetic transformations, never as real photographs.",
+  "rights_policy": "Source-page license statements recorded per image. This is not independent legal advice or blanket clearance for public redistribution.",
+  "download_status": "No image binaries downloaded in this chat environment. The package includes source URLs and a local download/transform script.",
+  "main_limitations": [
+    "Historical editions dominate the seed set and are not representative of current commercial book covers.",
+    "Many records have no ISBN because the depicted editions predate ISBN use.",
+    "Some Vietnamese images use Hán-Nôm, contain no visible title text, are low-resolution, or are composite scans; these require stratified analysis.",
+    "The current seed set is a pilot candidate corpus, not a statistically sufficient final benchmark.",
+    "The query variants generated from the same gallery image form a controlled perturbation benchmark and do not replace independently captured real-world query photos."
+  ]
+}

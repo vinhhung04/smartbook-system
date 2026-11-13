@@ -1,0 +1,37 @@
+---
+title: "Kiến trúc xử lý của Trợ lý AI (Copilot): kế hoạch, bằng chứng, giải thích, kiểm chứng, trực quan hóa"
+---
+%% Nguồn đối chiếu (nhánh hungg):
+%%   services/ai-service/main.py, copilot_plan.py, copilot_semantic_planner.py, tool_registry.py,
+%%   copilot_tools.py, assistant_tools.py, copilot_explain.py, copilot_visualization.py,
+%%   copilot_verification.py, copilot_claims.py, copilot_faithfulness.py, number_grounding.py,
+%%   agent_actions.py, apps/web/src/lib/copilot-visualization.ts, apps/web/src/lib/copilot-verification.ts
+%%   docs/ANALYSIS/AI_COPILOT_3_0_VISUALIZATION.md, AI_COPILOT_3_3_EVALUATION.md, AI_COPILOT_SEMANTIC_UNDERSTANDING.md
+flowchart TB
+    subgraph s1["1. Hiểu câu hỏi và lập kế hoạch"]
+        direction LR
+        q["Câu hỏi tiếng Việt<br/>+ trạng thái hội thoại"] --> plan["Lập kế hoạch luật<br/>copilot_plan.build_plan"]
+        plan -. "cờ COPILOT_SEMANTIC_PLANNER<br/>(mặc định off)" .-> sem["Semantic Planner:<br/>LLM chỉ đọc nghĩa,<br/>backend kiểm tra, luật thắng"]
+    end
+    subgraph s2["2. Thu thập bằng chứng"]
+        direction LR
+        tools["20 công cụ chỉ đọc<br/>gọi API bằng JWT người dùng"] --> data[("Dữ liệu có cấu trúc<br/>+ bảng bằng chứng")]
+        data --> xai["Giải thích: FACT · INFERENCE ·<br/>ASSUMPTION · UNKNOWN"]
+        data --> viz["Đặc tả biểu đồ line · bar · area ·<br/>pie · kpi · table (Pydantic)"]
+    end
+    subgraph s3["3. Sinh và kiểm chứng câu trả lời"]
+        direction LR
+        llm["LLM viết câu trả lời<br/>(OpenRouter, Qwen)"] --> ver{"Kiểm chứng<br/>Layer 1 tất định"}
+        ver -. "cờ COPILOT_SEMANTIC_CLAIMS<br/>(mặc định off)" .-> claims["Layer 2–3: LLM trích claim,<br/>backend phán quyết"]
+        ver --> st["PASSED / REPAIRED · WARNING (lược câu sai) ·<br/>BLOCKED (sinh lại ≤ 1 lần vẫn lỗi)"]
+    end
+    subgraph s4["4. Phản hồi và hành động có kiểm soát"]
+        direction LR
+        resp["Văn bản + biểu đồ + bằng chứng<br/>+ rủi ro và giới hạn"] --> ui["Web: sanitize đặc tả,<br/>chỉ vẽ bằng component whitelist"]
+        resp --> act{"safe_to_act?"}
+        act -- "Có" --> pa["Hành động chờ xác nhận<br/>(5 loại, hết hạn 10 phút)"]
+        pa --> human["Con người xác nhận hoặc hủy"]
+    end
+    s1 --> s2
+    s2 --> s3
+    s3 --> s4

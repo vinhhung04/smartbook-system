@@ -249,7 +249,7 @@ export function BorrowLoanDetailPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/80">
                     {['Mã vạch sách', 'Sách', 'Hạn trả', 'Ngày trả', 'Trạng thái', 'Tiền phạt', 'Tiền cọc'].map((header) => (
-                      <th key={header} className="text-left text-[11px] text-muted-foreground px-4 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>
+                      <th key={header} className="text-left text-[12px] text-muted-foreground px-4 py-3" style={{ fontWeight: 550 }}>
                         {header}
                       </th>
                     ))}

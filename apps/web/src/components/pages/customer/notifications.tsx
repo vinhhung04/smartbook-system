@@ -121,7 +121,7 @@ export function CustomerNotificationsPage() {
   const { rows, total, unreadCount, page, totalPages } = list;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Thông báo"
         subtitle={unreadCount > 0 ? `Bạn có ${unreadCount} thông báo chưa đọc` : 'Nhắc nhở, cập nhật và cảnh báo về tài khoản của bạn'}
@@ -179,7 +179,7 @@ export function CustomerNotificationsPage() {
         />
       ) : (
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground" data-testid="notifications-total">
+          <p className="text-[11px] font-semibold text-muted-foreground" data-testid="notifications-total">
             {filter === 'UNREAD' ? 'Chưa đọc' : filter === 'READ' ? 'Đã đọc' : 'Tất cả'} ({total})
           </p>
           <ul className="space-y-2" data-testid="notification-list">

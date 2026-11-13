@@ -102,7 +102,7 @@ export function NotificationItem({ item, onMarkedRead }: NotificationItemProps) 
                     <Check className="h-3 w-3" aria-hidden="true" />
                     {marking ? 'Đang lưu…' : 'Đánh dấu đã đọc'}
                   </button>
-                  <span className="rounded-[8px] bg-indigo-100 px-2 py-0.5 text-[10px] uppercase text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">Chưa đọc</span>
+                  <span className="rounded-[8px] bg-indigo-100 px-2 py-0.5 text-[10px] text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">Chưa đọc</span>
                 </>
               ) : null}
             </div>

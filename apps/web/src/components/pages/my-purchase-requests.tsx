@@ -21,7 +21,7 @@ import { warehouseService } from "@/services/warehouse";
 import { bookService } from "@/services/book";
 import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
-import { getStatusVariant } from "@/lib/status-registry";
+import { getStatusVariant, PURCHASE_REQUEST_STATUS_LABELS } from "@/lib/status-registry";
 
 const PAGE_SIZE = 10;
 const PANEL_ID = "purchase-request-list";
@@ -34,13 +34,7 @@ const REASONS = [
   { value: "OTHER", label: "Lý do khác" },
 ];
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  CONVERTED: "Đã vào đơn PO",
-  REJECTED: "Bị từ chối",
-  WITHDRAWN: "Đã rút",
-};
+const STATUS_LABEL = PURCHASE_REQUEST_STATUS_LABELS;
 
 const STATUS_FILTERS = ["ALL", "PENDING", "APPROVED", "CONVERTED", "REJECTED", "WITHDRAWN"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];

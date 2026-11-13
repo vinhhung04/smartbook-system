@@ -53,6 +53,10 @@ pnpm test:e2e
   is none). Needs sandbox credentials in `.env` and `VNPAY_SANDBOX=1`;
   accepts VNPay's sandbox terms dialog; `VNPAY_EVIDENCE_DIR=<dir>` keeps the screenshots.
 - `membership-plan-number-fields.spec.ts` — number fields that show 0 replace it as you type.
+- `fullhd-layout.spec.ts` — key staff, reader and public screens on a Full HD screen at Windows
+  scaling 100% / 125% / 150% (1920×945, 1536×730, 1280×595 CSS px): no sideways scroll, no
+  heading, button or table head running off screen or clipped. Each page loads once and is
+  resized in place, so it stays well inside the gateway's 600 requests / 15 min limit.
 - `number-input-audit.spec.ts` — opt-in audit (`NUMBER_INPUT_AUDIT=1`) of every number field
   across staff, reader and supplier screens; writes `test-results/number-input-audit.json`.
 

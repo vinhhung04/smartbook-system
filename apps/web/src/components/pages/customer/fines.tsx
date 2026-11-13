@@ -7,6 +7,7 @@ import { getApiErrorMessage } from '@/services/api';
 import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/components/ui/utils';
 import { getBorrowLabel } from '@/lib/status-registry';
 import { WALLET_TOPUP_AMOUNTS } from '@/lib/wallet-topup';
@@ -94,7 +95,7 @@ export function CustomerFinesPage() {
   const settledFines = fines.filter((fine) => remainingOf(fine) <= 0);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Tiền phạt & ví"
         subtitle="Số tiền phạt còn lại và lịch sử giao dịch ví của bạn"
@@ -122,7 +123,7 @@ export function CustomerFinesPage() {
           <section aria-label="Tổng quan tiền phạt" className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2">
             <div className={cn('p-5', totalFine > 0 ? 'bg-rose-50/60 dark:bg-rose-950/20' : 'bg-emerald-50/50 dark:bg-emerald-950/15')}>
               <p className="text-[12px] font-medium text-muted-foreground">Tiền phạt còn lại</p>
-              <p className={cn('mt-1.5 font-mono text-[28px] font-bold leading-none tabular-nums', totalFine > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+              <p className={cn('mt-1.5 text-[28px] font-bold leading-none tabular-nums', totalFine > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
                 {formatCurrencyVnd(totalFine)}
               </p>
               <p className="mt-2 text-[12px] text-muted-foreground">
@@ -133,7 +134,7 @@ export function CustomerFinesPage() {
             </div>
             <div className="border-t border-border p-5 sm:border-l sm:border-t-0">
               <p className="text-[12px] font-medium text-muted-foreground">Số dư ví</p>
-              <p className={cn('mt-1.5 font-mono text-[28px] font-bold leading-none tabular-nums', walletBalance < 100000 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground')}>
+              <p className={cn('mt-1.5 text-[28px] font-bold leading-none tabular-nums', walletBalance < 100000 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground')}>
                 {formatCurrencyVnd(walletBalance)}
               </p>
               <p className="mt-2 text-[12px] text-muted-foreground">
@@ -141,24 +142,23 @@ export function CustomerFinesPage() {
               </p>
               {heldBalance > 0 && (
                 <p className="mt-1 text-[12px] text-muted-foreground">
-                  Đang giữ làm tiền cọc: <span className="font-mono font-semibold tabular-nums text-foreground">{formatCurrencyVnd(heldBalance)}</span>
+                  Đang giữ làm tiền cọc: <span className="font-semibold tabular-nums text-foreground">{formatCurrencyVnd(heldBalance)}</span>
                 </p>
               )}
               <form
                 className="mt-3 flex gap-2"
                 onSubmit={(event) => { event.preventDefault(); void startTopup(); }}
               >
-                <select
-                  value={topupAmount}
-                  onChange={(event) => setTopupAmount(event.target.value)}
-                  aria-label="Số tiền nạp vào ví (VND)"
-                  className="h-9 min-w-0 flex-1 rounded-[10px] border border-input bg-background px-3 text-[13px] text-foreground"
-                >
-                  <option value="">Chọn mức nạp</option>
-                  {WALLET_TOPUP_AMOUNTS.map((amount) => (
-                    <option key={amount} value={String(amount)}>{formatCurrencyVnd(amount)}</option>
-                  ))}
-                </select>
+                <Select value={topupAmount} onValueChange={setTopupAmount}>
+                  <SelectTrigger aria-label="Số tiền nạp vào ví (VND)" className="h-9 min-w-0 flex-1 text-[13px]">
+                    <SelectValue placeholder="Chọn mức nạp" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WALLET_TOPUP_AMOUNTS.map((amount) => (
+                      <SelectItem key={amount} value={String(amount)}>{formatCurrencyVnd(amount)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <button
                   type="submit"
                   disabled={startingTopup || !topupAmount}
@@ -204,7 +204,7 @@ export function CustomerFinesPage() {
                         <p className="truncate text-[13px] font-medium text-foreground">{entry.entry_type ? getBorrowLabel('ledgerEntry', entry.entry_type) : entry.reference_type || 'Giao dịch'}</p>
                         <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
                       </div>
-                      <span className={cn('shrink-0 font-mono text-[14px] font-bold tabular-nums', outflow ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                      <span className={cn('shrink-0 text-[14px] font-bold tabular-nums', outflow ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
                         {outflow ? '−' : '+'}{formatCurrencyVnd(amount)}
                       </span>
                     </li>

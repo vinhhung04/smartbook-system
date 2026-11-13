@@ -52,7 +52,7 @@ export function DataTableHead({
   return (
     <th
       className={cn(
-        "text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider px-5 py-3",
+        "text-left text-[12px] font-medium text-muted-foreground px-5 py-3",
         sortable && "cursor-pointer select-none hover:text-foreground transition-colors",
         className,
       )}

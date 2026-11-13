@@ -294,11 +294,11 @@ export function InventoryPage() {
         className={cn(
           "flex flex-1 shrink-0 flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           active
-            ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300"
+            ? "border-primary/30 bg-primary/[0.06] text-primary dark:border-primary/40 dark:bg-primary/15"
             : "border-transparent hover:border-border hover:bg-muted/50",
         )}
       >
-        <span className={cn("text-[18px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>{loading ? "–" : count}</span>
+        <span className={cn("font-serif text-[20px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>{loading ? "–" : count}</span>
         <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11px]", active ? "font-medium" : "text-muted-foreground")}>
           {attention && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="cần chú ý" />}
           {label}
@@ -314,8 +314,6 @@ export function InventoryPage() {
           icon={Package}
           title="Tồn kho"
           description={loading ? "Đang tải…" : `${totals.titles} đầu sách có hàng · ${totals.available.toLocaleString("vi-VN")} cuốn sẵn sàng${totals.receiving ? ` · ${totals.receiving.toLocaleString("vi-VN")} cuốn chờ cất kệ` : ""}`}
-          iconBg="bg-gradient-to-br from-emerald-100 to-teal-50 dark:from-emerald-500/20 dark:to-teal-500/10"
-          iconColor="text-emerald-600 dark:text-emerald-400"
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => void loadInventory()} disabled={loading} aria-label="Làm mới">
@@ -336,7 +334,7 @@ export function InventoryPage() {
       <AnimatePresence>
         {hasNewData && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10" role="status">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10" role="status">
               <p className="flex items-center gap-2 text-[13px] text-indigo-700 dark:text-indigo-400">
                 <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
                 Tồn kho vừa thay đổi. Số liệu bên dưới có thể đã cũ.
@@ -350,7 +348,7 @@ export function InventoryPage() {
       </AnimatePresence>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="flex items-center gap-1 overflow-x-auto p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo tình trạng tồn kho">
             {filterButton("ALL")}
             <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
@@ -416,7 +414,7 @@ export function InventoryPage() {
                   { label: "Tình trạng", className: "hidden w-[150px] sm:table-cell" },
                   { label: "Cập nhật", className: "hidden w-[100px] xl:table-cell" },
                 ].map((h) => (
-                  <th key={h.label} scope="col" className={cn("px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground", h.className)}>{h.label}</th>
+                  <th key={h.label} scope="col" className={cn("px-4 py-3 text-left text-[12px] font-medium text-muted-foreground", h.className)}>{h.label}</th>
                 ))}
               </tr>
             </thead>

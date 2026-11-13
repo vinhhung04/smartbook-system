@@ -251,6 +251,15 @@ const WAREHOUSE_TASK_STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Đã hủy',
 };
 
+// Purchase requests read the same on the requester's page and the manager's queue.
+export const PURCHASE_REQUEST_STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Chờ duyệt',
+  APPROVED: 'Đã duyệt',
+  CONVERTED: 'Đã vào đơn PO',
+  REJECTED: 'Bị từ chối',
+  WITHDRAWN: 'Đã rút',
+};
+
 export function getWarehouseTaskStatusLabel(status: string): string {
   return WAREHOUSE_TASK_STATUS_LABELS[String(status || '').toUpperCase()] ?? status;
 }
@@ -260,17 +269,26 @@ export function getWarehouseTaskStatusLabel(status: string): string {
 // keeps its own softer visual shell but now sources label+tone from here
 // instead of a separate hardcoded map.
 export const CUSTOMER_STATUS: Record<string, { label: string; tone: Tone }> = {
-  ACTIVE: { label: 'Active', tone: 'success' },
-  OVERDUE: { label: 'Overdue', tone: 'rose' },
-  RETURNED: { label: 'Returned', tone: 'neutral' },
-  PENDING: { label: 'Pending', tone: 'warning' },
-  APPROVED: { label: 'Approved', tone: 'success' },
-  REJECTED: { label: 'Rejected', tone: 'rose' },
-  CANCELLED: { label: 'Cancelled', tone: 'neutral' },
-  READY_FOR_PICKUP: { label: 'Ready for pickup', tone: 'info' },
-  OUT_OF_STOCK: { label: 'Out of stock', tone: 'neutral' },
-  UNPAID: { label: 'Unpaid', tone: 'rose' },
-  PARTIALLY_PAID: { label: 'Partially paid', tone: 'warning' },
-  PAID: { label: 'Paid', tone: 'success' },
-  WAIVED: { label: 'Waived', tone: 'primary' },
+  // Wording follows BORROW_LABELS so a reader and the librarian see the same word.
+  ACTIVE: { label: 'Đang hoạt động', tone: 'success' },
+  AVAILABLE: { label: 'Có sẵn', tone: 'success' },
+  BORROWED: { label: 'Đang mượn', tone: 'info' },
+  OVERDUE: { label: 'Quá hạn', tone: 'rose' },
+  RETURNED: { label: 'Đã trả', tone: 'neutral' },
+  RETURNED_LATE: { label: 'Đã trả (trễ hạn)', tone: 'amber' },
+  LOST: { label: 'Mất sách', tone: 'rose' },
+  DAMAGED: { label: 'Hư hỏng', tone: 'rose' },
+  PENDING: { label: 'Chờ xác nhận', tone: 'warning' },
+  CONFIRMED: { label: 'Đang chuẩn bị', tone: 'primary' },
+  APPROVED: { label: 'Đã duyệt', tone: 'success' },
+  REJECTED: { label: 'Bị từ chối', tone: 'rose' },
+  CANCELLED: { label: 'Đã hủy', tone: 'neutral' },
+  EXPIRED: { label: 'Hết hạn', tone: 'neutral' },
+  READY_FOR_PICKUP: { label: 'Sẵn sàng nhận', tone: 'info' },
+  CONVERTED_TO_LOAN: { label: 'Đã nhận sách', tone: 'success' },
+  OUT_OF_STOCK: { label: 'Hết sách', tone: 'neutral' },
+  UNPAID: { label: 'Chưa trả', tone: 'rose' },
+  PARTIALLY_PAID: { label: 'Trả một phần', tone: 'warning' },
+  PAID: { label: 'Đã trả', tone: 'success' },
+  WAIVED: { label: 'Đã miễn', tone: 'primary' },
 };

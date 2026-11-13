@@ -245,7 +245,7 @@ export function BorrowCustomersPage() {
                     { label: 'Dư nợ phạt', className: 'hidden w-[140px] text-right md:table-cell' },
                     { label: 'Thao tác', className: 'w-[92px] text-right' },
                   ].map((header) => (
-                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
+                    <th key={header.label} className={cn('px-4 py-3 text-left text-xs font-medium text-muted-foreground', header.className)}>
                       {header.label}
                     </th>
                   ))}

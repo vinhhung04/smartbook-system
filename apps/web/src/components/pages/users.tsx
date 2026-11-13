@@ -574,7 +574,7 @@ export function UsersPage() {
             <thead>
               <tr className="border-b border-border bg-muted/40">
                 {columns.map((header) => (
-                  <th key={header.label} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", header.className)}>
+                  <th key={header.label} className={cn("px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground", header.className)}>
                     {header.label}
                   </th>
                 ))}
@@ -620,7 +620,7 @@ export function UsersPage() {
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
                             <RoleChips roles={user.roles || []} />
-                            <span className="sm:hidden"><StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} /></span>
+                            <span className="sm:hidden"><StatusBadge label={STATUS_LABELS[user.status] ?? user.status} variant={statusBadgeVariant(user.status)} /></span>
                             <span className="sm:hidden"><ScopeSummary scopes={scopes} warehouseById={warehouseById} /></span>
                           </div>
                         </div>
@@ -642,8 +642,8 @@ export function UsersPage() {
                     <td className="hidden px-4 py-3 sm:table-cell">
                       <ScopeSummary scopes={scopes} warehouseById={warehouseById} />
                     </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
-                      <StatusBadge label={user.status} variant={statusBadgeVariant(user.status)} />
+                    <td className="hidden whitespace-nowrap px-4 py-3 sm:table-cell">
+                      <StatusBadge label={STATUS_LABELS[user.status] ?? user.status} variant={statusBadgeVariant(user.status)} />
                     </td>
                     <td className="hidden px-4 py-3 text-[12px] text-muted-foreground 2xl:table-cell">{formatDate(user.created_at)}</td>
                     <td className="px-4 py-3">

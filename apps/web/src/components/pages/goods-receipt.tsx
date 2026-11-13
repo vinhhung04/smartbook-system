@@ -457,7 +457,7 @@ export function GoodsReceiptPage() {
               <thead>
                 <tr className="border-b border-border bg-muted">
                   {["Tên sách", "ISBN/SKU", "Đặt", "Đã nhận trước", "Còn lại", "Trên hóa đơn", "Thực đếm", "Thiếu", "Trạng thái"].map((heading) => (
-                    <th key={heading} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{heading}</th>
+                    <th key={heading} className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">{heading}</th>
                   ))}
                 </tr>
               </thead>
@@ -859,11 +859,11 @@ export function GoodsReceiptPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-gradient-to-r from-blue-50/30 to-transparent">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Tên sách</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Vị trí</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Số lượng</th>
-                    {showUnitCost ? <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Giá nhập</th> : null}
-                    {showUnitCost ? <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Thành tiền</th> : null}
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Tên sách</th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Vị trí</th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Số lượng</th>
+                    {showUnitCost ? <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Giá nhập</th> : null}
+                    {showUnitCost ? <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Thành tiền</th> : null}
                   </tr>
                 </thead>
                 <tbody>

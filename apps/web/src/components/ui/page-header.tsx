@@ -6,65 +6,39 @@ interface PageHeaderProps {
   icon?: React.ComponentType<{ className?: string }>;
   /** Primary title */
   title: string;
-  /** Subtitle / description */
-  description?: string;
+  /** Subtitle / description (text, or a meta line with badges) */
+  description?: React.ReactNode;
   /** Action buttons on the right */
   actions?: React.ReactNode;
-  /** Icon background color classes */
+  // The three props below styled the old colored icon tile. The public-site style has no tile,
+  // so they are accepted but unused; they go away once every page has moved to the new header.
+  /** @deprecated no longer rendered */
   iconBg?: string;
-  /** Icon foreground color classes */
+  /** @deprecated no longer rendered */
   iconColor?: string;
-  /** Icon container size */
+  /** @deprecated no longer rendered */
   iconSize?: "sm" | "md" | "lg";
   className?: string;
 }
 
-const iconSizeClasses = {
-  sm: "w-8 h-8",
-  md: "w-10 h-10",
-  lg: "w-12 h-12",
-};
-
-const iconInnerSizeClasses = {
-  sm: "w-4 h-4",
-  md: "w-5 h-5",
-  lg: "w-6 h-6",
-};
-
-export function PageHeader({
-  icon: Icon,
-  title,
-  description,
-  actions,
-  iconBg = "bg-indigo-100",
-  iconColor = "text-indigo-600",
-  iconSize = "md",
-  className,
-}: PageHeaderProps) {
+/**
+ * Page title in the public website's voice: the Fraunces display face, a calm muted lede,
+ * actions on the right. The icon stays as a small quiet mark beside the title, not a tile.
+ */
+export function PageHeader({ icon: Icon, title, description, actions, className }: PageHeaderProps) {
   return (
-    <div className={cn("flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between", className)}>
-      <div className="flex items-start gap-3">
-        {Icon && (
-          <div
-            className={cn(
-              "flex shrink-0 items-center justify-center rounded-xl border border-border",
-              iconSizeClasses[iconSize],
-              iconBg,
-            )}
-          >
-            <Icon className={cn(iconInnerSizeClasses[iconSize], iconColor)} />
-          </div>
+    <div className={cn("flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between", className)}>
+      <div className="min-w-0 flex-1">
+        <h1 className="flex items-center gap-2.5 text-balance font-display text-[28px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">
+          {Icon && <Icon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+          <span className="min-w-0">{title}</span>
+        </h1>
+        {description && (
+          <div className="mt-1.5 max-w-2xl text-pretty text-[14px] leading-relaxed text-muted-foreground">{description}</div>
         )}
-        <div className="min-w-0 flex-1">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-          {description && (
-            <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
-          )}
-        </div>
       </div>
 
-      {/* Right-side actions */}
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

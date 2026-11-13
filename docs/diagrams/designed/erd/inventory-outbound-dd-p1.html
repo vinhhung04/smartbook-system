@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ERD inventory_db – xuất kho, lấy hàng và đóng gói (1/2)</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">ER · Diagram Design · SmartBook</p>
+    <h1>ERD inventory_db – xuất kho, lấy hàng và đóng gói (1/2)</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 940" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="inventory-outbound-dd-p1-title inventory-outbound-dd-p1-desc">
+<title id="inventory-outbound-dd-p1-title">ERD inventory_db: xuất kho, lấy hàng và đóng gói, phần 1</title>
+<desc id="inventory-outbound-dd-p1-desc">Đơn xuất kho, dòng xuất, công việc lấy hàng và dòng lấy hàng.</desc>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- relationships -->
+<path d="M 524.0 712.0 L 524.0 728.0 Q 524.0 736.0 532.0 736.0 L 640.0 736.0 Q 648.0 736.0 648.0 744.0 L 648.0 776.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 293.0 463.0 L 293.0 502.0 Q 293.0 510.0 301.0 510.0 L 469.0 510.0 Q 477.0 510.0 477.0 518.0 L 477.0 536.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 242.0 463.0 L 242.0 488.0 Q 242.0 496.0 250.0 496.0 L 264.0 496.0 Q 272.0 496.0 272.0 504.0 L 272.0 536.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 191.0 463.0 L 191.0 488.0 Q 191.0 496.0 183.0 496.0 L 165.0 496.0 Q 157.0 496.0 157.0 504.0 L 157.0 536.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 571.0 472.0 L 571.0 536.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 637.0 472.0 L 637.0 488.0 Q 637.0 496.0 645.0 496.0 L 680.0 496.0 Q 688.0 496.0 688.0 504.0 L 688.0 776.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 506.0 344.0 L 501.0 344.0 Q 496.0 344.0 496.0 349.0 L 496.0 403.0 Q 496.0 408.0 501.0 408.0 L 506.0 408.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 333.0 216.0 L 333.0 232.0 Q 333.0 240.0 341.0 240.0 L 596.0 240.0 Q 604.0 240.0 604.0 248.0 L 604.0 280.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 242.0 216.0 L 242.0 307.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 197.0 216.0 L 197.0 232.0 Q 197.0 240.0 189.0 240.0 L 123.0 240.0 Q 115.0 240.0 115.0 248.0 L 115.0 536.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<path d="M 288.0 216.0 L 288.0 246.0 Q 288.0 254.0 296.0 254.0 L 360.0 254.0 Q 368.0 254.0 368.0 262.0 L 368.0 488.0 Q 368.0 496.0 360.0 496.0 L 320.0 496.0 Q 312.0 496.0 312.0 504.0 L 312.0 536.0" fill="none" stroke="#475569" stroke-width="1.2"/>
+<!-- cardinality -->
+<rect x="478.0" y="717.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="496.0" y="730.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="622.0" y="753.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="630.0" y="766.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="303.0" y="468.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="321.0" y="481.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="451.0" y="513.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="459.0" y="526.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="252.0" y="468.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="270.0" y="481.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="226.0" y="513.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="244.0" y="526.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..1</text>
+<rect x="201.0" y="468.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="219.0" y="481.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="131.0" y="513.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="139.0" y="526.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="581.0" y="477.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="599.0" y="490.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="545.0" y="513.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="553.0" y="526.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="647.0" y="509.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="665.0" y="522.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="662.0" y="753.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="670.0" y="766.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="460.0" y="320.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="478.0" y="333.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="460.0" y="414.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="478.0" y="427.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..1</text>
+<rect x="387.0" y="253.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="405.0" y="266.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="578.0" y="257.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="586.0" y="270.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="196.0" y="253.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="214.0" y="266.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="196.0" y="284.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="214.0" y="297.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..1</text>
+<rect x="151.0" y="253.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="169.0" y="266.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="89.0" y="513.5" width="16" height="17" rx="2" fill="#ffffff"/>
+<text x="97.0" y="526.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">1</text>
+<rect x="298.0" y="269.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="316.0" y="282.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..*</text>
+<rect x="322.0" y="513.5" width="36" height="17" rx="2" fill="#ffffff"/>
+<text x="340.0" y="526.5" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" font-weight="700">0..1</text>
+<!-- tables -->
+<rect x="384.0" y="536.0" width="280" height="176" rx="6" fill="#ffffff"/>
+<rect x="384.0" y="536.0" width="280" height="176" rx="6" fill="rgba(180,83,9,0.08)" stroke="#b45309" stroke-width="1.2"/>
+<path d="M 384.0 570.0 H 664.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="396.0" y="559" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">outbound_orders</text>
+<text x="396.0" y="587" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="654.0" y="587" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="396.0" y="605" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ warehouse_id</text>
+<text x="654.0" y="605" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="396.0" y="623" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  outbound_number</text>
+<text x="654.0" y="623" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar UK</text>
+<text x="396.0" y="641" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  outbound_type</text>
+<text x="654.0" y="641" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar</text>
+<text x="396.0" y="659" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  status</text>
+<text x="654.0" y="659" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar</text>
+<text x="396.0" y="677" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  reference_type</text>
+<text x="654.0" y="677" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">outboundreferencetype</text>
+<text x="396.0" y="695" fill="#5b6b82" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-style="italic">+ 12 cột khác</text>
+<rect x="140.0" y="307.0" width="204" height="156" rx="6" fill="#ffffff"/>
+<rect x="140.0" y="307.0" width="204" height="156" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<path d="M 140.0 341.0 H 344.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="152.0" y="330" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">outbound_order_items</text>
+<text x="152.0" y="358" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="334.0" y="358" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="152.0" y="376" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ outbound_order_id</text>
+<text x="334.0" y="376" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="152.0" y="394" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ variant_id</text>
+<text x="334.0" y="394" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="152.0" y="412" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ source_location_id</text>
+<text x="334.0" y="412" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="152.0" y="430" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  quantity</text>
+<text x="334.0" y="430" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">int</text>
+<text x="152.0" y="448" fill="#5b6b82" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-style="italic">+ 2 cột khác</text>
+<rect x="506.0" y="280.0" width="196" height="192" rx="6" fill="#ffffff"/>
+<rect x="506.0" y="280.0" width="196" height="192" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<path d="M 506.0 314.0 H 702.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="518.0" y="303" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">picking_tasks</text>
+<text x="518.0" y="331" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="692.0" y="331" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="518.0" y="349" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ root_order_id</text>
+<text x="692.0" y="349" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="518.0" y="367" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ parent_id</text>
+<text x="692.0" y="367" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="518.0" y="385" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ warehouse_id</text>
+<text x="692.0" y="385" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="518.0" y="403" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  task_number</text>
+<text x="692.0" y="403" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar UK</text>
+<text x="518.0" y="421" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  picking_type</text>
+<text x="692.0" y="421" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar</text>
+<text x="518.0" y="439" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  status</text>
+<text x="692.0" y="439" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar</text>
+<text x="518.0" y="457" fill="#5b6b82" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-style="italic">+ 7 cột khác</text>
+<rect x="151.0" y="40.0" width="228" height="176" rx="6" fill="#ffffff"/>
+<rect x="151.0" y="40.0" width="228" height="176" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<path d="M 151.0 74.0 H 379.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="163.0" y="63" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">picking_task_items</text>
+<text x="163.0" y="91" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="369.0" y="91" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="163.0" y="109" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ picking_task_id</text>
+<text x="369.0" y="109" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="163.0" y="127" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ outbound_order_item_id</text>
+<text x="369.0" y="127" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="163.0" y="145" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ variant_id</text>
+<text x="369.0" y="145" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="163.0" y="163" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">→ source_location_id</text>
+<text x="369.0" y="163" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<text x="163.0" y="181" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">  status</text>
+<text x="369.0" y="181" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">varchar</text>
+<text x="163.0" y="199" fill="#5b6b82" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-style="italic">+ 5 cột khác</text>
+<rect x="608.0" y="776.0" width="120" height="68" rx="6" fill="#ffffff"/>
+<rect x="608.0" y="776.0" width="120" height="68" rx="6" fill="rgba(31,56,100,0.03)" stroke="#475569" stroke-width="1" stroke-dasharray="4,3"/>
+<path d="M 608.0 810.0 H 728.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="620.0" y="799" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">warehouses</text>
+<text x="620.0" y="827" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="718.0" y="827" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<rect x="232.0" y="536.0" width="120" height="68" rx="6" fill="#ffffff"/>
+<rect x="232.0" y="536.0" width="120" height="68" rx="6" fill="rgba(31,56,100,0.03)" stroke="#475569" stroke-width="1" stroke-dasharray="4,3"/>
+<path d="M 232.0 570.0 H 352.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="244.0" y="559" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">locations</text>
+<text x="244.0" y="587" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="342.0" y="587" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<rect x="72.0" y="536.0" width="128" height="68" rx="6" fill="#ffffff"/>
+<rect x="72.0" y="536.0" width="128" height="68" rx="6" fill="rgba(31,56,100,0.03)" stroke="#475569" stroke-width="1" stroke-dasharray="4,3"/>
+<path d="M 72.0 570.0 H 200.0" stroke="rgba(31,56,100,0.22)" stroke-width="1"/>
+<text x="84.0" y="559" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">book_variants</text>
+<text x="84.0" y="587" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700"># id</text>
+<text x="190.0" y="587" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="end">uuid</text>
+<!-- legend -->
+<line x1="40" y1="892" x2="760" y2="892" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="44" y="916" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700">#</text>
+<text x="56.6" y="916" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">khóa chính</text>
+<text x="134.6" y="916" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700">→</text>
+<text x="147.2" y="916" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">khóa ngoại</text>
+<text x="225.2" y="916" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700">UK</text>
+<text x="244.39999999999998" y="916" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">duy nhất</text>
+<text x="314.4" y="916" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start" font-weight="700">0..*</text>
+<text x="346.79999999999995" y="916" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">bội số</text>
+<rect x="400.79999999999995" y="906" width="20" height="12" rx="2" fill="rgba(31,56,100,0.03)" stroke="#475569" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="428.79999999999995" y="916" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">bảng thuộc nhóm khác</text>
+</svg>
+    </div>
+    <p class="note">Nguồn: <code>services/inventory-service/prisma/schema.prisma</code>; danh sách bảng theo hình gốc.</p>
+  </div>
+</body>
+</html>

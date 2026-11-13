@@ -47,6 +47,7 @@ function LocationTreeRow({
   const isSelected = selectedId === node.id;
   const isInactive = node.is_active === false;
   const meta = locationTypeMeta(node.location_type);
+  const Icon = meta.icon;
 
   return (
     <li role="treeitem" aria-selected={isSelected} aria-expanded={hasChildren ? isExpanded : undefined}>
@@ -59,8 +60,8 @@ function LocationTreeRow({
           }
         }}
         tabIndex={0}
-        className={`group relative flex items-center gap-1.5 rounded-md py-1.5 pl-1 pr-2 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${
-          isSelected ? "bg-primary/10" : "hover:bg-accent"
+        className={`group relative flex cursor-pointer items-center gap-1.5 rounded-lg py-1.5 pl-1 pr-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+          isSelected ? "bg-primary/[0.08] text-primary" : "hover:bg-muted/60"
         }`}
       >
         {hasChildren ? (
@@ -79,15 +80,15 @@ function LocationTreeRow({
           <span className="shrink-0 w-4 h-4" />
         )}
 
-        <span className={`shrink-0 w-2 h-2 rounded-[2px] ${meta.dot}`} />
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "text-primary" : "text-muted-foreground"}`} aria-label={meta.label} />
 
         <span
-          className={`truncate text-[12.5px] font-medium ${isInactive ? "text-muted-foreground/70 line-through decoration-1" : "text-foreground/90"}`}
+          className={`truncate text-[13px] ${isSelected ? "font-semibold" : "font-medium"} ${isInactive ? "text-muted-foreground/70 line-through decoration-1" : isSelected ? "" : "text-foreground/90"}`}
         >
           {node.name || node.code}
         </span>
 
-        <span className="shrink-0 ml-auto pl-2 font-mono text-[10px] text-muted-foreground/70">{node.code}</span>
+        
       </div>
 
       {hasChildren && isExpanded && (

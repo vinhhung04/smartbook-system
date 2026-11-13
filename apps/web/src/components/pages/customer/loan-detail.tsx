@@ -61,7 +61,7 @@ export function CustomerLoanDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+      <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8 *:max-w-3xl" aria-busy="true">
         <div className="h-10 w-1/2 animate-pulse rounded-lg bg-muted" />
         <div className="h-32 animate-pulse rounded-xl border bg-card" />
         <div className="h-48 animate-pulse rounded-xl border bg-card" />
@@ -70,7 +70,7 @@ export function CustomerLoanDetailPage() {
   }
   if (error || !loan) {
     return (
-      <div className="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 *:max-w-3xl">
         <EmptyState
           variant={error ? 'error' : 'no-data'}
           title={error ? 'Không tải được phiếu mượn' : 'Không tìm thấy phiếu mượn'}
@@ -92,7 +92,7 @@ export function CustomerLoanDetailPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8 *:max-w-3xl">
       <NavLink to="/customer/loans" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
         <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" /> Quay lại phiếu mượn
       </NavLink>

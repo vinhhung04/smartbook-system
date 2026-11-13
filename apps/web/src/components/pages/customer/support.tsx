@@ -30,7 +30,7 @@ const FAQ_ITEMS = [
 
 export function CustomerSupportPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader title="Hỗ trợ & Liên hệ" subtitle="Các kênh liên hệ trực tiếp với thư viện và câu hỏi thường gặp" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

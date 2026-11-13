@@ -1,0 +1,56 @@
+---
+title: "Sơ đồ tuần tự: Trợ lý AI (Copilot) – câu hỏi, công cụ, bằng chứng, kiểm chứng"
+---
+%% Nguồn đối chiếu (nhánh hungg):
+%%   services/ai-service/main.py (POST /assistant/stream, _start_assistant_turn, _finalize_assistant_turn)
+%%   services/ai-service/copilot_plan.py (build_plan), copilot_semantic_planner.py (cờ COPILOT_SEMANTIC_PLANNER, mặc định off)
+%%   services/ai-service/tool_registry.py (11 công cụ phân tích + 9 công cụ tổng hợp = 20 công cụ chỉ đọc)
+%%   services/ai-service/copilot_explain.py, copilot_visualization.py, copilot_verification.py,
+%%   copilot_claims.py (cờ COPILOT_SEMANTIC_CLAIMS, mặc định off), routes_conversations.py (ASSISTANT_ROLES)
+%%   docs/ANALYSIS/AI_COPILOT_3_3_EVALUATION.md
+sequenceDiagram
+    autonumber
+    actor Q as Quản lý / Quản trị
+    participant W as Web App (Trợ lý AI)
+    participant G as API Gateway
+    participant AI as AI Service
+    participant AN as Analytics / Inventory API
+    participant OR as OpenRouter (Qwen)
+    participant DB as ai_db
+
+    Q->>W: Đặt câu hỏi tiếng Việt
+    W->>G: POST /ai/assistant/stream (JWT)
+    G->>AI: Chuyển tiếp kèm JWT
+    break Vai trò không thuộc ADMIN, WAREHOUSE_MANAGER
+        AI-->>W: 403
+    end
+    AI->>DB: Đọc lịch sử và trạng thái hội thoại (copilot_state)
+    Note right of AI: copilot_plan.build_plan: chuẩn hóa câu (bỏ dấu, viết tắt),<br/>nhận diện năng lực, kỳ, kho, ngân sách,<br/>chọn công cụ và đối số trong danh sách 20 công cụ đọc
+    opt Cờ COPILOT_SEMANTIC_PLANNER=on (mặc định off) và kế hoạch luật chưa đủ
+        AI->>OR: Một lời gọi chat_json chỉ đọc nghĩa câu hỏi
+        OR-->>AI: Gợi ý năng lực, kỳ, kho (backend kiểm tra và hợp nhất)
+    end
+    par Gọi các công cụ trong kế hoạch
+        AI->>G: GET /analytics/... bằng JWT người dùng
+        G->>AN: Chuyển tiếp, kiểm tra quyền và phạm vi kho
+        AN-->>AI: Dữ liệu có cấu trúc
+    end
+    Note right of AI: Bảng bằng chứng (evidence sheet), giải thích FACT /<br/>INFERENCE / ASSUMPTION / UNKNOWN, đặc tả biểu đồ<br/>line/bar/area/pie/kpi/table dựng từ dữ liệu công cụ
+    AI->>OR: Sinh câu trả lời từ bằng chứng (không được tự vẽ biểu đồ)
+    OR-->>AI: Bản nháp câu trả lời
+    Note right of AI: Kiểm chứng Layer 1 tất định: đối chiếu số liệu, kỳ, xếp hạng,<br/>ngân sách, NO_DATA, diễn đạt quá mức<br/>(Layer 2+3 trích claim bằng LLM: cờ COPILOT_SEMANTIC_CLAIMS, mặc định off)
+    alt Lỗi nghiêm trọng có căn cứ chính xác
+        AI->>OR: Sinh lại tối đa 1 lần
+        OR-->>AI: Bản nháp mới
+        Note right of AI: Vẫn lỗi → BLOCKED: trả câu dựng từ dữ liệu,<br/>không đề xuất hành động
+    else Lỗi chỉ ở nhận định suy luận
+        Note right of AI: Lược bỏ câu sai, trạng thái WARNING, safe_to_act = false
+    else Không phát hiện lỗi
+        Note right of AI: PASSED (hoặc REPAIRED nếu sửa số an toàn)
+    end
+    opt safe_to_act = true và câu hỏi dẫn tới việc cần làm
+        AI->>DB: Lưu ai_pending_actions (PENDING_CONFIRMATION, hết hạn 10 phút)
+    end
+    AI->>DB: Lưu tin nhắn, bằng chứng, đặc tả biểu đồ
+    AI-->>W: SSE: bản nháp → đang kiểm chứng → done {answer, visualizations, evidence, verification}
+    W-->>Q: Văn bản + biểu đồ (component whitelist) + bằng chứng + trạng thái kiểm chứng

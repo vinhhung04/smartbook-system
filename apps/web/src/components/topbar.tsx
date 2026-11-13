@@ -1,4 +1,4 @@
-import { Bell, ScanBarcode, LogOut, Search, UserCircle } from "lucide-react";
+import { Bell, Menu, ScanBarcode, LogOut, Search, UserCircle } from "lucide-react";
 import { Moon, Sun, Wifi, WifiOff } from "lucide"; // icon data (not components) — MorphIcon needs this, not lucide-react
 import { MorphIcon } from "morphicons/react";
 import { motion, AnimatePresence } from "motion/react";
@@ -114,7 +114,7 @@ function ThemeToggle() {
   );
 }
 
-export function Topbar() {
+export function Topbar({ onMenuClick, menuOpen = false }: { onMenuClick?: () => void; menuOpen?: boolean } = {}) {
   const navigate = useNavigate();
   const { connected } = useSocket();
   const { t } = useI18n();
@@ -122,7 +122,8 @@ export function Topbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState<AdminNotification[]>([]);
   const location = useLocation();
-  const { crumbs, color } = resolveBreadcrumb(location.pathname);
+  // One accent across the shell, as on the public site; the per-route colors are no longer shown.
+  const { crumbs } = resolveBreadcrumb(location.pathname);
   const user = authService.getCurrentUser();
 
   const handleAdminEvent = useCallback((eventName: string) => (data: unknown) => {
@@ -176,21 +177,33 @@ export function Topbar() {
   };
 
   return (
-    <header className="h-[52px] border-b border-border bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl flex items-center justify-between px-5 gap-4 shrink-0 sticky top-0 z-10">
-      <nav className="flex items-center gap-1.5 text-[13px]">
+    <header className="h-[52px] border-b border-border bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl flex items-center justify-between px-3 sm:px-5 gap-2 sm:gap-4 shrink-0 sticky top-0 z-10">
+      {onMenuClick && (
+        <button
+          type="button"
+          onClick={onMenuClick}
+          aria-label="Mở menu"
+          aria-controls="staff-sidebar"
+          aria-expanded={menuOpen}
+          className="w-8 h-8 -ml-1 flex items-center justify-center rounded-[8px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          <Menu className="w-[18px] h-[18px]" />
+        </button>
+      )}
+      <nav className="flex flex-1 min-w-0 items-center gap-1.5 text-[13px]">
         {crumbs.map((crumb, i) => (
-          <span key={`${crumb.labelKey}-${i}`} className="flex items-center gap-1.5">
+          <span key={`${crumb.labelKey}-${i}`} className={`flex min-w-0 items-center gap-1.5 ${i < crumbs.length - 1 ? "max-sm:hidden" : ""}`}>
             {i > 0 && <span className="text-slate-300">/</span>}
             {crumb.to ? (
               <NavLink to={crumb.to} className="text-muted-foreground hover:text-foreground transition-colors" style={{ fontWeight: 400 }}>{t(crumb.labelKey)}</NavLink>
             ) : (
-              <span className={i === crumbs.length - 1 ? color : "text-muted-foreground"} style={{ fontWeight: i === crumbs.length - 1 ? 600 : 400 }}>{t(crumb.labelKey)}</span>
+              <span className={`truncate ${i === crumbs.length - 1 ? "text-foreground" : "text-muted-foreground"}`} style={{ fontWeight: i === crumbs.length - 1 ? 600 : 400 }}>{t(crumb.labelKey)}</span>
             )}
           </span>
         ))}
       </nav>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         <button
           type="button"
           onClick={() => openCommandPalette()}
@@ -266,7 +279,7 @@ export function Topbar() {
         </div>
 
         <div className="relative">
-          <button onClick={() => setProfileOpen(!profileOpen)} className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center cursor-pointer hover:shadow-md hover:shadow-indigo-500/20 transition-all duration-140">
+          <button onClick={() => setProfileOpen(!profileOpen)} className="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center cursor-pointer transition-colors duration-140 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2">
             <span className="text-[10px] text-white" style={{ fontWeight: 700 }}>{initials}</span>
           </button>
           <AnimatePresence>

@@ -30,7 +30,7 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
 function FactGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{title}</p>
+      <p className="mb-1 text-[12px] font-semibold text-muted-foreground">{title}</p>
       <dl className="divide-y divide-border/70">{children}</dl>
     </div>
   );
@@ -54,7 +54,7 @@ export function ReorderDetail({ line, days, hasBudget }: { line: PlanLine; days:
       <figure className="flex gap-2.5 rounded-lg border border-border bg-muted/30 px-3.5 py-3">
         <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
-          <figcaption className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Lý do từ hệ thống phân tích</figcaption>
+          <figcaption className="text-[12px] font-semibold text-muted-foreground">Lý do từ hệ thống phân tích</figcaption>
           <p className="mt-1 text-[13px] leading-relaxed text-foreground/90">{item.reason || 'Hệ thống không trả về lý do cho đề xuất này.'}</p>
         </div>
       </figure>

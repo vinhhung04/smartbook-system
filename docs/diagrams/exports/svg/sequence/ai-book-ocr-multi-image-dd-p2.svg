@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 1052" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-book-ocr-multi-image-dd-p2-title ai-book-ocr-multi-image-dd-p2-desc" id="ai-book-ocr-multi-image-dd-p2-root">
+<title id="ai-book-ocr-multi-image-dd-p2-title">Nhập sách bằng OCR nhiều ảnh, phần 2: đối chiếu và lưu</title>
+<desc id="ai-book-ocr-multi-image-dd-p2-desc">AI Service tra cứu ISBN khi có đúng một mã hợp lệ, đối chiếu ảnh với nguồn tra cứu, trả đề xuất theo từng ô; người dùng áp dụng, xử lý trùng lặp và lưu qua bản nháp đối soát của Inventory.</desc>
+<defs>
+      <style>#ai-book-ocr-multi-image-dd-p2-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #ai-book-ocr-multi-image-dd-p2-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #ai-book-ocr-multi-image-dd-p2-root .diagram-container { width: 100%; overflow-x: auto; }
+      #ai-book-ocr-multi-image-dd-p2-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#ai-book-ocr-multi-image-dd-p2-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="408" y="124" width="352" height="176" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="1012" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="232" y1="104" x2="232" y2="1012" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="356" y1="104" x2="356" y2="1012" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="492" y1="104" x2="492" y2="1012" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="600" y1="104" x2="600" y2="1012" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="704" y1="104" x2="704" y2="1012" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="604" y1="196" x2="700" y2="196" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-link)"/>
+<line x1="700" y1="288" x2="604" y2="288" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow)"/>
+<line x1="596" y1="408" x2="236" y2="408" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow)"/>
+<line x1="228" y1="492" x2="100" y2="492" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow)"/>
+<line x1="100" y1="560" x2="228" y2="560" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow)"/>
+<line x1="236" y1="628" x2="352" y2="628" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-link)"/>
+<line x1="360" y1="712" x2="488" y2="712" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-link)"/>
+<line x1="488" y1="764" x2="236" y2="764" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow)"/>
+<line x1="100" y1="832" x2="228" y2="832" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow)"/>
+<line x1="236" y1="884" x2="352" y2="884" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-link)"/>
+<line x1="360" y1="952" x2="488" y2="952" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-link)"/>
+<line x1="488" y1="988" x2="236" y2="988" stroke="#000000" stroke-width="1.4" marker-end="url(#ai-book-ocr-multi-image-dd-p2-ai-book-ocr-multi-image-dd-p2-arrow-accent)"/>
+<!-- labels -->
+<rect x="620" y="154" width="64" height="34" rx="2" fill="#f7f7f7"/>
+<text x="652.0" y="167" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> Tra cứu</text>
+<text x="652.0" y="183" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ISBN</text>
+<rect x="618" y="246" width="68" height="34" rx="2" fill="#f7f7f7"/>
+<text x="652.0" y="259" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> Bản ghi</text>
+<text x="652.0" y="275" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">metadata</text>
+<path d="M 408 124 H 448 V 136 L 440 144 H 408 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="425.0" y="139" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">opt</text>
+<rect x="456" y="125" width="156" height="18" rx="2" fill="#f7f7f7"/>
+<text x="462" y="139" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Có đúng một ISBN hợp lệ]</text>
+<rect x="276" y="382" width="280" height="18" rx="2" fill="#ffffff"/>
+<text x="416.0" y="395" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> proposals theo từng ô của biểu mẫu + bằng chứng</text>
+<rect x="110" y="418" width="108" height="66" rx="2" fill="#ffffff"/>
+<text x="164.0" y="431" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> Panel "Kết quả</text>
+<text x="164.0" y="447" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đọc ảnh": giá trị,</text>
+<text x="164.0" y="463" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trạng thái, bằng</text>
+<text x="164.0" y="479" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">chứng</text>
+<rect x="114" y="502" width="100" height="50" rx="2" fill="#ffffff"/>
+<text x="164.0" y="515" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> Áp dụng từng</text>
+<text x="164.0" y="531" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trường hoặc các</text>
+<text x="164.0" y="547" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trường an toàn</text>
+<rect x="244" y="570" width="100" height="50" rx="2" fill="#ffffff"/>
+<text x="294.0" y="583" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">14.</tspan> Tạo bản nháp</text>
+<text x="294.0" y="599" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đối soát và kiểm</text>
+<text x="294.0" y="615" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">tra trùng</text>
+<rect x="368" y="638" width="112" height="66" rx="2" fill="#ffffff"/>
+<text x="424.0" y="651" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">15.</tspan> POST /api/</text>
+<text x="424.0" y="667" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">metadata-reconcil</text>
+<text x="424.0" y="683" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">iations, kiểm tra</text>
+<text x="424.0" y="699" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trùng lặp</text>
+<rect x="256" y="722" width="212" height="34" rx="2" fill="#ffffff"/>
+<text x="362.0" y="735" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">16.</tspan> Bản nháp + ứng viên trùng (EXACT_</text>
+<text x="362.0" y="751" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">DUPLICATE, SAME_EDITION...)</text>
+<rect x="108" y="774" width="112" height="50" rx="2" fill="#ffffff"/>
+<text x="164.0" y="787" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">17.</tspan> Xử lý trùng lặp,</text>
+<text x="164.0" y="803" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">chuẩn hóa thực thể,</text>
+<text x="164.0" y="819" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">bấm Lưu</text>
+<rect x="248" y="842" width="92" height="34" rx="2" fill="#ffffff"/>
+<text x="294.0" y="855" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">18.</tspan> Áp dụng bản</text>
+<text x="294.0" y="871" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">nháp đã duyệt</text>
+<rect x="368" y="894" width="112" height="50" rx="2" fill="#ffffff"/>
+<text x="424.0" y="907" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">19.</tspan> Ghi các trường</text>
+<text x="424.0" y="923" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đã chấp nhận trong</text>
+<text x="424.0" y="939" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">một giao dịch</text>
+<rect x="318" y="962" width="88" height="18" rx="2" fill="#ffffff"/>
+<text x="362.0" y="975" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">20.</tspan> Sách đã lưu</text>
+<!-- notes -->
+<rect x="428" y="208" width="332" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="440" y="227" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">lookup_book_by_isbn (Google Books, Open Library, nhà sách)</text>
+<rect x="324" y="312" width="436" height="60" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="336" y="331" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">reconcile.py: đối chiếu ảnh ↔ tra cứu theo khóa strict (giữ dấu),</text>
+<text x="336" y="347" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">gán EXTRACTED / CORROBORATED / LOOKUP_ONLY / REVIEW_REQUIRED /</text>
+<text x="336" y="363" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">CONFLICTED / INVALID, autofill_policy() quyết định safeToApply</text>
+<!-- nodes -->
+<circle cx="96" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 96 56 V 72 M 85 61 H 107 M 96 72 L 87 84 M 96 72 L 105 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="96" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Quản lý kho</text>
+<rect x="178" y="40" width="108" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="232" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web App</text>
+<text x="232" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">React · apps/web</text>
+<rect x="306" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="356" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="356" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="434" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="492" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="492" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<rect x="556" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="600" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">AI Service</text>
+<text x="600" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FastAPI</text>
+<rect x="652" y="40" width="104" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="704" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Nguồn tra cứu</text>
+<text x="704" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">ISBN</text>
+</svg>

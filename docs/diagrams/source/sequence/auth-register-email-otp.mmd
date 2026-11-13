@@ -1,0 +1,59 @@
+---
+title: "Sơ đồ tuần tự: Đăng ký tài khoản bạn đọc và xác thực email bằng OTP"
+---
+%% Nguồn đối chiếu (nhánh hungg, commit d6221e8):
+%%   apps/web/src/services/auth.ts (register, verifyEmailOtp, resendEmailOtp)
+%%   apps/api-gateway/src/index.js (proxy pathFilter "/auth")
+%%   services/auth-service/src/routes/auth.routes.js (/register, /email-otp/verify, /email-otp/resend)
+%%   services/auth-service/src/controllers/auth.controller.js (register, verifyEmailOtp, markEmailVerified)
+%%   services/auth-service/src/lib/email-otp.js (DEFAULT_POLICY: 6 chữ số, 5 phút, 5 lần thử, 60 giây chờ gửi lại, 10 lần gửi/giờ)
+%%   services/auth-service/src/lib/email-otp-store.js (bảng email_otp_challenges)
+%% Cờ REGISTRATION_EMAIL_VERIFICATION mặc định "required" (compose.prod.yml).
+sequenceDiagram
+    autonumber
+    actor U as Bạn đọc
+    participant W as Web App (React)
+    participant G as API Gateway
+    participant A as Auth Service
+    participant DB as PostgreSQL (auth_db)
+    participant M as Máy chủ SMTP
+
+    U->>W: Nhập họ tên, email, tên đăng nhập, mật khẩu
+    W->>G: POST /auth/register
+    G->>A: Chuyển tiếp (proxy /auth)
+    Note right of A: Giới hạn tần suất, kiểm tra dữ liệu,<br/>trùng username/email
+    A->>DB: Tạo users (status = PENDING_VERIFICATION),<br/>gán vai trò CUSTOMER
+    A->>DB: Tạo email_otp_challenges<br/>(chỉ lưu HMAC-SHA256 của mã, hết hạn sau 5 phút)
+    A->>M: Gửi email chứa mã 6 chữ số
+    alt Gửi email thất bại
+        A-->>G: 201 VERIFICATION_REQUIRED, email_delivery = FAILED
+        G-->>W: 201 {challenge}
+        W-->>U: Cho phép gửi lại mã ngay
+    else Gửi thành công
+        A-->>G: 201 VERIFICATION_REQUIRED {challenge}
+        G-->>W: 201 {challenge: masked_email, code_length, expires_at}
+        W-->>U: Hiển thị màn hình nhập mã
+    end
+
+    opt Bạn đọc yêu cầu gửi lại mã
+        W->>G: POST /auth/email-otp/resend
+        G->>A: Chuyển tiếp
+        Note right of A: Chờ 60 giây giữa hai lần gửi,<br/>tối đa 10 lần gửi mỗi giờ
+        A->>DB: Thay mã mới, đặt lại số lần thử
+        A->>M: Gửi email mới
+        A-->>W: 200 {challenge}
+    end
+
+    U->>W: Nhập mã OTP
+    W->>G: POST /auth/email-otp/verify {challenge_id, code}
+    G->>A: Chuyển tiếp
+    A->>DB: Giữ một lượt thử (UPDATE có điều kiện)
+    break Mã sai, hết hạn hoặc vượt 5 lần thử
+        A-->>G: 400 OTP_INVALID / 410 OTP_EXPIRED / 429 OTP_TOO_MANY_ATTEMPTS
+        G-->>W: Lỗi kèm attempts_remaining
+        W-->>U: Báo lỗi, cho nhập lại hoặc gửi lại mã
+    end
+    A->>DB: Trong một giao dịch: đánh dấu mã đã dùng,<br/>users.status = ACTIVE, ghi thời điểm xác thực email
+    A-->>G: 200 VERIFIED
+    G-->>W: 200 VERIFIED
+    W-->>U: Chuyển sang đăng nhập (không tự cấp phiên)

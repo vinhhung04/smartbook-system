@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ triển khai production trên VPS bằng Docker Compose</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Deployment · Diagram Design · SmartBook</p>
+    <h1>Sơ đồ triển khai production trên VPS bằng Docker Compose</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 1148" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="deployment-production-dd-title deployment-production-dd-desc">
+<title id="deployment-production-dd-title">Triển khai production trên VPS bằng Docker Compose</title>
+<desc id="deployment-production-dd-desc">Một VPS Ubuntu chạy Docker Compose với ba mạng edge, app và data: Caddy nhận HTTPS và chuyển tới web và api-gateway, năm service ở mạng app, cơ sở dữ liệu, Redis và RabbitMQ ở mạng data không ra Internet; GitHub triển khai qua SSH.</desc>
+<defs>
+  <marker id="deployment-production-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker>
+  <marker id="deployment-production-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#b45309"/></marker>
+  <marker id="deployment-production-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2f5597"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- zones -->
+<rect x="40" y="152" width="720" height="772" rx="8" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="56" y="174" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">VPS Ubuntu 24.04 (6 vCPU, ~12 GB RAM)</text>
+<text x="56" y="192" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">UFW chỉ mở 22/80/443 · fail2ban ·</text>
+<text x="56" y="208" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">Docker Compose · /opt/smartbook</text>
+<rect x="56" y="224" width="688" height="96" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="72" y="246" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">mạng edge</text>
+<rect x="56" y="356" width="688" height="164" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="72" y="378" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">mạng app (có đường ra Internet)</text>
+<rect x="56" y="560" width="440" height="124" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="72" y="582" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">mạng data (internal: không ra Internet,</text>
+<text x="72" y="600" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Caddy không tới được)</text>
+<rect x="56" y="756" width="688" height="152" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="72" y="778" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">Volume Docker</text>
+<rect x="40" y="948" width="720" height="100" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="970" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">Dịch vụ bên ngoài (đi ra từ mạng app)</text>
+<!-- arrows -->
+<path d="M 304 280 H 265" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deployment-production-dd-arrow)"/>
+<path d="M 496 280 H 535" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deployment-production-dd-arrow)"/>
+<path d="M 116 104 V 120 Q 116 128 124 128 H 376 Q 384 128 384 136 V 251" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#deployment-production-dd-arrow-link)"/>
+<path d="M 312 104 V 112 Q 312 120 320 120 H 408 Q 416 120 416 128 V 251" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#deployment-production-dd-arrow-link)"/>
+<path d="M 524 104 V 151" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#deployment-production-dd-arrow)"/>
+<path d="M 632 308 V 355" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deployment-production-dd-arrow)"/>
+<path d="M 276 520 V 559" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#deployment-production-dd-arrow)"/>
+<!-- labels -->
+<rect x="328" y="196" width="48" height="18" rx="2" fill="#ffffff"/>
+<text x="352.0" y="209" fill="#2f5597" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">HTTPS</text>
+<rect x="424" y="196" width="88" height="18" rx="2" fill="#ffffff"/>
+<text x="468.0" y="209" fill="#2f5597" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">HTTPS / WSS</text>
+<rect x="536" y="116" width="140" height="18" rx="2" fill="#ffffff"/>
+<text x="606.0" y="129" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">SSH deploy, pull image</text>
+<rect x="644" y="326" width="84" height="18" rx="2" fill="#ffffff"/>
+<text x="686.0" y="339" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">HTTP nội bộ</text>
+<rect x="288" y="531" width="124" height="18" rx="2" fill="#ffffff"/>
+<text x="350.0" y="544" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">SQL, cache, sự kiện</text>
+<!-- nodes -->
+<rect x="40" y="40" width="152" height="64" rx="6" fill="#ffffff"/>
+<rect x="40" y="40" width="152" height="64" rx="6" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<text x="116.0" y="69.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Trình duyệt</text>
+<text x="116.0" y="87.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">smartbook.io.vn</text>
+<rect x="204" y="40" width="216" height="64" rx="6" fill="#ffffff"/>
+<rect x="204" y="40" width="216" height="64" rx="6" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<text x="312.0" y="69.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Ứng dụng di động (APK EAS)</text>
+<text x="312.0" y="87.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api.smartbook.io.vn</text>
+<rect x="432" y="40" width="184" height="64" rx="6" fill="#ffffff"/>
+<rect x="432" y="40" width="184" height="64" rx="6" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="524.0" y="61.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">GitHub</text>
+<text x="524.0" y="79.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Actions (CI/CD) + GHCR</text>
+<text x="524.0" y="95.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">image gắn tag commit SHA</text>
+<rect x="628" y="40" width="132" height="64" rx="6" fill="#ffffff"/>
+<rect x="628" y="40" width="132" height="64" rx="6" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="694.0" y="69.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Expo EAS</text>
+<text x="694.0" y="87.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">build APK/AAB, OTA</text>
+<rect x="72" y="252" width="192" height="56" rx="6" fill="#ffffff"/>
+<rect x="72" y="252" width="192" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="168.0" y="277.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">web</text>
+<text x="168.0" y="295.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(nginx, bundle React, CSP)</text>
+<rect x="304" y="252" width="192" height="56" rx="6" fill="#ffffff"/>
+<rect x="304" y="252" width="192" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400.0" y="277.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">caddy 2.8 · cổng 80/443</text>
+<text x="400.0" y="295.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">HTTPS tự động, HSTS</text>
+<rect x="536" y="252" width="192" height="56" rx="6" fill="#ffffff"/>
+<rect x="536" y="252" width="192" height="56" rx="6" fill="rgba(180,83,9,0.08)" stroke="#b45309" stroke-width="1.2"/>
+<text x="632.0" y="277.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">api-gateway</text>
+<text x="632.0" y="295.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(nối cả 3 mạng)</text>
+<rect x="72" y="388" width="208" height="56" rx="6" fill="#ffffff"/>
+<rect x="72" y="388" width="208" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="176.0" y="413.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">auth-service</text>
+<text x="176.0" y="431.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">512 MB</text>
+<rect x="296" y="388" width="208" height="56" rx="6" fill="#ffffff"/>
+<rect x="296" y="388" width="208" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400.0" y="413.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">inventory-service</text>
+<text x="400.0" y="431.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">768 MB</text>
+<rect x="520" y="388" width="208" height="56" rx="6" fill="#ffffff"/>
+<rect x="520" y="388" width="208" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="624.0" y="413.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">borrow-service</text>
+<text x="624.0" y="431.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">768 MB</text>
+<rect x="184" y="452" width="208" height="56" rx="6" fill="#ffffff"/>
+<rect x="184" y="452" width="208" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="288.0" y="477.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">analytics-service</text>
+<text x="288.0" y="495.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">512 MB</text>
+<rect x="408" y="452" width="208" height="56" rx="6" fill="#ffffff"/>
+<rect x="408" y="452" width="208" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="512.0" y="477.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">ai-service</text>
+<text x="512.0" y="495.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">3 GB (CLIP CPU, Chromium)</text>
+<rect x="72" y="608" width="128" height="60" rx="6" fill="#ffffff"/>
+<rect x="72" y="608" width="128" height="60" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="136.0" y="627.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">db</text>
+<text x="136.0" y="645.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">pgvector/pg15</text>
+<text x="136.0" y="661.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">2 GB · 4 CSDL</text>
+<rect x="212" y="608" width="128" height="60" rx="6" fill="#ffffff"/>
+<rect x="212" y="608" width="128" height="60" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="276.0" y="635.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">redis 7 (AOF)</text>
+<text x="276.0" y="653.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">512 MB</text>
+<rect x="352" y="608" width="128" height="60" rx="6" fill="#ffffff"/>
+<rect x="352" y="608" width="128" height="60" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="416.0" y="635.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">rabbitmq 3.13</text>
+<text x="416.0" y="653.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">768 MB</text>
+<rect x="512" y="560" width="232" height="180" rx="4" fill="#f3f6fa" stroke="#c5cedb" stroke-width="1"/>
+<text x="524" y="581" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Tác vụ trên máy chủ</text>
+<text x="524" y="599" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">(cron, deploy/scripts)</text>
+<text x="524" y="617" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">• backup.sh 02:30: pg_dump 4 CSDL</text>
+<text x="524" y="635" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">  + ảnh đóng gói, giữ 14 ngày</text>
+<text x="524" y="653" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">• healthcheck.sh mỗi 5 phút,</text>
+<text x="524" y="671" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">  cảnh báo webhook tùy chọn</text>
+<text x="524" y="689" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">• deploy.sh: backup trước deploy,</text>
+<text x="524" y="707" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">  tự rollback</text>
+<text x="524" y="725" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">• restore.sh, verify-backup.sh</text>
+<rect x="72" y="788" width="208" height="48" rx="6" fill="#ffffff"/>
+<rect x="72" y="788" width="208" height="48" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="176.0" y="817.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">postgres_data</text>
+<rect x="296" y="788" width="208" height="48" rx="6" fill="#ffffff"/>
+<rect x="296" y="788" width="208" height="48" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="400.0" y="817.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">redis_data</text>
+<rect x="520" y="788" width="208" height="48" rx="6" fill="#ffffff"/>
+<rect x="520" y="788" width="208" height="48" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="624.0" y="817.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">rabbitmq_data</text>
+<rect x="72" y="844" width="208" height="48" rx="6" fill="#ffffff"/>
+<rect x="72" y="844" width="208" height="48" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="176.0" y="873.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">packing_evidence_data</text>
+<rect x="296" y="844" width="208" height="48" rx="6" fill="#ffffff"/>
+<rect x="296" y="844" width="208" height="48" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="400.0" y="865.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">ai_model_cache,</text>
+<text x="400.0" y="881.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">ai_cloakbrowser_cache</text>
+<rect x="520" y="844" width="208" height="48" rx="6" fill="#ffffff"/>
+<rect x="520" y="844" width="208" height="48" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="624.0" y="873.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">caddy_data, caddy_config</text>
+<rect x="56" y="980" width="160" height="52" rx="6" fill="#ffffff"/>
+<rect x="56" y="980" width="160" height="52" rx="6" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="136.0" y="1011.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">OpenRouter (Qwen)</text>
+<rect x="228" y="980" width="144" height="52" rx="6" fill="#ffffff"/>
+<rect x="228" y="980" width="144" height="52" rx="6" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="300.0" y="1011.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Máy chủ SMTP</text>
+<rect x="384" y="980" width="208" height="52" rx="6" fill="#ffffff"/>
+<rect x="384" y="980" width="208" height="52" rx="6" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="488.0" y="1003.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Google Books, Open Library,</text>
+<text x="488.0" y="1019.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">nhà sách</text>
+<rect x="604" y="980" width="140" height="52" rx="6" fill="#ffffff"/>
+<rect x="604" y="980" width="140" height="52" rx="6" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="674.0" y="1011.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">VNPay sandbox</text>
+<!-- legend -->
+<line x1="40" y1="1072" x2="760" y2="1072" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<rect x="44" y="1086" width="20" height="12" rx="2" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<text x="72" y="1096" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Máy khách</text>
+<rect x="148" y="1086" width="20" height="12" rx="2" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="176" y="1096" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Container</text>
+<rect x="252" y="1086" width="20" height="12" rx="2" fill="rgba(180,83,9,0.08)" stroke="#b45309" stroke-width="1"/>
+<text x="280" y="1096" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Gateway nối 3 mạng</text>
+<rect x="412" y="1086" width="20" height="12" rx="2" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="440" y="1096" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Dữ liệu, volume</text>
+<rect x="544" y="1086" width="20" height="12" rx="2" fill="rgba(31,56,100,0.03)" stroke="rgba(31,56,100,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="572" y="1096" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Bên ngoài</text>
+<line x1="44" y1="1120" x2="64" y2="1120" stroke="#2f5597" stroke-width="1.2"/>
+<text x="72" y="1124" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">HTTPS từ Internet</text>
+<line x1="200" y1="1120" x2="220" y2="1120" stroke="#475569" stroke-width="1.2"/>
+<text x="228" y="1124" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Lưu lượng nội bộ</text>
+<line x1="336" y1="1120" x2="356" y2="1120" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="364" y="1124" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Triển khai qua SSH</text>
+</svg>
+    </div>
+    <p class="note">Nguồn: <code>docs/diagrams/drawio/deployment-production.drawio</code> (Hình 4.2), vẽ lại ở mức faithful.</p>
+  </div>
+</body>
+</html>

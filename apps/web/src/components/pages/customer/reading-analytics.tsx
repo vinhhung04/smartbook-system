@@ -1,19 +1,35 @@
 import { useEffect, useState, useCallback } from 'react';
-import { motion } from 'motion/react';
-import {
-  BookOpen, TrendingUp, Award, Flame, Clock, RefreshCw,
-} from 'lucide-react';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area,
-} from 'recharts';
+import { Award, RefreshCw } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { aiService, ReadingStatsResponse } from '@/services/ai';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { CustomerPageHeader } from './_shared/customer-page-header';
+import { SectionCard } from './_shared/section-card';
+import { fillMonths } from './_shared/customer-format';
 
-const PIE_COLORS = ['#6366f1', '#a78bfa', '#c084fc', '#e879f9', '#f472b6', '#38bdf8', '#34d399', '#fbbf24'];
+const CHART_MONTHS = 12;
+
+function RankedList({ items, unit, empty }: { items: { name: string; count: number }[]; unit: string; empty: string }) {
+  if (items.length === 0) return <p className="text-[13px] text-muted-foreground">{empty}</p>;
+  const max = Math.max(...items.map((i) => i.count));
+  return (
+    <ol className="space-y-3">
+      {items.map((item) => (
+        <li key={item.name}>
+          <div className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="min-w-0 truncate text-foreground">{item.name}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">{item.count} {unit}</span>
+          </div>
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+            <div className="h-full rounded-full bg-indigo-500" style={{ width: `${(item.count / max) * 100}%` }} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export function CustomerReadingAnalyticsPage() {
   const [loading, setLoading] = useState(true);
@@ -45,13 +61,11 @@ export function CustomerReadingAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-24 animate-pulse rounded-xl border bg-card" />)}
-        </div>
-        <div className="grid gap-5 lg:grid-cols-2">
-          <div className="h-64 animate-pulse rounded-xl border bg-card" />
-          <div className="h-64 animate-pulse rounded-xl border bg-card" />
+      <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+        <div className="h-24 animate-pulse motion-reduce:animate-none rounded-xl border bg-card" />
+        <div className="grid gap-5 xl:grid-cols-3">
+          <div className="h-72 animate-pulse motion-reduce:animate-none rounded-xl border bg-card xl:col-span-2" />
+          <div className="h-72 animate-pulse motion-reduce:animate-none rounded-xl border bg-card" />
         </div>
       </div>
     );
@@ -59,7 +73,7 @@ export function CustomerReadingAnalyticsPage() {
 
   if (!stats) {
     return (
-      <div className="mx-auto max-w-5xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
         <EmptyState
           variant="no-data"
           title="Chưa có dữ liệu thống kê"
@@ -70,124 +84,92 @@ export function CustomerReadingAnalyticsPage() {
     );
   }
 
+  const months = fillMonths(stats.monthly_data);
+  const busiest = stats.monthly_data.reduce<{ month: string; count: number } | null>((best, m) => (!best || m.count > best.count ? m : best), null);
+  const [busyYear, busyMonth] = busiest ? busiest.month.split('-') : [];
+
+  // avg_borrow_days is 0 both for same-day returns and for "nothing returned yet"; the API cannot tell them apart.
+  const summary = [
+    { label: 'Sách đã mượn', value: String(stats.total_books), hint: 'tính trên mọi phiếu mượn' },
+    { label: 'Thời gian giữ sách TB', value: stats.avg_borrow_days > 0 ? `${stats.avg_borrow_days} ngày` : '—', hint: stats.avg_borrow_days > 0 ? 'trên các sách đã trả' : 'chưa đủ dữ liệu trả sách' },
+    { label: 'Chuỗi tháng liên tiếp', value: `${stats.streak_months} tháng`, hint: 'tháng nào cũng có mượn' },
+    { label: 'Thành tựu', value: String(stats.badges.length), hint: stats.badges.length ? stats.badges.map((b) => b.name).join(', ') : 'chưa mở khóa' },
+  ];
+
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Thống kê đọc sách"
         subtitle="Hành trình đọc sách của bạn"
         actions={
-          <button onClick={() => void loadStats()} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+          <button onClick={() => void loadStats()} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Làm mới
           </button>
         }
       />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Tổng sách đã mượn', value: stats.total_books, icon: BookOpen, color: 'from-indigo-500 to-blue-500', bg: 'bg-indigo-50 dark:bg-indigo-950/30' },
-          { label: 'Thời gian mượn TB', value: `${stats.avg_borrow_days} ngày`, icon: Clock, color: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50 dark:bg-emerald-950/30' },
-          { label: 'Chuỗi tháng liên tiếp', value: `${stats.streak_months} tháng`, icon: Flame, color: 'from-orange-500 to-red-500', bg: 'bg-orange-50 dark:bg-orange-950/30' },
-          { label: 'Thành tựu', value: stats.badges.length, icon: Award, color: 'from-violet-500 to-purple-500', bg: 'bg-violet-50 dark:bg-violet-950/30' },
-        ].map((item, i) => (
-          <motion.div key={item.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-            className={`${item.bg} rounded-xl border p-4 relative overflow-hidden`}>
-            <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${item.color}`} />
-            <item.icon className="w-5 h-5 text-slate-400 dark:text-slate-500 mb-2" />
-            <p className="text-[11px] text-muted-foreground mb-1" style={{ fontWeight: 550 }}>{item.label}</p>
-            <p className="text-[24px] text-slate-800 dark:text-slate-200" style={{ fontWeight: 700, lineHeight: 1 }}>{item.value}</p>
-          </motion.div>
-        ))}
-      </div>
+      <section aria-label="Tóm tắt" className="rounded-xl border border-border bg-card p-4 sm:p-5">
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-4">
+          {summary.map((item) => (
+            <div key={item.label} className="min-w-0">
+              <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+              <dd className="mt-1 truncate font-mono text-[22px] font-bold leading-none tabular-nums text-foreground">{item.value}</dd>
+              <p className="mt-1.5 truncate text-[11px] text-muted-foreground">{item.hint}</p>
+            </div>
+          ))}
+        </dl>
+      </section>
 
-      {/* Badges / Achievements */}
-      {stats.badges.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-          className="bg-gradient-to-br from-amber-50 to-orange-50/40 dark:from-amber-950/30 dark:to-orange-950/10 rounded-xl border border-amber-100/60 dark:border-amber-900/40 p-5">
-          <h3 className="text-[14px] mb-3 flex items-center gap-2" style={{ fontWeight: 650 }}>
-            <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" /> Thành tựu của bạn
-          </h3>
-          <div className="flex flex-wrap gap-3">
-            {stats.badges.map((badge) => (
-              <div key={badge.id} className="flex items-center gap-2 bg-card rounded-lg border border-amber-100 dark:border-amber-900/40 px-3 py-2 shadow-sm">
-                <span className="text-[20px]">{badge.icon}</span>
-                <div>
-                  <p className="text-[12px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>{badge.name}</p>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500">{badge.description}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="bg-card rounded-xl border p-5 shadow-sm">
-          <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
-            <TrendingUp className="w-4 h-4 text-indigo-500" /> Sách mượn theo tháng
-          </h3>
-          {stats.monthly_data.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={stats.monthly_data} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <defs>
-                  <linearGradient id="monthGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" vertical={false} />
-                <XAxis dataKey="month" fontSize={11} stroke="#94a3b8" />
-                <YAxis fontSize={11} stroke="#94a3b8" width={28} />
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '1px solid #e2e8f0' }} />
-                <Area type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2} fill="url(#monthGrad)" name="Sách" />
-              </AreaChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 dark:text-slate-500 text-[13px]">Chưa có dữ liệu</div>
-          )}
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-          className="bg-card rounded-xl border p-5 shadow-sm">
-          <h3 className="text-[14px] mb-4 flex items-center gap-2" style={{ fontWeight: 650 }}>
-            <BookOpen className="w-4 h-4 text-violet-500" /> Thể loại yêu thích
-          </h3>
-          {stats.top_categories.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={stats.top_categories} cx="50%" cy="50%" outerRadius={80} innerRadius={40} dataKey="count"
-                  label={({ name, percent }) => `${name.length > 12 ? name.slice(0, 12) + '…' : name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
-                  {stats.top_categories.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10, border: '1px solid #e2e8f0' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[220px] flex items-center justify-center text-slate-400 dark:text-slate-500 text-[13px]">Chưa có dữ liệu</div>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Top Authors */}
-      {stats.top_authors.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-          className="bg-card rounded-xl border p-5 shadow-sm">
-          <h3 className="text-[14px] mb-4" style={{ fontWeight: 650 }}>Tác giả hay đọc nhất</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={stats.top_authors} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f1f5" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} />
-              <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ fontSize: 11, borderRadius: 10 }} />
-              <Bar dataKey="count" radius={[0, 8, 8, 0]} name="Lần mượn">
-                {stats.top_authors.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-              </Bar>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <SectionCard
+          className="xl:col-span-2"
+          title="Sách mượn theo tháng"
+          subtitle={busiest ? `${CHART_MONTHS} tháng gần nhất · nhiều nhất ${busiest.count} cuốn vào tháng ${Number(busyMonth)}/${busyYear}` : `${CHART_MONTHS} tháng gần nhất`}
+        >
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={months} margin={{ top: 8, right: 4, left: -12, bottom: 0 }}>
+              <CartesianGrid stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" fontSize={11} tickLine={false} axisLine={false} tick={{ fill: 'var(--muted-foreground)' }} interval="preserveStartEnd" />
+              <YAxis fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: 'var(--muted-foreground)' }} width={36} />
+              <Tooltip
+                cursor={{ fill: 'var(--muted)' }}
+                formatter={(value) => [`${value} cuốn`, 'Đã mượn']}
+                labelFormatter={(label) => `Tháng ${label}`}
+                contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)' }}
+              />
+              <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
-        </motion.div>
-      )}
+        </SectionCard>
+
+        <SectionCard title="Thành tựu" subtitle="Mở khóa theo số sách và nhịp mượn">
+          {stats.badges.length ? (
+            <ul className="space-y-3">
+              {stats.badges.map((badge) => (
+                <li key={badge.id} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                    <Award className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-foreground">{badge.name}</p>
+                    <p className="text-[12px] text-muted-foreground">{badge.description}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">Mượn 10 cuốn để mở thành tựu đầu tiên.</p>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Tác giả hay đọc" className="xl:col-span-2">
+          <RankedList items={stats.top_authors} unit="lần mượn" empty="Các phiếu mượn chưa ghi tên tác giả." />
+        </SectionCard>
+
+        <SectionCard title="Thể loại yêu thích">
+          <RankedList items={stats.top_categories} unit="cuốn" empty="Các phiếu mượn chưa ghi thể loại." />
+        </SectionCard>
+      </div>
     </div>
   );
 }

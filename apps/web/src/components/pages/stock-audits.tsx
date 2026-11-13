@@ -253,7 +253,7 @@ function StockAuditListView() {
                     { label: "Tạo lúc", className: "hidden w-[170px] lg:table-cell" },
                     { label: "", className: "w-[40px]" },
                   ].map((heading) => (
-                    <TableHead key={heading.label || "chevron"} className={cn("px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap", heading.className)}>{heading.label}</TableHead>
+                    <TableHead key={heading.label || "chevron"} className={cn("px-4 py-3 text-[12px] font-semibold text-muted-foreground whitespace-nowrap", heading.className)}>{heading.label}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>

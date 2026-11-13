@@ -3,18 +3,16 @@ import { withoutLeadingZeros, zeroFieldProps } from '@/lib/number-input';
 import { borrowService } from '@/services/borrow';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+import { PageWrapper, FadeItem } from '../motion-utils';
 import {
   Crown,
   Plus,
   Edit,
   RefreshCw,
-  Shield,
   ToggleLeft,
   ToggleRight,
   Loader2,
-  Users,
 } from 'lucide-react';
-import { StatCard } from '@/components/ui/stat-card';
 import { SectionCard } from '@/components/ui/section-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -109,67 +107,96 @@ function formatVnd(value: unknown): string {
   return `${toNum(value).toLocaleString('vi-VN')} VND`;
 }
 
-function PlanCard({ plan, onEdit }: { plan: MembershipPlan; onEdit: (plan: MembershipPlan) => void }) {
-  const members = plan._count?.customer_memberships ?? 0;
-  const rules: Array<{ label: string; value: string }> = [
-    { label: 'Phí gói', value: toNum(plan.price) > 0 ? formatVnd(plan.price) : 'Miễn phí' },
-    { label: 'Thời hạn thẻ', value: `${plan.duration_days} ngày` },
-    { label: 'Gia hạn tối đa', value: `${plan.max_renewal_count} lần` },
-    { label: 'Giữ chỗ đặt trước', value: `${plan.reservation_hold_hours} giờ` },
-    { label: 'Phạt mỗi ngày trễ', value: toNum(plan.fine_per_day) > 0 ? formatVnd(plan.fine_per_day) : 'Không phạt' },
-    { label: 'Hệ số phí mất sách', value: `×${toNum(plan.lost_item_fee_multiplier)}` },
-    { label: 'Tiền cọc mỗi cuốn', value: toNum(plan.deposit_per_item) > 0 ? formatVnd(plan.deposit_per_item) : 'Không cọc' },
-  ];
+type PlanRule = { label: string; hint?: string; value: (plan: MembershipPlan) => string };
+
+// Rows of the comparison table, grouped the way a librarian reads a plan: what a reader may borrow, then what it costs.
+const PLAN_RULE_GROUPS: Array<{ title: string; rules: PlanRule[] }> = [
+  {
+    title: 'Quyền mượn',
+    rules: [
+      { label: 'Mượn cùng lúc', value: (p) => `${p.max_active_loans} cuốn` },
+      { label: 'Thời hạn mỗi lượt', value: (p) => `${p.max_loan_days} ngày` },
+      { label: 'Gia hạn tối đa', value: (p) => `${p.max_renewal_count} lần` },
+      { label: 'Giữ chỗ đặt trước', value: (p) => `${p.reservation_hold_hours} giờ` },
+    ],
+  },
+  {
+    title: 'Phí và tiền phạt',
+    rules: [
+      { label: 'Phí gói', value: (p) => (toNum(p.price) > 0 ? formatVnd(p.price) : 'Miễn phí') },
+      { label: 'Thời hạn thẻ', value: (p) => `${p.duration_days} ngày` },
+      { label: 'Phạt mỗi ngày trễ', value: (p) => (toNum(p.fine_per_day) > 0 ? formatVnd(p.fine_per_day) : 'Không phạt') },
+      { label: 'Phí mất sách', hint: 'hệ số nhân phí mất sách cơ bản', value: (p) => `×${toNum(p.lost_item_fee_multiplier)}` },
+      { label: 'Tiền cọc mỗi cuốn', value: (p) => (toNum(p.deposit_per_item) > 0 ? formatVnd(p.deposit_per_item) : 'Không cọc') },
+    ],
+  },
+];
+
+function PlanComparison({ plans, onEdit }: { plans: MembershipPlan[]; onEdit: (plan: MembershipPlan) => void }) {
+  const totalMembers = plans.reduce((sum, p) => sum + (p._count?.customer_memberships ?? 0), 0);
   return (
-    <article className={cn('flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md', !plan.is_active && 'opacity-70')}>
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold text-foreground" title={plan.name}>{plan.name}</h3>
-          <p className="font-mono text-[11px] text-muted-foreground">{plan.code}</p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {plan.is_active ? (
-            <StatusBadge label="Hoạt động" variant="success" dot />
-          ) : (
-            <StatusBadge label="Không hoạt động" variant="neutral" dot />
-          )}
-          {plan.is_default ? <StatusBadge label="Mặc định khi đăng ký" variant="info" /> : null}
-        </div>
-      </header>
-
-      {plan.description ? <p className="mt-2 line-clamp-2 text-[12px] text-muted-foreground">{plan.description}</p> : null}
-
-      <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3">
-        <div>
-          <p className="font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">{plan.max_active_loans}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">cuốn mượn cùng lúc</p>
-        </div>
-        <div>
-          <p className="font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">{plan.max_loan_days}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">ngày mỗi lượt mượn</p>
-        </div>
-      </div>
-
-      <dl className="mt-4 space-y-2 text-[12px]">
-        {rules.map((rule) => (
-          <div key={rule.label} className="flex items-center justify-between gap-3">
-            <dt className="text-muted-foreground">{rule.label}</dt>
-            <dd className="text-right font-medium text-foreground">{rule.value}</dd>
-          </div>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[600px] table-fixed border-collapse text-[13px]">
+        <colgroup>
+          <col className="w-[124px] sm:w-[220px]" />
+          {plans.map((plan) => <col key={plan.id} />)}
+        </colgroup>
+        <thead>
+          <tr className="border-b border-border align-top">
+            <th scope="col" className="sticky left-0 z-10 bg-card px-4 py-4 text-left text-xs font-medium text-muted-foreground">Gói</th>
+            {plans.map((plan) => {
+              const members = plan._count?.customer_memberships ?? 0;
+              const share = totalMembers > 0 ? Math.round((members / totalMembers) * 100) : 0;
+              return (
+                <th key={plan.id} scope="col" className={cn('px-4 py-4 text-left font-normal', !plan.is_active && 'text-muted-foreground')}>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[15px] font-semibold text-foreground">{plan.name}</span>
+                    {!plan.is_active && <StatusBadge label="Ngừng" variant="neutral" />}
+                  </div>
+                  <p className="font-mono text-[11px] text-muted-foreground">{plan.code}</p>
+                  {plan.is_default && <p className="mt-1.5"><StatusBadge label="Mặc định khi đăng ký" variant="info" /></p>}
+                  {plan.description && <p className="mt-2 line-clamp-3 text-[12px] text-muted-foreground" title={plan.description}>{plan.description}</p>}
+                  <div className="mt-3">
+                    <p className="text-[12px] text-muted-foreground">
+                      <span className="font-semibold tabular-nums text-foreground">{members.toLocaleString('vi-VN')}</span> thành viên
+                      {totalMembers > 0 && <span>, {share}%</span>}
+                    </p>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                      <div className="h-full rounded-full bg-amber-500" style={{ width: `${share}%` }} />
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="mt-3 h-8 gap-1.5" onClick={() => onEdit(plan)} aria-label={`Sửa gói ${plan.name}`}>
+                    <Edit className="h-3.5 w-3.5" /> Sửa
+                  </Button>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        {PLAN_RULE_GROUPS.map((group) => (
+          <tbody key={group.title}>
+            <tr className="bg-muted/40">
+              <th scope="rowgroup" colSpan={plans.length + 1} className="sticky left-0 px-4 py-2 text-left text-[12px] font-semibold text-foreground">
+                {group.title}
+              </th>
+            </tr>
+            {group.rules.map((rule) => (
+              <tr key={rule.label} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                <th scope="row" className="sticky left-0 bg-card px-4 py-2.5 text-left font-normal text-muted-foreground">
+                  {rule.label}
+                  {rule.hint && <span className="block text-[11px] text-muted-foreground/80">{rule.hint}</span>}
+                </th>
+                {plans.map((plan) => (
+                  <td key={plan.id} className={cn('px-4 py-2.5 tabular-nums', plan.is_active ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                    {rule.value(plan)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
         ))}
-      </dl>
-
-      <footer className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-3">
-        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <Users className="h-3.5 w-3.5" aria-hidden="true" />
-          {members} thành viên
-        </span>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => onEdit(plan)} aria-label={`Sửa gói ${plan.name}`}>
-          <Edit className="h-3.5 w-3.5" />
-          Sửa
-        </Button>
-      </footer>
-    </article>
+      </table>
+    </div>
   );
 }
 
@@ -322,73 +349,43 @@ export function MembershipPlansPage() {
   const inputClass =
     'w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40';
 
+  // Cheapest tier first, so the columns read as a ladder from basic to VIP.
+  const orderedPlans = [...plans].sort(
+    (a, b) => Number(b.is_active) - Number(a.is_active) || a.max_active_loans - b.max_active_loans || toNum(a.price) - toNum(b.price),
+  );
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+    <PageWrapper className="space-y-5">
+      <FadeItem>
         <PageHeader
           icon={Crown}
           title="Gói hội viên"
-          description="Quản lý các gói hội viên"
-          iconBg="bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg"
-          iconColor="text-white"
-          iconSize="sm"
+          description={
+            loading
+              ? 'Quy tắc mượn và phí của từng gói'
+              : `${stats.total} gói, ${stats.activePlans} đang mở đăng ký, ${stats.totalMembers.toLocaleString('vi-VN')} bạn đọc đang dùng`
+          }
+          iconBg="bg-amber-50 dark:bg-amber-500/10"
+          iconColor="text-amber-600 dark:text-amber-400"
           actions={
             <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={loading}
-                onClick={() => void loadPlans()}
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Làm mới
+              <Button type="button" variant="outline" size="sm" className="gap-2" disabled={loading} onClick={() => void loadPlans()}>
+                <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} /> Làm mới
               </Button>
               <Button type="button" size="sm" className="gap-2" onClick={openCreate}>
-                <Plus className="w-4 h-4" />
-                Gói mới
+                <Plus className="h-4 w-4" /> Gói mới
               </Button>
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-      >
-        <StatCard
-          label="Tổng số gói"
-          value={stats.total}
-          icon={Crown}
-          variant="warning"
-        />
-        <StatCard
-          label="Gói đang hoạt động"
-          value={stats.activePlans}
-          icon={Shield}
-          variant="success"
-        />
-        <StatCard
-          label="Tổng thành viên"
-          value={stats.totalMembers}
-          icon={ToggleRight}
-          variant="primary"
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <SectionCard noPadding>
+      <FadeItem>
+        <SectionCard
+          noPadding
+          title="So sánh các gói"
+          subtitle="Mỗi cột là một gói, xếp từ gói cơ bản đến gói cao nhất."
+        >
           {loading ? (
             <LoadingSpinner message="Đang tải gói hội viên..." className="justify-center py-16" />
           ) : plans.length === 0 ? (
@@ -399,20 +396,17 @@ export function MembershipPlansPage() {
               icon={Crown}
               action={
                 <Button size="sm" className="gap-2" onClick={openCreate}>
-                  <Plus className="w-4 h-4" />
-                  Gói mới
+                  <Plus className="h-4 w-4" /> Gói mới
                 </Button>
               }
             />
           ) : (
-            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
-              {plans.map((plan) => (
-                <PlanCard key={plan.id} plan={plan} onEdit={openEdit} />
-              ))}
+            <div className="border-t border-border">
+              <PlanComparison plans={orderedPlans} onEdit={openEdit} />
             </div>
           )}
         </SectionCard>
-      </motion.div>
+      </FadeItem>
 
       {showModal && (
         <div
@@ -441,20 +435,20 @@ export function MembershipPlansPage() {
             <div className="space-y-4">
               {!isEdit && (
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Mã gói
                   </label>
                   <input
                     className={inputClass}
                     value={form.code}
                     onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                    placeholder="e.g. GOLD"
+                    placeholder="VD: GOLD"
                     autoComplete="off"
                   />
                 </div>
               )}
               <div>
-                <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                <label className="block text-[12px] font-medium text-foreground mb-1.5">
                   Tên gói
                 </label>
                 <input
@@ -465,7 +459,7 @@ export function MembershipPlansPage() {
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                <label className="block text-[12px] font-medium text-foreground mb-1.5">
                   Mô tả
                 </label>
                 <textarea
@@ -478,7 +472,7 @@ export function MembershipPlansPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Tối đa mượn đồng thời
                   </label>
                   <input
@@ -491,7 +485,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Tối đa số ngày mượn
                   </label>
                   <input
@@ -504,7 +498,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Tối đa lần gia hạn
                   </label>
                   <input
@@ -517,7 +511,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Giữ đặt trước (giờ)
                   </label>
                   <input
@@ -530,7 +524,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Phạt/ngày
                   </label>
                   <input
@@ -544,7 +538,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="plan-price" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor="plan-price" className="block text-[12px] font-medium text-foreground mb-1.5">
                     Phí gói (VND)
                   </label>
                   <input
@@ -559,7 +553,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="plan-duration" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor="plan-duration" className="block text-[12px] font-medium text-foreground mb-1.5">
                     Thời hạn thẻ (ngày)
                   </label>
                   <input
@@ -573,7 +567,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label className="block text-[12px] font-medium text-foreground mb-1.5">
                     Hệ số phí mất sách
                   </label>
                   <input
@@ -587,7 +581,7 @@ export function MembershipPlansPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="plan-deposit" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                  <label htmlFor="plan-deposit" className="block text-[12px] font-medium text-foreground mb-1.5">
                     Tiền cọc mỗi cuốn (VND)
                   </label>
                   <input
@@ -659,6 +653,6 @@ export function MembershipPlansPage() {
           </motion.div>
         </div>
       )}
-    </div>
+    </PageWrapper>
   );
 }

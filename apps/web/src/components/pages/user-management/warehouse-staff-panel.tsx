@@ -89,7 +89,7 @@ export function WarehouseStaffPanel({ warehouses, warehouseId, onWarehouseChange
                 { label: "Trạng thái", className: "w-[120px]" },
                 { label: "", className: "w-[64px]" },
               ].map((header, index) => (
-                <th key={header.label || index} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", header.className)}>
+                <th key={header.label || index} className={cn("px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground", header.className)}>
                   {header.label}
                 </th>
               ))}

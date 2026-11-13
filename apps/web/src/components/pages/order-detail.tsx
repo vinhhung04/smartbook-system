@@ -334,13 +334,13 @@ export function OrderDetailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border bg-muted/40">
-                    <th className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Mã vạch</th>
-                    <th className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Tên sách</th>
-                    {showLocation ? <th className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Vị trí</th> : null}
-                    <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">SL kế hoạch</th>
-                    <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">SL thực đếm</th>
-                    {showUnitCost ? <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Đơn giá</th> : null}
-                    {showUnitCost ? <th className="text-right text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-wider font-medium">Thành tiền</th> : null}
+                    <th className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">Mã vạch</th>
+                    <th className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">Tên sách</th>
+                    {showLocation ? <th className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">Vị trí</th> : null}
+                    <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">SL kế hoạch</th>
+                    <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">SL thực đếm</th>
+                    {showUnitCost ? <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">Đơn giá</th> : null}
+                    {showUnitCost ? <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">Thành tiền</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -392,14 +392,14 @@ export function OrderDetailPage() {
             <SectionCard title="Tóm tắt phiếu nhập" className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-blue-100/60 dark:from-blue-500/10 dark:to-indigo-500/5 dark:border-blue-500/20">
               <div className="space-y-4">
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Kho</p>
+                  <p className="text-[12px] text-muted-foreground font-medium">Kho</p>
                   <p className="text-[13px] font-medium mt-1">{receipt.warehouse_code || receipt.warehouse_name || "-"}</p>
                 </div>
                 {receipt.purchase_order_id && (
                   <>
                     <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                     <div>
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">PO liên kết</p>
+                      <p className="text-[12px] text-muted-foreground font-medium">PO liên kết</p>
                       <NavLink to={`/purchase-orders/${receipt.purchase_order_id}`} className="text-[13px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
                         {receipt.po_number || receipt.purchase_order_id}
                       </NavLink>
@@ -408,19 +408,19 @@ export function OrderDetailPage() {
                 )}
                 <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Số dòng sách</p>
+                  <p className="text-[12px] text-muted-foreground font-medium">Số dòng sách</p>
                   <p className="text-[26px] text-blue-700 dark:text-blue-400 font-bold mt-1" style={{ lineHeight: 1 }}>{receipt.items.length}</p>
                 </div>
                 <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                 <div>
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Tổng số lượng</p>
+                  <p className="text-[12px] text-muted-foreground font-medium">Tổng số lượng</p>
                   <p className="text-[26px] text-emerald-700 dark:text-emerald-400 font-bold mt-1" style={{ lineHeight: 1 }}>{totalQty}</p>
                 </div>
                 {showUnitCost ? (
                   <>
                     <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
                     <div>
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">Tổng giá trị</p>
+                      <p className="text-[12px] text-muted-foreground font-medium">Tổng giá trị</p>
                       <p className="text-[18px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-1">{formatCurrency(receipt.total_amount || 0)}</p>
                     </div>
                   </>
@@ -575,7 +575,7 @@ export function OrderDetailPage() {
                     <thead>
                       <tr className="bg-muted border-b border-border">
                         {["Tên sách", "Mã vạch", "SL kế hoạch", "SL thực đếm"].map((h) => (
-                          <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+                          <th key={h} className="px-4 py-2.5 text-left text-[12px] font-semibold text-muted-foreground">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -692,7 +692,7 @@ export function OrderDetailPage() {
                 <thead>
                   <tr className="bg-muted border-b border-border">
                     {["Tên sách", "ISBN/Mã vạch", "NCC xuất", "Thực đếm", "Lệch", "Trạng thái"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{h}</th>
+                      <th key={h} className="px-4 py-2.5 text-left text-[12px] font-semibold text-muted-foreground">{h}</th>
                     ))}
                   </tr>
                 </thead>

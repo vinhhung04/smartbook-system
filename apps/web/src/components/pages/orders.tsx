@@ -310,7 +310,7 @@ export function OrdersPage() {
                   { label: "Giá trị", className: "hidden w-[140px] text-right xl:table-cell" },
                   { label: "Ngày tạo", className: "hidden w-[150px] lg:table-cell" },
                 ].map((heading) => (
-                  <TableHead key={heading.label} className={cn("px-4 text-[11px] uppercase tracking-wider text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                  <TableHead key={heading.label} className={cn("px-4 text-[12px] text-muted-foreground", heading.className)}>{heading.label}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>

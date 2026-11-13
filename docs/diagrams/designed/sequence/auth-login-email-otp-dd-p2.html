@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng nhập Web có OTP qua email (2/3): gửi và nhập mã</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Diagram Design · SmartBook</p>
+    <h1>Đăng nhập Web có OTP qua email (2/3): gửi và nhập mã</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 1104" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="auth-login-email-otp-dd-p2-title auth-login-email-otp-dd-p2-desc">
+<title id="auth-login-email-otp-dd-p2-title">Đăng nhập Web, phần 2: gửi và nhập mã OTP</title>
+<desc id="auth-login-email-otp-dd-p2-desc">Khi cần OTP, Auth Service tạo thử thách chỉ lưu HMAC của mã, gửi email mã 6 chữ số, nhận mã người dùng nhập và trả lỗi 400/410/429 khi mã sai, hết hạn hoặc vượt số lần thử.</desc>
+<defs>
+  <marker id="auth-login-email-otp-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="auth-login-email-otp-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="auth-login-email-otp-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="auth-login-email-otp-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="72" y="728" width="476" height="260" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<rect x="72" y="124" width="656" height="916" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<!-- lifelines -->
+<line x1="92" y1="104" x2="92" y2="1064" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="224" y1="104" x2="224" y2="1064" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="344" y1="104" x2="344" y2="1064" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="460" y1="104" x2="460" y2="1064" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="592" y1="104" x2="592" y2="1064" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="1064" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="464" y1="252" x2="704" y2="252" stroke="#222222" stroke-width="1.2" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="464" y1="304" x2="588" y2="304" stroke="#000000" stroke-width="1.2" marker-end="url(#auth-login-email-otp-dd-p2-arrow-link)"/>
+<line x1="456" y1="372" x2="348" y2="372" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="340" y1="424" x2="228" y2="424" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="220" y1="476" x2="96" y2="476" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="96" y1="512" x2="220" y2="512" stroke="#222222" stroke-width="1.2" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="228" y1="612" x2="340" y2="612" stroke="#000000" stroke-width="1.2" marker-end="url(#auth-login-email-otp-dd-p2-arrow-link)"/>
+<line x1="348" y1="664" x2="456" y2="664" stroke="#000000" stroke-width="1.2" marker-end="url(#auth-login-email-otp-dd-p2-arrow-link)"/>
+<line x1="464" y1="716" x2="704" y2="716" stroke="#222222" stroke-width="1.2" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="456" y1="784" x2="348" y2="784" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="340" y1="908" x2="228" y2="908" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<line x1="220" y1="976" x2="96" y2="976" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#auth-login-email-otp-dd-p2-arrow)"/>
+<!-- labels -->
+<rect x="472" y="210" width="224" height="34" rx="2" fill="#f7f7f7"/>
+<text x="584.0" y="223" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> Tạo EmailOtpChallenge (chỉ lưu HMAC</text>
+<text x="584.0" y="239" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">của mã)</text>
+<rect x="474" y="262" width="104" height="34" rx="2" fill="#f7f7f7"/>
+<text x="526.0" y="275" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> Gửi email chứa</text>
+<text x="526.0" y="291" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">mã OTP 6 chữ số</text>
+<rect x="358" y="314" width="88" height="50" rx="2" fill="#f7f7f7"/>
+<text x="402.0" y="327" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">14.</tspan> 202 OTP_</text>
+<text x="402.0" y="343" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">REQUIRED</text>
+<text x="402.0" y="359" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">{challenge}</text>
+<rect x="250" y="382" width="68" height="34" rx="2" fill="#f7f7f7"/>
+<text x="284.0" y="395" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">15.</tspan> 202</text>
+<text x="284.0" y="411" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">{challenge}</text>
+<rect x="110" y="434" width="96" height="34" rx="2" fill="#f7f7f7"/>
+<text x="158.0" y="447" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">16.</tspan> Hiển thị màn</text>
+<text x="158.0" y="463" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">hình nhập mã</text>
+<rect x="108" y="486" width="100" height="18" rx="2" fill="#f7f7f7"/>
+<text x="158.0" y="499" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">17.</tspan> Nhập mã OTP</text>
+<rect x="238" y="522" width="92" height="82" rx="2" fill="#f7f7f7"/>
+<text x="284.0" y="535" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">18.</tspan> POST</text>
+<text x="284.0" y="551" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/auth/login/</text>
+<text x="284.0" y="567" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">verify-otp</text>
+<text x="284.0" y="583" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">{challenge_</text>
+<text x="284.0" y="599" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">id, code}</text>
+<rect x="356" y="622" width="92" height="34" rx="2" fill="#f7f7f7"/>
+<text x="402.0" y="635" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">19.</tspan> Chuyển tiếp</text>
+<text x="402.0" y="651" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">yêu cầu</text>
+<rect x="472" y="674" width="224" height="34" rx="2" fill="#f7f7f7"/>
+<text x="584.0" y="687" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">20.</tspan> Giữ một lượt thử, so khớp HMAC, đánh</text>
+<text x="584.0" y="703" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">dấu đã dùng</text>
+<rect x="368" y="758" width="68" height="18" rx="2" fill="#f7f7f7"/>
+<text x="402.0" y="771" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">21.</tspan> Trả lỗi</text>
+<rect x="248" y="850" width="72" height="50" rx="2" fill="#f7f7f7"/>
+<text x="284.0" y="863" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">22.</tspan> Lỗi kèm</text>
+<text x="284.0" y="879" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">attempts_</text>
+<text x="284.0" y="895" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">remaining</text>
+<rect x="110" y="918" width="96" height="50" rx="2" fill="#f7f7f7"/>
+<text x="158.0" y="931" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">23.</tspan> Báo lỗi, cho</text>
+<text x="158.0" y="947" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">nhập lại hoặc gửi</text>
+<text x="158.0" y="963" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">lại mã</text>
+<path d="M 72 728 H 128 V 740 L 120 748 H 72 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="97.0" y="743" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">break</text>
+<rect x="136" y="729" width="220" height="18" rx="2" fill="#f7f7f7"/>
+<text x="142" y="743" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Mã sai, hết hạn hoặc vượt số lần thử]</text>
+<path d="M 72 124 H 112 V 136 L 104 144 H 72 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="89.0" y="139" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">opt</text>
+<rect x="120" y="125" width="72" height="18" rx="2" fill="#f7f7f7"/>
+<text x="126" y="139" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Cần OTP]</text>
+<!-- notes -->
+<rect x="156" y="156" width="372" height="44" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="168" y="175" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">email_otp_2fa_enabled, hoặc STAFF_EMAIL_OTP_MODE=required</text>
+<text x="168" y="191" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">với nhân viên nội bộ (mặc định off)</text>
+<rect x="272" y="796" width="256" height="44" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="284" y="815" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">400 OTP_INVALID / 410 OTP_EXPIRED /</text>
+<text x="284" y="831" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">429 OTP_TOO_MANY_ATTEMPTS</text>
+<rect x="312" y="1000" width="180" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="324" y="1019" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Tiếp tục ở Phần 3 (bước 24–26)</text>
+<!-- nodes -->
+<circle cx="92" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 92 56 V 72 M 81 61 H 103 M 92 72 L 83 84 M 92 72 L 101 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="92" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Người dùng</text>
+<rect x="170" y="40" width="108" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="224" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web App</text>
+<text x="224" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">React · apps/web</text>
+<rect x="294" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="344" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="344" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="410" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="460" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Auth Service</text>
+<text x="460" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">auth-service</text>
+<rect x="536" y="40" width="112" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="592" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Máy chủ SMTP</text>
+<text x="592" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">email</text>
+<path d="M 678.0 48 V 79 A 30.0 6 0 0 0 738.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="708" cy="48" rx="30.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="708" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">auth_db</text>
+<text x="708" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">PostgreSQL</text>
+</svg>
+    </div>
+    <p class="note">Nguồn: <code>docs/diagrams/source/sequence/auth-login-email-otp.mmd</code>, bước 12–23.</p>
+  </div>
+</body>
+</html>

@@ -899,7 +899,7 @@ export function ReceivingPutawayPage() {
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
                   {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
-                    <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{head}</TableHead>
+                    <TableHead key={head} className="text-[12px] font-semibold text-muted-foreground">{head}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
@@ -929,7 +929,6 @@ export function ReceivingPutawayPage() {
               disabled={draftLines.length === 0}
               loading={savingTransfer}
               data-testid="putaway-confirm-button"
-              className="bg-gradient-to-r from-violet-600 to-purple-600 hover:opacity-90"
             >
               Xác nhận chuyển lên kệ
             </Button>

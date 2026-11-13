@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 416" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="inventory-packing-evidence-dd-p2-title inventory-packing-evidence-dd-p2-desc" id="inventory-packing-evidence-dd-p2-root">
+<title id="inventory-packing-evidence-dd-p2-title">Đóng gói có bằng chứng hình ảnh, phần 2</title>
+<desc id="inventory-packing-evidence-dd-p2-desc">Khi hoàn tất đóng gói, Inventory chặn nếu thiếu video, trừ khi quản lý bỏ qua có lý do, và ghi công việc hoàn tất khi đủ bằng chứng.</desc>
+<defs>
+      <style>#inventory-packing-evidence-dd-p2-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #inventory-packing-evidence-dd-p2-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #inventory-packing-evidence-dd-p2-root .diagram-container { width: 100%; overflow-x: auto; }
+      #inventory-packing-evidence-dd-p2-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#inventory-packing-evidence-dd-p2-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="220" y="212" width="508" height="140" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<line x1="228" y1="280" x2="720" y2="280" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- lifelines -->
+<line x1="92" y1="104" x2="92" y2="376" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="240" y1="104" x2="240" y2="376" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="552" y1="104" x2="552" y2="376" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="376" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="96" y1="148" x2="236" y2="148" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow)"/>
+<line x1="244" y1="200" x2="548" y2="200" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow-link)"/>
+<line x1="548" y1="268" x2="244" y2="268" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow)"/>
+<line x1="556" y1="340" x2="704" y2="340" stroke="#000000" stroke-width="1.4" marker-end="url(#inventory-packing-evidence-dd-p2-inventory-packing-evidence-dd-p2-arrow-accent)"/>
+<!-- labels -->
+<rect x="106" y="122" width="120" height="18" rx="2" fill="#ffffff"/>
+<text x="166.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> hoàn tất đóng gói</text>
+<rect x="284" y="158" width="224" height="34" rx="2" fill="#ffffff"/>
+<text x="396.0" y="171" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">14.</tspan> POST</text>
+<text x="396.0" y="187" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/packing/tasks/{id}/complete</text>
+<rect x="260" y="242" width="272" height="18" rx="2" fill="#f7f7f7"/>
+<text x="396.0" y="255" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">15.</tspan> chặn (quản lý được bỏ qua kèm lý do, ghi nhật ký)</text>
+<rect x="568" y="314" width="124" height="18" rx="2" fill="#f7f7f7"/>
+<text x="630.0" y="327" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">16.</tspan> công việc hoàn tất</text>
+<path d="M 220 212 H 260 V 224 L 252 232 H 220 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="237.0" y="227" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="268" y="213" width="84" height="18" rx="2" fill="#f7f7f7"/>
+<text x="274" y="227" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[thiếu video]</text>
+<rect x="232" y="285" width="100" height="18" rx="2" fill="#f7f7f7"/>
+<text x="238" y="299" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[đủ bằng chứng]</text>
+<!-- nodes -->
+<circle cx="92" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 92 56 V 72 M 81 61 H 103 M 92 72 L 83 84 M 92 72 L 101 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="92" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Nhân viên kho</text>
+<rect x="182" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="240" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web/Mobile</text>
+<text x="240" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web · mobile</text>
+<rect x="494" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="552" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="552" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<path d="M 668.0 48 V 79 A 40.0 6 0 0 0 748.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="708" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="708" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="708" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">inventory_db</text>
+</svg>

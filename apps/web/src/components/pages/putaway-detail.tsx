@@ -202,7 +202,7 @@ export function PutawayDetailPage() {
               <thead>
                 <tr className="border-b border-border bg-gradient-to-r from-blue-50/40 to-transparent dark:from-blue-500/10">
                   {headers.map((header) => (
-                    <th key={header} className="text-left text-[11px] text-muted-foreground px-5 py-3 uppercase tracking-[0.05em]" style={{ fontWeight: 550 }}>{header}</th>
+                    <th key={header} className="text-left text-[12px] text-muted-foreground px-5 py-3" style={{ fontWeight: 550 }}>{header}</th>
                   ))}
                 </tr>
               </thead>

@@ -13,6 +13,12 @@ import { PageHeader } from '@/components/ui/page-header';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/status-badge';
+import { SectionCard } from '@/components/ui/section-card';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/components/ui/utils';
 
 export function TransferReceivingPage() {
   const [loading, setLoading] = useState(true);
@@ -130,16 +136,69 @@ export function TransferReceivingPage() {
     );
   }
 
-  const tableHeads = canManageQueue
-    ? ['Mã chuyển kho', 'Kho xuất', 'Kho nhận', 'Trạng thái', 'Tổng SL', 'Xuất lúc', 'Nhân viên nhận hàng', 'Thao tác']
-    : ['Mã chuyển kho', 'Kho xuất', 'Kho nhận', 'Trạng thái', 'Tổng SL', 'Xuất lúc', 'Thao tác'];
+  const unassigned = queue.filter((item) => !item.received_by_user_id).length;
+  const statusLabel = (status: string) => (status === 'IN_TRANSIT' ? 'Đang vận chuyển' : status);
+  const shippedAt = (item: TransferReceivingItem) => (item.shipped_at ? new Date(item.shipped_at).toLocaleDateString('vi-VN') : '-');
+
+  const assignControl = (item: TransferReceivingItem) => {
+    const assignedName = getAssignedStaffName(item.received_by_user_id);
+    const selectedStaffId = assigningStaffById[item.id] || '';
+    if (assignedName && !selectedStaffId) {
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+            <UserCheck className="h-3.5 w-3.5" /> {assignedName}
+          </span>
+          <button
+            type="button"
+            onClick={() => setAssigningStaffById((prev) => ({ ...prev, [item.id]: 'PICK' }))}
+            className="rounded text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Đổi
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <Select
+          // '' shows the placeholder; 'PICK' means "reassigning, nobody chosen yet".
+          value={selectedStaffId === 'PICK' ? '' : selectedStaffId}
+          onValueChange={(value) => setAssigningStaffById((prev) => ({ ...prev, [item.id]: value }))}
+        >
+          <SelectTrigger className="h-8 min-w-0 flex-1 text-[12px]" aria-label={`Nhân viên nhận hàng cho ${item.transfer_number}`}>
+            <SelectValue placeholder="Chọn nhân viên" />
+          </SelectTrigger>
+          <SelectContent>
+            {warehouseStaff.map((staff) => (
+              <SelectItem key={staff.id} value={staff.id}>{staff.full_name || staff.username}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          onClick={() => void handleAssign(item)}
+          disabled={!selectedStaffId || selectedStaffId === 'PICK'}
+          loading={assigningId === item.id}
+        >
+          Giao
+        </Button>
+      </div>
+    );
+  };
+
+  const flow = [
+    { title: 'Kho nguồn xuất hàng', text: 'Chuyển kho hiện ở đây khi kho nguồn đã xác nhận xuất kho và hàng đang vận chuyển.' },
+    { title: 'Giao người nhận', text: canManageQueue ? 'Quản lý chọn nhân viên nhận hàng cho từng chuyến.' : 'Quản lý giao chuyến cho bạn nhận hàng.' },
+    { title: 'Xác nhận nhận hàng', text: 'Hệ thống tự tạo phiếu nhập tại kho đích và đưa hàng vào khu nhận.' },
+  ];
 
   return (
-    <PageWrapper className="space-y-6">
+    <PageWrapper className="space-y-5">
       <FadeItem>
         <NavLink
           to="/my-warehouse-tasks"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+          className="inline-flex items-center gap-1.5 rounded text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lại task kho
         </NavLink>
@@ -149,153 +208,118 @@ export function TransferReceivingPage() {
         <PageHeader
           icon={PackageCheck}
           title="Nhận hàng chuyển kho"
-          description={
-            canManageQueue
-              ? 'Giao task và xác nhận nhận hàng từ chuyển kho (đang IN_TRANSIT)'
-              : 'Xác nhận nhận hàng cho task được giao'
-          }
-          iconBg="bg-amber-100 dark:bg-amber-500/15"
+          description={canManageQueue ? 'Giao việc và xác nhận nhận hàng cho các chuyến đang đến kho của bạn' : 'Xác nhận nhận hàng cho các chuyến được giao cho bạn'}
+          iconBg="bg-amber-50 dark:bg-amber-500/10"
           iconColor="text-amber-600 dark:text-amber-400"
+          actions={
+            canManageQueue ? (
+              <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
+                <SelectTrigger className="h-9 w-full sm:w-[300px]" aria-label="Kho đích">
+                  <SelectValue placeholder="Chọn kho đích" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Chọn kho đích</SelectItem>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>{w.code} - {w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : undefined
+          }
         />
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-xl border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/10 p-4">
-          <div className="flex items-center gap-2.5">
-            <PackageCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-            <p className="text-[12px] text-amber-800 dark:text-amber-300">
-              Các chuyển kho xuất hiện ở đây khi đã được xác nhận xuất kho tại kho nguồn (trạng thái IN_TRANSIT).
-              Sau khi nhân viên xác nhận nhận hàng, hệ thống sẽ tự tạo Phiếu nhập tại kho đích và đưa hàng vào khu nhận.
-            </p>
-          </div>
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {canManageQueue ? (
-              <div>
-                <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho đích</p>
-                <select
-                  value={selectedWarehouseId}
-                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                  className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
-                >
-                  <option value="">Chọn kho</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>{w.code} - {w.name}</option>
-                  ))}
-                </select>
+        <ol className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
+          {flow.map((step, index) => (
+            <li key={step.title} className="flex gap-3 bg-card px-4 py-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[12px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                {index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-foreground">{step.title}</p>
+                <p className="text-xs text-muted-foreground">{step.text}</p>
               </div>
-            ) : null}
-            <div className={canManageQueue ? 'md:col-span-2' : 'md:col-span-3'}>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Tìm chuyển kho</p>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Mã chuyển kho / kho"
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px]"
-              />
-            </div>
-          </div>
-        </div>
+            </li>
+          ))}
+        </ol>
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-gradient-to-r from-amber-50/30 to-transparent dark:from-amber-500/10">
-                  {tableHeads.map((head) => (
-                    <th key={head} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                      {head}
-                    </th>
+        <SectionCard
+          noPadding
+          title="Chuyến đang đến"
+          subtitle={`${queue.length} chuyến${canManageQueue && unassigned > 0 ? `, ${unassigned} chưa có người nhận` : ''}`}
+        >
+          <div className="border-t border-border px-4 py-3">
+            <FilterBar searchValue={query} onSearchChange={setQuery} searchPlaceholder="Tìm mã chuyển kho hoặc mã kho..." showSearchClear />
+          </div>
+          {filteredQueue.length === 0 ? (
+            <EmptyState
+              variant={query ? 'no-results' : 'inbox'}
+              title={query ? 'Không tìm thấy chuyển kho phù hợp' : 'Không có chuyển kho nào đang chờ nhận'}
+              description={query ? 'Thử tìm theo mã chuyển kho hoặc mã kho.' : 'Chuyến mới sẽ hiện ở đây ngay khi kho nguồn xác nhận xuất kho.'}
+              className="py-12"
+            />
+          ) : (
+            <Table className="table-fixed">
+              <TableHeader className="bg-muted/50">
+                <TableRow className="hover:bg-transparent">
+                  {[
+                    { label: 'Chuyển kho', className: '' },
+                    { label: 'Tuyến', className: 'hidden w-[180px] xl:table-cell' },
+                    { label: 'Số lượng', className: 'hidden w-[100px] text-right md:table-cell' },
+                    { label: 'Xuất lúc', className: 'hidden w-[110px] lg:table-cell' },
+                    ...(canManageQueue ? [{ label: 'Người nhận', className: 'hidden w-[250px] lg:table-cell' }] : []),
+                    { label: 'Thao tác', className: 'w-[150px] text-right' },
+                  ].map((header) => (
+                    <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium text-muted-foreground', header.className)}>
+                      {header.label}
+                    </TableHead>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredQueue.length === 0 ? (
-                  <tr>
-                    <td colSpan={tableHeads.length} className="py-10">
-                      <EmptyState variant="no-data" title="Không có chuyển kho nào đang chờ nhận hàng" />
-                    </td>
-                  </tr>
-                ) : filteredQueue.map((item) => {
-                  const assignedName = getAssignedStaffName(item.received_by_user_id);
-                  const selectedStaffId = assigningStaffById[item.id] || '';
-                  const isAssigning = assigningId === item.id;
-                  const isConfirming = confirming === item.id;
-
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredQueue.map((item) => {
+                  const route = `${item.from_warehouse_code || '-'} → ${item.to_warehouse_code || '-'}`;
                   return (
-                    <tr key={item.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-4 py-3 text-[12px] font-semibold">{item.transfer_number}</td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{item.from_warehouse_code || '-'}</td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{item.to_warehouse_code || '-'}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge label={item.status} variant="warning" />
-                      </td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{item.total_quantity}</td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">
-                        {item.shipped_at ? new Date(item.shipped_at).toLocaleDateString('vi-VN') : '-'}
-                      </td>
-                      {canManageQueue ? (
-                        <td className="px-4 py-3">
-                          {assignedName && !selectedStaffId ? (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
-                                <UserCheck className="w-3 h-3" /> {assignedName}
-                              </span>
-                              <button
-                                onClick={() => setAssigningStaffById((prev) => ({ ...prev, [item.id]: 'PICK' }))}
-                                className="text-[10px] text-muted-foreground hover:text-foreground underline"
-                              >
-                                Đổi
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <select
-                                value={selectedStaffId === 'PICK' ? '' : selectedStaffId}
-                                onChange={(e) => setAssigningStaffById((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                                className="h-8 min-w-[140px] rounded-[8px] border border-border bg-background px-2 text-[11px] text-foreground"
-                              >
-                                <option value="">Chọn nhân viên</option>
-                                {warehouseStaff.map((staff) => (
-                                  <option key={staff.id} value={staff.id}>
-                                    {staff.full_name || staff.username}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                onClick={() => void handleAssign(item)}
-                                disabled={isAssigning || !selectedStaffId || selectedStaffId === 'PICK'}
-                                className="h-8 rounded-[8px] bg-blue-600 px-3 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                              >
-                                {isAssigning ? '...' : 'Giao'}
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      ) : null}
-                      <td className="px-4 py-3">
-                        <button
+                    <TableRow key={item.id} className="hover:bg-muted/30">
+                      <TableCell className="px-4 py-3 align-top">
+                        <p className="truncate text-sm font-semibold text-foreground">{item.transfer_number}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <StatusBadge label={statusLabel(item.status)} variant="warning" dot />
+                          <span className="text-xs text-muted-foreground xl:hidden">{route}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground md:hidden">{item.total_quantity} cuốn, xuất {shippedAt(item)}</p>
+                        <p className="mt-1 hidden text-xs text-muted-foreground md:block lg:hidden">xuất {shippedAt(item)}</p>
+                        {canManageQueue && <div className="mt-2 lg:hidden">{assignControl(item)}</div>}
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 align-top font-mono text-xs text-muted-foreground xl:table-cell">{route}</TableCell>
+                      <TableCell className="hidden px-4 py-3 text-right align-top md:table-cell">
+                        <span className="text-sm font-semibold tabular-nums">{item.total_quantity}</span>
+                        <span className="text-xs text-muted-foreground"> cuốn</span>
+                      </TableCell>
+                      <TableCell className="hidden px-4 py-3 align-top text-xs text-muted-foreground lg:table-cell">{shippedAt(item)}</TableCell>
+                      {canManageQueue && <TableCell className="hidden px-4 py-3 align-top lg:table-cell">{assignControl(item)}</TableCell>}
+                      <TableCell className="px-4 py-3 text-right align-top">
+                        <Button
+                          size="sm"
+                          variant="success-outline"
                           onClick={() => void handleConfirmReceiving(item)}
-                          disabled={isConfirming || (!canManageQueue && !item.received_by_user_id)}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-emerald-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                          disabled={!canManageQueue && !item.received_by_user_id}
+                          loading={confirming === item.id}
+                          className="gap-1.5"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          {isConfirming ? 'Đang nhận...' : 'Xác nhận nhận hàng'}
-                        </button>
-                      </td>
-                    </tr>
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Đã nhận hàng
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          )}
+        </SectionCard>
       </FadeItem>
     </PageWrapper>
   );

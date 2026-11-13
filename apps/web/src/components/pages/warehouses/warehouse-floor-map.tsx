@@ -4,6 +4,8 @@ import type { LocationNode } from "@/services/warehouse";
 import { EmptyState } from "@/components/ui/empty-state";
 import { occupancyBand } from "./meta";
 
+const numberFormat = new Intl.NumberFormat("vi-VN");
+
 const LEGEND_ITEMS: Array<{ label: string; wash: string; line: string }> = [
   { label: "Trống", wash: "bg-muted", line: "bg-border" },
   { label: "Còn chỗ", wash: "bg-success/10", line: "bg-success" },
@@ -11,21 +13,21 @@ const LEGEND_ITEMS: Array<{ label: string; wash: string; line: string }> = [
   { label: "Gần đầy / vượt sức chứa", wash: "bg-destructive/10", line: "bg-destructive" },
 ];
 
-function countCompartments(shelves: LocationNode[]): { total: number; measured: number; avgRatio: number } {
+// Fill comes from `occupied_qty` (stock balances, summed by the location endpoint).
+function zoneStats(shelves: LocationNode[]): { total: number; capacity: number; occupied: number } {
   let total = 0;
-  let measured = 0;
-  let ratioSum = 0;
+  let capacity = 0;
+  let occupied = 0;
   shelves.forEach((shelf) => {
     (shelf.children || []).forEach((bin) => {
       total += 1;
-      const band = occupancyBand(bin.available, bin.capacity_qty);
-      if (band) {
-        measured += 1;
-        ratioSum += band.ratio;
+      if (typeof bin.capacity_qty === "number" && bin.capacity_qty > 0) {
+        capacity += bin.capacity_qty;
+        occupied += bin.occupied_qty ?? 0;
       }
     });
   });
-  return { total, measured, avgRatio: measured > 0 ? ratioSum / measured : 0 };
+  return { total, capacity, occupied };
 }
 
 interface WarehouseFloorMapProps {
@@ -47,11 +49,11 @@ export function WarehouseFloorMap({ zones, selectedLocationId, onSelectLocation 
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-border bg-muted/30 px-3 py-2">
-        <span className="text-[11px] font-medium text-muted-foreground">Mức lấp đầy:</span>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span className="text-[12px] font-medium text-muted-foreground">Mức lấp đầy</span>
         {LEGEND_ITEMS.map((item) => (
-          <span key={item.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span key={item.label} className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <span className={`relative h-3 w-3 shrink-0 overflow-hidden rounded-[3px] border border-border ${item.wash}`}>
               <span className={`absolute inset-x-0 top-0 h-[2px] ${item.line}`} />
             </span>
@@ -85,31 +87,29 @@ function ZoneBlock({
   onSelectLocation: (id: string) => void;
 }) {
   const shelves = zone.children || [];
-  const stats = countCompartments(shelves);
+  const stats = zoneStats(shelves);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.15) }}
-      className="rounded-xl border border-border bg-card p-4"
+      className="border-t border-border pt-5"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center shrink-0">
-            <LayoutGrid className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
-          </div>
-          <p className="text-[13px] font-semibold truncate">Khu vực {zone.name || zone.code}</p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <h3 className="truncate font-serif text-[16px] font-semibold tracking-tight">Khu vực {zone.name || zone.code}</h3>
         </div>
         {stats.total > 0 && (
-          <p className="text-[11px] text-muted-foreground shrink-0">
-            {stats.total} ngăn kệ · lấp đầy trung bình {Math.round(stats.avgRatio * 100)}%
+          <p className="shrink-0 text-[12px] text-muted-foreground">
+            {stats.total} ngăn kệ{stats.capacity > 0 ? `, đang chứa ${numberFormat.format(stats.occupied)} / ${numberFormat.format(stats.capacity)} cuốn` : ""}
           </p>
         )}
       </div>
 
       {shelves.length === 0 ? (
-        <p className="text-[12px] text-muted-foreground py-2">Khu vực này chưa có kệ nào.</p>
+        <p className="py-2 text-[12px] text-muted-foreground">Khu vực này chưa có kệ nào.</p>
       ) : (
         <div className="space-y-2.5">
           {shelves.map((shelf) => (
@@ -134,15 +134,15 @@ function AisleRow({
 
   return (
     <div className="flex items-stretch gap-3">
-      <div className="w-16 shrink-0 flex items-center">
-        <span className="text-[11px] font-medium text-muted-foreground truncate">
+      <div className="flex w-20 shrink-0 items-center">
+        <span className="truncate text-[12px] font-medium text-muted-foreground">
           Kệ {shelf.name || shelf.code}
         </span>
       </div>
       {bins.length === 0 ? (
-        <p className="flex-1 flex items-center text-[11px] italic text-muted-foreground">chưa có ngăn kệ</p>
+        <p className="flex flex-1 items-center text-[12px] text-muted-foreground">Chưa có ngăn kệ</p>
       ) : (
-        <div className="flex-1 grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-1.5">
+        <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-2">
           {bins.map((bin) => (
             <CompartmentTile
               key={bin.id}
@@ -166,41 +166,39 @@ function CompartmentTile({
   isSelected: boolean;
   onSelect: () => void;
 }) {
-  const band = occupancyBand(node.available, node.capacity_qty);
   const label = node.name || node.code;
-  const fraction = band ? `${node.available ?? 0}/${node.capacity_qty}` : null;
-  const titleParts = [node.code];
-  if (band) titleParts.push(`${band.label} — ${fraction}`);
+  // The aisle row already names the shelf, so the tile only needs the last segment ("A / 01 / 03" -> "03").
+  const shortLabel = label.split("/").pop()?.trim() || label;
+  const capacity = typeof node.capacity_qty === "number" && node.capacity_qty > 0 ? node.capacity_qty : null;
+  const occupied = node.occupied_qty ?? 0;
+  const band = occupancyBand(occupied, capacity);
+  const titleParts = [label, node.code];
+  if (capacity) titleParts.push(`đang chứa ${occupied}/${capacity}${band ? ` (${band.label.toLowerCase()})` : ""}`);
+  if (node.is_active === false) titleParts.push("ngừng hoạt động");
 
   return (
     <button
       type="button"
       onClick={onSelect}
       title={titleParts.join(" · ")}
-      className={`group relative aspect-square rounded-lg border overflow-hidden text-left transition-all ${
-        isSelected ? "border-primary ring-2 ring-primary/50" : "border-border hover:border-muted-foreground/40"
-      }`}
+      aria-label={titleParts.join(", ")}
+      aria-pressed={isSelected}
+      className={`relative aspect-[4/3] overflow-hidden rounded-lg border text-left transition-[border-color,box-shadow,background-color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+        isSelected ? "border-primary bg-primary/[0.06] ring-2 ring-primary/40" : "border-border bg-card hover:border-muted-foreground/40"
+      } ${node.is_active === false ? "opacity-50" : ""}`}
     >
       {band && (
         <>
-          <span
-            className={`absolute inset-x-0 bottom-0 transition-[height] duration-300 ${band.wash}`}
-            style={{ height: `${band.ratio * 100}%` }}
-          />
-          {band.ratio > 0 && (
-            <span
-              className={`absolute inset-x-0 h-[2px] ${band.line}`}
-              style={{ bottom: `${band.ratio * 100}%` }}
-            />
-          )}
+          <span className={`absolute inset-x-0 bottom-0 ${band.wash}`} style={{ height: `${band.ratio * 100}%` }} />
+          {band.ratio > 0 && <span className={`absolute inset-x-0 h-[2px] ${band.line}`} style={{ bottom: `${band.ratio * 100}%` }} />}
         </>
       )}
-      <span className="absolute inset-x-1 top-1 truncate font-mono text-[9px] leading-none text-foreground">
-        {label}
+      <span className="absolute left-1.5 top-1.5 max-w-[45%] truncate font-mono text-[10px] leading-none text-foreground">
+        {shortLabel}
       </span>
-      {fraction && (
-        <span className="absolute inset-x-1 bottom-1 text-center text-[9px] font-semibold leading-none text-foreground">
-          {fraction}
+      {capacity && (
+        <span className="absolute right-1.5 top-1.5 text-right text-[11px] font-semibold leading-none tabular-nums text-foreground">
+          {occupied}/{capacity}
         </span>
       )}
     </button>

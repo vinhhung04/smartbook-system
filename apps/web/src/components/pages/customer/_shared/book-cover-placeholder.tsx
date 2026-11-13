@@ -64,7 +64,7 @@ export function BookCoverPlaceholder({ category, title, imageUrl }: BookCoverPla
             <p className="line-clamp-2 text-[11px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>
               {title}
             </p>
-            <span className="rounded-full border border-border bg-card/80 px-2 py-0.5 text-[10px] uppercase tracking-[0.04em] text-muted-foreground">
+            <span className="rounded-full border border-border bg-card/80 px-2 py-0.5 text-[10px] text-muted-foreground">
               {style.label}
             </span>
           </div>

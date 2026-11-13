@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ hoạt động quy trình hỗ trợ ra quyết định với trợ lý AI</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Activity · UML · SmartBook</p>
+    <h1>Sơ đồ hoạt động quy trình hỗ trợ ra quyết định với trợ lý AI</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 1108" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="activity-ai-decision-support-dd-title activity-ai-decision-support-dd-desc">
+<title id="activity-ai-decision-support-dd-title">Sơ đồ hoạt động quy trình hỗ trợ ra quyết định với trợ lý AI</title>
+<desc id="activity-ai-decision-support-dd-desc">Quản lý kho đặt câu hỏi, AI Service gọi công cụ lặp đến khi đủ dữ liệu, mô hình sinh câu trả lời được kiểm tra căn cứ, hành động đề xuất chờ xác nhận trước khi thực thi.</desc>
+<defs>
+  <marker id="activity-ai-decision-support-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1f3864"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="40" y="40" width="720" height="1028" fill="#ffffff" stroke="#475569" stroke-width="1"/>
+<rect x="40" y="40" width="720" height="40" fill="#f3f6fa" stroke="#475569" stroke-width="1"/>
+<line x1="245.7" y1="40" x2="245.7" y2="1068" stroke="#c5cedb" stroke-width="1"/>
+<line x1="468.6" y1="40" x2="468.6" y2="1068" stroke="#c5cedb" stroke-width="1"/>
+<line x1="614.3" y1="40" x2="614.3" y2="1068" stroke="#c5cedb" stroke-width="1"/>
+<text x="142.85714285714283" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Quản lý kho</text>
+<text x="357.1428571428571" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">AI Service</text>
+<text x="541.4285714285713" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Mô hình ngôn ngữ</text>
+<text x="687.1428571428571" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Analytics Service</text>
+<path d="M 142.9 112.0 L 142.9 128.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 142.9 154.0 L 142.9 157.0 Q 142.9 160.0 145.9 160.0 L 349.1 160.0 Q 357.1 160.0 357.1 165.0 L 357.1 170.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 212.0 L 357.1 228.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 248.0 L 357.1 251.0 Q 357.1 254.0 360.1 254.0 L 533.4 254.0 Q 541.4 254.0 541.4 259.0 L 541.4 264.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 541.4 306.0 L 541.4 309.0 Q 541.4 312.0 538.4 312.0 L 365.1 312.0 Q 357.1 312.0 357.1 317.0 L 357.1 322.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 364.0 L 357.1 367.0 Q 357.1 370.0 360.1 370.0 L 679.1 370.0 Q 687.1 370.0 687.1 375.0 L 687.1 380.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 687.1 422.0 L 687.1 425.0 Q 687.1 428.0 684.1 428.0 L 365.1 428.0 Q 357.1 428.0 357.1 433.0 L 357.1 438.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 464.0 L 357.1 480.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 287.1 493.0 L 251.1 493.0 Q 243.1 493.0 243.1 485.0 L 243.1 246.0 Q 243.1 238.0 251.1 238.0 L 347.1 238.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 506.0 L 357.1 509.0 Q 357.1 512.0 360.1 512.0 L 533.4 512.0 Q 541.4 512.0 541.4 517.0 L 541.4 522.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 541.4 548.0 L 541.4 551.0 Q 541.4 554.0 538.4 554.0 L 365.1 554.0 Q 357.1 554.0 357.1 559.0 L 357.1 564.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 590.0 L 357.1 606.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 632.0 L 357.1 635.0 Q 357.1 638.0 360.1 638.0 L 533.4 638.0 Q 541.4 638.0 541.4 643.0 L 541.4 648.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 271.1 619.0 L 263.1 619.0 Q 255.1 619.0 255.1 627.0 L 255.1 692.0 Q 255.1 700.0 263.1 700.0 L 347.1 700.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 541.4 674.0 L 541.4 677.0 Q 541.4 680.0 538.4 680.0 L 365.1 680.0 Q 357.1 680.0 357.1 685.0 L 357.1 690.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 710.0 L 357.1 726.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 768.0 L 357.1 771.0 Q 357.1 774.0 354.1 774.0 L 150.9 774.0 Q 142.9 774.0 142.9 779.0 L 142.9 784.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 142.9 826.0 L 142.9 829.0 Q 142.9 832.0 145.9 832.0 L 349.1 832.0 Q 357.1 832.0 357.1 837.0 L 357.1 842.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 72.9 805.0 L 64.9 805.0 Q 56.9 805.0 56.9 813.0 L 56.9 1002.0 Q 56.9 1010.0 64.9 1010.0 L 132.9 1010.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 884.0 L 357.1 887.0 Q 357.1 890.0 354.1 890.0 L 150.9 890.0 Q 142.9 890.0 142.9 895.0 L 142.9 900.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 142.9 926.0 L 142.9 929.0 Q 142.9 932.0 145.9 932.0 L 349.1 932.0 Q 357.1 932.0 357.1 937.0 L 357.1 942.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 357.1 984.0 L 357.1 987.0 Q 357.1 990.0 354.1 990.0 L 150.9 990.0 Q 142.9 990.0 142.9 995.0 L 142.9 1000.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<path d="M 142.9 1020.0 L 142.9 1023.0 Q 142.9 1026.0 145.9 1026.0 L 349.1 1026.0 Q 357.1 1026.0 357.1 1031.0 L 357.1 1036.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-decision-support-dd-arrow)"/>
+<rect x="249.1428571428571" y="463.0" width="24" height="16" rx="2" fill="#ffffff"/>
+<text x="261.1428571428571" y="475.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">có</text>
+<rect x="305.1428571428571" y="506.0" width="44" height="16" rx="2" fill="#ffffff"/>
+<text x="327.1428571428571" y="518.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">không</text>
+<rect x="325.1428571428571" y="632.0" width="24" height="16" rx="2" fill="#ffffff"/>
+<text x="337.1428571428571" y="644.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">có</text>
+<rect x="261.1428571428571" y="633.0" width="44" height="16" rx="2" fill="#ffffff"/>
+<text x="283.1428571428571" y="645.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">không</text>
+<rect x="110.85714285714283" y="826.0" width="24" height="16" rx="2" fill="#ffffff"/>
+<text x="122.85714285714283" y="838.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">có</text>
+<rect x="62.85714285714283" y="827.0" width="44" height="16" rx="2" fill="#ffffff"/>
+<text x="84.85714285714283" y="839.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">không</text>
+<circle cx="142.85714285714283" cy="102.0" r="9" fill="#1f3864"/>
+<rect x="50.85714285714283" y="128.0" width="184" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="142.85714285714283" y="145.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Đặt câu hỏi bằng tiếng Việt</text>
+<rect x="281.1428571428571" y="170.0" width="152" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="187.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Kiểm tra vai trò,</text>
+<text x="357.1428571428571" y="203.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">nạp ngữ cảnh hội thoại</text>
+<polygon points="357.1428571428571,228.0 367.1428571428571,238.0 357.1428571428571,248.0 347.1428571428571,238.0" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<rect x="481.42857142857133" y="264.0" width="120" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="541.4285714285713" y="281.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Chọn công cụ và</text>
+<text x="541.4285714285713" y="297.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">tham số</text>
+<rect x="259.1428571428571" y="322.0" width="196" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="339.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Gọi công cụ qua API Gateway</text>
+<text x="357.1428571428571" y="355.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">bằng JWT của người hỏi</text>
+<rect x="625.1428571428571" y="380.0" width="124" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="687.1428571428571" y="397.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tính KPI, dự báo,</text>
+<text x="687.1428571428571" y="413.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">đề xuất, rủi ro</text>
+<rect x="271.1428571428571" y="438.0" width="172" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="455.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Đưa kết quả vào ngữ cảnh</text>
+<polygon points="287.1428571428571,493.0 299.1428571428571,480.0 415.1428571428571,480.0 427.1428571428571,493.0 415.1428571428571,506.0 299.1428571428571,506.0" fill="#f3f6fa" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="497.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Cần thêm dữ liệu?</text>
+<rect x="483.42857142857133" y="522.0" width="116" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="541.4285714285713" y="539.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Sinh câu trả lời</text>
+<rect x="277.1428571428571" y="564.0" width="160" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="581.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Kiểm tra căn cứ số liệu</text>
+<polygon points="271.1428571428571,619.0 283.1428571428571,606.0 431.1428571428571,606.0 443.1428571428571,619.0 431.1428571428571,632.0 283.1428571428571,632.0" fill="#f3f6fa" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="623.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Có số không có căn cứ?</text>
+<rect x="483.42857142857133" y="648.0" width="116" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="541.4285714285713" y="665.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Sinh lại một lần</text>
+<polygon points="357.1428571428571,690.0 367.1428571428571,700.0 357.1428571428571,710.0 347.1428571428571,700.0" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<rect x="265.1428571428571" y="726.0" width="184" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="743.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Trả lời kèm bằng chứng,</text>
+<text x="357.1428571428571" y="759.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">công cụ đã gọi, lưu hội thoại</text>
+<polygon points="72.85714285714283,805.0 84.85714285714283,784.0 200.85714285714283,784.0 212.85714285714283,805.0 200.85714285714283,826.0 84.85714285714283,826.0" fill="#f3f6fa" stroke="#1f3864" stroke-width="1.2"/>
+<text x="142.85714285714283" y="801.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Yêu cầu thực hiện</text>
+<text x="142.85714285714283" y="817.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">hành động?</text>
+<rect x="265.1428571428571" y="842.0" width="184" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="859.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tạo hành động chờ xác nhận</text>
+<text x="357.1428571428571" y="875.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(mức rủi ro, thời hạn)</text>
+<rect x="76.85714285714283" y="900.0" width="132" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="142.85714285714283" y="917.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Xác nhận hoặc hủy</text>
+<rect x="265.1428571428571" y="942.0" width="184" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="357.1428571428571" y="959.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Thực thi qua API nghiệp vụ,</text>
+<text x="357.1428571428571" y="975.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">ghi nhật ký vòng đời</text>
+<polygon points="142.85714285714283,1000.0 152.85714285714283,1010.0 142.85714285714283,1020.0 132.85714285714283,1010.0" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<circle cx="357.1428571428571" cy="1046.0" r="10" fill="#ffffff" stroke="#1f3864" stroke-width="1.4"/><circle cx="357.1428571428571" cy="1046.0" r="6" fill="#1f3864"/>
+</svg>
+    </div>
+    <p class="note">Chép nguyên văn từ hình gốc của báo cáo (Hình 3.4); ký pháp UML, phong cách SmartBook.</p>
+  </div>
+</body>
+</html>

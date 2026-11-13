@@ -182,8 +182,6 @@ export function BorrowPage() {
           icon={BookMarked}
           title="Quản lý mượn trả"
           description="Việc cần xử lý hôm nay và lối vào từng khâu"
-          iconBg="bg-gradient-to-br from-rose-100 to-pink-50 border border-rose-200/40 shadow-sm dark:from-rose-500/15 dark:to-pink-500/10 dark:border-rose-500/20"
-          iconColor="text-rose-600 dark:text-rose-400"
           actions={
             <Button variant="outline" size="sm" onClick={() => void loadDashboard()} disabled={loading} className="gap-2">
               <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
@@ -207,14 +205,14 @@ export function BorrowPage() {
               key={tile.label}
               to={tile.to}
               className={cn(
-                'group rounded-xl border border-border bg-card p-4 transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
+                'group rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30',
                 TONE_CLASS[tile.tone].ring,
               )}
             >
               <p className="text-[12px] font-medium text-muted-foreground">{tile.label}</p>
               <p
                 className={cn(
-                  'mt-2 font-mono text-[28px] font-bold leading-none tabular-nums',
+                  'mt-2 font-serif text-[28px] font-semibold leading-none tabular-nums',
                   active ? TONE_CLASS[tile.tone].value : 'text-foreground/40',
                 )}
               >
@@ -263,10 +261,6 @@ export function BorrowPage() {
                       to={`/borrow/loans/${loan.id}`}
                       className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none sm:px-5"
                     >
-                      <span
-                        aria-hidden="true"
-                        className={cn('h-8 w-1 shrink-0 rounded-full', overdue ? 'bg-rose-500' : 'bg-amber-400')}
-                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] font-semibold text-foreground">{loan.customers?.full_name || 'Khách hàng'}</p>
                         <p className="truncate text-[12px] text-muted-foreground">
@@ -319,7 +313,7 @@ export function BorrowPage() {
                       <span className="block truncate text-[11px] text-muted-foreground">{step.desc}</span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className="block font-mono text-[14px] font-bold tabular-nums text-foreground">{step.metric}</span>
+                      <span className="block font-serif text-[16px] font-semibold tabular-nums text-foreground">{step.metric}</span>
                       <span className="block text-[10px] text-muted-foreground">{step.metricLabel}</span>
                     </span>
                   </Link>

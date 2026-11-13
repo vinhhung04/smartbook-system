@@ -1,0 +1,4 @@
+SELECT ?work ?image ?date WHERE {
+  ?work wdt:P31 wd:Q7725634 ; wdt:P18 ?image ; wdt:P577 ?date .
+  FILTER(?date >= "1840-01-01"^^xsd:dateTime && ?date < "1931-01-01"^^xsd:dateTime)
+} LIMIT 5000

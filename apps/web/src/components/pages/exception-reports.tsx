@@ -228,7 +228,7 @@ export function ExceptionReportsPage() {
                   { label: "Giao xử lý", className: "hidden w-[200px] xl:table-cell" },
                   { label: "Thao tác", className: "w-[110px] text-right" },
                 ].map((h) => (
-                  <th key={h.label} className={cn("px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground", h.className)}>{h.label}</th>
+                  <th key={h.label} className={cn("px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground", h.className)}>{h.label}</th>
                 ))}
               </tr>
             </thead>
@@ -316,7 +316,7 @@ export function ExceptionReportsPage() {
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
                         <span className="text-[12px] font-medium text-foreground">{EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type}</span>
                         {qtyChange}
-                        <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
+                        <StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={statusVariant(r.status)} dot />
                       </div>
                       {assignment ? <div className="mt-2 xl:hidden">{assignment}</div> : null}
                     </td>
@@ -325,7 +325,7 @@ export function ExceptionReportsPage() {
                       {qtyChange ? <p className="text-[13px]">{qtyChange}</p> : null}
                     </td>
                     <td className="hidden px-4 py-3 align-top md:table-cell">
-                      <StatusBadge label={r.status} variant={statusVariant(r.status)} dot />
+                      <StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={statusVariant(r.status)} dot />
                     </td>
                     <td className="hidden px-4 py-3 align-top xl:table-cell">{assignment}</td>
                     <td className="px-4 py-3 text-right align-top">

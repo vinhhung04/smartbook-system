@@ -141,7 +141,7 @@ export function CustomerScanCoverPage() {
   }, [handedOver, handleFileSelect, location.pathname, navigate]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Tìm sách bằng ảnh bìa"
         subtitle="Chụp hoặc chọn ảnh bìa sách — hệ thống sẽ tìm sách khớp trong thư viện."

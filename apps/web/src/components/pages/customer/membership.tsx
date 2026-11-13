@@ -37,7 +37,7 @@ export function CustomerMembershipPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
+      <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8" aria-busy="true">
         <div className="h-56 animate-pulse rounded-2xl border bg-card" />
         <div className="h-48 animate-pulse rounded-xl border bg-card" />
       </div>
@@ -45,14 +45,14 @@ export function CustomerMembershipPage() {
   }
   if (error) {
     return (
-      <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
         <EmptyState variant="error" title="Không tải được hội viên" description={error} action={<button onClick={() => void load()} className="font-medium text-primary hover:underline">Thử lại</button>} />
       </div>
     );
   }
   if (!membership) {
     return (
-      <div className="mx-auto max-w-4xl p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
         <EmptyState
           variant="no-data"
           title="Không tìm thấy hội viên"
@@ -80,24 +80,24 @@ export function CustomerMembershipPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader title="Hội viên" subtitle="Gói của bạn, hạn mức mượn và thẻ thành viên" />
 
       <div className="grid gap-5 md:grid-cols-5">
         {/* The library card: what the reader shows at the desk */}
         <section
           aria-label="Thẻ thành viên"
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 via-blue-600 to-violet-600 p-5 text-white shadow-lg shadow-indigo-500/20 md:col-span-3"
+          className="relative overflow-hidden rounded-2xl bg-indigo-700 p-5 text-white shadow-md dark:bg-indigo-900 md:col-span-3"
         >
           <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-white/10" />
           <div className="relative flex h-full flex-col justify-between gap-6">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="flex items-center gap-1.5 text-[12px] font-medium text-white/70">
+                <p className="flex items-center gap-1.5 text-[12px] font-medium text-white/80">
                   <BookOpen className="h-3.5 w-3.5" aria-hidden="true" /> SmartBook Library
                 </p>
                 <h2 className="mt-1 text-[22px] font-bold tracking-tight" data-testid="membership-plan-name">{membership.plan_name || '—'}</h2>
-                <p className="text-[12px] text-white/70">Mã gói: {membership.plan_code || '—'}</p>
+                <p className="text-[12px] text-white/80">Mã gói: {membership.plan_code || '—'}</p>
                 <p className="mt-2 text-[12px] text-white/80" data-testid="membership-validity">
                   Hiệu lực: {formatCardDate(membership.start_date)} – {membership.end_date ? formatCardDate(membership.end_date) : 'không thời hạn'}
                 </p>
@@ -107,16 +107,16 @@ export function CustomerMembershipPage() {
               </div>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wider text-white/60">Số thẻ</p>
+              <p className="text-[11px] text-white/75">Số thẻ</p>
               <p className="font-mono text-[18px] font-semibold tracking-[0.08em]">{cardNumber}</p>
-              <p className="mt-1 text-[11px] text-white/60">Đưa mã QR này tại quầy để mượn hoặc trả sách nhanh hơn.</p>
+              <p className="mt-1 text-[11px] text-white/75">Đưa mã QR này tại quầy để mượn hoặc trả sách nhanh hơn.</p>
             </div>
           </div>
         </section>
 
         <section aria-label="Mức sử dụng" className="rounded-2xl border border-border bg-card p-5 md:col-span-2">
           <h2 className="text-[14px] font-semibold">Suất mượn của bạn</h2>
-          <p className="mt-3 font-mono text-[32px] font-bold leading-none tabular-nums">
+          <p className="mt-3 text-[32px] font-bold leading-none tabular-nums">
             {membership.active_loan_count}
             <span className="text-[18px] font-medium text-muted-foreground"> / {maxLoans || '—'}</span>
           </p>

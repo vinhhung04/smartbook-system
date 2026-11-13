@@ -252,11 +252,11 @@ export function PurchaseOrdersPage() {
         className={cn(
           "group relative flex flex-1 shrink-0 flex-col items-start rounded-lg border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           active
-            ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300"
+            ? "border-primary/30 bg-primary/[0.06] text-primary dark:border-primary/40 dark:bg-primary/15"
             : "border-transparent hover:border-border hover:bg-muted/50",
         )}
       >
-        <span className={cn("text-[18px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>
+        <span className={cn("font-serif text-[20px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>
           {count ?? "–"}
         </span>
         <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11px]", active ? "font-medium" : "text-muted-foreground")}>
@@ -274,8 +274,6 @@ export function PurchaseOrdersPage() {
           icon={ClipboardList}
           title="Đơn đặt hàng"
           description="Lập đơn đặt hàng, phê duyệt và đối soát nhập hàng"
-          iconBg="bg-gradient-to-br from-indigo-600 to-sky-600 shadow-lg shadow-indigo-500/20"
-          iconColor="text-white"
           actions={
             <>
               <Button variant="outline" size="sm" onClick={() => { void load(); void loadCounts(); }} disabled={loading}>
@@ -296,7 +294,7 @@ export function PurchaseOrdersPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="flex items-center gap-0.5 overflow-x-auto p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo trạng thái">
             {pipelineButton("ALL", "Tất cả", totalCount)}
             <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
@@ -371,7 +369,7 @@ export function PurchaseOrdersPage() {
                   { label: "Nhận hàng", className: "hidden w-[150px] sm:table-cell" },
                   { label: "Tổng tiền", className: "hidden w-[140px] text-right xl:table-cell" },
                 ].map((heading) => (
-                  <TableHead key={heading.label} className={cn("px-3 text-[11px] uppercase tracking-wider text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                  <TableHead key={heading.label} className={cn("px-3 text-[12px] text-muted-foreground", heading.className)}>{heading.label}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>

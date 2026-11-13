@@ -246,7 +246,7 @@ export function SuppliersPage() {
                     { label: 'Số PO', className: 'hidden w-[80px] text-right lg:table-cell' },
                     { label: '', className: 'w-[96px]' },
                   ].map((h) => (
-                    <TableHead key={h.label || 'actions'} className={cn('px-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', h.className)}>
+                    <TableHead key={h.label || 'actions'} className={cn('px-4 text-[12px] font-semibold text-muted-foreground', h.className)}>
                       {h.label}
                     </TableHead>
                   ))}

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 928" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-action-confirm-dd-title ai-action-confirm-dd-desc" id="ai-action-confirm-dd-root">
+<title id="ai-action-confirm-dd-title">Xác nhận hành động do AI đề xuất</title>
+<desc id="ai-action-confirm-dd-desc">Quản lý xác nhận hành động; AI Service kiểm tra hạn và quyền hiện tại, rồi gọi API nghiệp vụ bằng JWT người dùng, ghi trạng thái và nhật ký, đẩy sự kiện kết quả.</desc>
+<defs>
+      <style>#ai-action-confirm-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #ai-action-confirm-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #ai-action-confirm-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #ai-action-confirm-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#ai-action-confirm-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="ai-action-confirm-dd-ai-action-confirm-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-action-confirm-dd-ai-action-confirm-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-action-confirm-dd-ai-action-confirm-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-action-confirm-dd-ai-action-confirm-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="216" y="380" width="520" height="484" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<line x1="224" y1="480" x2="728" y2="480" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="888" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="236" y1="104" x2="236" y2="888" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="352" y1="104" x2="352" y2="888" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="484" y1="104" x2="484" y2="888" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="612" y1="104" x2="612" y2="888" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="716" y1="104" x2="716" y2="888" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="100" y1="164" x2="232" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<line x1="240" y1="232" x2="348" y2="232" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow-link)"/>
+<line x1="356" y1="284" x2="480" y2="284" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<path d="M 356 296 H 380 Q 388 296 388 304 V 324 Q 388 332 380 332 H 358" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<line x1="356" y1="368" x2="608" y2="368" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow-link)"/>
+<line x1="348" y1="468" x2="240" y2="468" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<line x1="356" y1="556" x2="480" y2="556" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<line x1="356" y1="608" x2="608" y2="608" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow-link)"/>
+<line x1="616" y1="660" x2="712" y2="660" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow-link)"/>
+<line x1="712" y1="696" x2="356" y2="696" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<line x1="356" y1="764" x2="480" y2="764" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow)"/>
+<line x1="356" y1="800" x2="608" y2="800" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow-link)"/>
+<line x1="348" y1="852" x2="240" y2="852" stroke="#000000" stroke-width="1.4" marker-end="url(#ai-action-confirm-dd-ai-action-confirm-dd-arrow-accent)"/>
+<!-- labels -->
+<rect x="110" y="122" width="112" height="34" rx="2" fill="#ffffff"/>
+<text x="166.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> nhấn "Xác nhận"</text>
+<text x="166.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trên thẻ hành động</text>
+<rect x="254" y="174" width="80" height="50" rx="2" fill="#ffffff"/>
+<text x="294.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST /ai/</text>
+<text x="294.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">actions/</text>
+<text x="294.0" y="219" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">confirm</text>
+<rect x="366" y="242" width="104" height="34" rx="2" fill="#ffffff"/>
+<text x="418.0" y="255" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> đọc ai_pending_</text>
+<text x="418.0" y="271" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">actions</text>
+<rect x="396" y="297" width="148" height="34" rx="2" fill="#ffffff"/>
+<text x="402" y="310.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">4. kiểm tra còn hạn (TTL</text>
+<text x="402" y="326.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">10 phút) và danh sách cấm</text>
+<rect x="370" y="342" width="224" height="18" rx="2" fill="#ffffff"/>
+<text x="482.0" y="355" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">5.</tspan> GET /auth/me (vai trò, quyền hiện tại)</text>
+<rect x="256" y="410" width="76" height="50" rx="2" fill="#f7f7f7"/>
+<text x="294.0" y="423" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> từ chối</text>
+<text x="294.0" y="439" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">(EXPIRED /</text>
+<text x="294.0" y="455" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">403)</text>
+<rect x="368" y="514" width="100" height="34" rx="2" fill="#f7f7f7"/>
+<text x="418.0" y="527" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> CONFIRMED +</text>
+<text x="418.0" y="543" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">audit log</text>
+<rect x="364" y="566" width="236" height="34" rx="2" fill="#f7f7f7"/>
+<text x="482.0" y="579" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> gọi API nghiệp vụ bằng JWT người dùng (ví</text>
+<text x="482.0" y="595" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">dụ POST /api/purchase-requests)</text>
+<rect x="634" y="618" width="60" height="34" rx="2" fill="#f7f7f7"/>
+<text x="664.0" y="631" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> chuyển</text>
+<text x="664.0" y="647" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">tiếp</text>
+<rect x="498" y="670" width="72" height="18" rx="2" fill="#f7f7f7"/>
+<text x="534.0" y="683" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> kết quả</text>
+<rect x="372" y="706" width="92" height="50" rx="2" fill="#f7f7f7"/>
+<text x="418.0" y="719" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> EXECUTED</text>
+<text x="418.0" y="735" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">hoặc FAILED +</text>
+<text x="418.0" y="751" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">audit log</text>
+<rect x="366" y="774" width="232" height="18" rx="2" fill="#f7f7f7"/>
+<text x="482.0" y="787" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> POST /internal/push-event (ai_action)</text>
+<rect x="258" y="810" width="72" height="34" rx="2" fill="#f7f7f7"/>
+<text x="294.0" y="823" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> kết quả</text>
+<text x="294.0" y="839" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">thực thi</text>
+<path d="M 216 380 H 256 V 392 L 248 400 H 216 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="233.0" y="395" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="264" y="381" width="160" height="18" rx="2" fill="#f7f7f7"/>
+<text x="270" y="395" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[không đủ quyền / hết hạn]</text>
+<rect x="228" y="485" width="56" height="18" rx="2" fill="#f7f7f7"/>
+<text x="234" y="499" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[hợp lệ]</text>
+<!-- nodes -->
+<circle cx="96" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 96 56 V 72 M 85 61 H 107 M 96 72 L 87 84 M 96 72 L 105 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="96" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Quản lý kho</text>
+<rect x="192" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="236" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web UI</text>
+<text x="236" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web</text>
+<rect x="308" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="352" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">AI Service</text>
+<text x="352" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FastAPI</text>
+<path d="M 444.0 48 V 79 A 40.0 6 0 0 0 524.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="484" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="484" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="484" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">ai_db</text>
+<rect x="562" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="612" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="612" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="672" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="716" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Service</text>
+<text x="716" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">nghiệp vụ</text>
+</svg>

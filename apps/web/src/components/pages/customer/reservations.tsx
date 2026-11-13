@@ -10,6 +10,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/components/ui/utils';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { ReservationCard } from './_shared/reservation-card';
+import { visualEnhancementTokens } from './_shared/visual-enhancement-tokens';
 
 const FETCH_PAGE_SIZE = 100;
 const MAX_FETCH_PAGES = 5;
@@ -81,7 +82,7 @@ export function CustomerReservationsPage() {
   const visible = shown.slice(0, visibleCount);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Đặt trước của tôi"
         subtitle="Theo dõi sách đang chờ và sách sẵn sàng để nhận"
@@ -137,16 +138,29 @@ export function CustomerReservationsPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           variant="no-data"
+          className={visualEnhancementTokens.emptyFrame}
           title="Chưa có đặt trước"
           description="Khám phá danh mục và đặt trước sách bạn muốn mượn."
-          action={<button onClick={() => navigate('/customer/books')} className="font-medium text-primary hover:underline">Xem danh mục</button>}
+          action={<button onClick={() => navigate('/customer/books')} className={visualEnhancementTokens.primaryAction}>Xem danh mục</button>}
         />
       ) : shown.length === 0 ? (
         <EmptyState
           variant="inbox"
+          className={visualEnhancementTokens.emptyFrame}
           title={view === 'live' ? 'Không có đặt trước nào đang chờ' : 'Chưa có lịch sử đặt trước'}
           description={view === 'live' ? 'Đặt trước sách trong danh mục để giữ chỗ cho bạn.' : 'Các đặt trước đã hoàn thành hoặc đã hủy sẽ hiển thị ở đây.'}
-          action={view === 'live' ? <button onClick={() => navigate('/customer/books')} className="font-medium text-primary hover:underline">Xem danh mục</button> : undefined}
+          action={
+            view === 'live' ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                <button onClick={() => navigate('/customer/books')} className={visualEnhancementTokens.primaryAction}>Xem danh mục</button>
+                {historyRows.length > 0 && (
+                  <button onClick={() => setView('history')} className={visualEnhancementTokens.secondaryAction}>
+                    Xem lịch sử ({historyRows.length})
+                  </button>
+                )}
+              </div>
+            ) : undefined
+          }
         />
       ) : (
         <div className="space-y-3">

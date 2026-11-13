@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiến trúc xử lý của Trợ lý AI (Copilot)</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Flowchart · Import Mermaid · faithful · SmartBook · kiểm thử</p>
+    <h1>Kiến trúc xử lý của Trợ lý AI (Copilot)</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 1196" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-copilot-pipeline-title ai-copilot-pipeline-desc">
+<title id="ai-copilot-pipeline-title">Kiến trúc xử lý của Trợ lý AI (Copilot)</title>
+<desc id="ai-copilot-pipeline-desc">Bốn giai đoạn của Copilot: hiểu câu hỏi và lập kế hoạch, thu thập bằng chứng, sinh và kiểm chứng câu trả lời, phản hồi và hành động có con người xác nhận; hai nhánh LLM chỉ bật bằng cờ.</desc>
+<defs>
+  <marker id="ai-copilot-pipeline-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker>
+  <marker id="ai-copilot-pipeline-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#b45309"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- zones -->
+<rect x="40" y="40" width="720" height="232" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="64" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">1. Hiểu câu hỏi và lập kế hoạch</text>
+<rect x="40" y="304" width="720" height="232" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="328" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">2. Thu thập bằng chứng</text>
+<rect x="40" y="568" width="720" height="280" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="592" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">3. Sinh và kiểm chứng câu trả lời</text>
+<rect x="40" y="880" width="720" height="240" rx="8" fill="#f3f6fa" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<text x="56" y="904" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">4. Phản hồi và hành động có kiểm soát</text>
+<!-- arrows -->
+<path d="M 232 110 H 287" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 384 140 V 179" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 256 382 H 303" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 480 382 H 527" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 392 412 V 443" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 248 656 H 295" fill="none" stroke="#b45309" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow-accent)"/>
+<path d="M 496 656 H 543" fill="none" stroke="#b45309" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow-accent)"/>
+<path d="M 396 704 V 759" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 224 958 H 271" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 400 958 H 471" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 140 996 V 1039" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 564 996 V 1039" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 640 272 V 303" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 640 536 V 567" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<path d="M 640 848 V 879" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#ai-copilot-pipeline-arrow)"/>
+<!-- labels -->
+<rect x="396" y="143" width="192" height="34" rx="2" fill="#f3f6fa"/>
+<text x="402" y="156" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif">cờ <tspan font-family="Consolas, 'Courier New', ui-monospace, monospace">COPILOT_SEMANTIC_PLANNER</tspan></text>
+<text x="402" y="172.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">(mặc định off)</text>
+<rect x="408" y="715" width="184" height="34" rx="2" fill="#f3f6fa"/>
+<text x="414" y="728" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif">cờ <tspan font-family="Consolas, 'Courier New', ui-monospace, monospace">COPILOT_SEMANTIC_CLAIMS</tspan></text>
+<text x="414" y="744.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">(mặc định off)</text>
+<rect x="422" y="932" width="28" height="18" rx="2" fill="#f3f6fa"/>
+<text x="436" y="945" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Có</text>
+<!-- nodes -->
+<rect x="56" y="80" width="176" height="60" rx="6" fill="#ffffff"/>
+<rect x="56" y="80" width="176" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="144.0" y="107.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Câu hỏi tiếng Việt</text>
+<text x="144.0" y="125.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">+ trạng thái hội thoại</text>
+<rect x="288" y="80" width="192" height="60" rx="6" fill="#ffffff"/>
+<rect x="288" y="80" width="192" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="384.0" y="107.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Lập kế hoạch luật</text>
+<text x="384.0" y="125.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">copilot_plan.build_plan</text>
+<rect x="280" y="180" width="208" height="76" rx="6" fill="#ffffff"/>
+<rect x="280" y="180" width="208" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="384.0" y="207.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Semantic Planner:</text>
+<text x="384.0" y="225.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">LLM chỉ đọc nghĩa,</text>
+<text x="384.0" y="241.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">backend kiểm tra, luật thắng</text>
+<rect x="56" y="352" width="200" height="60" rx="6" fill="#ffffff"/>
+<rect x="56" y="352" width="200" height="60" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="156.0" y="379.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">20 công cụ chỉ đọc</text>
+<text x="156.0" y="397.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">gọi API bằng JWT người dùng</text>
+<rect x="304" y="352" width="176" height="60" rx="6" fill="#ffffff"/>
+<rect x="304" y="352" width="176" height="60" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="392.0" y="379.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Dữ liệu có cấu trúc</text>
+<text x="392.0" y="397.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">+ bảng bằng chứng</text>
+<rect x="528" y="344" width="192" height="76" rx="6" fill="#ffffff"/>
+<rect x="528" y="344" width="192" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="624.0" y="371.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Giải thích:</text>
+<text x="624.0" y="389.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FACT · INFERENCE ·</text>
+<text x="624.0" y="405.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">ASSUMPTION · UNKNOWN</text>
+<rect x="292" y="444" width="200" height="76" rx="6" fill="#ffffff"/>
+<rect x="292" y="444" width="200" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="392.0" y="471.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Đặc tả biểu đồ</text>
+<text x="392.0" y="489.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">line · bar · area ·</text>
+<text x="392.0" y="505.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">pie · kpi · table (Pydantic)</text>
+<rect x="56" y="624" width="192" height="64" rx="6" fill="#ffffff"/>
+<rect x="56" y="624" width="192" height="64" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="152.0" y="653.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">LLM viết câu trả lời</text>
+<text x="152.0" y="671.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(OpenRouter, Qwen)</text>
+<polygon points="396,608.0 496.0,656 396,704.0 296.0,656" fill="#ffffff"/>
+<polygon points="396,608.0 496.0,656 396,704.0 296.0,656" fill="rgba(180,83,9,0.08)" stroke="#b45309" stroke-width="1.2"/>
+<text x="396" y="652.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Kiểm chứng</text>
+<text x="396" y="668.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Layer 1 tất định</text>
+<rect x="544" y="608" width="200" height="96" rx="6" fill="#ffffff"/>
+<rect x="544" y="608" width="200" height="96" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="644.0" y="637.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">PASSED / REPAIRED ·</text>
+<text x="644.0" y="655.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">WARNING (lược câu sai) ·</text>
+<text x="644.0" y="671.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">BLOCKED (sinh lại ≤ 1 lần</text>
+<text x="644.0" y="687.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">vẫn lỗi)</text>
+<rect x="300" y="760" width="192" height="76" rx="6" fill="#ffffff"/>
+<rect x="300" y="760" width="192" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="396.0" y="787.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Layer 2–3:</text>
+<text x="396.0" y="805.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">LLM trích claim,</text>
+<text x="396.0" y="821.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">backend phán quyết</text>
+<rect x="56" y="920" width="168" height="76" rx="6" fill="#ffffff"/>
+<rect x="56" y="920" width="168" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="140.0" y="947.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Văn bản + biểu đồ</text>
+<text x="140.0" y="965.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">+ bằng chứng</text>
+<text x="140.0" y="981.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">+ rủi ro và giới hạn</text>
+<polygon points="336,920.0 400.0,958 336,996.0 272.0,958" fill="#ffffff"/>
+<polygon points="336,920.0 400.0,958 336,996.0 272.0,958" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="336" y="962.0" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">safe_to_act?</text>
+<rect x="472" y="920" width="184" height="76" rx="6" fill="#ffffff"/>
+<rect x="472" y="920" width="184" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="564.0" y="947.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Hành động</text>
+<text x="564.0" y="965.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">chờ xác nhận</text>
+<text x="564.0" y="981.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(5 loại, hết hạn 10 phút)</text>
+<rect x="56" y="1040" width="232" height="64" rx="6" fill="#ffffff"/>
+<rect x="56" y="1040" width="232" height="64" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="172.0" y="1069.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Web: sanitize đặc tả,</text>
+<text x="172.0" y="1087.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">chỉ vẽ bằng component whitelist</text>
+<rect x="484" y="1040" width="160" height="64" rx="6" fill="#ffffff"/>
+<rect x="484" y="1040" width="160" height="64" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="564.0" y="1069.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Con người</text>
+<text x="564.0" y="1087.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">xác nhận hoặc hủy</text>
+<!-- legend -->
+<line x1="40" y1="1144" x2="760" y2="1144" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<line x1="40" y1="1164" x2="60" y2="1164" stroke="#475569" stroke-width="1.2"/>
+<text x="68" y="1168" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Luồng xử lý</text>
+<line x1="160" y1="1164" x2="180" y2="1164" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="188" y="1168" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Bật bằng cờ (mặc định off)</text>
+<line x1="380" y1="1164" x2="400" y2="1164" stroke="#b45309" stroke-width="1.2"/>
+<text x="408" y="1168" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Kiểm chứng (trọng tâm)</text>
+<rect x="572" y="1158" width="20" height="12" rx="2" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="600" y="1168" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Dữ liệu</text>
+</svg>
+    </div>
+    <p class="note">Vẽ lại từ <code>docs/diagrams/source/architecture/ai-copilot-pipeline.mmd</code> ở mức <em>faithful</em>: 16/16 nút, 15/15 cạnh, 4/4 zone. Bảng đối chiếu: <code>FIDELITY.md</code>.</p>
+  </div>
+</body>
+</html>
