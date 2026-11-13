@@ -91,6 +91,28 @@ async def get_user_context(auth_header: str | None) -> UserContext:
     raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
 
+SESSION_UNVERIFIED_DETAIL = ("Chưa xác minh được trạng thái phiên đăng nhập; thao tác tạm thời bị từ chối, "
+                             "vui lòng thử lại sau.")
+
+
+def require_verified_session(user_context: UserContext) -> None:
+    """One policy for every endpoint that reads or changes a private action:
+    the session must be fully verified, revocation included. get_user_context
+    already gives 401 for an invalid/revoked/locked token and 503 when auth
+    cannot answer; this adds 503 when auth answered but could not check
+    revocation (its Redis down: X-Token-Revocation-Check: unverified). The flag
+    comes only from the auth response header - nothing a client sends sets it."""
+    if not user_context.user_id:
+        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
+    if not user_context.revocation_verified:
+        raise HTTPException(status_code=503, detail=SESSION_UNVERIFIED_DETAIL)
+
+
+def is_admin(user_context: UserContext) -> bool:
+    """ADMIN by the roles auth-service read from its database - never by a JWT claim."""
+    return user_context.is_superuser or "ADMIN" in {normalize_role(r) for r in user_context.roles or []}
+
+
 def can_confirm_action(user_context: UserContext, action: PendingAction) -> bool:
     """Whether the user may confirm this action NOW: the action type's current
     policy (agent_actions.ACTION_CONFIG - role AND permission, mirroring the

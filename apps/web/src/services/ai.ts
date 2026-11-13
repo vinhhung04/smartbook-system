@@ -385,6 +385,8 @@ export interface AiActionListItem {
   created_at: string;
   expires_at: string;
   conversation_id: string | null;
+  /** Why the action failed or awaits reconciliation. */
+  error_message?: string | null;
 }
 
 export interface AiActionDetail extends AiActionListItem {
@@ -823,7 +825,11 @@ export const aiService = {
     offset?: number;
     conversationId?: string;
     mine?: boolean;
-  }): Promise<{ items: AiActionListItem[]; limit: number; offset: number }> => {
+    type?: string;
+    createdBy?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  }): Promise<{ items: AiActionListItem[]; limit: number; offset: number; total?: number }> => {
     const response = await aiAPI.get('/assistant/actions', {
       params: {
         status: params?.status,
@@ -831,7 +837,27 @@ export const aiService = {
         offset: params?.offset,
         conversation_id: params?.conversationId,
         mine: params?.mine,
+        type: params?.type,
+        created_by: params?.createdBy,
+        created_from: params?.createdFrom,
+        created_to: params?.createdTo,
       },
+    });
+    return response.data;
+  },
+
+  /** Admin: resolve an action whose outcome was unknown (RECONCILE_REQUIRED). */
+  reconcileAction: async (payload: {
+    actionId: string;
+    outcome: 'EXECUTED' | 'FAILED';
+    note: string;
+    evidenceReference?: string;
+  }): Promise<{ success: boolean; action_id: string; status: string }> => {
+    const response = await aiAPI.post('/actions/reconcile', {
+      action_id: payload.actionId,
+      outcome: payload.outcome,
+      note: payload.note,
+      evidence_reference: payload.evidenceReference || null,
     });
     return response.data;
   },

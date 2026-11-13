@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import os
 from typing import Any, Awaitable, Callable
 
@@ -174,6 +175,25 @@ def _isbn_key(value: Any) -> str:
     return "".join(ch for ch in str(value or "").strip().upper() if ch.isalnum())
 
 
+_AUTHOR_SPLIT = re.compile(r"\s*(?:[,;&/]|\bva\b|\band\b)\s*")
+
+
+def _author_names(book: dict) -> list[str]:
+    """Normalized author names of a book with at least two words - a single
+    word ("Ánh", "Cao") is too ambiguous to route a query on."""
+    raw = normalize_text(str(book.get("author") or ""))
+    return [name.strip() for name in _AUTHOR_SPLIT.split(raw) if len(name.strip().split()) >= 2]
+
+
+def _author_hits(books: list[dict], normalized_query: str) -> list[dict]:
+    """Structured author route (Phase E): the books whose author's full name
+    appears, as whole words, in the query ("Sách nào của Haruki Murakami?").
+    Semantic/keyword ranking spreads such a question over books that merely
+    mention similar themes; the author field answers it exactly."""
+    return [book for book in books
+            if any(re.search(rf"\b{re.escape(name)}\b", normalized_query) for name in _author_names(book))]
+
+
 # ISBN-10/13 (digits only, sau khi chuan hoa) luon >= 10 ky tu. Nguong nay
 # chan false-positive tu isbn rong/qua ngan bi coi la substring cua bat ky
 # query nao (vd "" luon la substring cua moi chuoi).
@@ -262,6 +282,7 @@ async def _score_and_rank_books_with_confidence(
         (book for book in valid_books if normalize_text(str(book.get("title") or "")) == normalized_query),
         None,
     )
+    author_hits = [] if (isbn_hit is not None or title_hit is not None) else _author_hits(valid_books, normalized_query)
 
     embed_result = await asyncio.to_thread(embeddings.embed_text, query)
     semantic = (
@@ -286,7 +307,8 @@ async def _score_and_rank_books_with_confidence(
         if hit.source_id in by_id
     ]
 
-    hard_match = "ISBN_EXACT" if isbn_hit is not None else ("TITLE_EXACT" if title_hit is not None else None)
+    hard_match = ("ISBN_EXACT" if isbn_hit is not None else "TITLE_EXACT" if title_hit is not None
+                  else "AUTHOR_EXACT" if author_hits else None)
     signals = retrieval_confidence.extract_signals(
         vector_store.CORPUS_BOOK, semantic, keyword, fused,
         semantic_available=embed_result is not None, hard_match=hard_match,
@@ -300,6 +322,15 @@ async def _score_and_rank_books_with_confidence(
         # 1.0 la ngoai thang diem RRF thong thuong (luon < 1/RRF_K), de ro rang day la
         # thang do identity chu khong phai xep hang.
         results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}, *results]
+    elif author_hits:
+        # The author's books first - those the hybrid ranking also found keep its
+        # order - then the rest of the ranking.
+        author_ids = {str(book["id"]) for book in author_hits}
+        ranked = [r for r in results if r["id"] in author_ids]
+        ranked_ids = {r["id"] for r in ranked}
+        unranked = [{**_compact_book_with_content(book), "score": 1.0}
+                    for book in author_hits if str(book["id"]) not in ranked_ids]
+        results = [*ranked, *unranked, *[r for r in results if r["id"] not in author_ids]]
 
     return results[:limit], confidence
 

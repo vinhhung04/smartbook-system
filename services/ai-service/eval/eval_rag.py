@@ -146,6 +146,9 @@ async def main() -> int:
         results.append({
             "id": entry["id"], "corpus": entry["corpus"], "question": entry["question"],
             "expected_ids": entry["expected_ids"], **outcome,
+            # Phase E: the route this question should take (scoring.classify_book_query)
+            "query_type": (scoring.classify_book_query(entry["question"]) if entry["corpus"] == "BOOK_METADATA"
+                           else "INTERNAL_DOC"),
         })
 
     embed_cache.save()
@@ -161,6 +164,13 @@ async def main() -> int:
         for corpus in ("BOOK_METADATA", "INTERNAL_DOC")
     }
     answerable_overall = scoring.answerable_recall(results)
+    # Phase E: an expected book that is not in the evaluated catalog cannot be
+    # retrieved by any method - report those cases apart (ground-truth drift).
+    catalog_ids = {str(book.get("id")) for book in books if isinstance(book, dict)}
+    corpus_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "corpus")
+    doc_ids = {os.path.splitext(name)[0] for name in os.listdir(corpus_dir) if name.endswith(".md")}
+    by_type = scoring.by_query_type([r for r in results if r["corpus"] == "BOOK_METADATA"], catalog_ids)
+    by_type.update(scoring.by_query_type([r for r in results if r["corpus"] == "INTERNAL_DOC"], doc_ids))
     selective_overall = scoring.selective_accuracy(results, k=1)
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -194,6 +204,22 @@ async def main() -> int:
     lines += ["", "## Theo corpus (Recall/MRR)"]
     for corpus, agg in by_corpus.items():
         lines.append(f"- **{corpus}** ({agg['count']}): R@1 {agg['recall_at_1']}, R@3 {agg['recall_at_3']}, R@5 {agg['recall_at_5']}, MRR {agg['mrr']}")
+    lines += ["", "## Phase E — theo loai truy van (Recall/Precision/MRR/abstention)", "",
+              "UNREACHABLE = case co dap an nhung expected id KHONG co trong catalog/corpus dang danh gia "
+              "(drift du lieu/ground truth, khong phai loi xep hang). Cot `reachable` chi tinh case con tim duoc.", "",
+              "| loai | case | co dap an | unreachable | R@1 (all) | R@5 (all) | MRR (all) | R@5 (reachable) | "
+              "MRR (reachable) | P@5 | no-answer acc | FPR |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for qtype, m in by_type.items():
+        allm, reach, na = m["all_answerable"] or {}, m["reachable_only"] or {}, m["no_answer"] or {}
+        lines.append(f"| {qtype} | {m['cases']} | {m['answerable']} | {m['unreachable']} | {allm.get('recall_at_1', '-')} | "
+                     f"{allm.get('recall_at_5', '-')} | {allm.get('mrr', '-')} | {reach.get('recall_at_5', '-')} | "
+                     f"{reach.get('mrr', '-')} | {m['precision_at_5'] if m['precision_at_5'] is not None else '-'} | "
+                     f"{na.get('no_answer_accuracy', '-')} | {na.get('false_positive_rate', '-')} |")
+    unreachable = [r for r in results if r["corpus"] == "BOOK_METADATA" and r["expected_ids"]
+                   and not set(r["expected_ids"]) & catalog_ids]
+    lines += ["", f"Case BOOK_METADATA unreachable: {len(unreachable)} — "
+              + ", ".join(f"`{r['id']}`" for r in unreachable)]
     lines += ["", "## Case truot (khong co expected nao trong top-5)", ""]
     for r in results:
         if r["expected_ids"] and scoring.recall_at_k(r["retrieved_ids"], r["expected_ids"], 5) == 0.0:
@@ -207,6 +233,15 @@ async def main() -> int:
         handle.write("\n".join(lines) + "\n")
     print("\n".join(lines))
     print(f"\nReport: {report_path}")
+
+    metrics_path = os.path.join(REPORTS_DIR, f"rag_metrics_{timestamp}{suffix}.json")
+    with open(metrics_path, "w", encoding="utf-8") as handle:
+        json.dump({"timestamp_utc": timestamp, "dataset": os.path.basename(DATASET_PATH), "cases": len(results),
+                   "catalog_books": len(books), "embedding": embeddings.EMBED_IDENTITY, "abstention": args.abstention,
+                   "split": args.split, "overall": overall, "by_corpus": by_corpus,
+                   "abstention_by_corpus": abstention_by_corpus, "by_query_type": by_type,
+                   "unreachable_book_cases": [r["id"] for r in unreachable]}, handle, ensure_ascii=False, indent=1)
+    print(f"Metrics: {metrics_path}")
 
     if args.dump_signals:
         signals_path = os.path.join(REPORTS_DIR, f"rag_signals_{timestamp}{suffix}.json")

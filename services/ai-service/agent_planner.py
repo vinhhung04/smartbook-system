@@ -617,6 +617,55 @@ def _build_report_draft(
     }
 
 
+async def _lookup_reservable_books(title: str, auth_header: str | None) -> list[dict]:
+    """Catalog rows for a reservation draft when retrieval brought none (a
+    RESERVATION_QUERY retrieves analytics, not the catalog): GET /api/books with
+    the user's own token, kept to reservable rows whose title contains the
+    asked title. Exact title first. [] on any failure - the draft then stays a
+    draft that cannot be sent, as before.
+
+    Each row gets `pickup_warehouse_id`: like the reader portal's reserve dialog
+    (reserve-modal.tsx), the public pickup branch (/public/catalog/branches)
+    holding the most available copies; None when no branch has one - inventory
+    refuses a reader's reservation at any other warehouse."""
+    wanted = normalize_text(title)
+    if not wanted or not auth_header:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
+            resp = await client.get(f"{_GATEWAY_URL}/api/books", params={"search": title},
+                                    headers={"Authorization": auth_header})
+        if resp.status_code >= 400:
+            return []
+        payload = resp.json()
+    except Exception as exc:  # noqa: BLE001 - lookup is best effort; the draft says what is missing
+        logger.warning("reservation draft: catalog lookup failed: %s", type(exc).__name__)
+        return []
+    rows = payload.get("data") if isinstance(payload, dict) else payload
+    rows = [r for r in rows or [] if isinstance(r, dict) and r.get("variant_id") and r.get("reservable", True) is not False
+            and wanted in normalize_text(str(r.get("title") or ""))]
+    branch_ids = await _pickup_branch_ids()
+    for row in rows:
+        stocked = [loc for loc in row.get("locations") or []
+                   if isinstance(loc, dict) and not loc.get("is_receiving")
+                   and (loc.get("available_quantity") or 0) > 0 and loc.get("warehouse_id") in branch_ids]
+        best = max(stocked, key=lambda loc: loc.get("available_quantity") or 0, default=None)
+        row["pickup_warehouse_id"] = best["warehouse_id"] if best else None
+    return sorted(rows, key=lambda r: normalize_text(str(r.get("title") or "")) != wanted)
+
+
+async def _pickup_branch_ids() -> set[str]:
+    """Public pickup branches (no auth; the reader portal reads the same list)."""
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
+            resp = await client.get(f"{_GATEWAY_URL}/public/catalog/branches")
+        data = resp.json().get("data") if resp.status_code < 400 else []
+        return {str(b.get("id")) for b in data or [] if isinstance(b, dict) and b.get("id")}
+    except Exception as exc:  # noqa: BLE001 - no branch list -> no pickup warehouse chosen
+        logger.warning("reservation draft: branch list failed: %s", type(exc).__name__)
+        return set()
+
+
 def _build_reservation_draft(
     message: str,
     intent_info: dict,
@@ -645,6 +694,9 @@ def _build_reservation_draft(
             balances = variants[0].get("stock_balances") or [] if isinstance(variants[0], dict) else []
             if isinstance(balances, list) and balances and isinstance(balances[0], dict):
                 warehouse_id = balances[0].get("warehouse_id")
+        # /api/books rows (via _lookup_reservable_books): the reader pickup branch with stock
+        if "pickup_warehouse_id" in first:
+            warehouse_id = warehouse_id or first.get("pickup_warehouse_id")
 
     requires_review = not (variant_id and warehouse_id)
     warnings = []
@@ -941,6 +993,12 @@ async def plan_agent_action(
 
     # Reservation draft
     if _contains_any(normalized, _RESERVATION_KEYWORDS) or intent == RESERVATION_QUERY:
+        title = str(((intent_info.get("entities") or {}).get("book_title")) or "").strip()
+        if not raw.get("Catalog Books") and title:
+            books = await _lookup_reservable_books(title, auth_header)
+            if books:
+                raw = {**raw, "Catalog Books": books}
+                intent_info = {**intent_info, "query": title}
         result = _build_reservation_draft(message, intent_info, raw, sources, user_context)
         if result:
             return result

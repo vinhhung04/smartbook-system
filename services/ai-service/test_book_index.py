@@ -232,3 +232,29 @@ class SearchBooksRetrievalStatusTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuthorRouteTest(unittest.TestCase):
+    """Phase E: a question naming an author's full name gets that author's books first."""
+
+    def setUp(self):
+        import vector_store
+        self.store = vector_store.InMemoryVectorStore()
+        vector_store.set_store(self.store)
+
+    def test_author_books_come_first_and_count_as_a_hard_match(self):
+        books = [*BOOKS, {**BOOKS[2], "id": "b4", "title": "Rung Na Uy", "author": "Haruki Murakami"},
+                 {**BOOKS[2], "id": "b5", "title": "Kafka ben bo bien", "author": "Haruki Murakami, Philip Gabriel"}]
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            results, confidence = run(assistant_tools._score_and_rank_books_with_confidence(
+                books, "Sách nào của Haruki Murakami?", 5))
+        self.assertEqual({r["id"] for r in results[:2]}, {"b4", "b5"})
+        self.assertEqual(confidence.reason_codes, ["AUTHOR_EXACT"])
+
+    def test_single_word_or_absent_author_does_not_route(self):
+        books = [{**BOOKS[0], "author": "Cao"}]
+        with mock.patch.object(embeddings, "embed_text", return_value=None):
+            _, confidence = run(assistant_tools._score_and_rank_books_with_confidence(books, "Sách nào của Nam Cao?", 5))
+            _, other = run(assistant_tools._score_and_rank_books_with_confidence(BOOKS, "Sách nào của Xuân Diệu?", 5))
+        self.assertNotIn("AUTHOR_EXACT", confidence.reason_codes)
+        self.assertNotIn("AUTHOR_EXACT", other.reason_codes)

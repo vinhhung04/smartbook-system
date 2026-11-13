@@ -149,6 +149,20 @@ class ReservationActionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(resp.result["mode"], "draft_only")
         self.assertEqual(self.sent, [])
 
+    async def test_executor_forwards_the_request_id(self):
+        """Phase E.10: the action's call into borrow-service carries the request
+        id of the confirm request (gateway -> ai-service -> borrow-service)."""
+        from ai_core.observability import REQUEST_ID
+        action = await self._draft(CUSTOMER)
+        token = REQUEST_ID.set("req-phase-e-1")
+        try:
+            await self._confirm(action.id, "Bearer cust")
+        finally:
+            REQUEST_ID.reset(token)
+        (sent,) = self.sent
+        self.assertEqual(sent.headers["x-request-id"], "req-phase-e-1")
+
 
 if __name__ == "__main__":
     unittest.main()
+

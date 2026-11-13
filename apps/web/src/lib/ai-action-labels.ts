@@ -35,4 +35,7 @@ export const AI_AUDIT_EVENT_LABEL: Record<string, string> = {
   CANCELLED: 'Đã từ chối',
   EXPIRED: 'Hết hạn',
   FAILED: 'Thực thi thất bại',
+  RECONCILE_REQUIRED: 'Chưa xác định kết quả, chờ đối chiếu',
+  STALE_EXECUTION: 'Lần thực thi không kết thúc',
+  RECONCILED: 'Admin đã đối chiếu',
 };

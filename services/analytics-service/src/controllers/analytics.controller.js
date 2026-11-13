@@ -1002,7 +1002,8 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     const plans = candidates.map((item) => {
       const row = rowById.get(item.variant_id);
       const incomingQty = incomingByVariant.get(item.variant_id) || 0;
-      const returns = expectedReturns(loanView.openAgesByVariant.get(item.variant_id) || [], item.lead_time_days, loanView.survival);
+      const openLoanAges = loanView.openAgesByVariant.get(item.variant_id) || [];
+      const returns = expectedReturns(openLoanAges, item.lead_time_days, loanView.survival);
       const plan = suggest({ ...row, available_qty: number(row.available_qty) + incomingQty }, {
         // Lending moves stock reserved -> borrowed, so only borrowed_qty copies are outside
         // available_qty; open loans beyond it (borrow_db out of step with inventory_db)
@@ -1010,7 +1011,17 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         expectedReturns: Math.min(returns ?? 0, number(row.borrowed_qty)),
         priorityFloors: 'IF_SHORTFALL',
       });
+      // borrow_db (loans) and inventory_db (stock) are each authoritative for their own
+      // records; when borrow has more open loans than inventory has copies on loan,
+      // the shelf position is unknown - neither side is overwritten or guessed.
+      const openLoans = openLoanAges.length;
+      const borrowedQty = number(row.borrowed_qty);
       return {
+        ...(openLoans > borrowedQty ? {
+          data_issue: 'BORROW_INVENTORY_MISMATCH',
+          open_loans_borrow: openLoans,
+          borrowed_qty_inventory: borrowedQty,
+        } : {}),
         incoming_qty: incomingQty,
         expected_returns: plan.expected_returns,
         inventory_position: plan.inventory_position,
@@ -1020,8 +1031,10 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     });
     // unit_cost is NOT NULL DEFAULT 0 in inventory_db, so 0 means "no price entered",
     // not "free": such a line gets no copies (allocateMarginal would fund it at 0 đ).
+    // Nor does a line whose stock position is unreliable (data_issue): no purchase
+    // recommendation is made on data the two services disagree on.
     const lines = plans.map((plan, i) => ({
-      cap: candidates[i].unit_cost > 0 ? plan.cap_qty : 0,
+      cap: candidates[i].unit_cost > 0 && !plan.data_issue ? plan.cap_qty : 0,
       unitCost: candidates[i].unit_cost, lambda: plan.lambda, position: plan.inventory_position,
     }));
     let allocation;
@@ -1052,6 +1065,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     });
     const funded = resultItems.filter((item) => item.funded_qty > 0);
     const unpriced = resultItems.filter((item) => item.budget_plan.cap_qty > 0 && !(item.unit_cost > 0));
+    const unreliable = resultItems.filter((item) => item.budget_plan.data_issue);
     budget = {
       budget_vnd: budgetVnd,
       funded_cost: allocation.spent,
@@ -1064,6 +1078,16 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
       // lines the plan needs but cannot fund until a unit cost is entered
       unpriced_lines: unpriced.length,
       unpriced_qty: unpriced.reduce((sum, item) => sum + item.budget_plan.cap_qty, 0),
+      // lines left unfunded because borrow_db and inventory_db disagree on their loans
+      unreliable_lines: unreliable.length,
+      unreliable_qty: unreliable.reduce((sum, item) => sum + item.budget_plan.cap_qty, 0),
+      data_consistency: {
+        status: unreliable.length ? 'MISMATCH' : 'CONSISTENT',
+        check: 'open loans in borrow_db <= borrowed_qty in inventory_db, per variant',
+        mismatched_lines: unreliable.length,
+        excess_open_loans: unreliable.reduce(
+          (sum, item) => sum + item.budget_plan.open_loans_borrow - item.budget_plan.borrowed_qty_inventory, 0),
+      },
       // funded lines ranked below `limit`: returned after the top-`limit` items so every funded line can be ordered
       funded_lines_outside_limit: resultItems.slice(limit).filter((item) => item.funded_qty > 0).length,
       funding_order: priorityWarehouseId ? 'PRIORITY_WAREHOUSE_THEN_MARGINAL' : 'MARGINAL_SERVICE_PER_COST',
@@ -1093,6 +1117,9 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         'Mỗi bản được duyệt cho dòng có mức tăng xác suất đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng cao nhất (nhu cầu giả định phân phối Poisson); một dòng có thể chỉ được duyệt một phần.',
         ...(unpriced.length
           ? [`${unpriced.length} dòng cần nhập nhưng danh mục chưa có đơn giá: không được cấp ngân sách và không tính vào chi phí kế hoạch cho đến khi bổ sung giá.`]
+          : []),
+        ...(unreliable.length
+          ? [`${unreliable.length} dòng có số phiếu mượn đang mở (dịch vụ mượn) nhiều hơn số bản kho ghi nhận đang cho mượn: dữ liệu hai hệ thống chưa đồng bộ nên không được cấp ngân sách cho đến khi đối soát.`]
           : []),
       ],
     };

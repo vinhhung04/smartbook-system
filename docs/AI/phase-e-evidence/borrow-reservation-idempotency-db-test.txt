@@ -1,0 +1,13 @@
+    ok 1 - retry after a lost response replays the reservation that was created
+    ok 2 - retry when the first attempt never reached the database creates it once
+    ok 3 - retry of the reservation that reached the membership limit still replays (not 409)
+    ok 4 - retry after the membership changed replays instead of re-validating
+    ok 5 - two concurrent requests with one key create one reservation and keep its stock hold
+    ok 6 - one key reused with a different payload is a conflict
+    ok 7 - the same key from two users never replays the other user's reservation
+    ok 8 - a reservation created before key scoping (legacy id) still replays for its creator only
+    ok 9 - replay after the connection pool is dropped (restart stand-in; the live E2E restarts the container)
+    ok 10 - missing Idempotency-Key is still rejected
+# tests 10
+# pass 10
+# fail 0

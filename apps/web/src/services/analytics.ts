@@ -186,6 +186,10 @@ export type ReorderSuggestionsData = {
     /** Lines the plan needs but cannot fund: the catalog has no unit cost for them. */
     unpriced_lines?: number;
     unpriced_qty?: number;
+    /** Lines unfunded because borrow and inventory disagree on loans (see data_consistency). */
+    unreliable_lines?: number;
+    unreliable_qty?: number;
+    data_consistency?: { status: 'CONSISTENT' | 'MISMATCH'; check: string; mismatched_lines: number; excess_open_loans: number };
     /** Funded lines ranked below `limit`, returned after the top-`limit` items. */
     funded_lines_outside_limit?: number;
     /** Share of the modelled lead-time demand the funded copies serve, 0-100. */

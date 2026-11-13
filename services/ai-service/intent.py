@@ -110,11 +110,16 @@ def is_policy_question(message: str) -> bool:
 _SELF_REFERENCE = re.compile(r"\btoi\b|\bcua minh\b|\bminh (?:dang|co|da|con)\b")
 
 
+def refers_to_self(message: str) -> bool:
+    """The question is about the asker ('tôi', 'của mình', 'mình đang...')."""
+    return bool(_SELF_REFERENCE.search(normalize_text(message)))
+
+
 def asks_about_own_data(message: str) -> bool:
     """'Tôi đang mượn những sách nào?' - answered from the user's own records,
     not from the documents. A rule question about oneself ('Tôi được mượn tối
     đa bao nhiêu cuốn?') is still a policy question."""
-    return bool(_SELF_REFERENCE.search(normalize_text(message))) and not is_policy_question(message)
+    return refers_to_self(message) and not is_policy_question(message)
 
 
 def _iso_date(value: datetime) -> str:

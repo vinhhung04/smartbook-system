@@ -13,9 +13,12 @@ from agent_actions import (
     CREATE_RESERVATION_DRAFT,
     CREATE_STOCK_ALERT,
     CREATE_STAFF_TASK_DRAFT,
+    get_action_config,
     is_dangerous_action,
+    policy_allows,
 )
 from agent_schemas import PendingAction, UserContext
+from ai_core.observability import current_request_id
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -51,6 +54,13 @@ def _item_failure(title: str, resp: httpx.Response | None = None, exc: Exception
 
 def _needs_reconciliation(failed_items: list[dict]) -> bool:
     return any(item.get("outcome") == "unknown" for item in failed_items)
+
+
+def _trace_headers() -> dict:
+    """The gateway's x-request-id, so an action's call into borrow/inventory
+    service carries the same id as the confirm request that started it."""
+    request_id = current_request_id()
+    return {"x-request-id": request_id} if request_id and request_id != "-" else {}
 
 
 def _short_id() -> str:
@@ -156,7 +166,7 @@ async def _exec_reorder(pending_action: PendingAction, auth_header: str) -> dict
     global_supplier_id = payload.get("supplier_id")
     global_supplier_name = payload.get("supplier_name")
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT), headers=_trace_headers()) as client:
         for item in valid_items:
             variant_id = item.get("book_variant_id") or item.get("variant_id")
             effective_warehouse_id = item["_effective_warehouse_id"]
@@ -277,6 +287,39 @@ async def _exec_report(payload: dict) -> dict:
 
 # ── Reservation Draft Executor ─────────────────────────────────────────────────
 
+RESERVATION_SELF, RESERVATION_STAFF, RESERVATION_DRAFT_ONLY = "self", "staff", "draft_only"
+
+
+def reservation_route(user_context: UserContext, payload: dict) -> str:
+    """The route follows what the account is, not which roles happen to be on it:
+    - an account with any staff role (or superuser) does staff work: a payload
+      naming a customer goes to /borrow/reservations and needs the staff
+      alternative of the policy (LIBRARIAN/ADMIN role AND a borrow-write
+      permission, or superuser); without a customer it stays a draft until one
+      is chosen. A secondary CUSTOMER role never turns that into a
+      self-reservation;
+    - an account that is only a reader reserves for itself (/my/reservations);
+      a customer_id in its payload is ignored - identity comes from the token;
+    - anyone else is refused (403).
+    The target service still checks its own permissions independently; this
+    only picks the door."""
+    policy = (get_action_config(CREATE_RESERVATION_DRAFT) or {}).get("policy") or []
+    self_alt = [alt for alt in policy if "CUSTOMER" in alt["roles"]]
+    staff_alt = [alt for alt in policy if "CUSTOMER" not in alt["roles"]]
+    roles = _user_roles_set(user_context)
+    perms = user_context.permissions or []
+
+    if roles & _STAFF_ROLES or user_context.is_superuser:
+        if not payload.get("customer_id"):
+            return RESERVATION_DRAFT_ONLY
+        if policy_allows(staff_alt, roles, perms, user_context.is_superuser):
+            return RESERVATION_STAFF
+        raise HTTPException(status_code=403, detail="Không có quyền đặt trước cho khách hàng.")
+    if policy_allows(self_alt, roles, perms):
+        return RESERVATION_SELF
+    raise HTTPException(status_code=403, detail="Không có quyền tạo đặt trước.")
+
+
 async def _exec_reservation(
     pending_action: PendingAction,
     auth_header: str,
@@ -295,12 +338,10 @@ async def _exec_reservation(
             "payload": payload,
         }
 
-    user_roles = _user_roles_set(user_context)
     idempotency_key = f"ai-reservation-{pending_action.id}"
+    route = reservation_route(user_context, payload)
 
-    is_customer = "CUSTOMER" in user_roles and not (user_roles & _STAFF_ROLES)
-
-    if is_customer or "CUSTOMER" in user_roles:
+    if route == RESERVATION_SELF:
         # Customer self-service route
         body = {
             "variant_id": variant_id,
@@ -311,7 +352,7 @@ async def _exec_reservation(
             "notes": payload.get("notes"),
         }
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT), headers=_trace_headers()) as client:
                 resp = await client.post(
                     f"{GATEWAY_URL}/my/reservations",
                     json=body,
@@ -336,7 +377,7 @@ async def _exec_reservation(
 
     # Staff/manager/admin route — requires customer_id
     customer_id = payload.get("customer_id")
-    if not customer_id:
+    if route == RESERVATION_DRAFT_ONLY or not customer_id:
         return {
             "success": True,
             "mode": "draft_only",
@@ -355,7 +396,7 @@ async def _exec_reservation(
         "notes": payload.get("notes"),
     }
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT), headers=_trace_headers()) as client:
             resp = await client.post(
                 f"{GATEWAY_URL}/borrow/reservations",
                 json=body,
@@ -422,7 +463,7 @@ async def _exec_stock_alert(payload: dict, auth_header: str) -> dict:
     failed_items: list[dict] = []
     duplicate_items: list[str] = []
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT), headers=_trace_headers()) as client:
         for item in valid_items:
             variant_id = item.get("book_variant_id") or item.get("variant_id")
             effective_warehouse_id = item["_effective_warehouse_id"]
@@ -538,7 +579,7 @@ async def _exec_staff_task(payload: dict, auth_header: str) -> dict:
         body["due_date"] = payload["due_date"]
 
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(EXECUTOR_TIMEOUT), headers=_trace_headers()) as client:
             resp = await client.post(
                 f"{GATEWAY_URL}/api/staff-tasks",
                 json=body,

@@ -84,7 +84,7 @@ const ALLOWED_EVENTS = new Set([
   "warehouse_task:assigned", "warehouse_task:status_changed",
   "exception_report:created", "exception_report:resolved",
   "ai_action:created", "ai_action:confirmed", "ai_action:executed",
-  "ai_action:failed", "ai_action:cancelled",
+  "ai_action:failed", "ai_action:cancelled", "ai_action:reconciled",
 ]);
 
 // Matches: user:{uuid}, customer:{uuid}, supplier:{uuid}, warehouse:{uuid},

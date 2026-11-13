@@ -127,6 +127,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'topbar.event.reservation_status_changed': 'Cập nhật đặt trước',
     'topbar.event.fine_created': 'Cập nhật phạt',
     'topbar.event.notification_new': 'Thông báo',
+    'topbar.event.ai_action_reconciled': 'Đề xuất AI đã được đối chiếu',
     // Breadcrumb labels
     'breadcrumb.dashboard': 'Tổng quan',
     'breadcrumb.catalog': 'Danh mục sách',
@@ -332,6 +333,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'topbar.event.reservation_status_changed': 'Reservation update',
     'topbar.event.fine_created': 'Fine update',
     'topbar.event.notification_new': 'Notification',
+    'topbar.event.ai_action_reconciled': 'AI action reconciled',
     'breadcrumb.dashboard': 'Dashboard',
     'breadcrumb.catalog': 'Catalog',
     'breadcrumb.inventory': 'Inventory',

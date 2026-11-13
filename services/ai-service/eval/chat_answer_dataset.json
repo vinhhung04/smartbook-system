@@ -1,73 +1,554 @@
-[
-  {"id": "ans-full-01", "category": "full_evidence", "user": "customer01", "question": "Hạng Bạc Sĩ được mượn tối đa bao nhiêu cuốn và bao nhiêu ngày?",
-   "expect": "answer", "must_include": ["5", "21"], "must_not_include": [], "expected_docs": ["membership-plans-overview", "membership-loan-limit"]},
-  {"id": "ans-full-02", "category": "full_evidence", "user": "customer01", "question": "Mã OTP gửi qua email có hiệu lực trong bao lâu?",
-   "expect": "answer", "must_include": ["5 phut"], "must_not_include": [], "expected_docs": ["account-security"]},
-  {"id": "ans-full-03", "category": "full_evidence", "user": "customer01", "question": "Nạp tiền vào ví được những mệnh giá nào?",
-   "expect": "answer", "must_include": ["10000", "200000"], "must_not_include": [], "expected_docs": ["wallet-vnpay"]},
-  {"id": "ans-full-04", "category": "full_evidence", "user": "librarian01", "question": "Quy trình kiểm kê kho diễn ra thế nào?",
-   "expect": "answer", "must_include": ["kiem ke"], "must_not_include": [], "expected_docs": ["warehouse-operations"]},
-
-  {"id": "ans-part-01", "category": "partial_evidence", "user": "customer01", "question": "Chủ nhật thư viện mở cửa đến mấy giờ và có wifi miễn phí không?",
-   "expect": "partial", "must_include": ["17:00"], "must_acknowledge_gap": true, "must_not_include": ["co wifi mien phi", "khong co wifi"], "expected_docs": ["branches-opening-hours"]},
-  {"id": "ans-part-02", "category": "partial_evidence", "user": "customer01", "question": "Đặt trước sách giữ chỗ bao lâu và có được đặt qua điện thoại không?",
-   "expect": "partial", "must_include": ["gio"], "must_acknowledge_gap": true, "must_not_include": [], "expected_docs": ["reservation-hold", "borrowing-process"]},
-  {"id": "ans-part-03", "category": "partial_evidence", "user": "librarian01", "question": "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?",
-   "expect": "partial", "must_include": ["librarian"], "must_acknowledge_gap": true, "must_not_include": [], "expected_docs": ["roles-permissions"]},
-  {"id": "ans-part-04", "category": "partial_evidence", "user": "customer01", "question": "Làm mất sách thì đền bao nhiêu và có được trả góp không?",
-   "expect": "partial", "must_include": ["100000"], "must_acknowledge_gap": true, "must_not_include": ["duoc tra gop", "khong duoc tra gop"], "expected_docs": ["lost-item-fee"]},
-
-  {"id": "ans-none-01", "category": "no_evidence", "user": "customer01", "question": "Thư viện có chỗ đậu xe ô tô miễn phí không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["khong ho tro", "co cho dau xe", "mien phi gui xe"], "expected_docs": []},
-  {"id": "ans-none-02", "category": "no_evidence", "user": "librarian01", "question": "Thư viện có tổ chức sự kiện gặp gỡ tác giả không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["khong ho tro", "thuong xuyen to chuc"], "expected_docs": []},
-  {"id": "ans-none-03", "category": "no_evidence", "user": "customer01", "question": "Có được mang đồ ăn vào phòng đọc không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["duoc phep mang", "cam mang", "khong duoc mang"], "expected_docs": []},
-  {"id": "ans-none-04", "category": "no_evidence", "user": "librarian01", "question": "Thư viện có cho thuê máy tính xách tay không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["khong ho tro", "co cho thue"], "expected_docs": []},
-
-  {"id": "ans-false-01", "category": "false_premise", "user": "customer01", "question": "Phí phạt trễ hạn của Thẻ Đọc là 10.000đ một ngày đúng không?",
-   "expect": "correct_premise", "must_include": ["5000"], "must_not_include": ["dung vay, phi phat la 10000"], "expected_docs": ["fine-calculation", "membership-plans-overview"]},
-  {"id": "ans-false-02", "category": "false_premise", "user": "customer01", "question": "Mã OTP có hiệu lực 30 phút phải không?",
-   "expect": "correct_premise", "must_include": ["5 phut"], "must_not_include": [], "expected_docs": ["account-security"]},
-  {"id": "ans-false-03", "category": "false_premise", "user": "customer01", "question": "Hạng Thượng Đế chỉ được mượn 5 cuốn phải không?",
-   "expect": "correct_premise", "must_include": ["15"], "must_not_include": [], "expected_docs": ["membership-plans-overview", "membership-loan-limit"]},
-  {"id": "ans-false-04", "category": "false_premise", "user": "customer01", "question": "Giao dịch VNPay có hiệu lực trong 1 tiếng đúng không?",
-   "expect": "correct_premise", "must_include": ["15 phut"], "must_not_include": [], "expected_docs": ["wallet-vnpay", "fines-payment"]},
-
-  {"id": "ans-contra-01", "category": "contradicts_kb", "user": "customer01", "question": "Tôi nghe nói làm mất sách chỉ cần đền đúng giá bìa của cuốn sách, có đúng không?",
-   "expect": "correct_premise", "must_include": ["100000"], "must_not_include": ["dung, chi can den gia bia"], "expected_docs": ["lost-item-fee"]},
-  {"id": "ans-contra-02", "category": "contradicts_kb", "user": "customer01", "question": "Bạn tôi bảo nạp ví bao nhiêu tiền cũng được, ví dụ 35.000đ, đúng không?",
-   "expect": "correct_premise", "must_include": ["10000"], "must_not_include": [], "expected_docs": ["wallet-vnpay"]},
-  {"id": "ans-contra-03", "category": "contradicts_kb", "user": "customer01", "question": "Còn nợ phạt vẫn đặt trước sách bình thường được mà phải không?",
-   "expect": "correct_premise", "must_include": ["khong"], "must_not_include": [], "expected_docs": ["fines-payment", "membership-plans-overview"]},
-  {"id": "ans-contra-04", "category": "contradicts_kb", "user": "customer01", "question": "Trả sách hư hỏng thì không bị phạt gì đúng không?",
-   "expect": "correct_premise", "must_include": ["50000"], "must_not_include": [], "expected_docs": ["lost-item-fee", "fines-payment"]},
-
-  {"id": "ans-dyn-01", "category": "dynamic_data", "user": "customer01", "question": "Tôi đang mượn những sách nào?",
-   "expect": "dynamic", "must_include": [], "must_not_include": [], "expected_docs": []},
-  {"id": "ans-dyn-02", "category": "dynamic_data", "user": "customer01", "question": "Tôi còn khoản phạt nào chưa thanh toán không?",
-   "expect": "dynamic", "must_include": [], "must_not_include": [], "expected_docs": []},
-  {"id": "ans-dyn-03", "category": "dynamic_data", "user": "librarian01", "question": "Hiện có bao nhiêu phiếu mượn quá hạn?",
-   "expect": "dynamic", "must_include": [], "must_not_include": [], "expected_docs": []},
-  {"id": "ans-dyn-04", "category": "dynamic_data", "user": "staff01", "question": "Hôm nay tôi có nhiệm vụ kho nào?",
-   "expect": "dynamic", "must_include": [], "must_not_include": [], "expected_docs": []},
-
-  {"id": "ans-multi-01", "category": "multi_source", "user": "customer01", "question": "Nếu tôi hạng Vàng Hoàng và trả sách trễ 3 ngày thì bị phạt bao nhiêu tiền?",
-   "expect": "answer", "must_include": ["6000"], "must_not_include": [], "expected_docs": ["fine-calculation", "membership-plans-overview"]},
-  {"id": "ans-multi-02", "category": "multi_source", "user": "customer01", "question": "Hạng Bạc Sĩ mượn 21 ngày thì mỗi lần gia hạn được thêm bao nhiêu ngày và gia hạn tối đa mấy lần?",
-   "expect": "answer", "must_include": ["10", "2"], "must_not_include": [], "expected_docs": ["renewal-count"]},
-  {"id": "ans-multi-03", "category": "multi_source", "user": "customer01", "question": "Thẻ Đọc làm mất một cuốn sách thì phải đền bao nhiêu tiền?",
-   "expect": "answer", "must_include": ["150000"], "must_not_include": [], "expected_docs": ["lost-item-fee"]},
-  {"id": "ans-multi-04", "category": "multi_source", "user": "customer01", "question": "Tôi đặt trước sách ở hạng Thẻ Đọc, sách sẵn sàng lúc 9 giờ sáng thứ Hai thì phải đến lấy trước khi nào?",
-   "expect": "answer", "must_include": ["24"], "must_not_include": [], "expected_docs": ["reservation-hold", "borrowing-process"]},
-
-  {"id": "ans-near-01", "category": "near_miss", "user": "librarian01", "question": "Thư viện có cho mượn sách nói (audiobook) không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["khong ho tro", "co cho muon sach noi"], "expected_docs": []},
-  {"id": "ans-near-02", "category": "near_miss", "user": "librarian01", "question": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["co the gia han qua sms"], "expected_docs": []},
-  {"id": "ans-near-03", "category": "near_miss", "user": "librarian01", "question": "Có thể quyên góp sách cũ cho thư viện không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["chi tiep nhan", "co the quyen gop", "khong nhan quyen gop"], "expected_docs": []},
-  {"id": "ans-near-04", "category": "near_miss", "user": "librarian01", "question": "Có được mang thú cưng vào thư viện không?",
-   "expect": "abstain", "must_include": [], "must_not_include": ["co quyen yeu cau", "duoc mang thu cung", "cam mang thu cung"], "expected_docs": []}
-]
+{
+ "version": "v2-2026-11-13",
+ "previous_version": "chat_answer_dataset_v1.json (32 cases, unchanged copy)",
+ "verified_by": "Phase E: each changed case re-read against services/ai-service/corpus/*.md (documents) or the live service endpoint named in `truth` (dynamic data); reasons in chat_answer_dataset_CHANGELOG.md",
+ "cases": [
+  {
+   "id": "ans-full-01",
+   "category": "full_evidence",
+   "user": "customer01",
+   "question": "Hạng Bạc Sĩ được mượn tối đa bao nhiêu cuốn và bao nhiêu ngày?",
+   "expect": "answer",
+   "must_include": [
+    "5",
+    "21"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "membership-plans-overview",
+    "membership-loan-limit"
+   ]
+  },
+  {
+   "id": "ans-full-02",
+   "category": "full_evidence",
+   "user": "customer01",
+   "question": "Mã OTP gửi qua email có hiệu lực trong bao lâu?",
+   "expect": "answer",
+   "must_include": [
+    "5 phut"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "account-security"
+   ]
+  },
+  {
+   "id": "ans-full-03",
+   "category": "full_evidence",
+   "user": "customer01",
+   "question": "Nạp tiền vào ví được những mệnh giá nào?",
+   "expect": "answer",
+   "must_include": [
+    "10000",
+    "200000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "wallet-vnpay"
+   ]
+  },
+  {
+   "id": "ans-full-04",
+   "category": "full_evidence",
+   "user": "librarian01",
+   "question": "Quy trình kiểm kê kho diễn ra thế nào?",
+   "expect": "answer",
+   "must_include": [
+    "kiem ke"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "warehouse-operations"
+   ]
+  },
+  {
+   "id": "ans-part-01",
+   "category": "partial_evidence",
+   "user": "customer01",
+   "question": "Chủ nhật thư viện mở cửa đến mấy giờ và có wifi miễn phí không?",
+   "expect": "partial",
+   "must_include": [
+    "17:00"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [
+    "co wifi mien phi",
+    "khong co wifi"
+   ],
+   "expected_docs": [
+    "branches-opening-hours"
+   ]
+  },
+  {
+   "id": "ans-part-02",
+   "category": "partial_evidence",
+   "user": "customer01",
+   "question": "Đặt trước sách giữ chỗ bao lâu và có được đặt qua điện thoại không?",
+   "expect": "partial",
+   "must_include": [
+    "gio"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [],
+   "expected_docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ]
+  },
+  {
+   "id": "ans-part-03",
+   "category": "partial_evidence",
+   "user": "librarian01",
+   "question": "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?",
+   "expect": "partial",
+   "must_include": [],
+   "must_acknowledge_gap": true,
+   "must_not_include": [
+    "kiem ke"
+   ],
+   "expected_docs": [
+    "roles-permissions"
+   ],
+   "must_include_any": [
+    [
+     "librarian",
+     "thu thu"
+    ],
+    [
+     "dat truoc",
+     "dat sach",
+     "reservation",
+     "cho muon",
+     "muon/tra",
+     "muon tra",
+     "nhan tra",
+     "gia han",
+     "thanh toan phat",
+     "ghi nhan thanh toan",
+     "nghiep vu quay"
+    ]
+   ]
+  },
+  {
+   "id": "ans-part-04",
+   "category": "partial_evidence",
+   "user": "customer01",
+   "question": "Làm mất sách thì đền bao nhiêu và có được trả góp không?",
+   "expect": "partial",
+   "must_include": [
+    "100000"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [
+    "duoc tra gop",
+    "duoc phep tra gop",
+    "co the tra gop",
+    "ho tro tra gop",
+    "khong duoc tra gop",
+    "khong the tra gop",
+    "khong ho tro tra gop",
+    "khong the thanh toan mot phan",
+    "khong duoc thanh toan nhieu lan"
+   ],
+   "expected_docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "must_include_any": [
+    [
+     "nhieu lan",
+     "mot phan"
+    ]
+   ]
+  },
+  {
+   "id": "ans-none-01",
+   "category": "no_evidence",
+   "user": "customer01",
+   "question": "Thư viện có chỗ đậu xe ô tô miễn phí không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "co cho dau xe",
+    "mien phi gui xe"
+   ],
+   "expected_docs": []
+  },
+  {
+   "id": "ans-none-02",
+   "category": "no_evidence",
+   "user": "librarian01",
+   "question": "Thư viện có tổ chức sự kiện gặp gỡ tác giả không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "thuong xuyen to chuc"
+   ],
+   "expected_docs": []
+  },
+  {
+   "id": "ans-none-03",
+   "category": "no_evidence",
+   "user": "customer01",
+   "question": "Có được mang đồ ăn vào phòng đọc không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "duoc phep mang",
+    "cam mang",
+    "khong duoc mang"
+   ],
+   "expected_docs": []
+  },
+  {
+   "id": "ans-none-04",
+   "category": "no_evidence",
+   "user": "librarian01",
+   "question": "Thư viện có cho thuê máy tính xách tay không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "co cho thue"
+   ],
+   "expected_docs": []
+  },
+  {
+   "id": "ans-false-01",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Phí phạt trễ hạn của Thẻ Đọc là 10.000đ một ngày đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "5000"
+   ],
+   "must_not_include": [
+    "dung vay, phi phat la 10000"
+   ],
+   "expected_docs": [
+    "fine-calculation",
+    "membership-plans-overview"
+   ]
+  },
+  {
+   "id": "ans-false-02",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Mã OTP có hiệu lực 30 phút phải không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "5 phut"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "account-security"
+   ]
+  },
+  {
+   "id": "ans-false-03",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Hạng Thượng Đế chỉ được mượn 5 cuốn phải không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "15"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "membership-plans-overview",
+    "membership-loan-limit"
+   ]
+  },
+  {
+   "id": "ans-false-04",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Giao dịch VNPay có hiệu lực trong 1 tiếng đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "15 phut"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "wallet-vnpay",
+    "fines-payment"
+   ]
+  },
+  {
+   "id": "ans-contra-01",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Tôi nghe nói làm mất sách chỉ cần đền đúng giá bìa của cuốn sách, có đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "100000"
+   ],
+   "must_not_include": [
+    "dung, chi can den gia bia"
+   ],
+   "expected_docs": [
+    "lost-item-fee"
+   ]
+  },
+  {
+   "id": "ans-contra-02",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Bạn tôi bảo nạp ví bao nhiêu tiền cũng được, ví dụ 35.000đ, đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "10000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "wallet-vnpay"
+   ]
+  },
+  {
+   "id": "ans-contra-03",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Còn nợ phạt vẫn đặt trước sách bình thường được mà phải không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "khong"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "fines-payment",
+    "membership-plans-overview"
+   ]
+  },
+  {
+   "id": "ans-contra-04",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Trả sách hư hỏng thì không bị phạt gì đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "50000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ]
+  },
+  {
+   "id": "ans-dyn-01",
+   "category": "dynamic_data",
+   "user": "customer01",
+   "question": "Tôi đang mượn những sách nào?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "truth": {
+    "kind": "count",
+    "source": "my_active_loans"
+   }
+  },
+  {
+   "id": "ans-dyn-02",
+   "category": "dynamic_data",
+   "user": "customer01",
+   "question": "Tôi còn khoản phạt nào chưa thanh toán không?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "truth": {
+    "kind": "count",
+    "source": "my_unpaid_fines"
+   }
+  },
+  {
+   "id": "ans-dyn-03",
+   "category": "dynamic_data",
+   "user": "librarian01",
+   "question": "Hiện có bao nhiêu phiếu mượn quá hạn?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "truth": {
+    "kind": "count",
+    "source": "overdue_loans_total"
+   }
+  },
+  {
+   "id": "ans-dyn-04",
+   "category": "dynamic_data",
+   "user": "staff01",
+   "question": "Hôm nay tôi có nhiệm vụ kho nào?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "truth": {
+    "kind": "tasks_today",
+    "source": "my_open_tasks"
+   }
+  },
+  {
+   "id": "ans-multi-01",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Nếu tôi hạng Vàng Hoàng và trả sách trễ 3 ngày thì bị phạt bao nhiêu tiền?",
+   "expect": "answer",
+   "must_include": [
+    "6000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "fine-calculation",
+    "membership-plans-overview"
+   ]
+  },
+  {
+   "id": "ans-multi-02",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Hạng Bạc Sĩ mượn 21 ngày thì mỗi lần gia hạn được thêm bao nhiêu ngày và gia hạn tối đa mấy lần?",
+   "expect": "answer",
+   "must_include": [
+    "10",
+    "2"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "renewal-count"
+   ]
+  },
+  {
+   "id": "ans-multi-03",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Thẻ Đọc làm mất một cuốn sách thì phải đền bao nhiêu tiền?",
+   "expect": "answer",
+   "must_include": [
+    "150000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "lost-item-fee"
+   ]
+  },
+  {
+   "id": "ans-multi-04",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Tôi đặt trước sách ở hạng Thẻ Đọc, sách sẵn sàng lúc 9 giờ sáng thứ Hai thì phải đến lấy trước khi nào?",
+   "expect": "answer",
+   "must_include": [
+    "24"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ]
+  },
+  {
+   "id": "ans-near-01",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Thư viện có cho mượn sách nói (audiobook) không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "co cho muon sach noi"
+   ],
+   "expected_docs": []
+  },
+  {
+   "id": "ans-near-02",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "co the gia han qua sms",
+    "khong the gia han qua sms",
+    "khong the thuc hien qua tin nhan sms",
+    "khong the gia han qua tin nhan",
+    "khong ho tro sms",
+    "khong ho tro gia han qua sms"
+   ],
+   "expected_docs": [],
+   "must_include_any": [
+    [
+     "quay",
+     "thu thu",
+     "nhan vien",
+     "lien he",
+     "ho tro"
+    ]
+   ]
+  },
+  {
+   "id": "ans-near-03",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Có thể quyên góp sách cũ cho thư viện không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "chi tiep nhan",
+    "co the quyen gop",
+    "khong nhan quyen gop"
+   ],
+   "expected_docs": []
+  },
+  {
+   "id": "ans-near-04",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Có được mang thú cưng vào thư viện không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "co quyen yeu cau",
+    "duoc mang thu cung",
+    "cam mang thu cung",
+    "khong duoc mang thu cung",
+    "bi han che",
+    "han che mang thu cung",
+    "khong cho phep mang thu cung"
+   ],
+   "expected_docs": [],
+   "must_include_any": [
+    [
+     "quay",
+     "thu thu",
+     "nhan vien",
+     "lien he",
+     "ho tro"
+    ]
+   ],
+   "acceptable_docs": [
+    "book-care"
+   ]
+  },
+  {
+   "id": "ans-dyn-05",
+   "category": "dynamic_data",
+   "user": "customer01",
+   "question": "Thư viện hiện có tổng cộng bao nhiêu phiếu mượn quá hạn?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "truth": {
+    "kind": "must_not_reveal",
+    "source": "overdue_loans_total",
+    "as_user": "librarian01"
+   }
+  }
+ ]
+}

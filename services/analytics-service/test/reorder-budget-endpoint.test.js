@@ -147,6 +147,29 @@ test('expected returns never exceed the copies inventory records as on loan', as
   assert.equal(data.items[0].budget_plan.cap_qty, 4);
 });
 
+test('a line whose loans disagree between borrow and inventory is reported, not funded (Phase E)', async () => {
+  const returned = Array.from({ length: 40 }, () => ({ variant_id: 'x', age_days: 30, duration_days: 14 }));
+  const open = Array.from({ length: 4 }, () => ({ variant_id: 'a', age_days: 10, duration_days: null }));
+  fixture.loans = [...returned, ...open];
+  // borrow_db: 4 open loans of A; inventory_db: 1 copy on loan -> A's shelf position is unknown
+  fixture.inventory = [row('a', 'A', 5, 100000, { borrowed_qty: 1 }), row('b', 'B', 3, 10000)];
+  const data = await call({ limit: '20', budgetVnd: '50000000' });
+  const byId = Object.fromEntries(data.items.map((i) => [i.variant_id, i]));
+  assert.equal(byId.a.funded_qty, 0, 'no purchase recommendation on inconsistent data');
+  assert.equal(byId.a.budget_plan.data_issue, 'BORROW_INVENTORY_MISMATCH');
+  assert.deepEqual([byId.a.budget_plan.open_loans_borrow, byId.a.budget_plan.borrowed_qty_inventory], [4, 1]);
+  assert.equal(byId.b.funded_qty, 3, 'consistent lines are still funded');
+  assert.equal(byId.b.budget_plan.data_issue, undefined);
+  assert.deepEqual([data.budget.unreliable_lines, data.budget.unreliable_qty], [1, byId.a.budget_plan.cap_qty]);
+  assert.deepEqual([data.budget.data_consistency.status, data.budget.data_consistency.excess_open_loans], ['MISMATCH', 3]);
+  assert.ok(data.budget.assumptions.some((text) => text.includes('chưa đồng bộ')));
+
+  fixture.inventory = [row('a', 'A', 5, 100000, { borrowed_qty: 4 })];
+  const consistent = await call({ limit: '20', budgetVnd: '50000000' });
+  assert.equal(consistent.budget.data_consistency.status, 'CONSISTENT');
+  assert.equal(consistent.budget.unreliable_lines, 0);
+});
+
 test('an invalid budget is rejected', async () => {
   await assert.rejects(call({ budgetVnd: '-1' }), /budgetVnd must be a non-negative number/);
   await assert.rejects(call({ budgetVnd: 'abc' }), /budgetVnd must be a non-negative number/);

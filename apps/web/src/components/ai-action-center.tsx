@@ -8,11 +8,16 @@ import { StatusBadge } from '@/components/status-badge';
 import { getStatusVariant } from '@/lib/status-registry';
 import { AI_ACTION_TYPE_LABEL, AI_ACTION_STATUS_LABEL, AI_ACTION_RISK_LABEL, AI_AUDIT_EVENT_LABEL } from '@/lib/ai-action-labels';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { cn } from '@/components/ui/utils';
 import { ActionCard } from '@/components/ai-action-card';
 import { aiService, type AiActionListItem, type AiActionDetail, type AiAuditLogEntry } from '@/services/ai';
 import { getApiErrorMessage } from '@/services/http-clients';
+import { authService } from '@/services/auth';
 import { toast } from 'sonner';
 import { useSocket } from '@/lib/socket';
 import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
@@ -30,7 +35,16 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: 'CANCELLED', label: 'Đã hủy' },
   { value: 'FAILED', label: 'Thất bại' },
   { value: 'EXPIRED', label: 'Hết hạn' },
+  { value: 'RECONCILE_REQUIRED', label: 'Chờ đối chiếu' },
 ];
+
+// UI gate only — ai-service re-checks ADMIN (from auth-service, not the token) on every call.
+function currentUserIsAdmin(): boolean {
+  const me = authService.getCurrentUser();
+  return Boolean(me?.is_superuser || me?.roles?.includes('ADMIN'));
+}
+
+const RECONCILE_NOTE_MIN = 10;
 
 const TYPE_ICON: Record<string, typeof Sparkles> = {
   CREATE_REORDER_DRAFT: ShoppingCart,
@@ -108,9 +122,83 @@ function AuditTimeline({ logs }: { logs: AiAuditLogEntry[] }) {
               {log.new_status ? AI_ACTION_STATUS_LABEL[log.new_status] ?? log.new_status : ''}
             </p>
           )}
+          {typeof log.metadata?.reconciliation_note === 'string' && (
+            <p className="text-[11.5px] text-foreground">
+              Ghi chú: {log.metadata.reconciliation_note}
+              {typeof log.metadata.evidence_reference === 'string' && log.metadata.evidence_reference
+                ? ` · Bằng chứng: ${log.metadata.evidence_reference}` : ''}
+            </p>
+          )}
         </li>
       ))}
     </ol>
+  );
+}
+
+function ReconcilePanel({ actionId, onDone }: { actionId: string; onDone: () => void }) {
+  const [outcome, setOutcome] = useState<'' | 'EXECUTED' | 'FAILED'>('');
+  const [evidence, setEvidence] = useState('');
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const noteOk = note.trim().length >= RECONCILE_NOTE_MIN;
+  const evidenceOk = outcome !== 'EXECUTED' || evidence.trim().length > 0;
+  const canSubmit = Boolean(outcome) && noteOk && evidenceOk && !submitting;
+
+  const submit = () => {
+    if (!canSubmit || !outcome) return;
+    setSubmitting(true);
+    setError(null);
+    aiService
+      .reconcileAction({ actionId, outcome, note: note.trim(), evidenceReference: evidence.trim() || undefined })
+      .then(() => {
+        toast.success(outcome === 'EXECUTED' ? 'Đã ghi nhận: đề xuất đã được thực hiện.' : 'Đã ghi nhận: đề xuất chưa được thực hiện.');
+        onDone();
+      })
+      .catch((err) => setError(getApiErrorMessage(err, 'Không ghi nhận được kết quả đối chiếu.')))
+      .finally(() => setSubmitting(false));
+  };
+
+  return (
+    <section aria-label="Đối chiếu kết quả" className="space-y-3 rounded-xl border border-border p-3.5">
+      <div>
+        <h4 className="text-[13px] font-semibold text-foreground">Đối chiếu kết quả</h4>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">
+          Kiểm tra trực tiếp ở nghiệp vụ đích (ví dụ danh sách đặt trước, đề xuất nhập) rồi ghi nhận kết quả.
+          Chọn &ldquo;Chưa thực hiện&rdquo; không tự chạy lại đề xuất.
+        </p>
+      </div>
+      <RadioGroup value={outcome} onValueChange={(v) => setOutcome(v as 'EXECUTED' | 'FAILED')} aria-label="Kết quả đối chiếu">
+        <div className="flex items-center gap-2">
+          <RadioGroupItem value="EXECUTED" id={`reconcile-executed-${actionId}`} className="border-muted-foreground/60" />
+          <Label htmlFor={`reconcile-executed-${actionId}`} className="text-[13px]">Đã thực hiện — tìm thấy bản ghi ở nghiệp vụ đích</Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <RadioGroupItem value="FAILED" id={`reconcile-failed-${actionId}`} className="border-muted-foreground/60" />
+          <Label htmlFor={`reconcile-failed-${actionId}`} className="text-[13px]">Chưa thực hiện — không có bản ghi nào</Label>
+        </div>
+      </RadioGroup>
+      <div className="space-y-1">
+        <Label htmlFor={`reconcile-evidence-${actionId}`} className="text-[12.5px]">
+          Mã tham chiếu nghiệp vụ{outcome === 'EXECUTED' ? ' (bắt buộc)' : ''}
+        </Label>
+        <Input id={`reconcile-evidence-${actionId}`} value={evidence} maxLength={200}
+          onChange={(e) => setEvidence(e.target.value)} placeholder="Ví dụ: RSV-1A2B3C4D" />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor={`reconcile-note-${actionId}`} className="text-[12.5px]">Ghi chú đối chiếu (bắt buộc)</Label>
+        <Textarea id={`reconcile-note-${actionId}`} value={note} maxLength={500} rows={3}
+          onChange={(e) => setNote(e.target.value)} placeholder="Đã kiểm tra ở đâu, thấy gì" />
+        {note.length > 0 && !noteOk && (
+          <p className="text-[11.5px] text-muted-foreground">Cần ít nhất {RECONCILE_NOTE_MIN} ký tự.</p>
+        )}
+      </div>
+      {error && <p role="alert" className="text-[12.5px] text-rose-700 dark:text-rose-300">{error}</p>}
+      <Button type="button" size="sm" onClick={submit} disabled={!canSubmit}>
+        {submitting ? 'Đang ghi nhận…' : 'Ghi nhận kết quả'}
+      </Button>
+    </section>
   );
 }
 
@@ -184,6 +272,7 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
         </div>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1 text-[12px] sm:grid-cols-3">
           <div><dt className="text-muted-foreground">Tạo lúc</dt><dd className="tabular-nums text-foreground">{formatDate(action.created_at)}</dd></div>
+          <div><dt className="text-muted-foreground">Người tạo</dt><dd className="break-all text-foreground">{action.created_by_user_id ?? 'hệ thống'}</dd></div>
           {action.status === 'PENDING_CONFIRMATION' && action.expires_at && (
             <div><dt className="text-muted-foreground">Hết hạn</dt><dd className="tabular-nums text-foreground">{formatDate(action.expires_at)}</dd></div>
           )}
@@ -211,9 +300,18 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
       {action.error_message && (
         <div role="alert" className="flex gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-[13px] text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span><span className="font-semibold">Lỗi khi thực thi: </span>{action.error_message}</span>
+          <span>
+            <span className="font-semibold">{action.status === 'RECONCILE_REQUIRED' ? 'Lý do cần đối chiếu: ' : 'Lỗi khi thực thi: '}</span>
+            {action.error_message}
+          </span>
         </div>
       )}
+
+      {action.status === 'RECONCILE_REQUIRED' && (currentUserIsAdmin() ? (
+        <ReconcilePanel actionId={action.id} onDone={() => void refetch()} />
+      ) : (
+        <p className="text-[12.5px] text-muted-foreground">Kết quả đang chờ quản trị viên đối chiếu; không tạo lại đề xuất để tránh trùng lặp.</p>
+      ))}
 
       <section aria-label="Lịch sử audit" className="space-y-2">
         <h4 className="text-[13px] font-semibold text-foreground">Lịch sử audit</h4>
@@ -344,6 +442,12 @@ export function AIActionCenter() {
                         <span className="mt-0.5 block text-[12px] text-muted-foreground">
                           {AI_ACTION_TYPE_LABEL[item.type] ?? item.type} · <time dateTime={item.created_at} title={formatDate(item.created_at)}>{relative(item.created_at)}</time>
                         </span>
+                        {item.status === 'RECONCILE_REQUIRED' && (
+                          <span className="mt-0.5 block text-[12px] text-muted-foreground">
+                            Người tạo: {item.created_by_user_id ? item.created_by_user_id.slice(0, 8) : 'hệ thống'}
+                            {item.error_message ? <span className="line-clamp-1">Lý do: {item.error_message}</span> : null}
+                          </span>
+                        )}
                         <span className="mt-1.5 flex flex-wrap gap-1.5">
                           <StatusBadge label={AI_ACTION_STATUS_LABEL[item.status] ?? item.status} variant={getStatusVariant('aiAction', item.status)} dot />
                           <StatusBadge label={AI_ACTION_RISK_LABEL[item.risk] ?? item.risk} variant={getStatusVariant('pendingActionRisk', item.risk)} />

@@ -77,7 +77,7 @@ from agent_store import (
 )
 from ai_core import policy as ai_policy, prompts as ai_prompts, tools as ai_tools
 from ai_core.observability import RequestIdMiddleware
-from ai_core.policy import get_user_context, can_confirm_action, require_can_confirm_action
+from ai_core.policy import get_user_context, is_admin, can_confirm_action, require_can_confirm_action, require_verified_session
 from user_personal_context import build_user_personal_context, get_primary_role, ANALYTICS_BLOCKED_ROLES
 from agent_executor import execute_agent_action
 from agent_schemas import ConfirmActionRequest, CancelActionRequest, ConfirmActionResponse
@@ -3717,7 +3717,7 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
     await _enforce_rate_limit(request, user_ctx)
 
     intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
-    personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
+    personal = await build_user_personal_context(user_ctx, intent_info, auth_header, req.message.strip())
 
     # CUSTOMER and SUPPLIER must not see system-wide analytics; their personal
     # context (loans, fines, tasks) already comes from build_user_personal_context.
@@ -5213,6 +5213,14 @@ async def chat_stream(request: Request, req: ChatRequest):
 
 # ── Agent Action Endpoints ────────────────────────────────────────────────────
 
+async def get_verified_user_context(auth_header: str):
+    """Every /actions/* endpoint: verified identity, revocation included
+    (agent_permissions.require_verified_session)."""
+    user_ctx = await get_user_context(auth_header)
+    require_verified_session(user_ctx)
+    return user_ctx
+
+
 @app.post("/actions/confirm", response_model=ConfirmActionResponse)
 async def confirm_action(request: Request, req: ConfirmActionRequest):
     await cleanup_expired_actions()
@@ -5222,9 +5230,22 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required to confirm actions.")
 
+    # Identity (revocation included) and ownership BEFORE anything about the
+    # action is revealed: the EXECUTED replay below returns the stored result,
+    # which must never reach a caller who could not confirm the action itself.
+    user_ctx = await get_verified_user_context(auth_header)
+
     action = await get_pending_action(req.action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
+
+    # Mirrors the ownership check on /actions/cancel and GET /actions/pending/{id}:
+    # without it, any user whose role satisfies require_can_confirm_action below could
+    # confirm (or cancel-via-confirm) another user's pending action by guessing/observing
+    # its action_id (broadcast over the ai_action:* websocket events to other staff).
+    if action.created_by_user_id and not user_ctx.is_superuser:
+        if user_ctx.user_id != action.created_by_user_id:
+            raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
 
     if action.status == CANCELLED:
         raise HTTPException(status_code=400, detail="This action was already cancelled.")
@@ -5241,18 +5262,6 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
 
     if is_expired(action) or action.status == ACTION_EXPIRED:
         raise HTTPException(status_code=410, detail="Action has expired. Please ask AI to create a new one.")
-
-    # Resolved up-front (not only on the confirm path) so a cancel-via-confirm
-    # (`confirm: false`) also records who cancelled it in the audit log.
-    user_ctx = await get_user_context(auth_header)
-
-    # Mirrors the ownership check on /actions/cancel and GET /actions/pending/{id}:
-    # without it, any user whose role satisfies require_can_confirm_action below could
-    # confirm (or cancel-via-confirm) another user's pending action by guessing/observing
-    # its action_id (broadcast over the ai_action:* websocket events to other staff).
-    if action.created_by_user_id and not user_ctx.is_superuser:
-        if user_ctx.user_id != action.created_by_user_id:
-            raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
 
     if not req.confirm:
         if not await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id):
@@ -5271,12 +5280,6 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         )
 
     require_can_confirm_action(user_ctx, action)
-    if not user_ctx.revocation_verified:
-        # Phase 5: auth-service could not check whether this token was revoked
-        # (Redis unreachable). Executing a write for a possibly logged-out
-        # session is refused; the action stays pending for a later confirm.
-        raise HTTPException(status_code=503, detail="Chưa xác minh được trạng thái phiên đăng nhập; thao tác tạm thời "
-                                                    "bị từ chối, vui lòng thử lại sau.")
 
     # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload -
     # only the fields the confirm dialog edits (action_guard), then re-check the
@@ -5371,13 +5374,10 @@ async def cancel_action(request: Request, req: CancelActionRequest):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required to cancel actions.")
 
+    user_ctx = await get_verified_user_context(auth_header)
     action = await get_pending_action(req.action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
-
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.user_id:
-        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
 
     if action.created_by_user_id and not user_ctx.is_superuser:
         if user_ctx.user_id != action.created_by_user_id:
@@ -5400,13 +5400,10 @@ async def get_action(request: Request, action_id: str):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
 
+    user_ctx = await get_verified_user_context(auth_header)
     action = await get_pending_action(action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
-
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.user_id:
-        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
 
     if action.created_by_user_id and not user_ctx.is_superuser:
         if user_ctx.user_id != action.created_by_user_id:
@@ -5419,23 +5416,43 @@ class ReconcileActionRequest(BaseModel):
     action_id: str
     outcome: Literal["EXECUTED", "FAILED"]
     note: str
+    # What the administrator found in the target service: e.g. the reservation
+    # number / purchase request id for EXECUTED, or what was searched for FAILED.
+    # Optional in the schema for old clients; EXECUTED without it is refused.
+    evidence_reference: str | None = None
+
+
+RECONCILE_NOTE_MIN_CHARS = 10
 
 
 @app.post("/actions/reconcile")
 async def reconcile_action(request: Request, req: ReconcileActionRequest):
     """Resolve an action whose outcome was unknown (RECONCILE_REQUIRED) after
     an administrator checked the target service: EXECUTED if the write is
-    there, FAILED if not (FAILED may then be confirmed again). Admin-only."""
+    there, FAILED if not. Admin-only. FAILED is never executed again
+    automatically - its creator may confirm it again by hand. Concurrent
+    resolutions of one action: the row lock in agent_store lets exactly one
+    through; the other gets 409, as does any action no longer waiting."""
     auth_header = request.headers.get("authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+    user_ctx = await get_verified_user_context(auth_header)
+    if not is_admin(user_ctx):
         raise HTTPException(status_code=403, detail="Admin access required.")
-    if not req.note.strip():
-        raise HTTPException(status_code=400, detail="Cần ghi chú kết quả đối chiếu.")
-    if not await resolve_reconciliation(req.action_id, req.outcome, req.note.strip()[:500], user_ctx.user_id):
+    note = (req.note or "").strip()
+    evidence = (req.evidence_reference or "").strip()
+    if len(note) < RECONCILE_NOTE_MIN_CHARS:
+        raise HTTPException(status_code=400, detail=f"Cần ghi chú kết quả đối chiếu (ít nhất {RECONCILE_NOTE_MIN_CHARS} ký tự).")
+    if req.outcome == EXECUTED and not evidence:
+        raise HTTPException(status_code=400, detail="Xác nhận đã thực thi cần mã tham chiếu nghiệp vụ làm bằng chứng "
+                                                    "(ví dụ số đặt trước, mã đề xuất nhập).")
+    if not await resolve_reconciliation(req.action_id, req.outcome, note[:500], user_ctx.user_id,
+                                        evidence_reference=evidence[:200] or None, actor_roles=list(user_ctx.roles)):
         raise HTTPException(status_code=409, detail="Action is not waiting for reconciliation.")
+    resolved = await get_pending_action(req.action_id)
+    asyncio.ensure_future(push_ai_action_event(
+        "ai_action:reconciled", req.action_id, resolved.type if resolved else None,
+        resolved.created_by_user_id if resolved else None, {"outcome": req.outcome}))
     return {"success": True, "action_id": req.action_id, "status": req.outcome}
 
 
@@ -5444,8 +5461,8 @@ async def actions_stats(request: Request):
     auth_header = request.headers.get("authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+    user_ctx = await get_verified_user_context(auth_header)
+    if not is_admin(user_ctx):
         raise HTTPException(status_code=403, detail="Admin access required.")
 
     async with get_session() as session:

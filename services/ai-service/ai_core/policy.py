@@ -5,6 +5,8 @@ is made by the backend; nothing a client or a model sends can widen it.
     rate limit      rate_limit_key / enforce_rate_limit - per user, or per the
                     client IP the gateway vouches for (anonymous)
     assistant gate  can_use_assistant - manager role AND analytics permission
+    session         require_verified_session - verified identity AND
+                    revocation, for every private action endpoint
     actions         can_confirm_action / require_can_confirm_action - the
                     action type's policy, role AND permission, at confirm time
     warehouses      readable/writable/can_view - auth-service scopes, fail-closed
@@ -20,7 +22,10 @@ import os
 from fastapi import HTTPException
 
 from action_guard import require_write_scope, validated_override  # noqa: F401  (re-export)
-from agent_permissions import can_confirm_action, get_user_context, require_can_confirm_action  # noqa: F401
+from agent_permissions import (  # noqa: F401
+    can_confirm_action, get_user_context, is_admin, require_can_confirm_action,
+    require_verified_session,
+)
 from routes_conversations import can_use_assistant  # noqa: F401
 from warehouse_scope import can_view, readable_warehouses, writable_warehouses  # noqa: F401
 

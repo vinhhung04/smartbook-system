@@ -136,7 +136,12 @@ export function BudgetPlanner({ data, budgetVnd, onBudgetChange, selection, hasM
                   ]}
                 />
               ) : null}
-              {selection && selection.lines > 0 ? (
+              {budget.unreliable_lines ? (
+              <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+                {formatCount(budget.unreliable_lines)} dòng có dữ liệu mượn lệch giữa dịch vụ mượn và kho (số phiếu mượn đang mở nhiều hơn số bản kho ghi nhận đang cho mượn) nên chưa được cấp ngân sách — cần đối soát dữ liệu trước khi đặt mua.
+              </p>
+            ) : null}
+            {selection && selection.lines > 0 ? (
                 <AllocationBar
                   label="Bạn đang chọn để đặt hàng"
                   scale={scale}

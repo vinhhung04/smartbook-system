@@ -218,7 +218,8 @@ async def cancel_pending_action(action_id: str, actor_user_id: str | None = None
 
 async def _finish_execution(action_id: str, new_status: str, event_type: str, actor_user_id: str | None,
                             result: dict | None, error: str | None = None,
-                            from_statuses: tuple[str, ...] = _EXECUTING) -> bool:
+                            from_statuses: tuple[str, ...] = _EXECUTING,
+                            actor_roles: list[str] | None = None, extra_metadata: dict | None = None) -> bool:
     """Move an executing action to where its execution ended. Conditional on
     the current status (from_statuses), so a terminal state is never
     overwritten - e.g. an EXECUTED action cannot be turned FAILED by a late,
@@ -230,16 +231,26 @@ async def _finish_execution(action_id: str, new_status: str, event_type: str, ac
         if row is None or row.status not in from_statuses:
             return False
         old_status, now = row.status, _now()
-        row.status = new_status
+        if event_type == "RECONCILED" and row.result:
+            result = {**result, "execution_result": row.result}  # keep what the run itself reported
         if new_status == EXECUTED:
-            row.executed_at = now
-            row.confirmed_at = row.confirmed_at or now
-            row.confirmed_by_user_id = row.confirmed_by_user_id or actor_user_id
-            row.result = result
+            values = {"executed_at": now, "confirmed_at": row.confirmed_at or now,
+                      "confirmed_by_user_id": row.confirmed_by_user_id or actor_user_id, "result": result}
         else:
-            row.failed_at = now
-            row.error_message = error
-            row.result = result if result is not None else {"error": error}
+            values = {"failed_at": now, "error_message": error,
+                      "result": result if result is not None else {"error": error}}
+        # Conditional on the status read above, not only on the row lock: two
+        # concurrent finishers (two reconciliations, a late run vs. a
+        # reconciliation) cannot both win even where FOR UPDATE is a no-op.
+        moved = await session.execute(
+            update(PendingActionRow)
+            .where(PendingActionRow.action_id == action_id, PendingActionRow.status == old_status)
+            .values(status=new_status, **values)
+            .execution_options(synchronize_session=False)
+        )
+        if moved.rowcount != 1:
+            await session.rollback()
+            return False
         await _log_audit(
             session,
             action_id=action_id,
@@ -247,7 +258,9 @@ async def _finish_execution(action_id: str, new_status: str, event_type: str, ac
             old_status=old_status,
             new_status=new_status,
             actor_user_id=actor_user_id,
-            event_metadata={"result_summary": str(result)[:200] if result else None, "error": (error or "")[:200] or None},
+            actor_roles=actor_roles,
+            event_metadata={"result_summary": str(result)[:200] if result else None, "error": (error or "")[:200] or None,
+                            **(extra_metadata or {})},
         )
         await session.commit()
         return True
@@ -271,17 +284,26 @@ async def mark_action_needs_reconciliation(action_id: str, error: str, actor_use
                                    result, error, from_statuses=(CONFIRMED,))
 
 
-async def resolve_reconciliation(action_id: str, outcome: str, note: str, actor_user_id: str | None) -> bool:
+async def resolve_reconciliation(action_id: str, outcome: str, note: str, actor_user_id: str | None,
+                                 evidence_reference: str | None = None, actor_roles: list[str] | None = None) -> bool:
     """A person checked the target service: RECONCILE_REQUIRED -> EXECUTED (it
-    was written) or FAILED (it was not; FAILED may then be confirmed again)."""
+    was written) or FAILED (it was not; FAILED may then be confirmed again by
+    hand - never automatically). The audit row records who, when, the status
+    before and after, the note and the evidence reference. Row-locked and
+    conditional on RECONCILE_REQUIRED, so of two concurrent resolutions only
+    one succeeds and a terminal state is never resolved again."""
     if outcome not in (EXECUTED, FAILED):
         raise ValueError("outcome must be EXECUTED or FAILED")
-    resolution = {"reconciled": True, "note": note, "outcome": outcome}
+    resolution = {"reconciled": True, "note": note, "outcome": outcome, "evidence_reference": evidence_reference,
+                  "reconciled_by_user_id": actor_user_id, "reconciled_at": _now().isoformat()}
+    audit = {"reconciliation_note": note, "evidence_reference": evidence_reference, "outcome": outcome}
     if outcome == EXECUTED:
         return await _finish_execution(action_id, EXECUTED, "RECONCILED", actor_user_id, resolution,
-                                       from_statuses=(RECONCILE_REQUIRED,))
+                                       from_statuses=(RECONCILE_REQUIRED,), actor_roles=actor_roles,
+                                       extra_metadata=audit)
     return await _finish_execution(action_id, FAILED, "RECONCILED", actor_user_id, resolution,
-                                   f"reconciled as not executed: {note}", from_statuses=(RECONCILE_REQUIRED,))
+                                   f"reconciled as not executed: {note}", from_statuses=(RECONCILE_REQUIRED,),
+                                   actor_roles=actor_roles, extra_metadata=audit)
 
 
 async def release_stale_confirmed_actions(max_age_seconds: int = STALE_CONFIRMED_SECONDS) -> int:

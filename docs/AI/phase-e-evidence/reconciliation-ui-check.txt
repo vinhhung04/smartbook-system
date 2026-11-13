@@ -1,0 +1,9 @@
+PASS - admin sees the RECONCILE_REQUIRED queue with creator + reason :: Tạo đề xuất nhập 16 dòng sách từ 2 kho Đề xuất nhập sách · 1 phút trước Người tạo: dd1b7481 Lý do: some lines have an unknown outcome Chờ đối chiếu Rủi ro vừa
+PASS - submit is disabled until an outcome and a note are given
+PASS - EXECUTED without an evidence reference stays disabled
+PASS - FAILED with a note can be submitted
+PASS - success toast after reconciling
+PASS - audit timeline shows the RECONCILED event with the note
+PASS - after reload the reconciled action has left the queue (state persisted)
+PASS - creator (non-admin) has no reconciliation form anywhere
+{"actionId":"act_3bd5a6b5","steps":8,"failed":0}

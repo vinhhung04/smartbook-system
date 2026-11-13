@@ -91,3 +91,53 @@ class AgentStoreConcurrencyPgTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(TEST_DSN, "TEST_PG_DSN khong duoc set - bo qua integration test")
+class ReconciliationConcurrencyPgTest(AgentStoreConcurrencyPgTest):
+    """Phase E: an unknown-outcome action is resolved exactly once, with one
+    audit row, even when admins (or a late execution) race on it."""
+
+    def _reconcile_required(self, action_type="CREATE_STAFF_TASK_DRAFT"):
+        async def make():
+            action = await self.agent_store.create_pending_action(
+                action_type=action_type, summary="pg reconcile", payload={}, risk="LOW", user_context=self._user())
+            await self.agent_store.mark_action_confirmed(action.id, actor_user_id="pg-u1")
+            await self.agent_store.mark_action_needs_reconciliation(action.id, "timeout", actor_user_id="pg-u1")
+            return action
+        return make
+
+    def test_exactly_one_of_many_concurrent_resolutions_wins(self):
+        from sqlalchemy import func, select
+        from db_models import ActionAuditLogRow
+
+        async def scenario():
+            action = await self._reconcile_required()()
+            outcomes = await asyncio.gather(*[
+                self.agent_store.resolve_reconciliation(action.id, "EXECUTED" if i % 2 else "FAILED",
+                                                        f"admin {i} checked the task list", f"admin-{i}",
+                                                        evidence_reference="TSK-1")
+                for i in range(6)])
+            async with self.db.get_session() as session:
+                audits = await session.scalar(select(func.count()).select_from(ActionAuditLogRow).where(
+                    ActionAuditLogRow.action_id == action.id, ActionAuditLogRow.event_type == "RECONCILED"))
+            status = (await self.agent_store.get_pending_action(action.id)).status
+            return outcomes, audits, status
+
+        outcomes, audits, status = self._run(scenario)
+        self.assertEqual(sum(outcomes), 1)
+        self.assertEqual(audits, 1)
+        self.assertIn(status, ("EXECUTED", "FAILED"))
+
+    def test_late_execution_and_reconciliation_cannot_both_finish(self):
+        async def scenario():
+            action = await self._reconcile_required()()
+            late, resolved = await asyncio.gather(
+                self.agent_store.mark_action_executed(action.id, {"late": True}, actor_user_id="pg-u1"),
+                self.agent_store.resolve_reconciliation(action.id, "FAILED", "nothing found in the task list",
+                                                        "pg-admin"))
+            return late, resolved, (await self.agent_store.get_pending_action(action.id)).status
+
+        late, resolved, status = self._run(scenario)
+        self.assertEqual(late + resolved, 1)
+        self.assertEqual(status, "EXECUTED" if late else "FAILED")

@@ -156,7 +156,8 @@ class ActionLifecycleTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             await self._confirm(action.id)
 
-        body = main.ReconcileActionRequest(action_id=action.id, outcome="EXECUTED", note="task exists: TSK-1")
+        body = main.ReconcileActionRequest(action_id=action.id, outcome="EXECUTED", note="task exists: TSK-1",
+                                           evidence_reference="TSK-1")
         with self.assertRaises(HTTPException) as forbidden:
             await main.reconcile_action(_request("Bearer owner"), body)
         self.assertEqual(forbidden.exception.status_code, 403)
@@ -199,7 +200,13 @@ class ActionLifecycleTest(unittest.IsolatedAsyncioTestCase):
         self.executor.side_effect = slow_execute
 
         first = asyncio.create_task(self._confirm(action.id))
-        await asyncio.sleep(0.05)
+        # Wait until the first request holds the claim. A fixed sleep let the second
+        # request claim first on a slow run; it then waited on `gate` forever (hang).
+        for _ in range(500):
+            if await self._status(action.id) == "CONFIRMED":
+                break
+            await asyncio.sleep(0.01)
+        self.assertEqual(await self._status(action.id), "CONFIRMED")
         with self.assertRaises(HTTPException) as second:
             await self._confirm(action.id)
         self.assertEqual(second.exception.status_code, 409)
