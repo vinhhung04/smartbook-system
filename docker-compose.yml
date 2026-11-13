@@ -406,7 +406,7 @@ services:
       - ISBN_INCOMPLETE_CACHE_TTL_SECONDS=${ISBN_INCOMPLETE_CACHE_TTL_SECONDS:-600}
       # Tra cứu hai vòng (isbn_rounds.py): vòng 1 hỏi tuần tự theo mã theo thứ tự này,
       # vòng 2 hỏi mọi nguồn còn bật. Xem BOOK_SEARCH_UPGRADE_REPORT.md.
-      - ISBN_ROUND1_ORDER=${ISBN_ROUND1_ORDER:-catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,dinhTi,googleBooks,openLibrary,fahasa}
+      - ISBN_ROUND1_ORDER=${ISBN_ROUND1_ORDER:-catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,fahasa}
       - ISBN_DISABLED_SOURCES=${ISBN_DISABLED_SOURCES:-}
       - ISBN_PROVIDER_TIMEOUT_SECONDS=${ISBN_PROVIDER_TIMEOUT_SECONDS:-10}
       - ISBN_PROVIDER_RETRIES=${ISBN_PROVIDER_RETRIES:-1}

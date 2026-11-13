@@ -5,4 +5,4 @@ import os
 # Live checks of the real sites run separately (eval/live_book_sources.py).
 os.environ["ISBN_PERSISTENT_CACHE"] = "false"
 os.environ["ENABLE_BOOKSTORE_CODE_INDEX"] = "false"
-os.environ["ISBN_DISABLED_SOURCES"] = "aiWebSearch,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,catalog,fahasa,googleBooks,openLibrary,dinhTi,tiki,nhanam,thaiHa,vanLang,webSearch"
+os.environ["ISBN_DISABLED_SOURCES"] = "aiWebSearch,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,bizbooks,catalog,fahasa,googleBooks,openLibrary,dinhTi,tiki,nhanam,thaiHa,vanLang,webSearch"

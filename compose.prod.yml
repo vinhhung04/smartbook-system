@@ -275,7 +275,7 @@ services:
       - ISBN_FUSION_MODE=${ISBN_FUSION_MODE:-evidence}
       - ISBN_LOOKUP_TOTAL_BUDGET_SECONDS=${ISBN_LOOKUP_TOTAL_BUDGET_SECONDS:-45}
       - ISBN_INCOMPLETE_CACHE_TTL_SECONDS=${ISBN_INCOMPLETE_CACHE_TTL_SECONDS:-600}
-      - ISBN_ROUND1_ORDER=${ISBN_ROUND1_ORDER:-catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,dinhTi,googleBooks,openLibrary,fahasa}
+      - ISBN_ROUND1_ORDER=${ISBN_ROUND1_ORDER:-catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,fahasa}
       - ISBN_DISABLED_SOURCES=${ISBN_DISABLED_SOURCES:-}
       - ISBN_PROVIDER_TIMEOUT_SECONDS=${ISBN_PROVIDER_TIMEOUT_SECONDS:-10}
       - ISBN_PROVIDER_RETRIES=${ISBN_PROVIDER_RETRIES:-1}

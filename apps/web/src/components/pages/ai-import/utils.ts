@@ -22,6 +22,10 @@ export const SOURCE_LABELS: Record<IsbnSourceName, string> = {
   omegaPlus: "Omega+",
   tanViet: "Tân Việt",
   alphaBooks: "Alpha Books",
+  phuongNam: "Phương Nam",
+  nhanVan: "Nhân Văn",
+  minhLong: "Minh Long",
+  bizbooks: "Bizbooks",
   webSearch: "Web search",
   aiWebSearch: "Web search (AI)",
 };

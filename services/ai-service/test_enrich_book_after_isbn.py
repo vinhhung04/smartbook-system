@@ -106,7 +106,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["found"])
         self.assertEqual(result["metadataQualityScore"], 0.0)
-        self.assertEqual(len(result["sources"]), 19)
+        self.assertEqual(len(result["sources"]), 23)
         self.assertIn("processingTimeMs", result)
 
     async def test_lookup_keeps_metadata_when_one_provider_times_out(self):

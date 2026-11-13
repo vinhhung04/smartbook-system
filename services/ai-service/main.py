@@ -184,7 +184,7 @@ ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SEC
 # Two-round search (isbn_rounds.py). Round 1 asks these code-capable sources one
 # at a time, in this order; ISBN_DISABLED_SOURCES switches any source off.
 # Barcode-indexed stores come right after the catalog: a miss there costs no request.
-ISBN_ROUND1_ORDER = os.getenv("ISBN_ROUND1_ORDER", "catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,dinhTi,googleBooks,openLibrary,fahasa")
+ISBN_ROUND1_ORDER = os.getenv("ISBN_ROUND1_ORDER", "catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,fahasa")
 ISBN_DISABLED_SOURCES = os.getenv("ISBN_DISABLED_SOURCES", "")
 ISBN_PROVIDER_TIMEOUT_SECONDS = float(os.getenv("ISBN_PROVIDER_TIMEOUT_SECONDS", "10"))
 ISBN_PROVIDER_RETRIES = int(os.getenv("ISBN_PROVIDER_RETRIES", "1"))
@@ -2663,6 +2663,8 @@ def _book_providers() -> list[isbn_rounds.BookProvider]:
         Provider("openLibrary", by_code=_open_library_by_code, by_title=_open_library_by_title, round1=True, **common),
         Provider("dinhTi", by_code=bookstore_providers.dinhti_by_code, by_title=bookstore_providers.dinhti_by_title,
                  round1=True, accepts_raw_barcode=True, **common),
+        Provider("bizbooks", by_code=bookstore_providers.bizbooks_by_code, by_title=bookstore_providers.bizbooks_by_title,
+                 round1=True, accepts_raw_barcode=True, **common),
         Provider("tiki", by_title=_tiki_by_title, **common),
         # Plain HTTP only - Cloudflare blocks it often; a 403 pauses it (isbn_rounds).
         Provider("fahasa", by_code=_fahasa_by_code, round1=True, accepts_raw_barcode=True,
@@ -2677,7 +2679,7 @@ def _book_providers() -> list[isbn_rounds.BookProvider]:
                  by_title=bookstore_providers.title_search(bookstore_providers.VANLANG),
                  round1=True, accepts_raw_barcode=True, **{**common, "timeout": store_timeout}),
     ] + [
-        # Publisher stores reached only through their product feed index (bookstore_providers).
+        # Publisher stores and bookstore chains reached only through their product feed index (bookstore_providers).
         Provider(store.name, by_code=bookstore_providers.code_search(store),
                  by_title=bookstore_providers.index_title_search(store),
                  round1=True, accepts_raw_barcode=True, **{**common, "timeout": store_timeout})
@@ -2687,7 +2689,7 @@ def _book_providers() -> list[isbn_rounds.BookProvider]:
                  **{**common, "timeout": BOOK_MARKETPLACE_TIMEOUT_SECONDS, "retries": 0}),
     ] + [Provider(name, disabled_reason=reason) for name, reason in UNUSABLE_BOOK_SOURCES.items()]
 
-    marketplace = {"dinhTi", "tiki", "fahasa", "nhanam", "thaiHa", "vanLang", "webSearch"} | {
+    marketplace = {"dinhTi", "bizbooks", "tiki", "fahasa", "nhanam", "thaiHa", "vanLang", "webSearch"} | {
         store.name for store in bookstore_providers.FEED_ONLY_STORES}
     disabled = {name.strip() for name in ISBN_DISABLED_SOURCES.split(",") if name.strip()}
     out = []

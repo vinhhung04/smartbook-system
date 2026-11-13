@@ -86,6 +86,10 @@ INDEPENDENCE_GROUPS = {
     "omegaPlus": "publisher_omegaplus",
     "tanViet": "publisher_tanviet",
     "alphaBooks": "publisher_alphabooks",
+    "bizbooks": "publisher_bizbooks",
+    "phuongNam": "retail_phuongnam",
+    "nhanVan": "retail_nhanvan",
+    "minhLong": "retail_minhlong",
     "webSearch": "web_search",
     "aiWebSearch": "web_search_ai",
 }

@@ -63,11 +63,21 @@ def _page_count(value) -> int | None:
     return int(digits) if digits and int(digits) < 20000 else None
 
 
+def complete_ean13(code: str) -> str:
+    """Phương Nam stores many barcodes as the first 12 digits of the EAN-13 (no check
+    digit), e.g. 978604239806 for 9786042398060. Only book (978/979) and Vietnamese
+    (893) prefixes are completed - a 12-digit UPC-A is a different code."""
+    if len(code) != 12 or not code.isdigit() or code[:3] not in ("978", "979", "893"):
+        return code
+    total = sum(int(digit) * (3 if i % 2 else 1) for i, digit in enumerate(code))
+    return code + str((10 - total % 10) % 10)
+
+
 def _variant_codes(product: dict) -> list[str]:
     codes = []
     for variant in product.get("variants") or []:
         for key in ("barcode", "sku"):
-            code = isbn_matching.normalize_code(variant.get(key))
+            code = complete_ean13(isbn_matching.normalize_code(variant.get(key)))
             if len(code) in (10, 13) and code not in codes:
                 codes.append(code)
     return codes
@@ -157,6 +167,54 @@ async def dinhti_by_title(client: httpx.AsyncClient, title: str, author: str | N
     return results
 
 
+# ── Bizbooks (WooCommerce) ─────────────────────────────────────────────────────
+# The public WooCommerce Store API (robots.txt allows /wp-json/, checked 2026-11-13)
+# matches `search` against the SKU too, which Bizbooks sets to "#<barcode>". The
+# site's own ?s= search does not. Items carry no author/publisher attributes.
+
+BIZBOOKS_STORE_API = "https://bizbooks.vn/wp-json/wc/store/v1/products"
+
+
+def parse_bizbooks_product(item: dict) -> dict:
+    code = isbn_matching.normalize_code(item.get("sku"))
+    images = item.get("images") or []
+    categories = [c.get("name") for c in item.get("categories") or [] if c.get("name")]
+    return {
+        "title": html_module.unescape(item.get("name") or "").strip() or None,
+        "subtitle": None,
+        "authors": [],
+        "translator": [],
+        "publisher": None,
+        "publishedDate": None,
+        "description": html_to_text(item.get("description") or item.get("short_description")),
+        "categories": categories,
+        "language": "vi",
+        "pageCount": None,
+        "thumbnail": _https(images[0].get("src")) if images else None,
+        "identifiers": [code] if len(code) in (10, 13) else [],
+        "sourceUrl": item.get("permalink"),
+        "sourceFetchMode": "json",
+    }
+
+
+async def _bizbooks_search(client: httpx.AsyncClient, query: str, limit: int) -> list[dict]:
+    resp = await client.get(BIZBOOKS_STORE_API, params={"search": query, "per_page": limit})
+    resp.raise_for_status()
+    items = resp.json()
+    capture_metadata_source("bizbooks", "json", items, str(resp.url))
+    return [parse_bizbooks_product(item) for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+async def bizbooks_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
+    """The item whose SKU is the code; else the first hit (reported as MISMATCH)."""
+    results = await _bizbooks_search(client, code, 5)
+    return next((r for r in results if code in r["identifiers"]), results[0] if results else None)
+
+
+async def bizbooks_by_title(client: httpx.AsyncClient, title: str, author: str | None) -> list[dict]:
+    return await _bizbooks_search(client, title, TITLE_CANDIDATES)
+
+
 # ── Sitemap-indexed stores (Sapo / Haravan) ───────────────────────────────────
 
 # Labels of the spec block some stores put in the product description, e.g.
@@ -235,7 +293,7 @@ def tag_specs(tags) -> dict:
 
 def _strip_title(name: str, suffix: str | None = None) -> str:
     name = re.sub(r"^\s*\[[^\]]*\]\s*[-–:]?\s*", "", str(name or ""))  # "[ĐẶT TRƯỚC] - ..."
-    name = re.sub(r"^\s*Sách\s*-\s*", "", name)  # "Sách - Trao Gửi Yêu Thương"
+    name = re.sub(r"^\s*Sách\s*[-:]\s*", "", name)  # "Sách - Trao Gửi Yêu Thương", "Sách: ..." (Minh Long)
     name = re.sub(r"\s*\(\s*(?:TB|tái bản)[^)]*\)\s*$", "", name, flags=re.IGNORECASE)
     if suffix:
         name = re.sub(rf"\s*-\s*{suffix}\s*$", "", name, flags=re.IGNORECASE)
@@ -376,7 +434,13 @@ AZVIETNAM = SitemapStore("azVietnam", "https://azvietnam.vn", _feed_parser())
 OMEGAPLUS = SitemapStore("omegaPlus", "https://omegaplus.vn", _feed_parser())
 TANVIET = SitemapStore("tanViet", "https://tanvietbooks.vn", _feed_parser(title_suffix="Tân Việt Books"))
 ALPHABOOKS = SitemapStore("alphaBooks", "https://alphabooks.vn", _feed_parser(vendor_is_author=True))
-FEED_ONLY_STORES = (IPM, KIMDONG, AZVIETNAM, OMEGAPLUS, TANVIET, ALPHABOOKS)
+# Bookstore chains (checked 2026-11-13, same robots rules: /search disallowed, feed and
+# product JSON allowed). Their feeds also list stationery and toys; only a scanned
+# code that is in the index is ever read. Vendor is the supplier there, not the author.
+PHUONGNAM = SitemapStore("phuongNam", "https://nhasachphuongnam.com", _feed_parser())
+NHANVAN = SitemapStore("nhanVan", "https://nhanvan.vn", _feed_parser())
+MINHLONG = SitemapStore("minhLong", "https://minhlongbook.vn", _feed_parser())
+FEED_ONLY_STORES = (IPM, KIMDONG, AZVIETNAM, OMEGAPLUS, TANVIET, ALPHABOOKS, PHUONGNAM, NHANVAN, MINHLONG)
 
 _sitemap_cache: dict[str, tuple[float, list[tuple[str, str]]]] = {}
 _sitemap_locks: dict[str, asyncio.Lock] = {}
@@ -473,12 +537,13 @@ async def build_code_index(client: httpx.AsyncClient, store: SitemapStore) -> di
     store's paginated product feed."""
     codes: dict[str, str] = {}
     titles: list[tuple[str, str]] = []
-    seen, previous_first = 0, None
+    seen, previous_first, truncated = 0, None, True
     for page in range(1, CODE_INDEX_MAX_PAGES + 1):
         resp = await client.get(f"{store.base_url}/collections/all/products.json", params={"limit": 250, "page": page})
         resp.raise_for_status()
         products = (resp.json() or {}).get("products") or []
         if not products or products[0].get("id") == previous_first:
+            truncated = False
             break  # past the last page (or a feed that repeats its last page)
         previous_first = products[0].get("id")
         seen += len(products)
@@ -492,7 +557,9 @@ async def build_code_index(client: httpx.AsyncClient, store: SitemapStore) -> di
             if name:
                 titles.append((url, str(name)))
         await asyncio.sleep(CODE_INDEX_PAGE_DELAY_SECONDS)
-    return {"codes": codes, "titles": titles, "products": seen}
+    # truncated: the feed is longer than CODE_INDEX_MAX_PAGES (Phương Nam, Nhân Văn:
+    # ~20k products at 50/page), so the index may miss products past that page.
+    return {"codes": codes, "titles": titles, "products": seen, "truncated": truncated}
 
 
 async def refresh_code_index(store: SitemapStore, user_agent: str | None = None) -> dict:
@@ -501,7 +568,8 @@ async def refresh_code_index(store: SitemapStore, user_agent: str | None = None)
         built = await build_code_index(client, store)
     if built["codes"]:  # an empty/failed crawl never replaces a good index
         _code_index[store.name] = {**built, "builtAt": time.time()}
-    return {"store": store.name, "codes": len(built["codes"]), "products": built["products"]}
+    return {"store": store.name, "codes": len(built["codes"]), "products": built["products"],
+            "truncated": built.get("truncated", False)}
 
 
 async def refresh_code_indexes_forever(user_agent: str | None, logger) -> None:
@@ -512,8 +580,9 @@ async def refresh_code_indexes_forever(user_agent: str | None, logger) -> None:
     async def refresh(store: SitemapStore) -> bool:
         try:
             summary = await refresh_code_index(store, user_agent)
-            logger.info("bookstore code index %s: %d codes from %d products",
-                        store.name, summary["codes"], summary["products"])
+            logger.info("bookstore code index %s: %d codes from %d products%s",
+                        store.name, summary["codes"], summary["products"],
+                        f" (truncated at {CODE_INDEX_MAX_PAGES} pages)" if summary["truncated"] else "")
             return True
         except Exception as exc:  # noqa: BLE001 - one store must not stop the others
             logger.warning("bookstore code index %s not refreshed: %s", store.name, exc)

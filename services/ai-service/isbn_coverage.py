@@ -13,7 +13,8 @@ from __future__ import annotations
 ISBN_SOURCE_ORDER = [
     "catalog", "googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook",
     "nhanam", "dinhTi", "thaiHa", "vanLang",
-    "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks", "webSearch", "aiWebSearch",
+    "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks",
+    "phuongNam", "nhanVan", "minhLong", "bizbooks", "webSearch", "aiWebSearch",
 ]
 ISBN_INTELLIGENCE_FIELDS = (
     "title", "subtitle", "authors", "translator", "publisher", "publishedDate", "description",

@@ -338,6 +338,96 @@ class FeedStoreParserTests(unittest.TestCase):
         self.assertEqual(data["title"], "Bảng Âm Thanh Về Số Đếm")
 
 
+class BookstoreChainTests(unittest.IsolatedAsyncioTestCase):
+    """Phương Nam / Nhân Văn / Minh Long feeds and the Bizbooks Store API - shapes observed 2026-11-13."""
+
+    def tearDown(self):
+        bp._code_index.clear()
+
+    def test_twelve_digit_barcodes_get_their_ean13_check_digit(self):
+        self.assertEqual(bp.complete_ean13("978604239806"), "9786042398060")
+        self.assertEqual(bp.complete_ean13("893523522627"), "8935235226272")
+        self.assertEqual(bp.complete_ean13("9786042398060"), "9786042398060")  # already complete
+        self.assertEqual(bp.complete_ean13("012345678905"), "012345678905")  # a UPC-A is another code
+
+    async def test_phuong_nam_twelve_digit_barcode_is_indexed_and_verified_as_ean13(self):
+        feed = [{"id": 1, "handle": "host-club-15", "title": "Host Club Trường Ouran - Tập 15",
+                 "variants": [{"barcode": "978604239806", "sku": "3TT0001"}]}]
+
+        def handler(request):
+            page = int(request.url.params.get("page", "1"))
+            return httpx.Response(200, json={"products": feed if page == 1 else []})
+        with patch("bookstore_providers.CODE_INDEX_PAGE_DELAY_SECONDS", 0):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                built = await bp.build_code_index(client, bp.PHUONGNAM)
+        self.assertEqual(built["codes"], {"9786042398060": "https://nhasachphuongnam.com/products/host-club-15"})
+        self.assertFalse(built["truncated"])
+        data = bp.PHUONGNAM.parse({**feed[0], "description": "<p>Truyện tranh.</p>"}, "u")
+        self.assertEqual(data["identifiers"], ["9786042398060"])
+        self.assertEqual(data["authors"], [])  # the vendor is the supplier, never the author
+
+    async def test_a_feed_longer_than_the_page_cap_is_marked_truncated(self):
+        def handler(request):
+            page = int(request.url.params.get("page", "1"))
+            return httpx.Response(200, json={"products": [{"id": page, "handle": f"p{page}", "variants": []}]})
+        with patch("bookstore_providers.CODE_INDEX_PAGE_DELAY_SECONDS", 0), \
+             patch("bookstore_providers.CODE_INDEX_MAX_PAGES", 3):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                built = await bp.build_code_index(client, bp.NHANVAN)
+        self.assertTrue(built["truncated"])
+        self.assertEqual(built["products"], 3)
+
+    def test_nhan_van_spec_table(self):
+        product = {"title": "Ultraman - Tập 2 - Tặng Kèm Card Metalize", "vendor": "NXB Kim Đồng",
+                   "tags": ["tacgia: Eiichi Shimizu; Tomohiro Shimoguchi"],
+                   "description": "<p>THÔNG TIN CHI TIẾT</p><table><tr><td>Mã sản phẩm</td><td>9786042425353</td></tr>"
+                                  "<tr><td>Tác giả</td><td>Eiichi Shimizu, Tomohiro Shimoguchi</td></tr>"
+                                  "<tr><td>Người dịch</td><td>Itsuwa Rei</td></tr><tr><td>NXB</td><td>Kim Đồng</td></tr>"
+                                  "<tr><td>Năm XB</td><td>2026</td></tr><tr><td>Số trang</td><td>192</td></tr></table>",
+                   "variants": [{"barcode": "9786042425353"}]}
+        data = bp.NHANVAN.parse(product, "https://nhanvan.vn/products/ultraman-2")
+        self.assertEqual((data["authors"], data["translator"], data["publisher"], data["publishedDate"], data["pageCount"]),
+                         (["Eiichi Shimizu", "Tomohiro Shimoguchi"], ["Itsuwa Rei"], "Kim Đồng", "2026", 192))
+        self.assertEqual(data["identifiers"], ["9786042425353"])
+
+    def test_minh_long_book_prefix_with_colon(self):
+        data = bp.MINHLONG.parse({"title": "Sách: Đánh Thức Khả Năng Quan Sát Và Ghi Nhớ", "vendor": "Khác",
+                                  "variants": [{"barcode": "8936238103737"}]}, "u")
+        self.assertEqual(data["title"], "Đánh Thức Khả Năng Quan Sát Và Ghi Nhớ")
+
+    BIZBOOKS_ITEM = {
+        "id": 1, "name": "Đắc Nhân Tâm: Bí quyết để thành công - Tinh hoa được chắt lọc", "sku": "#8935246945926",
+        "permalink": "https://bizbooks.vn/san-pham/dac-nhan-tam/", "attributes": [],
+        "description": "<p>Đắc Nhân Tâm dạy bạn hiểu con người sâu sắc.</p>",
+        "categories": [{"name": "Kỹ năng giao tiếp"}], "images": [{"src": "https://bizbooks.vn/a.jpg"}],
+    }
+
+    def test_bizbooks_item_is_parsed(self):
+        data = bp.parse_bizbooks_product(self.BIZBOOKS_ITEM)
+        self.assertEqual(data["identifiers"], ["8935246945926"])  # "#" stripped from the SKU
+        self.assertEqual(data["title"], "Đắc Nhân Tâm: Bí quyết để thành công - Tinh hoa được chắt lọc")
+        self.assertEqual((data["categories"], data["thumbnail"]), (["Kỹ năng giao tiếp"], "https://bizbooks.vn/a.jpg"))
+        self.assertEqual((data["authors"], data["publisher"]), ([], None))  # not in the API, never guessed
+        self.assertIn("hiểu con người", data["description"])
+
+    async def test_bizbooks_by_code_uses_the_store_api_and_prefers_the_matching_sku(self):
+        other = {**self.BIZBOOKS_ITEM, "name": "Sách khác", "sku": "#8935246900000"}
+        calls = []
+        routes = {bp.BIZBOOKS_STORE_API: httpx.Response(200, json=[other, self.BIZBOOKS_ITEM])}
+        async with client_for(routes, calls) as client:
+            data = await bp.bizbooks_by_code(client, "8935246945926")
+        self.assertEqual(data["identifiers"], ["8935246945926"])
+        self.assertIn("search=8935246945926", calls[0])
+        self.assertNotIn("/?s=", calls[0])  # the site search does not match SKUs
+
+    async def test_bizbooks_without_the_code_returns_the_first_hit_or_nothing(self):
+        other = {**self.BIZBOOKS_ITEM, "sku": "#8935246900000"}
+        async with client_for({bp.BIZBOOKS_STORE_API: httpx.Response(200, json=[other])}) as client:
+            self.assertEqual((await bp.bizbooks_by_code(client, "8935246945926"))["identifiers"], ["8935246900000"])
+        async with client_for({bp.BIZBOOKS_STORE_API: httpx.Response(200, json=[])}) as client:
+            self.assertIsNone(await bp.bizbooks_by_code(client, "8935246945926"))
+
+
 class IndexTitleSearchTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         bp._code_index.clear()

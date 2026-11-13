@@ -37,7 +37,8 @@ export interface LookupBookByIsbnRequest {
 export type IsbnSourceName =
   | 'catalog' | 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook'
   | 'nhanam' | 'dinhTi' | 'thaiHa' | 'vanLang'
-  | 'ipm' | 'kimDong' | 'azVietnam' | 'omegaPlus' | 'tanViet' | 'alphaBooks' | 'webSearch' | 'aiWebSearch';
+  | 'ipm' | 'kimDong' | 'azVietnam' | 'omegaPlus' | 'tanViet' | 'alphaBooks'
+  | 'phuongNam' | 'nhanVan' | 'minhLong' | 'bizbooks' | 'webSearch' | 'aiWebSearch';
 
 /** How a source's value was pulled out - structured API/JSON-LD is most reliable,
  *  an AI-inferred value the least (see services/ai-service/isbn_fusion.py). */
@@ -203,6 +204,10 @@ export interface LookupBookByIsbnResponse {
     omegaPlus?: boolean;
     tanViet?: boolean;
     alphaBooks?: boolean;
+    phuongNam?: boolean;
+    nhanVan?: boolean;
+    minhLong?: boolean;
+    bizbooks?: boolean;
     webSearch?: boolean;
     aiWebSearch?: boolean;
     aiSummary: string;
@@ -226,6 +231,10 @@ export interface LookupBookByIsbnResponse {
     omegaPlus?: number;
     tanViet?: number;
     alphaBooks?: number;
+    phuongNam?: number;
+    nhanVan?: number;
+    minhLong?: number;
+    bizbooks?: number;
     webSearch?: number;
     aiWebSearch?: number;
   };

@@ -147,7 +147,7 @@ export function AIImportPage() {
 
   const sourceCount = useMemo(() => {
     if (!lookupData) return 0;
-    const keys = ["catalog", "googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "nhanam", "dinhTi", "thaiHa", "vanLang", "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks", "webSearch", "aiWebSearch"] as const;
+    const keys = ["catalog", "googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook", "nhanam", "dinhTi", "thaiHa", "vanLang", "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks", "phuongNam", "nhanVan", "minhLong", "bizbooks", "webSearch", "aiWebSearch"] as const;
     return keys.filter((key) => lookupData.source[key]).length;
   }, [lookupData]);
 

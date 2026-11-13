@@ -38,6 +38,12 @@ SOURCE_RELIABILITY = {
     "omegaPlus": {"default": 0.88, "title": 0.93, "authors": 0.9, "translator": 0.9, "publisher": 0.88, "pageCount": 0.9, "categories": 0.6},
     "tanViet": {"default": 0.88, "title": 0.93, "authors": 0.9, "translator": 0.9, "publisher": 0.88, "pageCount": 0.9, "categories": 0.6},
     "alphaBooks": {"default": 0.88, "title": 0.93, "authors": 0.9, "translator": 0.9, "publisher": 0.88, "pageCount": 0.9, "categories": 0.6},
+    # Bookstore chains: Nhân Văn has a full spec table; Phương Nam, Minh Long and Bizbooks
+    # give little more than title/description, read from their own product JSON.
+    "nhanVan": {"default": 0.88, "title": 0.93, "authors": 0.9, "translator": 0.9, "publisher": 0.88, "pageCount": 0.9, "categories": 0.6},
+    "phuongNam": {"default": 0.88, "title": 0.93, "categories": 0.6},
+    "minhLong": {"default": 0.85, "title": 0.9, "categories": 0.6},
+    "bizbooks": {"default": 0.88, "title": 0.93, "categories": 0.6},
     # AI web search: a model READING cited pages; every value is checked against the page
     # text (ai_web_search.verify), still below sources read directly.
     "aiWebSearch": {"default": 0.75, "title": 0.8, "authors": 0.75, "publisher": 0.75, "pageCount": 0.75},
