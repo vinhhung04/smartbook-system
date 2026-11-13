@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 const { pushToRooms } = require('../lib/socket-emitter');
 
 const {
@@ -9,7 +8,7 @@ const {
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 // Phase 5 warehouse scope: managers list, read, assign and resolve only
 // reports of warehouses in their scope (the warehouse is the stored report's),

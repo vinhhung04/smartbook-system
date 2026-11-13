@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { getMeter } = require('@smartbook/shared/metrics');
 
-const prisma = new PrismaClient();
+const { prisma } = require('./prisma');
 const meter = getMeter('inventory-service');
 
 let lastOutboxPending = 0;

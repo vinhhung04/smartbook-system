@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { pushToRooms } = require('../lib/socket-emitter');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const VALID_ALERT_TYPES = ['LOW_STOCK', 'OUT_OF_STOCK', 'STOCK_RISK', 'AGING_STOCK'];
 const VALID_ALERT_LEVELS = ['LOW', 'MEDIUM', 'HIGH'];

@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const COMPARTMENT_TYPES = ['SHELF_COMPARTMENT', 'BIN'];
 

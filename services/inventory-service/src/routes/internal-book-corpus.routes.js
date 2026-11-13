@@ -1,10 +1,9 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const {
   isValidInternalKey, mapCatalogRecord, mapCorpusBook, normalizeCatalogCode, parseCorpusPageParams,
 } = require('../services/internal-catalog.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 // Feed for ai-service's catalog_sync.py, which keeps the BOOK_METADATA vector
 // corpus in step with the catalog. That background job has no user session, so

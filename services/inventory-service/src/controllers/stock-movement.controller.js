@@ -1,7 +1,6 @@
-const { PrismaClient } = require('@prisma/client');
 const { scopedWarehouseWhere, scopeErrorStatus } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 function mapMovementType(rawType, fromLocationId, toLocationId) {
   const normalized = String(rawType || '').toUpperCase();

@@ -1,6 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const READY_PUTAWAY_STATUS = 'POSTED';
 const POSTING_REFERENCE_TYPE = 'GOODS_RECEIPT';

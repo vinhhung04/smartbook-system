@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
 const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
 const { normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear } = require('../services/catalog-metadata.validation');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const UNCATEGORIZED_NAME = 'Chưa phân loại';
 const UNCATEGORIZED_SLUG = 'chua-phan-loai';

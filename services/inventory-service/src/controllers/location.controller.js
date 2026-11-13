@@ -1,9 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
 
 const { requireWarehouseReadAccess } = require('../utils/warehouse-scope.utils');
 const { getOccupancyByLocationIds, rollUpOccupancy } = require('../services/location-capacity.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const LOCATION_TYPES = ['ZONE', 'SHELF', 'SHELF_COMPARTMENT', 'BIN'];
 const ROOT_TYPES = ['ZONE'];

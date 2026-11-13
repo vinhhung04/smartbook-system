@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
 const { canonicalKey } = require('../services/authority-normalization.service');
 const { checkDuplicates, normalizeIsbn } = require('../services/duplicate-intelligence.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 const ACTIONS = ['LINK_EXISTING_VARIANT', 'CREATE_VARIANT_FOR_EDITION', 'CREATE_NEW_EDITION', 'CREATE_NEW_TITLE', 'DISMISS_WARNING'];
 
 function inputMetadata(req) {

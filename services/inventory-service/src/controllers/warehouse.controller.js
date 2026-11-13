@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 
 const {
   readableWarehouseFilter,
@@ -6,7 +5,7 @@ const {
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 function parseId(value) {
   return String(value || '').trim() || null;

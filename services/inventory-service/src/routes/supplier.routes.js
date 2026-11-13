@@ -1,7 +1,6 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const { authorizeManagerDecision, authorizeManagerRead } = require('../middlewares/auth.middleware');
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 const router = express.Router();
 
 router.get('/', authorizeManagerRead(['inventory.supplier.read', 'inventory.purchase.read']), async (req, res) => {
