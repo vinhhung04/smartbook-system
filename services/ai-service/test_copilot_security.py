@@ -26,7 +26,7 @@ from test_copilot_visualization import COMPARE, NOW, WAREHOUSES, FakeStoreWithDa
 
 HN, HCM = "w-hn", "w-hcm"
 MANAGER = UserContext(user_id="11111111-1111-4111-8111-111111111111", username="m", roles=["WAREHOUSE_MANAGER"],
-                      permissions=["analytics.read"], is_superuser=False)
+                      permissions=["analytics.read", "inventory.purchase.request"], is_superuser=False)
 NO_ASSISTANT = UserContext(user_id=MANAGER.user_id, username="m", roles=["WAREHOUSE_STAFF"], permissions=["inventory.task.read"],
                            is_superuser=False)
 OTHER = UserContext(user_id="22222222-2222-4222-8222-222222222222", username="o", roles=["WAREHOUSE_MANAGER"],
@@ -277,6 +277,7 @@ class ActionConfirmationTests(unittest.IsolatedAsyncioTestCase):
 
         self._patches = [
             patch("main.cleanup_expired_actions", new=AsyncMock()),
+            patch("main.release_stale_confirmed_actions", new=AsyncMock(return_value=0)),
             patch("main.get_user_context", new=user),
             patch("main.mark_action_confirmed", new=self.claimed),
             patch("main.mark_action_executed", new=AsyncMock()),

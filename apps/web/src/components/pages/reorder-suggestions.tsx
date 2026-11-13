@@ -106,7 +106,11 @@ export function ReorderSuggestionsPage() {
   const [noShowLoading, setNoShowLoading] = useState(true);
   const [noShowError, setNoShowError] = useState<string | null>(null);
 
+  // Only the latest request may update the page: changing the budget, period or
+  // limit while an analysis is running must not let the older answer land last.
+  const latestRequest = useRef(0);
   const loadData = useCallback(async () => {
+    const request = ++latestRequest.current;
     try {
       setLoading(true);
       setError(null);
@@ -116,13 +120,14 @@ export function ReorderSuggestionsPage() {
         limit,
         budgetVnd: budgetVnd === '' ? undefined : budgetVnd,
       });
-      setData(response);
+      if (request === latestRequest.current) setData(response);
     } catch (err) {
+      if (request !== latestRequest.current) return;
       const message = getApiErrorMessage(err, 'Không thể tải gợi ý nhập thêm sách');
       setError(message);
       toast.error(message);
     } finally {
-      setLoading(false);
+      if (request === latestRequest.current) setLoading(false);
     }
   }, [days, limit, budgetVnd]);
 

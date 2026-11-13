@@ -55,22 +55,24 @@ export function stockoutText(item: ReorderSuggestionItem) {
 // ── Budget funding ──────────────────────────────────────────────────────────────
 // With a budget the service re-sizes each line against its inventory position
 // (budget_plan.cap_qty) and funds copies up to that cap. A line whose cap is 0 is
-// not "over budget" - the plan simply needs nothing for it.
-export type FundingStatus = 'FULL' | 'PARTIAL' | 'UNFUNDED' | 'NOT_NEEDED';
+// not "over budget" - the plan simply needs nothing for it. A line the plan needs
+// but the catalog has no unit cost for is never funded (NO_PRICE).
+export type FundingStatus = 'FULL' | 'PARTIAL' | 'UNFUNDED' | 'NOT_NEEDED' | 'NO_PRICE';
 
 export function fundingStatus(item: ReorderSuggestionItem, hasBudget: boolean): FundingStatus | null {
   if (!hasBudget) return null;
   const cap = item.budget_plan?.cap_qty ?? item.suggested_reorder_qty;
   const funded = item.funded_qty ?? 0;
   if (cap <= 0) return 'NOT_NEEDED';
+  if (!(item.unit_cost > 0)) return 'NO_PRICE';
   if (funded <= 0) return 'UNFUNDED';
   if (funded < cap) return 'PARTIAL';
   return 'FULL';
 }
 
-/** Quantity the system proposes for a line: what the budget funds, else the plain suggestion. */
+/** Quantity the system proposes for a line: exactly what the budget funds (0 included), else the plain suggestion. */
 export function systemQty(item: ReorderSuggestionItem, hasBudget: boolean) {
-  return hasBudget && item.funded_qty ? item.funded_qty : item.suggested_reorder_qty;
+  return hasBudget ? item.funded_qty ?? 0 : item.suggested_reorder_qty;
 }
 
 export const MAX_ORDER_QTY = 99999;
@@ -148,6 +150,11 @@ export function buildPlanLine(item: ReorderSuggestionItem, leadDays: number, has
     overFunded: hasBudget && qty !== null ? Math.max(0, qty - funded) : 0,
     cost: lineCost(qty, item.unit_cost),
   };
+}
+
+/** Copies the user would order beyond what the budget funds (budget mode). */
+export function overFundedQty(lines: PlanLine[]) {
+  return lines.reduce((sum, line) => sum + line.overFunded, 0);
 }
 
 // ── Risk models ─────────────────────────────────────────────────────────────────

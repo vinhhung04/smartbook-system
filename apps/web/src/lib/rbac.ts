@@ -48,6 +48,7 @@ export const ROUTE_ACCESS = {
   borrowRead: { roles: LIBRARY_ROLES, permissions: ["borrow.read", "borrow.customers.read", "borrow.loans.read"] },
   borrowWrite: { roles: ["ADMIN", "LIBRARIAN"], permissions: ["borrow.write", "borrow.loans.write", "borrow.customers.write"] },
   reports: { roles: MANAGER_OPERATION_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
+  // Same set as ASSISTANT_ROLES / ASSISTANT_PERMISSIONS in services/ai-service/routes_conversations.py.
   aiAssistant: { roles: MANAGER_OPERATION_ROLES, permissions: ["reports.read", "analytics.reports.view", "analytics.read"] },
   admin: { roles: ADMIN_ROLES, permissions: ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"] },
   customer: { roles: ["CUSTOMER"], permissions: ["customer.self.read", "inventory.catalog.read"] },

@@ -26,6 +26,9 @@ aggregates these across a request's rounds and attaches them to the
 """
 from __future__ import annotations
 
+from ai_core.observability import current_request_id
+import asyncio
+import contextlib
 import functools
 import logging
 import os
@@ -128,14 +131,14 @@ def _log_call(usage: ChatUsage) -> None:
         ai_llm_cost_usd_total.labels(feature=usage.feature, model=usage.model).inc(usage.cost_usd)
     if usage.error:
         logger.warning(
-            "llm_call feature=%s provider=%s model=%s latency_ms=%.0f error=%s",
-            usage.feature, usage.provider, usage.model, usage.latency_ms, usage.error,
+            "llm_call request_id=%s feature=%s provider=%s model=%s latency_ms=%.0f error=%s",
+            current_request_id(), usage.feature, usage.provider, usage.model, usage.latency_ms, usage.error,
         )
     else:
         logger.info(
-            "llm_call feature=%s provider=%s model=%s latency_ms=%.0f prompt_tokens=%s "
+            "llm_call request_id=%s feature=%s provider=%s model=%s latency_ms=%.0f prompt_tokens=%s "
             "completion_tokens=%s tool_calls=%d cost_usd=%s",
-            usage.feature, usage.provider, usage.model, usage.latency_ms, usage.prompt_tokens,
+            current_request_id(), usage.feature, usage.provider, usage.model, usage.latency_ms, usage.prompt_tokens,
             usage.completion_tokens, usage.tool_call_count, usage.cost_usd,
         )
 
@@ -243,6 +246,25 @@ def _is_retryable(exc: Exception) -> bool:
     return isinstance(exc, (httpx.TimeoutException, httpx.TransportError))
 
 
+# Phase F: a 429 answered by an immediate retry is usually a second 429
+# (measured: 10 of 10 retried planner calls at concurrency 3). Wait as the
+# provider asks (Retry-After), bounded so a caller's own timeout still holds.
+RATE_LIMIT_RETRY_MAX_SECONDS = float(os.getenv("OPENROUTER_RATE_LIMIT_RETRY_MAX_SECONDS", "2"))
+
+
+def _rate_limit_delay(exc: Exception) -> float:
+    """Seconds to wait before retrying after `exc`: only for a 429, else 0."""
+    import httpx
+
+    if not (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429):
+        return 0.0
+    try:
+        wanted = float(exc.response.headers.get("retry-after", "1"))
+    except ValueError:
+        wanted = 1.0
+    return max(0.5, min(wanted, RATE_LIMIT_RETRY_MAX_SECONDS))
+
+
 def _image_part(image_bytes: bytes, mime: str) -> dict:
     import base64
 
@@ -330,6 +352,8 @@ class OpenRouterProvider:
                         last_exc = exc
                         if attempt == 0 and retry_once and not _is_retryable(exc):
                             break  # non-transient: skip the same-model retry, go to fallback
+                        if attempt == 0 and retry_once:
+                            await asyncio.sleep(_rate_limit_delay(exc))
                         continue
 
         assert last_exc is not None
@@ -383,6 +407,24 @@ class OpenRouterProvider:
             usage=usage,
         )
 
+    @contextlib.asynccontextmanager
+    async def _open_stream(self, http_client, payload: dict):
+        """The streamed completion request. A 429 arrives before any token, so
+        it gets one bounded wait (Retry-After) and one retry - the non-streaming
+        path has the same retry in _request_completion; without it a busy
+        provider failed the whole assistant answer."""
+        import httpx
+
+        for attempt in (0, 1):
+            async with http_client.stream("POST", f"{self._base_url}/chat/completions",
+                                          headers=self._headers(), json=payload) as response:
+                if response.status_code == 429 and attempt == 0:
+                    delay = _rate_limit_delay(httpx.HTTPStatusError("429", request=response.request, response=response))
+                else:
+                    yield response
+                    return
+            await asyncio.sleep(delay)
+
     async def chat_stream(
         self, messages: list[dict], tools: list[dict], *, num_predict: int, timeout: float,
         temperature: float = 0.2, feature: str = "",
@@ -412,10 +454,7 @@ class OpenRouterProvider:
         cost_usd: float | None = None
         try:
             async with httpx.AsyncClient(timeout=timeout) as http_client:
-                async with http_client.stream(
-                    "POST", f"{self._base_url}/chat/completions",
-                    headers=self._headers(), json=payload,
-                ) as response:
+                async with self._open_stream(http_client, payload) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():
                         if not line or not line.startswith("data:"):

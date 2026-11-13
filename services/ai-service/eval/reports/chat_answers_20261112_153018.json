@@ -1,0 +1,956 @@
+{
+ "summary": {
+  "cases": 32,
+  "answer_accuracy": 0.719,
+  "by_category": {
+   "full_evidence": "4/4",
+   "partial_evidence": "1/4",
+   "no_evidence": "4/4",
+   "false_premise": "2/4",
+   "contradicts_kb": "4/4",
+   "dynamic_data": "2/4",
+   "multi_source": "3/4",
+   "near_miss": "3/4"
+  },
+  "abstention_accuracy": 0.875,
+  "false_refusal_rate": 0.188,
+  "unsupported_claim_cases": 0,
+  "citation_precision": 0.6,
+  "citation_completeness": 0.7,
+  "grounding_warning_rate": 0.25,
+  "throttled": 0
+ },
+ "rows": [
+  {
+   "id": "ans-full-01",
+   "category": "full_evidence",
+   "user": "customer01",
+   "question": "Hạng Bạc Sĩ được mượn tối đa bao nhiêu cuốn và bao nhiêu ngày?",
+   "expect": "answer",
+   "must_include": [
+    "5",
+    "21"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "membership-plans-overview",
+    "membership-loan-limit"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "membership-loan-limit",
+    "membership-plans-overview",
+    "renewal-count"
+   ],
+   "citation_precision": 0.6666666666666666,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn, theo quy định hiện hành của SmartBook:\n\n📚 **Hạng Bạc Sĩ (SILVER)** cho phép mượn tối đa **5 cuốn** sách.\n⏳ Thời hạn mượn là **21 ngày** mỗi lượt.\n\nNgoài ra, thành viên hạng này còn được gia hạn tối đa **2 lần** và giữ chỗ đặt trước **36 giờ**.\n\nBạn có thể xem chi tiết quyền lợi hoặc nâng cấp thẻ tại trang **Gói thành viên** 🪪.\n\nNguồn dữ liệu: FAQ: Mỗi hạng thành viên được mượn tối đa bao nhiêu sách và trong bao lâu?, FAQ: Tôi có thể gia hạn sách đã mượn không?, FAQ: SmartBook có những hạng thẻ thành viên nào và quyền lợi khác nhau ra sao?, Gói thành viên hiện hành",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-full-02",
+   "category": "full_evidence",
+   "user": "customer01",
+   "question": "Mã OTP gửi qua email có hiệu lực trong bao lâu?",
+   "expect": "answer",
+   "must_include": [
+    "5 phut"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "account-security"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "account-security"
+   ],
+   "citation_precision": 1.0,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Mã OTP gửi qua email có hiệu lực trong **5 phút** 📧.\n\nNgoài ra, bạn cần lưu ý một số quy định bảo mật quan trọng:\n- Mỗi mã chỉ được nhập sai tối đa **5 lần**.\n- Phải chờ **60 giây** trước khi yêu cầu nhận mã mới.\n- Không bao giờ chia sẻ mã OTP cho người khác, kể cả người tự xưng là nhân viên thư viện 🔒.\n\nNguồn dữ liệu: FAQ về bảo mật tài khoản và xác thực OTP.\n\nNguồn dữ liệu: FAQ: Mã OTP gửi qua email có hiệu lực bao lâu?",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-full-03",
+   "category": "full_evidence",
+   "user": "customer01",
+   "question": "Nạp tiền vào ví được những mệnh giá nào?",
+   "expect": "answer",
+   "must_include": [
+    "10000",
+    "200000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "wallet-vnpay"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "fines-payment",
+    "wallet-vnpay"
+   ],
+   "citation_precision": 0.5,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn, theo quy định của SmartBook, ví tài khoản chỉ chấp nhận các mệnh giá cố định sau:\n\n- **10.000 VND**\n- **20.000 VND**\n- **50.000 VND**\n- **100.000 VND**\n- **200.000 VND**\n\nBạn có thể nạp tiền trực tuyến qua cổng VNPay trên web hoặc ứng dụng di động, hoặc đến quầy thư viện để giao dịch bằng tiền mặt/chuyển khoản. 📚💳",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-full-04",
+   "category": "full_evidence",
+   "user": "librarian01",
+   "question": "Quy trình kiểm kê kho diễn ra thế nào?",
+   "expect": "answer",
+   "must_include": [
+    "kiem ke"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "warehouse-operations"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "goods-receipt-process",
+    "warehouse-operations"
+   ],
+   "citation_precision": 0.5,
+   "citation_complete": true,
+   "grounding_warning": true,
+   "reply": "Chào bạn, thủ thư **librarian01**.\n\nTheo quy định hiện hành của SmartBook, quy trình kiểm kê kho (stock audit) diễn ra như sau:\n\n- **Tạo đợt kiểm kê:** Quản lý tạo đợt kiểm kê cho một kho cụ thể và giao nhiệm vụ cho nhân viên.\n- **Đếm thực tế:** Nhân viên sử dụng ứng dụng di động để quét mã hoặc đếm số lượng thực tế từng dòng hàng, sau đó gửi kết quả (**submit**).\n- **Xem xét & Duyệt:** Quản lý đối chiếu chênh lệch giữa số đếm thực tế và số liệu trên hệ thống, sau đó quyết định **duyệt (approve)** hoặc **hủy** đợt kiểm kê.\n\n⚠️ **Lưu ý:** Tồn kho chỉ được cập nhật chính thức sau khi đợt kiểm kê được quản lý duyệt thành công.\n\nĐể thực hiện hoặc theo dõi tiến độ kiểm kê, bạn vui lòng truy cập mục **Inventory** hoặc **Stock Audit** trên Dashboard.\n\nNguồn dữ liệu: FAQ Kiểm kê kho (stock audit)",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-part-01",
+   "category": "partial_evidence",
+   "user": "customer01",
+   "question": "Chủ nhật thư viện mở cửa đến mấy giờ và có wifi miễn phí không?",
+   "expect": "partial",
+   "must_include": [
+    "17:00"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [
+    "co wifi mien phi",
+    "khong co wifi"
+   ],
+   "expected_docs": [
+    "branches-opening-hours"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [
+    "ai-assistant-scope",
+    "branches-opening-hours",
+    "reader-features"
+   ],
+   "citation_precision": 0.3333333333333333,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn, dựa trên thông tin hiện hành của hệ thống SmartBook:\n\n🕒 **Giờ mở cửa Chủ nhật**: Các chi nhánh đều đóng cửa lúc **17:00** (mở cửa từ 8:00).\n📶 **Wifi miễn phí**: Tài liệu của thư viện chưa có thông tin về việc cung cấp wifi miễn phí tại các chi nhánh. Bạn nên kiểm tra trực tiếp tại quầy thủ thư hoặc trang Chi nhánh để có thông tin mới nhất nhé.\n\n✅ Thẻ thư viện của bạn còn hiệu lực đến **2027-09-08**. Hiện tại bạn không có khoản phạt nào và tất cả sách đang mượn đều đã được trả đúng hạn.\n\n💡 *Gợi ý*: Để tìm sách nhanh hơn, bạn có thể truy cập trang **Danh mục sách** hoặc hỏi trợ lý AI theo tên/tác giả.",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-part-02",
+   "category": "partial_evidence",
+   "user": "customer01",
+   "question": "Đặt trước sách giữ chỗ bao lâu và có được đặt qua điện thoại không?",
+   "expect": "partial",
+   "must_include": [
+    "gio"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [],
+   "expected_docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ],
+   "correct": false,
+   "facts_ok": false,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": false,
+   "grounding_warning": true,
+   "reply": "Chào bạn, dựa trên dữ liệu hiện tại của hệ thống **SmartBook**, tôi xin thông báo như sau:\n\n📚 **Về thời gian giữ sách:**\nTài liệu và dữ liệu cấu hình hiện hành của thư viện **chưa có thông tin cụ thể** về số ngày được giữ chỗ (ví dụ: 3 ngày hay 7 ngày). Bạn vui lòng kiểm tra kỹ email xác nhận đặt sách hoặc liên hệ trực tiếp để biết chính xác hạn cuối cùng bạn cần đến nhận sách.\n\n📞 **Về việc đặt qua điện thoại:**\nHệ thống SmartBook hiện hỗ trợ đặt sách chủ yếu qua nền tảng số (Website/Ứng dụng). Tài liệu hiện tại **chưa xác nhận** khả năng đặt giữ chỗ qua tổng đài điện thoại. Để đảm bảo đơn hàng được xử lý nhanh nhất, bạn nên thực hiện đặt qua tài khoản cá nhân.\n\n💡 **Lời khuyên:**\nBạn đang có **18 yêu cầu đặt sách** (chủ yếu là **\"Norwegian Wood\"**) đã chuyển thành trạng thái **CONVERTED_TO_LOAN**. Điều này cho thấy các đầu sách này đã sẵn sàng để bạn mượn. Bạn hãy kiểm tra lại mục \"Sách đang chờ\" trong Dashboard để hoàn tất thủ tục mượn nhé!\n\nNếu cần hỗ trợ thêm về quy trình nhận sách, bạn có thể truy cập trang **Hỗ trợ & Liên hệ** hoặc ghé quầy thủ thư.",
+   "intent": "RESERVATION_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-part-03",
+   "category": "partial_evidence",
+   "user": "librarian01",
+   "question": "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?",
+   "expect": "partial",
+   "must_include": [
+    "librarian"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [],
+   "expected_docs": [
+    "roles-permissions"
+   ],
+   "correct": false,
+   "facts_ok": false,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [
+    "library-law-reading-culture",
+    "membership-loan-limit",
+    "membership-plans-overview"
+   ],
+   "citation_precision": 0.0,
+   "citation_complete": false,
+   "grounding_warning": false,
+   "reply": "Chào bạn, dựa trên dữ liệu hiện hành của hệ thống SmartBook:\n\n1.  **Quyền hạn:** Tôi không có thông tin chi tiết về \"quyền lợi nhân sự\" hay \"nghỉ phép\" trong tài liệu hướng dẫn nghiệp vụ. Thông tin này thường nằm trong hợp đồng lao động hoặc quy chế nội bộ riêng của thư viện, không được công khai trong FAQ hệ thống.\n2.  **Nghỉ phép:** Tài liệu của thư viện **chưa có thông tin** về số ngày nghỉ phép hàng năm dành cho thủ thư.\n\n👉 **Gợi ý hành động:**\nBạn vui lòng kiểm tra mục **Hỗ trợ & Liên hệ** hoặc trao đổi trực tiếp với **Quản lý thư viện (Warehouse Manager/Admin)** để được cung cấp chính xác nhất về chế độ phúc lợi và nghỉ phép nhé.\n\nNếu bạn cần hỗ trợ các nghiệp vụ khác như xử lý phiếu mượn/trả, xem phạt quá hạn hoặc quản lý tồn kho, tôi luôn sẵn sàng giúp đỡ! 📚✅",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-part-04",
+   "category": "partial_evidence",
+   "user": "customer01",
+   "question": "Làm mất sách thì đền bao nhiêu và có được trả góp không?",
+   "expect": "partial",
+   "must_include": [
+    "100000"
+   ],
+   "must_acknowledge_gap": true,
+   "must_not_include": [
+    "duoc tra gop",
+    "khong duoc tra gop"
+   ],
+   "expected_docs": [
+    "lost-item-fee"
+   ],
+   "correct": false,
+   "facts_ok": false,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": false,
+   "grounding_warning": true,
+   "reply": "Chào bạn,\n\nTài liệu của thư viện SmartBook **chưa có thông tin** cụ thể về mức phí đền bù khi làm mất sách cũng như quy định cho phép trả góp hay không. 📚\n\nĐể biết chính xác quy định này, bạn vui lòng:\n1. Truy cập trang **Hỗ trợ & Liên hệ** để xem nội quy chi tiết.\n2. Hoặc liên hệ trực tiếp với quầy thủ thư để được tư vấn rõ ràng nhất. ⚠️\n\n*Lưu ý: Hiện tại hồ sơ của bạn không có khoản phạt nào chưa thanh toán, nên bạn vẫn đang trong tình trạng tốt. ✅*",
+   "intent": "FINE_SUMMARY_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-none-01",
+   "category": "no_evidence",
+   "user": "customer01",
+   "question": "Thư viện có chỗ đậu xe ô tô miễn phí không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "co cho dau xe",
+    "mien phi gui xe"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+   "intent": "GENERAL_QUERY",
+   "provider": "abstention",
+   "throttled": false
+  },
+  {
+   "id": "ans-none-02",
+   "category": "no_evidence",
+   "user": "librarian01",
+   "question": "Thư viện có tổ chức sự kiện gặp gỡ tác giả không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "thuong xuyen to chuc"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+   "intent": "GENERAL_QUERY",
+   "provider": "abstention",
+   "throttled": false
+  },
+  {
+   "id": "ans-none-03",
+   "category": "no_evidence",
+   "user": "customer01",
+   "question": "Có được mang đồ ăn vào phòng đọc không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "duoc phep mang",
+    "cam mang",
+    "khong duoc mang"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+   "intent": "GENERAL_QUERY",
+   "provider": "abstention",
+   "throttled": false
+  },
+  {
+   "id": "ans-none-04",
+   "category": "no_evidence",
+   "user": "librarian01",
+   "question": "Thư viện có cho thuê máy tính xách tay không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "co cho thue"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+   "intent": "GENERAL_QUERY",
+   "provider": "abstention",
+   "throttled": false
+  },
+  {
+   "id": "ans-false-01",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Phí phạt trễ hạn của Thẻ Đọc là 10.000đ một ngày đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "5000"
+   ],
+   "must_not_include": [
+    "dung vay, phi phat la 10000"
+   ],
+   "expected_docs": [
+    "fine-calculation",
+    "membership-plans-overview"
+   ],
+   "correct": false,
+   "facts_ok": false,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": true,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": false,
+   "grounding_warning": true,
+   "reply": "Tài liệu của thư viện chưa có thông tin về mức phí phạt trễ hạn cụ thể cho **Thẻ Đọc**.\n\nĐể biết chính xác quy định này, bạn vui lòng:\n1. Kiểm tra kỹ lại trong **Hợp đồng đăng ký thẻ** hoặc **Quy chế thư viện** đã ký khi làm thẻ.\n2. Liên hệ trực tiếp với quầy thủ thư hoặc trang **Hỗ trợ & Liên hệ** để được xác nhận rõ ràng.\n\n✅ Hiện tại, bạn không có khoản phạt nào chưa thanh toán trên hệ thống.",
+   "intent": "OVERDUE_LOAN_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-false-02",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Mã OTP có hiệu lực 30 phút phải không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "5 phut"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "account-security"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "account-security"
+   ],
+   "citation_precision": 1.0,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Không phải, bạn nhé. Theo quy định hiện hành của SmartBook:\n\n- Mã OTP có hiệu lực **5 phút** kể từ khi nhận được.\n- Sau 5 phút, mã sẽ tự động hết hạn và bạn cần yêu cầu gửi lại (chờ tối thiểu 60 giây).\n- Giới hạn **30 phút** thực chất là khung thời gian cho phép gửi lại mã xác thực tối đa 5 lần trong một phiên.\n\n⚠️ Lưu ý quan trọng: Không bao giờ chia sẻ mã OTP cho bất kỳ ai, kể cả người tự xưng là nhân viên thư viện.\n\nNguồn dữ liệu: FAQ về bảo mật tài khoản & Mã OTP\n\nNguồn dữ liệu: FAQ: Mã OTP gửi qua email có hiệu lực bao lâu?",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-false-03",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Hạng Thượng Đế chỉ được mượn 5 cuốn phải không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "15"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "membership-plans-overview",
+    "membership-loan-limit"
+   ],
+   "correct": false,
+   "facts_ok": false,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": true,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": false,
+   "grounding_warning": true,
+   "reply": "Chào bạn, dựa trên dữ liệu hiện tại của hệ thống SmartBook, **chưa có thông tin** về quy định hạn mức mượn sách theo hạng thẻ \"Thượng Đế\" hay bất kỳ hạng nào khác. 📚\n\nThông tin chi tiết về giới hạn số lượng sách được phép mượn thường nằm trong phần **Điều khoản & Quy định** hoặc khi bạn đăng ký/thay đổi hạng thẻ. Để biết chính xác quyền lợi của mình, bạn vui lòng:\n\n1. Kiểm tra kỹ lại thông tin thẻ thư viện trên trang **Dashboard**.\n2. Liên hệ trực tiếp với quầy thủ thư hoặc mục **Hỗ trợ & Liên hệ** để được xác nhận quy định cụ thể. ✅\n\n*Lưu ý: Hiện tại bạn đang có **20 quyển** sách đã trả và **18 đặt hàng** đang chờ xử lý, cho thấy bạn là một độc giả rất tích cực! 📊*",
+   "intent": "RESERVATION_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-false-04",
+   "category": "false_premise",
+   "user": "customer01",
+   "question": "Giao dịch VNPay có hiệu lực trong 1 tiếng đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "15 phut"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "wallet-vnpay",
+    "fines-payment"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "account-security",
+    "fines-payment",
+    "wallet-vnpay"
+   ],
+   "citation_precision": 0.6666666666666666,
+   "citation_complete": true,
+   "grounding_warning": true,
+   "reply": "Chào bạn, thông tin này **không chính xác** theo quy định hiện hành của SmartBook. ⚠️\n\nTheo hệ thống, mỗi giao dịch VNPay chỉ có hiệu lực trong **15 phút**, không phải 1 tiếng. 🕒\n\nNếu bạn đã thanh toán nhưng vẫn chưa thấy cập nhật, hãy thử tải lại trang **Tiền phạt** sau khi chờ hệ thống nhận kết quả từ VNPay. Nếu cần hỗ trợ thêm về cổng thanh toán, bạn có thể liên hệ tổng đài VNPay: **1900 55 55 77**. 📞\n\n👉 *Gợi ý: Bạn có thể kiểm tra trạng thái giao dịch hoặc thử thanh toán lại (nếu giao dịch cũ đã hết hạn) tại trang **Tiền phạt**.*",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-contra-01",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Tôi nghe nói làm mất sách chỉ cần đền đúng giá bìa của cuốn sách, có đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "100000"
+   ],
+   "must_not_include": [
+    "dung, chi can den gia bia"
+   ],
+   "expected_docs": [
+    "lost-item-fee"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "book-care",
+    "lost-item-fee"
+   ],
+   "citation_precision": 0.5,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn, thông tin này **không hoàn toàn chính xác** theo quy định hiện hành của SmartBook. 📚\n\nTheo hệ thống, khi sách bị mất, khoản phạt được tính dựa trên **phí đền cơ sở nhân với hệ số hạng thẻ** của bạn (không chỉ là giá bìa). Cụ thể:\n- **Phí đền cơ sở:** **100.000 VND** / cuốn.\n- **Hệ số bồi thường:** Phụ thuộc vào gói thành viên (ví dụ: Thẻ Đọc x1.5 = 150.000 VND; Thượng Đế x1.0 = 100.000 VND).\n- Ngoài ra, nếu sách bị trả muộn trước khi báo mất, bạn sẽ phải chịu thêm **phạt trễ hạn** riêng biệt.\n\nBạn có thể kiểm tra chi tiết mức phí áp dụng cho thẻ của mình hoặc xem lại các trường hợp làm rách/uwet sách tại trang **FAQ & Quy định**. ✅",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-contra-02",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Bạn tôi bảo nạp ví bao nhiêu tiền cũng được, ví dụ 35.000đ, đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "10000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "wallet-vnpay"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "fines-payment",
+    "wallet-vnpay"
+   ],
+   "citation_precision": 0.5,
+   "citation_complete": true,
+   "grounding_warning": true,
+   "reply": "Thực tế không đúng bạn nhé. 😅 Theo quy định hiện hành của SmartBook, hệ thống chỉ chấp nhận các mệnh giá cố định là **10.000**, **20.000**, **50.000**, **100.000** và **200.000 VND**. Bạn không thể nạp số lẻ như 35.000đ trực tuyến được.\n\nNếu muốn nạp chính xác khoản tiền đó, bạn có thể:\n- Nộp tại quầy thư viện bằng tiền mặt hoặc chuyển khoản (thủ thư sẽ ghi nhận).\n- Hoặc chọn mệnh giá cao nhất phù hợp (ví dụ 50.000đ) rồi dùng phần dư cho các lần sau.\n\n👉 Để nạp tiền, bạn hãy vào trang **Tiền phạt** trên web hoặc tab **Ví** trên ứng dụng di động.\n\nNguồn dữ liệu: FAQ Ví SmartBook",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-contra-03",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Còn nợ phạt vẫn đặt trước sách bình thường được mà phải không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "khong"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "fines-payment",
+    "membership-plans-overview"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "fines-payment",
+    "lost-item-fee"
+   ],
+   "citation_precision": 0.5,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Thực tế là **không được** nhé bạn. 🚫\n\nTheo quy định của SmartBook, khi còn nợ tiền phạt chưa thanh toán, hệ thống sẽ khóa các quyền hạn sau:\n- ❌ Không thể **đặt trước (reserve)** sách mới.\n- ❌ Không thể **mượn thêm** sách mới.\n- ✅ Các phiếu mượn đang có hiệu lực vẫn giữ nguyên cho đến khi trả.\n\nBạn cần thanh toán hết số tiền phạt trong mục **Fines** trên Dashboard để kích hoạt lại khả năng đặt và mượn sách. Hiện tại bạn không có khoản phạt nào nên hoàn toàn bình thường! ✅\n\nNguồn dữ liệu: FAQ \"Còn nợ tiền phạt có ảnh hưởng gì không?\" & Dữ liệu hiện hành",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-contra-04",
+   "category": "contradicts_kb",
+   "user": "customer01",
+   "question": "Trả sách hư hỏng thì không bị phạt gì đúng không?",
+   "expect": "correct_premise",
+   "must_include": [
+    "50000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "lost-item-fee",
+    "fines-payment"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "fines-payment",
+    "lost-item-fee"
+   ],
+   "citation_precision": 1.0,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Thực tế là **không đúng** nhé bạn! 😅\n\nTheo quy định của SmartBook, nếu sách trả về ở tình trạng **hư hỏng (DAMAGED)** hoặc **kém (POOR)**, hệ thống sẽ tự động tạo khoản phạt loại **DAMAGE**. Mức phạt mặc định là **50.000 VND/cuốn** (thư viện có thể điều chỉnh tùy trường hợp). Chỉ khi sách được đánh giá là còn tốt thì mới không phát sinh phí này.\n\nBạn nên kiểm tra lại tình trạng các cuốn sách trước khi mang đến quầy trả để tránh mất tiền oan nhé! Nếu cần hỗ trợ thêm, bạn có thể vào trang **Hỗ trợ & Liên hệ** hoặc hỏi trực tiếp thủ thư tại quầy. 📚✅",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-dyn-01",
+   "category": "dynamic_data",
+   "user": "customer01",
+   "question": "Tôi đang mượn những sách nào?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "correct": false,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "borrowing-process",
+    "membership-plans-overview",
+    "reader-features"
+   ],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, dựa trên dữ liệu hệ thống hiện tại, tôi không thể hiển thị tên cụ thể của các đầu sách bạn đang mượn vì thông tin tiêu đề trong danh sách loan của bạn bị ẩn (hiển thị là \"?\").\n\nTuy nhiên, tôi có thể cung cấp tổng quan về tình trạng mượn sách của bạn như sau:\n\n- 📚 **Tổng số phiếu mượn:** Bạn có **15** phiếu mượn được liệt kê.\n- ✅ **Trạng thái:** Tất cả **15** phiếu này đều đã ghi nhận là **\"đã trả\"**.\n- ⚠️ **Lưu ý quan trọng:** Mặc dù hệ thống liệt kê 15 phiếu, nhưng gói thành viên hiện hành của bạn (**The Doc**) chỉ cho phép tối đa **3** cuốn sách cùng lúc. Vì tất cả các sách trong danh sách này đều đã trả, nên hiện tại bạn không vi phạm giới hạn mượn quá mức.\n\nNếu bạn muốn xem chi tiết tên sách hoặc kiểm tra lại lịch sử, vui lòng truy cập trang **Borrow** (Mượn/Trả) để đối chiếu mã số đơn hàng (ví dụ: `LOAN-361675-IAE2OY`).\n\nNguồn dữ liệu: Dữ liệu cá nhân customer01 từ hệ thống SmartBook.",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-dyn-02",
+   "category": "dynamic_data",
+   "user": "customer01",
+   "question": "Tôi còn khoản phạt nào chưa thanh toán không?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, theo dữ liệu hiện tại của hệ thống:\n\n✅ **Bạn không có khoản phạt nào chưa thanh toán.**\n\nTài khoản của bạn đang trong tình trạng tốt. Nếu bạn muốn xem chi tiết lịch sử giao dịch hoặc kiểm tra lại thẻ thư viện, bạn có thể truy cập trang **Dashboard** 👤.",
+   "intent": "FINE_SUMMARY_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-dyn-03",
+   "category": "dynamic_data",
+   "user": "librarian01",
+   "question": "Hiện có bao nhiêu phiếu mượn quá hạn?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, theo dữ liệu hệ thống hiện tại:\n\n✅ **Tổng số phiếu mượn quá hạn:** **0**\n✅ **Tổng số đầu sách đang quá hạn:** **0**\n\nThư viện của chúng ta hiện không có bất kỳ khoản vay nào bị trễ hạn. Tình hình trả sách rất tốt! 🎉\n\nBạn có thể kiểm tra chi tiết tình trạng này trong thẻ **Borrow (Mượn/Trả)** trên Dashboard để xác nhận nhé.",
+   "intent": "OVERDUE_LOAN_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-dyn-04",
+   "category": "dynamic_data",
+   "user": "staff01",
+   "question": "Hôm nay tôi có nhiệm vụ kho nào?",
+   "expect": "dynamic",
+   "must_include": [],
+   "must_not_include": [],
+   "expected_docs": [],
+   "correct": false,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "roles-permissions",
+    "warehouse-operations"
+   ],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, dưới đây là tổng hợp nhiệm vụ kho hiện tại của bạn (staff01):\n\n📦 **Task đang chờ xử lý (47 tasks):**\nBạn có rất nhiều task cần quan tâm, chủ yếu là các báo cáo ngoại lệ (**EXCEPTION_REPORT**) và yêu cầu mua hàng. Các task nổi bật bao gồm:\n- **8 phiếu EXCEPTION_REPORT** đang ở trạng thái **OPEN** (mã: `86f3884a`, `f1312773`, `4b757cc7`, `03237b1f`, `910c645c`, `8da1b8b5`).\n- **1 phiếu PURCHASE_REQUEST** đang ở trạng thái **OPEN** (mã: `86f3884a` - *lưu ý: mã này trùng với exception report trong danh sách trên, vui lòng kiểm tra kỹ*).\n- Các task khác đã hoàn thành hoặc bị hủy (WITHDRAWN/POSTED).\n\n🛒 **Đơn Picking duy nhất:**\n- **Picking #OB-1789983835985-C07C**: Trạng thái **PICKING**. Đây là đơn cần lấy hàng ngay.\n\n📥 **Phiếu Putaway:**\n- Bạn có **16 phiếu Putaway**, nhưng tất cả đều đã ở trạng thái **POSTED** (đã đăng nhập/xuất bản), nghĩa là chúng đã được xử lý xong. Không còn nhiệm putaway nào đang chờ.\n\n✅ **Hành động gợi ý:**\n1. Vào trang **Dashboard** hoặc tab **Nhiệm vụ** để xem chi tiết 8 báo cáo ngoại lệ (**EXCEPTION_REPORT**) và giải quyết các vấn đề phát sinh.\n2. Thực hiện đơn **Picking #OB-1789983835985-C07C** ngay vì nó đang chờ xử lý.\n3. Kiểm tra lại các task **PURCHASE_REQUEST** còn lại để đảm bảo không bỏ sót yêu cầu mua hàng mới.\n\nNguồn dữ liệu: Dữ liệu hệ thống SmartBook cho user staff01.",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-multi-01",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Nếu tôi hạng Vàng Hoàng và trả sách trễ 3 ngày thì bị phạt bao nhiêu tiền?",
+   "expect": "answer",
+   "must_include": [
+    "6000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "fine-calculation",
+    "membership-plans-overview"
+   ],
+   "correct": false,
+   "facts_ok": false,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": true,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": false,
+   "grounding_warning": true,
+   "reply": "Chào bạn,\n\nHiện tại, dữ liệu hệ thống của SmartBook **chưa cung cấp thông tin cụ thể** về mức phạt cho từng hạng thẻ (như Vàng Hoàng) hoặc chi tiết tính phí theo ngày trễ hạn. 📚\n\nĐể biết chính xác số tiền phạt 3 ngày này, bạn vui lòng:\n1. Kiểm tra kỹ hơn trong **Hỗ trợ & Liên hệ** hoặc mục **Nội quy thư viện** trên ứng dụng/web.\n2. Hoặc liên hệ trực tiếp quầy thủ thư để được tư vấn rõ ràng nhất. ✅\n\n*Lưu ý: Hiện tại tài liệu của thư viện chưa có thông tin chi tiết về bảng mức phạt theo hạng thành viên.*",
+   "intent": "FINE_SUMMARY_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-multi-02",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Hạng Bạc Sĩ mượn 21 ngày thì mỗi lần gia hạn được thêm bao nhiêu ngày và gia hạn tối đa mấy lần?",
+   "expect": "answer",
+   "must_include": [
+    "10",
+    "2"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "renewal-count"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "membership-loan-limit",
+    "membership-plans-overview",
+    "renewal-count"
+   ],
+   "citation_precision": 0.3333333333333333,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn customer01,\n\nTheo quy định hiện hành cho hạng thành viên **Bạc Sĩ (SILVER)**:\n- Mỗi lần gia hạn được thêm tối đa **2 lần**.\n- Thời gian gia hạn mỗi lần là **10 ngày** (tương đương một nửa thời hạn mượn gốc 21 ngày).\n\nBạn có thể thực hiện gia hạn trực tiếp trên trang quản lý phiếu mượn của mình. Nếu cần hỗ trợ thêm, hãy nhắn tin nhé! 📚✅",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-multi-03",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Thẻ Đọc làm mất một cuốn sách thì phải đền bao nhiêu tiền?",
+   "expect": "answer",
+   "must_include": [
+    "150000"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "lost-item-fee"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "fines-payment",
+    "lost-item-fee"
+   ],
+   "citation_precision": 0.5,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn, đối với thành viên hạng **Thẻ Đọc (The Doc)**, mức phí đền bù khi làm mất sách là **150.000 VND** cho mỗi cuốn. 📚\n\nCụ thể:\n- Phí đền cơ sở: 100.000 VND/cuốn.\n- Hệ số đền bù của thẻ Đọc: x1.5.\n- Tổng cộng: 100.000 x 1.5 = **150.000 VND**.\n\n⚠️ Lưu ý: Nếu cuốn sách này cũng bị trả muộn trước khi báo mất, bạn sẽ phải chịu thêm tiền phạt trễ hạn (5.000 VND/ngày) riêng biệt.\n\nBạn có thể kiểm tra hoặc thanh toán các khoản phạt liên quan trong mục **Borrow** (Mượn/Trả) trên hệ thống. ✅",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-multi-04",
+   "category": "multi_source",
+   "user": "customer01",
+   "question": "Tôi đặt trước sách ở hạng Thẻ Đọc, sách sẵn sàng lúc 9 giờ sáng thứ Hai thì phải đến lấy trước khi nào?",
+   "expect": "answer",
+   "must_include": [
+    "24"
+   ],
+   "must_not_include": [],
+   "expected_docs": [
+    "reservation-hold",
+    "borrowing-process"
+   ],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "borrowing-process",
+    "reservation-hold"
+   ],
+   "citation_precision": 1.0,
+   "citation_complete": true,
+   "grounding_warning": false,
+   "reply": "Chào bạn, với tư cách là thành viên hạng **Thẻ Đọc (The Doc)**, thời gian giữ chỗ cho sách đã đặt trước là **24 giờ**.\n\n📚 Theo thông tin từ hệ thống:\n- Sách sẵn sàng lúc **9:00 sáng thứ Hai**.\n- Bạn cần đến nhận sách trước **9:00 sáng thứ Ba** (sau 24 giờ).\n\n⚠️ Nếu quá thời hạn này mà không đến nhận, hệ thống sẽ tự động chuyển trạng thái đặt trước sang **hết hạn (EXPIRED)** và trả sách về kho. Bạn có thể đặt trước lại nếu sách còn tồn kho.\n\n✅ Để đảm bảo nhận được sách, bạn nên đến quầy thủ thư hoặc điểm lấy sách sớm nhất có thể trong khung giờ trên.\n\nNguồn dữ liệu: Gói thành viên hiện hành & FAQ về thời gian giữ chỗ.",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-near-01",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Thư viện có cho mượn sách nói (audiobook) không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "khong ho tro",
+    "co cho muon sach noi"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, dựa trên dữ liệu hiện hành của hệ thống **SmartBook**, tài liệu của thư viện **chưa có thông tin** về việc cho mượn sách nói (audiobook) hoặc các định dạng phi in. 📚\n\nHiện tại, hệ thống chỉ ghi nhận các hoạt động mượn/trả sách tiêu chuẩn và chưa liệt kê audiobook trong danh mục dịch vụ. Bạn vui lòng liên hệ trực tiếp quầy thủ thư hoặc trang **Hỗ trợ & Liên hệ** để được xác nhận chính xác nhất nhé! ✅",
+   "intent": "RESERVATION_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-near-02",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "co the gia han qua sms"
+   ],
+   "expected_docs": [],
+   "correct": false,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": false,
+   "false_refusal": false,
+   "cited": [
+    "membership-plans-overview",
+    "renewal-count"
+   ],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, theo quy định hiện hành của SmartBook, **không có** dịch vụ gia hạn thẻ hội viên qua tin nhắn SMS.\n\nThư viện hiện hỗ trợ các hình thức gia hạn và quản lý thẻ như sau:\n- **Gia hạn sách mượn:** Bạn đọc có thể gia hạn trực tiếp trên hệ thống hoặc liên hệ quầy thủ thư (tùy thuộc vào hạng thành viên).\n- **Nâng hạng thẻ:** Việc đổi hạng thẻ do nhân viên thư viện thực hiện tại quầy; cổng bạn đọc chưa hỗ trợ tự nâng hạng trực tuyến.\n\n👉 Để được hỗ trợ cụ thể về thẻ của mình, bạn vui lòng truy cập trang **Hỗ trợ & Liên hệ** hoặc đến trực tiếp **Quầy thủ thư**.\n\nNguồn dữ liệu: FAQ Thư viện SmartBook",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  },
+  {
+   "id": "ans-near-03",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Có thể quyên góp sách cũ cho thư viện không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "chi tiep nhan",
+    "co the quyen gop",
+    "khong nhan quyen gop"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+   "intent": "GENERAL_QUERY",
+   "provider": "abstention",
+   "throttled": false
+  },
+  {
+   "id": "ans-near-04",
+   "category": "near_miss",
+   "user": "librarian01",
+   "question": "Có được mang thú cưng vào thư viện không?",
+   "expect": "abstain",
+   "must_include": [],
+   "must_not_include": [
+    "co quyen yeu cau",
+    "duoc mang thu cung",
+    "cam mang thu cung"
+   ],
+   "expected_docs": [],
+   "correct": true,
+   "facts_ok": true,
+   "forbidden_hits": [],
+   "abstained": true,
+   "false_refusal": false,
+   "cited": [
+    "book-care",
+    "membership-plans-overview",
+    "reader-features"
+   ],
+   "citation_precision": null,
+   "citation_complete": null,
+   "grounding_warning": false,
+   "reply": "Chào bạn, dựa trên quy định hiện hành của SmartBook:\n\n- Tài liệu của thư viện **chưa có thông tin chính thức** về việc cho phép mang thú cưng vào khu vực đọc sách.\n- Tuy nhiên, trong phần hướng dẫn bảo quản sách, hệ thống khuyến cáo người mượn nên **\"để sách xa tầm với của trẻ nhỏ và vật nuôi\"** để tránh làm hư hỏng tài liệu (như rách bìa, cong gáy). 🐾📚\n\nĐể đảm bảo an toàn cho sách và không gian chung, bạn vui lòng tham khảo trực tiếp tại quầy thủ thư hoặc trang **Hỗ trợ & Liên hệ** để được xác nhận quy định cụ thể nhất nhé. ✅",
+   "intent": "GENERAL_QUERY",
+   "provider": "openrouter",
+   "throttled": false
+  }
+ ]
+}

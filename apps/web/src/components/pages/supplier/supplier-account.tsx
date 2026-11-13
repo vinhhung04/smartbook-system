@@ -11,6 +11,7 @@ import { supplierAccountService } from "@/services/supplier-account";
 import { purchaseOrderStatusLabel } from "@/lib/purchase-order-status";
 import type { SupplierPortalOrder, SupplierPortalShortageReport } from "@/services/supplier-portal";
 import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
+import { AIChatbot } from "@/components/ai-chatbot";
 
 type InvoiceLines = Record<string, number>;
 
@@ -445,6 +446,8 @@ export function SupplierAccountPage() {
         onConfirm={confirmState.onConfirm}
         loading={working}
       />
+      {/* Phase F: Supplier Assistant - reads only this supplier's own orders (ai-service supplier.orders). */}
+      <AIChatbot />
     </div>
   );
 }

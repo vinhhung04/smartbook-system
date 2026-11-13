@@ -1,0 +1,14 @@
+PASS - 1. staff creates an action via AI chat :: {"id": "act_ed1e4fc3", "type": "CREATE_REORDER_DRAFT", "status": "PENDING_CONFIRMATION", "summary": "Tạo đề xuất nhập 16 dòng sách từ 2 kho", "payload": {"items
+PASS - 2. action confirmed by its creator :: HTTP 200
+PASS - 3-4. executor could not learn the outcome -> RECONCILE_REQUIRED :: status=RECONCILE_REQUIRED error=some lines have an unknown outcome
+PASS - 4b. a RECONCILE_REQUIRED action is not executed again :: HTTP 409
+PASS - 5. customer cannot read the action :: HTTP 403
+PASS - 6. librarian cannot reconcile :: HTTP 403
+PASS - 7. admin lists the reconciliation queue :: total=1
+PASS - 8. admin reads detail + audit trail :: events=['CREATED', 'CONFIRMED', 'RECONCILE_REQUIRED']
+PASS - 9a. empty note is refused :: HTTP 400
+PASS - 9. admin reconciles as FAILED (evidence: none found) :: HTTP 200 {"success":true,"action_id":"act_ed1e4fc3","status":"FAILED"}
+PASS - 10. audit log has one RECONCILED row with actor, before/after, note :: [{"event_type": "RECONCILED", "actor_user_id": "b251a588-e31a-4e92-9ec3-e80d7c7aff29", "actor_roles": ["ADMIN"], "old_status": "RECONCILE_REQUIRED", "new_status": "FAILED", "metadata": {"error": "reconciled as not execut
+PASS - 11. second reconciliation is refused :: HTTP 409
+PASS - 12. state persists across reads :: status=FAILED
+{"action_id": "act_ed1e4fc3", "steps": 13, "failed": 0}

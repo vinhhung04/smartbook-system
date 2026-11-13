@@ -532,3 +532,74 @@ def dataset_split(case_id: str) -> str:
 
     digest = hashlib.sha256(f"smartbook-eval-split:{case_id}".encode("utf-8")).digest()
     return "val" if digest[0] % 2 == 0 else "test"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase E: retrieval by query type, and whether the ground truth is reachable.
+# ─────────────────────────────────────────────────────────────────────────────
+
+BOOK_QUERY_TYPES = ("ISBN", "AUTHOR", "TITLE", "CATEGORY", "DESCRIPTION")
+_ISBN_IN_QUERY = re.compile(r"(?<!\d)(?:\d{13}|\d{9}[\dx])(?!\d)")  # ISBN-13/EAN-13 (incl. 893...) or ISBN-10
+_AUTHOR_CUES = ("tac gia", "nha van", "nha tho", "cua tac gia", "tac pham nao cua", "sach nao cua", "viet boi")
+_TITLE_CUES = ("tim sach", "co cuon", "cuon sach ten", "sach ten")
+_CATEGORY_CUES = ("tap tho", "tuyen tap tho", "truyen co tich", "the loai", "tieu thuyet trinh tham", "sach thieu nhi",
+                  "truyen ngan nao")
+
+
+def classify_book_query(question: str) -> str:
+    """Deterministic query type of a BOOK_METADATA question - the retrieval
+    route each type should take (ISBN exact lookup, structured author match,
+    title full-text/fuzzy, metadata/category filter, semantic description)."""
+    text = normalize_for_match(question)
+    digits = re.sub(r"[\s-]", "", text)
+    if _ISBN_IN_QUERY.search(digits):
+        return "ISBN"
+    if any(cue in text for cue in _AUTHOR_CUES):
+        return "AUTHOR"
+    if any(cue in text for cue in _CATEGORY_CUES):
+        return "CATEGORY"
+    quoted = any(q in question for q in ("'", '"', "“", "‘"))
+    if quoted or (any(text.startswith(cue) or f" {cue} " in f" {text} " for cue in _TITLE_CUES)
+                  and len(text.split()) <= 9):
+        return "TITLE"
+    return "DESCRIPTION"
+
+
+def precision_at_k(retrieved_ids: list[str], expected_ids: list[str], k: int) -> float | None:
+    """Share of the top-k that is relevant; None when nothing was returned
+    (an abstention is scored by abstention_metrics, not here)."""
+    top = retrieved_ids[:k]
+    if not top:
+        return None
+    expected = set(expected_ids)
+    return sum(1 for doc_id in top if doc_id in expected) / len(top)
+
+
+def by_query_type(results: list[dict], catalog_ids: set[str] | None = None) -> dict:
+    """Recall@1/5, Precision@5, MRR and abstention per query type; answerable
+    cases whose expected ids are not in the evaluated catalog are counted as
+    UNREACHABLE and also reported separately - a retriever cannot find a book
+    that is not there, so that miss is a data/ground-truth drift, not a ranking
+    error. The raw (all cases) numbers are kept alongside."""
+    groups: dict[str, list[dict]] = {}
+    for r in results:
+        groups.setdefault(r["query_type"], []).append(r)
+    out = {}
+    for qtype, items in sorted(groups.items()):
+        answerable = [r for r in items if r["expected_ids"]]
+        reachable = [r for r in answerable if catalog_ids is None or set(r["expected_ids"]) & catalog_ids]
+        precisions = [p for p in (precision_at_k(r["retrieved_ids"], r["expected_ids"], 5) for r in answerable)
+                      if p is not None]
+        no_answer = [r for r in items if not r["expected_ids"]]
+
+        def agg(rows):
+            return aggregate_retrieval_scores(rows) if rows else None
+
+        out[qtype] = {
+            "cases": len(items), "answerable": len(answerable), "reachable": len(reachable),
+            "unreachable": len(answerable) - len(reachable),
+            "all_answerable": agg(answerable), "reachable_only": agg(reachable),
+            "precision_at_5": round(sum(precisions) / len(precisions), 4) if precisions else None,
+            "no_answer": abstention_metrics(no_answer) if no_answer else None,
+        }
+    return out

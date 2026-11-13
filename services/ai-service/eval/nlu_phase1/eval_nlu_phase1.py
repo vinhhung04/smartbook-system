@@ -88,7 +88,9 @@ def _month(year: int, month: int) -> tuple[date, date]:
 
 def resolve_period(token: str) -> tuple[str, str]:
     t = TODAY
-    if token == "this_month":
+    if token == "today":
+        s, e = t, t
+    elif token == "this_month":
         s, e = t.replace(day=1), t
     elif token == "last_month":
         prev = t.replace(day=1) - timedelta(days=1)
@@ -151,7 +153,7 @@ def mock_collected(plan_tools: list[dict], turn: dict) -> dict:
 # ── running the planner ─────────────────────────────────────────────────────
 
 def load_cases(split: str | None) -> list[dict]:
-    with open(DATASET, encoding="utf-8") as fh:
+    with open(DATASET, encoding="utf-8") as fh:  # DATASET may be replaced by --dataset
         cases = [json.loads(line) for line in fh if line.strip()]
     return [c for c in cases if split in (None, "all") or c["split"] == split]
 
@@ -169,6 +171,9 @@ def plan_record(plan) -> dict:
         "is_followup": d.get("is_followup"), "style": d.get("style") or {},
         "viz": (d.get("visualization") or {}).get("chart_type"),
         "sub_questions": d.get("sub_questions") or [],
+        "carried": d.get("carried_over") or [],
+        # Phase F: the list of the previous turn the plan carries ("trong số đó")
+        "subset": [i.get("title") for i in (d.get("entities") or {}).get("subset_items") or [] if isinstance(i, dict)],
     }
 
 
@@ -204,7 +209,7 @@ async def run(code_dir: str, mode: str, split: str | None, concurrency: int) -> 
                     plan = cp.QueryPlan(intent="GENERAL_QUERY")
                 elapsed = (time.perf_counter() - started) * 1000
                 gold = {k: v for k, v in turn.items() if k != "q"}
-                if "focus" in turn:
+                if "focus" in turn or turn.get("subset"):
                     gold["_items"] = items
                 items = turn.get("mock_items") or items
                 rec = plan_record(plan)
@@ -289,6 +294,9 @@ def score_turn(r: dict) -> dict:
         items = g.get("_items") or []
         want = items[g["focus"] - 1] if len(items) >= g["focus"] else None
         ents["focus"] = g["focus"] in rank_args or (p["focus"] is not None and p["focus"] == want)
+    if g.get("subset"):
+        # Phase F: "trong số đó" must carry the previous list itself, not just a label
+        ents["subset"] = bool(g.get("_items")) and p.get("subset") == list(g["_items"])
     if "viz" in g:
         ents["viz"] = p["viz"] == g["viz"]
     if "style" in g:
@@ -428,8 +436,15 @@ def main() -> None:
     ap.add_argument("--label", default="run")
     ap.add_argument("--concurrency", type=int, default=3)
     ap.add_argument("--rescore")
+    ap.add_argument("--dataset", help="questions .jsonl (default: the Phase 1 set)")
+    ap.add_argument("--reports", help="report directory (default: eval/reports/nlu_phase1)")
     ap.add_argument("--hash", action="store_true", help="print the sha256 of the split and exit")
     args = ap.parse_args()
+    global DATASET, REPORTS
+    if args.dataset:
+        DATASET = os.path.abspath(args.dataset)
+    if args.reports:
+        REPORTS = os.path.abspath(args.reports)
     if args.hash:
         print(dataset_hash(args.split))
         return

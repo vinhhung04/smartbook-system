@@ -46,6 +46,13 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "SmartBook mở thư viện ảnh khi bạn chọn một ảnh bìa sách để tìm sách.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

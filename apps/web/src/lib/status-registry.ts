@@ -80,6 +80,7 @@ const DOMAINS = {
     CANCELLED: 'neutral',
     EXPIRED: 'danger',
     FAILED: 'danger',
+    RECONCILE_REQUIRED: 'warning',
   },
   pendingActionRisk: {
     LOW: 'success',

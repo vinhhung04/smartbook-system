@@ -1,5 +1,6 @@
 import type { AiVerification } from '@/lib/copilot-verification';
 import { aiAPI, getToken } from './http-clients';
+import { readHttpError, type AiExplainability, type BookAvailability, type TurnImage } from './ai-experience';
 
 export interface RecommendationResponse {
   recommendations: Array<{
@@ -345,6 +346,8 @@ export interface AssistantResponse extends AssistantExtras {
   evidence?: AiEvidenceItem[];
   retrieval_warnings?: string[];
   plan?: AssistantPlanSummary | null;
+  explainability?: AiExplainability | null;
+  image_context?: ImageContextSummary | null;
 }
 
 export interface PendingAction {
@@ -385,6 +388,8 @@ export interface AiActionListItem {
   created_at: string;
   expires_at: string;
   conversation_id: string | null;
+  /** Why the action failed or awaits reconciliation. */
+  error_message?: string | null;
 }
 
 export interface AiActionDetail extends AiActionListItem {
@@ -449,6 +454,17 @@ export interface ChatResponse {
   context_sources?: Array<{ name: string; endpoint?: string; status?: string }>;
   retrieval_warnings?: string[];
   pending_action?: PendingAction | null;
+  /** Phase F: the unified evidence contract and the photo this turn used (both optional). */
+  explainability?: AiExplainability | null;
+  image_context?: ImageContextSummary | null;
+}
+
+export interface ImageContextSummary {
+  attachment_id: string;
+  used: boolean;
+  status: string;
+  book?: { book_id: string; title: string | null; authors?: string[]; isbn?: string | null } | null;
+  availability?: BookAvailability | null;
 }
 
 export interface SystemContext {
@@ -641,6 +657,10 @@ export const aiService = {
       onError: (error: unknown) => void;
       /** Copilot 3.2: the streamed text is a draft being checked against the data. */
       onStatus?: (stage: string) => void;
+      /** Aborting stops the request quietly: no onError, no onDone. */
+      signal?: AbortSignal;
+      /** Phase F: a photo identified by /vision/identify (server checks ownership). */
+      image?: TurnImage;
     },
   ): Promise<void> => {
     try {
@@ -648,6 +668,7 @@ export const aiService = {
       const baseURL = aiAPI.defaults.baseURL || '';
       const response = await fetch(`${baseURL}/assistant/stream`, {
         method: 'POST',
+        signal: handlers.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -655,10 +676,11 @@ export const aiService = {
         body: JSON.stringify({
           message,
           conversation_id: conversationId || null,
+          ...(handlers.image ?? {}),
         }),
       });
       if (!response.ok || !response.body) {
-        throw new Error(`Assistant stream request failed with status ${response.status}`);
+        throw await readHttpError(response, `Assistant stream request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -691,6 +713,7 @@ export const aiService = {
         }
       }
     } catch (error) {
+      if (handlers.signal?.aborted) return;
       handlers.onError(error);
     }
   },
@@ -719,6 +742,10 @@ export const aiService = {
       onToken: (text: string) => void;
       onDone: (data: ChatResponse) => void;
       onError: (error: unknown) => void;
+      /** Aborting stops the request quietly: no onError, no onDone. */
+      signal?: AbortSignal;
+      /** Phase F: a photo identified by /vision/identify (server checks ownership). */
+      image?: TurnImage;
     },
   ): Promise<void> => {
     try {
@@ -726,6 +753,7 @@ export const aiService = {
       const baseURL = aiAPI.defaults.baseURL || '';
       const response = await fetch(`${baseURL}/chat/stream`, {
         method: 'POST',
+        signal: handlers.signal,
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -734,10 +762,11 @@ export const aiService = {
           message,
           conversation_history: conversationHistory,
           system_context: systemContext || null,
+          ...(handlers.image ?? {}),
         }),
       });
       if (!response.ok || !response.body) {
-        throw new Error(`Chat stream request failed with status ${response.status}`);
+        throw await readHttpError(response, `Chat stream request failed with status ${response.status}`);
       }
 
       const reader = response.body.getReader();
@@ -768,6 +797,7 @@ export const aiService = {
         }
       }
     } catch (error) {
+      if (handlers.signal?.aborted) return;
       handlers.onError(error);
     }
   },
@@ -815,7 +845,11 @@ export const aiService = {
     offset?: number;
     conversationId?: string;
     mine?: boolean;
-  }): Promise<{ items: AiActionListItem[]; limit: number; offset: number }> => {
+    type?: string;
+    createdBy?: string;
+    createdFrom?: string;
+    createdTo?: string;
+  }): Promise<{ items: AiActionListItem[]; limit: number; offset: number; total?: number }> => {
     const response = await aiAPI.get('/assistant/actions', {
       params: {
         status: params?.status,
@@ -823,7 +857,27 @@ export const aiService = {
         offset: params?.offset,
         conversation_id: params?.conversationId,
         mine: params?.mine,
+        type: params?.type,
+        created_by: params?.createdBy,
+        created_from: params?.createdFrom,
+        created_to: params?.createdTo,
       },
+    });
+    return response.data;
+  },
+
+  /** Admin: resolve an action whose outcome was unknown (RECONCILE_REQUIRED). */
+  reconcileAction: async (payload: {
+    actionId: string;
+    outcome: 'EXECUTED' | 'FAILED';
+    note: string;
+    evidenceReference?: string;
+  }): Promise<{ success: boolean; action_id: string; status: string }> => {
+    const response = await aiAPI.post('/actions/reconcile', {
+      action_id: payload.actionId,
+      outcome: payload.outcome,
+      note: payload.note,
+      evidence_reference: payload.evidenceReference || null,
     });
     return response.data;
   },

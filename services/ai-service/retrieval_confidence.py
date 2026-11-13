@@ -86,6 +86,16 @@ def _config_from_env(prefix: str, defaults: ConfidenceConfig) -> ConfidenceConfi
 # half and checked on the untouched test half (eval/reports/
 # calibration_20261008_044653.md, RAG_EVAL_20261008_SUMMARY.md): 0.40 takes
 # test No-answer Accuracy 0.917 -> 1.0 with Answerable Recall@5 still 1.0.
+# Re-calibrated 2026-11-12 after the corpus grew from 10 to 22 documents (64
+# chunks; 42 new cases doc-078..119): with more documents an out-of-scope
+# question always lands near some chunk, and 0.40 let 33% of them through.
+# eval/calibrate_rag.py --split=hash picked 0.45 (calibration_20261112_134338.md:
+# test No-answer Accuracy 0.739, Answerable Recall@5 0.959), but 0.40 is kept:
+# it is the CEILING for INTERNAL_DOC because a keyword-only hit scores at most
+# w_keyword * 1.0 = 0.40, so any higher tau silently disables the keyword-only
+# fallback when embeddings are down (test_faq_retrieval.py). The calibration
+# dump cannot see this - every case there had a semantic signal. Out-of-scope
+# questions on the larger corpus must be handled after retrieval, not here.
 # The same run left BOOK_METADATA at 0.25: a stricter value cut its false
 # positives but raised false negatives on test (FNR 0.13 -> 0.23).
 #

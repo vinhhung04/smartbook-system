@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from typing import Any
 
 import httpx
@@ -23,32 +24,9 @@ _ROLE_PRIORITY = [
     "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER",
 ]
 
-_ROLE_ENDPOINTS: dict[str, list[str]] = {
-    "CUSTOMER": [
-        "/borrow/my/loans",
-        "/borrow/my/reservations",
-        "/borrow/my/fines",
-        "/borrow/my/membership",
-    ],
-    "WAREHOUSE_STAFF": [
-        "/api/my-warehouse-tasks",
-        "/api/picking/tasks",
-        "/api/putaway/receipts",
-        "/api/my-exception-reports",
-    ],
-    "WAREHOUSE_MANAGER": [
-        "/analytics/dashboard/kpis",
-        "/analytics/warehouse-stock-risk",
-        "/api/my-warehouse-tasks",
-    ],
-    "ADMIN": [
-        "/analytics/dashboard/kpis",
-        "/analytics/warehouse-stock-risk",
-        "/api/my-warehouse-tasks",
-    ],
-    "LIBRARIAN": ["/borrow/loans", "/borrow/reservations", "/borrow/fines"],
-    "SUPPLIER": [],
-}
+# Which personal endpoints a user may read is decided by the capability
+# registry (ai_core.capabilities.personal_endpoints): the union over ALL the
+# user's roles AND permissions, not one "primary" role (Phase F1).
 
 _ROLE_PERSONAS: dict[str, str] = {
     "CUSTOMER": (
@@ -74,7 +52,8 @@ _ROLE_PERSONAS: dict[str, str] = {
     ),
     "SUPPLIER": (
         "Bạn đang hỗ trợ nhà cung cấp {name}. "
-        "Chỉ xem dữ liệu liên quan đến supplier của họ."
+        "Chỉ dùng dữ liệu đơn hàng của chính nhà cung cấp này (đã được hệ thống lọc theo tài khoản). "
+        "Không có quyền xem tồn kho, analytics nội bộ hay dữ liệu nhà cung cấp khác."
     ),
     "anonymous": (
         "Người dùng chưa đăng nhập. "
@@ -82,12 +61,80 @@ _ROLE_PERSONAS: dict[str, str] = {
     ),
 }
 
+# Data minimization (Phase E): which personal topic each endpoint serves. A
+# question loads only the topics it is about - "Thư viện mở cửa lúc nào?"
+# loads nothing, "Tôi có khoản phạt nào?" loads fines only.
+_ENDPOINT_TOPIC: dict[str, str] = {
+    "/borrow/my/loans": "loans", "/borrow/my/reservations": "reservations",
+    "/borrow/my/fines": "fines", "/borrow/my/membership": "membership", "/borrow/my/account": "wallet",
+    "/borrow/loans": "loans", "/borrow/reservations": "reservations", "/borrow/fines": "fines",
+    "/api/my-warehouse-tasks": "tasks", "/api/picking/tasks": "tasks", "/api/putaway/receipts": "tasks",
+    "/api/exception-reports/my": "tasks",
+    "/analytics/dashboard/kpis": "analytics", "/analytics/warehouse-stock-risk": "stock",
+    "/api/supplier-account/orders": "supplier_orders",
+}
+
+_INTENT_TOPICS: dict[str, set[str]] = {
+    "OVERDUE_LOAN_QUERY": {"loans"},
+    "FINE_SUMMARY_QUERY": {"fines"},
+    "RESERVATION_QUERY": {"reservations"},
+    "DASHBOARD_SUMMARY_QUERY": {"analytics", "tasks"},
+    "BORROW_TREND_QUERY": {"analytics"},
+    "TOP_BORROWED_BOOKS_QUERY": {"analytics"},
+    "LOW_STOCK_QUERY": {"stock"},
+    "REORDER_SUGGESTION_QUERY": {"stock"},
+    "AGING_INVENTORY_QUERY": {"stock"},
+}
+# Matched on normalize_text() output (no diacritics, lower case).
+_TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "loans": ("dang muon", "da muon", "sach muon", "phieu muon", "muon sach", "tra sach", "han tra", "qua han",
+              "sach nao toi", "lich su muon"),
+    "fines": ("tien phat", "khoan phat", "bi phat", "phi phat", "phat tre", "dong phat", "nop phat", "tra phat",
+              "muc phat", "tien no", "con no", "khoan no", "phi den", "den bu"),
+    "reservations": ("dat truoc", "dat cho", "giu sach", "giu cho", "ma nhan", "nhan sach"),
+    "membership": ("the thu vien", "the hoi vien", "the cua toi", "hoi vien", "hang the", "hang thanh vien",
+                   "goi thanh vien", "het han the", "membership"),
+    "wallet": ("vi cua toi", "vi dien tu", "so du", "nap tien", "tien trong vi", "vi con"),
+    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "picking", "lay hang", "cat hang",
+              "putaway", "nhan hang", "kiem ke", "ngoai le", "duoc giao"),
+    "analytics": ("tong quan", "kpi", "chi so", "bao cao"),
+    "stock": ("ton kho", "het hang", "sap het", "nhap them"),
+    "supplier_orders": ("don hang", "don dat hang", "purchase order", "giao hang", "hoa don", "bao thieu",
+                        "thieu hang", "xac nhan don", "phieu giao", "giao du", "da giao", "cho xac nhan"),
+}
+# An explicit request for one's whole account loads every topic of the role.
+_WHOLE_ACCOUNT = ("tai khoan cua toi", "thong tin cua toi", "ho so cua toi", "tinh hinh cua toi",
+                  "tong quan tai khoan", "tat ca thong tin")
+
+
+def select_personal_topics(message: str | None, intent: str | None) -> set[str]:
+    """The personal topics a question is about - by NLU intent and by what the
+    question names. Not by the word "tôi" alone: "Tôi muốn biết giờ mở cửa"
+    selects nothing. A policy question that names a topic ("Tôi có được gia
+    hạn thẻ không?") still gets that topic - the answer may depend on it."""
+    from intent import is_policy_question, normalize_text, refers_to_self
+
+    text = normalize_text(message or "")
+    if any(phrase in text for phrase in _WHOLE_ACCOUNT):
+        return set(_TOPIC_KEYWORDS)
+    # "Phí phạt trễ hạn tính thế nào?" is answered from the documents; the
+    # asker's own fines are not part of that answer unless they ask about them.
+    if message and is_policy_question(message) and not refers_to_self(message):
+        return set()
+    topics = set(_INTENT_TOPICS.get(intent or "", set()))
+    for topic, keywords in _TOPIC_KEYWORDS.items():
+        if any(re.search(rf"\b{re.escape(keyword)}\b", text) for keyword in keywords):
+            topics.add(topic)
+    return topics
+
+
 # Roles that must NOT see system-wide analytics from retrieval.py.
 ANALYTICS_BLOCKED_ROLES: frozenset[str] = frozenset({"CUSTOMER", "SUPPLIER"})
 
 
 def get_primary_role(user_ctx: Any) -> str:
-    """Return the highest-priority canonical role for the user context object."""
+    """The highest-priority canonical role - for the persona text only. Which
+    data is read comes from ai_core.capabilities (all roles AND permissions)."""
     raw = [r.upper() for r in (getattr(user_ctx, "roles", None) or [])]
     roles = [_LEGACY_ROLE_MAP.get(r, r) for r in raw]
     for role in _ROLE_PRIORITY:
@@ -143,19 +190,39 @@ def _n(val: Any, default: float = 0) -> float:
         return default
 
 
+def _loan_title(loan: dict) -> str:
+    """A loan's book title. borrow-service sends it as primary_book_title and
+    on each loan_items[] row (book_title); older shapes nest a `book`."""
+    book = loan.get("book") or loan.get("book_variant") or {}
+    items = loan.get("loan_items") if isinstance(loan.get("loan_items"), list) else []
+    return ((book.get("title") if isinstance(book, dict) else None) or loan.get("book_title")
+            or loan.get("primary_book_title")
+            or next((i.get("book_title") for i in items if isinstance(i, dict) and i.get("book_title")), None)
+            or "?")
+
+
+_ACTIVE_LOAN_STATUSES = ("BORROWED", "OVERDUE")
+
+
 def _fmt_loans(data: Any) -> str:
     items = _normalise_to_items(data)
     if not items:
         return "Bạn không có sách nào đang mượn."
     status_map = {"BORROWED": "đang mượn", "OVERDUE": "QUÁ HẠN ⚠️", "RETURNED": "đã trả", "PENDING": "chờ xử lý"}
-    lines = [f"📚 Sách đang mượn ({len(items)} quyển):"]
+    # The endpoint returns the reader's whole loan history: only BORROWED/OVERDUE
+    # are "đang mượn" - a header counting every loan made returned books look borrowed.
+    active = [loan for loan in items if str(loan.get("status", "")).upper() in _ACTIVE_LOAN_STATUSES]
+    history = len(items) - len(active)
+    if not active:
+        return (f"📚 Bạn không có sách nào đang mượn (lịch sử: {history} phiếu đã đóng)."
+                if history else "Bạn không có sách nào đang mượn.")
+    lines = [f"📚 Sách đang mượn: {len(active)} phiếu" + (f" (ngoài ra {history} phiếu đã đóng)." if history else ".")]
     n_overdue = 0
-    for loan in items[:15]:
+    for loan in active[:15]:
         number = loan.get("loan_number") or loan.get("id", "")[:8]
         status = loan.get("status", "")
         due = loan.get("due_date") or loan.get("return_due_date") or ""
-        book = loan.get("book") or loan.get("book_variant") or {}
-        title = (book.get("title") if isinstance(book, dict) else None) or loan.get("book_title", "?")
+        title = _loan_title(loan)
         if status == "OVERDUE":
             n_overdue += 1
         status_vn = status_map.get(status, status)
@@ -184,13 +251,15 @@ def _fmt_fines(data: Any) -> str:
 
 def _fmt_reservations(data: Any) -> str:
     items = _normalise_to_items(data)
-    active_statuses = {"PENDING", "WAITING", "READY", "CONFIRMED", "ACTIVE"}
-    active = [r for r in items if str(r.get("status", "")).upper() in active_statuses or
-              str(r.get("status", "")).upper() not in ("CANCELLED", "COMPLETED", "EXPIRED", "DONE")]
+    # borrow-service ACTIVE_RESERVATION_STATUSES (+ older names); FULFILLED, NO_SHOW,
+    # CANCELLED, EXPIRED... are history, not "đang chờ"
+    active_statuses = {"PENDING", "CONFIRMED", "READY_FOR_PICKUP", "WAITING", "READY", "ACTIVE"}
+    active = [r for r in items if str(r.get("status", "")).upper() in active_statuses]
     if not active:
         return "Bạn không có đặt sách nào đang chờ."
     lines = [f"📋 Đặt sách của bạn ({len(active)} đặt đang chờ):"]
     status_map = {"PENDING": "chờ xác nhận", "WAITING": "đang chờ", "READY": "sẵn sàng lấy ✅",
+                  "READY_FOR_PICKUP": "sẵn sàng lấy ✅",
                   "CONFIRMED": "đã xác nhận", "ACTIVE": "đang hoạt động"}
     for res in active[:10]:
         book = res.get("book") or {}
@@ -218,10 +287,15 @@ def _fmt_membership(data: Any) -> str:
     return "Có thông tin thẻ thư viện nhưng không đọc được định dạng."
 
 
+# Finished work in /api/my-warehouse-tasks: a putaway is POSTED, a purchase
+# request CONVERTED/WITHDRAWN/REJECTED, a report RESOLVED - none is "pending".
+_TERMINAL_TASK_STATUSES = {"COMPLETED", "CANCELLED", "DONE", "CLOSED", "POSTED", "CONVERTED", "WITHDRAWN",
+                           "REJECTED", "RESOLVED"}
+
+
 def _fmt_warehouse_tasks(data: Any) -> str:
     items = _normalise_to_items(data)
-    done_statuses = {"COMPLETED", "CANCELLED", "DONE", "CLOSED"}
-    pending = [t for t in items if str(t.get("status", "")).upper() not in done_statuses]
+    pending = [t for t in items if str(t.get("status", "")).upper() not in _TERMINAL_TASK_STATUSES]
     if not pending:
         return "✅ Bạn không có task nào đang chờ thực hiện." if items else "Chưa có task nào được giao cho bạn."
     lines = [f"📦 Task được giao cho bạn ({len(pending)} tasks đang chờ):"]
@@ -284,22 +358,59 @@ def _fmt_exception_reports(data: Any) -> str:
     return "\n".join(lines)
 
 
+def _fmt_supplier_orders(data: Any) -> str:
+    """GET /api/supplier-account/orders - already filtered by inventory-service
+    to the supplier linked to the caller's account (findAuthenticatedSupplier)."""
+    payload = data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), dict) else data
+    orders = payload.get("orders") if isinstance(payload, dict) else None
+    if not isinstance(orders, list) or not orders:
+        return "Nhà cung cấp chưa có đơn đặt hàng nào trên hệ thống."
+    name = ((payload.get("supplier") or {}).get("name")) if isinstance(payload, dict) else None
+    lines = [f"📦 Đơn đặt hàng của {name or 'nhà cung cấp'} ({len(orders)} đơn):"]
+    for order in orders[:8]:
+        po = order.get("purchase_order") or {}
+        dispatch = order.get("dispatch") or {}
+        items = po.get("items") or []
+        remaining = sum(_n(i.get("remaining_qty")) for i in items)
+        ordered = sum(_n(i.get("ordered_qty")) for i in items)
+        invoices = order.get("invoices") or []
+        shortages = [r for r in order.get("shortage_reports") or []
+                     if str(r.get("status", "")).upper() not in ("RESOLVED", "CLOSED", "ACKNOWLEDGED")]
+        line = (f"  - {po.get('po_number') or '?'} [{po.get('status') or '?'}], gửi NCC: {dispatch.get('status') or '?'}, "
+                f"{len(items)} dòng, đặt {int(ordered)} cuốn, còn chờ giao {int(remaining)} cuốn")
+        if po.get("expected_date"):
+            line += f", dự kiến {str(po['expected_date'])[:10]}"
+        if invoices:
+            line += f", {len(invoices)} hóa đơn giao hàng"
+        if shortages:
+            line += f", {len(shortages)} báo thiếu chưa xử lý"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _fmt_borrow_loans_all(data: Any) -> str:
     """For LIBRARIAN: all system loans."""
     items = _normalise_to_items(data)
     if not items:
         return "Không có dữ liệu loan trong hệ thống."
-    n_overdue = sum(1 for l in items if str(l.get("status", "")).upper() == "OVERDUE")
-    n_active = sum(1 for l in items if str(l.get("status", "")).upper() in ("BORROWED", "OVERDUE"))
-    lines = [f"📚 Loan trong hệ thống (sample {len(items)}): {n_active} đang mượn, {n_overdue} quá hạn."]
+    # The list is one page; borrow-service's meta.status_counts are the totals.
+    counts = (data.get("meta") or {}).get("status_counts") if isinstance(data, dict) else None
+    if isinstance(counts, dict) and counts:
+        n_overdue = int(counts.get("OVERDUE") or 0)
+        n_active = int(counts.get("BORROWED") or 0) + n_overdue
+        lines = [f"📚 Loan toàn hệ thống: {n_active} đang mượn, trong đó {n_overdue} quá hạn."]
+    else:
+        n_overdue = sum(1 for l in items if str(l.get("status", "")).upper() == "OVERDUE")
+        n_active = sum(1 for l in items if str(l.get("status", "")).upper() in ("BORROWED", "OVERDUE"))
+        lines = [f"📚 Loan trong {len(items)} phiếu gần nhất (không phải toàn hệ thống): "
+                 f"{n_active} đang mượn, {n_overdue} quá hạn."]
     overdue_list = [l for l in items if str(l.get("status", "")).upper() == "OVERDUE"][:5]
     if overdue_list:
         lines.append("Quá hạn gần đây:")
         for loan in overdue_list:
             number = loan.get("loan_number") or loan.get("id", "")[:8]
             customer = (loan.get("customers") or {}).get("full_name") if isinstance(loan.get("customers"), dict) else loan.get("customer_name", "?")
-            book = loan.get("book") or {}
-            title = (book.get("title") if isinstance(book, dict) else None) or loan.get("book_title", "?")
+            title = _loan_title(loan)
             due = (loan.get("due_date") or "")[:10]
             lines.append(f"  - [{number}] \"{title}\" — KH: {customer} | Hạn: {due}")
     return "\n".join(lines)
@@ -325,7 +436,16 @@ def _fmt_reservations_all(data: Any) -> str:
     return f"📋 Đặt sách hệ thống: {len(items)} tổng, {len(pending)} đang chờ xử lý."
 
 
+def _fmt_wallet(data: Any) -> str:
+    info = data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), dict) else data
+    if not isinstance(info, dict):
+        return "Không đọc được thông tin ví."
+    return (f"👛 Ví: khả dụng {_n(info.get('available_balance')):,.0f} {info.get('currency_code') or 'VND'}, "
+            f"đang tạm giữ {_n(info.get('held_balance')):,.0f}.")
+
+
 _ENDPOINT_FORMATTERS: dict[str, Any] = {
+    "/borrow/my/account":       _fmt_wallet,
     "/borrow/my/loans":         _fmt_loans,
     "/borrow/my/fines":         _fmt_fines,
     "/borrow/my/reservations":  _fmt_reservations,
@@ -333,7 +453,8 @@ _ENDPOINT_FORMATTERS: dict[str, Any] = {
     "/api/my-warehouse-tasks":  _fmt_warehouse_tasks,
     "/api/picking/tasks":       _fmt_picking,
     "/api/putaway/receipts":    _fmt_putaway,
-    "/api/my-exception-reports": _fmt_exception_reports,
+    "/api/exception-reports/my": _fmt_exception_reports,
+    "/api/supplier-account/orders": _fmt_supplier_orders,
     "/borrow/loans":            _fmt_borrow_loans_all,
     "/borrow/fines":            _fmt_borrow_fines_all,
     "/borrow/reservations":     _fmt_reservations_all,
@@ -361,6 +482,7 @@ async def build_user_personal_context(
     user_ctx: Any,
     intent_info: dict,
     auth_header: str | None,
+    message: str | None = None,
 ) -> dict:
     """
     Fetch role-appropriate personal data and return a context dict.
@@ -383,6 +505,8 @@ async def build_user_personal_context(
             "warnings": [],
         }
 
+    from ai_core import capabilities
+
     role = get_primary_role(user_ctx)
     name = (
         getattr(user_ctx, "username", None)
@@ -390,8 +514,17 @@ async def build_user_personal_context(
         or "bạn"
     )
     persona = _ROLE_PERSONAS.get(role, _ROLE_PERSONAS["anonymous"]).format(name=name)
+    other_roles = [r for r in capabilities.roles_of(user_ctx) if r != role and r in capabilities.ROLE_LABELS]
+    if other_roles:
+        persona += (" Người dùng còn có vai trò: " + ", ".join(capabilities.ROLE_LABELS[r] for r in other_roles)
+                    + " — mỗi loại dữ liệu chỉ dùng khi có quyền tương ứng.")
 
-    endpoints = _ROLE_ENDPOINTS.get(role, [])
+    topics = select_personal_topics(message if message is not None else intent_info.get("query"),
+                                    intent_info.get("intent"))
+    endpoints = [ep for ep in capabilities.personal_endpoints(user_ctx) if _ENDPOINT_TOPIC.get(ep) in topics]
+    if not topics:
+        # Nothing personal was asked: no personal data is fetched or prompted.
+        return {"role": role, "persona": persona, "summary": "", "sources": [], "warnings": [], "topics": []}
     if not endpoints:
         return {
             "role": role,
@@ -420,10 +553,14 @@ async def build_user_personal_context(
             if text:
                 summaries.append(text)
 
+    if warnings and not summaries:
+        # Asked about their own data but it could not be read: say so, never invent it.
+        summaries.append("⚠️ Không tải được dữ liệu cá nhân lúc này; không được suy đoán số liệu của người dùng.")
     return {
         "role": role,
         "persona": persona,
         "summary": "\n\n".join(summaries),
         "sources": sources,
         "warnings": warnings,
+        "topics": sorted(topics),
     }

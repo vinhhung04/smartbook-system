@@ -19,6 +19,9 @@ import { CopilotVisualizationNotes, CopilotVisualizations } from '@/components/a
 import { CopilotDecision } from '@/components/ai-copilot-decision';
 import { ActionCard } from '@/components/ai-action-card';
 import type { AssistantMessage } from './model';
+import { BookRecognitionCard } from '@/components/ai-experience/book-recognition-card';
+import { EvidencePanel } from '@/components/ai-experience/evidence-panel';
+import type { BookRecognition, RecognitionCandidate } from '@/services/ai-experience';
 
 // One turn of the conversation. An assistant answer is laid out as a
 // structured brief, not a chat bubble: conclusion -> trust warnings -> key
@@ -151,15 +154,18 @@ interface MessageItemProps {
   onRetry: () => void;
   onActionConfirmed: (actionId: string, result: unknown) => void;
   onActionCancelled: () => void;
+  /** Phase F: the user picked one of the candidates of an ambiguous cover photo. */
+  onChooseBook?: (recognition: BookRecognition, candidate: RecognitionCandidate) => void;
 }
 
-function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry, onActionConfirmed, onActionCancelled }: MessageItemProps) {
+function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry, onActionConfirmed, onActionCancelled, onChooseBook }: MessageItemProps) {
   if (message.role === 'user') {
     return (
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: EASE_STANDARD }}
         className="flex justify-end">
         <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground sm:max-w-[75%]">
           <span className="sr-only">Bạn hỏi: </span>
+          {message.hasPhoto && <span className="mb-0.5 block text-[12px] text-muted-foreground">📷 Kèm ảnh bìa sách</span>}
           {message.content}
         </p>
       </motion.div>
@@ -167,6 +173,20 @@ function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry
   }
 
   const streaming = phase !== null;
+
+  if (message.recognition) {
+    const recognition = message.recognition;
+    return (
+      <article aria-label="Kết quả nhận diện ảnh bìa">
+        <AnswerHeader />
+        <div className="max-w-xl space-y-1 sm:pl-8">
+          <p className="text-[14px] text-foreground">{message.content}</p>
+          <BookRecognitionCard recognition={recognition} chosenBookId={message.chosenBookId}
+            onChoose={onChooseBook && !busy ? (c) => onChooseBook(recognition, c) : undefined} />
+        </div>
+      </article>
+    );
+  }
 
   if (phase === 'waiting') {
     return (
@@ -324,6 +344,8 @@ function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry
             )}
           </div>
         )}
+
+        {!streaming && <EvidencePanel explainability={message.explainability} />}
 
         {isLast && !busy && message.followups && message.followups.length > 0 && (
           <CopilotFollowups items={message.followups} onPick={onAsk} disabled={busy} />

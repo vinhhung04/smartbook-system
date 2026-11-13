@@ -12,6 +12,7 @@ const {
   createRequestContext,
   createRequestLogger,
   requireEnv,
+  resolveClientIp,
   securityHeaders,
 } = require("@smartbook/shared/runtime");
 const { getMeter } = require("@smartbook/shared/metrics");
@@ -32,6 +33,20 @@ const borrowTarget =
 const analyticsTarget =
   process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3006";
 const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
+
+// ai-service rate-limits anonymous callers by client IP, but sees every request
+// from this gateway's address. The gateway resolves the client IP the same way
+// its own limiter does (resolveClientIp, trusting only the proxy hops in front
+// of it) and hands it over in a header it alone writes: a copy sent by the
+// client is replaced, never forwarded.
+const AI_CLIENT_IP_HEADER = "x-smartbook-client-ip";
+const AI_TRUSTED_PROXY_HOPS = Number(process.env.GATEWAY_TRUSTED_PROXY_HOPS || 1);
+function setAiClientIp(proxyReq, req) {
+  // req.aiClientIp is resolved before any proxy runs (see the middleware after
+  // the global rate limiter): by the time proxyReq fires, xfwd has already
+  // appended this gateway's own peer to X-Forwarded-For, shifting every hop.
+  proxyReq.setHeader(AI_CLIENT_IP_HEADER, req.aiClientIp || resolveClientIp(req, AI_TRUSTED_PROXY_HOPS));
+}
 
 function handleAiProxyError(_error, req, res) {
   if (res.headersSent) return;
@@ -69,7 +84,7 @@ const ALLOWED_EVENTS = new Set([
   "warehouse_task:assigned", "warehouse_task:status_changed",
   "exception_report:created", "exception_report:resolved",
   "ai_action:created", "ai_action:confirmed", "ai_action:executed",
-  "ai_action:failed", "ai_action:cancelled",
+  "ai_action:failed", "ai_action:cancelled", "ai_action:reconciled",
 ]);
 
 // Matches: user:{uuid}, customer:{uuid}, supplier:{uuid}, warehouse:{uuid},
@@ -263,6 +278,11 @@ app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 // One nginx reverse proxy sits in front of api-gateway in production, appending the real
 // client IP as the last X-Forwarded-For entry — trust exactly that one hop.
 app.use(createRateLimiter({ max: Number(process.env.GATEWAY_RATE_LIMIT_MAX || 600), windowMs: 15 * 60 * 1000, trustedProxyHops: 1 }));
+// The client IP as this gateway's own limiter sees it, kept for the AI proxies.
+app.use((req, _res, next) => {
+  req.aiClientIp = resolveClientIp(req, AI_TRUSTED_PROXY_HOPS);
+  next();
+});
 app.use((req, res, next) => {
   const maxBytes = Number(process.env.GATEWAY_MAX_REQUEST_BYTES || 8 * 1024 * 1024);
   const contentLength = Number(req.headers["content-length"] || 0);
@@ -458,7 +478,7 @@ app.use(
     xfwd: true,
     // Mounted path arrives as "/?q=..."; drop that bare "/" before the query.
     pathRewrite: (path) => `/public/discover${path.replace(/^\/(?=\?|$)/, "")}`,
-    on: { error: handleAiProxyError },
+    on: { error: handleAiProxyError, proxyReq: setAiClientIp },
   }),
 );
 
@@ -492,7 +512,7 @@ app.use(
     target: aiTarget,
     changeOrigin: true,
     xfwd: true,
-    on: { error: handleAiProxyError },
+    on: { error: handleAiProxyError, proxyReq: setAiClientIp },
   }),
 );
 
@@ -556,6 +576,10 @@ app.use(
 // service-to-service only. They check the internal key themselves; this keeps
 // them off the public edge entirely instead of relying on that check alone.
 app.use("/ai/internal", (_req, res) => res.status(404).json({ message: "Not found" }));
+// Prometheus scrapes ai-service:8000/metrics on the internal network; the public
+// edge must not expose its per-feature latency, token and cost counters, nor
+// FastAPI's generated docs / OpenAPI schema (the full internal API surface).
+app.use(["/ai/metrics", "/ai/docs", "/ai/redoc", "/ai/openapi.json"], (_req, res) => res.status(404).json({ message: "Not found" }));
 
 app.use(
   "/ai",
@@ -564,7 +588,7 @@ app.use(
     changeOrigin: true,
     xfwd: true,
     pathRewrite: { "^/ai": "" },
-    on: { error: handleAiProxyError },
+    on: { error: handleAiProxyError, proxyReq: setAiClientIp },
   }),
 );
 

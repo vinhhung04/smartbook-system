@@ -23,6 +23,11 @@ import { AssistantEmptyState } from '@/components/ai-assistant/assistant-empty-s
 import { AssistantComposer } from '@/components/ai-assistant/assistant-composer';
 import { MessageItem, type StreamPhase } from '@/components/ai-assistant/assistant-message';
 import { useStickToBottom } from '@/components/ai-assistant/use-stick-to-bottom';
+import { aiExperienceService, AiHttpError, type AiCapabilities, type BookRecognition, type RecognitionCandidate, type TurnImage } from '@/services/ai-experience';
+import { usePhotoAttachment } from '@/components/ai-experience/use-photo-attachment';
+import { PhotoAttachButton, PhotoPreview } from '@/components/ai-experience/photo-composer';
+
+const DEFAULT_PHOTO_QUESTION = 'Đây là sách gì? Tình hình tồn kho và lượt mượn của sách này thế nào?';
 
 // /ai-assistant - a decision workspace: conversation history on the left
 // (drawer below xl), the conversation in the centre, and the AI Action Center
@@ -73,6 +78,18 @@ export function AIAssistantPage() {
   const pendingCountReloadTimerRef = useRef<number | null>(null);
   // Guards a second send fired before React re-renders with loading=true (double Enter/click).
   const inFlightRef = useRef(false);
+  // Phase F: cover photo -> recognised book the next questions may refer to.
+  const [caps, setCaps] = useState<AiCapabilities | null>(null);
+  const photo = usePhotoAttachment();
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
+  const [activeImage, setActiveImage] = useState<{ attachment_id: string; book_id?: string | null; title?: string | null } | null>(null);
+  useEffect(() => {
+    aiExperienceService.getCapabilities().then(setCaps).catch(() => setCaps(null));
+  }, []);
+  // The in-flight /assistant/stream request: "Dừng", a new conversation and
+  // leaving the page abort it, so no late answer lands in the wrong thread.
+  const streamRef = useRef<AbortController | null>(null);
+  useEffect(() => () => streamRef.current?.abort(), []);
   const { scrollRef, contentRef, atBottom, scrollToBottom } = useStickToBottom(messages.length > 0);
 
   const loadConversations = async () => {
@@ -186,20 +203,26 @@ export function AIAssistantPage() {
     });
   };
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, image?: TurnImage, skipUser = false) => {
     const trimmed = text.trim();
     if (!trimmed || inFlightRef.current || hydrating) return;
     inFlightRef.current = true;
+    const turnImage = image ?? (activeImage ? { attachment_id: activeImage.attachment_id, book_id: activeImage.book_id } : undefined);
     // Placeholder assistant message is filled in-place as tokens stream in — this IS the
     // "is the assistant working" indicator, no separate loading bubble needed once text starts.
-    setMessages((prev) => [...prev, { role: 'user', content: trimmed }, { role: 'assistant', content: '' }]);
+    setMessages((prev) => [...prev, ...(skipUser ? [] : [{ role: 'user' as const, content: trimmed }]),
+      { role: 'assistant', content: '' }]);
     setInput((current) => (current.trim() === trimmed ? '' : current));
     setLoading(true);
     setAnnouncement('Đã gửi câu hỏi. Đang chờ trợ lý trả lời.');
     scrollToBottom();
     let firstToken = true;
+    const controller = new AbortController();
+    streamRef.current = controller;
     try {
       await aiService.askAssistantStream(trimmed, conversationId, {
+        signal: controller.signal,
+        image: turnImage,
         onToken: (token) => {
           if (firstToken) {
             firstToken = false;
@@ -221,6 +244,7 @@ export function AIAssistantPage() {
             evidence: response.evidence,
             groundingWarning: response.grounding_warning,
             retrievalWarnings: response.retrieval_warnings,
+            explainability: response.explainability ?? null,
             ...extrasToMessageFields(response),
           }));
           setAnnouncement('Trợ lý đã trả lời xong.');
@@ -230,7 +254,10 @@ export function AIAssistantPage() {
           loadConversations();
         },
         onError: (error) => {
-          toast.error(getApiErrorMessage(error, 'Không thể gửi câu hỏi tới trợ lý AI'));
+          if (error instanceof AiHttpError && turnImage && (error.status === 410 || error.status === 400)) {
+            setActiveImage(null);
+          }
+          toast.error(error instanceof AiHttpError ? error.message : getApiErrorMessage(error, 'Không thể gửi câu hỏi tới trợ lý AI'));
           setAnnouncement('Có lỗi khi trả lời câu hỏi.');
           updateLastMessage(() => ({
             role: 'assistant',
@@ -240,16 +267,70 @@ export function AIAssistantPage() {
         },
       });
     } finally {
+      if (streamRef.current === controller) streamRef.current = null;
       inFlightRef.current = false;
       setLoading(false);
     }
   };
 
+  // The streamed text is an unverified draft, so a stopped answer is not kept;
+  // marked as an error, the turn gets the usual "retry" affordance.
+  const stopAnswer = useCallback(() => {
+    if (!streamRef.current) return;
+    streamRef.current.abort();
+    setMessages((prev) => {
+      if (prev.length === 0 || prev[prev.length - 1].role !== 'assistant') return prev;
+      const next = [...prev];
+      next[next.length - 1] = {
+        role: 'assistant',
+        content: 'Đã dừng câu trả lời. Bản nháp chưa được đối chiếu với dữ liệu nên không được giữ lại.',
+        isError: true,
+      };
+      return next;
+    });
+    setAnnouncement('Đã dừng câu trả lời.');
+  }, []);
+
+  const askWithPhoto = async (question: string) => {
+    if (inFlightRef.current || hydrating) return;
+    setMessages((prev) => [...prev, { role: 'user', content: question, hasPhoto: true }]);
+    setInput('');
+    setLoading(true);
+    setAnnouncement('Đang phân tích ảnh bìa sách.');
+    const rec = await photo.identify();
+    setLoading(false);
+    if (!rec) {
+      setAnnouncement('Không phân tích được ảnh. Bạn có thể thử lại.');
+      return;
+    }
+    photo.clear();
+    const top = rec.candidates[0];
+    setMessages((prev) => [...prev, {
+      role: 'assistant', content: rec.explanation.summary, recognition: rec, pendingQuestion: question,
+      chosenBookId: rec.status === 'IDENTIFIED' ? top?.book_id : null,
+    }]);
+    setAnnouncement(rec.explanation.summary);
+    if (rec.status === 'IDENTIFIED' && top) {
+      setActiveImage({ attachment_id: rec.attachment_id, book_id: top.book_id, title: top.title });
+      await sendMessage(question, { attachment_id: rec.attachment_id, book_id: top.book_id, image_turn: true }, true);
+    } else {
+      setActiveImage(null);
+    }
+  };
+
+  const submit = async (text: string) => {
+    if (photo.file) {
+      await askWithPhoto(text.trim() || DEFAULT_PHOTO_QUESTION);
+      return;
+    }
+    await sendMessage(text);
+  };
+
   // Children are memoised; hand them stable callbacks that always run the latest closure.
-  const sendRef = useRef(sendMessage);
+  const sendRef = useRef(submit);
   const messagesRef = useRef(messages);
   useLayoutEffect(() => {
-    sendRef.current = sendMessage;
+    sendRef.current = submit;
     messagesRef.current = messages;
   });
   const ask = useCallback((text: string) => {
@@ -264,6 +345,17 @@ export function AIAssistantPage() {
     setMessages((prev) => prev.slice(0, -2));
     void sendRef.current(question.content);
   }, []);
+
+  const chooseRef = useRef<(rec: BookRecognition, c: RecognitionCandidate) => void>(() => {});
+  chooseRef.current = (rec, candidate) => {
+    if (inFlightRef.current) return;
+    const owner = messagesRef.current.find((m) => m.recognition?.attachment_id === rec.attachment_id);
+    setMessages((prev) => prev.map((m) => (m.recognition?.attachment_id === rec.attachment_id ? { ...m, chosenBookId: candidate.book_id } : m)));
+    setActiveImage({ attachment_id: rec.attachment_id, book_id: candidate.book_id, title: candidate.title });
+    void sendMessage(owner?.pendingQuestion || DEFAULT_PHOTO_QUESTION,
+      { attachment_id: rec.attachment_id, book_id: candidate.book_id, image_turn: true }, true);
+  };
+  const chooseBook = useCallback((rec: BookRecognition, c: RecognitionCandidate) => chooseRef.current(rec, c), []);
 
   const handleActionConfirmed = useCallback((_actionId: string, result: unknown) => {
     const res = result as { created_requests?: Array<{ warehouse_name?: string; request_number?: string }>; skipped_items?: string[]; no_warehouse_items?: string[] } | null;
@@ -297,6 +389,7 @@ export function AIAssistantPage() {
   // The typed draft is kept across new/switched conversations: it is the
   // person's own text, and only sending it clears it.
   const startNewConversation = () => {
+    streamRef.current?.abort();
     setMessages([]);
     setConversationId(newConversationId());
     localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
@@ -526,6 +619,7 @@ export function AIAssistantPage() {
                           onRetry={retryLast}
                           onActionConfirmed={handleActionConfirmed}
                           onActionCancelled={handleActionCancelled}
+                          onChooseBook={chooseBook}
                         />
                       );
                     })}
@@ -548,8 +642,29 @@ export function AIAssistantPage() {
                   onChange={setInput}
                   onSubmit={ask}
                   sending={loading}
+                  onStop={stopAnswer}
                   blocked={hydrating}
                   suggestions={messages.length > 0 ? suggestionGroups : undefined}
+                  allowEmpty={Boolean(photo.file)}
+                  attachSlot={caps?.multimodal.enabled ? (
+                    <PhotoAttachButton photo={photo} maxBytes={caps.multimodal.max_bytes} notice={caps.multimodal.notice}
+                      disabled={busy} buttonRef={attachButtonRef} />
+                  ) : null}
+                  previewSlot={(
+                    <>
+                      <PhotoPreview photo={photo} onReplace={() => attachButtonRef.current?.click()}
+                        onRetry={() => void askWithPhoto(DEFAULT_PHOTO_QUESTION)} />
+                      {activeImage?.title && !photo.file && (
+                        <p className="mx-3 mt-3 flex items-center gap-2 rounded-lg bg-primary/5 px-2.5 py-1.5 text-[12.5px] text-foreground">
+                          <span className="truncate">Câu hỏi tiếp theo có thể nói về sách trong ảnh: <strong>{activeImage.title}</strong></span>
+                          <button type="button" onClick={() => setActiveImage(null)}
+                            className="ml-auto shrink-0 cursor-pointer rounded px-1.5 py-0.5 text-[12px] font-medium text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                            Bỏ
+                          </button>
+                        </p>
+                      )}
+                    </>
+                  )}
                 />
               </div>
             </div>

@@ -1,0 +1,1039 @@
+{
+ "meta": {
+  "label": "dev_det",
+  "mode": "det",
+  "split": "dev",
+  "now": "2026-10-26T10:00:00+07:00",
+  "dataset_sha256": "6c864397323bff7a612be16dd1b6b47a70f813b10dd25d1a9eb22cebb7c7fb88",
+  "run_at": "2026-11-13T12:44:52+07:00",
+  "wall_s": 0.1,
+  "concurrency": 3
+ },
+ "summary": {
+  "turns": 13,
+  "intent_exact": {
+   "ok": 8,
+   "n": 8,
+   "rate": 1.0
+  },
+  "caps_prf": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "tools_prf": [
+   1.0,
+   1.0,
+   1.0
+  ],
+  "analysis": {
+   "ok": 0,
+   "n": 0,
+   "rate": null
+  },
+  "entity_fields": {
+   "ok": 5,
+   "n": 5,
+   "rate": 1.0
+  },
+  "entity_turns": {
+   "ok": 5,
+   "n": 5,
+   "rate": 1.0
+  },
+  "context_resolution": {
+   "ok": 6,
+   "n": 6,
+   "rate": 1.0
+  },
+  "multi_intent_coverage_mean": 1.0,
+  "multi_intent_full_coverage": {
+   "ok": 1,
+   "n": 1,
+   "rate": 1.0
+  },
+  "clarify_recall": {
+   "ok": 1,
+   "n": 1,
+   "rate": 1.0
+  },
+  "false_clarification": {
+   "ok": 0,
+   "n": 12,
+   "rate": 0.0
+  },
+  "abstention": {
+   "ok": 0,
+   "n": 0,
+   "rate": null
+  },
+  "violations": 0,
+  "semantic_on_action_or_sensitive": 0,
+  "violation_turns": [],
+  "errors": 0,
+  "planning_ms": {
+   "p50": 0.9,
+   "p95": 4.3,
+   "max": 7.1
+  },
+  "llm_calls": {
+   "total": 0,
+   "per_turn": 0.0,
+   "routed_turns": 0,
+   "prompt_tokens": 0,
+   "completion_tokens": 0,
+   "cost_usd": 0,
+   "llm_latency_ms": {
+    "p50": null,
+    "p95": null
+   }
+  },
+  "planning_ms_routed": {
+   "p50": null,
+   "p95": null
+  },
+  "by_group": {
+   "ambiguous": {
+    "intent_exact": {
+     "ok": 0,
+     "n": 0,
+     "rate": null
+    },
+    "caps_f1": null,
+    "tools_f1": null
+   },
+   "context": {
+    "intent_exact": {
+     "ok": 6,
+     "n": 6,
+     "rate": 1.0
+    },
+    "caps_f1": 1.0,
+    "tools_f1": 1.0
+   },
+   "multi_intent": {
+    "intent_exact": {
+     "ok": 1,
+     "n": 1,
+     "rate": 1.0
+    },
+    "caps_f1": 1.0,
+    "tools_f1": 1.0
+   },
+   "paraphrase": {
+    "intent_exact": {
+     "ok": 1,
+     "n": 1,
+     "rate": 1.0
+    },
+    "caps_f1": 1.0,
+    "tools_f1": 1.0
+   }
+  }
+ },
+ "rows": [
+  {
+   "case": "f-context-081",
+   "group": "context",
+   "split": "dev",
+   "root": "d_top_subset",
+   "turn": 0,
+   "q": "Top 5 sách mượn nhiều tháng này",
+   "gold": {
+    "caps": [
+     "top_borrowed"
+    ],
+    "period": "this_month",
+    "setup": true,
+    "mock_items": [
+     "Nhà Giả Kim",
+     "Đắc Nhân Tâm",
+     "Sapiens",
+     "Atomic Habits",
+     "Tuổi Trẻ Đáng Giá Bao Nhiêu"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "top_borrowed"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_top_books",
+      "args": {
+       "from_date": "2026-10-01T00:00:00+07:00",
+       "to_date": "2026-10-26T10:00:00+07:00",
+       "limit": 5
+      }
+     }
+    ],
+    "warehouses": [],
+    "time_range": {
+     "token": "this_month",
+     "start": "2026-10-01",
+     "end": "2026-10-26",
+     "label": "tháng 10/2026 (đến hôm nay)"
+    },
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Sách được mượn nhiều nhất",
+      "capability": "top_borrowed",
+      "tools": [
+       "get_top_books"
+      ],
+      "status": "planned",
+      "period": "tháng 10/2026 (đến hôm nay)",
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 7.1,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-081",
+   "group": "context",
+   "split": "dev",
+   "root": "d_top_subset",
+   "turn": 1,
+   "q": "Trong số đó cuốn nào tồn ít?",
+   "gold": {
+    "caps": [
+     "top_borrowed",
+     "warehouse_risk"
+    ],
+    "alt": [
+     [
+      "warehouse_risk"
+     ],
+     [
+      "top_borrowed",
+      "warehouse_risk",
+      "reorder"
+     ]
+    ],
+    "subset": true,
+    "followup": true,
+    "_items": [
+     "Nhà Giả Kim",
+     "Đắc Nhân Tâm",
+     "Sapiens",
+     "Atomic Habits",
+     "Tuổi Trẻ Đáng Giá Bao Nhiêu"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "warehouse_risk",
+     "top_borrowed"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "analyze_demand_vs_stock",
+      "args": {}
+     }
+    ],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": true,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Tồn kho thấp, rủi ro thiếu sách",
+      "capability": "warehouse_risk",
+      "tools": [
+       "analyze_demand_vs_stock"
+      ],
+      "status": "planned",
+      "depends_on": []
+     },
+     {
+      "id": 2,
+      "goal": "Sách được mượn nhiều nhất",
+      "capability": "top_borrowed",
+      "tools": [
+       "analyze_demand_vs_stock"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [
+     "last_items"
+    ],
+    "subset": [
+     "Nhà Giả Kim",
+     "Đắc Nhân Tâm",
+     "Sapiens",
+     "Atomic Habits",
+     "Tuổi Trẻ Đáng Giá Bao Nhiêu"
+    ]
+   },
+   "ms": 1.0,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-081",
+   "group": "context",
+   "split": "dev",
+   "root": "d_top_subset",
+   "turn": 2,
+   "q": "Cuốn thứ ba có cần nhập không?",
+   "gold": {
+    "caps": [
+     "reorder"
+    ],
+    "focus": 3,
+    "followup": true,
+    "_items": [
+     "Nhà Giả Kim",
+     "Đắc Nhân Tâm",
+     "Sapiens",
+     "Atomic Habits",
+     "Tuổi Trẻ Đáng Giá Bao Nhiêu"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "reorder"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "explain_reorder_item",
+      "args": {
+       "variant_id": "v3"
+      }
+     }
+    ],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": "Sapiens",
+    "is_followup": true,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Đề xuất nhập (số lượng, chi phí)",
+      "capability": "reorder",
+      "tools": [
+       "explain_reorder_item"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [
+     "focus_item"
+    ],
+    "subset": []
+   },
+   "ms": 0.7,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-082",
+   "group": "context",
+   "split": "dev",
+   "root": "d_low_subset",
+   "turn": 0,
+   "q": "Kho HCM có những đầu sách nào sắp hết?",
+   "gold": {
+    "caps": [
+     "warehouse_risk"
+    ],
+    "wh": [
+     "WH-HCM-01"
+    ],
+    "setup": true,
+    "mock_items": [
+     "Dế Mèn Phiêu Lưu Ký",
+     "Số Đỏ",
+     "Tắt Đèn",
+     "Chí Phèo",
+     "Vợ Nhặt"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "warehouse_risk"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_warehouse_low_stock_items",
+      "args": {
+       "warehouse": "Kho HCM Chinh"
+      }
+     },
+     {
+      "name": "get_warehouse_stock_risk",
+      "args": {}
+     }
+    ],
+    "warehouses": [
+     "WH-HCM-01"
+    ],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Tồn kho thấp, rủi ro thiếu sách",
+      "capability": "warehouse_risk",
+      "tools": [
+       "get_warehouse_low_stock_items",
+       "get_warehouse_stock_risk"
+      ],
+      "status": "planned",
+      "warehouses": [
+       "Kho HCM Chinh"
+      ],
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 1.3,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-082",
+   "group": "context",
+   "split": "dev",
+   "root": "d_low_subset",
+   "turn": 1,
+   "q": "Trong số này cuốn nào được mượn nhiều nhất?",
+   "gold": {
+    "caps": [
+     "top_borrowed"
+    ],
+    "alt": [
+     [
+      "top_borrowed",
+      "warehouse_risk"
+     ]
+    ],
+    "subset": true,
+    "followup": true,
+    "_items": [
+     "Dế Mèn Phiêu Lưu Ký",
+     "Số Đỏ",
+     "Tắt Đèn",
+     "Chí Phèo",
+     "Vợ Nhặt"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "top_borrowed"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_top_books",
+      "args": {
+       "limit": 50
+      }
+     }
+    ],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": true,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Sách được mượn nhiều nhất",
+      "capability": "top_borrowed",
+      "tools": [
+       "get_top_books"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [
+     "last_items"
+    ],
+    "subset": [
+     "Dế Mèn Phiêu Lưu Ký",
+     "Số Đỏ",
+     "Tắt Đèn",
+     "Chí Phèo",
+     "Vợ Nhặt"
+    ]
+   },
+   "ms": 0.8,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-082",
+   "group": "context",
+   "split": "dev",
+   "root": "d_low_subset",
+   "turn": 2,
+   "q": "Nhập thêm các cuốn này thì cần bao nhiêu tiền?",
+   "gold": {
+    "caps": [
+     "reorder"
+    ],
+    "subset": true,
+    "followup": true,
+    "_items": [
+     "Dế Mèn Phiêu Lưu Ký",
+     "Số Đỏ",
+     "Tắt Đèn",
+     "Chí Phèo",
+     "Vợ Nhặt"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "reorder"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_reorder_suggestions",
+      "args": {}
+     }
+    ],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": true,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Đề xuất nhập (số lượng, chi phí)",
+      "capability": "reorder",
+      "tools": [
+       "get_reorder_suggestions"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [
+     "last_items"
+    ],
+    "subset": [
+     "Dế Mèn Phiêu Lưu Ký",
+     "Số Đỏ",
+     "Tắt Đèn",
+     "Chí Phèo",
+     "Vợ Nhặt"
+    ]
+   },
+   "ms": 0.9,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-ambiguous-083",
+   "group": "ambiguous",
+   "split": "dev",
+   "root": "d_hcm_branch",
+   "turn": 0,
+   "q": "Chi nhánh HCM có thiếu sách không?",
+   "gold": {
+    "clarify": true
+   },
+   "pred": {
+    "capabilities": [
+     "warehouse_risk"
+    ],
+    "analysis": "clarification",
+    "clarification": true,
+    "tools": [],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 2.4,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-084",
+   "group": "context",
+   "split": "dev",
+   "root": "d_scope_change",
+   "turn": 0,
+   "q": "So sánh kho HCM với kho Cần Thơ",
+   "gold": {
+    "caps": [
+     "warehouse_risk"
+    ],
+    "wh": [
+     "WH-HCM-01",
+     "WH-CT-01"
+    ],
+    "setup": true
+   },
+   "pred": {
+    "capabilities": [
+     "warehouse_risk"
+    ],
+    "analysis": "comparison",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "compare_warehouses",
+      "args": {
+       "warehouses": [
+        "Kho HCM Chinh",
+        "Kho Cần Thơ"
+       ]
+      }
+     }
+    ],
+    "warehouses": [
+     "WH-HCM-01",
+     "WH-CT-01"
+    ],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Tồn kho thấp, rủi ro thiếu sách",
+      "capability": "warehouse_risk",
+      "tools": [
+       "compare_warehouses"
+      ],
+      "status": "planned",
+      "warehouses": [
+       "Kho HCM Chinh",
+       "Kho Cần Thơ"
+      ],
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 1.2,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-084",
+   "group": "context",
+   "split": "dev",
+   "root": "d_scope_change",
+   "turn": 1,
+   "q": "Nếu chỉ xét những sách được mượn nhiều thì kho nào thiếu hơn?",
+   "gold": {
+    "caps": [
+     "top_borrowed",
+     "warehouse_risk"
+    ],
+    "wh": [
+     "WH-HCM-01",
+     "WH-CT-01"
+    ],
+    "followup": true
+   },
+   "pred": {
+    "capabilities": [
+     "top_borrowed",
+     "warehouse_risk"
+    ],
+    "analysis": "what_if",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "compare_warehouses",
+      "args": {
+       "warehouses": [
+        "Kho HCM Chinh",
+        "Kho Cần Thơ"
+       ]
+      }
+     },
+     {
+      "name": "get_top_books",
+      "args": {}
+     }
+    ],
+    "warehouses": [
+     "WH-HCM-01",
+     "WH-CT-01"
+    ],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": true,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Sách được mượn nhiều nhất",
+      "capability": "top_borrowed",
+      "tools": [
+       "get_top_books"
+      ],
+      "status": "planned",
+      "depends_on": []
+     },
+     {
+      "id": 2,
+      "goal": "Tồn kho thấp, rủi ro thiếu sách",
+      "capability": "warehouse_risk",
+      "tools": [
+       "compare_warehouses"
+      ],
+      "status": "planned",
+      "warehouses": [
+       "Kho HCM Chinh",
+       "Kho Cần Thơ"
+      ],
+      "depends_on": [
+       1
+      ]
+     }
+    ],
+    "carried": [
+     "warehouses"
+    ],
+    "subset": []
+   },
+   "ms": 0.8,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-multi_intent-085",
+   "group": "multi_intent",
+   "split": "dev",
+   "root": "d_mi_three",
+   "turn": 0,
+   "q": "Có bao nhiêu sách quá hạn, tiền phạt còn nợ và kho nào thiếu sách?",
+   "gold": {
+    "caps": [
+     "overdue",
+     "fines",
+     "warehouse_risk"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "overdue",
+     "fines",
+     "warehouse_risk"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_warehouse_stock_risk",
+      "args": {}
+     },
+     {
+      "name": "get_overdue_summary",
+      "args": {}
+     },
+     {
+      "name": "get_fine_summary",
+      "args": {}
+     }
+    ],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Tình hình phiếu quá hạn",
+      "capability": "overdue",
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "status": "planned",
+      "depends_on": []
+     },
+     {
+      "id": 2,
+      "goal": "Tiền phạt",
+      "capability": "fines",
+      "tools": [
+       "get_fine_summary"
+      ],
+      "status": "planned",
+      "depends_on": []
+     },
+     {
+      "id": 3,
+      "goal": "Tồn kho thấp, rủi ro thiếu sách",
+      "capability": "warehouse_risk",
+      "tools": [
+       "get_warehouse_stock_risk"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 1.0,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-paraphrase-086",
+   "group": "paraphrase",
+   "split": "dev",
+   "root": "d_p_trend",
+   "turn": 0,
+   "q": "lượt mượn có tăng không",
+   "gold": {
+    "caps": [
+     "borrow_trend"
+    ]
+   },
+   "pred": {
+    "capabilities": [
+     "borrow_trend"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "compare_borrow_periods",
+      "args": {
+       "from_date": "2026-09-26T00:00:00+07:00",
+       "to_date": "2026-10-26T10:00:00+07:00",
+       "compare_from_date": "2026-08-27T00:00:00+07:00",
+       "compare_to_date": "2026-09-26T23:59:59+07:00"
+      }
+     }
+    ],
+    "warehouses": [],
+    "time_range": {
+     "token": "last_30_days",
+     "start": "2026-09-26",
+     "end": "2026-10-26",
+     "label": "30 ngày qua"
+    },
+    "comparison_period": {
+     "token": "prev_last_30_days",
+     "start": "2026-08-27",
+     "end": "2026-09-26",
+     "label": "30 ngày trước đó"
+    },
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Lượt mượn theo thời gian (tăng hay giảm)",
+      "capability": "borrow_trend",
+      "tools": [
+       "compare_borrow_periods"
+      ],
+      "status": "planned",
+      "period": "30 ngày qua so với 30 ngày trước đó",
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 0.9,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-087",
+   "group": "context",
+   "split": "dev",
+   "root": "d_week_then_month",
+   "turn": 0,
+   "q": "Tiền phạt tuần này thế nào?",
+   "gold": {
+    "caps": [
+     "fines"
+    ],
+    "setup": true
+   },
+   "pred": {
+    "capabilities": [
+     "fines"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_fine_summary",
+      "args": {}
+     }
+    ],
+    "warehouses": [],
+    "time_range": {
+     "token": "this_week",
+     "start": "2026-10-26",
+     "end": "2026-10-26",
+     "label": "tuần này"
+    },
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": false,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Tiền phạt",
+      "capability": "fines",
+      "tools": [
+       "get_fine_summary"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 0.7,
+   "error": null,
+   "semantic": {}
+  },
+  {
+   "case": "f-context-087",
+   "group": "context",
+   "split": "dev",
+   "root": "d_week_then_month",
+   "turn": 1,
+   "q": "Còn quá hạn thì sao?",
+   "gold": {
+    "caps": [
+     "overdue"
+    ],
+    "followup": true
+   },
+   "pred": {
+    "capabilities": [
+     "overdue"
+    ],
+    "analysis": "lookup",
+    "clarification": false,
+    "tools": [
+     {
+      "name": "get_overdue_summary",
+      "args": {}
+     }
+    ],
+    "warehouses": [],
+    "time_range": null,
+    "comparison_period": null,
+    "budgets": [],
+    "pct": null,
+    "focus": null,
+    "is_followup": true,
+    "style": {},
+    "viz": null,
+    "sub_questions": [
+     {
+      "id": 1,
+      "goal": "Tình hình phiếu quá hạn",
+      "capability": "overdue",
+      "tools": [
+       "get_overdue_summary"
+      ],
+      "status": "planned",
+      "depends_on": []
+     }
+    ],
+    "carried": [],
+    "subset": []
+   },
+   "ms": 0.7,
+   "error": null,
+   "semantic": {}
+  }
+ ]
+}

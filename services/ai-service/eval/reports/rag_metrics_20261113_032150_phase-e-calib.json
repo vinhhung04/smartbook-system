@@ -1,0 +1,256 @@
+{
+ "timestamp_utc": "20261113_032150",
+ "dataset": "rag_dataset.json",
+ "cases": 226,
+ "catalog_books": 135,
+ "embedding": "qwen/qwen3-embedding-8b@768",
+ "abstention": "off",
+ "split": "all",
+ "overall": {
+  "count": 226,
+  "recall_at_1": 0.4142,
+  "recall_at_3": 0.4329,
+  "recall_at_5": 0.4353,
+  "mrr": 0.4327
+ },
+ "by_corpus": {
+  "BOOK_METADATA": {
+   "count": 107,
+   "recall_at_1": 0.1926,
+   "recall_at_3": 0.204,
+   "recall_at_5": 0.2092,
+   "mrr": 0.2177
+  },
+  "INTERNAL_DOC": {
+   "count": 119,
+   "recall_at_1": 0.6134,
+   "recall_at_3": 0.6387,
+   "recall_at_5": 0.6387,
+   "mrr": 0.6261
+  }
+ },
+ "abstention_by_corpus": {
+  "BOOK_METADATA": {
+   "no_answer_count": 52,
+   "answerable_count": 55,
+   "no_answer_accuracy": 0.8654,
+   "false_positive_rate": 0.1346,
+   "false_negative_rate": 0.1273,
+   "coverage": 0.514,
+   "abstention_precision": 0.8654,
+   "abstention_recall": 0.8654,
+   "abstention_f1": 0.8654
+  },
+  "INTERNAL_DOC": {
+   "no_answer_count": 40,
+   "answerable_count": 79,
+   "no_answer_accuracy": 0.7,
+   "false_positive_rate": 0.3,
+   "false_negative_rate": 0.0,
+   "coverage": 0.7647,
+   "abstention_precision": 1.0,
+   "abstention_recall": 0.7,
+   "abstention_f1": 0.8235
+  }
+ },
+ "by_query_type": {
+  "AUTHOR": {
+   "cases": 6,
+   "answerable": 6,
+   "reachable": 4,
+   "unreachable": 2,
+   "all_answerable": {
+    "count": 6,
+    "recall_at_1": 0.1019,
+    "recall_at_3": 0.3056,
+    "recall_at_5": 0.3981,
+    "mrr": 0.5278
+   },
+   "reachable_only": {
+    "count": 4,
+    "recall_at_1": 0.1528,
+    "recall_at_3": 0.4583,
+    "recall_at_5": 0.5972,
+    "mrr": 0.7917
+   },
+   "precision_at_5": 0.4333,
+   "no_answer": null
+  },
+  "CATEGORY": {
+   "cases": 7,
+   "answerable": 5,
+   "reachable": 0,
+   "unreachable": 5,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0,
+    "mrr": 0.0
+   },
+   "reachable_only": null,
+   "precision_at_5": 0.0,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "DESCRIPTION": {
+   "cases": 77,
+   "answerable": 28,
+   "reachable": 11,
+   "unreachable": 17,
+   "all_answerable": {
+    "count": 28,
+    "recall_at_1": 0.3571,
+    "recall_at_3": 0.3571,
+    "recall_at_5": 0.3571,
+    "mrr": 0.3616
+   },
+   "reachable_only": {
+    "count": 11,
+    "recall_at_1": 0.9091,
+    "recall_at_3": 0.9091,
+    "recall_at_5": 0.9091,
+    "mrr": 0.9205
+   },
+   "precision_at_5": 0.0714,
+   "no_answer": {
+    "no_answer_count": 49,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.8571,
+    "false_positive_rate": 0.1429,
+    "false_negative_rate": null,
+    "coverage": 0.1429,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.8571,
+    "abstention_f1": 0.9231
+   }
+  },
+  "ISBN": {
+   "cases": 11,
+   "answerable": 11,
+   "reachable": 6,
+   "unreachable": 5,
+   "all_answerable": {
+    "count": 11,
+    "recall_at_1": 0.5455,
+    "recall_at_3": 0.5455,
+    "recall_at_5": 0.5455,
+    "mrr": 0.5455
+   },
+   "reachable_only": {
+    "count": 6,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.1091,
+   "no_answer": null
+  },
+  "TITLE": {
+   "cases": 6,
+   "answerable": 5,
+   "reachable": 4,
+   "unreachable": 1,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 0.8,
+    "recall_at_3": 0.8,
+    "recall_at_5": 0.8,
+    "mrr": 0.8
+   },
+   "reachable_only": {
+    "count": 4,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.16,
+   "no_answer": {
+    "no_answer_count": 1,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "INTERNAL_DOC": {
+   "cases": 119,
+   "answerable": 79,
+   "reachable": 79,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 79,
+    "recall_at_1": 0.9241,
+    "recall_at_3": 0.962,
+    "recall_at_5": 0.962,
+    "mrr": 0.943
+   },
+   "reachable_only": {
+    "count": 79,
+    "recall_at_1": 0.9241,
+    "recall_at_3": 0.962,
+    "recall_at_5": 0.962,
+    "mrr": 0.943
+   },
+   "precision_at_5": 0.4958,
+   "no_answer": {
+    "no_answer_count": 40,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.7,
+    "false_positive_rate": 0.3,
+    "false_negative_rate": null,
+    "coverage": 0.3,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.7,
+    "abstention_f1": 0.8235
+   }
+  }
+ },
+ "unreachable_book_cases": [
+  "bm-001",
+  "bm-002",
+  "bm-003",
+  "bm-006",
+  "bm-007",
+  "bm-016",
+  "bm-017",
+  "bm-018",
+  "bm-019",
+  "bm-020",
+  "bm-021",
+  "bm-022",
+  "bm-023",
+  "bm-024",
+  "bm-025",
+  "bm-030",
+  "bm-031",
+  "bm-032",
+  "bm-033",
+  "bm-036",
+  "bm-037",
+  "bm-043",
+  "bm-044",
+  "bm-046",
+  "bm-047",
+  "bm-048",
+  "bm-049",
+  "bm-050",
+  "bm-053",
+  "bm-054"
+ ]
+}

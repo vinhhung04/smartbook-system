@@ -55,10 +55,46 @@ test('funding status reads the re-sized cap, not the plain suggestion', () => {
   assert.equal(ri.fundingStatus(item({ suggested_reorder_qty: 6, funded_qty: 3, budget_plan: { cap_qty: 3 } }), true), 'FULL');
 });
 
-test('system quantity is the funded quantity under a budget, else the suggestion', () => {
+test('a line without a unit cost is flagged instead of being reported as unfunded', () => {
+  assert.equal(ri.fundingStatus(item({ unit_cost: 0, funded_qty: 0, budget_plan: { cap_qty: 3 } }), true), 'NO_PRICE');
+  // nothing needed: still NOT_NEEDED whatever the price
+  assert.equal(ri.fundingStatus(item({ unit_cost: 0, funded_qty: 0, budget_plan: { cap_qty: 0 } }), true), 'NOT_NEEDED');
+  assert.equal(ri.fundingStatus(item({ unit_cost: 0 }), false), null);
+});
+
+test('system quantity is exactly the funded quantity under a budget, else the suggestion', () => {
   assert.equal(ri.systemQty(item({ funded_qty: 2 }), true), 2);
-  assert.equal(ri.systemQty(item({ funded_qty: 0 }), true), 4);
+  // funded 0 stays 0: an unfunded line must not fall back to the plain suggestion
+  assert.equal(ri.systemQty(item({ funded_qty: 0 }), true), 0);
+  assert.equal(ri.systemQty(item({ funded_qty: 0, budget_plan: { cap_qty: 0 } }), true), 0);
   assert.equal(ri.systemQty(item({ funded_qty: 2 }), false), 4);
+});
+
+test('under a budget an unfunded line has no order quantity until the user types one, shown as over the funding', () => {
+  const unfunded = item({ funded_qty: 0, budget_plan: { cap_qty: 3 } });
+  const line = ri.buildPlanLine(unfunded, 14, true, undefined);
+  assert.equal(line.qty, null);
+  assert.equal(line.systemQty, 0);
+  assert.equal(line.funding, 'UNFUNDED');
+  assert.equal(line.overFunded, 0);
+  const typed = ri.buildPlanLine(unfunded, 14, true, '3');
+  assert.equal(typed.qty, 3);
+  assert.equal(typed.manual, true);
+  assert.equal(typed.overFunded, 3);
+  // not needed by the plan: no default quantity either
+  assert.equal(ri.buildPlanLine(item({ funded_qty: 0, budget_plan: { cap_qty: 0 } }), 14, true, undefined).qty, null);
+  // the same line without a budget keeps the plain suggestion
+  assert.equal(ri.buildPlanLine(unfunded, 14, false, undefined).qty, 4);
+});
+
+test('copies over the funding add up across the selected lines', () => {
+  const lines = [
+    ri.buildPlanLine(item({ variant_id: 'a', funded_qty: 2, budget_plan: { cap_qty: 4 } }), 14, true, '5'),
+    ri.buildPlanLine(item({ variant_id: 'b', funded_qty: 2, budget_plan: { cap_qty: 2 } }), 14, true, undefined),
+    ri.buildPlanLine(item({ variant_id: 'c', funded_qty: 0, budget_plan: { cap_qty: 1 } }), 14, true, '1'),
+  ];
+  assert.equal(ri.overFundedQty(lines), 4);
+  assert.equal(ri.overFundedQty([]), 0);
 });
 
 test('parseQty accepts whole copies from 1 only', () => {

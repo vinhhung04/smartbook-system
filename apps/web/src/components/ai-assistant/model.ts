@@ -9,6 +9,7 @@ import type {
   PendingAction,
 } from '@/services/ai';
 import type { AiVerification } from '@/lib/copilot-verification';
+import type { AiExplainability, BookRecognition } from '@/services/ai-experience';
 import type { AuthUser } from '@/services/auth';
 import { hasAnyPermission } from '@/lib/rbac';
 import { sanitizeVisualizations, type CopilotVisualizationSpec } from '@/lib/copilot-visualization';
@@ -39,6 +40,13 @@ export interface AssistantMessage {
   /** Reopened from history: charts show the stored snapshot, never refreshed. */
   fromHistory?: boolean;
   isError?: boolean;
+  /** Phase F (client only, not stored server-side): a cover photo and its recognition. */
+  hasPhoto?: boolean;
+  recognition?: BookRecognition;
+  pendingQuestion?: string;
+  chosenBookId?: string | null;
+  /** Phase F: the unified evidence contract of the answer (ai_core/explainability.py). */
+  explainability?: AiExplainability | null;
 }
 
 export function extrasToMessageFields(extras?: AssistantExtras | null): Partial<AssistantMessage> {

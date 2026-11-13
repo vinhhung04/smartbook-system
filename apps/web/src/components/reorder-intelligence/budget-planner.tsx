@@ -136,7 +136,12 @@ export function BudgetPlanner({ data, budgetVnd, onBudgetChange, selection, hasM
                   ]}
                 />
               ) : null}
-              {selection && selection.lines > 0 ? (
+              {budget.unreliable_lines ? (
+              <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+                {formatCount(budget.unreliable_lines)} dòng có dữ liệu mượn lệch giữa dịch vụ mượn và kho (số phiếu mượn đang mở nhiều hơn số bản kho ghi nhận đang cho mượn) nên chưa được cấp ngân sách — cần đối soát dữ liệu trước khi đặt mua.
+              </p>
+            ) : null}
+            {selection && selection.lines > 0 ? (
                 <AllocationBar
                   label="Bạn đang chọn để đặt hàng"
                   scale={scale}
@@ -172,6 +177,11 @@ export function BudgetPlanner({ data, budgetVnd, onBudgetChange, selection, hasM
               </div>
             </dl>
 
+            {budget.unpriced_lines ? (
+              <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
+                {formatCount(budget.unpriced_lines)} dòng cần nhập ({formatCount(budget.unpriced_qty ?? 0)} bản) chưa có đơn giá trong danh mục nên chưa được cấp ngân sách và không tính vào nhu cầu ở trên — bổ sung đơn giá để đưa vào phân bổ.
+              </p>
+            ) : null}
             {selection && selection.lines > 0 ? (
               <p className={cn('text-[12px] leading-relaxed', selection.cost > budget.budget_vnd ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground')}>
                 Lựa chọn hiện tại: {formatVnd(selection.cost)}

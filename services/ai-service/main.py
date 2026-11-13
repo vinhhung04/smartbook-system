@@ -9,13 +9,13 @@ import re
 import logging
 import asyncio
 import functools
-import inspect
 import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
 import time
 import signal
 from datetime import datetime
+from typing import Literal
 import sys
 from html.parser import HTMLParser
 from cache import assistant_response_cache, isbn_lookup_cache, response_cache, rate_limiter, summary_cache
@@ -31,6 +31,7 @@ from intent import (
     REORDER_SUGGESTION_QUERY,
     RESERVATION_QUERY,
     TOP_BORROWED_BOOKS_QUERY,
+    asks_about_own_data,
     detect_intent,
     is_information_seeking,
     normalize_text,
@@ -70,9 +71,14 @@ from agent_store import (
     get_action_result,
     cleanup_expired_actions,
     is_expired,
+    mark_action_needs_reconciliation,
+    release_stale_confirmed_actions,
+    resolve_reconciliation,
 )
-from agent_permissions import get_user_context, can_confirm_action, require_can_confirm_action
-from user_personal_context import build_user_personal_context, get_primary_role, ANALYTICS_BLOCKED_ROLES
+from ai_core import capabilities as ai_capabilities, policy as ai_policy, prompts as ai_prompts, tools as ai_tools
+from ai_core.observability import RequestIdMiddleware
+from ai_core.policy import get_user_context, is_admin, can_confirm_action, require_can_confirm_action, require_verified_session
+from user_personal_context import build_user_personal_context, get_primary_role
 from agent_executor import execute_agent_action
 from agent_schemas import ConfirmActionRequest, CancelActionRequest, ConfirmActionResponse
 from agent_actions import (
@@ -80,6 +86,9 @@ from agent_actions import (
     EXECUTED,
     CANCELLED,
     EXPIRED as ACTION_EXPIRED,
+    FAILED as ACTION_FAILED,
+    RECONCILE_REQUIRED,
+    RETRY_SAFE_ACTIONS,
     get_action_config,
 )
 from sqlalchemy import select, func
@@ -113,8 +122,11 @@ from copilot_plan import VN_TZ as COPILOT_TZ
 from copilot_visualization import Visualization
 from copilot_response import COPILOT_SYSTEM_PROMPT
 from routes_actions import router as actions_router
-from routes_conversations import ASSISTANT_PERMISSIONS, ASSISTANT_ROLES, router as conversations_router
+from ai_core.prompts import CHAT_SYSTEM_PROMPT, GENERAL_QUERY_ABSTENTION_REPLY, ROLE_BASED_RULES
+from routes_conversations import ASSISTANT_PERMISSIONS, ASSISTANT_ROLES, can_use_assistant, router as conversations_router
 from routes_cover_search import router as cover_search_router
+from routes_ai_experience import image_prompt_block, resolve_turn_image, router as ai_experience_router
+from ai_core import explainability as ai_explainability
 from routes_public_discover import router as public_discover_router
 from prometheus_fastapi_instrumentator import Instrumentator
 from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
@@ -122,6 +134,8 @@ from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provi
 logger = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="SmartBook AI Service")
+# Request correlation (ai_core.observability): the gateway's x-request-id on every log line.
+app.add_middleware(RequestIdMiddleware)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
@@ -138,6 +152,7 @@ app.add_middleware(
 app.include_router(actions_router)
 app.include_router(conversations_router)
 app.include_router(cover_search_router)
+app.include_router(ai_experience_router)
 app.include_router(public_discover_router)
 
 Instrumentator().instrument(app).expose(app)
@@ -210,6 +225,8 @@ INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
 AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS = float(os.getenv("AUTHORITY_NORMALIZATION_TIMEOUT_SECONDS", "4"))
 
 CHAT_LLM_TIMEOUT_SECONDS = float(os.getenv("CHAT_LLM_TIMEOUT_SECONDS", "12"))
+CHAT_MAX_TOKENS = 800
+CHAT_TEMPERATURE = 0.4
 
 # ── OpenRouter — the sole inference backend this service depends on. Anthropic,
 # Groq and Ollama were all deliberately removed - Qwen via OpenRouter is the one
@@ -274,6 +291,18 @@ async def _startup_nightly_briefing() -> None:
 
 
 @app.on_event("startup")
+async def _startup_release_stale_actions() -> None:
+    """An action left CONFIRMED by a run that died with the previous process
+    must not stay "executing" forever (agent_store.release_stale_confirmed_actions)."""
+    try:
+        released = await release_stale_confirmed_actions()
+        if released:
+            logger.warning("startup: %d action(s) left CONFIRMED by an unfinished run were released", released)
+    except Exception as exc:  # noqa: BLE001 - never block startup; confirm_action sweeps again
+        logger.warning("startup: stale action sweep failed: %s", type(exc).__name__)
+
+
+@app.on_event("startup")
 async def _startup_ingest_corpus() -> None:
     """Dong bo vector store nen o background. Khong chan startup: service phai
     len duoc ngay ca khi OpenRouter/inventory chua san sang — retrieval se
@@ -334,6 +363,27 @@ async def catalog_sync_trigger(request: Request):
     return await catalog_sync.sync_book_corpus()
 
 
+_corpus_sync_lock = asyncio.Lock()
+
+
+@app.post("/internal/corpus-sync")
+async def corpus_sync_trigger(request: Request):
+    """Re-ingest corpus/*.md now (INTERNAL_DOC), without restarting the
+    service: only chunks whose content hash changed are re-embedded, a deleted
+    file's document is removed, and an empty or unreadable corpus directory
+    removes nothing (ingestion.ingest_internal_docs). Internal-key only; the
+    gateway does not expose /ai/internal/*. A second call while one runs
+    returns busy instead of ingesting twice."""
+    import catalog_sync
+    import ingestion
+    if not catalog_sync.is_valid_internal_key(request.headers.get("x-internal-service-key")):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if _corpus_sync_lock.locked():
+        return {"skipped": "busy"}
+    async with _corpus_sync_lock:
+        return await ingestion.ingest_internal_docs()
+
+
 # One definition, shared with routes_conversations (history is masked for a
 # reader who no longer passes this gate).
 ASSISTANT_ALLOWED_ROLES = ASSISTANT_ROLES
@@ -388,6 +438,8 @@ async def health():
         "assistant_model": ASSISTANT_MODEL,
         "vision_model": VISION_MODEL,
         "embed_model": embeddings.EMBED_MODEL,
+        # which prompt text is answering (ai_core.prompts): changes with every prompt edit
+        "prompt_versions": ai_prompts.versions(),
     }
 
 
@@ -3377,53 +3429,8 @@ async def _generate_book_summary(req: BookSummaryRequest):
 # AI Chat — Trợ lý ảo SmartBook
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Fixed reply for /chat when retrieval_confidence.py decides NO_EVIDENCE on an
-# information-seeking GENERAL_QUERY message (see chat()) - the corpus has no
-# real answer, so the LLM is skipped entirely rather than risk it inventing one
-# from an empty [RAG CONTEXT] block (Chức năng 1.4: no hallucination on weak
-# retrieval). A greeting/small-talk message with the same NO_EVIDENCE decision
-# still reaches the LLM below - see is_information_seeking().
-GENERAL_QUERY_ABSTENTION_REPLY = (
-    "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này."
-)
-
-CHAT_SYSTEM_PROMPT = (
-    "Bạn là **SmartBook AI** — trợ lý ảo thông minh chuyên biệt cho hệ thống quản lý thư viện SmartBook.\n\n"
-
-    "## Vai trò & năng lực\n"
-    "- Bạn có quyền truy cập DỮ LIỆU THỜI GIAN THỰC của thư viện (được cung cấp trong mục [DỮ LIỆU HỆ THỐNG] bên dưới).\n"
-    "- Bạn hỗ trợ: tra cứu sách, kiểm tra tồn kho, theo dõi mượn/trả, phạt quá hạn, gợi ý sách, phân tích xu hướng.\n"
-    "- Bạn hiểu cấu trúc hệ thống: Catalog (danh mục sách), Inventory (kho), Borrow (mượn/trả), Fines (phạt).\n\n"
-
-    "## Quy tắc trả lời\n"
-    "1. **Luôn dùng dữ liệu thực** khi có trong [DỮ LIỆU HỆ THỐNG]. Trích dẫn con số cụ thể.\n"
-    "2. Nếu người dùng hỏi về sách cụ thể, tìm trong danh sách sách được cung cấp. Nếu không tìm thấy, nói rõ.\n"
-    "3. Khi phân tích, đưa ra nhận xét có giá trị (ví dụ: cảnh báo tồn kho thấp, sách quá hạn nhiều).\n"
-    "4. Trả lời bằng **tiếng Việt**, ngắn gọn, thân thiện, chuyên nghiệp.\n"
-    "5. Dùng **bold** cho số liệu quan trọng và tên sách. Dùng emoji nhẹ (📚 📊 ⚠️ ✅) làm điểm nhấn.\n"
-    "6. Giới hạn 3-8 câu, trừ khi người dùng yêu cầu chi tiết.\n"
-    "7. Khi gợi ý hành động, chỉ rõ người dùng nên vào trang nào (Dashboard, Catalog, Inventory, Borrow, Reports).\n"
-    "8. Nếu dữ liệu không đủ để trả lời chính xác, nói rõ giới hạn và gợi ý cách kiểm tra.\n\n"
-
-    "## Khả năng đặc biệt\n"
-    "- Phân tích xu hướng mượn sách và gợi ý nhập thêm đầu sách.\n"
-    "- Cảnh báo sách tồn kho thấp hoặc hết hàng.\n"
-    "- Tổng hợp tình hình mượn quá hạn và phạt.\n"
-    "- So sánh và xếp hạng sách theo lượt mượn.\n"
-    "- Tư vấn quy trình nghiệp vụ thư viện (nhập kho, putaway, picking, xuất kho).\n"
-)
-
-ROLE_BASED_RULES = (
-    "\n## Quy tắc theo vai trò người dùng\n"
-    "- Luôn trả lời theo user hiện tại được xác định từ Authorization token. KHÔNG dùng thông tin user từ body request.\n"
-    "- CUSTOMER: Chỉ dùng dữ liệu cá nhân của customer đó. Không tiết lộ dữ liệu người khác hay analytics toàn hệ thống.\n"
-    "- WAREHOUSE_STAFF: Ưu tiên task được giao cho họ, không hiện task của người khác.\n"
-    "- WAREHOUSE_MANAGER/ADMIN: Có thể trả lời dữ liệu tổng quan hệ thống.\n"
-    "- LIBRARIAN: Tập trung nghiệp vụ mượn trả, reservation, loan, fine.\n"
-    "- SUPPLIER: Chỉ xem dữ liệu liên quan supplier của họ.\n"
-    "- Nếu người dùng hỏi ngoài phạm vi quyền của họ, giải thích ngắn gọn họ không có quyền xem dữ liệu đó.\n"
-    "- Không bịa dữ liệu. Nếu không có dữ liệu từ endpoint, nói rõ là chưa có thông tin.\n"
-)
+# The chatbot's prompts (CHAT_SYSTEM_PROMPT, ROLE_BASED_RULES) and its fixed
+# abstention reply live in ai_core/prompts.py, named and versioned.
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -3441,7 +3448,9 @@ def _build_context_block(system_context: dict | None) -> str:
     if not system_context:
         return "\n[DỮ LIỆU HỆ THỐNG]: Không có dữ liệu thời gian thực. Trả lời dựa trên kiến thức chung.\n"
 
-    parts = ["\n[DỮ LIỆU HỆ THỐNG — Cập nhật tại thời điểm người dùng gửi tin nhắn]\n"]
+    # The client built this block, not the backend: never present it as verified system data.
+    parts = ["\n[DỮ LIỆU DO GIAO DIỆN GỬI KÈM — backend chưa xác minh. Chỉ dùng tham khảo; khi trích số liệu "
+             "từ đây phải nói rõ đây là dữ liệu chưa xác minh từ giao diện.]\n"]
 
     summary = system_context.get("summary")
     if summary:
@@ -3507,7 +3516,9 @@ def _build_context_block(system_context: dict | None) -> str:
 
 
 class ChatMessage(BaseModel):
-    role: str
+    # Client-held history: a "system" (or "tool") turn here would be a second
+    # system prompt the caller wrote, so only the two conversational roles pass.
+    role: Literal["user", "assistant"]
     content: str
 
 
@@ -3515,11 +3526,20 @@ class ChatRequest(BaseModel):
     message: str
     conversation_history: list[ChatMessage] = []
     system_context: dict | None = None
+    # Phase F3 (optional, additive): a photo identified by /vision/identify.
+    # Only the server-side, owner-bound context is used; book_id must be one
+    # of that photo's verified candidates (routes_ai_experience.resolve_turn_image).
+    attachment_id: str | None = None
+    book_id: str | None = None
+    image_turn: bool = False
 
 
 class AssistantRequest(BaseModel):
     message: str
     conversation_id: str | None = None
+    attachment_id: str | None = None
+    book_id: str | None = None
+    image_turn: bool = False
 
 
 class AssistantToolCall(BaseModel):
@@ -3572,6 +3592,10 @@ class AssistantResponse(BaseModel):
     # what-if - options, pros / cons, risks, assumptions, conditional
     # recommendation - built from tool data only (copilot_decision).
     decision: dict | None = None
+    # Phase F (optional, additive): the unified evidence contract shared with
+    # /chat (ai_core.explainability) and the photo context the turn used.
+    explainability: dict | None = None
+    image_context: dict | None = None
 
 
 async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
@@ -3580,9 +3604,25 @@ async def _chat_with_text_llm(messages: list[dict]) -> tuple[str | None, bool]:
     interface /assistant uses, so the conversation is sent as a proper
     chat-messages call rather than collapsed into one role-labelled prompt."""
     reply, ok = await _call_text_llm_messages(
-        messages, max_tokens=800, temperature=0.4, timeout=CHAT_LLM_TIMEOUT_SECONDS, feature="chat",
+        messages, max_tokens=CHAT_MAX_TOKENS, temperature=CHAT_TEMPERATURE, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+        feature="chat",
     )
     return (reply or None), ok
+
+
+async def _stream_chat_reply(messages: list[dict]):
+    """/chat/stream's reply as it is generated: yields each text delta, then a
+    final ("done", provider name) once the stream completed. Raises when the
+    stream fails; the caller then answers through _chat_with_text_llm, which
+    carries the retry and fallback model a streaming call does not have."""
+    provider = _get_text_llm_provider()
+    async for chunk in provider.chat_stream(
+        messages, [], num_predict=CHAT_MAX_TOKENS, timeout=CHAT_LLM_TIMEOUT_SECONDS,
+        temperature=CHAT_TEMPERATURE, feature="chat",
+    ):
+        if chunk.delta:
+            yield "delta", chunk.delta
+    yield "done", provider.name
 
 
 _AGENT_ACTION_KEYWORDS = [
@@ -3669,58 +3709,71 @@ async def _legacy_chat_user(auth_header: str | None):
     return await get_user_context(auth_header)
 
 
-@app.post("/chat")
-async def chat(request: Request, req: ChatRequest):
+def _rate_limit_key(request: Request, user_ctx) -> str:
+    return ai_policy.rate_limit_key(request, user_ctx)
+
+
+async def _enforce_rate_limit(request: Request, user_ctx) -> None:
+    """Per user, or per the gateway-vouched client IP (ai_core.policy)."""
+    await ai_policy.enforce_rate_limit(request, user_ctx, rate_limiter)
+
+
+async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
+    """Everything /chat and /chat/stream do before the LLM call - identity,
+    rate limit, intent, personal context, retrieval, the abstention decision,
+    the prompt and the cache lookup - in one copy so the two endpoints cannot
+    drift apart. `abstain` short-circuits everything after retrieval."""
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message không được để trống.")
 
-    # Rate limiting - use the client IP as the limiter key.
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
-
     auth_header = request.headers.get("authorization")
-
-    # Resolve user identity early so persona and personal context can be built
-    # before retrieval (see _legacy_chat_user for the Phase 5 policy).
+    # Resolve user identity early so the rate limit is per user and persona and
+    # personal context can be built before retrieval (see _legacy_chat_user).
     user_ctx = await _legacy_chat_user(auth_header)
+    await _enforce_rate_limit(request, user_ctx)
 
     intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
-
-    # Build personal context (role-aware data) in parallel with system analytics.
-    personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
+    personal = await build_user_personal_context(user_ctx, intent_info, auth_header, req.message.strip())
+    image_ctx = await resolve_turn_image(req.attachment_id, req.book_id, req.image_turn, user_ctx, req.message.strip())
+    image_used = bool(image_ctx and image_ctx.get("used"))
 
     # CUSTOMER and SUPPLIER must not see system-wide analytics; their personal
     # context (loans, fines, tasks) already comes from build_user_personal_context.
     # Exception (ANALYTICS_BLOCK_EXEMPT_INTENTS): BOOK_SEARCH_QUERY so customers can still
     # look up catalog books, and GENERAL_QUERY so they reach the FAQ semantic search.
-    _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
+    # Phase F1: decided from ALL roles AND permissions (ai_core.capabilities),
+    # not the persona's primary role. Anonymous keeps the previous behaviour.
+    _blocked = user_ctx is not None and not ai_capabilities.allows(user_ctx, "analytics.chat")
     _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
     if _blocked and not _is_exempt_intent:
-        retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
+        # No system-wide analytics for them - but a policy question NLU filed
+        # under an analytics intent ("Phí phạt trễ hạn tính thế nào?" ->
+        # FINE_SUMMARY_QUERY) still deserves the library's documents. The
+        # documents are static policy, not anyone's data; the reader's own
+        # loans and fines keep coming from `personal`. Intent is unchanged, so
+        # the GENERAL_QUERY abstention below never fires for these.
+        retrieval = await retrieve_context({**intent_info, "intent": GENERAL_QUERY, "query": req.message.strip()}, None)
     else:
         retrieval = await retrieve_context(intent_info, auth_header)
+
+    turn = {"message": req.message, "auth_header": auth_header, "user_ctx": user_ctx,
+            "intent_info": intent_info, "retrieval": retrieval, "abstain": False,
+            "personal": personal, "image_ctx": image_ctx}
 
     # NO_EVIDENCE on an information-seeking GENERAL_QUERY: skip the LLM entirely
     # instead of handing it an empty [RAG CONTEXT] and hoping the prompt rules
     # stop it from inventing an answer. A greeting/small-talk message with the
-    # same decision (is_information_seeking() false) still reaches the LLM
-    # below, since there is nothing to hallucinate about there.
+    # same decision (is_information_seeking() false) still reaches the LLM, and
+    # so does a question about the user's own records when they were loaded.
     if (
         intent_info.get("intent") == GENERAL_QUERY
         and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
         and is_information_seeking(req.message)
+        and not (personal.get("summary") and asks_about_own_data(req.message))
+        and not image_used  # the recognised photo is the evidence of this turn
     ):
-        return {
-            "reply": GENERAL_QUERY_ABSTENTION_REPLY,
-            "ai_provider": "abstention",
-            "intent": intent_info.get("intent"),
-            "context_sources": [],
-            "retrieval_warnings": [],
-            "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
-            "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
-        }
+        turn["abstain"] = True
+        return turn
 
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
@@ -3737,11 +3790,7 @@ async def chat(request: Request, req: ChatRequest):
             "summary": legacy_context,
             "raw": {"legacy_system_context": req.system_context},
             "sources": [
-                {
-                    "name": "Legacy Frontend System Context",
-                    "endpoint": "system_context",
-                    "status": "ok",
-                }
+                {"name": "Legacy Frontend System Context", "endpoint": "system_context", "status": "ok"}
             ],
             "warnings": warnings + ["RAG retrieval failed; using legacy system_context fallback."],
         }
@@ -3751,17 +3800,6 @@ async def chat(request: Request, req: ChatRequest):
         context_block = build_rag_context(intent_info, retrieval)
     else:
         context_block = build_no_data_context(intent_info)
-
-    # CUSTOMER/SUPPLIER get `retrieval` zeroed out above, but their own data
-    # still reaches the prompt via `personal` - merge both so citation and
-    # numeric grounding see it too, not just system-wide analytics.
-    grounding_context = merge_grounding_context(retrieval, personal)
-
-    metadata = {
-        "intent": intent_info.get("intent"),
-        "context_sources": retrieval.get("sources") or [],
-        "retrieval_warnings": retrieval.get("warnings") or [],
-    }
 
     # Include auth and intent in the cache key so RAG answers do not leak across users.
     history_hash = ""
@@ -3773,110 +3811,164 @@ async def chat(request: Request, req: ChatRequest):
 
     # Bypass cache for action requests and personal queries (data is user-specific).
     is_action_request = _wants_agent_action(req.message)
-    is_personal_query = _is_personal_query(req.message)
-    skip_cache = is_action_request or is_personal_query
-    cached_reply = None if skip_cache else response_cache.get(req.message, history_hash)
-    if cached_reply:
-        return {"reply": cached_reply, "ai_provider": "cached", **metadata}
+    skip_cache = is_action_request or _is_personal_query(req.message) or bool(image_ctx)
 
-    # Build persona block from personal context.
     persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
     if personal.get("summary"):
         persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
-
-    system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
+    system_content = (CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
+                      + image_prompt_block(image_ctx))
     messages = [{"role": "system", "content": system_content}]
-
     for msg in req.conversation_history[-10:]:
         messages.append({"role": msg.role, "content": msg.content})
-
     messages.append({"role": "user", "content": req.message.strip()})
 
-    async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
-        """Try to plan an agent action and append a confirmation hint to the reply."""
-        pending_action_data = None
+    turn.update({
+        "retrieval": retrieval,
+        "used_legacy_context": used_legacy_context,
+        # CUSTOMER/SUPPLIER get `retrieval` zeroed out above, but their own data
+        # still reaches the prompt via `personal` - merge both so citation and
+        # numeric grounding see it too, not just system-wide analytics.
+        "grounding_context": merge_grounding_context(retrieval, personal),
+        "metadata": {
+            "intent": intent_info.get("intent"),
+            "context_sources": retrieval.get("sources") or [],
+            "retrieval_warnings": retrieval.get("warnings") or [],
+            **({"image_context": _public_image_context(image_ctx)} if image_ctx else {}),
+        },
+        "history_hash": history_hash,
+        "is_action_request": is_action_request,
+        "skip_cache": skip_cache,
+        "cached_reply": None if skip_cache else response_cache.get(req.message, history_hash),
+        "messages": messages,
+    })
+    return turn
 
-        if is_action_request and user_ctx is None:
-            reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
-            return reply_text, None
 
-        if user_ctx is not None:
-            try:
-                planned = await plan_agent_action(req.message, intent_info, retrieval, user_ctx, auth_header=auth_header)
-                if planned is not None:
-                    temp_action = _make_temp_action_for_check(planned)
-                    if not can_confirm_action(user_ctx, temp_action):
-                        reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
-                    else:
-                        action = await create_pending_action(
-                            action_type=planned["type"],
-                            summary=planned["summary"],
-                            payload=planned["payload"],
-                            risk=planned["risk"],
-                            sources=planned.get("sources", []),
-                            intent=planned.get("intent"),
-                            created_from_message=req.message,
-                            warnings=planned.get("warnings", []),
-                            requires_review=planned.get("requires_review", False),
-                            user_context=user_ctx,
-                        )
-                        pending_action_data = action.model_dump()
-                        reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
-                        asyncio.ensure_future(push_ai_action_event(
-                            "ai_action:created",
-                            action.action_id,
-                            action.type,
-                            user_ctx.user_id if user_ctx else None,
-                            {"summary": action.summary, "risk": action.risk},
-                        ))
-            except Exception as exc:
-                logger.warning("Agent planning failed (non-fatal): %s", exc)
+def _public_image_context(ctx: dict | None) -> dict | None:
+    """What the client is told about the photo this turn used."""
+    if not ctx:
+        return None
+    return {"attachment_id": ctx["attachment_id"], "used": ctx["used"], "status": ctx["status"],
+            "book": ctx.get("book"), "availability": ctx.get("availability"),
+            "candidates": ctx.get("candidates") or []}
 
-        return reply_text, pending_action_data
 
-    reply, ok = await _chat_with_text_llm(messages)
+def _chat_explainability(turn: dict, reply: str, abstained: bool = False) -> dict:
+    image = turn.get("image_ctx")
+    return ai_explainability.for_chat(
+        reply, turn["message"], turn["retrieval"], turn.get("grounding_context") or turn["retrieval"],
+        turn.get("personal"), image if (image or {}).get("used") else None, abstained=abstained)
+
+
+def _chat_abstention_payload(turn: dict) -> dict:
+    return {
+        "reply": GENERAL_QUERY_ABSTENTION_REPLY,
+        "ai_provider": "abstention",
+        "intent": turn["intent_info"].get("intent"),
+        "context_sources": [],
+        "retrieval_warnings": [],
+        "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
+        "retrievalConfidence": turn["retrieval"].get("retrieval_confidence", 0.0),
+        "explainability": _chat_explainability(turn, GENERAL_QUERY_ABSTENTION_REPLY, abstained=True),
+    }
+
+
+def _chat_cached_payload(turn: dict) -> dict:
+    return {"reply": turn["cached_reply"], "ai_provider": "cached", **turn["metadata"],
+            "explainability": _chat_explainability(turn, turn["cached_reply"])}
+
+
+async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dict | None]:
+    """Try to plan an agent action and append a confirmation hint to the reply."""
+    user_ctx = turn["user_ctx"]
+    if turn["is_action_request"] and user_ctx is None:
+        return reply_text + "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.", None
+    if user_ctx is None:
+        return reply_text, None
+
+    pending_action_data = None
+    try:
+        planned = await plan_agent_action(
+            turn["message"], turn["intent_info"], turn["retrieval"], user_ctx, auth_header=turn["auth_header"])
+        if planned is not None:
+            temp_action = _make_temp_action_for_check(planned)
+            if not can_confirm_action(user_ctx, temp_action):
+                reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
+            else:
+                action = await create_pending_action(
+                    action_type=planned["type"],
+                    summary=planned["summary"],
+                    payload=planned["payload"],
+                    risk=planned["risk"],
+                    sources=planned.get("sources", []),
+                    intent=planned.get("intent"),
+                    created_from_message=turn["message"],
+                    warnings=planned.get("warnings", []),
+                    requires_review=planned.get("requires_review", False),
+                    user_context=user_ctx,
+                )
+                pending_action_data = action.model_dump()
+                reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+                asyncio.ensure_future(push_ai_action_event(
+                    "ai_action:created",
+                    action.id,
+                    action.type,
+                    user_ctx.user_id,
+                    {"summary": action.summary, "risk": action.risk},
+                ))
+    except Exception as exc:
+        logger.warning("Agent planning failed (non-fatal): %s", exc)
+    return reply_text, pending_action_data
+
+
+def _chat_draft(turn: dict, reply: str | None, ok: bool) -> tuple[str, str]:
+    """(reply text, provider name): the model's reply, or the rule-based
+    fallback built from the retrieved data when the model gave nothing."""
     if ok and reply:
-        reply_with_sources = ensure_source_line(reply, retrieval.get("sources") or [])
-        grounding_warning = verify_numeric_grounding(reply_with_sources, grounding_context)
-        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-        if not pending_action_data and not skip_cache:
-            response_cache.set(req.message, reply_with_sources, history_hash)
-        result = {"reply": reply_with_sources, "ai_provider": _get_text_llm_provider().name, **metadata}
-        if grounding_warning:
-            result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
-        if pending_action_data:
-            result["pending_action"] = pending_action_data
-        return result
+        return reply, _get_text_llm_provider().name
+    return build_fallback_reply(turn["intent_info"], turn["retrieval"], turn["used_legacy_context"]), "fallback"
 
-    fallback_reply = build_fallback_reply(intent_info, retrieval, used_legacy_context)
-    fallback_reply, pending_action_data = await _apply_agent_layer(fallback_reply)
-    result = {"reply": fallback_reply, "ai_provider": "fallback", **metadata}
+
+async def _finish_chat_reply(turn: dict, text: str, provider: str) -> dict:
+    """Source line, numeric grounding (model replies only), the agent-action
+    layer and the cache write - the final body of /chat and of /chat/stream's
+    `done` event."""
+    # An uncertain FAQ near-miss is not a citation the reply necessarily used.
+    uncertain = turn["retrieval"].get("retrieval_status") == retrieval_confidence.UNCERTAIN
+    reply_with_sources = text if uncertain else ensure_source_line(text, turn["retrieval"].get("sources") or [])
+    grounding_warning = (
+        verify_numeric_grounding(reply_with_sources, turn["grounding_context"]) if provider != "fallback" else None
+    )
+    reply_with_sources, pending_action_data = await _apply_chat_agent_layer(turn, reply_with_sources)
+    if not pending_action_data and not turn["skip_cache"] and provider != "fallback":
+        response_cache.set(turn["message"], reply_with_sources, turn["history_hash"])
+
+    result = {"reply": reply_with_sources, "ai_provider": provider, **turn["metadata"],
+              "explainability": _chat_explainability(turn, reply_with_sources)}
+    if grounding_warning:
+        result["retrieval_warnings"] = [*result["retrieval_warnings"], grounding_warning]
     if pending_action_data:
         result["pending_action"] = pending_action_data
     return result
 
 
-def _filter_tool_args(tool_fn, args: dict) -> dict:
-    """Drop arguments the model hallucinated that aren't in the tool's real signature.
-
-    Smaller quantized models sometimes pass kwargs not present in the declared
-    JSON schema (e.g. calling get_warehouse_stock_risk with a stray `priority`
-    arg). Silently drop unknown keys instead of letting the call raise TypeError.
-    """
-    try:
-        valid_params = set(inspect.signature(tool_fn).parameters.keys())
-    except (TypeError, ValueError):
-        return args
-    return {key: value for key, value in args.items() if key in valid_params}
+@app.post("/chat")
+async def chat(request: Request, req: ChatRequest):
+    turn = await _prepare_chat_turn(request, req)
+    if turn["abstain"]:
+        return _chat_abstention_payload(turn)
+    if turn["cached_reply"]:
+        return _chat_cached_payload(turn)
+    reply, ok = await _chat_with_text_llm(turn["messages"])
+    return await _finish_chat_reply(turn, *_chat_draft(turn, reply, ok))
 
 
 async def _run_tool_call(name: str, args: dict, auth_header: str | None) -> tuple[str, dict]:
     """Execute one model-requested tool call, used with asyncio.gather to run every tool
-    call within a single round concurrently — all ANALYTICS_TOOLS are read-only GETs."""
-    tool_fn = TOOL_FUNCTIONS.get(name)
-    if tool_fn is None:
-        return name, {"error": f"Unknown tool: {name}"}
-    return name, await tool_fn(auth_header, **_filter_tool_args(tool_fn, args))
+    call within a single round concurrently — all ANALYTICS_TOOLS are read-only GETs.
+    Validation, timeout and audit logging: ai_core.tools.run_read_tool."""
+    return name, await ai_tools.run_read_tool(name, args, auth_header)
 
 
 def _get_assistant_provider():
@@ -4087,10 +4179,9 @@ async def _run_fast_path_tool(message: str, auth_header: str | None) -> list[dic
         return []
 
     async def _run_one(tool_name: str, tool_args: dict) -> dict | None:
-        tool_fn = TOOL_FUNCTIONS.get(tool_name)
-        if tool_fn is None:
+        if tool_name not in TOOL_FUNCTIONS:
             return None
-        tool_result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, tool_args))
+        tool_result = await ai_tools.run_read_tool(tool_name, tool_args, auth_header)
         return {"tool_name": tool_name, "tool_args": tool_args, "tool_result": tool_result}
 
     results = await asyncio.gather(*(_run_one(name, args) for name, args in picks))
@@ -4247,15 +4338,7 @@ async def _build_assistant_pending_action(
 
 
 def _assistant_can_access(user_ctx) -> bool:
-    if user_ctx is None:
-        return False
-    if user_ctx.is_superuser:
-        return True
-    if set(user_ctx.roles or []) & ASSISTANT_ALLOWED_ROLES:
-        return True
-    if set(user_ctx.permissions or []) & ASSISTANT_ALLOWED_PERMISSIONS:
-        return True
-    return False
+    return can_use_assistant(user_ctx)
 
 
 def _collect_evidence(collected_data: dict) -> list[dict]:
@@ -4403,10 +4486,9 @@ def _plan_fast_path(plan, snapshot: dict | None = None):
             return await _run_fast_path_tool(message, auth_header)
 
         async def _run_one(call: dict) -> dict | None:
-            tool_fn = TOOL_FUNCTIONS.get(call["name"])
-            if tool_fn is None:
+            if call["name"] not in TOOL_FUNCTIONS:
                 return None
-            result = await tool_fn(auth_header, **_filter_tool_args(tool_fn, call["args"]))
+            result = await ai_tools.run_read_tool(call["name"], call["args"], auth_header)
             return {"tool_name": call["name"], "tool_args": call["args"], "tool_result": result}
 
         results = await asyncio.gather(*(_run_one(call) for call in plan.required_tools))
@@ -4447,6 +4529,9 @@ def _assistant_payload(
         "verification": extras.get("verification"),
         "decision": extras.get("decision"),
     }
+    if extras.get("image_context"):
+        payload["image_context"] = extras["image_context"]
+    payload["explainability"] = ai_explainability.for_assistant(payload)
     if debug is not None:
         payload["debug"] = debug
     return payload
@@ -4621,6 +4706,7 @@ async def _finalize_assistant_turn(
     messages: list[dict], provider, call_usage: list[dict], plan, state: dict | None, warehouses: list[dict],
     user_ctx, auth_header: str | None, conversation, conversation_id_str: str, cache_key: str | None,
     plan_note_text: str = "", viz_now: datetime | None = None, context_cache_key: str | None = None,
+    image_ctx: dict | None = None,
 ) -> dict:
     """Everything after the tool loop, shared by both endpoints: one grounding
     retry, the reorder pending action (still confirmation-gated), the
@@ -4804,6 +4890,8 @@ async def _finalize_assistant_turn(
     extras["faithfulness"] = faithfulness
     extras["verification"] = verification
     extras["decision"] = copilot_decision.build(plan, collected_data, verification)
+    if image_ctx:
+        extras["image_context"] = _public_image_context(image_ctx)
     new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
     metadata = {"copilot_state": new_state, "plan": plan.public(), "extras": extras,
                 "warehouse_ids": sorted(warehouse_scope.warehouse_ids_in(collected_data))}
@@ -4847,20 +4935,22 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message không được để trống.")
 
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
-
     auth_header = request.headers.get("authorization")
     user_ctx = await get_user_context(auth_header)
+    await _enforce_rate_limit(request, user_ctx)
     if not _assistant_can_access(user_ctx):
         raise HTTPException(status_code=403, detail="Bạn không có quyền sử dụng trợ lý phân tích.")
+    # Every READ tool of this turn is checked against the caller's capabilities
+    # (ai_core.tools.run_read_tool) - defence in depth behind the gate above.
+    ai_tools.CALLER.set(user_ctx)
 
     message_text = req.message.strip()
+    image_ctx = await resolve_turn_image(req.attachment_id, req.book_id, req.image_turn, user_ctx, message_text)
     conversation = await _resolve_owned_conversation(req.conversation_id, user_ctx, message_text)
     conversation_id_str = str(conversation.conversation_id)
     partition = await _access_fingerprint(user_ctx)
+    if image_ctx:
+        partition = None  # a turn about a photo is never served from, or written to, the answer cache
     copilot_tools.CACHE_PARTITION.set(partition)
     history, state = await _load_conversation_context(conversation)
     cache_key = _assistant_cache_key(conversation_id_str, message_text, partition) if partition else None
@@ -4870,7 +4960,7 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
         "auth_header": auth_header, "user_ctx": user_ctx, "message_text": message_text,
         "conversation": conversation, "conversation_id_str": conversation_id_str, "cache_key": cache_key,
         "context_cache_key": context_cache_key, "cache_partition": partition,
-        "cached": _cache_lookup(cache_key, context_cache_key),
+        "cached": _cache_lookup(cache_key, context_cache_key), "image_ctx": image_ctx,
     }
     cached = turn["cached"]
     if cached is not None and not await warehouse_scope.can_view(
@@ -4879,7 +4969,12 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if turn["cached"] is not None:
         return turn
 
-    plan, warehouses = await _plan_assistant_turn(message_text, state, auth_header)
+    image_book = (image_ctx or {}).get("book") if (image_ctx or {}).get("used") else None
+    # The recognised title is handed to the planner as a quoted title, so "sách
+    # này" plans the same tools as naming the book (copilot_plan._book_title_in).
+    planner_text = f'{message_text} (sách "{image_book["title"]}")' if image_book and image_book.get("title") \
+        else message_text
+    plan, warehouses = await _plan_assistant_turn(planner_text, state, auth_header)
     turn.update({"history": history, "state": state, "plan": plan, "warehouses": warehouses})
     if plan.clarification_needed:
         return turn
@@ -4889,7 +4984,7 @@ async def _start_assistant_turn(request: Request, req: AssistantRequest) -> dict
     if viz_mode in ("retype", "render"):
         return turn  # _visualization_turn persists both sides, no LLM
     await conversation_store.append_message(conversation.id, role="user", content=message_text)
-    turn["plan_note"] = copilot_response.plan_note(plan)
+    turn["plan_note"] = copilot_response.plan_note(plan) + image_prompt_block(image_ctx)
     snapshot = turn.get("snapshot")
     if viz_mode == "explain" and snapshot and snapshot.get("data"):
         turn["viz_now"] = _snapshot_time(snapshot)
@@ -4996,7 +5091,7 @@ async def assistant(request: Request, req: AssistantRequest):
         state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
         conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
         context_cache_key=turn.get("context_cache_key"),
-        plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
+        plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"), image_ctx=turn.get("image_ctx"),
     )
     return AssistantResponse(**payload)
 
@@ -5125,7 +5220,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             state=turn["state"], warehouses=turn["warehouses"], user_ctx=turn["user_ctx"], auth_header=auth_header,
             conversation=conversation, conversation_id_str=conversation_id_str, cache_key=turn["cache_key"],
             context_cache_key=turn.get("context_cache_key"),
-            plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"),
+            plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"), image_ctx=turn.get("image_ctx"),
         )
         yield _sse("done", _validated_payload(payload))
 
@@ -5134,198 +5229,83 @@ async def assistant_stream(request: Request, req: AssistantRequest):
 
 @app.post("/chat/stream")
 async def chat_stream(request: Request, req: ChatRequest):
-    """Streaming twin of /chat: same prep (auth, intent, retrieval, cache,
-    agent-action layer). The LLM reply itself is sent as a single `token`
-    event (not per-token) - _chat_with_text_llm's underlying provider call is
-    non-streaming; the SSE shape is kept for client compatibility and so a
-    future genuinely-streaming call (OpenRouterProvider.chat_stream) can slot
-    in here without changing the endpoint's event contract.
+    """Streaming twin of /chat: the same prepared turn (_prepare_chat_turn) and
+    the same final body (_finish_chat_reply). The model's reply streams as
+    `token` events while it is generated (OpenRouterProvider.chat_stream); if
+    the stream fails, the reply comes from the non-streaming call as one
+    `token` event instead.
     The final `done` event's `reply` is the source of truth (it has the
     source-line / agent-confirmation sentences appended, which streamed tokens
     don't include yet) — the client should replace, not just append, on done.
     """
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="Message không được để trống.")
-
-    client_ip = request.client.host if request.client else "unknown"
-    allowed, reason = await rate_limiter.acquire(key=client_ip)
-    if not allowed:
-        raise HTTPException(status_code=429, detail=reason)
-
-    auth_header = request.headers.get("authorization")
-    user_ctx = await _legacy_chat_user(auth_header)
-
-    intent_info = await classify_user_message(req.message.strip(), req.conversation_history, user_ctx)
-    personal = await build_user_personal_context(user_ctx, intent_info, auth_header)
-
-    _blocked = personal.get("role") in ANALYTICS_BLOCKED_ROLES
-    _is_exempt_intent = intent_info.get("intent") in ANALYTICS_BLOCK_EXEMPT_INTENTS
-    if _blocked and not _is_exempt_intent:
-        retrieval: dict = {"summary": "", "raw": {}, "sources": [], "warnings": [], "retrieved_at": ""}
-    else:
-        retrieval = await retrieve_context(intent_info, auth_header)
-
-    # See the identical check in /chat above.
-    abstain = (
-        intent_info.get("intent") == GENERAL_QUERY
-        and retrieval.get("retrieval_status") == retrieval_confidence.NO_EVIDENCE
-        and is_information_seeking(req.message)
-    )
-
-    warnings = list(retrieval.get("warnings") or [])
-    sources = list(retrieval.get("sources") or [])
-    ok_sources = any(source.get("status") == "ok" for source in sources)
-    missing_auth = any("Missing Authorization" in warning for warning in warnings)
-    used_legacy_context = False
-
-    if not ok_sources and warnings and req.system_context and not missing_auth:
-        legacy_context = _build_context_block(req.system_context)
-        retrieval = {
-            **retrieval,
-            "summary": legacy_context,
-            "raw": {"legacy_system_context": req.system_context},
-            "sources": [
-                {"name": "Legacy Frontend System Context", "endpoint": "system_context", "status": "ok"}
-            ],
-            "warnings": warnings + ["RAG retrieval failed; using legacy system_context fallback."],
-        }
-        used_legacy_context = True
-
-    if retrieval.get("summary") or retrieval.get("raw") or retrieval.get("sources"):
-        context_block = build_rag_context(intent_info, retrieval)
-    else:
-        context_block = build_no_data_context(intent_info)
-
-    # See the identical comment in /chat above.
-    grounding_context = merge_grounding_context(retrieval, personal)
-
-    metadata = {
-        "intent": intent_info.get("intent"),
-        "context_sources": retrieval.get("sources") or [],
-        "retrieval_warnings": retrieval.get("warnings") or [],
-    }
-
-    history_hash = ""
-    if req.conversation_history:
-        hist_text = "|".join(m.content[:100] for m in req.conversation_history[-3:])
-        history_hash = hashlib.md5(hist_text.encode()).hexdigest()[:8]
-    auth_hash = hashlib.md5((auth_header or "anonymous").encode()).hexdigest()[:8]
-    history_hash = f"{history_hash}:{auth_hash}:{intent_info.get('intent') or 'unknown'}"
-
-    is_action_request = _wants_agent_action(req.message)
-    is_personal_query = _is_personal_query(req.message)
-    skip_cache = is_action_request or is_personal_query
-    cached_reply = None if skip_cache else response_cache.get(req.message, history_hash)
-
-    persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
-    if personal.get("summary"):
-        persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
-    system_content = CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
-    messages = [{"role": "system", "content": system_content}]
-    for msg in req.conversation_history[-10:]:
-        messages.append({"role": msg.role, "content": msg.content})
-    messages.append({"role": "user", "content": req.message.strip()})
-
-    async def _apply_agent_layer(reply_text: str) -> tuple[str, dict | None]:
-        pending_action_data = None
-        if is_action_request and user_ctx is None:
-            reply_text += "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token."
-            return reply_text, None
-        if user_ctx is not None:
-            try:
-                planned = await plan_agent_action(req.message, intent_info, retrieval, user_ctx, auth_header=auth_header)
-                if planned is not None:
-                    temp_action = _make_temp_action_for_check(planned)
-                    if not can_confirm_action(user_ctx, temp_action):
-                        reply_text += "\n\nBạn chưa đủ quyền để xác nhận hành động này."
-                    else:
-                        action = await create_pending_action(
-                            action_type=planned["type"],
-                            summary=planned["summary"],
-                            payload=planned["payload"],
-                            risk=planned["risk"],
-                            sources=planned.get("sources", []),
-                            intent=planned.get("intent"),
-                            created_from_message=req.message,
-                            warnings=planned.get("warnings", []),
-                            requires_review=planned.get("requires_review", False),
-                            user_context=user_ctx,
-                        )
-                        pending_action_data = action.model_dump()
-                        reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
-                        asyncio.ensure_future(push_ai_action_event(
-                            "ai_action:created",
-                            action.action_id,
-                            action.type,
-                            user_ctx.user_id if user_ctx else None,
-                            {"summary": action.summary, "risk": action.risk},
-                        ))
-            except Exception as exc:
-                logger.warning("Agent planning failed (non-fatal): %s", exc)
-        return reply_text, pending_action_data
+    turn = await _prepare_chat_turn(request, req)
 
     async def event_generator():
-        if abstain:
-            yield _sse("token", {"text": GENERAL_QUERY_ABSTENTION_REPLY})
-            yield _sse("done", {
-                "reply": GENERAL_QUERY_ABSTENTION_REPLY, "ai_provider": "abstention",
-                "intent": intent_info.get("intent"), "context_sources": [], "retrieval_warnings": [],
-                "retrievalStatus": retrieval_confidence.NO_EVIDENCE,
-                "retrievalConfidence": retrieval.get("retrieval_confidence", 0.0),
-            })
+        if turn["abstain"] or turn["cached_reply"]:
+            payload = _chat_abstention_payload(turn) if turn["abstain"] else _chat_cached_payload(turn)
+            yield _sse("token", {"text": payload["reply"]})
+            yield _sse("done", payload)
             return
 
-        if cached_reply:
-            yield _sse("token", {"text": cached_reply})
-            yield _sse("done", {"reply": cached_reply, "ai_provider": "cached", **metadata})
-            return
-
-        full_text = ""
-        provider = "fallback"
-        reply, ok = await _chat_with_text_llm(messages)
-        if ok and reply:
-            full_text = reply
-            provider = _get_text_llm_provider().name
-            yield _sse("token", {"text": full_text})
-
-        if not full_text:
-            full_text = build_fallback_reply(intent_info, retrieval, used_legacy_context)
-            provider = "fallback"
-            yield _sse("token", {"text": full_text})
-
-        reply_with_sources = ensure_source_line(full_text, retrieval.get("sources") or [])
-        grounding_warning = (
-            verify_numeric_grounding(reply_with_sources, grounding_context) if provider != "fallback" else None
-        )
-        reply_with_sources, pending_action_data = await _apply_agent_layer(reply_with_sources)
-
-        if not pending_action_data and not skip_cache and provider != "fallback":
-            response_cache.set(req.message, reply_with_sources, history_hash)
-
-        final_meta = dict(metadata)
-        if grounding_warning:
-            final_meta["retrieval_warnings"] = [*final_meta["retrieval_warnings"], grounding_warning]
-        if pending_action_data:
-            final_meta["pending_action"] = pending_action_data
-
-        yield _sse("done", {"reply": reply_with_sources, "ai_provider": provider, **final_meta})
+        streamed, provider = "", None
+        try:
+            async for kind, value in _stream_chat_reply(turn["messages"]):
+                if kind == "delta":
+                    streamed += value
+                    yield _sse("token", {"text": value})
+                else:
+                    provider = value
+        except Exception as exc:  # noqa: BLE001 - answered below without streaming
+            logger.warning("chat stream failed (%s); answering without streaming", type(exc).__name__)
+            provider = None
+        if provider and streamed.strip():
+            text = streamed.strip()
+        else:
+            # Nothing usable streamed: the non-streaming call (retry + fallback model,
+            # then the rule-based reply). `done` replaces any partial text already shown.
+            reply, ok = await _chat_with_text_llm(turn["messages"])
+            text, provider = _chat_draft(turn, reply, ok)
+            yield _sse("token", {"text": text})
+        yield _sse("done", await _finish_chat_reply(turn, text, provider))
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 # ── Agent Action Endpoints ────────────────────────────────────────────────────
 
+async def get_verified_user_context(auth_header: str):
+    """Every /actions/* endpoint: verified identity, revocation included
+    (agent_permissions.require_verified_session)."""
+    user_ctx = await get_user_context(auth_header)
+    require_verified_session(user_ctx)
+    return user_ctx
+
+
 @app.post("/actions/confirm", response_model=ConfirmActionResponse)
 async def confirm_action(request: Request, req: ConfirmActionRequest):
     await cleanup_expired_actions()
+    await release_stale_confirmed_actions()
 
     auth_header = request.headers.get("authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required to confirm actions.")
 
+    # Identity (revocation included) and ownership BEFORE anything about the
+    # action is revealed: the EXECUTED replay below returns the stored result,
+    # which must never reach a caller who could not confirm the action itself.
+    user_ctx = await get_verified_user_context(auth_header)
+
     action = await get_pending_action(req.action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
+
+    # Mirrors the ownership check on /actions/cancel and GET /actions/pending/{id}:
+    # without it, any user whose role satisfies require_can_confirm_action below could
+    # confirm (or cancel-via-confirm) another user's pending action by guessing/observing
+    # its action_id (broadcast over the ai_action:* websocket events to other staff).
+    if action.created_by_user_id and not user_ctx.is_superuser:
+        if user_ctx.user_id != action.created_by_user_id:
+            raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
 
     if action.status == CANCELLED:
         raise HTTPException(status_code=400, detail="This action was already cancelled.")
@@ -5342,18 +5322,6 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
 
     if is_expired(action) or action.status == ACTION_EXPIRED:
         raise HTTPException(status_code=410, detail="Action has expired. Please ask AI to create a new one.")
-
-    # Resolved up-front (not only on the confirm path) so a cancel-via-confirm
-    # (`confirm: false`) also records who cancelled it in the audit log.
-    user_ctx = await get_user_context(auth_header)
-
-    # Mirrors the ownership check on /actions/cancel and GET /actions/pending/{id}:
-    # without it, any user whose role satisfies require_can_confirm_action below could
-    # confirm (or cancel-via-confirm) another user's pending action by guessing/observing
-    # its action_id (broadcast over the ai_action:* websocket events to other staff).
-    if action.created_by_user_id and not user_ctx.is_superuser:
-        if user_ctx.user_id != action.created_by_user_id:
-            raise HTTPException(status_code=403, detail="You can only confirm or cancel your own actions.")
 
     if not req.confirm:
         if not await cancel_pending_action(req.action_id, actor_user_id=user_ctx.user_id):
@@ -5372,12 +5340,6 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         )
 
     require_can_confirm_action(user_ctx, action)
-    if not user_ctx.revocation_verified:
-        # Phase 5: auth-service could not check whether this token was revoked
-        # (Redis unreachable). Executing a write for a possibly logged-out
-        # session is refused; the action stays pending for a later confirm.
-        raise HTTPException(status_code=503, detail="Chưa xác minh được trạng thái phiên đăng nhập; thao tác tạm thời "
-                                                    "bị từ chối, vui lòng thử lại sau.")
 
     # Merge user-supplied overrides (e.g. warehouse_id chosen in UI) into payload -
     # only the fields the confirm dialog edits (action_guard), then re-check the
@@ -5401,6 +5363,9 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
                 message="Action was already executed (idempotent).",
                 result=await get_action_result(req.action_id),
             )
+        if latest is not None and latest.status == RECONCILE_REQUIRED:
+            raise HTTPException(status_code=409, detail="Chưa xác định được kết quả lần thực thi trước; đề xuất này "
+                                                        "đang chờ đối chiếu và không được thực thi lại.")
         raise HTTPException(status_code=409, detail="Action is already being executed or is no longer pending.")
     asyncio.ensure_future(push_ai_action_event(
         "ai_action:confirmed",
@@ -5409,35 +5374,58 @@ async def confirm_action(request: Request, req: ConfirmActionRequest):
         user_id_for_emit,
     ))
 
+    return await _execute_claimed_action(action, auth_header, user_ctx, user_id_for_emit)
+
+
+async def _execute_claimed_action(action, auth_header: str, user_ctx, user_id_for_emit) -> ConfirmActionResponse:
+    """Run a claimed (CONFIRMED) action and record where it ended:
+    - EXECUTED: the executor returned a result;
+    - FAILED: the target - or a local precondition - refused it (an
+      HTTPException), so nothing was written and it may be confirmed again;
+    - RECONCILE_REQUIRED: the outcome is unknown (ActionOutcomeUnknown, a bug
+      after the request may have been sent, or a multi-line result with lines
+      whose outcome is unknown). Never re-executed automatically, unless the
+      type is retry-safe (RETRY_SAFE_ACTIONS), which goes to FAILED instead."""
+    action_id, actor = action.id, user_ctx.user_id
     try:
         result = await execute_agent_action(action, auth_header, user_ctx)
-        await mark_action_executed(req.action_id, result, actor_user_id=user_ctx.user_id)
+    except HTTPException as exc:
+        error = f"HTTP {exc.status_code}: {exc.detail}"
+        await mark_action_failed(action_id, error, actor_user_id=actor)
         asyncio.ensure_future(push_ai_action_event(
-            "ai_action:executed",
-            req.action_id,
-            action.type,
-            user_id_for_emit,
-            {"result_summary": str(result)[:200] if result else None},
-        ))
-        return ConfirmActionResponse(
-            success=True,
-            action_id=req.action_id,
-            status=EXECUTED,
-            message="Action executed successfully.",
-            result=result,
-        )
-    except HTTPException:
+            "ai_action:failed", action_id, action.type, user_id_for_emit, {"error": error[:200]}))
         raise
-    except Exception as exc:
-        await mark_action_failed(req.action_id, str(exc), actor_user_id=user_ctx.user_id)
+    except Exception as exc:  # ActionOutcomeUnknown, or an unexpected error mid-execution
+        error = f"{type(exc).__name__}: {exc}"
+        logger.warning("action %s outcome unknown: %s", action_id, error[:300])
+        if action.type in RETRY_SAFE_ACTIONS:
+            await mark_action_failed(action_id, f"outcome unknown, retry-safe: {error}", actor_user_id=actor)
+            detail = "Chưa thực hiện được đề xuất do lỗi kết nối; có thể bấm xác nhận lại an toàn."
+        else:
+            await mark_action_needs_reconciliation(action_id, error, actor_user_id=actor)
+            detail = ("Không xác định được đề xuất đã được thực hiện hay chưa. Đề xuất được chuyển sang chờ đối chiếu; "
+                      "vui lòng kiểm tra trước khi tạo lại để tránh trùng lặp.")
         asyncio.ensure_future(push_ai_action_event(
-            "ai_action:failed",
-            req.action_id,
-            action.type,
-            user_id_for_emit,
-            {"error": str(exc)[:200]},
-        ))
-        raise HTTPException(status_code=500, detail=f"Action execution failed: {exc}")
+            "ai_action:failed", action_id, action.type, user_id_for_emit,
+            {"error": error[:200], "reconcile_required": action.type not in RETRY_SAFE_ACTIONS}))
+        raise HTTPException(status_code=502, detail=detail)
+
+    if isinstance(result, dict) and result.get("needs_reconciliation"):
+        await mark_action_needs_reconciliation(
+            action_id, "some lines have an unknown outcome", actor_user_id=actor, result=result)
+        asyncio.ensure_future(push_ai_action_event(
+            "ai_action:failed", action_id, action.type, user_id_for_emit,
+            {"result_summary": str(result)[:200], "reconcile_required": True}))
+        return ConfirmActionResponse(
+            success=False, action_id=action_id, status=RECONCILE_REQUIRED,
+            message="Một phần đề xuất không xác định được kết quả; cần đối chiếu trước khi tạo lại.", result=result)
+
+    await mark_action_executed(action_id, result, actor_user_id=actor)
+    asyncio.ensure_future(push_ai_action_event(
+        "ai_action:executed", action_id, action.type, user_id_for_emit,
+        {"result_summary": str(result)[:200] if result else None}))
+    return ConfirmActionResponse(
+        success=True, action_id=action_id, status=EXECUTED, message="Action executed successfully.", result=result)
 
 
 @app.post("/actions/cancel")
@@ -5446,13 +5434,10 @@ async def cancel_action(request: Request, req: CancelActionRequest):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required to cancel actions.")
 
+    user_ctx = await get_verified_user_context(auth_header)
     action = await get_pending_action(req.action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
-
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.user_id:
-        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
 
     if action.created_by_user_id and not user_ctx.is_superuser:
         if user_ctx.user_id != action.created_by_user_id:
@@ -5475,13 +5460,10 @@ async def get_action(request: Request, action_id: str):
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
 
+    user_ctx = await get_verified_user_context(auth_header)
     action = await get_pending_action(action_id)
     if not action:
         raise HTTPException(status_code=404, detail="Action not found.")
-
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.user_id:
-        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
 
     if action.created_by_user_id and not user_ctx.is_superuser:
         if user_ctx.user_id != action.created_by_user_id:
@@ -5490,13 +5472,57 @@ async def get_action(request: Request, action_id: str):
     return action.model_dump()
 
 
+class ReconcileActionRequest(BaseModel):
+    action_id: str
+    outcome: Literal["EXECUTED", "FAILED"]
+    note: str
+    # What the administrator found in the target service: e.g. the reservation
+    # number / purchase request id for EXECUTED, or what was searched for FAILED.
+    # Optional in the schema for old clients; EXECUTED without it is refused.
+    evidence_reference: str | None = None
+
+
+RECONCILE_NOTE_MIN_CHARS = 10
+
+
+@app.post("/actions/reconcile")
+async def reconcile_action(request: Request, req: ReconcileActionRequest):
+    """Resolve an action whose outcome was unknown (RECONCILE_REQUIRED) after
+    an administrator checked the target service: EXECUTED if the write is
+    there, FAILED if not. Admin-only. FAILED is never executed again
+    automatically - its creator may confirm it again by hand. Concurrent
+    resolutions of one action: the row lock in agent_store lets exactly one
+    through; the other gets 409, as does any action no longer waiting."""
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authorization header required.")
+    user_ctx = await get_verified_user_context(auth_header)
+    if not is_admin(user_ctx):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    note = (req.note or "").strip()
+    evidence = (req.evidence_reference or "").strip()
+    if len(note) < RECONCILE_NOTE_MIN_CHARS:
+        raise HTTPException(status_code=400, detail=f"Cần ghi chú kết quả đối chiếu (ít nhất {RECONCILE_NOTE_MIN_CHARS} ký tự).")
+    if req.outcome == EXECUTED and not evidence:
+        raise HTTPException(status_code=400, detail="Xác nhận đã thực thi cần mã tham chiếu nghiệp vụ làm bằng chứng "
+                                                    "(ví dụ số đặt trước, mã đề xuất nhập).")
+    if not await resolve_reconciliation(req.action_id, req.outcome, note[:500], user_ctx.user_id,
+                                        evidence_reference=evidence[:200] or None, actor_roles=list(user_ctx.roles)):
+        raise HTTPException(status_code=409, detail="Action is not waiting for reconciliation.")
+    resolved = await get_pending_action(req.action_id)
+    asyncio.ensure_future(push_ai_action_event(
+        "ai_action:reconciled", req.action_id, resolved.type if resolved else None,
+        resolved.created_by_user_id if resolved else None, {"outcome": req.outcome}))
+    return {"success": True, "action_id": req.action_id, "status": req.outcome}
+
+
 @app.get("/actions/stats")
 async def actions_stats(request: Request):
     auth_header = request.headers.get("authorization")
     if not auth_header:
         raise HTTPException(status_code=401, detail="Authorization header required.")
-    user_ctx = await get_user_context(auth_header)
-    if not user_ctx.is_superuser and "ADMIN" not in {r.upper() for r in user_ctx.roles}:
+    user_ctx = await get_verified_user_context(auth_header)
+    if not is_admin(user_ctx):
         raise HTTPException(status_code=403, detail="Admin access required.")
 
     async with get_session() as session:
@@ -5507,8 +5533,12 @@ async def actions_stats(request: Request):
             select(func.count()).select_from(PendingActionRow).where(PendingActionRow.status == EXECUTED)
         )
         total = await session.scalar(select(func.count()).select_from(PendingActionRow))
+        reconcile = await session.scalar(
+            select(func.count()).select_from(PendingActionRow).where(PendingActionRow.status == RECONCILE_REQUIRED)
+        )
 
-    return {"pending": pending or 0, "executed": executed or 0, "total": total or 0}
+    return {"pending": pending or 0, "executed": executed or 0, "total": total or 0,
+            "reconcile_required": reconcile or 0}
 
 
 @app.post("/cache/clear")

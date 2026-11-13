@@ -116,12 +116,15 @@ def test_mark_action_failed():
         action = await agent_store.create_pending_action(
             action_type="CREATE_STOCK_ALERT", summary="s4", payload={}, risk="LOW", user_context=_user(),
         )
+        # only an executing (claimed) action can fail; a pending one was never run
+        assert not await agent_store.mark_action_failed(action.id, "boom", actor_user_id="u1")
+        assert await agent_store.mark_action_confirmed(action.id, actor_user_id="u1")
         ok = await agent_store.mark_action_failed(action.id, "boom", actor_user_id="u1")
         assert ok
         fetched = await agent_store.get_pending_action(action.id)
         assert fetched.status == "FAILED"
         assert await agent_store.get_action_result(action.id) == {"error": "boom"}
-        assert await _audit_events(action.id) == ["CREATED", "FAILED"]
+        assert await _audit_events(action.id) == ["CREATED", "CONFIRMED", "FAILED"]
 
     _run(_t())
 

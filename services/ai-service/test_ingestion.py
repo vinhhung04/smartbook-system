@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 from unittest import mock
+from unittest.mock import AsyncMock, patch
 
 import embeddings
 import ingestion
@@ -174,3 +175,35 @@ class ChunkHashModelRotationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CorpusSyncEndpointTest(unittest.IsolatedAsyncioTestCase):
+    """POST /internal/corpus-sync: internal key required; re-ingests corpus/
+    on demand (no restart) and never runs two ingests at once."""
+
+    def _request(self, key):
+        from types import SimpleNamespace
+        return SimpleNamespace(headers={"x-internal-service-key": key} if key else {})
+
+    async def test_requires_the_internal_key(self):
+        import main
+        from fastapi import HTTPException
+        with patch("catalog_sync.is_valid_internal_key", return_value=False), \
+             patch("ingestion.ingest_internal_docs", new=AsyncMock(side_effect=AssertionError("must not run"))):
+            with self.assertRaises(HTTPException) as denied:
+                await main.corpus_sync_trigger(self._request("wrong"))
+        self.assertEqual(denied.exception.status_code, 403)
+
+    async def test_runs_the_incremental_ingest(self):
+        import main
+        result = {"documents": 22, "chunks_embedded": 1, "chunks_skipped": 63, "removed": 0}
+        with patch("catalog_sync.is_valid_internal_key", return_value=True), \
+             patch("ingestion.ingest_internal_docs", new=AsyncMock(return_value=result)) as ingest:
+            self.assertEqual(await main.corpus_sync_trigger(self._request("k")), result)
+        ingest.assert_awaited_once()
+
+    async def test_a_second_call_while_one_runs_is_skipped(self):
+        import main
+        with patch("catalog_sync.is_valid_internal_key", return_value=True):
+            async with main._corpus_sync_lock:
+                self.assertEqual(await main.corpus_sync_trigger(self._request("k")), {"skipped": "busy"})

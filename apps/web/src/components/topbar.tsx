@@ -99,6 +99,7 @@ const EVENT_CONFIG: Record<string, { titleKey: string; color: string }> = {
   'ai_action:executed':         { titleKey: 'topbar.event.ai_action_executed',          color: 'bg-emerald-500' },
   'ai_action:failed':           { titleKey: 'topbar.event.ai_action_failed',            color: 'bg-red-500' },
   'ai_action:cancelled':        { titleKey: 'topbar.event.ai_action_cancelled',         color: 'bg-slate-500' },
+  'ai_action:reconciled':       { titleKey: 'topbar.event.ai_action_reconciled',        color: 'bg-amber-500' },
   // Fallback
   'notification:new':           { titleKey: 'topbar.event.notification_new',            color: 'bg-cyan-500' },
 };

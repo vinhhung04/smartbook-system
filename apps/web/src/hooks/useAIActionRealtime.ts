@@ -9,6 +9,7 @@ const AI_ACTION_EVENTS = [
   'ai_action:executed',
   'ai_action:failed',
   'ai_action:cancelled',
+  'ai_action:reconciled',
 ];
 
 export function useAIActionRealtime(onEvent: AIActionEventCallback) {

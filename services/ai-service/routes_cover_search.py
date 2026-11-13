@@ -27,6 +27,7 @@ import assistant_tools
 import cover_embeddings
 import cover_gallery
 import embeddings
+import image_input
 from llm_provider import get_openrouter_provider, VisionResponseError, VISION_MODEL
 
 logger = logging.getLogger("uvicorn.error")
@@ -75,7 +76,7 @@ def _clean_ocr_value(value) -> str | None:
     return text
 
 
-async def _run_cover_ocr(image_bytes: bytes) -> dict:
+async def _run_cover_ocr(image_bytes: bytes, report_error: bool = False) -> dict:
     """OpenRouter vision call. analyze_image() already guarantees a JSON
     object response (json_object mode) or raises VisionResponseError - any
     failure (upstream error, timeout, invalid JSON) degrades to "no OCR
@@ -90,7 +91,8 @@ async def _run_cover_ocr(image_bytes: bytes) -> dict:
         )
     except Exception as exc:
         logger.warning("cover_search: OCR failed: %s", type(exc).__name__)
-        data = {"title": None, "author": None}
+        # report_error: the Phase F conversation tells "provider failed" apart from "no legible text"
+        return {"title": None, "author": None, **({"error": True} if report_error else {})}
 
     title = _clean_ocr_value(data.get("title"))
     author = _clean_ocr_value(data.get("author"))
@@ -201,9 +203,15 @@ def _merge_candidates(books: list[dict], ocr_matches: list[dict], visual_matches
 async def find_book_by_cover(request: Request, file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File phải là ảnh (image/*).")
-    image_bytes = file.file.read()
+    image_bytes = file.file.read(image_input.MAX_IMAGE_BYTES + 1)
     if not image_bytes:
         raise HTTPException(status_code=400, detail="File ảnh rỗng.")
+    # Phase F hardening: the declared type is not trusted. Raster signatures
+    # only (GIF kept for existing scan clients); SVG/HTML and oversize files are refused.
+    if len(image_bytes) > image_input.MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Ảnh quá lớn.")
+    if image_input.sniff_format(image_bytes) is None and image_bytes[:6] not in (b"GIF87a", b"GIF89a"):
+        raise HTTPException(status_code=415, detail="File không phải ảnh JPEG/PNG/WebP/GIF hợp lệ.")
 
     auth_header = request.headers.get("authorization")
 

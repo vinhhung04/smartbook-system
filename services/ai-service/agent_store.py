@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 
+import os
+
 from agent_actions import (
     PENDING_CONFIRMATION,
     CONFIRMED,
@@ -12,6 +14,8 @@ from agent_actions import (
     CANCELLED,
     FAILED,
     EXPIRED,
+    RECONCILE_REQUIRED,
+    RETRY_SAFE_ACTIONS,
     get_action_config,
 )
 from agent_schemas import PendingAction, UserContext
@@ -19,6 +23,13 @@ from db import get_session
 from db_models import ActionAuditLogRow, PendingActionRow
 
 DEFAULT_TTL_SECONDS = 600
+# A CONFIRMED action is being executed by the request that claimed it. Older
+# than this, that request is gone (crash/restart mid-execution): see
+# release_stale_confirmed_actions. Well above the longest executor run.
+STALE_CONFIRMED_SECONDS = int(os.getenv("ACTION_STALE_CONFIRMED_SECONDS", "900"))
+# Where an execution may end: from CONFIRMED (normal), or from
+# RECONCILE_REQUIRED when a slow run finishes after the stale sweep flagged it.
+_EXECUTING = (CONFIRMED, RECONCILE_REQUIRED)
 
 
 def _now() -> datetime:
@@ -205,59 +216,119 @@ async def cancel_pending_action(action_id: str, actor_user_id: str | None = None
         return True
 
 
-async def mark_action_executed(action_id: str, result: dict, actor_user_id: str | None = None) -> bool:
+async def _finish_execution(action_id: str, new_status: str, event_type: str, actor_user_id: str | None,
+                            result: dict | None, error: str | None = None,
+                            from_statuses: tuple[str, ...] = _EXECUTING,
+                            actor_roles: list[str] | None = None, extra_metadata: dict | None = None) -> bool:
+    """Move an executing action to where its execution ended. Conditional on
+    the current status (from_statuses), so a terminal state is never
+    overwritten - e.g. an EXECUTED action cannot be turned FAILED by a late,
+    duplicate report. Returns False when the action was not in from_statuses."""
     async with get_session() as session:
-        db_result = await session.execute(
-            select(PendingActionRow).where(PendingActionRow.action_id == action_id)
-        )
-        row = db_result.scalar_one_or_none()
-        if row is None:
+        row = (await session.execute(
+            select(PendingActionRow).where(PendingActionRow.action_id == action_id).with_for_update()
+        )).scalar_one_or_none()
+        if row is None or row.status not in from_statuses:
             return False
-
-        old_status = row.status
-        row.status = EXECUTED
-        row.executed_at = _now()
-        row.confirmed_at = row.confirmed_at or row.executed_at
-        row.confirmed_by_user_id = row.confirmed_by_user_id or actor_user_id
-        row.result = result
+        old_status, now = row.status, _now()
+        if event_type == "RECONCILED" and row.result:
+            result = {**result, "execution_result": row.result}  # keep what the run itself reported
+        if new_status == EXECUTED:
+            values = {"executed_at": now, "confirmed_at": row.confirmed_at or now,
+                      "confirmed_by_user_id": row.confirmed_by_user_id or actor_user_id, "result": result}
+        else:
+            values = {"failed_at": now, "error_message": error,
+                      "result": result if result is not None else {"error": error}}
+        # Conditional on the status read above, not only on the row lock: two
+        # concurrent finishers (two reconciliations, a late run vs. a
+        # reconciliation) cannot both win even where FOR UPDATE is a no-op.
+        moved = await session.execute(
+            update(PendingActionRow)
+            .where(PendingActionRow.action_id == action_id, PendingActionRow.status == old_status)
+            .values(status=new_status, **values)
+            .execution_options(synchronize_session=False)
+        )
+        if moved.rowcount != 1:
+            await session.rollback()
+            return False
         await _log_audit(
             session,
             action_id=action_id,
-            event_type="EXECUTED",
+            event_type=event_type,
             old_status=old_status,
-            new_status=EXECUTED,
+            new_status=new_status,
             actor_user_id=actor_user_id,
-            event_metadata={"result_summary": str(result)[:200] if result else None},
+            actor_roles=actor_roles,
+            event_metadata={"result_summary": str(result)[:200] if result else None, "error": (error or "")[:200] or None,
+                            **(extra_metadata or {})},
         )
         await session.commit()
         return True
+
+
+async def mark_action_executed(action_id: str, result: dict, actor_user_id: str | None = None) -> bool:
+    return await _finish_execution(action_id, EXECUTED, "EXECUTED", actor_user_id, result)
 
 
 async def mark_action_failed(action_id: str, error: str, actor_user_id: str | None = None) -> bool:
-    async with get_session() as session:
-        result = await session.execute(
-            select(PendingActionRow).where(PendingActionRow.action_id == action_id)
-        )
-        row = result.scalar_one_or_none()
-        if row is None:
-            return False
+    """The target refused the action (or a local precondition did): nothing
+    was written, so FAILED stays re-confirmable (mark_action_confirmed)."""
+    return await _finish_execution(action_id, FAILED, "FAILED", actor_user_id, None, error)
 
-        old_status = row.status
-        row.status = FAILED
-        row.failed_at = _now()
-        row.error_message = error
-        row.result = {"error": error}
-        await _log_audit(
-            session,
-            action_id=action_id,
-            event_type="FAILED",
-            old_status=old_status,
-            new_status=FAILED,
-            actor_user_id=actor_user_id,
-            event_metadata={"error": error[:200]},
-        )
-        await session.commit()
-        return True
+
+async def mark_action_needs_reconciliation(action_id: str, error: str, actor_user_id: str | None = None,
+                                           result: dict | None = None) -> bool:
+    """The outcome is unknown: the target may have written. Not re-confirmable;
+    a person resolves it (resolve_reconciliation)."""
+    return await _finish_execution(action_id, RECONCILE_REQUIRED, "RECONCILE_REQUIRED", actor_user_id,
+                                   result, error, from_statuses=(CONFIRMED,))
+
+
+async def resolve_reconciliation(action_id: str, outcome: str, note: str, actor_user_id: str | None,
+                                 evidence_reference: str | None = None, actor_roles: list[str] | None = None) -> bool:
+    """A person checked the target service: RECONCILE_REQUIRED -> EXECUTED (it
+    was written) or FAILED (it was not; FAILED may then be confirmed again by
+    hand - never automatically). The audit row records who, when, the status
+    before and after, the note and the evidence reference. Row-locked and
+    conditional on RECONCILE_REQUIRED, so of two concurrent resolutions only
+    one succeeds and a terminal state is never resolved again."""
+    if outcome not in (EXECUTED, FAILED):
+        raise ValueError("outcome must be EXECUTED or FAILED")
+    resolution = {"reconciled": True, "note": note, "outcome": outcome, "evidence_reference": evidence_reference,
+                  "reconciled_by_user_id": actor_user_id, "reconciled_at": _now().isoformat()}
+    audit = {"reconciliation_note": note, "evidence_reference": evidence_reference, "outcome": outcome}
+    if outcome == EXECUTED:
+        return await _finish_execution(action_id, EXECUTED, "RECONCILED", actor_user_id, resolution,
+                                       from_statuses=(RECONCILE_REQUIRED,), actor_roles=actor_roles,
+                                       extra_metadata=audit)
+    return await _finish_execution(action_id, FAILED, "RECONCILED", actor_user_id, resolution,
+                                   f"reconciled as not executed: {note}", from_statuses=(RECONCILE_REQUIRED,),
+                                   actor_roles=actor_roles, extra_metadata=audit)
+
+
+async def release_stale_confirmed_actions(max_age_seconds: int = STALE_CONFIRMED_SECONDS) -> int:
+    """Actions left CONFIRMED by a request that never finished (the service
+    restarted mid-execution). A retry-safe type (RETRY_SAFE_ACTIONS) goes to
+    FAILED, so the user can simply confirm again; any other type goes to
+    RECONCILE_REQUIRED, because the write may have happened."""
+    cutoff = _now() - timedelta(seconds=max_age_seconds)
+    async with get_session() as session:
+        rows = (await session.execute(
+            select(PendingActionRow).where(
+                PendingActionRow.status == CONFIRMED, PendingActionRow.confirmed_at < cutoff,
+            ).with_for_update(skip_locked=True)
+        )).scalars().all()
+        for row in rows:
+            new_status = FAILED if row.type in RETRY_SAFE_ACTIONS else RECONCILE_REQUIRED
+            error = f"execution did not finish within {max_age_seconds}s (service restart or crash)"
+            row.status = new_status
+            row.failed_at = _now()
+            row.error_message = error
+            await _log_audit(session, action_id=row.action_id, event_type="STALE_EXECUTION",
+                             old_status=CONFIRMED, new_status=new_status, event_metadata={"error": error})
+        if rows:
+            await session.commit()
+        return len(rows)
 
 
 async def mark_action_confirmed(action_id: str, actor_user_id: str | None = None) -> bool:

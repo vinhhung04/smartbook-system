@@ -1002,12 +1002,26 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     const plans = candidates.map((item) => {
       const row = rowById.get(item.variant_id);
       const incomingQty = incomingByVariant.get(item.variant_id) || 0;
-      const returns = expectedReturns(loanView.openAgesByVariant.get(item.variant_id) || [], item.lead_time_days, loanView.survival);
+      const openLoanAges = loanView.openAgesByVariant.get(item.variant_id) || [];
+      const returns = expectedReturns(openLoanAges, item.lead_time_days, loanView.survival);
       const plan = suggest({ ...row, available_qty: number(row.available_qty) + incomingQty }, {
-        expectedReturns: returns ?? 0,
+        // Lending moves stock reserved -> borrowed, so only borrowed_qty copies are outside
+        // available_qty; open loans beyond it (borrow_db out of step with inventory_db)
+        // are already on the shelf and must not be counted again as returns.
+        expectedReturns: Math.min(returns ?? 0, number(row.borrowed_qty)),
         priorityFloors: 'IF_SHORTFALL',
       });
+      // borrow_db (loans) and inventory_db (stock) are each authoritative for their own
+      // records; when borrow has more open loans than inventory has copies on loan,
+      // the shelf position is unknown - neither side is overwritten or guessed.
+      const openLoans = openLoanAges.length;
+      const borrowedQty = number(row.borrowed_qty);
       return {
+        ...(openLoans > borrowedQty ? {
+          data_issue: 'BORROW_INVENTORY_MISMATCH',
+          open_loans_borrow: openLoans,
+          borrowed_qty_inventory: borrowedQty,
+        } : {}),
         incoming_qty: incomingQty,
         expected_returns: plan.expected_returns,
         inventory_position: plan.inventory_position,
@@ -1015,8 +1029,13 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         lambda: Math.max(plan.lead_time_demand, plan.avg_daily_demand * plan.lead_time_days),
       };
     });
+    // unit_cost is NOT NULL DEFAULT 0 in inventory_db, so 0 means "no price entered",
+    // not "free": such a line gets no copies (allocateMarginal would fund it at 0 đ).
+    // Nor does a line whose stock position is unreliable (data_issue): no purchase
+    // recommendation is made on data the two services disagree on.
     const lines = plans.map((plan, i) => ({
-      cap: plan.cap_qty, unitCost: candidates[i].unit_cost, lambda: plan.lambda, position: plan.inventory_position,
+      cap: candidates[i].unit_cost > 0 && !plan.data_issue ? plan.cap_qty : 0,
+      unitCost: candidates[i].unit_cost, lambda: plan.lambda, position: plan.inventory_position,
     }));
     let allocation;
     let scenarioGain;
@@ -1045,6 +1064,8 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
       };
     });
     const funded = resultItems.filter((item) => item.funded_qty > 0);
+    const unpriced = resultItems.filter((item) => item.budget_plan.cap_qty > 0 && !(item.unit_cost > 0));
+    const unreliable = resultItems.filter((item) => item.budget_plan.data_issue);
     budget = {
       budget_vnd: budgetVnd,
       funded_cost: allocation.spent,
@@ -1052,8 +1073,23 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
       funded_lines: funded.length,
       funded_qty: funded.reduce((sum, item) => sum + item.funded_qty, 0),
       partially_funded_lines: funded.filter((item) => item.funded_qty < item.budget_plan.cap_qty).length,
-      // every re-sized line in full: what this budget mode would need
+      // every re-sized line in full: what this budget mode would need (priced lines only)
       capped_need_cost: round(resultItems.reduce((sum, item) => sum + item.budget_plan.cap_qty * item.unit_cost, 0), 2),
+      // lines the plan needs but cannot fund until a unit cost is entered
+      unpriced_lines: unpriced.length,
+      unpriced_qty: unpriced.reduce((sum, item) => sum + item.budget_plan.cap_qty, 0),
+      // lines left unfunded because borrow_db and inventory_db disagree on their loans
+      unreliable_lines: unreliable.length,
+      unreliable_qty: unreliable.reduce((sum, item) => sum + item.budget_plan.cap_qty, 0),
+      data_consistency: {
+        status: unreliable.length ? 'MISMATCH' : 'CONSISTENT',
+        check: 'open loans in borrow_db <= borrowed_qty in inventory_db, per variant',
+        mismatched_lines: unreliable.length,
+        excess_open_loans: unreliable.reduce(
+          (sum, item) => sum + item.budget_plan.open_loans_borrow - item.budget_plan.borrowed_qty_inventory, 0),
+      },
+      // funded lines ranked below `limit`: returned after the top-`limit` items so every funded line can be ordered
+      funded_lines_outside_limit: resultItems.slice(limit).filter((item) => item.funded_qty > 0).length,
       funding_order: priorityWarehouseId ? 'PRIORITY_WAREHOUSE_THEN_MARGINAL' : 'MARGINAL_SERVICE_PER_COST',
       quantity_rule: 'POSITION_WITH_INCOMING_AND_RETURNS',
       // expected lead-time demand (Poisson model) the funded copies serve, as a share of
@@ -1074,11 +1110,17 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         open_loans: loanView.open,
       },
       assumptions: [
-        'Tồn dùng cho ngân sách = khả dụng + số bản đang về từ phiếu nhập đã duyệt/đã gửi nhà cung cấp + số bản đang mượn dự kiến trả trong thời gian chờ hàng.',
+        'Tồn dùng cho ngân sách = khả dụng + số bản đang về từ phiếu nhập đã duyệt/đã gửi nhà cung cấp + số bản đang mượn dự kiến trả trong thời gian chờ hàng (không vượt số bản kho ghi nhận đang cho mượn).',
         loanView.survival
           ? `Khả năng trả sách ước lượng từ ${loanView.returned} lượt trả trong 365 ngày và ${loanView.open} lượt đang mượn (Kaplan-Meier, gộp toàn thư viện).`
           : 'Chưa đủ lịch sử trả sách để ước lượng: không tính bản đang mượn sẽ trả.',
         'Mỗi bản được duyệt cho dòng có mức tăng xác suất đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng cao nhất (nhu cầu giả định phân phối Poisson); một dòng có thể chỉ được duyệt một phần.',
+        ...(unpriced.length
+          ? [`${unpriced.length} dòng cần nhập nhưng danh mục chưa có đơn giá: không được cấp ngân sách và không tính vào chi phí kế hoạch cho đến khi bổ sung giá.`]
+          : []),
+        ...(unreliable.length
+          ? [`${unreliable.length} dòng có số phiếu mượn đang mở (dịch vụ mượn) nhiều hơn số bản kho ghi nhận đang cho mượn: dữ liệu hai hệ thống chưa đồng bộ nên không được cấp ngân sách cho đến khi đối soát.`]
+          : []),
       ],
     };
   }
@@ -1095,7 +1137,10 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
       },
       summary,
       budget,
-      items: resultItems.slice(0, limit),
+      // the top `limit` by priority; with a budget, plus every funded line ranked below it
+      items: budget
+        ? resultItems.filter((item, i) => i < limit || item.funded_qty > 0)
+        : resultItems.slice(0, limit),
     },
   });
 });

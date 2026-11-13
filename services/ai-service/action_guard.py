@@ -40,8 +40,13 @@ ALLOWED_OVERRIDES = {
     CREATE_REPORT_DRAFT: set(),
 }
 MAX_LINE_QUANTITY = 1000
-# Executors that write into a warehouse (reports are drafts with no warehouse).
-_WRITES_WAREHOUSE = {CREATE_REORDER_DRAFT, CREATE_STOCK_ALERT, CREATE_RESERVATION_DRAFT, CREATE_STAFF_TASK_DRAFT}
+# Executors that write into a warehouse as a warehouse operation, so the user
+# needs WRITE scope on it. Not CREATE_RESERVATION_DRAFT: a reservation is a
+# borrow-service request (a reader holding a copy, or the desk doing it for a
+# reader), authorized there by borrow roles/permissions - readers and
+# librarians hold no warehouse scope, so requiring one blocked every
+# reservation a customer confirmed. Reports are drafts with no warehouse.
+_WRITES_WAREHOUSE = {CREATE_REORDER_DRAFT, CREATE_STOCK_ALERT, CREATE_STAFF_TASK_DRAFT}
 
 
 def _line_key(item: dict) -> str:

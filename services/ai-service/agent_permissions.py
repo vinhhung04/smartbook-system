@@ -6,7 +6,7 @@ import os
 import httpx
 from fastapi import HTTPException
 
-from agent_actions import normalize_role
+from agent_actions import get_action_config, normalize_role, policy_allows
 from agent_schemas import PendingAction, UserContext
 
 logger = logging.getLogger("uvicorn.error")
@@ -91,22 +91,37 @@ async def get_user_context(auth_header: str | None) -> UserContext:
     raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
 
+SESSION_UNVERIFIED_DETAIL = ("Chưa xác minh được trạng thái phiên đăng nhập; thao tác tạm thời bị từ chối, "
+                             "vui lòng thử lại sau.")
+
+
+def require_verified_session(user_context: UserContext) -> None:
+    """One policy for every endpoint that reads or changes a private action:
+    the session must be fully verified, revocation included. get_user_context
+    already gives 401 for an invalid/revoked/locked token and 503 when auth
+    cannot answer; this adds 503 when auth answered but could not check
+    revocation (its Redis down: X-Token-Revocation-Check: unverified). The flag
+    comes only from the auth response header - nothing a client sends sets it."""
+    if not user_context.user_id:
+        raise HTTPException(status_code=401, detail="Could not resolve user identity.")
+    if not user_context.revocation_verified:
+        raise HTTPException(status_code=503, detail=SESSION_UNVERIFIED_DETAIL)
+
+
+def is_admin(user_context: UserContext) -> bool:
+    """ADMIN by the roles auth-service read from its database - never by a JWT claim."""
+    return user_context.is_superuser or "ADMIN" in {normalize_role(r) for r in user_context.roles or []}
+
+
 def can_confirm_action(user_context: UserContext, action: PendingAction) -> bool:
-    """Return True if the user has permission to confirm this action."""
-    if user_context.is_superuser:
-        return True
-
-    user_roles = {normalize_role(r) for r in user_context.roles}
-    allowed_roles = {normalize_role(r) for r in action.allowed_roles}
-    if user_roles & allowed_roles:
-        return True
-
-    user_perms = set(user_context.permissions)
-    allowed_perms = set(action.allowed_permissions)
-    if user_perms & allowed_perms:
-        return True
-
-    return False
+    """Whether the user may confirm this action NOW: the action type's current
+    policy (agent_actions.ACTION_CONFIG - role AND permission, mirroring the
+    target service), never the role list copied onto the action when it was
+    drafted. An unknown type is never confirmable."""
+    config = get_action_config(action.type)
+    if config is None:
+        return False
+    return policy_allows(config["policy"], user_context.roles, user_context.permissions, user_context.is_superuser)
 
 
 def require_can_confirm_action(user_context: UserContext, action: PendingAction) -> None:
@@ -114,6 +129,5 @@ def require_can_confirm_action(user_context: UserContext, action: PendingAction)
     if not can_confirm_action(user_context, action):
         raise HTTPException(
             status_code=403,
-            detail=f"Insufficient permissions to confirm action type '{action.type}'. "
-                   f"Required roles: {action.allowed_roles}.",
+            detail=f"Insufficient permissions to confirm action type '{action.type}'.",
         )

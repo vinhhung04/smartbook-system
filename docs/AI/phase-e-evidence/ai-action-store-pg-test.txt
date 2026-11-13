@@ -1,0 +1,8 @@
+test_concurrent_confirm_requests_execute_the_action_once (test_agent_store_pg.AgentStoreConcurrencyPgTest) ... /app/main.py:158: DeprecationWarning: 
+test_exactly_one_of_many_concurrent_claims_wins (test_agent_store_pg.AgentStoreConcurrencyPgTest) ... ok
+test_concurrent_confirm_requests_execute_the_action_once (test_agent_store_pg.ReconciliationConcurrencyPgTest) ... ok
+test_exactly_one_of_many_concurrent_claims_wins (test_agent_store_pg.ReconciliationConcurrencyPgTest) ... ok
+test_exactly_one_of_many_concurrent_resolutions_wins (test_agent_store_pg.ReconciliationConcurrencyPgTest) ... ok
+test_late_execution_and_reconciliation_cannot_both_finish (test_agent_store_pg.ReconciliationConcurrencyPgTest) ... ok
+Ran 6 tests in 2.005s
+OK

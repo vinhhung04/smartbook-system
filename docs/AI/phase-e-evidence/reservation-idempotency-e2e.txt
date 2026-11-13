@@ -1,0 +1,12 @@
+PASS - 1. reader asks the AI to reserve a book -> draft with variant + warehouse :: title='Số đỏ' action={"id": "act_631bf828", "type": "CREATE_RESERVATION_DRAFT", "status": "PENDING_CONFIRMATION", "summary": "Tạo đặt chỗ sách 'Số đỏ'", "payload": {"title_query": "
+PASS - 2. confirm creates exactly one real reservation :: status=EXECUTED reservation=RSV-C59F920B
+PASS - 3. confirming again replays the stored result
+PASS - 4. retry with the same key returns the same reservation (200, idempotent) :: HTTP 200
+PASS - 5. four concurrent retries -> all the same reservation :: [200, 200, 200, 200]
+PASS - 6. same key with a different payload -> 409 IDEMPOTENCY_KEY_REUSED :: HTTP 409
+PASS - 7. another user's request with the same key never receives the reader's reservation :: HTTP 409 {"message":"Khách đã có một đặt chỗ đang hoạt động cho cuốn sách này"}
+PASS - 8. a new key for the same book is a duplicate (409), not a second reservation :: HTTP 409
+PASS - 9. retry after a borrow-service restart still replays :: HTTP 200
+PASS - 10. no duplicate: the reader has exactly one more reservation than before :: before=81 after=82
+cleanup: cancel reservation RSV-C59F920B -> HTTP 200
+{"action_id": "act_631bf828", "reservation_id": "c59f920b-706f-42b7-a6a7-4d9527a07544", "steps": 10, "failed": 0}

@@ -1,0 +1,9 @@
+PASS - 1. staff creates an action via AI chat :: {"id": "act_3bd5a6b5", "type": "CREATE_REORDER_DRAFT", "status": "PENDING_CONFIRMATION", "summary": "Tạo đề xuất nhập 16 dòng sách từ 2 kho", "payload": {"items
+PASS - 2. action confirmed by its creator :: HTTP 200
+PASS - 3-4. executor could not learn the outcome -> RECONCILE_REQUIRED :: status=RECONCILE_REQUIRED error=some lines have an unknown outcome
+PASS - 4b. a RECONCILE_REQUIRED action is not executed again :: HTTP 409
+PASS - 5. customer cannot read the action :: HTTP 403
+PASS - 6. librarian cannot reconcile :: HTTP 403
+PASS - 7. admin lists the reconciliation queue :: total=1
+PASS - 8. admin reads detail + audit trail :: events=['CREATED', 'CONFIRMED', 'RECONCILE_REQUIRED']
+{"action_id": "act_3bd5a6b5", "left_in": "RECONCILE_REQUIRED", "evidence_found": null, "steps": 8, "failed": 0}

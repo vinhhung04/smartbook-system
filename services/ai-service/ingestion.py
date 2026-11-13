@@ -23,7 +23,9 @@ from vector_store import Chunk
 logger = logging.getLogger("uvicorn.error")
 
 MAX_CHUNK_CHARS = int(os.getenv("INGEST_MAX_CHUNK_CHARS", "1200"))
-CORPUS_DIR = os.path.join(os.path.dirname(__file__), "corpus")
+# INTERNAL_DOC_DIR lets a deployment mount the corpus as a volume, so a document
+# can be edited and re-synced (POST /internal/corpus-sync) without a new image.
+CORPUS_DIR = os.getenv("INTERNAL_DOC_DIR") or os.path.join(os.path.dirname(__file__), "corpus")
 
 _HEADING_RE = re.compile(r"^#{1,6} ", re.MULTILINE)
 
