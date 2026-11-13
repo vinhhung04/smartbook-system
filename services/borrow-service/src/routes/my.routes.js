@@ -68,7 +68,7 @@ router.get('/preferences', async (req, res) => {
   try {
     const { ensureCurrentCustomer } = require('../controllers/customer.controller');
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     const { prisma } = require('../lib/prisma');
     let prefs = await prisma.customer_preferences.findFirst({ where: { customer_id: customer.id } });
     if (!prefs) {
@@ -86,7 +86,7 @@ router.patch('/preferences', async (req, res) => {
   try {
     const { ensureCurrentCustomer } = require('../controllers/customer.controller');
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     const { prisma } = require('../lib/prisma');
     const allowed = ['notify_email', 'notify_sms', 'notify_in_app', 'preferred_language'];
     const data = {};

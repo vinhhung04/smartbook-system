@@ -48,12 +48,12 @@ function enforceRequestedWarehouseScope() {
     try {
       for (const id of writeIds) {
         if (!(await canWriteWarehouse(req.user, id))) {
-          return res.status(403).json({ message: 'You do not have write access to this warehouse', code: 'WAREHOUSE_ACCESS_DENIED' });
+          return res.status(403).json({ message: 'Bạn không có quyền thao tác trên kho này', code: 'WAREHOUSE_ACCESS_DENIED' });
         }
       }
       for (const id of readIds) {
         if (!(await canReadWarehouse(req.user, id))) {
-          return res.status(403).json({ message: 'You do not have read access to this warehouse', code: 'WAREHOUSE_ACCESS_DENIED' });
+          return res.status(403).json({ message: 'Bạn không có quyền xem kho này', code: 'WAREHOUSE_ACCESS_DENIED' });
         }
       }
     } catch (error) {
@@ -84,7 +84,7 @@ function requireRecordWarehouse(load, { access = 'write', fresh = false } = {}) 
       if (warehouseId === undefined) return next();
       if (!(await check(req.user, warehouseId, { fresh }))) {
         return res.status(403).json({
-          message: `You do not have ${access} access to this warehouse`,
+          message: `Bạn không có quyền truy cập kho này (${access})`,
           code: 'WAREHOUSE_ACCESS_DENIED',
         });
       }

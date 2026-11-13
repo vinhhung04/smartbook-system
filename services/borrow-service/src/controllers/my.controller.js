@@ -71,7 +71,7 @@ async function getMyReservations(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const pagination = parsePagination(req.query);
@@ -131,17 +131,17 @@ async function getMyReservationById(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const reservationId = String(req.params.id || '').trim();
     if (!parseUuid(reservationId)) {
-      return res.status(400).json({ message: 'Invalid reservation id' });
+      return res.status(400).json({ message: 'Mã đặt trước không hợp lệ' });
     }
 
     const reservation = await prisma.loan_reservations.findUnique({ where: { id: reservationId } });
     if (!reservation || reservation.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Reservation not found' });
+      return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
 
     let variant = null;
@@ -174,7 +174,7 @@ async function createMyReservation(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     req.body = {
@@ -197,17 +197,17 @@ async function cancelMyReservation(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const reservationId = String(req.params.id || '').trim();
     if (!parseUuid(reservationId)) {
-      return res.status(400).json({ message: 'Invalid reservation id' });
+      return res.status(400).json({ message: 'Mã đặt trước không hợp lệ' });
     }
 
     const reservation = await prisma.loan_reservations.findUnique({ where: { id: reservationId } });
     if (!reservation || reservation.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Reservation not found' });
+      return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
 
     return cancelReservation(req, res);
@@ -221,7 +221,7 @@ async function getMyLoans(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const pagination = parsePagination(req.query);
@@ -289,12 +289,12 @@ async function getMyLoanById(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const loanId = String(req.params.id || '').trim();
     if (!parseUuid(loanId)) {
-      return res.status(400).json({ message: 'Invalid loan id' });
+      return res.status(400).json({ message: 'Mã phiếu mượn không hợp lệ' });
     }
 
     const loan = await prisma.loan_transactions.findUnique({
@@ -310,7 +310,7 @@ async function getMyLoanById(req, res) {
     });
 
     if (!loan || loan.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Loan not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
     let variantById = new Map();
@@ -362,26 +362,26 @@ async function requestMyLoanRenewal(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const loanId = String(req.params.id || '').trim();
     if (!parseUuid(loanId)) {
-      return res.status(400).json({ message: 'Invalid loan id' });
+      return res.status(400).json({ message: 'Mã phiếu mượn không hợp lệ' });
     }
 
     const loan = await prisma.loan_transactions.findUnique({ where: { id: loanId } });
     if (!loan || loan.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Loan not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
     if (!['BORROWED', 'OVERDUE'].includes(loan.status)) {
-      return res.status(409).json({ message: `Cannot request renewal from status ${loan.status}` });
+      return res.status(409).json({ message: `Không thể yêu cầu gia hạn khi phiếu mượn ở trạng thái ${loan.status}` });
     }
 
     const membershipInfo = await resolveActiveMembership(prisma, customer.id);
     if (!membershipInfo) {
-      return res.status(409).json({ message: 'Customer does not have active membership' });
+      return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
     const pendingRequest = await prisma.customer_notifications.findFirst({
@@ -413,7 +413,7 @@ async function requestMyLoanRenewal(req, res) {
 
     if (existingRequests >= membershipInfo.limits.max_renewal_count) {
       return res.status(409).json({
-        message: 'Renewal request limit exceeded by membership plan',
+        message: 'Đã vượt số lần gia hạn cho phép của gói thành viên',
         detail: {
           max_renewal_count: membershipInfo.limits.max_renewal_count,
           existing_request_count: existingRequests,
@@ -467,7 +467,7 @@ async function getMyFines(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const fines = await prisma.fines.findMany({
@@ -522,7 +522,7 @@ async function getMyAccount(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const snapshot = await prisma.$transaction((tx) => getCustomerAccountSnapshot(tx, customer.id));
@@ -553,18 +553,18 @@ async function payMyFine(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const fineId = String(req.body?.fine_id || '').trim();
     if (!parseUuid(fineId)) {
-      return res.status(400).json({ message: 'fine_id must be a valid uuid' });
+      return res.status(400).json({ message: 'fine_id phải là UUID hợp lệ' });
     }
 
     const paymentMethod = String(req.body?.payment_method || 'EWALLET').trim().toUpperCase();
     const allowedMethods = new Set(['CASH', 'CARD', 'TRANSFER', 'EWALLET']);
     if (!allowedMethods.has(paymentMethod)) {
-      return res.status(400).json({ message: 'payment_method must be one of CASH, CARD, TRANSFER, EWALLET' });
+      return res.status(400).json({ message: 'payment_method phải là một trong CASH, CARD, TRANSFER, EWALLET' });
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -574,22 +574,22 @@ async function payMyFine(req, res) {
       });
 
       if (!fine || fine.customer_id !== customer.id) {
-        return { code: 404, payload: { message: 'Fine not found' } };
+        return { code: 404, payload: { message: 'Không tìm thấy khoản phạt' } };
       }
 
       if (fine.status === 'PAID' || fine.status === 'WAIVED') {
-        return { code: 409, payload: { message: `Cannot pay fine with status ${fine.status}` } };
+        return { code: 409, payload: { message: `Không thể thanh toán khoản phạt ở trạng thái ${fine.status}` } };
       }
 
       const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + toNumber(item.amount), 0);
       const remaining = Math.max(0, toNumber(fine.amount) - toNumber(fine.waived_amount) - paidSoFar);
       if (remaining <= 0) {
-        return { code: 409, payload: { message: 'Fine is already fully settled' } };
+        return { code: 409, payload: { message: 'Khoản phạt đã được thanh toán đủ' } };
       }
 
       const requestedAmount = req.body?.amount == null ? remaining : Number(req.body.amount);
       if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-        return { code: 400, payload: { message: 'amount must be a positive number' } };
+        return { code: 400, payload: { message: 'amount phải là số dương' } };
       }
 
       const amount = Number(requestedAmount.toFixed(2));
@@ -597,7 +597,7 @@ async function payMyFine(req, res) {
         return {
           code: 409,
           payload: {
-            message: 'amount exceeds remaining fine balance',
+            message: 'amount vượt số tiền phạt còn lại',
             detail: { remaining },
           },
         };
@@ -691,12 +691,12 @@ async function getMyMomoPaymentStatus(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const orderId = String(req.params.orderId || '').trim();
     if (!orderId || orderId.length > 255) {
-      return res.status(400).json({ message: 'orderId is required and must not exceed 255 characters' });
+      return res.status(400).json({ message: 'orderId là bắt buộc và không được quá 255 ký tự' });
     }
 
     const payment = await prisma.fine_payments.findFirst({
@@ -737,17 +737,17 @@ async function topupMyAccount(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const amount = Number(req.body?.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ message: 'amount must be a positive number' });
+      return res.status(400).json({ message: 'amount phải là số dương' });
     }
 
     const idempotencyKey = String(req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || '').trim();
     if (!idempotencyKey) {
-      return res.status(400).json({ message: 'Idempotency-Key header is required for topup' });
+      return res.status(400).json({ message: 'Cần header Idempotency-Key khi nạp tiền' });
     }
 
     const result = await prisma.$transaction((tx) => creditAccount(tx, {
@@ -783,7 +783,7 @@ async function getMyAccountLedger(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const ledger = await prisma.$transaction((tx) => listAccountLedger(tx, customer.id, req.query || {}));

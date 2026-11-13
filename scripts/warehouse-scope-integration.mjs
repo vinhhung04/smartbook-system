@@ -98,6 +98,15 @@ await check('9. analytics aggregates only cover the caller\'s warehouses', async
   assert.ok(suRisk.body.length >= 4);
 });
 
+await check('10. the putaway page\'s warehouse picker lists only the caller\'s warehouses', async () => {
+  // /receiving-putaway preselects the first entry, so an unscoped list opened
+  // the page on a warehouse the user cannot read (every follow-up call 403).
+  const codes = async (token) => (await call(token, '/api/receiving-context/warehouses')).body.map((w) => w.code);
+  assert.deepEqual(await codes(tokens.curator01), ['WH-HCM-01']);
+  assert.deepEqual(await codes(tokens.warehouse01), ['WH-HN-01']);
+  assert.ok((await codes(tokens.hung)).length >= 4);
+});
+
 if (WITH_AI) {
   await check('8. AI copilot answers a question about a warehouse outside the scope without its data', async () => {
     const res = await call(tokens.curator01, '/ai/assistant', {

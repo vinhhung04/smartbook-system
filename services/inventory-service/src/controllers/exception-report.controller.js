@@ -49,15 +49,15 @@ async function createExceptionReport(req, res) {
     evidence_photo_url,
   } = req.body;
 
-  if (!warehouse_id) return res.status(400).json({ message: 'warehouse_id is required' });
+  if (!warehouse_id) return res.status(400).json({ message: 'Thiếu warehouse_id' });
   if (!task_type || !VALID_TASK_TYPES.includes(task_type)) {
-    return res.status(400).json({ message: `task_type must be one of: ${VALID_TASK_TYPES.join(', ')}` });
+    return res.status(400).json({ message: `task_type phải là một trong: ${VALID_TASK_TYPES.join(', ')}` });
   }
-  if (!task_id) return res.status(400).json({ message: 'task_id is required' });
+  if (!task_id) return res.status(400).json({ message: 'Thiếu task_id' });
   if (!exception_type || !VALID_EXCEPTION_TYPES.includes(exception_type)) {
-    return res.status(400).json({ message: `exception_type must be one of: ${VALID_EXCEPTION_TYPES.join(', ')}` });
+    return res.status(400).json({ message: `exception_type phải là một trong: ${VALID_EXCEPTION_TYPES.join(', ')}` });
   }
-  if (!note || !note.trim()) return res.status(400).json({ message: 'note is required' });
+  if (!note || !note.trim()) return res.status(400).json({ message: 'Thiếu ghi chú (note)' });
 
   let photoUrl = null;
   if (evidence_photo_url !== undefined && evidence_photo_url !== null && evidence_photo_url !== '') {
@@ -68,7 +68,7 @@ async function createExceptionReport(req, res) {
     const isValidDataUrl = /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(ref);
     const isValidHttpUrl = ref.startsWith('http://') || ref.startsWith('https://');
     if (!isValidDataUrl && !isValidHttpUrl) {
-      return res.status(400).json({ message: 'evidence_photo_url must be a base64 data:image/{png,jpeg,webp,gif} URL or an http(s) URL' });
+      return res.status(400).json({ message: 'evidence_photo_url phải là URL base64 data:image/{png,jpeg,webp,gif} hoặc URL http(s)' });
     }
     photoUrl = ref;
   }
@@ -78,7 +78,7 @@ async function createExceptionReport(req, res) {
 
   try {
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id } });
-    if (!warehouse) return res.status(404).json({ message: 'Warehouse not found' });
+    if (!warehouse) return res.status(404).json({ message: 'Không tìm thấy kho' });
 
     // Validate that task_id belongs to a real task assigned to this user
     if (task_type === 'RECEIVING' || task_type === 'PUTAWAY') {
@@ -86,10 +86,10 @@ async function createExceptionReport(req, res) {
         where: { id: task_id },
         select: { id: true, warehouse_id: true, received_by_user_id: true },
       });
-      if (!gr) return res.status(404).json({ message: 'Task not found: goods receipt does not exist' });
-      if (gr.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the task' });
+      if (!gr) return res.status(404).json({ message: 'Không tìm thấy công việc: phiếu nhập kho không tồn tại' });
+      if (gr.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Kho không khớp với công việc' });
       if (!isManager && gr.received_by_user_id !== userId) {
-        return res.status(403).json({ message: 'Task not assigned to you' });
+        return res.status(403).json({ message: 'Công việc không được giao cho bạn' });
       }
     } else if (task_type === 'PICKING' || task_type === 'OUTBOUND') {
       const oo = await prisma.outbound_orders.findUnique({
@@ -97,32 +97,32 @@ async function createExceptionReport(req, res) {
         select: { id: true, warehouse_id: true, processed_by_user_id: true },
       });
       if (oo) {
-        if (oo.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the task' });
+        if (oo.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Kho không khớp với công việc' });
         if (!isManager && oo.processed_by_user_id !== userId) {
-          return res.status(403).json({ message: 'Task not assigned to you' });
+          return res.status(403).json({ message: 'Công việc không được giao cho bạn' });
         }
       } else {
         const to = await prisma.transfer_orders.findUnique({
           where: { id: task_id },
           select: { id: true, from_warehouse_id: true, shipped_by_user_id: true },
         });
-        if (!to) return res.status(404).json({ message: 'Task not found: no outbound or transfer order with this ID' });
-        if (to.from_warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the task' });
+        if (!to) return res.status(404).json({ message: 'Không tìm thấy công việc: không có phiếu xuất kho hoặc chuyển kho với ID này' });
+        if (to.from_warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Kho không khớp với công việc' });
         if (!isManager && to.shipped_by_user_id !== userId) {
-          return res.status(403).json({ message: 'Task not assigned to you' });
+          return res.status(403).json({ message: 'Công việc không được giao cho bạn' });
         }
       }
     }
 
     if (book_variant_id) {
       const variant = await prisma.book_variants.findUnique({ where: { id: book_variant_id } });
-      if (!variant) return res.status(404).json({ message: 'Book variant not found' });
+      if (!variant) return res.status(404).json({ message: 'Không tìm thấy ấn bản sách' });
     }
 
     if (goods_receipt_id) {
       const receipt = await prisma.goods_receipts.findUnique({ where: { id: goods_receipt_id } });
-      if (!receipt) return res.status(404).json({ message: 'Goods receipt not found' });
-      if (receipt.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Warehouse does not match the goods receipt' });
+      if (!receipt) return res.status(404).json({ message: 'Không tìm thấy phiếu nhập kho' });
+      if (receipt.warehouse_id !== warehouse_id) return res.status(400).json({ message: 'Kho không khớp với phiếu nhập kho' });
     }
 
     const report = await prisma.warehouse_exception_reports.create({
@@ -256,10 +256,10 @@ async function getExceptionReportById(req, res) {
       },
     });
 
-    if (!report) return res.status(404).json({ message: 'Exception report not found' });
+    if (!report) return res.status(404).json({ message: 'Không tìm thấy báo cáo sự cố' });
 
     if (!isManager && report.created_by_user_id !== userId) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
     if (report.created_by_user_id !== userId && !(await requireWarehouseReadAccess(req, res, report.warehouse_id))) return undefined;
 
@@ -276,10 +276,10 @@ async function resolveExceptionReport(req, res) {
 
   try {
     const report = await prisma.warehouse_exception_reports.findUnique({ where: { id: req.params.id } });
-    if (!report) return res.status(404).json({ message: 'Exception report not found' });
+    if (!report) return res.status(404).json({ message: 'Không tìm thấy báo cáo sự cố' });
     if (!(await requireWarehouseWriteAccess(req, res, report.warehouse_id, { fresh: true }))) return undefined;
     if (report.status === 'RESOLVED') {
-      return res.status(400).json({ message: 'Report is already resolved' });
+      return res.status(400).json({ message: 'Báo cáo đã được xử lý' });
     }
 
     const updated = await prisma.warehouse_exception_reports.update({
@@ -318,17 +318,17 @@ async function assignExceptionReport(req, res) {
   }
 
   if (!id) {
-    return res.status(400).json({ message: 'id is required' });
+    return res.status(400).json({ message: 'Thiếu id' });
   }
 
   if (!assignee_user_id || typeof assignee_user_id !== 'string' || !assignee_user_id.trim()) {
-    return res.status(400).json({ message: 'assignee_user_id is required' });
+    return res.status(400).json({ message: 'Thiếu assignee_user_id' });
   }
 
   try {
     const report = await prisma.warehouse_exception_reports.findUnique({ where: { id } });
     if (!report) {
-      return res.status(404).json({ message: 'Exception report not found' });
+      return res.status(404).json({ message: 'Không tìm thấy báo cáo sự cố' });
     }
     if (!(await requireWarehouseWriteAccess(req, res, report.warehouse_id))) return undefined;
     if (!(await requireAssignableUser(res, assignee_user_id.trim(), report.warehouse_id))) return undefined;

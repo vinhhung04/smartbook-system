@@ -5,13 +5,29 @@ import type { CatalogBookLite, DuplicateMatch, EditableBookForm } from "./types"
 /** Human-readable labels for each ISBN lookup provider, shared by the hero summary,
  *  the ISBN intelligence panel, and the loading-progress checklist. */
 export const SOURCE_LABELS: Record<IsbnSourceName, string> = {
+  catalog: "Kho SmartBook",
   googleBooks: "Google Books",
   openLibrary: "OpenLibrary",
   worldCat: "WorldCat",
   fahasa: "Fahasa",
   tiki: "Tiki",
   vinabook: "Vinabook",
+  nhanam: "Nhã Nam",
+  dinhTi: "Đinh Tị",
+  thaiHa: "Thái Hà",
+  vanLang: "Văn Lang",
+  ipm: "IPM",
+  kimDong: "Kim Đồng",
+  azVietnam: "AZ Việt Nam",
+  omegaPlus: "Omega+",
+  tanViet: "Tân Việt",
+  alphaBooks: "Alpha Books",
+  phuongNam: "Phương Nam",
+  nhanVan: "Nhân Văn",
+  minhLong: "Minh Long",
+  bizbooks: "Bizbooks",
   webSearch: "Web search",
+  aiWebSearch: "Web search (AI)",
 };
 
 /** Librarian-facing (Vietnamese) names for the metadata fields shown in coverage/gap summaries. */
@@ -35,7 +51,9 @@ export function fieldLabel(field: string): string {
 }
 
 export function winningSourceName(lookup: LookupBookByIsbnResponse): string | null {
-  const winner = (lookup.sources || []).find((source) => source.status === "SUCCESS");
+  // The source that identified the book by its code (round 1) first, then any other hit.
+  const found = (lookup.sources || []).filter((source) => source.status === "SUCCESS");
+  const winner = found.find((source) => source.round === 1) || found[0];
   return winner ? SOURCE_LABELS[winner.name] || winner.name : null;
 }
 
@@ -45,6 +63,25 @@ export function normalizeIsbnInput(value: string): string {
     return `${cleaned.slice(0, 9)}${cleaned.slice(9).toUpperCase()}`;
   }
   return cleaned;
+}
+
+export type CodeKind = "ISBN13" | "ISBN10" | "EAN13" | "BAD_CHECKSUM_13" | "BAD_CHECKSUM_10" | "WRONG_LENGTH" | "EMPTY";
+
+/** Advisory shape check shown while typing (the backend makes the real decision):
+ *  ISBN-13 = EAN-13 with a 978/979 prefix; other valid EAN-13s are retail barcodes. */
+export function classifyCode(raw: string): { kind: CodeKind; digits: string } {
+  const digits = normalizeIsbnInput(raw);
+  if (!digits) return { kind: "EMPTY", digits };
+  if (digits.length === 13 && /^\d{13}$/.test(digits)) {
+    const sum = digits.slice(0, 12).split("").reduce((acc, d, i) => acc + Number(d) * (i % 2 ? 3 : 1), 0);
+    if ((10 - (sum % 10)) % 10 !== Number(digits[12])) return { kind: "BAD_CHECKSUM_13", digits };
+    return { kind: /^97[89]/.test(digits) ? "ISBN13" : "EAN13", digits };
+  }
+  if (digits.length === 10 && /^\d{9}[\dX]$/.test(digits)) {
+    const sum = digits.split("").reduce((acc, d, i) => acc + (d === "X" ? 10 : Number(d)) * (10 - i), 0);
+    return { kind: sum % 11 === 0 ? "ISBN10" : "BAD_CHECKSUM_10", digits };
+  }
+  return { kind: "WRONG_LENGTH", digits };
 }
 
 export function parsePublishYear(publishedDate: string): number | undefined {
@@ -281,6 +318,8 @@ const EXTRACTION_METHOD_I18N_KEY: Record<string, string> = {
   json_ld: "isbn_intelligence.method.json_ld",
   dom: "isbn_intelligence.method.dom",
   snippet_regex: "isbn_intelligence.method.snippet_regex",
+  title_match: "isbn_intelligence.method.title_match",
+  llm_grounded: "isbn_intelligence.method.llm_grounded",
   llm_derived: "isbn_intelligence.method.llm_derived",
 };
 

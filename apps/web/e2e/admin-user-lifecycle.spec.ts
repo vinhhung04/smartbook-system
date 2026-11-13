@@ -3,7 +3,7 @@ import { loginAs, logout } from './helpers/auth';
 
 // Golden flow #3: admin creates a user, assigns a role, then locks the
 // account. A locked account is rejected by the backend at login itself
-// (403 "User is not active", services/auth-service/src/controllers/
+// (403 "Tài khoản đang bị khóa...", services/auth-service/src/controllers/
 // auth.controller.js:417-419) before any session/route is reached -- there
 // is no route-guard "forbidden" page involved in this particular flow (that
 // page is for an authenticated-but-under-permissioned user visiting a route
@@ -42,6 +42,6 @@ test('admin creates, assigns a role to, and locks a user', async ({ page }) => {
   await page.locator('#login-identifier').fill(username);
   await page.locator('#login-password').fill(password);
   await page.getByTestId('login-submit').click();
-  await expect(page.getByText('User is not active')).toBeVisible();
+  await expect(page.getByText('Tài khoản đang bị khóa hoặc chưa được kích hoạt. Liên hệ quản trị viên.')).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
 });

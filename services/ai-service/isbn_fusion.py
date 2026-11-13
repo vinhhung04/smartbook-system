@@ -50,6 +50,8 @@ METHOD_RELIABILITY = {
     "json_ld": 1.0,          # schema.org structured markup embedded in an HTML page (Fahasa's default fetch)
     "dom": 0.9,              # a specific DOM field read after the page had to be rendered (Fahasa CloakBrowser path)
     "snippet_regex": 0.75,   # a labelled "Title | ISBN: ...; Tác giả: ...; Nhà XB: ..." pattern matched out of free text (web search)
+    "llm_grounded": 0.85,   # AI web search: a model read the page, value verified in the page text (ai_web_search.py)
+    "title_match": 0.7,     # Round 2 hit found by title with no comparable code (isbn_matching.py)
     "llm_derived": 0.4,      # a value the LLM inferred from unstructured text, no direct structural anchor
 }
 
@@ -73,7 +75,23 @@ INDEPENDENCE_GROUPS = {
     "fahasa": "vn_marketplace",
     "tiki": "vn_marketplace",
     "vinabook": "vn_marketplace",  # Vietnamese marketplaces frequently reuse the same publisher/distributor feed
+    "catalog": "smartbook_catalog",
+    "nhanam": "publisher_nhanam",
+    "dinhTi": "publisher_dinhti",
+    "thaiHa": "publisher_thaiha",
+    "vanLang": "publisher_vanlang",
+    "ipm": "publisher_ipm",
+    "kimDong": "publisher_kimdong",
+    "azVietnam": "publisher_azvietnam",
+    "omegaPlus": "publisher_omegaplus",
+    "tanViet": "publisher_tanviet",
+    "alphaBooks": "publisher_alphabooks",
+    "bizbooks": "publisher_bizbooks",
+    "phuongNam": "retail_phuongnam",
+    "nhanVan": "retail_nhanvan",
+    "minhLong": "retail_minhlong",
     "webSearch": "web_search",
+    "aiWebSearch": "web_search_ai",
 }
 SECONDARY_GROUP_DISCOUNT = 0.5
 
@@ -90,6 +108,10 @@ def infer_method(source: str, source_fetch_mode: str | None = None) -> str:
     """Best-effort method inference from the source name (and, for Fahasa,
     the fetch mode main.py already records) when a caller doesn't pass
     extractionMethod explicitly."""
+    if source_fetch_mode == "ai-web-search":
+        return "llm_grounded"
+    if source_fetch_mode == "round2-title-match":
+        return "title_match"
     if source == "webSearch":
         return "snippet_regex"
     if source == "fahasa":
@@ -148,7 +170,7 @@ def _language_key(value) -> str:
 def _compatible(field: str, a, b) -> bool:
     """Whether two raw candidate values count as "the same value" for this
     field - see the module docstring for the per-field policy."""
-    if field == "authors":
+    if field in ("authors", "translator"):
         set_a, set_b = _author_set(a), _author_set(b)
         return set_a == set_b or set_a.issubset(set_b) or set_b.issubset(set_a)
     if field == "pageCount":
@@ -167,10 +189,29 @@ def _compatible(field: str, a, b) -> bool:
     return normalize_text(str(a)) == normalize_text(str(b))
 
 
+def normalized_value(field: str, value):
+    """The value as fusion compares it - recorded as provenance next to the original."""
+    if field in ("authors", "translator"):
+        return sorted(_author_set(value))
+    if field == "publisher":
+        return _publisher_key(str(value))
+    if field == "publishedDate":
+        return _date_year(value)
+    if field == "language":
+        return _language_key(value)
+    if field == "pageCount":
+        return value if isinstance(value, int) else None
+    if field == "categories":
+        return sorted(normalize_text(str(v)) for v in (value or []))
+    if field in ("description", "thumbnail"):
+        return None  # free text / URL: compared as-is
+    return normalize_text(str(value))
+
+
 def _representative(field: str, cluster: list[dict]) -> object:
     """The single display value for a cluster that may hold several raw
     strings that all normalize the same way (e.g. "2008" and "2008-08-01")."""
-    if field == "authors":
+    if field in ("authors", "translator"):
         return max(cluster, key=lambda e: (len(_author_set(e["value"])), _evidence_reliability(field, e)))["value"]
     if field == "publishedDate":
         return max(cluster, key=lambda e: (str(e["value"]).count("-"), _evidence_reliability(field, e)))["value"]

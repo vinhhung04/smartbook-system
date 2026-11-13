@@ -171,6 +171,6 @@ test('a line whose loans disagree between borrow and inventory is reported, not 
 });
 
 test('an invalid budget is rejected', async () => {
-  await assert.rejects(call({ budgetVnd: '-1' }), /budgetVnd must be a non-negative number/);
-  await assert.rejects(call({ budgetVnd: 'abc' }), /budgetVnd must be a non-negative number/);
+  await assert.rejects(call({ budgetVnd: '-1' }), /budgetVnd phải là số không âm/);
+  await assert.rejects(call({ budgetVnd: 'abc' }), /budgetVnd phải là số không âm/);
 });

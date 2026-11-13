@@ -114,7 +114,9 @@ def legacy_projection(bundle):
     found = bool(metadata.get('title') or metadata.get('authors'))
     confidence = {f: d['confidence'] for f, d in bundle['decisions'].items()}
     quality = sum(confidence.values()) / len(confidence)
-    providers = ('googleBooks', 'openLibrary', 'worldCat', 'fahasa', 'tiki', 'vinabook', 'webSearch')
+    providers = ('googleBooks', 'openLibrary', 'worldCat', 'fahasa', 'tiki', 'vinabook',
+                 'nhanam', 'dinhTi', 'thaiHa', 'vanLang', 'ipm', 'kimDong', 'azVietnam', 'omegaPlus', 'tanViet', 'alphaBooks',
+                 'phuongNam', 'nhanVan', 'minhLong', 'bizbooks', 'webSearch')
     return {**metadata, 'isbn': bundle['targetIsbn'] or '', 'isbn13': bundle['targetIsbn'],
             'success': found, 'found': found, 'source': {**{p: any(d['provider'] == p for d in docs.values()) for p in providers}, 'aiSummary': 'none'},
             'confidence': {'overall': quality, **{p: 0 for p in providers}}, 'fieldConfidence': confidence,

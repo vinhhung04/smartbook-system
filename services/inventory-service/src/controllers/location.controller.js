@@ -252,7 +252,7 @@ async function getZonesAndBinsByWarehouse(req, res) {
   const warehouseId = parseId(req.params.warehouseId || req.params.id);
 
   if (!warehouseId) {
-    return res.status(400).json({ message: 'Invalid warehouse id' });
+    return res.status(400).json({ message: 'Mã kho không hợp lệ' });
   }
 
   try {
@@ -271,7 +271,7 @@ async function getZonesAndBinsByWarehouse(req, res) {
     });
 
     if (!warehouse) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     return res.json({
@@ -291,7 +291,7 @@ async function getZonesAndBinsByWarehouse(req, res) {
 async function getLocationTreeByWarehouse(req, res) {
   const warehouseId = parseId(req.params.warehouseId);
   if (!warehouseId) {
-    return res.status(400).json({ message: 'Invalid warehouse id' });
+    return res.status(400).json({ message: 'Mã kho không hợp lệ' });
   }
 
   try {
@@ -301,7 +301,7 @@ async function getLocationTreeByWarehouse(req, res) {
     });
 
     if (!warehouse) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     const locations = await prisma.locations.findMany({
@@ -325,13 +325,13 @@ async function getLocationById(req, res) {
   const id = parseId(req.params.id);
 
   if (!id) {
-    return res.status(400).json({ message: 'Invalid location id' });
+    return res.status(400).json({ message: 'Mã vị trí không hợp lệ' });
   }
 
   try {
     const location = await loadLocation(id);
     if (!location) {
-      return res.status(404).json({ message: 'Location not found' });
+      return res.status(404).json({ message: 'Không tìm thấy vị trí' });
     }
 
     return res.json(locationPayload(location));
@@ -348,19 +348,19 @@ async function createLocation(req, res) {
   const type = ensureLocationType(req.body.location_type);
 
   if (!warehouseId) {
-    return res.status(400).json({ message: 'warehouse_id is required' });
+    return res.status(400).json({ message: 'Thiếu warehouse_id' });
   }
   if (!code) {
-    return res.status(400).json({ message: 'code is required' });
+    return res.status(400).json({ message: 'Thiếu mã (code)' });
   }
   if (!type) {
-    return res.status(400).json({ message: `location_type must be one of: ${LOCATION_TYPES.join(', ')}` });
+    return res.status(400).json({ message: `location_type phải là một trong: ${LOCATION_TYPES.join(', ')}` });
   }
 
   try {
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouseId } });
     if (!warehouse) {
-      return res.status(404).json({ message: 'Warehouse not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kho' });
     }
 
     let parent = null;
@@ -374,15 +374,15 @@ async function createLocation(req, res) {
         },
       });
       if (!parent) {
-        return res.status(400).json({ message: 'parent_location_id not found' });
+        return res.status(400).json({ message: 'Không tìm thấy parent_location_id' });
       }
       if (parent.warehouse_id !== warehouseId) {
-        return res.status(400).json({ message: 'Parent location must belong to the same warehouse' });
+        return res.status(400).json({ message: 'Vị trí cha phải thuộc cùng kho' });
       }
     }
 
     if (!canAttachToParent(type, parent?.location_type || null)) {
-      return res.status(400).json({ message: 'Invalid parent-child location_type relationship' });
+      return res.status(400).json({ message: 'Quan hệ cha-con giữa các location_type không hợp lệ' });
     }
 
     const capacityCheck = await ensureParentChildCapacity(parentId, parent?.location_type || null, type);
@@ -392,7 +392,7 @@ async function createLocation(req, res) {
 
     const requestedCapacity = normalizeNumber(req.body.capacity_qty);
     if (type === 'SHELF_COMPARTMENT' && requestedCapacity !== null && requestedCapacity > MAX_COMPARTMENT_CAPACITY) {
-      return res.status(400).json({ message: `SHELF_COMPARTMENT capacity cannot exceed ${MAX_COMPARTMENT_CAPACITY}` });
+      return res.status(400).json({ message: `Sức chứa SHELF_COMPARTMENT không được vượt quá ${MAX_COMPARTMENT_CAPACITY}` });
     }
 
     const data = {
@@ -414,7 +414,7 @@ async function createLocation(req, res) {
     return res.status(201).json(locationPayload(full));
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Location code already exists in this warehouse' });
+      return res.status(409).json({ message: 'Mã vị trí đã tồn tại trong kho này' });
     }
     console.error('Error while creating location:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -424,7 +424,7 @@ async function createLocation(req, res) {
 async function updateLocation(req, res) {
   const id = parseId(req.params.id);
   if (!id) {
-    return res.status(400).json({ message: 'Invalid location id' });
+    return res.status(400).json({ message: 'Mã vị trí không hợp lệ' });
   }
 
   const nextCode = req.body.code !== undefined || req.body.location_code !== undefined
@@ -434,16 +434,16 @@ async function updateLocation(req, res) {
   const nextParentId = req.body.parent_location_id !== undefined ? parseId(req.body.parent_location_id) : undefined;
 
   if ((req.body.code !== undefined || req.body.location_code !== undefined) && !nextCode) {
-    return res.status(400).json({ message: 'code cannot be empty' });
+    return res.status(400).json({ message: 'code không được để trống' });
   }
   if (req.body.location_type !== undefined && !nextType) {
-    return res.status(400).json({ message: `location_type must be one of: ${LOCATION_TYPES.join(', ')}` });
+    return res.status(400).json({ message: `location_type phải là một trong: ${LOCATION_TYPES.join(', ')}` });
   }
 
   try {
     const current = await loadLocation(id);
     if (!current) {
-      return res.status(404).json({ message: 'Location not found' });
+      return res.status(404).json({ message: 'Không tìm thấy vị trí' });
     }
 
     const finalParentId = nextParentId !== undefined ? nextParentId : current.parent_location_id;
@@ -460,25 +460,25 @@ async function updateLocation(req, res) {
         },
       });
       if (!parent) {
-        return res.status(400).json({ message: 'parent_location_id not found' });
+        return res.status(400).json({ message: 'Không tìm thấy parent_location_id' });
       }
       if (parent.warehouse_id !== current.warehouse_id) {
-        return res.status(400).json({ message: 'Parent location must belong to the same warehouse' });
+        return res.status(400).json({ message: 'Vị trí cha phải thuộc cùng kho' });
       }
     }
 
     const validTree = await ensureNoCycle(current.id, finalParentId, current.warehouse_id);
     if (!validTree) {
-      return res.status(400).json({ message: 'Cannot create parent-child cycle' });
+      return res.status(400).json({ message: 'Không thể tạo vòng lặp cha-con giữa các vị trí' });
     }
 
     const childrenCompatible = await ensureChildrenCompatible(current.id, finalType);
     if (!childrenCompatible) {
-      return res.status(400).json({ message: 'Cannot update location_type because existing children would violate hierarchy rules' });
+      return res.status(400).json({ message: 'Không thể đổi location_type vì các vị trí con hiện có sẽ sai quy tắc phân cấp' });
     }
 
     if (!canAttachToParent(finalType, parent?.location_type || null)) {
-      return res.status(400).json({ message: 'Invalid parent-child location_type relationship' });
+      return res.status(400).json({ message: 'Quan hệ cha-con giữa các location_type không hợp lệ' });
     }
 
     const capacityCheck = await ensureParentChildCapacity(finalParentId, parent?.location_type || null, finalType, current.id);
@@ -488,7 +488,7 @@ async function updateLocation(req, res) {
 
     const requestedCapacity = req.body.capacity_qty !== undefined ? normalizeNumber(req.body.capacity_qty) : undefined;
     if (requestedCapacity !== undefined && finalType === 'SHELF_COMPARTMENT' && requestedCapacity !== null && requestedCapacity > MAX_COMPARTMENT_CAPACITY) {
-      return res.status(400).json({ message: `SHELF_COMPARTMENT capacity cannot exceed ${MAX_COMPARTMENT_CAPACITY}` });
+      return res.status(400).json({ message: `Sức chứa SHELF_COMPARTMENT không được vượt quá ${MAX_COMPARTMENT_CAPACITY}` });
     }
 
     const finalCode = nextCode !== undefined ? nextCode : current.location_code;
@@ -520,7 +520,7 @@ async function updateLocation(req, res) {
     return res.json(locationPayload(full));
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Location code already exists in this warehouse' });
+      return res.status(409).json({ message: 'Mã vị trí đã tồn tại trong kho này' });
     }
     console.error('Error while updating location:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -531,7 +531,7 @@ async function deleteLocation(req, res) {
   const id = parseId(req.params.id);
 
   if (!id) {
-    return res.status(400).json({ message: 'Invalid location id' });
+    return res.status(400).json({ message: 'Mã vị trí không hợp lệ' });
   }
 
   try {
@@ -542,7 +542,7 @@ async function deleteLocation(req, res) {
       },
     });
     if (!location) {
-      return res.status(404).json({ message: 'Location not found' });
+      return res.status(404).json({ message: 'Không tìm thấy vị trí' });
     }
 
     const [
@@ -580,7 +580,7 @@ async function deleteLocation(req, res) {
 
     if (conflicts.length > 0) {
       return res.status(409).json({
-        message: 'Cannot delete location because it is referenced by existing records',
+        message: 'Không thể xóa vị trí vì đang được dữ liệu khác tham chiếu',
         conflicts,
       });
     }

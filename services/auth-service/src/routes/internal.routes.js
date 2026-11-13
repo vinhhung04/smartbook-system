@@ -24,7 +24,7 @@ function createInternalRouter({ prisma, internalKey = process.env.INTERNAL_SERVI
 
   router.use((req, res, next) => {
     if (!isValidInternalKey(req.headers['x-internal-service-key'], String(internalKey || '').trim())) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
     return next();
   });
@@ -32,7 +32,7 @@ function createInternalRouter({ prisma, internalKey = process.env.INTERNAL_SERVI
   router.get('/users/:id/warehouse-scopes', async (req, res) => {
     const userId = String(req.params.id || '');
     if (!UUID_RE.test(userId)) {
-      return res.status(400).json({ message: 'user id must be a UUID' });
+      return res.status(400).json({ message: 'user id phải là UUID' });
     }
     try {
       const user = await prisma.user.findUnique({
@@ -49,7 +49,7 @@ function createInternalRouter({ prisma, internalKey = process.env.INTERNAL_SERVI
           },
         },
       });
-      if (!user) return res.status(404).json({ message: 'User not found' });
+      if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
       return res.json({
         data: {
           user_id: user.id,

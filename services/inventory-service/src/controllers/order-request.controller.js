@@ -107,7 +107,7 @@ async function getCurrentReferenceSequence(tx, referenceType) {
 async function previewOutboundReferenceCode(req, res) {
   const referenceType = normalizeOutboundReferenceType(req.query?.reference_type);
   if (!referenceType) {
-    return res.status(400).json({ message: "Invalid reference_type" });
+    return res.status(400).json({ message: "reference_type không hợp lệ" });
   }
 
   try {
@@ -170,7 +170,7 @@ function validateOutboundReferenceRequest(payload) {
   if (!referenceType) {
     return {
       valid: false,
-      message: "Invalid reference_type",
+      message: "reference_type không hợp lệ",
     };
   }
 
@@ -372,7 +372,7 @@ async function listOrderRequests(req, res) {
       if (!canApprove) {
         return res
           .status(403)
-          .json({ message: "Only manager/admin can view approval queue" });
+          .json({ message: "Chỉ quản lý hoặc quản trị viên được xem hàng chờ duyệt" });
       }
       outboundWhere.status = "PENDING_APPROVAL";
       transferWhere.status = "REQUESTED";
@@ -452,13 +452,13 @@ async function createOutboundRequest(req, res) {
   }
 
   if (!warehouseId) {
-    return res.status(400).json({ message: "warehouse_id is required" });
+    return res.status(400).json({ message: "Thiếu warehouse_id" });
   }
 
   if (
     !["SALE", "DISPOSAL", "RETURN_TO_SUPPLIER", "MANUAL"].includes(outboundType)
   ) {
-    return res.status(400).json({ message: "Invalid outbound_type" });
+    return res.status(400).json({ message: "outbound_type không hợp lệ" });
   }
 
   if (!referenceValidation.valid) {
@@ -466,7 +466,7 @@ async function createOutboundRequest(req, res) {
   }
 
   if (lines.length === 0) {
-    return res.status(400).json({ message: "lines is required" });
+    return res.status(400).json({ message: "Thiếu lines" });
   }
 
   const normalizedLines = [];
@@ -482,14 +482,14 @@ async function createOutboundRequest(req, res) {
         .status(400)
         .json({
           message:
-            "Each line must include isbn13 (or variant_id) and quantity > 0",
+            "Mỗi dòng phải có isbn13 (hoặc variant_id) và quantity > 0",
         });
     }
 
     if (lineIsbn13 && !/^\d{13}$/.test(lineIsbn13)) {
       return res
         .status(400)
-        .json({ message: "isbn13 must contain exactly 13 digits" });
+        .json({ message: "isbn13 phải gồm đúng 13 chữ số" });
     }
 
     normalizedLines.push({
@@ -512,7 +512,7 @@ async function createOutboundRequest(req, res) {
         return {
           invalid: true,
           statusCode: 400,
-          message: "Warehouse not found or inactive",
+          message: "Không tìm thấy kho hoặc kho đã ngừng hoạt động",
         };
       }
 
@@ -523,7 +523,7 @@ async function createOutboundRequest(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "One or more isbn13 values are invalid or inactive",
+            message: "Có giá trị isbn13 không hợp lệ hoặc đã ngừng hoạt động",
           };
         }
 
@@ -553,7 +553,7 @@ async function createOutboundRequest(req, res) {
         return {
           invalid: true,
           statusCode: 400,
-          message: "One or more variant_id is invalid or inactive",
+          message: "Có variant_id không hợp lệ hoặc đã ngừng hoạt động",
         };
       }
 
@@ -575,7 +575,7 @@ async function createOutboundRequest(req, res) {
             invalid: true,
             statusCode: 400,
             message:
-              "One or more source_location_id is invalid for selected warehouse",
+              "Có source_location_id không hợp lệ với kho đã chọn",
           };
         }
       }
@@ -668,19 +668,19 @@ async function createTransferRequest(req, res) {
   if (!fromWarehouseId || !toWarehouseId) {
     return res
       .status(400)
-      .json({ message: "from_warehouse_id and to_warehouse_id are required" });
+      .json({ message: "Cần có đủ from_warehouse_id và to_warehouse_id" });
   }
 
   if (fromWarehouseId === toWarehouseId) {
     return res
       .status(400)
       .json({
-        message: "from_warehouse_id must be different from to_warehouse_id",
+        message: "from_warehouse_id phải khác to_warehouse_id",
       });
   }
 
   if (lines.length === 0) {
-    return res.status(400).json({ message: "lines is required" });
+    return res.status(400).json({ message: "Thiếu lines" });
   }
 
   const normalizedLines = [];
@@ -697,14 +697,14 @@ async function createTransferRequest(req, res) {
         .status(400)
         .json({
           message:
-            "Each line must include isbn13 (or variant_id) and quantity > 0",
+            "Mỗi dòng phải có isbn13 (hoặc variant_id) và quantity > 0",
         });
     }
 
     if (lineIsbn13 && !/^\d{13}$/.test(lineIsbn13)) {
       return res
         .status(400)
-        .json({ message: "isbn13 must contain exactly 13 digits" });
+        .json({ message: "isbn13 phải gồm đúng 13 chữ số" });
     }
 
     normalizedLines.push({
@@ -731,7 +731,7 @@ async function createTransferRequest(req, res) {
         return {
           invalid: true,
           statusCode: 400,
-          message: "Source or target warehouse is invalid/inactive",
+          message: "Kho nguồn hoặc kho đích không hợp lệ hoặc đã ngừng hoạt động",
         };
       }
 
@@ -742,7 +742,7 @@ async function createTransferRequest(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "One or more isbn13 values are invalid or inactive",
+            message: "Có giá trị isbn13 không hợp lệ hoặc đã ngừng hoạt động",
           };
         }
 
@@ -773,7 +773,7 @@ async function createTransferRequest(req, res) {
         return {
           invalid: true,
           statusCode: 400,
-          message: "One or more variant_id is invalid or inactive",
+          message: "Có variant_id không hợp lệ hoặc đã ngừng hoạt động",
         };
       }
 
@@ -846,7 +846,7 @@ async function createTransferRequest(req, res) {
         return {
           invalid: true,
           statusCode: 409,
-          message: `Khong du ton kho tai kho nguon. ${shortagePreview}`,
+          message: `Không đủ tồn kho tại kho nguồn. ${shortagePreview}`,
           details: {
             error_code: "INSUFFICIENT_STOCK",
             source_warehouse_id: fromWarehouseId,
@@ -873,7 +873,7 @@ async function createTransferRequest(req, res) {
             invalid: true,
             statusCode: 400,
             message:
-              "One or more from_location_id is invalid for source warehouse",
+              "Có from_location_id không hợp lệ với kho nguồn",
           };
         }
       }
@@ -896,7 +896,7 @@ async function createTransferRequest(req, res) {
             invalid: true,
             statusCode: 400,
             message:
-              "One or more to_location_id is invalid for target warehouse",
+              "Có to_location_id không hợp lệ với kho đích",
           };
         }
       }
@@ -987,7 +987,7 @@ async function approveRequest(req, res) {
   const currentUserId = parseId(req.user?.id);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid task type or task id" });
+    return res.status(400).json({ message: "Loại công việc hoặc mã công việc không hợp lệ" });
   }
 
   if (!currentUserId) {
@@ -1011,13 +1011,13 @@ async function approveRequest(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Outbound request not found",
+            message: "Không tìm thấy yêu cầu xuất kho",
           };
         if (order.status !== "PENDING_APPROVAL") {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Outbound request is not in PENDING_APPROVAL",
+            message: "Yêu cầu xuất kho không ở trạng thái PENDING_APPROVAL",
           };
         }
 
@@ -1080,13 +1080,13 @@ async function approveRequest(req, res) {
         return {
           invalid: true,
           statusCode: 404,
-          message: "Transfer request not found",
+          message: "Không tìm thấy yêu cầu chuyển kho",
         };
       if (order.status !== "REQUESTED") {
         return {
           invalid: true,
           statusCode: 400,
-          message: "Transfer request is not in REQUESTED",
+          message: "Yêu cầu chuyển kho không ở trạng thái REQUESTED",
         };
       }
 
@@ -1146,7 +1146,7 @@ async function rejectRequest(req, res) {
   const currentUserId = parseId(req.user?.id);
 
   if (!taskType || !taskId) {
-    return res.status(400).json({ message: "Invalid task type or task id" });
+    return res.status(400).json({ message: "Loại công việc hoặc mã công việc không hợp lệ" });
   }
 
   if (!currentUserId) {
@@ -1170,13 +1170,13 @@ async function rejectRequest(req, res) {
           return {
             invalid: true,
             statusCode: 404,
-            message: "Outbound request not found",
+            message: "Không tìm thấy yêu cầu xuất kho",
           };
         if (order.status !== "PENDING_APPROVAL") {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Outbound request is not in PENDING_APPROVAL",
+            message: "Yêu cầu xuất kho không ở trạng thái PENDING_APPROVAL",
           };
         }
 
@@ -1242,13 +1242,13 @@ async function rejectRequest(req, res) {
         return {
           invalid: true,
           statusCode: 404,
-          message: "Transfer request not found",
+          message: "Không tìm thấy yêu cầu chuyển kho",
         };
       if (order.status !== "REQUESTED") {
         return {
           invalid: true,
           statusCode: 400,
-          message: "Transfer request is not in REQUESTED",
+          message: "Yêu cầu chuyển kho không ở trạng thái REQUESTED",
         };
       }
 

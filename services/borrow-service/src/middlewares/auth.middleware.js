@@ -63,7 +63,7 @@ function authorizeAnyPermission(permissions = []) {
     const allowed = permissions.some((permission) => userPermissions.includes(permission));
 
     if (!allowed) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     return next();
@@ -88,7 +88,7 @@ function authorizeAnyRole(roles = []) {
     const allowed = allowedRoles.some((role) => userRoles.includes(role));
 
     if (!allowed) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     return next();
@@ -108,7 +108,7 @@ function authorizeBorrowAdminRead(req, res, next) {
   ].includes(permission));
 
   if (!roleAllowed || !permissionAllowed) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
 
   return next();
@@ -130,7 +130,7 @@ function authorizeBorrowAdminWrite(req, res, next) {
   ].includes(permission));
 
   if (!roleAllowed || !permissionAllowed) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
 
   return next();
@@ -148,7 +148,7 @@ function authorizeCustomerSelf(req, res, next) {
   ].includes(permission));
 
   if (!isCustomer || !hasSelfPermission) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
 
   return next();

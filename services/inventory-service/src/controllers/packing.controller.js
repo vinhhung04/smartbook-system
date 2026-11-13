@@ -51,7 +51,7 @@ async function scanInvoice(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!code) {
-    return res.status(400).json({ message: "code is required" });
+    return res.status(400).json({ message: "Thiếu mã (code)" });
   }
   if (!actorUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -69,7 +69,7 @@ async function scanInvoice(req, res) {
     });
 
     if (!order) {
-      return res.status(404).json({ message: "Outbound order not found for this code" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu xuất kho với mã này" });
     }
     if (!ORDER_READY_FOR_PACKING_STATUS.includes(order.status)) {
       return res.status(400).json({
@@ -191,7 +191,7 @@ async function listPackingTasks(req, res) {
 async function getPackingTaskDetail(req, res) {
   const taskId = parseId(req.params.taskId);
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid taskId" });
+    return res.status(400).json({ message: "taskId không hợp lệ" });
   }
 
   try {
@@ -217,7 +217,7 @@ async function getPackingTaskDetail(req, res) {
     });
 
     if (!task) {
-      return res.status(404).json({ message: "Packing task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     }
     if (!(await requireWarehouseReadAccess(req, res, task.warehouse_id))) return undefined;
 
@@ -234,13 +234,13 @@ async function claimPackingTask(req, res) {
   const assignToSelf = req.path.endsWith("/claim-self");
 
   if (!taskId || !actorUserId) {
-    return res.status(400).json({ message: "Invalid request" });
+    return res.status(400).json({ message: "Yêu cầu không hợp lệ" });
   }
 
   try {
     const task = await prisma.packing_tasks.findUnique({ where: { id: taskId } });
     if (!task) {
-      return res.status(404).json({ message: "Packing task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     }
     if (task.assigned_packer_id && task.assigned_packer_id !== actorUserId) {
       return res.status(409).json({ message: "Task đã được nhân viên khác nhận" });
@@ -270,7 +270,7 @@ async function scanPackingItem(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId || !code) {
-    return res.status(400).json({ message: "taskId and code are required" });
+    return res.status(400).json({ message: "Cần có đủ taskId và code" });
   }
   if (!actorUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -279,10 +279,10 @@ async function scanPackingItem(req, res) {
   try {
     const task = await prisma.packing_tasks.findUnique({ where: { id: taskId } });
     if (!task) {
-      return res.status(404).json({ message: "Packing task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     }
     if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
     if (task.status === "COMPLETED" || task.status === "CANCELLED") {
       return res.status(400).json({ message: `Task đã ${task.status}, không thể scan thêm` });
@@ -348,10 +348,10 @@ async function uploadPackingEvidence(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId || !evidenceType || !storageRef) {
-    return res.status(400).json({ message: "taskId, evidence_type and storage_ref are required" });
+    return res.status(400).json({ message: "Cần có đủ taskId, evidence_type và storage_ref" });
   }
   if (!["PHOTO", "VIDEO", "LIVE_SNAPSHOT"].includes(evidenceType)) {
-    return res.status(400).json({ message: "evidence_type must be PHOTO, VIDEO or LIVE_SNAPSHOT" });
+    return res.status(400).json({ message: "evidence_type phải là PHOTO, VIDEO hoặc LIVE_SNAPSHOT" });
   }
   if (!actorUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -361,16 +361,16 @@ async function uploadPackingEvidence(req, res) {
   const isValidRef =
     ref.startsWith("data:image/") || ref.startsWith("data:video/") || ref.startsWith("http://") || ref.startsWith("https://");
   if (!isValidRef) {
-    return res.status(400).json({ message: "storage_ref must be a data: URL or http(s) URL" });
+    return res.status(400).json({ message: "storage_ref phải là URL data: hoặc URL http(s)" });
   }
 
   try {
     const task = await prisma.packing_tasks.findUnique({ where: { id: taskId } });
     if (!task) {
-      return res.status(404).json({ message: "Packing task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     }
     if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
 
     let evidence = await prisma.packing_camera_evidence.create({
@@ -427,7 +427,7 @@ async function runPackingPhotoVerification(evidenceId, taskId, storageRef, wareh
 async function attachTaskNumberForUpload(req, res, next) {
   const taskId = parseId(req.params.taskId);
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid taskId" });
+    return res.status(400).json({ message: "taskId không hợp lệ" });
   }
 
   try {
@@ -436,10 +436,10 @@ async function attachTaskNumberForUpload(req, res, next) {
       include: { outbound_orders: { select: { outbound_number: true } } },
     });
     if (!task) {
-      return res.status(404).json({ message: "Packing task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     }
     if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
 
     req.packingTaskNumber = task.task_number;
@@ -456,13 +456,13 @@ async function uploadPackingVideoEvidence(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid taskId" });
+    return res.status(400).json({ message: "taskId không hợp lệ" });
   }
   if (!actorUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
   }
   if (!req.file) {
-    return res.status(400).json({ message: "video file is required" });
+    return res.status(400).json({ message: "Thiếu tệp video" });
   }
 
   try {
@@ -492,7 +492,7 @@ async function completePackingTask(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid taskId" });
+    return res.status(400).json({ message: "taskId không hợp lệ" });
   }
   if (!actorUserId) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -505,13 +505,13 @@ async function completePackingTask(req, res) {
         include: { packing_task_items: true },
       });
       if (!task) {
-        return { invalid: true, statusCode: 404, message: "Packing task not found" };
+        return { invalid: true, statusCode: 404, message: "Không tìm thấy công việc đóng gói" };
       }
       if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
-        return { invalid: true, statusCode: 403, message: "Forbidden" };
+        return { invalid: true, statusCode: 403, message: "Bạn không có quyền thực hiện thao tác này" };
       }
       if (task.status === "COMPLETED") {
-        return { invalid: true, statusCode: 400, message: "Task already completed" };
+        return { invalid: true, statusCode: 400, message: "Công việc đã hoàn thành" };
       }
       if (!isTaskFullyVerified(task.packing_task_items)) {
         return {
@@ -586,16 +586,16 @@ async function cancelPackingTask(req, res) {
   const actorUserId = parseId(req.user?.id);
 
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid taskId" });
+    return res.status(400).json({ message: "taskId không hợp lệ" });
   }
 
   try {
     const task = await prisma.packing_tasks.findUnique({ where: { id: taskId } });
     if (!task) {
-      return res.status(404).json({ message: "Packing task not found" });
+      return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     }
     if (task.status === "COMPLETED") {
-      return res.status(400).json({ message: "Cannot cancel a completed task" });
+      return res.status(400).json({ message: "Không thể hủy công việc đã hoàn thành" });
     }
 
     const updated = await prisma.packing_tasks.update({
@@ -622,12 +622,12 @@ async function cancelPackingTask(req, res) {
 async function getPackingTaskHistory(req, res) {
   const taskId = parseId(req.params.taskId);
   if (!taskId) {
-    return res.status(400).json({ message: "Invalid taskId" });
+    return res.status(400).json({ message: "taskId không hợp lệ" });
   }
 
   try {
     const owner = await prisma.packing_tasks.findUnique({ where: { id: taskId }, select: { warehouse_id: true } });
-    if (!owner) return res.status(404).json({ message: "Packing task not found" });
+    if (!owner) return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
     if (!(await requireWarehouseReadAccess(req, res, owner.warehouse_id))) return undefined;
     const [auditLogs, scanEvents] = await Promise.all([
       prisma.inventory_audit_logs.findMany({

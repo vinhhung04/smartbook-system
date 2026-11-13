@@ -83,7 +83,7 @@ Borrow Service quản lý toàn bộ nghiệp vụ lưu thông và cổng tự p
 | RABBITMQ_URL | Event bus (consumer "Báo khi có sách") |
 | FRONTEND_URL | URL web dùng trong email/redirect |
 | SMTP_HOST/PORT/USER/PASS/FROM | Cấu hình gửi email thông báo |
-| VNPAY_TMN_CODE, VNPAY_HASH_SECRET, VNPAY_PAYMENT_URL, VNPAY_RETURN_URL | Trả phạt và nạp ví online qua VNPay; thiếu cấu hình thì endpoint VNPay trả 503. Sandbox: đăng ký merchant thử nghiệm của VNPay (miễn phí, không cần hợp đồng) để lấy mã TMN và hash secret; thanh toán bằng thẻ test. IPN cần URL public (tunnel hoặc VPS); khi chạy cục bộ không có IPN, trang return vẫn ghi nhận giao dịch. Production chỉ đổi cấu hình (cần hợp đồng với VNPay). |
+| VNPAY_TMN_CODE, VNPAY_HASH_SECRET, VNPAY_PAYMENT_URL, VNPAY_RETURN_URL | Trả phạt và nạp ví online qua VNPay; thiếu cấu hình thì endpoint VNPay trả 503. Sandbox: đăng ký merchant thử nghiệm tại https://pay.vnpaytest.vn/dev-registration (miễn phí, không cần hợp đồng; liên kết từ tài liệu https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html). VNPay gửi mã TMN và hash secret về email đăng ký; thanh toán bằng thẻ test công bố tại https://sandbox.vnpayment.vn/apis/vnpay-demo/. IPN cần URL public (tunnel hoặc VPS); khi chạy cục bộ không có IPN, trang return vẫn ghi nhận giao dịch. Production chỉ đổi cấu hình (cần hợp đồng với VNPay). |
 | DEFAULT_MEMBERSHIP_PLAN_CODE | Mã gói dự phòng khi chưa gói nào có `is_default = true` |
 | DEFAULT_FINE_PER_DAY, LOST_ITEM_BASE_FEE, DAMAGED_ITEM_FEE, BORROW_FEE_PER_ITEM | Mức phí mặc định |
 | `*_INTERVAL_MS`, `*_BATCH_SIZE` | Chu kỳ/kích thước lô của từng job nền |

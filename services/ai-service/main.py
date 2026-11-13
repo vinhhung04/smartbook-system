@@ -196,6 +196,13 @@ BOOK_LOOKUP_USER_AGENT = os.getenv("BOOK_LOOKUP_USER_AGENT", "SmartBookBot/1.0")
 ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL = os.getenv("ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", "false").lower() == "true"
 ENABLE_METADATA_INTELLIGENCE_V2 = os.getenv("ENABLE_METADATA_INTELLIGENCE_V2", "false").lower() == "true"
 ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SECONDS", "45"))
+# Two-round search (isbn_rounds.py). Round 1 asks these code-capable sources one
+# at a time, in this order; ISBN_DISABLED_SOURCES switches any source off.
+# Barcode-indexed stores come right after the catalog: a miss there costs no request.
+ISBN_ROUND1_ORDER = os.getenv("ISBN_ROUND1_ORDER", "catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,fahasa")
+ISBN_DISABLED_SOURCES = os.getenv("ISBN_DISABLED_SOURCES", "")
+ISBN_PROVIDER_TIMEOUT_SECONDS = float(os.getenv("ISBN_PROVIDER_TIMEOUT_SECONDS", "10"))
+ISBN_PROVIDER_RETRIES = int(os.getenv("ISBN_PROVIDER_RETRIES", "1"))
 # A found-but-incomplete lookup (gaps left, or a provider timed out/errored) is cached
 # only briefly so it is retried soon instead of sticking for the full 7 days.
 ISBN_INCOMPLETE_CACHE_TTL_SECONDS = int(os.getenv("ISBN_INCOMPLETE_CACHE_TTL_SECONDS", "600"))
@@ -300,6 +307,17 @@ async def _startup_release_stale_actions() -> None:
             logger.warning("startup: %d action(s) left CONFIRMED by an unfinished run were released", released)
     except Exception as exc:  # noqa: BLE001 - never block startup; confirm_action sweeps again
         logger.warning("startup: stale action sweep failed: %s", type(exc).__name__)
+
+
+@app.on_event("startup")
+async def _startup_bookstore_code_index() -> None:
+    """Build the barcode index of Nhã Nam / Văn Lang / Thái Hà in the background
+    (bookstore_providers) so those stores can identify a scanned code in Round 1.
+    Opt-out via ENABLE_BOOKSTORE_CODE_INDEX (tests, offline environments)."""
+    import bookstore_providers
+    if not bookstore_providers.CODE_INDEX_ENABLED or not ENABLE_MARKETPLACE_LOOKUP:
+        return
+    asyncio.create_task(bookstore_providers.refresh_code_indexes_forever(BOOK_LOOKUP_USER_AGENT, logger))
 
 
 @app.on_event("startup")
@@ -656,26 +674,9 @@ def _manual_entry_response(raw_isbn: str, normalized_isbn: str | None, reason: s
         "language": None,
         "pageCount": None,
         "thumbnail": None,
-        "source": {
-            "googleBooks": False,
-            "openLibrary": False,
-            "worldCat": False,
-            "fahasa": False,
-            "tiki": False,
-            "vinabook": False,
-            "webSearch": False,
-            "aiSummary": "none",
-        },
-        "confidence": {
-            "overall": 0.0,
-            "googleBooks": 0.0,
-            "openLibrary": 0.0,
-            "worldCat": 0.0,
-            "fahasa": 0.0,
-            "tiki": 0.0,
-            "vinabook": 0.0,
-            "webSearch": 0.0,
-        },
+        "translator": [],
+        "source": {**{name: False for name in ISBN_SOURCE_ORDER}, "aiSummary": "none"},
+        "confidence": {"overall": 0.0, **{name: 0.0 for name in ISBN_SOURCE_ORDER}},
         "summaryVi": None,
         "keywords": [],
         "manualEntryRequired": True,
@@ -1319,6 +1320,34 @@ async def _fetch_web_search_fallback(isbn: str) -> tuple[dict | None, float, str
 
 # ── 5. Tiki direct API ────────────────────────────────────────────────────────
 
+async def _fetch_tiki_detail(client: httpx.AsyncClient, product_id) -> tuple[str | None, str | None, str | None]:
+    """(description, author, publisher) from Tiki's product detail API; all None on failure."""
+    description, authors_text, publisher_text = None, None, None
+    if not product_id:
+        return description, authors_text, publisher_text
+    try:
+        detail_resp = await client.get(
+            f"https://tiki.vn/api/v2/products/{product_id}",
+            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+        )
+        detail_resp.raise_for_status()
+        detail = detail_resp.json() or {}
+        capture_metadata_source('tiki', 'json', detail, f'https://tiki.vn/api/v2/products/{product_id}')
+        description = _safe_text(detail.get("description") or detail.get("short_description"))
+        # Authors and publisher from specifications
+        for spec_group in detail.get("specifications") or []:
+            for attr in (spec_group.get("attributes") or []):
+                code = attr.get("code", "")
+                val = _safe_text(attr.get("value"))
+                if code in ("author", "tac_gia") and val:
+                    authors_text = val
+                elif code in ("publisher", "nha_xuat_ban") and val:
+                    publisher_text = val
+    except Exception:
+        pass
+    return description, authors_text, publisher_text
+
+
 async def _fetch_tiki_by_isbn_api(
     client: httpx.AsyncClient,
     isbn: str,
@@ -1345,32 +1374,7 @@ async def _fetch_tiki_by_isbn_api(
             if sku != isbn:
                 continue
             thumbnail = item.get("thumbnail_url") or None
-            product_id = item.get("id")
-            # Fetch full product detail for description
-            description = None
-            if product_id:
-                try:
-                    detail_resp = await client.get(
-                        f"https://tiki.vn/api/v2/products/{product_id}",
-                        headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
-                    )
-                    detail_resp.raise_for_status()
-                    detail = detail_resp.json() or {}
-                    capture_metadata_source('tiki', 'json', detail, f'https://tiki.vn/api/v2/products/{product_id}')
-                    description = _safe_text(detail.get("description") or detail.get("short_description"))
-                    # Authors and publisher from specifications
-                    specs = detail.get("specifications") or []
-                    authors_text, publisher_text = None, None
-                    for spec_group in specs:
-                        for attr in (spec_group.get("attributes") or []):
-                            code = attr.get("code", "")
-                            val = _safe_text(attr.get("value"))
-                            if code in ("author", "tac_gia") and val:
-                                authors_text = val
-                            elif code in ("publisher", "nha_xuat_ban") and val:
-                                publisher_text = val
-                except Exception:
-                    pass
+            description, authors_text, publisher_text = await _fetch_tiki_detail(client, item.get("id"))
 
             metadata = {
                 "title": name or None,
@@ -1517,6 +1521,203 @@ async def _fetch_vinabook_by_isbn_api(
     except Exception as exc:
         logger.warning("Vinabook search lookup failed for %s: %s", isbn, exc)
         raise
+
+
+# ── 5c. Two-round search adapters (isbn_rounds.BookProvider callables) ───────
+# Code searches must return the codes printed on the record in `identifiers`
+# (isbn_rounds verifies them); title searches return candidate records.
+
+async def _google_books_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
+    params = {"q": f"isbn:{code}"}
+    if GOOGLE_BOOKS_API_KEY:
+        params["key"] = GOOGLE_BOOKS_API_KEY
+    resp = await client.get(GOOGLE_BOOKS_API_BASE_URL, params=params)
+    resp.raise_for_status()
+    items = [_parse_google_books_item(item) for item in (resp.json() or {}).get("items") or []]
+    return next((item for item in items if code in item["identifiers"]), items[0] if items else None)
+
+
+async def _open_library_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
+    """Open Library's Books API is keyed by the ISBN itself: a record returned for
+    `ISBN:<code>` is catalogued under that code."""
+    isbn10 = _isbn13_to_isbn10(code) if len(code) == 13 and code[:3] in ("978", "979") else None
+    data, _score = await _fetch_open_library_by_isbn(client, code, isbn10)
+    if not data:
+        return None
+    return {**data, "identifiers": [code], "sourceUrl": data.get("sourceUrl") or f"{OPEN_LIBRARY_SITE_ORIGIN}/isbn/{code}"}
+
+
+async def _catalog_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
+    """Source 0: the library's own catalog (inventory-service), exact code match.
+    A book a librarian already saved is found instantly, whatever the outside
+    sources are doing."""
+    if not INTERNAL_SERVICE_KEY:
+        raise RuntimeError("INTERNAL_SERVICE_KEY is not set")
+    resp = await client.get(
+        f"{INVENTORY_SERVICE_URL}/internal/catalog/books/by-code/{code}",
+        headers={"x-internal-service-key": INTERNAL_SERVICE_KEY},
+    )
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    book = resp.json() or {}
+    return {
+        "title": book.get("title"), "subtitle": book.get("subtitle"),
+        "authors": book.get("authors") or [], "translator": book.get("translator") or [],
+        "publisher": book.get("publisher"), "publishedDate": book.get("published_date"),
+        "description": book.get("description"), "categories": book.get("categories") or [],
+        "language": book.get("language"), "pageCount": book.get("page_count"),
+        "thumbnail": book.get("cover_image_url"),
+        "identifiers": [c for c in (book.get("isbn13"), book.get("isbn10")) if c],
+        "catalogBookId": book.get("book_id"),
+        "sourceUrl": None, "sourceFetchMode": "catalog",
+    }
+
+
+# Web-search engines answer the same code very differently (checked live with
+# 8935325011894: "<code> site:fahasa.com" -> nothing on auto/duckduckgo, Fahasa
+# links on bing/google; the bare code -> the right page on auto/bing/yahoo). So
+# several (query, backend) pairs are tried, stopping at the first verified page.
+FAHASA_SEARCHES = (("{code}", "auto"), ("{code} site:fahasa.com", "bing"),
+                   ('"{code}"', "google"), ("{code} site:fahasa.com", "google"))
+FAHASA_MAX_PAGES = 4
+
+
+def _ddgs_fahasa_urls(query: str, backend: str) -> list[str]:
+    """Fahasa product-page links from one web search. Sync (runs in a thread)."""
+    try:
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=8, backend=backend))
+    except Exception as exc:  # "No results found" is raised as an exception by ddgs
+        logger.info("Fahasa web search %r via %s: %s", query, backend, type(exc).__name__)
+        return []
+    urls = [r.get("href", "") for r in results]
+    return list(dict.fromkeys(u for u in urls if "fahasa.com/" in u and u.endswith(".html") and "/searchengine" not in u))
+
+
+_FAHASA_ATTRIBUTES = {
+    "tác giả": "authors", "người dịch": "translator", "nxb": "publisher", "năm xb": "publishedDate",
+    "số trang": "pageCount", "ngôn ngữ": "language",
+}
+
+
+def _parse_fahasa_attributes(page: str) -> dict:
+    """Fahasa's product table: <th class="table-label">NXB</th><td>...Thế Giới...</td>."""
+    out: dict = {}
+    for label, cell in re.findall(r'<th class="table-label">\s*(.*?)\s*</th>\s*<td[^>]*>(.*?)</td>', page, flags=re.DOTALL):
+        key = _FAHASA_ATTRIBUTES.get(re.sub(r"\s+", " ", _html_module.unescape(label)).strip().lower())
+        value = re.sub(r"\s+", " ", _html_module.unescape(re.sub(r"<[^>]+>", " ", cell))).strip()
+        if not key or not value or key in out:
+            continue
+        if key in ("authors", "translator"):
+            out[key] = [name.strip() for name in re.split(r"[,;]", value) if name.strip()]
+        elif key == "pageCount":
+            digits = "".join(filter(str.isdigit, value))
+            out[key] = int(digits) if digits else None
+        elif key == "language":
+            out[key] = "vi" if "việt" in value.lower() else ("en" if "anh" in value.lower() else value)
+        else:
+            out[key] = value
+    return out
+
+
+async def _fahasa_page(client: httpx.AsyncClient, url: str) -> dict | None:
+    resp = await client.get(url, headers={"Accept-Language": "vi-VN,vi;q=0.9"})
+    resp.raise_for_status()
+    page = resp.text
+    capture_metadata_source("fahasa", "html", page, url)
+    metadata = _parse_json_ld_product(page) or _parse_meta_product(page)
+    if not metadata:
+        return None
+    codes = re.findall(r'"(?:sku|gtin13|isbn)"\s*:\s*"(\d{10,13})"', page)
+    codes += re.findall(r"Mã hàng\s*(?:<[^>]+>\s*)*(\d{10,13})", page)
+    if metadata.get("_isbn_from_ld"):
+        codes.append(metadata["_isbn_from_ld"])
+    # The attribute table is more complete than JSON-LD (translator, NXB, year, pages).
+    table = _parse_fahasa_attributes(page)
+    metadata = {**metadata, **{k: v for k, v in table.items() if v}}
+    return {**metadata, "identifiers": list(dict.fromkeys(codes)), "sourceUrl": url, "sourceFetchMode": "httpx"}
+
+
+async def _fahasa_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
+    """Fahasa with plain HTTP only (no CloakBrowser): find the product page via web
+    search, read it, and keep the page whose "Mã hàng" is the code. Returns the
+    first other page read when none matches (Round 1 reports it as MISMATCH).
+    When Cloudflare answers 403 the source is paused by isbn_rounds."""
+    tried: list[str] = []
+    first = None
+    for query, backend in FAHASA_SEARCHES:
+        for url in await asyncio.to_thread(_ddgs_fahasa_urls, query.format(code=code), backend):
+            if url in tried or len(tried) >= FAHASA_MAX_PAGES:
+                continue
+            tried.append(url)
+            data = await _fahasa_page(client, url)
+            if data and code in data["identifiers"]:
+                return data
+            first = first or data
+        if len(tried) >= FAHASA_MAX_PAGES:
+            break
+    return first
+
+
+async def _web_search_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
+    """A labelled search snippet that contains the code itself (never a title guess)."""
+    data, _score, outcome = await _fetch_web_search_fallback(code)
+    if outcome in ("TIMEOUT", "ERROR"):
+        raise RuntimeError(f"web search {outcome}")
+    if not data:
+        return None
+    return {**data, "identifiers": [code], "_verification": "CODE_IN_SNIPPET"}
+
+
+async def _tiki_by_title(client: httpx.AsyncClient, title: str, author: str | None) -> list[dict]:
+    resp = await client.get(
+        "https://tiki.vn/api/v2/products",
+        params={"q": title, "limit": 5, "category": 8322},
+        headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
+    )
+    resp.raise_for_status()
+    candidates = []
+    for item in ((resp.json() or {}).get("data") or [])[:3]:
+        if not isbn_matching.titles_match(title, item.get("name")):
+            continue
+        description, author_text, _publisher = await _fetch_tiki_detail(client, item.get("id"))
+        candidates.append({
+            "title": _safe_text(item.get("name")), "authors": [author_text] if author_text else [],
+            "description": description, "categories": [], "language": "vi",
+            "sourceUrl": f"https://tiki.vn/{item['url_path']}" if item.get("url_path") else None,
+        })
+    return candidates
+
+
+async def _open_library_by_title(client: httpx.AsyncClient, title: str, author: str | None) -> list[dict]:
+    params = {"title": title, "limit": 5, "fields": "key,title,author_name,subject,language,isbn"}
+    if author:
+        params["author"] = author
+    resp = await client.get(f"{OPEN_LIBRARY_SITE_ORIGIN}/search.json", params=params)
+    resp.raise_for_status()
+    return [
+        {
+            "title": doc.get("title"), "authors": doc.get("author_name") or [], "description": None,
+            "categories": (doc.get("subject") or [])[:5],
+            "language": "vi" if "vie" in (doc.get("language") or []) else None,
+            # every edition's ISBN of this work - lets Round 2 tell the same edition from another one
+            "identifiers": doc.get("isbn") or [],
+            "sourceUrl": f"{OPEN_LIBRARY_SITE_ORIGIN}{doc['key']}" if doc.get("key") else None,
+        }
+        for doc in (resp.json() or {}).get("docs") or []
+    ]
+
+
+async def _google_books_by_title(client: httpx.AsyncClient, title: str, author: str | None) -> list[dict]:
+    query = f'intitle:"{title}"' + (f' inauthor:"{author}"' if author else "")
+    params = {"q": query, "maxResults": 5}
+    if GOOGLE_BOOKS_API_KEY:
+        params["key"] = GOOGLE_BOOKS_API_KEY
+    resp = await client.get(GOOGLE_BOOKS_API_BASE_URL, params=params)
+    resp.raise_for_status()
+    return [_parse_google_books_item(item) for item in (resp.json() or {}).get("items") or []]
 
 
 # ── 6. Orchestrate all marketplace providers ──────────────────────────────────
@@ -1757,6 +1958,13 @@ from isbn_coverage import (  # noqa: E402  (deterministic-intelligence constants
 )
 from isbn_targeted import MAX_ROUNDS, PROVIDER_MIN_SECONDS, ProviderLedger, plan_targeted_retrieval  # noqa: E402
 import isbn_fusion  # noqa: E402
+import isbn_matching  # noqa: E402
+import isbn_rounds  # noqa: E402
+import isbn_progress  # noqa: E402
+import bookstore_providers  # noqa: E402
+import isbn_cache_store  # noqa: E402
+import ai_web_search  # noqa: E402
+from dataclasses import replace  # noqa: E402
 
 
 def _normalize_evidence_value(value):
@@ -1832,6 +2040,14 @@ def _build_isbn_intelligence(provider_metadata: dict[str, dict | None], source_s
                 source_url = provider_data.get("sourceUrl")
                 if source_url:
                     item["sourceUrl"] = source_url
+                # Two-round provenance: when it was read, how the record was tied to the
+                # scanned code, and the value as compared (isbn_rounds._stamp).
+                provenance = provider_data.get("_provenance") or {}
+                for key in ("retrievedAt", "verification", "matchConfidence", "round"):
+                    if provenance.get(key) is not None:
+                        item[key] = provenance[key]
+                if provenance:
+                    item["normalizedValue"] = isbn_fusion.normalized_value(field, value)
                 confirmations.append(item)
 
         fused = (
@@ -1894,6 +2110,11 @@ def _parse_google_books_item(item: dict) -> dict:
         "language": _safe_text(volume_info.get("language")),
         "pageCount": volume_info.get("pageCount") if isinstance(volume_info.get("pageCount"), int) else None,
         "thumbnail": _safe_text(image_links.get("thumbnail") or image_links.get("smallThumbnail")),
+        "identifiers": [
+            str(ident.get("identifier")).strip() for ident in volume_info.get("industryIdentifiers") or []
+            if ident.get("type") in ("ISBN_13", "ISBN_10") and ident.get("identifier")
+        ],
+        "sourceUrl": volume_info.get("infoLink") or volume_info.get("canonicalVolumeLink"),
     }
 
 
@@ -2451,240 +2672,209 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     raw_isbn = str(req.isbn or "").strip()
     isbn13, isbn10, validation_error = _normalize_and_validate_isbn(raw_isbn)
 
-    # Check if the input looks like a numeric barcode (10 or 13 digits) even if not a valid ISBN
+    # A 10/13-digit code that fails the ISBN checksum may still be a store barcode:
+    # only providers that search raw barcodes (and verify them) are asked.
     raw_barcode = re.sub(r"[^0-9]", "", raw_isbn)
     is_barcode_candidate = len(raw_barcode) in (10, 13)
-
-    # ── Barcode mode: non-ISBN but numeric code → try marketplace first ───────
-    if validation_error and is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP:
-        logger.info("ISBN validation failed (%s), trying marketplace barcode lookup for %s", validation_error, raw_barcode)
-        mp_results = await _fetch_all_marketplace(raw_barcode, None)
-        fahasa_b, fahasa_bs, tiki_b, tiki_bs, vinabook_b, vinabook_bs, web_b, _ = mp_results
-        mp_merged = _merge_with_marketplace({}, fahasa_b, tiki_b, vinabook_b)
-        mp_found = bool(mp_merged.get("title") or mp_merged.get("description"))
-
-        if mp_found:
-            # Try to extract a canonical ISBN from JSON-LD if marketplace returned one
-            canonical_isbn13 = None
-            canonical_isbn10 = None
-            for src in [fahasa_b, tiki_b, vinabook_b]:
-                if not src:
-                    continue
-                ld_isbn = (src.get("_isbn_from_ld") or "").strip()
-                if ld_isbn:
-                    c13, c10, err = _normalize_and_validate_isbn(ld_isbn)
-                    if not err:
-                        canonical_isbn13, canonical_isbn10 = c13, c10
-                        break
-
-            mp_score = max(fahasa_bs, tiki_bs, vinabook_bs)
-            return {
-                "success": True,
-                "found": True,
-                "isbn": canonical_isbn13 or raw_barcode,
-                "isbn13": canonical_isbn13,
-                "isbn10": canonical_isbn10,
-                "title": mp_merged.get("title"),
-                "subtitle": mp_merged.get("subtitle"),
-                "authors": mp_merged.get("authors") or [],
-                "publisher": mp_merged.get("publisher"),
-                "publishedDate": mp_merged.get("publishedDate"),
-                "description": mp_merged.get("description"),
-                "categories": mp_merged.get("categories") or [],
-                "language": mp_merged.get("language"),
-                "pageCount": mp_merged.get("pageCount"),
-                "thumbnail": mp_merged.get("thumbnail"),
-                "source": {
-                    "googleBooks": False,
-                    "openLibrary": False,
-                    "worldCat": False,
-                    "fahasa": bool(fahasa_b),
-                    "tiki": bool(tiki_b),
-                    "vinabook": bool(vinabook_b),
-                    "webSearch": web_b,
-                    "aiSummary": "none",
-                },
-                "confidence": {
-                    "overall": round(mp_score, 3),
-                    "googleBooks": 0.0,
-                    "openLibrary": 0.0,
-                    "worldCat": 0.0,
-                    "fahasa": round(fahasa_bs, 3),
-                    "tiki": round(tiki_bs, 3),
-                    "vinabook": round(vinabook_bs, 3),
-                    "webSearch": 0.0,
-                },
-                "summaryVi": None,
-                "keywords": [],
-                "manualEntryRequired": False,
-                "reason": "barcode is not a valid ISBN but marketplace lookup attempted",
-                # Without these, lookup_book_by_isbn() builds intelligence from {} and
-                # overwrites the found metadata above with empty values.
-                "_providerMetadata": {"fahasa": fahasa_b, "tiki": tiki_b, "vinabook": vinabook_b},
-                "_providerOutcomes": mp_results[7],
-            }
-
-        logger.info("Barcode %s not found in any marketplace source", raw_barcode)
-        return _manual_entry_response(raw_isbn, raw_barcode, "barcode not found in any source")
-
-    if validation_error:
+    if validation_error and not (is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP):
+        isbn_progress.stage("validate", "failed", kind="INVALID", length=len(raw_barcode))
         return _manual_entry_response(raw_isbn, None, validation_error)
+    isbn_progress.stage("validate", "done", code=isbn13 or raw_barcode,
+                        kind="BARCODE" if validation_error else ("ISBN10" if len(raw_barcode) == 10 else "ISBN13"))
 
-    if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:
+    if not validation_error and ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:
+        isbn_progress.stage("retrieval", "started", mode="field-level")
         try:
             return await _run_field_level_lookup(raw_isbn, isbn13, isbn10, bool(req.generateVietnameseSummary))
         except Exception:
-            logger.exception("Field-level ISBN retrieval failed for %s, falling back to legacy lookup", isbn13)
+            logger.exception("Field-level ISBN retrieval failed for %s, falling back to the two-round lookup", isbn13)
 
-    # ── Standard ISBN lookup: run standard providers + marketplace in parallel ─
-    if ENABLE_MARKETPLACE_LOOKUP:
-        std_gather, mp_gather = await asyncio.gather(
-            _run_standard_lookups(isbn13, isbn10),
-            _fetch_all_marketplace(isbn13, isbn10),
-            return_exceptions=True,
-        )
-        std_results: list = std_gather if not isinstance(std_gather, Exception) else []
-        mp_tuple = mp_gather if not isinstance(mp_gather, Exception) else (None, 0.0, None, 0.0, None, 0.0, False, {"fahasa": "ERROR", "tiki": "ERROR", "vinabook": "ERROR"})
+    return await _two_round_lookup(
+        raw_isbn, isbn13 or raw_barcode, isbn10, valid_isbn=not validation_error,
+        generate_summary=bool(req.generateVietnameseSummary),
+    )
+
+
+# ── Two-round search: registry and orchestration (isbn_rounds.py) ────────────
+
+# Sources that exist in the codebase but cannot be used - see BOOK_DATA_SOURCE_AUDIT.md.
+UNUSABLE_BOOK_SOURCES = {
+    "vinabook": "INACTIVE: vinabook.com trả 404 cho cả trang chủ và trang tìm kiếm",
+    "worldCat": "INACTIVE: OCLC Classify API (classify.oclc.org) trả 404 - dịch vụ đã ngừng",
+}
+NOT_FOUND_MESSAGE = "Không tìm thấy thông tin sách theo mã đã nhập."
+
+
+def _book_providers() -> list[isbn_rounds.BookProvider]:
+    """The provider registry. Built per lookup so env-driven config and test
+    patches of the adapter functions apply. Add a source here and to
+    ISBN_SOURCE_ORDER / source_reliability.py."""
+    Provider = isbn_rounds.BookProvider
+    common = {"timeout": ISBN_PROVIDER_TIMEOUT_SECONDS, "retries": ISBN_PROVIDER_RETRIES,
+              "user_agent": BOOK_LOOKUP_USER_AGENT}
+    store_timeout = max(ISBN_PROVIDER_TIMEOUT_SECONDS, 20.0)  # first call downloads the sitemap (~1 MB)
+    providers = [
+        Provider("catalog", by_code=_catalog_by_code, round1=True, accepts_raw_barcode=True,
+                 **{**common, "timeout": 5.0, "retries": 0}),
+        Provider("googleBooks", by_code=_google_books_by_code, by_title=_google_books_by_title, round1=True, **common),
+        Provider("openLibrary", by_code=_open_library_by_code, by_title=_open_library_by_title, round1=True, **common),
+        Provider("dinhTi", by_code=bookstore_providers.dinhti_by_code, by_title=bookstore_providers.dinhti_by_title,
+                 round1=True, accepts_raw_barcode=True, **common),
+        Provider("bizbooks", by_code=bookstore_providers.bizbooks_by_code, by_title=bookstore_providers.bizbooks_by_title,
+                 round1=True, accepts_raw_barcode=True, **common),
+        Provider("tiki", by_title=_tiki_by_title, **common),
+        # Plain HTTP only - Cloudflare blocks it often; a 403 pauses it (isbn_rounds).
+        Provider("fahasa", by_code=_fahasa_by_code, round1=True, accepts_raw_barcode=True,
+                 **{**common, "timeout": max(BOOK_MARKETPLACE_TIMEOUT_SECONDS, 30.0), "retries": 0}),
+        Provider("nhanam", by_code=bookstore_providers.code_search(bookstore_providers.NHANAM),
+                 by_title=bookstore_providers.title_search(bookstore_providers.NHANAM),
+                 round1=True, accepts_raw_barcode=True, **{**common, "timeout": store_timeout}),
+        Provider("thaiHa", by_code=bookstore_providers.code_search(bookstore_providers.THAIHA),
+                 by_title=bookstore_providers.title_search(bookstore_providers.THAIHA),
+                 round1=True, accepts_raw_barcode=True, **{**common, "timeout": store_timeout}),
+        Provider("vanLang", by_code=bookstore_providers.code_search(bookstore_providers.VANLANG),
+                 by_title=bookstore_providers.title_search(bookstore_providers.VANLANG),
+                 round1=True, accepts_raw_barcode=True, **{**common, "timeout": store_timeout}),
+    ] + [
+        # Publisher stores and bookstore chains reached only through their product feed index (bookstore_providers).
+        Provider(store.name, by_code=bookstore_providers.code_search(store),
+                 by_title=bookstore_providers.index_title_search(store),
+                 round1=True, accepts_raw_barcode=True, **{**common, "timeout": store_timeout})
+        for store in bookstore_providers.FEED_ONLY_STORES
+    ] + [
+        Provider("webSearch", by_code=_web_search_by_code,
+                 **{**common, "timeout": BOOK_MARKETPLACE_TIMEOUT_SECONDS, "retries": 0}),
+    ] + [Provider(name, disabled_reason=reason) for name, reason in UNUSABLE_BOOK_SOURCES.items()]
+
+    marketplace = {"dinhTi", "bizbooks", "tiki", "fahasa", "nhanam", "thaiHa", "vanLang", "webSearch"} | {
+        store.name for store in bookstore_providers.FEED_ONLY_STORES}
+    disabled = {name.strip() for name in ISBN_DISABLED_SOURCES.split(",") if name.strip()}
+    out = []
+    for provider in providers:
+        if provider.disabled_reason is None and provider.name in disabled:
+            provider = replace(provider, disabled_reason="DISABLED_BY_CONFIG: ISBN_DISABLED_SOURCES")
+        elif provider.disabled_reason is None and provider.name in marketplace and not ENABLE_MARKETPLACE_LOOKUP:
+            provider = replace(provider, disabled_reason="DISABLED_BY_CONFIG: ENABLE_MARKETPLACE_LOOKUP=false")
+        out.append(provider)
+    return out
+
+
+def _round1_providers(providers: list[isbn_rounds.BookProvider]) -> list[isbn_rounds.BookProvider]:
+    """Round 1 order from ISBN_ROUND1_ORDER; only code-capable, verifiable sources."""
+    by_name = {p.name: p for p in providers if p.round1 and p.by_code}
+    order = [name.strip() for name in ISBN_ROUND1_ORDER.split(",") if name.strip() in by_name]
+    return [by_name[name] for name in order]
+
+
+def _ai_web_provider(code: str) -> isbn_rounds.BookProvider:
+    """The AI web search source (ai_web_search.py): OpenRouter web_search (Exa) + a
+    model that only reads the cited pages. ISBN_AI_WEB_MODE: title (default: Round 2,
+    searches by the title Round 1 identified), parallel (by code, alongside the code
+    searches), fallback (by code, after them), off."""
+    reason = None
+    if ai_web_search.MODE not in ("title", "parallel", "fallback"):
+        reason = "DISABLED_BY_CONFIG: ISBN_AI_WEB_MODE=off"
+    elif "aiWebSearch" in {n.strip() for n in ISBN_DISABLED_SOURCES.split(",")}:
+        reason = "DISABLED_BY_CONFIG: ISBN_DISABLED_SOURCES"
+    elif not os.getenv("OPENROUTER_API_KEY", "").strip():
+        reason = "DISABLED_BY_CONFIG: OPENROUTER_API_KEY chưa được đặt"
+    if ai_web_search.MODE == "title":
+        return isbn_rounds.BookProvider(
+            "aiWebSearch", by_title=ai_web_search.title_search_for(code), round1=False,
+            timeout=ai_web_search.TIMEOUT_SECONDS + 5, retries=0,  # never retry a paid call
+            user_agent=BOOK_LOOKUP_USER_AGENT, disabled_reason=reason)
+    return isbn_rounds.BookProvider(
+        "aiWebSearch", by_code=ai_web_search.ai_by_code, round1=True, accepts_raw_barcode=True,
+        timeout=ai_web_search.TIMEOUT_SECONDS + 5, retries=0,  # never retry a paid call
+        user_agent=BOOK_LOOKUP_USER_AGENT, disabled_reason=reason)
+
+
+async def _two_round_lookup(raw_isbn: str, code: str, isbn10: str | None, valid_isbn: bool,
+                            generate_summary: bool) -> dict:
+    providers = _book_providers()
+    round1_providers = _round1_providers(providers)
+    ai_provider = _ai_web_provider(code)
+    parallel = None
+    if ai_web_search.MODE == "title":
+        providers = providers + [ai_provider]  # Round 2 only, by the identified title
+    elif ai_web_search.MODE == "fallback" and not ai_provider.disabled_reason:
+        round1_providers = round1_providers + [ai_provider]  # asked last, only if nothing matched
     else:
-        std_results = await _run_standard_lookups(isbn13, isbn10)
-        mp_tuple = (None, 0.0, None, 0.0, None, 0.0, False, {})
+        parallel = ai_provider  # runs alongside, started once the catalog has missed
+    targets = {c for c in (code, isbn10) if c}
+    round1 = await isbn_rounds.run_round1(round1_providers, code, targets, valid_isbn,
+                                          parallel=parallel, parallel_after="catalog")
+    round1_order = [p.name for p in round1_providers] + ([parallel.name] if parallel else [])
 
-    # Unpack standard results
-    provider_outcomes: dict[str, str] = {}
-    def _unpack_standard(index: int, source: str) -> tuple[dict | None, float]:
-        if len(std_results) <= index:
-            return None, 0.0
-        value = std_results[index]
-        if isinstance(value, Exception):
-            provider_outcomes[source] = "TIMEOUT" if isinstance(value, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
-            return None, 0.0
-        return value
-    google_data, google_score = _unpack_standard(0, "googleBooks")
-    open_data, open_score = _unpack_standard(1, "openLibrary")
-    worldcat_data, worldcat_score = None, 0.0
-    if ENABLE_WORLDCAT_LOOKUP:
-        worldcat_data, worldcat_score = _unpack_standard(2, "worldCat")
-
-    # Unpack marketplace results
-    fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, marketplace_outcomes = mp_tuple
-    provider_outcomes.update(marketplace_outcomes)
-
-    # ── Merge all sources ─────────────────────────────────────────────────────
-    merged = _merge_lookup_metadata_with_fallbacks(google_data, open_data, worldcat_data)
-    if ENABLE_MARKETPLACE_LOOKUP:
-        merged = _merge_with_marketplace(merged, fahasa_data, tiki_data, vinabook_data)
-
-    found = bool(merged.get("title") or merged.get("authors") or merged.get("description"))
-    web_data, web_score = None, 0.0
-    if not found and ENABLE_MARKETPLACE_LOOKUP:
-        web_data, web_score, web_outcome = await _fetch_web_search_fallback(isbn13)
-        if web_outcome and web_outcome != "NOT_FOUND":
-            provider_outcomes["webSearch"] = web_outcome
-        if web_data:
-            merged = _merge_with_marketplace(merged, web_data, None, None)
-            found = bool(merged.get("title") or merged.get("authors") or merged.get("description"))
-
-    # ── Not found → return empty response with source flags ───────────────────
-    if not found:
-        result = _manual_entry_response(raw_isbn, isbn13, "metadata not found from providers")
-        result["isbn"] = isbn13
-        result["source"].update({
-            "googleBooks": bool(google_data),
-            "openLibrary": bool(open_data),
-            "worldCat": bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False,
-            "fahasa": bool(fahasa_data),
-            "tiki": bool(tiki_data),
-            "vinabook": bool(vinabook_data),
-            "webSearch": bool(web_data),
-        })
-        result["confidence"].update({
-            "googleBooks": google_score,
-            "openLibrary": open_score,
-            "worldCat": worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
-            "fahasa": fahasa_score,
-            "tiki": tiki_score,
-            "vinabook": vinabook_score,
-            "webSearch": web_score,
-            "overall": max(google_score, open_score,
-                           worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
-                           fahasa_score, tiki_score, vinabook_score, web_score),
-        })
-        result["_providerMetadata"] = {
-            "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
-            "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data, "webSearch": web_data,
-        }
-        result["_providerOutcomes"] = provider_outcomes
+    if not round1["identity"]:
+        # Round 1 found no record carrying this code: stop - no title guessing, no metadata.
+        result = _manual_entry_response(raw_isbn, code, NOT_FOUND_MESSAGE)
+        result["isbn"] = code
+        result["message"] = NOT_FOUND_MESSAGE
+        statuses = isbn_rounds.merge_outcomes(round1, None)
+        for provider in providers:
+            statuses.setdefault(provider.name, {
+                "source": provider.name, "round": 2, "query": "-",
+                "status": "DISABLED" if provider.disabled_reason else "SKIPPED",
+                "reason": provider.disabled_reason or "ROUND1_NOT_FOUND", "durationMs": 0, "attempts": 0,
+            })
+        result["_providerMetadata"] = {}
+        result["_roundStatuses"] = statuses
+        result["_rounds"] = (round1, None, round1_order)
         return result
 
-    # ── Generate Vietnamese summary ───────────────────────────────────────────
-    summary_vi = None
-    keywords = []
-    ai_provider = "none"
-    if req.generateVietnameseSummary and _should_generate_summary(merged):
-        summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(merged)
+    # Codes printed on the identifying record (e.g. its ISBN next to the EAN) are the same book.
+    targets |= {isbn_matching.normalize_code(c) for c in round1["data"].get("identifiers") or [] if c}
+    round2 = await isbn_rounds.run_round2(providers, round1, code, targets)
+    provider_metadata = round2["metadata"]
+    statuses = isbn_rounds.merge_outcomes(round1, round2)
+    identity = round1["data"]
+
+    summary_vi, keywords, ai_provider = None, [], "none"
+    if generate_summary and _should_generate_summary(identity):
+        summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(identity)
         ai_provider = _get_text_llm_provider().name if ok else "none"
 
-    # ── Calculate overall confidence ──────────────────────────────────────────
-    all_scores = [
-        google_score, open_score,
-        worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
-        fahasa_score, tiki_score, vinabook_score,
-        web_score,
-    ]
-    overall_confidence = round(max(all_scores), 3)
-    active_scores = [s for s in all_scores if s > 0]
-    if len(active_scores) >= 2:
-        avg_score = sum(active_scores) / len(active_scores)
-        overall_confidence = round(max(overall_confidence, min(1.0, avg_score + 0.1)), 3)
-
-    result = {
-        "success": True,
-        "found": True,
-        "isbn": isbn13,
-        "isbn13": isbn13,
+    scores = {name: _metadata_completeness_score(data) for name, data in provider_metadata.items() if data}
+    active = [score for score in scores.values() if score > 0]
+    overall = max(active, default=0.0)
+    if len(active) >= 2:
+        overall = max(overall, min(1.0, sum(active) / len(active) + 0.1))
+    identity_isbn13 = next((c for c in targets if len(c) == 13 and c[:3] in ("978", "979")), None)
+    return {
+        "success": True, "found": True, "isbn": code,
+        "isbn13": code if valid_isbn else identity_isbn13,
         "isbn10": isbn10,
-        "title": merged.get("title"),
-        "subtitle": merged.get("subtitle"),
-        "authors": merged.get("authors") or [],
-        "publisher": merged.get("publisher"),
-        "publishedDate": merged.get("publishedDate"),
-        "description": merged.get("description"),
-        "categories": merged.get("categories") or [],
-        "language": merged.get("language"),
-        "pageCount": merged.get("pageCount"),
-        "thumbnail": merged.get("thumbnail"),
-        "source": {
-            "googleBooks": bool(google_data),
-            "openLibrary": bool(open_data),
-            "worldCat": bool(worldcat_data) if ENABLE_WORLDCAT_LOOKUP else False,
-            "fahasa": bool(fahasa_data),
-            "tiki": bool(tiki_data),
-            "vinabook": bool(vinabook_data),
-            "webSearch": bool(web_data),
-            "aiSummary": ai_provider,
-        },
-        "confidence": {
-            "overall": overall_confidence,
-            "googleBooks": google_score,
-            "openLibrary": open_score,
-            "worldCat": worldcat_score if ENABLE_WORLDCAT_LOOKUP else 0.0,
-            "fahasa": fahasa_score,
-            "tiki": tiki_score,
-            "vinabook": vinabook_score,
-            "webSearch": web_score,
-        },
-        "summaryVi": summary_vi,
-        "keywords": keywords,
-        "manualEntryRequired": False,
-        "sourceUrl": (fahasa_data or tiki_data or vinabook_data or web_data or {}).get("sourceUrl"),
-        "sourceFetchMode": (fahasa_data or tiki_data or vinabook_data or web_data or {}).get("sourceFetchMode"),
+        **{field: identity.get(field) for field in ("title", "subtitle", "publisher", "publishedDate", "description",
+                                                     "language", "pageCount", "thumbnail")},
+        "authors": identity.get("authors") or [], "categories": identity.get("categories") or [],
+        "translator": identity.get("translator") or [],
+        "source": {**{name: bool(provider_metadata.get(name)) for name in ISBN_SOURCE_ORDER}, "aiSummary": ai_provider},
+        "confidence": {"overall": round(overall, 3), **{name: round(scores.get(name, 0.0), 3) for name in ISBN_SOURCE_ORDER}},
+        "summaryVi": summary_vi, "keywords": keywords, "manualEntryRequired": False,
+        "sourceUrl": identity.get("sourceUrl"), "sourceFetchMode": identity.get("sourceFetchMode"),
+        "_providerMetadata": provider_metadata,
+        "_roundStatuses": statuses,
+        "_rounds": (round1, round2, round1_order),
     }
-    result["_providerMetadata"] = {
-        "googleBooks": google_data, "openLibrary": open_data, "worldCat": worldcat_data,
-        "fahasa": fahasa_data, "tiki": tiki_data, "vinabook": vinabook_data, "webSearch": web_data,
-    }
-    result["_providerOutcomes"] = provider_outcomes
-    return result
+
+
+def _round_source_statuses(statuses: dict[str, dict]) -> dict:
+    """Per-source status for `sources[]` from the two-round outcomes."""
+    out = {}
+    for source in ISBN_SOURCE_ORDER:
+        outcome = statuses.get(source) or {"status": "SKIPPED", "durationMs": 0}
+        entry = {"enabled": outcome["status"] != "DISABLED", "status": outcome["status"],
+                 "durationMs": outcome.get("durationMs", 0)}
+        for key in ("round", "query", "attempts", "verification", "matchConfidence", "retrievedAt", "reason", "error"):
+            if outcome.get(key) not in (None, ""):
+                entry[key] = outcome[key]
+        if outcome.get("verification") == "TITLE_MATCH":
+            entry["matchedBy"] = "title"
+        if outcome.get("sourceUrl"):
+            entry["sourceUrl"] = outcome["sourceUrl"]
+        out[source] = entry
+    return out
 
 
 def _build_field_level_source_statuses(ledger: dict[str, dict]) -> dict:
@@ -2702,7 +2892,7 @@ def _build_field_level_source_statuses(ledger: dict[str, dict]) -> dict:
     statuses = {}
     for source in ISBN_SOURCE_ORDER:
         entry = ledger.get(source)
-        if not enabled[source]:
+        if not enabled.get(source, False):
             statuses[source] = {"enabled": False, "status": "DISABLED", "durationMs": 0}
         elif entry is None:
             statuses[source] = {"enabled": True, "status": "SKIPPED", "durationMs": 0}
@@ -2730,8 +2920,8 @@ def _build_source_statuses(result: dict, started_at: float, trace: dict | None =
     outcomes = result.get("_providerOutcomes") or {}
     return {
         source: {
-            "enabled": enabled[source],
-            "status": "DISABLED" if not enabled[source] else ("SUCCESS" if source_flags.get(source) else outcomes.get(source, "NOT_FOUND")),
+            "enabled": enabled.get(source, False),
+            "status": "DISABLED" if not enabled.get(source, False) else ("SUCCESS" if source_flags.get(source) else outcomes.get(source, "NOT_FOUND")),
             "durationMs": elapsed,
         }
         for source in ISBN_SOURCE_ORDER
@@ -2744,13 +2934,13 @@ def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
     isbn13, _isbn10, error = _normalize_and_validate_isbn(str(req.isbn or ""))
     if error or not isbn13:
         return None
-    mode = "fl1" if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL else "legacy"
+    mode = "fl1" if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL else "r2v1"  # two-round search, v1
     return f"{isbn13}:{bool(req.generateVietnameseSummary)}:{mode}"
 
 
 def _isbn_cache_ttl(result: dict) -> int | None:
     """None = the cache's default (long) TTL; a short TTL when the result is incomplete."""
-    provider_failed = any(s.get("status") in ("TIMEOUT", "ERROR") for s in result.get("sources") or [])
+    provider_failed = any(s.get("status") in ("TIMEOUT", "ERROR", "PAUSED") for s in result.get("sources") or [])
     if result.get("needsEnrichment") or provider_failed:
         return ISBN_INCOMPLETE_CACHE_TTL_SECONDS
     return None
@@ -2841,18 +3031,34 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     if cache_key:
         cached = isbn_lookup_cache.get(cache_key)
         if cached is not None:
+            isbn_progress.stage("cache", "done", hit=True, store="memory")
             return cached
+    stored, stored_fresh = await isbn_cache_store.get(cache_key) if cache_key else (None, False)
+    if stored is not None and stored_fresh:
+        isbn_lookup_cache.set(cache_key, stored, ttl_seconds=_isbn_cache_ttl(stored))
+        isbn_progress.stage("cache", "done", hit=True, store="persistent")
+        return stored
 
     started_at = time.perf_counter()
     result = await _lookup_book_by_isbn_legacy(req)
     provider_metadata = result.pop("_providerMetadata", {})
     trace = result.pop("_retrievalTrace", None)
-    intelligence = _build_isbn_intelligence(provider_metadata, _build_source_statuses(result, started_at, trace))
+    round_statuses = result.pop("_roundStatuses", None)
+    rounds = result.pop("_rounds", None)
+    source_statuses = (_round_source_statuses(round_statuses) if round_statuses is not None
+                       else _build_source_statuses(result, started_at, trace))
+    isbn_progress.stage("fusion", "started", sources=sum(1 for data in provider_metadata.values() if data))
+    intelligence = _build_isbn_intelligence(provider_metadata, source_statuses)
     result.pop("_providerOutcomes", None)
     for source in intelligence["sources"]:
         source_url = (provider_metadata.get(source["name"]) or {}).get("sourceUrl")
-        if source_url:
+        if source_url and not source.get("sourceUrl"):
             source["sourceUrl"] = source_url
+    if rounds is not None:
+        round1, round2, round1_order = rounds
+        result["verification"], result["fieldSources"] = isbn_rounds.build_verification(
+            round1, round2, round_statuses, intelligence["fieldEvidence"], round1_order,
+        )
     if result.get("found"):
         result.update(intelligence["metadata"])
         result["authors"] = result["authors"] or []
@@ -2861,9 +3067,20 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     _attach_coverage_fields(result, intelligence, trace)
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
     _log_isbn_lookup(result, trace)
+    coverage = result.get("metadataCoverage") or {}
+    isbn_progress.stage("fusion", "done", found=bool(result.get("found")),
+                        conflicts=len(result.get("conflicts") or []),
+                        foundFields=coverage.get("foundFields"), totalFields=coverage.get("totalFields"))
 
     if cache_key and result.get("found"):
-        isbn_lookup_cache.set(cache_key, result, ttl_seconds=_isbn_cache_ttl(result))
+        ttl = _isbn_cache_ttl(result)
+        isbn_lookup_cache.set(cache_key, result, ttl_seconds=ttl)
+        await isbn_cache_store.put(cache_key, result, ttl)
+    elif stored is not None:
+        # Re-lookup found nothing (sources down or blocking): keep the last verified result.
+        logger.info("ISBN %s: re-lookup found nothing, serving the stored result", req.isbn)
+        isbn_progress.stage("cache", "done", hit=True, store="persistent", fallback=True)
+        return {**stored, "servedFromStore": True}
     return result
 
 
@@ -2888,6 +3105,7 @@ async def metadata_extraction_service(input):
                           ENABLE_MARKETPLACE_LOOKUP, ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL, 'extract-v1'])
     cached = isbn_lookup_cache.get(key)
     if cached:
+        isbn_progress.stage("cache", "done", hit=True, store="memory")
         result = deepcopy(cached)
         result['intelligence']['cacheHit'] = True
         return result
@@ -2910,8 +3128,10 @@ async def metadata_extraction_service(input):
         provider = _get_text_llm_provider()
     except ValueError:
         provider = None
+    isbn_progress.stage("pipeline", "started", documents=len(docs))
     bundle = await run_pipeline(docs, target, provider, budget=max(.01, 60 - (time.monotonic() - began)))
     bundle['warnings'].extend(warnings)
+    isbn_progress.stage("pipeline", "done", warnings=len(bundle['warnings']))
     bundle['processingTimeMs'] = int((time.monotonic() - began) * 1000)
     result = legacy_projection(bundle)
     if result['found']:
@@ -3096,7 +3316,9 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         isbn=req.isbn,
         generateVietnameseSummary=False,
     ))
+    isbn_progress.stage("authority", "started")
     authority, authority_warning = await _normalize_with_catalog_authority(lookup)
+    isbn_progress.stage("authority", "done", ok=authority is not None)
     verified = req.verifiedMetadata if isinstance(req.verifiedMetadata, dict) else (authority or {}).get("normalized")
     ai_lookup = {**lookup, **({
         "title": verified.get("title", lookup.get("title")),
@@ -3108,7 +3330,9 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         "pageCount": verified.get("pageCount", lookup.get("pageCount")),
         "description": verified.get("description", lookup.get("description")),
     } if isinstance(verified, dict) else {})}
+    isbn_progress.stage("ai", "started")
     suggestions = await _build_post_isbn_ai_suggestions(ai_lookup, req.existingCategories or [])
+    isbn_progress.stage("ai", "done", provider=suggestions.get("provider") or "none")
     if authority_warning:
         suggestions["qualityWarnings"] = list(suggestions.get("qualityWarnings") or []) + [authority_warning]
     gap_warning = _residual_gap_warning(lookup)
@@ -3125,6 +3349,23 @@ async def enrich_book_after_isbn(req: EnrichBookAfterIsbnRequest):
         "qualityWarnings": (authority or {}).get("qualityWarnings", [authority_warning] if authority_warning else []),
         "explanation": {"authority": "Inventory Service deterministic authority normalization", "aiInput": "verified metadata only"},
     }
+
+
+# Same lookup as /enrich-book-after-isbn, streamed: `progress` events as each
+# stage and source starts/finishes, then one `result` event carrying exactly the
+# JSON the plain endpoint returns (or one sanitized `error`). The plain endpoint
+# is unchanged and remains the client's fallback.
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+@app.post("/enrich-book-after-isbn/stream")
+async def enrich_book_after_isbn_stream(req: EnrichBookAfterIsbnRequest, request: Request):
+    from catalog_access import catalog_access_error
+    denied = await catalog_access_error(request.headers.get("authorization"))
+    if denied:
+        raise HTTPException(*denied)
+    return StreamingResponse(isbn_progress.stream(lambda: enrich_book_after_isbn(req)),
+                             media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 # ────────────────────────────────────────────────────────────────────────────────

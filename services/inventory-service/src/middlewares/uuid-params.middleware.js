@@ -21,7 +21,7 @@ function rejectInvalidUuidParams(router) {
   for (const name of UUID_PARAMS) {
     router.param(name, (req, res, next, value) => {
       if (UUID_RE.test(String(value).trim())) return next();
-      return res.status(400).json({ message: `Invalid ${name}` });
+      return res.status(400).json({ message: `${name} không hợp lệ` });
     });
   }
   return router;

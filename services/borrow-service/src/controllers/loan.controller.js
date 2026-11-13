@@ -175,29 +175,29 @@ async function createDirectLoan(req, res) {
   const idempotencyKey = parseIdempotencyKey(req);
 
   if (!customer_id || !variant_id || !warehouse_id) {
-    return res.status(400).json({ message: 'customer_id, variant_id and warehouse_id are required' });
+    return res.status(400).json({ message: 'Cần có đủ customer_id, variant_id và warehouse_id' });
   }
 
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for direct loan creation' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi tạo phiếu mượn trực tiếp' });
   }
 
   if (![customer_id, variant_id, warehouse_id].every(isUuid)) {
-    return res.status(400).json({ message: 'customer_id, variant_id and warehouse_id must be valid UUID values' });
+    return res.status(400).json({ message: 'customer_id, variant_id và warehouse_id phải là UUID hợp lệ' });
   }
 
   if (pickup_location_id && !isUuid(pickup_location_id)) {
-    return res.status(400).json({ message: 'pickup_location_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'pickup_location_id phải là UUID hợp lệ (nếu có)' });
   }
 
   const normalizedQuantity = Number.parseInt(String(quantity || '1'), 10);
   if (!Number.isInteger(normalizedQuantity) || normalizedQuantity <= 0) {
-    return res.status(400).json({ message: 'quantity must be a positive integer' });
+    return res.status(400).json({ message: 'quantity phải là số nguyên dương' });
   }
 
   const normalizedSource = String(source_channel || 'COUNTER').trim().toUpperCase();
   if (!['WEB', 'MOBILE', 'COUNTER', 'ADMIN'].includes(normalizedSource)) {
-    return res.status(400).json({ message: 'Invalid source_channel' });
+    return res.status(400).json({ message: 'source_channel không hợp lệ' });
   }
 
   const reservationId = deterministicUuid(`direct-loan:reservation:${idempotencyKey}`);
@@ -211,7 +211,7 @@ async function createDirectLoan(req, res) {
 
     const customer = await prisma.customers.findUnique({ where: { id: customer_id } });
     if (!customer || customer.status !== 'ACTIVE') {
-      return res.status(409).json({ message: 'Customer is not eligible for direct loan' });
+      return res.status(409).json({ message: 'Bạn đọc không đủ điều kiện mượn trực tiếp' });
     }
 
     if (Number(customer.total_fine_balance) > 0) {
@@ -223,7 +223,7 @@ async function createDirectLoan(req, res) {
 
     const membershipInfo = await resolveActiveMembership(prisma, customer_id);
     if (!membershipInfo) {
-      return res.status(409).json({ message: 'Customer does not have active membership' });
+      return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
     const activeLoanCount = await prisma.loan_transactions.count({
@@ -235,7 +235,7 @@ async function createDirectLoan(req, res) {
 
     if (activeLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
-        message: 'Customer exceeded max active loans limit by membership plan',
+        message: 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên',
         detail: {
           max_active_loans: membershipInfo.limits.max_active_loans,
           active_loan_count: activeLoanCount,
@@ -263,14 +263,14 @@ async function createDirectLoan(req, res) {
 
       if (accountSnapshot.settings.auto_debit_borrow_fee !== true) {
         return res.status(409).json({
-          message: 'Auto debit for borrow fee is disabled',
+          message: 'Chưa bật tự động trừ phí mượn từ ví',
           detail: { borrow_fee_amount: borrowFeeAmount },
         });
       }
 
       if (projectedBalance < accountSnapshot.minWalletBalanceRequired) {
         return res.status(409).json({
-          message: 'Insufficient wallet balance for auto debit',
+          message: 'Số dư ví không đủ để tự động trừ phí',
           detail: {
             available_balance: accountSnapshot.availableBalance,
             required_amount: borrowFeeAmount,
@@ -546,11 +546,11 @@ async function reviewLoanRenewal(req, res) {
   const reason = String(req.body?.reason || '').trim() || null;
 
   if (!loanId || !isUuid(loanId)) {
-    return res.status(400).json({ message: 'Invalid loan id' });
+    return res.status(400).json({ message: 'Mã phiếu mượn không hợp lệ' });
   }
 
   if (!['APPROVE', 'REJECT'].includes(decision)) {
-    return res.status(400).json({ message: 'decision must be APPROVE or REJECT' });
+    return res.status(400).json({ message: 'decision phải là APPROVE hoặc REJECT' });
   }
 
   try {
@@ -560,7 +560,7 @@ async function reviewLoanRenewal(req, res) {
     });
 
     if (!loan) {
-      return res.status(404).json({ message: 'Loan not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
     const pendingRequest = await prisma.customer_notifications.findFirst({
@@ -573,16 +573,16 @@ async function reviewLoanRenewal(req, res) {
     });
 
     if (!pendingRequest) {
-      return res.status(409).json({ message: 'No pending renewal request found for this loan' });
+      return res.status(409).json({ message: 'Phiếu mượn này không có yêu cầu gia hạn đang chờ duyệt' });
     }
 
     if (decision === 'APPROVE' && !['BORROWED', 'OVERDUE'].includes(loan.status)) {
-      return res.status(409).json({ message: `Cannot approve renewal for loan status ${loan.status}` });
+      return res.status(409).json({ message: `Không thể duyệt gia hạn cho phiếu mượn ở trạng thái ${loan.status}` });
     }
 
     const membershipInfo = await resolveActiveMembership(prisma, loan.customer_id);
     if (!membershipInfo) {
-      return res.status(409).json({ message: 'Customer does not have active membership' });
+      return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
     const requestedDays = Number(req.body?.extension_days || pendingRequest.metadata?.requested_extension_days || 0);
@@ -592,7 +592,7 @@ async function reviewLoanRenewal(req, res) {
 
     const renewableItems = loan.loan_items.filter((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
     if (decision === 'APPROVE' && renewableItems.length === 0) {
-      return res.status(409).json({ message: 'No active loan items to renew' });
+      return res.status(409).json({ message: 'Không có sách đang mượn để gia hạn' });
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -607,7 +607,7 @@ async function reviewLoanRenewal(req, res) {
             return {
               code: 409,
               payload: {
-                message: 'Renewal limit exceeded for at least one loan item',
+                message: 'Có sách đã vượt số lần gia hạn cho phép',
                 detail: {
                   loan_item_id: item.id,
                   max_renewal_count: membershipInfo.limits.max_renewal_count,
@@ -725,7 +725,7 @@ async function reviewLoanRenewal(req, res) {
 async function getLoanById(req, res) {
   const id = parseId(req.params.id);
   if (!id || !isUuid(id)) {
-    return res.status(400).json({ message: 'Invalid loan id' });
+    return res.status(400).json({ message: 'Mã phiếu mượn không hợp lệ' });
   }
 
   try {
@@ -747,7 +747,7 @@ async function getLoanById(req, res) {
     });
 
     if (!loan) {
-      return res.status(404).json({ message: 'Loan not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
     return res.json({ data: loan });
@@ -767,26 +767,26 @@ async function previewLoanReturn(req, res) {
   const condition = markLost ? 'LOST' : String(req.query.item_condition_on_return || 'GOOD').trim().toUpperCase();
 
   if (!loanId || !isUuid(loanId)) {
-    return res.status(400).json({ message: 'Invalid loan id' });
+    return res.status(400).json({ message: 'Mã phiếu mượn không hợp lệ' });
   }
   if (loanItemId && !isUuid(loanItemId)) {
-    return res.status(400).json({ message: 'loan_item_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'loan_item_id phải là UUID hợp lệ (nếu có)' });
   }
   if (markLost && !loanItemId) {
-    return res.status(400).json({ message: 'mark_lost requires loan_item_id for single-item processing' });
+    return res.status(400).json({ message: 'mark_lost cần loan_item_id để xử lý từng cuốn' });
   }
 
   try {
     const loan = await prisma.loan_transactions.findUnique({ where: { id: loanId }, include: { loan_items: true } });
     if (!loan) {
-      return res.status(404).json({ message: 'Loan not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
     const targets = loanItemId
       ? loan.loan_items.filter((item) => item.id === loanItemId && (item.status === 'BORROWED' || item.status === 'OVERDUE'))
       : loan.loan_items.filter((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
     if (targets.length === 0) {
-      return res.status(409).json({ message: 'No active loan items to return' });
+      return res.status(409).json({ message: 'Không có sách đang mượn để trả' });
     }
 
     const membershipInfo = await resolveActiveMembership(prisma, loan.customer_id);
@@ -812,23 +812,23 @@ async function convertReservationToLoan(req, res) {
   const idempotencyKey = parseIdempotencyKey(req);
 
   if (!reservationId || !isUuid(reservationId)) {
-    return res.status(400).json({ message: 'Invalid reservation id' });
+    return res.status(400).json({ message: 'Mã đặt trước không hợp lệ' });
   }
 
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for conversion' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi chuyển thành phiếu mượn' });
   }
 
   try {
     const reservation = await prisma.loan_reservations.findUnique({ where: { id: reservationId } });
     if (!reservation) {
-      return res.status(404).json({ message: 'Reservation not found' });
+      return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
 
     if (reservation.status === 'CONVERTED_TO_LOAN') {
       const existingLoan = await prisma.loan_transactions.findFirst({ where: { source_reservation_id: reservationId } });
       if (!existingLoan) {
-        return res.status(409).json({ message: 'Reservation is already converted, but loan record was not found' });
+        return res.status(409).json({ message: 'Đặt trước đã được chuyển nhưng không tìm thấy phiếu mượn' });
       }
       return res.json({ data: existingLoan, idempotent: true });
     }
@@ -843,33 +843,33 @@ async function convertReservationToLoan(req, res) {
 
     if (reservation.status === 'READY_FOR_PICKUP') {
       if (!reservation.pickup_code) {
-        return res.status(409).json({ message: 'Pickup code has not been issued for this reservation' });
+        return res.status(409).json({ message: 'Đặt trước này chưa được cấp mã nhận sách' });
       }
 
       if (!req.pickupCodeVerified) {
-        return res.status(409).json({ message: 'Pickup code is required to convert a ready reservation to loan' });
+        return res.status(409).json({ message: 'Cần mã nhận sách để chuyển đặt trước đã sẵn sàng thành phiếu mượn' });
       }
 
       if (reservation.pickup_code_used_at) {
-        return res.status(409).json({ message: 'Pickup code has already been used' });
+        return res.status(409).json({ message: 'Mã nhận sách đã được sử dụng' });
       }
 
       if (normalizePickupCode(req.pickupCode) !== reservation.pickup_code) {
-        return res.status(409).json({ message: 'Pickup code does not match this reservation' });
+        return res.status(409).json({ message: 'Mã nhận sách không khớp với đặt trước này' });
       }
 
       if (reservation.pickup_code_expires_at && new Date(reservation.pickup_code_expires_at).getTime() <= Date.now()) {
-        return res.status(409).json({ message: 'Pickup code has expired' });
+        return res.status(409).json({ message: 'Mã nhận sách đã hết hạn' });
       }
     }
 
     if (new Date(reservation.expires_at).getTime() <= Date.now()) {
-      return res.status(409).json({ message: 'Reservation already expired and cannot be converted' });
+      return res.status(409).json({ message: 'Đặt trước đã hết hạn, không thể chuyển thành phiếu mượn' });
     }
 
     const customer = await prisma.customers.findUnique({ where: { id: reservation.customer_id } });
     if (!customer || customer.status !== 'ACTIVE') {
-      return res.status(409).json({ message: 'Customer is not eligible for loan conversion' });
+      return res.status(409).json({ message: 'Bạn đọc không đủ điều kiện chuyển đặt trước thành phiếu mượn' });
     }
 
     if (Number(customer.total_fine_balance) > 0) {
@@ -881,7 +881,7 @@ async function convertReservationToLoan(req, res) {
 
     const membershipInfo = await resolveActiveMembership(prisma, reservation.customer_id);
     if (!membershipInfo) {
-      return res.status(409).json({ message: 'Customer does not have active membership' });
+      return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
     const activeLoanCount = await prisma.loan_transactions.count({
@@ -893,7 +893,7 @@ async function convertReservationToLoan(req, res) {
 
     if (activeLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
-        message: 'Customer exceeded max active loans limit by membership plan',
+        message: 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên',
         detail: {
           max_active_loans: membershipInfo.limits.max_active_loans,
           active_loan_count: activeLoanCount,
@@ -911,7 +911,7 @@ async function convertReservationToLoan(req, res) {
 
       if (accountSnapshot.settings.auto_debit_borrow_fee !== true) {
         return res.status(409).json({
-          message: 'Auto debit for borrow fee is disabled',
+          message: 'Chưa bật tự động trừ phí mượn từ ví',
           detail: {
             borrow_fee_amount: borrowFeeAmount,
           },
@@ -920,7 +920,7 @@ async function convertReservationToLoan(req, res) {
 
       if (projectedBalance < accountSnapshot.minWalletBalanceRequired) {
         return res.status(409).json({
-          message: 'Insufficient wallet balance for auto debit',
+          message: 'Số dư ví không đủ để tự động trừ phí',
           detail: {
             available_balance: accountSnapshot.availableBalance,
             required_amount: borrowFeeAmount,
@@ -1081,7 +1081,7 @@ async function convertReservationToLoan(req, res) {
       if (error instanceof AccountError) {
         if (error.code === 'INSUFFICIENT_FUNDS') {
           return res.status(409).json({
-            message: 'Insufficient wallet balance for auto debit',
+            message: 'Số dư ví không đủ để tự động trừ phí',
             detail: error.detail,
           });
         }
@@ -1126,7 +1126,7 @@ async function convertReservationPickupCodeToLoan(req, res) {
   const pickupCode = parsePickupCodeFromBody(req.body || {});
 
   if (!pickupCode) {
-    return res.status(400).json({ message: 'pickup_code is required' });
+    return res.status(400).json({ message: 'Thiếu pickup_code' });
   }
 
   try {
@@ -1136,7 +1136,7 @@ async function convertReservationPickupCodeToLoan(req, res) {
     });
 
     if (!reservation) {
-      return res.status(404).json({ message: 'Pickup code not found' });
+      return res.status(404).json({ message: 'Không tìm thấy mã nhận sách' });
     }
 
     req.params.id = reservation.id;
@@ -1170,23 +1170,23 @@ async function returnLoan(req, res) {
   const settlementReason = String(settlement_reason || notes || '').trim();
 
   if (!loanId || !isUuid(loanId)) {
-    return res.status(400).json({ message: 'Invalid loan id' });
+    return res.status(400).json({ message: 'Mã phiếu mượn không hợp lệ' });
   }
 
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for return' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi trả sách' });
   }
 
   if (loan_item_id && !isUuid(loan_item_id)) {
-    return res.status(400).json({ message: 'loan_item_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'loan_item_id phải là UUID hợp lệ (nếu có)' });
   }
 
   if (returned_to_location_id && !isUuid(returned_to_location_id)) {
-    return res.status(400).json({ message: 'returned_to_location_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'returned_to_location_id phải là UUID hợp lệ (nếu có)' });
   }
 
   if (markLost && !loan_item_id) {
-    return res.status(400).json({ message: 'mark_lost requires loan_item_id for single-item processing' });
+    return res.status(400).json({ message: 'mark_lost cần loan_item_id để xử lý từng cuốn' });
   }
 
   // Populated only once the returnBorrowedStock loop below has actually
@@ -1202,11 +1202,11 @@ async function returnLoan(req, res) {
     });
 
     if (!loan) {
-      return res.status(404).json({ message: 'Loan not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
     if (!ACTIVE_LOAN_STATUSES.includes(loan.status)) {
-      return res.status(409).json({ message: `Loan cannot be returned from status ${loan.status}` });
+      return res.status(409).json({ message: `Không thể trả sách khi phiếu mượn ở trạng thái ${loan.status}` });
     }
 
     const targets = loan_item_id
@@ -1214,7 +1214,7 @@ async function returnLoan(req, res) {
       : loan.loan_items.filter((item) => item.status === 'BORROWED' || item.status === 'OVERDUE');
 
     if (targets.length === 0) {
-      return res.status(409).json({ message: 'No active loan items to return' });
+      return res.status(409).json({ message: 'Không có sách đang mượn để trả' });
     }
 
     // A deposit is only used to pay for damage or loss on an explicit, explained
@@ -1225,7 +1225,7 @@ async function returnLoan(req, res) {
       });
       if (heldDepositCount > 0) {
         return res.status(400).json({
-          message: 'settlement_reason is required when a deposit is settled for a damaged or lost book',
+          message: 'Cần settlement_reason khi dùng tiền cọc để xử lý sách hỏng hoặc mất',
           code: 'SETTLEMENT_REASON_REQUIRED',
         });
       }

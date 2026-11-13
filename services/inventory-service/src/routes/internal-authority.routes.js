@@ -5,7 +5,7 @@ const { readAuthorities } = require('../controllers/metadata-reconciliation.cont
 router.post('/normalize', async (req, res) => {
   const expectedKey = String(process.env.INTERNAL_SERVICE_KEY || '').trim();
   const providedKey = String(req.headers['x-internal-service-key'] || '').trim();
-  if (!providedKey || providedKey !== expectedKey) return res.status(403).json({ message: 'Forbidden' });
+  if (!providedKey || providedKey !== expectedKey) return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   try {
     const result = reconcileMetadata(req.body?.metadata || {}, await readAuthorities());
     return res.json(result);

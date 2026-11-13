@@ -196,7 +196,7 @@ io.on("connection", async (socket) => {
 function validateInternalKey(req, res) {
   const key = req.headers["x-internal-service-key"];
   if (key !== INTERNAL_SERVICE_KEY) {
-    res.status(403).json({ message: "Forbidden" });
+    res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     return false;
   }
   return true;
@@ -223,7 +223,7 @@ app.post("/internal/push-event", express.json({ limit: "64kb" }), (req, res) => 
 
   const rawSize = Buffer.byteLength(JSON.stringify(req.body));
   if (rawSize > MAX_PAYLOAD_BYTES) {
-    return res.status(413).json({ message: "Payload too large" });
+    return res.status(413).json({ message: "Dữ liệu gửi lên quá lớn" });
   }
 
   const { room, event, data } = req.body;
@@ -288,7 +288,7 @@ app.use((req, res, next) => {
   const contentLength = Number(req.headers["content-length"] || 0);
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
     return res.status(413).json({
-      message: "Payload too large",
+      message: "Dữ liệu gửi lên quá lớn",
       code: "PAYLOAD_TOO_LARGE",
       request_id: req.requestId || null,
     });
@@ -371,7 +371,7 @@ function requireAdminToken(req, res, next) {
   const allowed = payload.is_superuser === true
     || roles.includes("ADMIN")
     || ADMIN_PERMISSIONS.some((permission) => permissions.includes(permission));
-  if (!allowed) return res.status(403).json({ message: "Forbidden", code: "FORBIDDEN" });
+  if (!allowed) return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này", code: "FORBIDDEN" });
   return next();
 }
 
@@ -415,11 +415,11 @@ const DOT_SEGMENT = /(?:^|\/|%2f)(?:\.|%2e){2}(?:\/|%2f|$)/i;
 
 function publicReadOnly(req, res, next) {
   if (DOT_SEGMENT.test(req.originalUrl.split("?")[0])) {
-    return res.status(400).json({ message: "Bad request", code: "BAD_PATH", request_id: req.requestId || null });
+    return res.status(400).json({ message: "Yêu cầu không hợp lệ", code: "BAD_PATH", request_id: req.requestId || null });
   }
   if (PUBLIC_READ_METHODS.has(req.method)) return next();
   return res.status(405).json({
-    message: "Method not allowed",
+    message: "Phương thức không được hỗ trợ",
     code: "METHOD_NOT_ALLOWED",
     request_id: req.requestId || null,
   });
@@ -483,7 +483,7 @@ app.use(
 );
 
 app.use("/public", (req, res) => res.status(404).json({
-  message: "Not found",
+  message: "Không tìm thấy",
   code: "NOT_FOUND",
   request_id: req.requestId || null,
 }));
@@ -575,7 +575,7 @@ app.use(
 // ai-service's /internal/* endpoints (catalog sync trigger/status) are
 // service-to-service only. They check the internal key themselves; this keeps
 // them off the public edge entirely instead of relying on that check alone.
-app.use("/ai/internal", (_req, res) => res.status(404).json({ message: "Not found" }));
+app.use("/ai/internal", (_req, res) => res.status(404).json({ message: "Không tìm thấy" }));
 // Prometheus scrapes ai-service:8000/metrics on the internal network; the public
 // edge must not expose its per-feature latency, token and cost counters, nor
 // FastAPI's generated docs / OpenAPI schema (the full internal API surface).

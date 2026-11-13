@@ -56,7 +56,7 @@ export default function CustomerProfileEditScreen() {
         await customerProfileApi.updateMyProfile(check.update);
         router.back();
       } catch (err) {
-        const message = err instanceof ApiError ? (err.message === 'Phone already exists' ? 'Số điện thoại này đã được dùng cho tài khoản khác' : err.message) : 'Không lưu được thông tin';
+        const message = err instanceof ApiError ? err.message : 'Không lưu được thông tin';
         setFieldError({ field: null, message });
       } finally {
         setSaving(false);

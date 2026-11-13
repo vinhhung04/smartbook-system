@@ -76,7 +76,7 @@ export function setRefreshHandler(handler: RefreshHandler | null) {
 // Backend auth middlewares (auth/inventory/borrow-service) return 401 only when the
 // Authorization header itself is missing/malformed, but 403 for an expired or invalid
 // token — the same status code legitimate permission-denied errors also use (e.g.
-// "Forbidden", "Task is assigned to another picker"). Matching on these exact messages
+// "Bạn không có quyền thực hiện thao tác này"). Matching on these exact English messages
 // is how we tell "your session is dead, log in again" apart from "you can't do that".
 const AUTH_FAILURE_MESSAGES = new Set([
   'Token expired',

@@ -237,7 +237,7 @@ async function getBookById(req, res) {
   const bookId = parseId(req.params.id);
 
   if (!bookId) {
-    return res.status(400).json({ message: 'Invalid book id' });
+    return res.status(400).json({ message: 'Mã sách không hợp lệ' });
   }
 
   try {
@@ -297,7 +297,7 @@ async function getBookById(req, res) {
     });
 
     if (!book) {
-      return res.status(404).json({ message: 'Book not found' });
+      return res.status(404).json({ message: 'Không tìm thấy sách' });
     }
 
     return res.json(mapBookSummary(book));
@@ -357,7 +357,7 @@ async function findBookByBarcode(req, res) {
   const barcode = normalizeBarcode(req.params.barcode || req.query.barcode);
 
   if (!barcode) {
-    return res.status(400).json({ message: 'barcode is required' });
+    return res.status(400).json({ message: 'Thiếu mã vạch (barcode)' });
   }
 
   try {
@@ -382,7 +382,7 @@ async function findBookByBarcode(req, res) {
     });
 
     if (!variant) {
-      return res.status(404).json({ message: 'Book variant not found by barcode' });
+      return res.status(404).json({ message: 'Không tìm thấy ấn bản sách theo barcode' });
     }
 
     return res.json({
@@ -404,11 +404,11 @@ async function findBookByIsbn13(req, res) {
   const isbn13 = normalizeIsbn13(req.params.isbn13 || req.query.isbn13 || req.query.barcode);
 
   if (!isbn13) {
-    return res.status(400).json({ message: 'isbn13 is required' });
+    return res.status(400).json({ message: 'Thiếu isbn13' });
   }
 
   if (!/^\d{13}$/.test(isbn13)) {
-    return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
+    return res.status(400).json({ message: 'isbn13 phải gồm đúng 13 chữ số' });
   }
 
   try {
@@ -426,7 +426,7 @@ async function findBookByIsbn13(req, res) {
     });
 
     if (!variant) {
-      return res.status(404).json({ message: 'Book variant not found by isbn13' });
+      return res.status(404).json({ message: 'Không tìm thấy ấn bản sách theo isbn13' });
     }
 
     return res.json({
@@ -458,16 +458,16 @@ async function createIncompleteBook(req, res) {
 
   if (!isbn13 || !title || !Number.isFinite(rawPrice) || rawPrice < 0) {
     return res.status(400).json({
-      message: 'isbn13, title and price >= 0 are required',
+      message: 'Cần có đủ isbn13, title và price >= 0',
     });
   }
 
   if (!/^\d{13}$/.test(isbn13)) {
-    return res.status(400).json({ message: 'isbn13 must contain exactly 13 digits' });
+    return res.status(400).json({ message: 'isbn13 phải gồm đúng 13 chữ số' });
   }
 
   if (publishYear === undefined) {
-    return res.status(400).json({ message: 'publish_year must be an integer from 1000 to 2100' });
+    return res.status(400).json({ message: 'publish_year phải là số nguyên từ 1000 đến 2100' });
   }
 
   try {
@@ -678,7 +678,7 @@ async function updateBookDetails(req, res) {
   const bookId = parseId(req.params.id);
 
   if (!bookId) {
-    return res.status(400).json({ message: 'Invalid book id' });
+    return res.status(400).json({ message: 'Mã sách không hợp lệ' });
   }
 
   const {
@@ -705,7 +705,7 @@ async function updateBookDetails(req, res) {
   const normalizedPublishYear = publish_year !== undefined ? normalizePublishYear(publish_year) : undefined;
 
   if (normalizedPublishYear === undefined && publish_year !== undefined) {
-    return res.status(400).json({ message: 'publish_year must be an integer from 1000 to 2100' });
+    return res.status(400).json({ message: 'publish_year phải là số nguyên từ 1000 đến 2100' });
   }
 
   try {
@@ -833,11 +833,11 @@ async function updateBookDetails(req, res) {
     });
 
     if (!updated) {
-      return res.status(404).json({ message: 'Book not found' });
+      return res.status(404).json({ message: 'Không tìm thấy sách' });
     }
 
     if (updated.forbidden) {
-      return res.status(403).json({ message: 'Only incomplete books can be completed by library staff' });
+      return res.status(403).json({ message: 'Nhân viên thư viện chỉ bổ sung được sách đang thiếu thông tin' });
     }
 
     return res.json({
@@ -854,7 +854,7 @@ async function deleteBook(req, res) {
   const bookId = parseId(req.params.id);
 
   if (!bookId) {
-    return res.status(400).json({ message: 'Invalid book id' });
+    return res.status(400).json({ message: 'Mã sách không hợp lệ' });
   }
 
   try {
@@ -863,7 +863,7 @@ async function deleteBook(req, res) {
     });
 
     if (!existingBook) {
-      return res.status(404).json({ message: 'Book not found' });
+      return res.status(404).json({ message: 'Không tìm thấy sách' });
     }
 
     await prisma.$transaction([

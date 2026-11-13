@@ -102,7 +102,7 @@ app.use('/borrow/notifications', notificationAdminRoutes);
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {
     return res.status(413).json({
-      message: `Payload too large (current limit: ${JSON_BODY_LIMIT})`,
+      message: `Dữ liệu gửi lên quá lớn (giới hạn hiện tại: ${JSON_BODY_LIMIT})`,
     });
   }
 

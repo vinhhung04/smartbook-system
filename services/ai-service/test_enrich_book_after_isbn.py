@@ -96,7 +96,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         })
 
         self.assertEqual(result["metadata"]["title"], "Available from Open Library")
-        self.assertEqual(result["sources"][0]["status"], "TIMEOUT")
+        self.assertEqual({s["name"]: s for s in result["sources"]}["googleBooks"]["status"], "TIMEOUT")
         self.assertGreater(result["fieldConfidence"]["title"], 0)
 
     async def test_invalid_isbn_returns_intelligence_fields_without_lookup(self):
@@ -106,7 +106,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["found"])
         self.assertEqual(result["metadataQualityScore"], 0.0)
-        self.assertEqual(len(result["sources"]), 7)
+        self.assertEqual(len(result["sources"]), 23)
         self.assertIn("processingTimeMs", result)
 
     async def test_lookup_keeps_metadata_when_one_provider_times_out(self):
@@ -127,7 +127,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="9780132350884"))
 
         self.assertEqual(result["title"], "Open Library result")
-        self.assertEqual(result["sources"][1]["status"], "SUCCESS")
+        self.assertEqual({s["name"]: s for s in result["sources"]}["openLibrary"]["status"], "SUCCESS")
         self.assertGreater(result["fieldConfidence"]["title"], 0)
 
     async def test_marketplace_provider_timeout_does_not_block_other_sources(self):
@@ -149,7 +149,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
             "vinabook": "TIMEOUT",
         })
 
-    async def test_lookup_uses_web_fallback_when_all_catalog_sources_are_empty(self):
+    async def test_lookup_without_a_code_match_returns_no_metadata(self):
         from main import lookup_book_by_isbn, IsbnLookupRequest
 
         fallback = {
@@ -165,17 +165,26 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
             "thumbnail": None,
             "sourceUrl": "https://example.test/books",
         }
-        marketplace = (None, 0.0, None, 0.0, None, 0.0, False, {})
+        from isbn_rounds import BookProvider
+
+        async def nothing(_client, _code):
+            return None
+        web = AsyncMock(return_value=(fallback, 0.55, None))
+        providers = [BookProvider("googleBooks", by_code=nothing, round1=True, retries=0),
+                     BookProvider("webSearch", by_code=AsyncMock(), retries=0)]
         with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), \
-             patch("main._run_standard_lookups", new=AsyncMock(return_value=[(None, 0.0), (None, 0.0)])), \
-             patch("main._fetch_all_marketplace", new=AsyncMock(return_value=marketplace)), \
-             patch("main._fetch_web_search_fallback", new=AsyncMock(return_value=(fallback, 0.55, None))):
+             patch("main._book_providers", return_value=providers), patch("main.ISBN_ROUND1_ORDER", "googleBooks"), \
+             patch("main._fetch_web_search_fallback", new=web):
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="8935095630639"))
 
-        self.assertTrue(result["found"])
-        self.assertEqual(result["title"], "Nửa kia vượt trội")
-        self.assertTrue(result["source"]["webSearch"])
-        self.assertEqual(result["fieldEvidence"]["title"]["selectedSource"], "webSearch")
+        # Round 1 found no record with this code: no metadata, and the web snippet
+        # (Round 2 only) is never used to guess the book.
+        self.assertFalse(result["found"])
+        self.assertIsNone(result["title"])
+        self.assertEqual(result["message"], "Không tìm thấy thông tin sách theo mã đã nhập.")
+        self.assertFalse(result["verification"]["round2Ran"])
+        providers[1].by_code.assert_not_awaited()
+        web.assert_not_awaited()
     async def test_returns_lookup_and_ai_suggestions_for_found_isbn(self):
         lookup = {
             "success": True,

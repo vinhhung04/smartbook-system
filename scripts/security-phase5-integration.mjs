@@ -87,11 +87,17 @@ await check('1. a forged token (superuser claim, wrong secret) gets nothing from
 
 // ── 2. stock audits ─────────────────────────────────────────────────────────
 const allAudits = rows((await call(tokens.hung, '/api/stock-audits')).body);
-const d3Audit = allAudits.find((a) => a.warehouse_id === D3);
+let d3Audit = allAudits.find((a) => a.warehouse_id === D3);
 const hcmDraftAudit = allAudits.find((a) => a.warehouse_id === HCM && ['DRAFT', 'IN_PROGRESS'].includes(a.status));
+if (!d3Audit) {
+  // The demo seed only has HCM audits: create one in BR-HCM-02 and cancel it at the end.
+  const created = await call(tokens.hung, '/api/stock-audits', { method: 'POST', body: JSON.stringify({ warehouse_id: D3, note: `${TAG} scope check` }) });
+  d3Audit = created.body?.data || null;
+  if (d3Audit?.id) cleanup.push(() => call(tokens.hung, `/api/stock-audits/${d3Audit.id}/cancel`, { method: 'PATCH' }));
+}
 
 await check('2. stock audits: manager01 lists none of BR-HCM-02, cannot open / approve / cancel one', async () => {
-  assert.ok(d3Audit, 'fixture: an audit in BR-HCM-02 (demo seed)');
+  assert.ok(d3Audit, 'fixture: an audit in BR-HCM-02 (demo seed or created by hung)');
   const list = rows((await call(tokens.manager01, '/api/stock-audits')).body);
   assert.equal(notD3(list).length, 0, 'BR-HCM-02 audits listed');
   const one = await call(tokens.manager01, `/api/stock-audits/${d3Audit.id}`);
@@ -112,10 +118,19 @@ await check('3. stock audits: a READ-scope manager (curator01) can open an HCM a
 });
 
 // ── 3. staff tasks ──────────────────────────────────────────────────────────
+let d3Task = rows((await call(tokens.hung, '/api/staff-tasks?limit=200')).body).find((t) => t.warehouse_id === D3);
+if (!d3Task) {
+  // Same as the audit: none in the demo seed, so hung creates one and cancels it at the end.
+  const created = await call(tokens.hung, '/api/staff-tasks', {
+    method: 'POST',
+    body: JSON.stringify({ title: `${TAG} scope check`, assignee_user_id: me.hung, warehouse_id: D3, task_type: 'OTHER', priority: 'LOW' }),
+  });
+  d3Task = created.body?.data || null;
+  if (d3Task?.id) cleanup.push(() => call(tokens.hung, `/api/staff-tasks/${d3Task.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'CANCELLED' }) }));
+}
+
 await check('4. staff tasks: manager01 lists none of BR-HCM-02 and cannot change one', async () => {
-  const all = rows((await call(tokens.hung, '/api/staff-tasks?limit=200')).body);
-  const d3Task = all.find((t) => t.warehouse_id === D3);
-  assert.ok(d3Task, 'fixture: a task in BR-HCM-02 (demo seed)');
+  assert.ok(d3Task, 'fixture: a task in BR-HCM-02 (demo seed or created by hung)');
   const list = rows((await call(tokens.manager01, '/api/staff-tasks?limit=200')).body);
   assert.equal(notD3(list).length, 0, 'BR-HCM-02 tasks listed');
   const r = await call(tokens.manager01, `/api/staff-tasks/${d3Task.id}`, { method: 'PATCH', body: JSON.stringify({}) });

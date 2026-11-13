@@ -91,7 +91,7 @@ describe('buildReservationPayload', () => {
 
 describe('describeReservationError', () => {
   it('turns a 409 stock change into a Vietnamese message and asks for a refresh', () => {
-    for (const message of ['Insufficient available stock', 'Insufficient available stock to reserve', 'Selected warehouse is not a valid pickup location']) {
+    for (const message of ['Không đủ tồn kho khả dụng', 'Không đủ tồn kho khả dụng để đặt trước', 'Chi nhánh đã chọn không phải điểm nhận sách hợp lệ']) {
       const result = describeReservationError(409, message);
       expect(result.refresh).toBe(true);
       expect(result.message).toMatch(/vui lòng chọn lại/);
@@ -99,7 +99,7 @@ describe('describeReservationError', () => {
   });
 
   it('translates membership limits and keeps messages the backend already wrote in Vietnamese', () => {
-    expect(describeReservationError(409, 'Customer exceeded max active loans limit by membership plan')).toEqual({
+    expect(describeReservationError(409, 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên')).toEqual({
       message: 'Bạn đã đạt số sách tối đa theo gói thẻ (tính cả sách đang mượn và đang đặt trước).',
       refresh: false,
     });

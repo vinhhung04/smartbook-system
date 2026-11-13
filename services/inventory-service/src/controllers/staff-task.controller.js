@@ -43,7 +43,7 @@ async function requireTaskManageAccess(req, res, task, userId) {
   if (req.user?.is_superuser) return true;
   if (!task.warehouse_id) {
     if (task.assigned_by_user_id === userId || task.assignee_user_id === userId) return true;
-    res.status(403).json({ message: 'You do not have access to this task', code: 'WAREHOUSE_ACCESS_DENIED' });
+    res.status(403).json({ message: 'Bạn không có quyền truy cập công việc này', code: 'WAREHOUSE_ACCESS_DENIED' });
     return false;
   }
   return requireWarehouseWriteAccess(req, res, task.warehouse_id);
@@ -172,11 +172,11 @@ async function createStaffTask(req, res) {
   } = req.body;
 
   if (!title || !String(title).trim()) {
-    return res.status(400).json({ message: 'title is required' });
+    return res.status(400).json({ message: 'Thiếu tiêu đề (title)' });
   }
 
   if (!assignee_user_id) {
-    return res.status(400).json({ message: 'assignee_user_id is required' });
+    return res.status(400).json({ message: 'Thiếu assignee_user_id' });
   }
 
   // a task belongs to one warehouse: the assignee and any linked record are checked against it
@@ -186,35 +186,35 @@ async function createStaffTask(req, res) {
 
   const normalizedType = task_type ? String(task_type).toUpperCase() : 'GENERAL';
   if (!VALID_TASK_TYPES.includes(normalizedType)) {
-    return res.status(400).json({ message: `task_type must be one of: ${VALID_TASK_TYPES.join(', ')}` });
+    return res.status(400).json({ message: `task_type phải là một trong: ${VALID_TASK_TYPES.join(', ')}` });
   }
 
   const normalizedPriority = priority ? String(priority).toUpperCase() : 'MEDIUM';
   if (!VALID_PRIORITIES.includes(normalizedPriority)) {
-    return res.status(400).json({ message: `priority must be one of: ${VALID_PRIORITIES.join(', ')}` });
+    return res.status(400).json({ message: `priority phải là một trong: ${VALID_PRIORITIES.join(', ')}` });
   }
 
   let normalizedEntityType = null;
   if (related_entity_type) {
     normalizedEntityType = String(related_entity_type).toUpperCase();
     if (!VALID_ENTITY_TYPES.includes(normalizedEntityType)) {
-      return res.status(400).json({ message: `related_entity_type must be one of: ${VALID_ENTITY_TYPES.join(', ')}` });
+      return res.status(400).json({ message: `related_entity_type phải là một trong: ${VALID_ENTITY_TYPES.join(', ')}` });
     }
   }
 
   try {
     const warehouse = await prisma.warehouses.findUnique({ where: { id: warehouse_id }, select: { id: true, is_active: true } });
     if (!warehouse || !warehouse.is_active) {
-      return res.status(400).json({ message: 'warehouse_id is invalid' });
+      return res.status(400).json({ message: 'warehouse_id không hợp lệ' });
     }
     // the body warehouse_id was write-checked by enforceRequestedWarehouseScope;
     // the person doing the task must be active warehouse staff with WRITE there
     if (!(await requireAssignableUser(res, String(assignee_user_id).trim(), warehouse_id))) return undefined;
     if (normalizedEntityType && related_entity_id) {
       const entity = await ENTITY_WAREHOUSE[normalizedEntityType](String(related_entity_id));
-      if (!entity) return res.status(400).json({ message: 'related_entity_id is invalid' });
+      if (!entity) return res.status(400).json({ message: 'related_entity_id không hợp lệ' });
       if (entity.warehouse_id && !(await canReadWarehouse(req.user, entity.warehouse_id))) {
-        return res.status(403).json({ message: 'You do not have read access to this warehouse', code: 'WAREHOUSE_ACCESS_DENIED' });
+        return res.status(403).json({ message: 'Bạn không có quyền xem kho này', code: 'WAREHOUSE_ACCESS_DENIED' });
       }
       if (entity.warehouse_id && entity.warehouse_id !== warehouse_id) {
         return res.status(400).json({ message: 'Đối tượng liên kết thuộc kho khác với kho của task', code: 'ENTITY_WAREHOUSE_MISMATCH' });
@@ -279,7 +279,7 @@ async function updateStaffTask(req, res) {
   try {
     const task = await prisma.staff_tasks.findUnique({ where: { id } });
     if (!task) {
-      return res.status(404).json({ message: 'Staff task not found' });
+      return res.status(404).json({ message: 'Không tìm thấy công việc' });
     }
 
     if (!canManage && task.assignee_user_id !== userId) {
@@ -296,21 +296,21 @@ async function updateStaffTask(req, res) {
     if (canManage) {
       const { title, description, task_type, priority, assignee_user_id, warehouse_id, due_date } = req.body;
       if (title !== undefined) {
-        if (!String(title).trim()) return res.status(400).json({ message: 'title is required' });
+        if (!String(title).trim()) return res.status(400).json({ message: 'Thiếu tiêu đề (title)' });
         updateData.title = String(title).trim();
       }
       if (description !== undefined) updateData.description = description ? String(description).trim() : null;
       if (task_type !== undefined) {
         const t = String(task_type).toUpperCase();
         if (!VALID_TASK_TYPES.includes(t)) {
-          return res.status(400).json({ message: `task_type must be one of: ${VALID_TASK_TYPES.join(', ')}` });
+          return res.status(400).json({ message: `task_type phải là một trong: ${VALID_TASK_TYPES.join(', ')}` });
         }
         updateData.task_type = t;
       }
       if (priority !== undefined) {
         const p = String(priority).toUpperCase();
         if (!VALID_PRIORITIES.includes(p)) {
-          return res.status(400).json({ message: `priority must be one of: ${VALID_PRIORITIES.join(', ')}` });
+          return res.status(400).json({ message: `priority phải là một trong: ${VALID_PRIORITIES.join(', ')}` });
         }
         updateData.priority = p;
       }
@@ -323,7 +323,7 @@ async function updateStaffTask(req, res) {
       const nextAssignee = assignee_user_id !== undefined ? String(assignee_user_id || '').trim() : task.assignee_user_id;
       const nextWarehouse = warehouse_id !== undefined ? (warehouse_id || null) : task.warehouse_id;
       if (assignee_user_id !== undefined && !nextAssignee) {
-        return res.status(400).json({ message: 'assignee_user_id is required' });
+        return res.status(400).json({ message: 'Thiếu assignee_user_id' });
       }
       if (warehouse_id !== undefined && !nextWarehouse && task.warehouse_id) {
         return res.status(400).json({ message: 'Task phải thuộc một kho', code: 'WAREHOUSE_REQUIRED' });
@@ -334,7 +334,7 @@ async function updateStaffTask(req, res) {
         if (!OPEN_STATUSES.includes(task.status)) return closedTaskResponse(res);
         if (warehouseChanged) {
           const warehouse = await prisma.warehouses.findUnique({ where: { id: nextWarehouse }, select: { is_active: true } });
-          if (!warehouse || !warehouse.is_active) return res.status(400).json({ message: 'warehouse_id is invalid' });
+          if (!warehouse || !warehouse.is_active) return res.status(400).json({ message: 'warehouse_id không hợp lệ' });
         }
         if (!(await requireAssignableUser(res, nextAssignee, nextWarehouse))) return undefined;
         updateData.assignee_user_id = nextAssignee;
@@ -348,7 +348,7 @@ async function updateStaffTask(req, res) {
     if (req.body.status !== undefined) {
       const s = String(req.body.status).toUpperCase();
       if (!VALID_STATUSES.includes(s)) {
-        return res.status(400).json({ message: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+        return res.status(400).json({ message: `status phải là một trong: ${VALID_STATUSES.join(', ')}` });
       }
       if (!canManage) {
         if (!['IN_PROGRESS', 'DONE'].includes(s)) {
@@ -402,7 +402,7 @@ async function updateStaffTask(req, res) {
     return res.json({ data: updated });
   } catch (error) {
     if (error?.code === 'P2025') {
-      return res.status(404).json({ message: 'Staff task not found' });
+      return res.status(404).json({ message: 'Không tìm thấy công việc' });
     }
     if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
@@ -421,18 +421,18 @@ async function updateStaffTaskStatus(req, res) {
   const canManage = isManagerOrAdmin(req.user);
 
   if (!status) {
-    return res.status(400).json({ message: 'status is required' });
+    return res.status(400).json({ message: 'Thiếu status' });
   }
 
   const normalizedStatus = String(status).toUpperCase();
   if (!VALID_STATUSES.includes(normalizedStatus)) {
-    return res.status(400).json({ message: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    return res.status(400).json({ message: `status phải là một trong: ${VALID_STATUSES.join(', ')}` });
   }
 
   try {
     const task = await prisma.staff_tasks.findUnique({ where: { id } });
     if (!task) {
-      return res.status(404).json({ message: 'Staff task not found' });
+      return res.status(404).json({ message: 'Không tìm thấy công việc' });
     }
 
     const isAssignee = task.assignee_user_id === userId;
@@ -472,7 +472,7 @@ async function updateStaffTaskStatus(req, res) {
     return res.json({ data: updated });
   } catch (error) {
     if (error?.code === 'P2025') {
-      return res.status(404).json({ message: 'Staff task not found' });
+      return res.status(404).json({ message: 'Không tìm thấy công việc' });
     }
     if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
@@ -512,7 +512,7 @@ async function flagAssigneesWhoCannotWork(tasks) {
 async function getOpenTaskSummary(req, res) {
   const userId = req.user?.id || req.user?.sub;
   const assigneeId = String(req.query.assignee_user_id || '').trim();
-  if (!assigneeId) return res.status(400).json({ message: 'assignee_user_id is required' });
+  if (!assigneeId) return res.status(400).json({ message: 'Thiếu assignee_user_id' });
   try {
     const where = {
       assignee_user_id: assigneeId,
@@ -682,7 +682,7 @@ async function enrichTasksWithEntityInfo(tasks) {
 async function getEntityOptions(req, res) {
   const { type, warehouse_id } = req.query;
   if (!type || !VALID_ENTITY_TYPES.includes(String(type).toUpperCase())) {
-    return res.status(400).json({ message: `type must be one of: ${VALID_ENTITY_TYPES.join(', ')}` });
+    return res.status(400).json({ message: `type phải là một trong: ${VALID_ENTITY_TYPES.join(', ')}` });
   }
   const entityType = String(type).toUpperCase();
   const wh = warehouse_id || null;

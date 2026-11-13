@@ -20,7 +20,7 @@ router.get('/', authorizeManagerRead(['inventory.supplier.read', 'inventory.purc
 router.post('/', authorizeManagerDecision(['inventory.supplier.write']), async (req, res) => {
   try {
     const { code, name, contact_name, phone, email, address, tax_code } = req.body;
-    if (!name) return res.status(400).json({ message: 'name is required' });
+    if (!name) return res.status(400).json({ message: 'Thiếu tên (name)' });
 
     const supplier = await prisma.suppliers.create({
       data: {
@@ -35,7 +35,7 @@ router.post('/', authorizeManagerDecision(['inventory.supplier.write']), async (
     });
     return res.status(201).json(supplier);
   } catch (error) {
-    if (error.code === 'P2002') return res.status(409).json({ message: 'Supplier name or code already exists' });
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Tên hoặc mã nhà cung cấp đã tồn tại' });
     console.error('createSupplier error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -54,7 +54,7 @@ router.patch('/:id', authorizeManagerDecision(['inventory.supplier.write']), asy
     const supplier = await prisma.suppliers.update({ where: { id }, data });
     return res.json(supplier);
   } catch (error) {
-    if (error.code === 'P2025') return res.status(404).json({ message: 'Supplier not found' });
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Không tìm thấy nhà cung cấp' });
     console.error('updateSupplier error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -65,7 +65,7 @@ router.delete('/:id', authorizeManagerDecision(['inventory.supplier.write']), as
     await prisma.suppliers.delete({ where: { id: req.params.id } });
     return res.json({ message: 'Supplier deleted' });
   } catch (error) {
-    if (error.code === 'P2025') return res.status(404).json({ message: 'Supplier not found' });
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Không tìm thấy nhà cung cấp' });
     console.error('deleteSupplier error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
