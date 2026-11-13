@@ -17,5 +17,5 @@ test('a malformed warehouse_id is a 400, not a database error', async () => {
   const res = fakeRes();
   await getLowStockByWarehouse({ query: { warehouse_id: 'kho-ha-noi' } }, res);
   assert.equal(res.statusCode, 400);
-  assert.deepEqual(res.body, { message: 'Invalid warehouse_id' });
+  assert.deepEqual(res.body, { message: 'warehouse_id không hợp lệ' });
 });

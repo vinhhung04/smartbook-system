@@ -16,7 +16,7 @@ function createInternalWarehousesRouter({ prisma, onScopeChanged = () => {}, int
 
   router.use((req, res, next) => {
     if (!isValidInternalKey(req.headers['x-internal-service-key'], internalKey())) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
     return next();
   });
@@ -26,7 +26,7 @@ function createInternalWarehousesRouter({ prisma, onScopeChanged = () => {}, int
     const ids = [...new Set(String(req.query.ids || '').split(',').map((v) => v.trim()).filter(Boolean))];
     if (!ids.length) return res.json({ data: [] });
     if (ids.length > MAX_IDS || ids.some((id) => !UUID_RE.test(id))) {
-      return res.status(400).json({ message: 'ids must be up to 200 UUIDs' });
+      return res.status(400).json({ message: 'ids chỉ được chứa tối đa 200 UUID' });
     }
     try {
       const rows = await prisma.warehouses.findMany({
@@ -41,7 +41,7 @@ function createInternalWarehousesRouter({ prisma, onScopeChanged = () => {}, int
 
   router.post('/warehouse-scopes/invalidate', express.json(), (req, res) => {
     const userId = String(req.body?.user_id || '');
-    if (!UUID_RE.test(userId)) return res.status(400).json({ message: 'user_id must be a UUID' });
+    if (!UUID_RE.test(userId)) return res.status(400).json({ message: 'user_id phải là UUID' });
     onScopeChanged(userId);
     return res.status(204).end();
   });

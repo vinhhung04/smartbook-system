@@ -214,11 +214,11 @@ async function register(req, res) {
     const full_name = String(req.body?.full_name || '').trim();
 
     if (!username || !email || !password || !full_name) {
-      return res.status(400).json({ message: 'username, email, password, full_name are required' });
+      return res.status(400).json({ message: 'Cần có đủ username, email, password và full_name' });
     }
 
     if (password.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+      return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 6 ký tự' });
     }
 
     const existingUser = await prisma.$queryRawUnsafe(
@@ -234,7 +234,7 @@ async function register(req, res) {
     );
 
     if (existingUser.length) {
-      return res.status(409).json({ message: 'Email or username already exists' });
+      return res.status(409).json({ message: 'Email hoặc tên đăng nhập đã tồn tại' });
     }
 
     const verificationRequired = registrationVerificationRequired();
@@ -369,7 +369,7 @@ async function me(req, res) {
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     }
 
     const { roles, permissions } = await getUserRolesAndPermissions(user.id);
@@ -392,7 +392,7 @@ async function listWarehouseStaff(req, res) {
     const canManageAssignments = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER');
 
     if (!canManageAssignments) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     const users = await prisma.$queryRawUnsafe(
@@ -433,18 +433,18 @@ async function updateMe(req, res) {
     const phone = req.body?.phone;
 
     if (full_name !== undefined && String(full_name).trim().length < 2) {
-      return res.status(400).json({ message: 'full_name must be at least 2 characters' });
+      return res.status(400).json({ message: 'Họ tên (full_name) phải có ít nhất 2 ký tự' });
     }
 
     if (email !== undefined) {
       const normalizedEmail = normalizeIdentifier(email);
       if (!normalizedEmail || !normalizedEmail.includes('@')) {
-        return res.status(400).json({ message: 'Invalid email format' });
+        return res.status(400).json({ message: 'Email không đúng định dạng' });
       }
     }
 
     if (phone !== undefined && phone !== null && String(phone).trim() && !/^[0-9+()\-\s]{6,30}$/.test(String(phone).trim())) {
-      return res.status(400).json({ message: 'Invalid phone format' });
+      return res.status(400).json({ message: 'Số điện thoại không đúng định dạng' });
     }
 
     // A new address is unconfirmed until its own code is entered. Where the email is
@@ -454,11 +454,11 @@ async function updateMe(req, res) {
     if (email !== undefined) {
       const nextEmail = normalizeIdentifier(email);
       const current = await prisma.user.findUnique({ where: { id: userId } });
-      if (!current) return res.status(404).json({ message: 'User not found' });
+      if (!current) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
       if (nextEmail !== normalizeIdentifier(current.email)) {
         const { roles } = await getUserRolesAndPermissions(userId);
         if (requiresEmailOtp(current, roles)) {
-          return res.status(403).json({ message: 'This account uses email sign-in codes; ask an administrator to change its email.', code: 'EMAIL_CHANGE_REQUIRES_ADMIN' });
+          return res.status(403).json({ message: 'Tài khoản này đăng nhập bằng mã gửi qua email, hãy nhờ quản trị viên đổi email.', code: 'EMAIL_CHANGE_REQUIRES_ADMIN' });
         }
         emailChange = { email: nextEmail, email_verified_at: null };
       }
@@ -484,7 +484,7 @@ async function updateMe(req, res) {
     });
   } catch (error) {
     if (error?.code === 'P2002') {
-      return res.status(409).json({ message: 'Email already exists' });
+      return res.status(409).json({ message: 'Email đã tồn tại' });
     }
     console.error('update me error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -521,7 +521,7 @@ async function logout(req, res) {
 async function revokeRefresh(req, res) {
   const presented = req.body?.refresh_token;
   if (!presented || typeof presented !== 'string') {
-    return res.status(400).json({ message: 'refresh_token is required' });
+    return res.status(400).json({ message: 'Thiếu refresh_token' });
   }
   try {
     await refreshTokens.revoke(presented);
@@ -538,7 +538,7 @@ async function revokeRefresh(req, res) {
 async function refresh(req, res) {
   const presented = req.body?.refresh_token;
   if (!presented || typeof presented !== 'string') {
-    return res.status(400).json({ message: 'refresh_token is required' });
+    return res.status(400).json({ message: 'Thiếu refresh_token' });
   }
   if (!process.env.JWT_SECRET) {
     return res.status(500).json({ message: 'JWT_SECRET is not configured' });
@@ -597,7 +597,7 @@ async function login(req, res) {
     const password = String(req.body?.password || '');
 
     if (!identifier || !password) {
-      return res.status(400).json({ message: 'Identifier and password are required' });
+      return res.status(400).json({ message: 'Vui lòng nhập tài khoản và mật khẩu.' });
     }
 
     const users = await prisma.$queryRawUnsafe(
@@ -632,7 +632,7 @@ async function login(req, res) {
 
       if (failed_login_attempts >= MAX_FAILED_LOGIN_ATTEMPTS && user.status === 'ACTIVE') {
         await prisma.user.update({ where: { id: user.id }, data: { status: 'LOCKED' } });
-        return res.status(403).json({ message: 'Account locked due to too many failed login attempts. Contact an administrator.' });
+        return res.status(403).json({ message: 'Tài khoản đã bị khóa do nhập sai mật khẩu quá nhiều lần. Liên hệ quản trị viên.' });
       }
 
       return res.status(401).json({ message: 'Invalid credentials' });
@@ -648,7 +648,7 @@ async function login(req, res) {
     }
 
     if (user.status !== 'ACTIVE') {
-      return res.status(403).json({ message: 'User is not active' });
+      return res.status(403).json({ message: 'Tài khoản đang bị khóa hoặc chưa được kích hoạt. Liên hệ quản trị viên.' });
     }
 
     if (!process.env.JWT_SECRET) {
@@ -724,7 +724,7 @@ async function verifyLoginOtp(req, res) {
     // Re-read: the account may have been locked or deactivated while the code was in the mail.
     const user = await prisma.user.findUnique({ where: { id: challenge.user_id } });
     if (!user || user.deleted_at || user.status !== 'ACTIVE') {
-      return res.status(403).json({ message: 'User is not active' });
+      return res.status(403).json({ message: 'Tài khoản đang bị khóa hoặc chưa được kích hoạt. Liên hệ quản trị viên.' });
     }
 
     // A password change (or lock, role change) after the password step started ends it.
@@ -736,7 +736,7 @@ async function verifyLoginOtp(req, res) {
       return res.status(503).json({ message: 'Sign-in cannot be completed right now. Try again shortly.', code: 'AUTH_STATE_UNAVAILABLE' });
     }
     if (Number.isFinite(cutoff) && cutoff > Math.floor(new Date(challenge.created_at).getTime() / 1000)) {
-      return res.status(410).json({ message: 'This verification session is no longer valid. Start again.', code: 'OTP_CHALLENGE_INVALID' });
+      return res.status(410).json({ message: 'Phiên xác thực không còn hiệu lực. Vui lòng bắt đầu lại.', code: 'OTP_CHALLENGE_INVALID' });
     }
 
     const { roles, permissions } = await getUserRolesAndPermissions(user.id);
@@ -768,7 +768,7 @@ async function verifyEmailOtp(req, res) {
 async function resendEmailOtp(req, res) {
   const purpose = String(req.body?.purpose || PURPOSES.EMAIL_VERIFICATION).toUpperCase();
   if (!PURPOSES[purpose]) {
-    return res.status(400).json({ message: 'Invalid purpose', code: 'VALIDATION_ERROR' });
+    return res.status(400).json({ message: 'purpose không hợp lệ', code: 'VALIDATION_ERROR' });
   }
   try {
     const { challenge } = await emailOtp.resend({ challengeId: req.body?.challenge_id, purpose });
@@ -784,14 +784,14 @@ async function changePassword(req, res) {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
     const { current_password, new_password } = req.body;
-    if (!current_password || !new_password) return res.status(400).json({ message: 'current_password and new_password are required' });
-    if (new_password.length < 6) return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    if (!current_password || !new_password) return res.status(400).json({ message: 'Cần có đủ current_password và new_password' });
+    if (new_password.length < 6) return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
 
     const valid = await bcrypt.compare(current_password, user.password_hash);
-    if (!valid) return res.status(400).json({ message: 'Current password is incorrect' });
+    if (!valid) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
 
     const newHash = await bcrypt.hash(new_password, BCRYPT_ROUNDS);
     await prisma.user.update({ where: { id: userId }, data: { password_hash: newHash } });
@@ -814,7 +814,7 @@ async function requestPasswordReset(req, res) {
     const genericResponse = { message: 'If the account exists, a reset link has been sent' };
 
     if (!identifier) {
-      return res.status(400).json({ message: 'identifier is required' });
+      return res.status(400).json({ message: 'Thiếu tài khoản đăng nhập (identifier)' });
     }
 
     const users = await prisma.$queryRawUnsafe(
@@ -866,17 +866,17 @@ async function confirmPasswordReset(req, res) {
     const newPassword = String(req.body?.new_password || '');
 
     if (!token || !newPassword) {
-      return res.status(400).json({ message: 'token and new_password are required' });
+      return res.status(400).json({ message: 'Cần có đủ token và new_password' });
     }
     if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
     }
 
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
     const resetToken = await prisma.passwordResetToken.findUnique({ where: { token_hash: tokenHash } });
 
     if (!resetToken || resetToken.used_at || resetToken.expires_at < new Date()) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+      return res.status(400).json({ message: 'Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn' });
     }
 
     const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
@@ -905,7 +905,7 @@ async function resendVerification(req, res) {
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ message: 'Không tìm thấy người dùng' });
     }
 
     if (user.email_verified_at) {

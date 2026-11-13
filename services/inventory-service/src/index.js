@@ -13,7 +13,7 @@ const {
 const { enforceRequestedWarehouseScope } = require('./middlewares/warehouse-scope.middleware');
 const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
 const { createInternalWarehousesRouter } = require('./routes/internal-warehouses.routes');
-const { clearScopeCache } = require('./utils/warehouse-scope.utils');
+const { clearScopeCache, scopedWarehouseWhere, scopeErrorStatus } = require('./utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 const bookRoutes = require('./routes/book.routes');
@@ -377,10 +377,11 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   }
 });
 
-app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.read']), async (_req, res) => {
+app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.read']), async (req, res) => {
   try {
+    // Only warehouses the caller can read: /receiving-putaway opens on the first one.
     const warehouses = await prisma.warehouses.findMany({
-      where: { is_active: true },
+      where: { is_active: true, ...(await scopedWarehouseWhere(req.user, 'id')) },
       select: {
         id: true,
         code: true,
@@ -391,6 +392,7 @@ app.get('/api/receiving-context/warehouses', authorizeTaskRead(['inventory.task.
 
     return res.json({ data: warehouses });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
     return res.status(500).json({ message: 'Internal server error' });
   }

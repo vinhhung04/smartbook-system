@@ -47,6 +47,11 @@ pnpm test:e2e
   local VNPay simulator (`pnpm vnpay:simulator`; setup in `docs/SERVICES/BORROW_SERVICE.md`):
   paid top-up credits the wallet once, a replayed return URL credits nothing, a cancelled
   top-up credits nothing, a forged return URL is rejected. Opt-in: `VNPAY_SIMULATOR=1`.
+- `vnpay-sandbox.spec.ts` — the same top-up against the REAL VNPay sandbox with VNPay's published
+  test cards: NCB success card (OTP 123456) credits the wallet once, the "insufficient balance"
+  card and a cancel credit nothing; an open fine of customer01 is paid by card (skipped when there
+  is none). Needs sandbox credentials in `.env` and `VNPAY_SANDBOX=1`;
+  accepts VNPay's sandbox terms dialog; `VNPAY_EVIDENCE_DIR=<dir>` keeps the screenshots.
 - `membership-plan-number-fields.spec.ts` — number fields that show 0 replace it as you type.
 - `number-input-audit.spec.ts` — opt-in audit (`NUMBER_INPUT_AUDIT=1`) of every number field
   across staff, reader and supplier screens; writes `test-results/number-input-audit.json`.

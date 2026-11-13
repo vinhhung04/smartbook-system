@@ -16,7 +16,7 @@ const {
 async function checkWarehouseWriteOrFail(user, warehouseId) {
   const allowed = await canWriteWarehouse(user, warehouseId);
   if (!allowed) {
-    return { invalid: true, statusCode: 403, message: "You do not have write access to this warehouse" };
+    return { invalid: true, statusCode: 403, message: "Bạn không có quyền thao tác trên kho này" };
   }
   return null;
 }
@@ -279,11 +279,11 @@ async function normalizePurchaseOrderPayload(tx, body) {
   const note = normalizeText(body?.note);
   const lines = Array.isArray(body?.items) ? body.items : [];
 
-  if (!supplierId) return { invalid: true, message: "supplier_id is required" };
-  if (!warehouseId) return { invalid: true, message: "warehouse_id is required" };
-  if (lines.length === 0) return { invalid: true, message: "items is required" };
+  if (!supplierId) return { invalid: true, message: "Thiếu supplier_id" };
+  if (!warehouseId) return { invalid: true, message: "Thiếu warehouse_id" };
+  if (lines.length === 0) return { invalid: true, message: "Thiếu items" };
   if (expectedDate && Number.isNaN(new Date(expectedDate).getTime())) {
-    return { invalid: true, message: "expected_date is invalid" };
+    return { invalid: true, message: "expected_date không hợp lệ" };
   }
 
   const [supplier, warehouse] = await Promise.all([
@@ -298,10 +298,10 @@ async function normalizePurchaseOrderPayload(tx, body) {
   ]);
 
   if (!supplier || supplier.status !== "ACTIVE") {
-    return { invalid: true, message: "Supplier not found or inactive" };
+    return { invalid: true, message: "Không tìm thấy nhà cung cấp hoặc nhà cung cấp đã ngừng hoạt động" };
   }
   if (!warehouse || !warehouse.is_active) {
-    return { invalid: true, message: "Warehouse not found or inactive" };
+    return { invalid: true, message: "Không tìm thấy kho hoặc kho đã ngừng hoạt động" };
   }
 
   const normalizedItems = [];
@@ -310,18 +310,18 @@ async function normalizePurchaseOrderPayload(tx, body) {
     const orderedQty = toInt(rawLine?.ordered_qty);
     const unitCost = Number(rawLine?.unit_cost);
     if (!orderedQty || orderedQty <= 0) {
-      return { invalid: true, message: "Each item must include ordered_qty > 0" };
+      return { invalid: true, message: "Mỗi dòng hàng phải có ordered_qty > 0" };
     }
     if (!Number.isFinite(unitCost) || unitCost < 0) {
-      return { invalid: true, message: "Each item must include unit_cost >= 0" };
+      return { invalid: true, message: "Mỗi dòng hàng phải có unit_cost >= 0" };
     }
 
     const variantId = await resolveVariantIdByIdentifier(tx, rawLine);
     if (!variantId) {
-      return { invalid: true, message: "Each item must include a valid variant_id or isbn13" };
+      return { invalid: true, message: "Mỗi dòng hàng phải có variant_id hoặc isbn13 hợp lệ" };
     }
     if (seenVariants.has(variantId)) {
-      return { invalid: true, message: "Duplicate variant in purchase order items" };
+      return { invalid: true, message: "Đơn đặt hàng có ấn bản bị lặp" };
     }
     seenVariants.add(variantId);
     normalizedItems.push({
@@ -340,7 +340,7 @@ async function normalizePurchaseOrderPayload(tx, body) {
     },
   });
   if (variantCount !== normalizedItems.length) {
-    return { invalid: true, message: "One or more variants are inactive or invalid" };
+    return { invalid: true, message: "Có ấn bản không hợp lệ hoặc đã ngừng hoạt động" };
   }
 
   return {
@@ -456,8 +456,8 @@ function mapShortageReport(report) {
 async function createSupplierInvoice(tx, po, payload, userId) {
   const invoiceNumber = normalizeText(payload?.invoice_number);
   const lines = Array.isArray(payload?.items) ? payload.items : [];
-  if (!invoiceNumber) return { invalid: true, message: "invoice_number is required" };
-  if (lines.length === 0) return { invalid: true, message: "items is required" };
+  if (!invoiceNumber) return { invalid: true, message: "Thiếu invoice_number" };
+  if (lines.length === 0) return { invalid: true, message: "Thiếu items" };
 
   const poItemsById = new Map();
   const poItemsByVariant = new Map();
@@ -475,22 +475,22 @@ async function createSupplierInvoice(tx, po, payload, userId) {
     const invoicedQty = toInt(rawLine?.invoiced_qty);
     const unitCost = Number(rawLine?.unit_cost);
 
-    if (!poItem) return { invalid: true, message: "Invoice item variant does not belong to purchase order" };
+    if (!poItem) return { invalid: true, message: "Ấn bản trong hóa đơn không thuộc đơn đặt hàng" };
     if (variantId && variantId !== poItem.variant_id) {
-      return { invalid: true, message: "purchase_order_item_id and variant_id do not match" };
+      return { invalid: true, message: "purchase_order_item_id và variant_id không khớp nhau" };
     }
     if (!invoicedQty || invoicedQty <= 0) {
-      return { invalid: true, message: "Each invoice item must include invoiced_qty > 0" };
+      return { invalid: true, message: "Mỗi dòng hóa đơn phải có invoiced_qty > 0" };
     }
     if (!Number.isFinite(unitCost) || unitCost < 0) {
-      return { invalid: true, message: "Each invoice item must include unit_cost >= 0" };
+      return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
     }
-    if (seen.has(poItem.variant_id)) return { invalid: true, message: "Duplicate variant in invoice items" };
+    if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
     seen.add(poItem.variant_id);
 
     const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
     if (invoicedQty > remainingQty) {
-      return { invalid: true, message: "Invoice quantity cannot exceed remaining purchase order quantity" };
+      return { invalid: true, message: "Số lượng hóa đơn không được vượt số lượng còn lại của đơn đặt hàng" };
     }
 
     invoiceItems.push({
@@ -504,9 +504,9 @@ async function createSupplierInvoice(tx, po, payload, userId) {
 
   const invoiceDate = parseDateOrNull(payload?.invoice_date);
   const expectedDeliveryDate = parseDateOrNull(payload?.expected_delivery_date);
-  if (normalizeText(payload?.invoice_date) && !invoiceDate) return { invalid: true, message: "invoice_date is invalid" };
+  if (normalizeText(payload?.invoice_date) && !invoiceDate) return { invalid: true, message: "invoice_date không hợp lệ" };
   if (normalizeText(payload?.expected_delivery_date) && !expectedDeliveryDate) {
-    return { invalid: true, message: "expected_delivery_date is invalid" };
+    return { invalid: true, message: "expected_delivery_date không hợp lệ" };
   }
 
   const invoice = await tx.supplier_delivery_invoices.create({
@@ -602,14 +602,14 @@ async function getPurchaseOrders(req, res) {
 
 async function getPurchaseOrderById(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
 
   try {
     const po = await prisma.purchase_orders.findUnique({
       where: { id },
       include: getPurchaseOrderInclude(),
     });
-    if (!po) return res.status(404).json({ message: "Purchase order not found" });
+    if (!po) return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
 
     const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
     if (!canRead) return;
@@ -680,7 +680,7 @@ async function createPurchaseOrder(req, res) {
 async function updatePurchaseOrder(req, res) {
   const id = parseId(req.params.id);
   const userId = parseId(req.user?.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -689,17 +689,17 @@ async function updatePurchaseOrder(req, res) {
         where: { id },
         include: { purchase_order_items: true },
       });
-      if (!existing) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (!existing) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn đặt hàng" };
 
       const existingScopeError = await checkWarehouseWriteOrFail(req.user, existing.warehouse_id);
       if (existingScopeError) return existingScopeError;
 
       if (![PO_STATUSES.DRAFT, PO_STATUSES.REJECTED].includes(existing.status)) {
-        return { invalid: true, message: "Only DRAFT or REJECTED purchase orders can be updated" };
+        return { invalid: true, message: "Chỉ sửa được đơn đặt hàng ở trạng thái DRAFT hoặc REJECTED" };
       }
       const totalReceived = existing.purchase_order_items.reduce((sum, item) => sum + Number(item.received_qty || 0), 0);
       if (totalReceived > 0) {
-        return { invalid: true, message: "Cannot update purchase order after receiving has started" };
+        return { invalid: true, message: "Không thể sửa đơn đặt hàng khi đã bắt đầu nhận hàng" };
       }
 
       const payload = await normalizePurchaseOrderPayload(tx, req.body);
@@ -790,7 +790,7 @@ async function rejectPurchaseOrder(req, res) {
 async function transitionPurchaseOrder(req, res, options) {
   const id = parseId(req.params.id);
   const userId = parseId(req.user?.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -799,7 +799,7 @@ async function transitionPurchaseOrder(req, res, options) {
         where: { id },
         include: { purchase_order_items: true },
       });
-      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (!po) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn đặt hàng" };
 
       const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
       if (scopeError) return scopeError;
@@ -807,11 +807,11 @@ async function transitionPurchaseOrder(req, res, options) {
       if (!options.allowedFrom.includes(po.status)) {
         return {
           invalid: true,
-          message: `Purchase order cannot transition from ${po.status} to ${options.nextStatus}`,
+          message: `Đơn đặt hàng không thể chuyển từ ${po.status} sang ${options.nextStatus}`,
         };
       }
       if (po.purchase_order_items.length === 0) {
-        return { invalid: true, message: "Purchase order must have at least one item" };
+        return { invalid: true, message: "Đơn đặt hàng phải có ít nhất một dòng hàng" };
       }
 
       const noteValue = options.noteValue || normalizeText(req.body?.note);
@@ -872,7 +872,7 @@ async function transitionPurchaseOrder(req, res, options) {
 async function cancelPurchaseOrder(req, res) {
   const id = parseId(req.params.id);
   const userId = parseId(req.user?.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -881,17 +881,17 @@ async function cancelPurchaseOrder(req, res) {
         where: { id },
         include: { purchase_order_items: true },
       });
-      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (!po) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn đặt hàng" };
 
       const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
       if (scopeError) return scopeError;
 
       if (![PO_STATUSES.DRAFT, PO_STATUSES.REJECTED, PO_STATUSES.PENDING_APPROVAL, PO_STATUSES.APPROVED].includes(po.status)) {
-        return { invalid: true, message: "Purchase order cannot be cancelled in current status" };
+        return { invalid: true, message: "Không thể hủy đơn đặt hàng ở trạng thái hiện tại" };
       }
       const totalReceived = po.purchase_order_items.reduce((sum, item) => sum + Number(item.received_qty || 0), 0);
       if (totalReceived > 0) {
-        return { invalid: true, message: "Cannot cancel purchase order after receiving has started" };
+        return { invalid: true, message: "Không thể hủy đơn đặt hàng khi đã bắt đầu nhận hàng" };
       }
 
       const updated = await tx.purchase_orders.update({
@@ -923,7 +923,7 @@ async function sendToSupplier(req, res) {
   const id = parseId(req.params.id);
   const userId = parseId(req.user?.id);
   const requestedChannel = normalizeText(req.body?.channel);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -935,19 +935,19 @@ async function sendToSupplier(req, res) {
           purchase_order_items: true,
         },
       });
-      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (!po) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn đặt hàng" };
 
       const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
       if (scopeError) return scopeError;
 
       if (po.status === PO_STATUSES.SENT_TO_SUPPLIER) {
-        return { invalid: true, message: "Purchase order has already been sent to supplier" };
+        return { invalid: true, message: "Đơn đặt hàng đã được gửi cho nhà cung cấp" };
       }
       if (po.status !== PO_STATUSES.APPROVED) {
-        return { invalid: true, message: "Only APPROVED purchase orders can be sent to supplier" };
+        return { invalid: true, message: "Chỉ gửi được đơn đặt hàng đã duyệt (APPROVED) cho nhà cung cấp" };
       }
       if (po.purchase_order_items.length === 0) {
-        return { invalid: true, message: "Purchase order must have at least one item" };
+        return { invalid: true, message: "Đơn đặt hàng phải có ít nhất một dòng hàng" };
       }
 
       // Atomic claim closes the same TOCTOU window fixed for goods-receipt
@@ -958,9 +958,9 @@ async function sendToSupplier(req, res) {
       if (!claimed) {
         const current = await tx.purchase_orders.findUnique({ where: { id } });
         if (current?.status === PO_STATUSES.SENT_TO_SUPPLIER) {
-          return { invalid: true, message: "Purchase order has already been sent to supplier" };
+          return { invalid: true, message: "Đơn đặt hàng đã được gửi cho nhà cung cấp" };
         }
-        return { invalid: true, message: "Purchase order status changed while it was being sent" };
+        return { invalid: true, message: "Trạng thái đơn đặt hàng đã thay đổi trong lúc gửi" };
       }
 
       const portalToken = makePortalToken();
@@ -1042,7 +1042,7 @@ async function sendToSupplier(req, res) {
 async function supplierConfirm(req, res) {
   const id = parseId(req.params.id);
   const userId = parseId(req.user?.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -1051,13 +1051,13 @@ async function supplierConfirm(req, res) {
         where: { id },
         include: { purchase_order_items: true },
       });
-      if (!po) return { invalid: true, statusCode: 404, message: "Purchase order not found" };
+      if (!po) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn đặt hàng" };
 
       const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
       if (scopeError) return scopeError;
 
       if (po.status !== PO_STATUSES.SENT_TO_SUPPLIER) {
-        return { invalid: true, message: "Only SENT_TO_SUPPLIER purchase orders can be supplier-confirmed" };
+        return { invalid: true, message: "Chỉ đơn đặt hàng ở trạng thái SENT_TO_SUPPLIER mới được nhà cung cấp xác nhận" };
       }
 
       await tx.supplier_order_dispatches.updateMany({
@@ -1097,7 +1097,7 @@ async function supplierConfirm(req, res) {
     });
   } catch (error) {
     if (error.code === "P2002") {
-      return res.status(409).json({ message: "Supplier invoice number already exists for this supplier" });
+      return res.status(409).json({ message: "Số hóa đơn này đã tồn tại với nhà cung cấp" });
     }
     console.error("Error while recording supplier confirmation:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -1106,11 +1106,11 @@ async function supplierConfirm(req, res) {
 
 async function getSupplierDocuments(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
 
   try {
     const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true, warehouse_id: true } });
-    if (!po) return res.status(404).json({ message: "Purchase order not found" });
+    if (!po) return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
 
     const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
     if (!canRead) return;
@@ -1158,11 +1158,11 @@ async function getSupplierDocuments(req, res) {
 
 async function getShortageReports(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
 
   try {
     const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true, warehouse_id: true } });
-    if (!po) return res.status(404).json({ message: "Purchase order not found" });
+    if (!po) return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
 
     const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
     if (!canRead) return;
@@ -1187,7 +1187,7 @@ async function updateShortageReportStatus(req, res, targetStatus) {
   const id = parseId(req.params.id);
   const reportId = parseId(req.params.reportId);
   const userId = parseId(req.user?.id);
-  if (!id || !reportId) return res.status(400).json({ message: "Invalid purchase order or shortage report id" });
+  if (!id || !reportId) return res.status(400).json({ message: "Mã đơn đặt hàng hoặc báo cáo thiếu hàng không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
   try {
@@ -1195,17 +1195,17 @@ async function updateShortageReportStatus(req, res, targetStatus) {
       const report = await tx.supplier_shortage_reports.findFirst({
         where: { id: reportId, purchase_order_id: id },
       });
-      if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+      if (!report) return { invalid: true, statusCode: 404, message: "Không tìm thấy báo cáo thiếu hàng" };
 
       const po = await tx.purchase_orders.findUnique({ where: { id }, select: { warehouse_id: true } });
       const scopeError = await checkWarehouseWriteOrFail(req.user, po?.warehouse_id);
       if (scopeError) return scopeError;
 
       if (targetStatus === "SENT_TO_SUPPLIER" && report.status !== "OPEN") {
-        return { invalid: true, message: "Only OPEN shortage reports can be sent" };
+        return { invalid: true, message: "Chỉ gửi được báo cáo thiếu hàng đang mở (OPEN)" };
       }
       if (targetStatus === "RESOLVED" && !["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
-        return { invalid: true, message: "Shortage report cannot be resolved from current status" };
+        return { invalid: true, message: "Không thể xử lý báo cáo thiếu hàng ở trạng thái hiện tại" };
       }
 
       const updated = await tx.supplier_shortage_reports.update({
@@ -1265,14 +1265,14 @@ async function resolveShortageReport(req, res) {
 
 async function getPurchaseOrderReconciliation(req, res) {
   const id = parseId(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid purchase order id" });
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
 
   try {
     const po = await prisma.purchase_orders.findUnique({
       where: { id },
       include: getPurchaseOrderInclude(),
     });
-    if (!po) return res.status(404).json({ message: "Purchase order not found" });
+    if (!po) return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
 
     const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
     if (!canRead) return;
@@ -1319,7 +1319,7 @@ async function getPurchaseOrderReconciliation(req, res) {
 
 async function createGoodsReceiptFromPurchaseOrder(req, res) {
   return res.status(400).json({
-    message: "Create goods receipt from supplier invoice/delivery note instead of directly from purchase order",
+    message: "Hãy tạo phiếu nhập kho từ hóa đơn/phiếu giao hàng của nhà cung cấp, không tạo trực tiếp từ đơn đặt hàng",
   });
 }
 

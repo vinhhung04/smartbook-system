@@ -28,11 +28,11 @@ test('malformed uuid path params are rejected with 400, not passed to the handle
   await withServer(buildRouter(), async (base) => {
     const bad = await fetch(`${base}/not-a-uuid`);
     assert.equal(bad.status, 400);
-    assert.deepEqual(await bad.json(), { message: 'Invalid id' });
+    assert.deepEqual(await bad.json(), { message: 'id không hợp lệ' });
 
     const badTask = await fetch(`${base}/outbound/123/approve`, { method: 'POST' });
     assert.equal(badTask.status, 400);
-    assert.deepEqual(await badTask.json(), { message: 'Invalid taskId' });
+    assert.deepEqual(await badTask.json(), { message: 'taskId không hợp lệ' });
   });
 });
 

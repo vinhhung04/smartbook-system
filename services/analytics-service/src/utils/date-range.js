@@ -11,7 +11,7 @@ function parseDate(value, fieldName) {
   if (!value) return null;
   const date = new Date(String(value));
   if (Number.isNaN(date.getTime())) {
-    throw createHttpError(400, `${fieldName} must be a valid ISO date`);
+    throw createHttpError(400, `${fieldName} phải là ngày hợp lệ theo định dạng ISO`);
   }
   return date;
 }
@@ -25,7 +25,7 @@ function parseDateRange(query, options = {}) {
   const from = parseDate(query.from, 'from') || defaultFrom;
 
   if (from > to) {
-    throw createHttpError(400, 'from must be before or equal to to');
+    throw createHttpError(400, 'from phải trước hoặc bằng to');
   }
 
   return { from, to };
@@ -34,7 +34,7 @@ function parseDateRange(query, options = {}) {
 function parseGranularity(value) {
   const granularity = String(value || 'day').toLowerCase();
   if (!['day', 'month'].includes(granularity)) {
-    throw createHttpError(400, 'granularity must be day or month');
+    throw createHttpError(400, 'granularity phải là day hoặc month');
   }
   return granularity;
 }
@@ -42,7 +42,7 @@ function parseGranularity(value) {
 function parseLimit(value, defaultValue = 10, maxValue = 50) {
   const limit = Number(value || defaultValue);
   if (!Number.isInteger(limit) || limit < 1 || limit > maxValue) {
-    throw createHttpError(400, `limit must be an integer from 1 to ${maxValue}`);
+    throw createHttpError(400, `limit phải là số nguyên từ 1 đến ${maxValue}`);
   }
   return limit;
 }

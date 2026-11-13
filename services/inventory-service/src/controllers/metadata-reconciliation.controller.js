@@ -47,7 +47,7 @@ function explain(result, raw) {
 async function createDraft(req, res) {
   const raw = rawLookup(req);
   const isbn = String(raw.isbn || req.body?.isbn || '').trim();
-  if (!isbn && !raw.intelligence) return res.status(400).json({ message: 'isbn is required' });
+  if (!isbn && !raw.intelligence) return res.status(400).json({ message: 'Thiếu ISBN' });
   try {
     validateBundle(raw.intelligence);
     const result = reconcileMetadata(raw, await readAuthorities());
@@ -104,7 +104,7 @@ async function createDraft(req, res) {
 async function getDraft(req, res) {
   try {
     const data = await prisma.metadata_reconciliation_drafts.findUnique({ where: { id: req.params.id }, include: { decisions: { orderBy: { field: 'asc' } } } });
-    return data ? res.json({ data }) : res.status(404).json({ message: 'Draft not found' });
+    return data ? res.json({ data }) : res.status(404).json({ message: 'Không tìm thấy bản nháp' });
   } catch (error) {
     console.error('Unable to load metadata reconciliation draft', error);
     return res.status(500).json({ message: 'Unable to load metadata reconciliation draft' });
@@ -114,14 +114,14 @@ async function getDraft(req, res) {
 async function decideField(req, res) {
   const { status, value } = req.body || {};
   const field = req.params.field;
-  if (!FIELDS.includes(field)) return res.status(400).json({ message: 'Unsupported metadata field' });
-  if (!['ACCEPTED', 'REJECTED'].includes(status)) return res.status(400).json({ message: 'status must be ACCEPTED or REJECTED' });
+  if (!FIELDS.includes(field)) return res.status(400).json({ message: 'Trường siêu dữ liệu không được hỗ trợ' });
+  if (!['ACCEPTED', 'REJECTED'].includes(status)) return res.status(400).json({ message: 'status phải là ACCEPTED hoặc REJECTED' });
   try {
     if (value !== undefined) validateField(field, value);
     const data = await prisma.$transaction(async (tx) => {
       const draft = await tx.metadata_reconciliation_drafts.findUnique({ where: { id: req.params.id }, include: { decisions: true } });
-      if (!draft) { const error = new Error('Draft not found'); error.statusCode = 404; throw error; }
-      if (draft.status === 'APPLIED') { const error = new Error('Draft already applied'); error.statusCode = 409; throw error; }
+      if (!draft) { const error = new Error('Không tìm thấy bản nháp'); error.statusCode = 404; throw error; }
+      if (draft.status === 'APPLIED') { const error = new Error('Bản nháp đã được áp dụng'); error.statusCode = 409; throw error; }
       const previous = draft.decisions.find(d => d.field === field);
       const event = reviewEvent(field, previous?.value, value === undefined ? previous?.value : value, req.user.id, status);
       const row = await tx.metadata_reconciliation_field_decisions.update({
@@ -134,7 +134,7 @@ async function decideField(req, res) {
     return res.json({ data });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
-    if (error.code === 'P2025') return res.status(404).json({ message: 'Draft or field not found' });
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Không tìm thấy bản nháp hoặc trường dữ liệu' });
     console.error('Unable to decide reconciliation field', error);
     return res.status(500).json({ message: 'Unable to decide reconciliation field' });
   }
@@ -204,14 +204,14 @@ async function applyDraft(req, res) {
     const result = await prisma.$transaction(async (tx) => {
       const draft = await tx.metadata_reconciliation_drafts.findUnique({ where: { id: req.params.id }, include: { decisions: true } });
       if (!draft) {
-        const error = new Error('Draft not found'); error.statusCode = 404; throw error;
+        const error = new Error('Không tìm thấy bản nháp'); error.statusCode = 404; throw error;
       }
       if (draft.status === 'APPLIED') {
         return { book: await tx.books.findUnique({ where: { id: draft.book_id } }), variantId: draft.explanation?.appliedVariantId || null };
       }
       assertReady(draft);
       if (draft.raw_metadata?.intelligence && finalMetadata.isbn13 && !validIsbn(finalMetadata.isbn13)) {
-        const error = new Error('Invalid ISBN checksum'); error.statusCode = 400; throw error;
+        const error = new Error('Mã ISBN sai số kiểm tra'); error.statusCode = 400; throw error;
       }
       let bookId = requestedBookId || draft.book_id;
       const accepted = Object.fromEntries(draft.decisions.filter((decision) => decision.status === 'ACCEPTED').map((decision) => [decision.field, decision.value]));
@@ -232,23 +232,23 @@ async function applyDraft(req, res) {
       const isbn10 = finalMetadata.isbn10 === undefined ? undefined : normalizeIsbn10(finalMetadata.isbn10);
       const publishYear = finalMetadata.publishYear === undefined ? undefined : normalizePublishYear(finalMetadata.publishYear);
       const pageCount = finalMetadata.pageCount === undefined ? undefined : normalizePageCount(finalMetadata.pageCount);
-      if ((finalMetadata.isbn13 !== undefined && !isbn13) || (finalMetadata.isbn10 !== undefined && !isbn10) || (publishYear === undefined && finalMetadata.publishYear !== undefined) || (pageCount === undefined && finalMetadata.pageCount !== undefined)) { const error = new Error('Invalid final metadata'); error.statusCode = 400; throw error; }
+      if ((finalMetadata.isbn13 !== undefined && !isbn13) || (finalMetadata.isbn10 !== undefined && !isbn10) || (publishYear === undefined && finalMetadata.publishYear !== undefined) || (pageCount === undefined && finalMetadata.pageCount !== undefined)) { const error = new Error('Siêu dữ liệu cuối cùng không hợp lệ'); error.statusCode = 400; throw error; }
       let book = bookId ? await tx.books.findUnique({ where: { id: bookId }, include: { book_authors: true, book_categories: true, book_variants: true } }) : null;
       if (!book && !bookId) {
         const title = String(finalMetadata.title || accepted.title || '').trim();
-        if (!title || !isbn13) { const error = new Error('title and valid isbn13 are required to create a catalog book'); error.statusCode = 400; throw error; }
+        if (!title || !isbn13) { const error = new Error('Cần có title và isbn13 hợp lệ để tạo sách trong danh mục'); error.statusCode = 400; throw error; }
         const createdBook = await tx.books.create({ data: { title, default_language: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi', metadata: { is_incomplete: false, metadataProvenance: { title: accepted.title ? 'STAFF_APPROVED' : 'STAFF_APPROVED' } } } });
         const createdVariant = await tx.book_variants.create({ data: { book_id: createdBook.id, sku: `IMPORT-${isbn13}`, isbn13, language_code: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi' } });
         bookId = createdBook.id;
         book = { ...createdBook, book_authors: [], book_categories: [], book_variants: [createdVariant] };
       }
-      if (!book) { const error = new Error('Book not found'); error.statusCode = 404; throw error; }
+      if (!book) { const error = new Error('Không tìm thấy sách'); error.statusCode = 404; throw error; }
       const duplicateReview = duplicateReviewId ? await tx.duplicate_review_drafts.findUnique({ where: { id: duplicateReviewId } }) : null;
-      if (duplicateReviewId && !duplicateReview) { const error = new Error('Duplicate review not found'); error.statusCode = 404; throw error; }
-      if (duplicateReview && duplicateReview.selected_book_id && duplicateReview.selected_book_id !== bookId) { const error = new Error('Duplicate review target does not match bookId'); error.statusCode = 400; throw error; }
+      if (duplicateReviewId && !duplicateReview) { const error = new Error('Không tìm thấy mục rà soát trùng lặp'); error.statusCode = 404; throw error; }
+      if (duplicateReview && duplicateReview.selected_book_id && duplicateReview.selected_book_id !== bookId) { const error = new Error('Mục rà soát trùng lặp không khớp với bookId'); error.statusCode = 400; throw error; }
       const variantId = requestedVariantId || duplicateReview?.selected_variant_id || book.book_variants[0]?.id || null;
       const variant = variantId ? await tx.book_variants.findUnique({ where: { id: variantId } }) : null;
-      if (variantId && (!variant || variant.book_id !== bookId)) { const error = new Error('Variant does not belong to selected book'); error.statusCode = 400; throw error; }
+      if (variantId && (!variant || variant.book_id !== bookId)) { const error = new Error('Ấn bản không thuộc sách đã chọn'); error.statusCode = 400; throw error; }
       const isLinkedVariant = duplicateReview?.decision === 'LINK_EXISTING_VARIANT';
       const preserveBook = Boolean(draft.raw_metadata?.intelligence && requestedBookId && duplicateReview?.decision === 'CREATE_VARIANT_FOR_EDITION');
       const relations = await resolveRelationIds(tx, draft, preserveBook ? {} : accepted, createEntities);
@@ -304,7 +304,7 @@ async function applyDraft(req, res) {
     return res.json({ data: result });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
-    if (error.code === 'P2002') return res.status(409).json({ message: 'ISBN, barcode, or SKU already belongs to an existing variant' });
+    if (error.code === 'P2002') return res.status(409).json({ message: 'ISBN, barcode hoặc SKU đã thuộc về một ấn bản có sẵn' });
     console.error('Unable to apply metadata reconciliation draft', error);
     return res.status(500).json({ message: 'Unable to apply metadata reconciliation draft' });
   }

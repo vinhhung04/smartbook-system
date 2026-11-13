@@ -258,7 +258,7 @@ async function getReadyReceipts(req, res) {
 async function getReadyReceiptDetail(req, res) {
   const receiptId = parseId(req.params.id);
   if (!receiptId) {
-    return res.status(400).json({ message: 'Invalid goods receipt id' });
+    return res.status(400).json({ message: 'Mã phiếu nhập kho không hợp lệ' });
   }
 
   try {
@@ -298,15 +298,15 @@ async function getReadyReceiptDetail(req, res) {
     });
 
     if (!receipt) {
-      return res.status(404).json({ message: 'Goods receipt not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu nhập kho' });
     }
     if (!(await requireWarehouseReadAccess(req, res, receipt.warehouse_id))) return undefined;
 
     if (receipt.status !== READY_PUTAWAY_STATUS) {
-      return res.status(400).json({ message: 'Only POSTED goods receipts can be put away' });
+      return res.status(400).json({ message: 'Chỉ phiếu nhập kho đã ghi sổ (POSTED) mới cất hàng được' });
     }
     if (!canAccessReceipt(req, receipt)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     const postedMovements = await prisma.stock_movements.findMany({
@@ -396,7 +396,7 @@ async function getReadyReceiptDetail(req, res) {
 async function getPutawayLocations(req, res) {
   const receiptId = parseId(req.params.id);
   if (!receiptId) {
-    return res.status(400).json({ message: 'Invalid goods receipt id' });
+    return res.status(400).json({ message: 'Mã phiếu nhập kho không hợp lệ' });
   }
 
   try {
@@ -411,15 +411,15 @@ async function getPutawayLocations(req, res) {
     });
 
     if (!receipt) {
-      return res.status(404).json({ message: 'Goods receipt not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu nhập kho' });
     }
     if (!(await requireWarehouseReadAccess(req, res, receipt.warehouse_id))) return undefined;
 
     if (receipt.status !== READY_PUTAWAY_STATUS) {
-      return res.status(400).json({ message: 'Only POSTED goods receipts can be put away' });
+      return res.status(400).json({ message: 'Chỉ phiếu nhập kho đã ghi sổ (POSTED) mới cất hàng được' });
     }
     if (!canAccessReceipt(req, receipt)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     const locations = await prisma.locations.findMany({
@@ -545,17 +545,17 @@ async function confirmPutaway(req, res) {
   const userId = req.user?.id || null;
 
   if (!receiptId) {
-    return res.status(400).json({ message: 'Invalid goods receipt id' });
+    return res.status(400).json({ message: 'Mã phiếu nhập kho không hợp lệ' });
   }
   if (allocations.length === 0) {
-    return res.status(400).json({ message: 'allocations is required' });
+    return res.status(400).json({ message: 'Thiếu allocations' });
   }
 
   let committedWarehouseId = null;
 
   try {
     const scopeCheck = await prisma.goods_receipts.findUnique({ where: { id: receiptId }, select: { warehouse_id: true } });
-    if (!scopeCheck) return res.status(404).json({ message: 'Goods receipt not found' });
+    if (!scopeCheck) return res.status(404).json({ message: 'Không tìm thấy phiếu nhập kho' });
     if (!(await requireWarehouseWriteAccess(req, res, scopeCheck.warehouse_id, { fresh: true }))) return undefined;
 
     const result = await prisma.$transaction(async (tx) => {
@@ -573,7 +573,7 @@ async function confirmPutaway(req, res) {
         return { notFound: true };
       }
       if (receipt.status !== READY_PUTAWAY_STATUS) {
-        return { invalid: true, message: 'Only POSTED goods receipts can be put away' };
+        return { invalid: true, message: 'Chỉ phiếu nhập kho đã ghi sổ (POSTED) mới cất hàng được' };
       }
       if (!canAccessReceipt(req, receipt)) {
         return { forbidden: true };
@@ -594,7 +594,7 @@ async function confirmPutaway(req, res) {
       });
 
       if (receiptItems.length === 0) {
-        return { invalid: true, message: 'Goods receipt has no item lines' };
+        return { invalid: true, message: 'Phiếu nhập kho không có dòng hàng nào' };
       }
 
       // Track which items are already fully putaway (location already assigned).
@@ -661,7 +661,7 @@ async function confirmPutaway(req, res) {
       if (itemsToProcess.length === 0) {
         return {
           invalid: true,
-          message: 'All item lines have already been fully putaway',
+          message: 'Tất cả dòng hàng đã được cất đủ',
         };
       }
 
@@ -674,11 +674,11 @@ async function confirmPutaway(req, res) {
         const putawayQuantity = toInt(allocation?.putaway_quantity);
 
         if (!itemId || putawayQuantity === null || putawayQuantity < 0) {
-          return { invalid: true, message: 'Each allocation must include item_id and putaway_quantity >= 0' };
+          return { invalid: true, message: 'Mỗi dòng phân bổ phải có item_id và putaway_quantity >= 0' };
         }
 
         if (putawayQuantity > 0 && (!zoneId || !shelfId || !compartmentId)) {
-          return { invalid: true, message: 'Allocation with putaway_quantity > 0 must include zone_id, shelf_id and compartment_id' };
+          return { invalid: true, message: 'Dòng phân bổ có putaway_quantity > 0 phải có zone_id, shelf_id và compartment_id' };
         }
 
         allocationMap.set(itemId, {
@@ -692,14 +692,14 @@ async function confirmPutaway(req, res) {
 
       for (const item of itemsToProcess) {
         if (!allocationMap.has(String(item.id))) {
-          return { invalid: true, message: 'Cannot complete putaway while some item lines are not allocated' };
+          return { invalid: true, message: 'Chưa thể hoàn tất cất hàng khi còn dòng hàng chưa phân bổ' };
         }
       }
 
       const receiptItemIds = new Set(receiptItems.map((item) => String(item.id)));
       for (const itemId of allocationMap.keys()) {
         if (!receiptItemIds.has(itemId)) {
-          return { invalid: true, message: 'Allocation contains an item that does not belong to this goods receipt' };
+          return { invalid: true, message: 'Phân bổ có dòng hàng không thuộc phiếu nhập kho này' };
         }
       }
 
@@ -734,7 +734,7 @@ async function confirmPutaway(req, res) {
         const putawayQuantity = allocation.putaway_quantity;
 
         if (putawayQuantity > totalQuantity) {
-          return { invalid: true, message: 'putaway_quantity cannot exceed received quantity' };
+          return { invalid: true, message: 'putaway_quantity không được vượt số lượng đã nhận' };
         }
 
         let shelf = null;
@@ -747,32 +747,32 @@ async function confirmPutaway(req, res) {
           compartment = locationMap.get(allocation.compartment_id);
 
           if (!shelf || !zone || !compartment) {
-            return { invalid: true, message: 'Selected zone, shelf or compartment is invalid or inactive' };
+            return { invalid: true, message: 'Khu, kệ hoặc ô kệ đã chọn không hợp lệ hoặc đã ngừng hoạt động' };
           }
 
           if (normalizeLocationType(zone.location_type) !== 'ZONE') {
-            return { invalid: true, message: 'zone_id must be a ZONE location' };
+            return { invalid: true, message: 'zone_id phải là vị trí loại ZONE' };
           }
 
           if (normalizeLocationType(shelf.location_type) !== 'SHELF') {
-            return { invalid: true, message: 'shelf_id must be a SHELF location' };
+            return { invalid: true, message: 'shelf_id phải là vị trí loại SHELF' };
           }
 
           {
             const compartmentType = normalizeLocationType(compartment.location_type);
             if (compartmentType !== 'SHELF_COMPARTMENT' && compartmentType !== 'BIN') {
-              return { invalid: true, message: 'compartment_id must be a SHELF_COMPARTMENT location' };
+              return { invalid: true, message: 'compartment_id phải là vị trí loại SHELF_COMPARTMENT' };
             }
           }
 
           const shelfZone = getZoneAncestor(shelf, locationMap);
           if (!shelfZone || shelfZone.id !== zone.id) {
-            return { invalid: true, message: 'Selected shelf does not belong to the selected zone' };
+            return { invalid: true, message: 'Kệ đã chọn không thuộc khu đã chọn' };
           }
 
           const compartmentShelf = getShelfAncestor(compartment, locationMap);
           if (!compartmentShelf || compartmentShelf.id !== shelf.id) {
-            return { invalid: true, message: 'Selected compartment does not belong to the selected shelf' };
+            return { invalid: true, message: 'Ô kệ đã chọn không thuộc kệ đã chọn' };
           }
         }
 
@@ -840,7 +840,7 @@ async function confirmPutaway(req, res) {
         });
 
         if (targetLocs.length !== putawayLocationIds.length) {
-          return { invalid: true, message: 'One or more putaway target locations are invalid or inactive' };
+          return { invalid: true, message: 'Có vị trí cất hàng không hợp lệ hoặc đã ngừng hoạt động' };
         }
 
         const occRows = await tx.stock_balances.groupBy({
@@ -860,7 +860,7 @@ async function confirmPutaway(req, res) {
           if (compartmentType !== 'SHELF_COMPARTMENT' && compartmentType !== 'BIN') {
             return {
               invalid: true,
-              message: `Location ${target.location_code} is not a valid shelf compartment for putaway`,
+              message: `Vị trí ${target.location_code} không phải ô kệ hợp lệ để cất hàng`,
             };
           }
           const currentOnHand = occMap.get(locationId) || 0;
@@ -874,7 +874,7 @@ async function confirmPutaway(req, res) {
             return {
               invalid: true,
               message:
-                `Shelf compartment ${target.location_code} only has ${remaining} remaining capacity (max ${maxCapacity}, currently ${currentOnHand}). Cannot put away ${increment} unit(s).`,
+                `Ô kệ ${target.location_code} chỉ còn chứa được ${remaining} (tối đa ${maxCapacity}, đang có ${currentOnHand}). Không thể cất thêm ${increment} cuốn.`,
             };
           }
         }
@@ -897,7 +897,7 @@ async function confirmPutaway(req, res) {
       });
 
       if (postingEntries.length === 0) {
-        return { invalid: true, message: 'No quantity to post' };
+        return { invalid: true, message: 'Không có số lượng để ghi sổ' };
       }
 
       const aggregatedBalanceEntries = aggregateBalanceEntries(postingEntries);
@@ -987,10 +987,10 @@ async function confirmPutaway(req, res) {
     });
 
     if (result.notFound) {
-      return res.status(404).json({ message: 'Goods receipt not found' });
+      return res.status(404).json({ message: 'Không tìm thấy phiếu nhập kho' });
     }
     if (result.forbidden) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     if (result.invalid) {
@@ -1016,7 +1016,7 @@ async function confirmPutaway(req, res) {
 async function claimPutawayTask(req, res) {
   const receiptId = parseId(req.params.id);
   if (!receiptId) {
-    return res.status(400).json({ message: 'Invalid goods receipt id' });
+    return res.status(400).json({ message: 'Mã phiếu nhập kho không hợp lệ' });
   }
 
   const userId = req.user?.id || req.user?.sub;
@@ -1058,10 +1058,10 @@ async function assignPutawayTask(req, res) {
   const assigneeUserId = parseId(req.body?.user_id || req.body?.putaway_assignee_user_id);
 
   if (!receiptId) {
-    return res.status(400).json({ message: 'Invalid goods receipt id' });
+    return res.status(400).json({ message: 'Mã phiếu nhập kho không hợp lệ' });
   }
   if (!assigneeUserId) {
-    return res.status(400).json({ message: 'user_id is required' });
+    return res.status(400).json({ message: 'Thiếu user_id' });
   }
 
   try {

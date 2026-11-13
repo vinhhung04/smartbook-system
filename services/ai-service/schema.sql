@@ -145,3 +145,31 @@ CREATE INDEX IF NOT EXISTS ix_ai_chunks_tsv
     ON ai_document_chunks USING gin (tsv);
 CREATE INDEX IF NOT EXISTS ix_ai_chunks_corpus_model
     ON ai_document_chunks (corpus, embedding_model);
+
+-- Last known good ISBN lookups (isbn_cache_store.py): kept across restarts and
+-- served when a later re-lookup finds nothing because sources are down/blocking.
+CREATE TABLE IF NOT EXISTS ai_isbn_lookup_cache (
+    cache_key   VARCHAR(80)    PRIMARY KEY,
+    payload     TEXT           NOT NULL,
+    expires_at     TIMESTAMPTZ(6) NOT NULL,
+    refresh_after  TIMESTAMPTZ(6),
+    updated_at     TIMESTAMPTZ(6) NOT NULL DEFAULT now()
+);
+ALTER TABLE ai_isbn_lookup_cache ADD COLUMN IF NOT EXISTS refresh_after TIMESTAMPTZ(6);
+
+-- AI web search lane (ai_web_search.py): one row per paid call, reserved BEFORE
+-- the call so daily/monthly limits are hard caps; plus a per-code result cache.
+CREATE TABLE IF NOT EXISTS ai_web_search_calls (
+    id         BIGSERIAL      PRIMARY KEY,
+    code       VARCHAR(20)    NOT NULL,
+    called_at  TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+    model      VARCHAR(100),
+    status     VARCHAR(20)    NOT NULL,
+    usage      TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_ai_web_search_calls_called_at ON ai_web_search_calls (called_at);
+CREATE TABLE IF NOT EXISTS ai_web_search_cache (
+    code        VARCHAR(20)    PRIMARY KEY,
+    payload     TEXT           NOT NULL,
+    expires_at  TIMESTAMPTZ(6) NOT NULL
+);

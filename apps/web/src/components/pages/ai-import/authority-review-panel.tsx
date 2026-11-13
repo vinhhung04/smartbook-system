@@ -140,7 +140,7 @@ export function AuthorityReviewPanel({
                     {t("metadata_reconciliation.accept")}
                   </button>
                   {hasNew && noun ? (
-                    <button type="button" onClick={() => onCreateEntity(row.field)} className={`${button} border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100 dark:border-violet-500/25 dark:bg-violet-500/10 dark:text-violet-300`}>
+                    <button type="button" onClick={() => onCreateEntity(row.field)} className={`${button} border-border bg-[#ececec] text-foreground hover:bg-[#e2e2e2] dark:bg-white/10 dark:hover:bg-white/15`}>
                       <CirclePlus className="h-3.5 w-3.5" aria-hidden="true" />
                       {noun.create}
                     </button>

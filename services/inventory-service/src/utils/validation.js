@@ -40,7 +40,7 @@ const UUID_RE =
 function normalizeRequiredUserId(value) {
   const raw = String(value || "").trim();
   if (!raw || !UUID_RE.test(raw)) {
-    const err = new Error(`Invalid required user ID: ${raw}`);
+    const err = new Error(`User ID bắt buộc không hợp lệ: ${raw}`);
     err.statusCode = 400;
     throw err;
   }

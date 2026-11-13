@@ -42,7 +42,7 @@ app.get('/ready', async (_req, res) => {
 app.use('/analytics', analyticsRoutes);
 
 app.use((req, res) => {
-  res.status(404).json({ message: 'Analytics route not found', path: req.originalUrl });
+  res.status(404).json({ message: 'Không tìm thấy đường dẫn báo cáo phân tích', path: req.originalUrl });
 });
 
 app.use((error, _req, res, _next) => {

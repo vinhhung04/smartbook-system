@@ -27,13 +27,13 @@ function isUuid(value) {
 async function getCustomerAccount(req, res) {
   const customerId = String(req.params.id || '').trim();
   if (!isUuid(customerId)) {
-    return res.status(400).json({ message: 'Invalid customer id' });
+    return res.status(400).json({ message: 'Mã bạn đọc không hợp lệ' });
   }
 
   try {
     const customer = await prisma.customers.findUnique({ where: { id: customerId }, select: { id: true } });
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     const [snapshot, ledger, heldDeposits, reconciliation] = await prisma.$transaction(async (tx) => [
@@ -77,13 +77,13 @@ async function recordCounterTopup(req, res) {
   const note = req.body?.note ? String(req.body.note).trim().slice(0, 500) : null;
 
   if (!isUuid(customerId)) {
-    return res.status(400).json({ message: 'Invalid customer id' });
+    return res.status(400).json({ message: 'Mã bạn đọc không hợp lệ' });
   }
   if (!idempotencyKey) {
-    return res.status(400).json({ message: 'Idempotency-Key header is required for a top-up' });
+    return res.status(400).json({ message: 'Cần header Idempotency-Key khi nạp tiền' });
   }
   if (!TOPUP_METHODS.has(method)) {
-    return res.status(400).json({ message: 'method must be CASH or TRANSFER' });
+    return res.status(400).json({ message: 'method phải là CASH hoặc TRANSFER' });
   }
 
   if (!isAllowedTopupAmount(req.body?.amount)) {
@@ -98,7 +98,7 @@ async function recordCounterTopup(req, res) {
   try {
     const customer = await prisma.customers.findUnique({ where: { id: customerId }, select: { id: true, status: true } });
     if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
+      return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     }
 
     const result = await prisma.$transaction(async (tx) => {

@@ -155,14 +155,14 @@ function canUseSupplierAccount(user) {
 
 async function findAuthenticatedSupplier(req) {
   if (!canUseSupplierAccount(req.user)) {
-    const error = new Error("Supplier account role is required");
+    const error = new Error("Cần vai trò tài khoản nhà cung cấp");
     error.statusCode = 403;
     throw error;
   }
 
   const email = (normalizeText(req.user?.email) || "").toLowerCase();
   if (!email) {
-    const error = new Error("Supplier account email is required");
+    const error = new Error("Tài khoản nhà cung cấp chưa có email");
     error.statusCode = 403;
     throw error;
   }
@@ -175,7 +175,7 @@ async function findAuthenticatedSupplier(req) {
   });
 
   if (!supplier) {
-    const error = new Error("No active supplier is linked to this account email");
+    const error = new Error("Không có nhà cung cấp đang hoạt động nào gắn với email tài khoản này");
     error.statusCode = 403;
     throw error;
   }
@@ -185,7 +185,7 @@ async function findAuthenticatedSupplier(req) {
 
 async function findAuthenticatedDispatch(req, poId) {
   if (!poId) {
-    const error = new Error("Invalid purchase order id");
+    const error = new Error("Mã đơn đặt hàng không hợp lệ");
     error.statusCode = 400;
     throw error;
   }
@@ -200,14 +200,14 @@ async function findAuthenticatedDispatch(req, poId) {
   });
 
   if (!dispatch) {
-    const error = new Error("Supplier order not found for this account");
+    const error = new Error("Không tìm thấy đơn của nhà cung cấp cho tài khoản này");
     error.statusCode = 404;
     throw error;
   }
 
   const token = dispatch.payload?.portal_token;
   if (!token) {
-    const error = new Error("Supplier order is missing portal token metadata");
+    const error = new Error("Đơn của nhà cung cấp thiếu thông tin mã truy cập cổng");
     error.statusCode = 409;
     throw error;
   }
@@ -225,11 +225,11 @@ function handleSupplierAccountError(res, error, label) {
 
 async function getPortalOrder(req, res) {
   const token = normalizeText(req.params.token);
-  if (!token) return res.status(400).json({ message: "Portal token is required" });
+  if (!token) return res.status(400).json({ message: "Thiếu mã truy cập cổng nhà cung cấp" });
 
   try {
     const dispatch = await findDispatchByToken(token);
-    if (!dispatch) return res.status(404).json({ message: "Supplier portal order not found" });
+    if (!dispatch) return res.status(404).json({ message: "Không tìm thấy đơn trên cổng nhà cung cấp" });
     return res.json({ data: mapPortalOrder(dispatch) });
   } catch (error) {
     console.error("Error while loading supplier portal order:", error);
@@ -239,7 +239,7 @@ async function getPortalOrder(req, res) {
 
 async function confirmPortalOrder(req, res) {
   const token = normalizeText(req.params.token);
-  if (!token) return res.status(400).json({ message: "Portal token is required" });
+  if (!token) return res.status(400).json({ message: "Thiếu mã truy cập cổng nhà cung cấp" });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -247,10 +247,10 @@ async function confirmPortalOrder(req, res) {
         where: getPortalTokenWhere(token),
         include: { purchase_orders: true },
       });
-      if (!dispatch) return { invalid: true, statusCode: 404, message: "Supplier portal order not found" };
+      if (!dispatch) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn trên cổng nhà cung cấp" };
       const po = dispatch.purchase_orders;
       if (po.status !== "SENT_TO_SUPPLIER") {
-        return { invalid: true, message: "Only sent purchase orders can be confirmed by supplier" };
+        return { invalid: true, message: "Nhà cung cấp chỉ xác nhận được đơn đặt hàng đã gửi" };
       }
 
       await tx.supplier_order_dispatches.update({
@@ -286,9 +286,9 @@ async function createPortalInvoice(req, res) {
   const invoiceNumber = normalizeText(req.body?.invoice_number);
   const sourceShortageReportId = parseId(req.body?.source_shortage_report_id || req.body?.shortage_report_id);
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
-  if (!token) return res.status(400).json({ message: "Portal token is required" });
-  if (!invoiceNumber) return res.status(400).json({ message: "invoice_number is required" });
-  if (items.length === 0) return res.status(400).json({ message: "items is required" });
+  if (!token) return res.status(400).json({ message: "Thiếu mã truy cập cổng nhà cung cấp" });
+  if (!invoiceNumber) return res.status(400).json({ message: "Thiếu invoice_number" });
+  if (items.length === 0) return res.status(400).json({ message: "Thiếu items" });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -296,10 +296,10 @@ async function createPortalInvoice(req, res) {
         where: getPortalTokenWhere(token),
         include: { purchase_orders: { include: { purchase_order_items: true } } },
       });
-      if (!dispatch) return { invalid: true, statusCode: 404, message: "Supplier portal order not found" };
+      if (!dispatch) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn trên cổng nhà cung cấp" };
       const po = dispatch.purchase_orders;
       if (!["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(po.status)) {
-        return { invalid: true, message: "Purchase order is not ready for supplier invoice" };
+        return { invalid: true, message: "Đơn đặt hàng chưa sẵn sàng để lập hóa đơn nhà cung cấp" };
       }
 
       if (po.status === "SENT_TO_SUPPLIER") {
@@ -326,7 +326,7 @@ async function createPortalInvoice(req, res) {
           include: { supplier_shortage_report_items: true },
         });
         if (!shortageReport) {
-          return { invalid: true, statusCode: 404, message: "Shortage report not found for this supplier order" };
+          return { invalid: true, statusCode: 404, message: "Không tìm thấy báo cáo thiếu hàng cho đơn này của nhà cung cấp" };
         }
         shortageItemsByPoItemId = new Map(
           shortageReport.supplier_shortage_report_items.map((item) => [String(item.purchase_order_item_id), item]),
@@ -341,20 +341,20 @@ async function createPortalInvoice(req, res) {
         const poItem = poItemsById.get(String(poItemId));
         const invoicedQty = toInt(rawLine?.invoiced_qty);
         const unitCost = Number(rawLine?.unit_cost);
-        if (!poItem) return { invalid: true, message: "Invoice item must belong to this purchase order" };
-        if (!invoicedQty || invoicedQty <= 0) return { invalid: true, message: "Each invoice item must include invoiced_qty > 0" };
-        if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Each invoice item must include unit_cost >= 0" };
-        if (seen.has(poItem.variant_id)) return { invalid: true, message: "Duplicate variant in invoice items" };
+        if (!poItem) return { invalid: true, message: "Dòng hóa đơn phải thuộc đơn đặt hàng này" };
+        if (!invoicedQty || invoicedQty <= 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có invoiced_qty > 0" };
+        if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
+        if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
         seen.add(poItem.variant_id);
         const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
-        if (invoicedQty > remainingQty) return { invalid: true, message: "Invoice quantity cannot exceed remaining purchase order quantity" };
+        if (invoicedQty > remainingQty) return { invalid: true, message: "Số lượng hóa đơn không được vượt số lượng còn lại của đơn đặt hàng" };
         if (sourceShortageReportId) {
           const shortageItem = shortageItemsByPoItemId.get(String(poItem.id));
           if (!shortageItem) {
-            return { invalid: true, message: "Redelivery invoice can only include items from the shortage report" };
+            return { invalid: true, message: "Hóa đơn giao bù chỉ được gồm các dòng trong báo cáo thiếu hàng" };
           }
           if (invoicedQty > Number(shortageItem.shortage_qty || 0)) {
-            return { invalid: true, message: "Redelivery quantity cannot exceed shortage quantity" };
+            return { invalid: true, message: "Số lượng giao bù không được vượt số lượng thiếu" };
           }
         }
         invoiceItems.push({
@@ -413,7 +413,7 @@ async function createPortalInvoice(req, res) {
     if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
     return res.status(201).json({ message: "Supplier invoice created", data: result.data });
   } catch (error) {
-    if (error.code === "P2002") return res.status(409).json({ message: "Supplier invoice number already exists for this supplier" });
+    if (error.code === "P2002") return res.status(409).json({ message: "Số hóa đơn này đã tồn tại với nhà cung cấp" });
     console.error("Error while creating supplier portal invoice:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -422,8 +422,8 @@ async function createPortalInvoice(req, res) {
 async function acknowledgeShortageReport(req, res) {
   const token = normalizeText(req.params.token);
   const reportId = parseId(req.params.reportId);
-  if (!token) return res.status(400).json({ message: "Portal token is required" });
-  if (!reportId) return res.status(400).json({ message: "Invalid shortage report id" });
+  if (!token) return res.status(400).json({ message: "Thiếu mã truy cập cổng nhà cung cấp" });
+  if (!reportId) return res.status(400).json({ message: "Mã báo cáo thiếu hàng không hợp lệ" });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -431,14 +431,14 @@ async function acknowledgeShortageReport(req, res) {
         where: getPortalTokenWhere(token),
         include: { purchase_orders: true },
       });
-      if (!dispatch) return { invalid: true, statusCode: 404, message: "Supplier portal order not found" };
+      if (!dispatch) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn trên cổng nhà cung cấp" };
       const po = dispatch.purchase_orders;
       const report = await tx.supplier_shortage_reports.findFirst({
         where: { id: reportId, purchase_order_id: po.id, supplier_id: po.supplier_id },
       });
-      if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+      if (!report) return { invalid: true, statusCode: 404, message: "Không tìm thấy báo cáo thiếu hàng" };
       if (!["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
-        return { invalid: true, message: "Shortage report cannot be acknowledged from current status" };
+        return { invalid: true, message: "Không thể xác nhận báo cáo thiếu hàng ở trạng thái hiện tại" };
       }
 
       const updated = await tx.supplier_shortage_reports.update({
@@ -470,8 +470,8 @@ async function cannotFulfillShortageReport(req, res) {
   const token = normalizeText(req.params.token);
   const reportId = parseId(req.params.reportId);
   const reason = normalizeText(req.body?.reason) || "Supplier cannot fulfill remaining shortage";
-  if (!token) return res.status(400).json({ message: "Portal token is required" });
-  if (!reportId) return res.status(400).json({ message: "Invalid shortage report id" });
+  if (!token) return res.status(400).json({ message: "Thiếu mã truy cập cổng nhà cung cấp" });
+  if (!reportId) return res.status(400).json({ message: "Mã báo cáo thiếu hàng không hợp lệ" });
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -479,14 +479,14 @@ async function cannotFulfillShortageReport(req, res) {
         where: getPortalTokenWhere(token),
         include: { purchase_orders: true },
       });
-      if (!dispatch) return { invalid: true, statusCode: 404, message: "Supplier portal order not found" };
+      if (!dispatch) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn trên cổng nhà cung cấp" };
       const po = dispatch.purchase_orders;
       const report = await tx.supplier_shortage_reports.findFirst({
         where: { id: reportId, purchase_order_id: po.id, supplier_id: po.supplier_id },
       });
-      if (!report) return { invalid: true, statusCode: 404, message: "Shortage report not found" };
+      if (!report) return { invalid: true, statusCode: 404, message: "Không tìm thấy báo cáo thiếu hàng" };
       if (!["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
-        return { invalid: true, message: "Shortage report cannot be updated from current status" };
+        return { invalid: true, message: "Không thể cập nhật báo cáo thiếu hàng ở trạng thái hiện tại" };
       }
 
       const nextReason = [report.reason, `[SUPPLIER_CANNOT_FULFILL] ${reason}`].filter(Boolean).join("\n");
@@ -517,7 +517,7 @@ async function cannotFulfillShortageReport(req, res) {
 
 function createRedeliveryInvoice(req, res) {
   const reportId = parseId(req.params.reportId);
-  if (!reportId) return res.status(400).json({ message: "Invalid shortage report id" });
+  if (!reportId) return res.status(400).json({ message: "Mã báo cáo thiếu hàng không hợp lệ" });
   req.body = {
     ...(req.body || {}),
     source_shortage_report_id: reportId,
@@ -633,7 +633,7 @@ async function createSupplierAccountRedeliveryInvoice(req, res) {
 }
 
 function supplierCannotPostStock(_req, res) {
-  return res.status(403).json({ message: "Supplier portal cannot create or post goods receipts" });
+  return res.status(403).json({ message: "Cổng nhà cung cấp không được tạo hoặc ghi sổ phiếu nhập kho" });
 }
 
 module.exports = {

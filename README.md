@@ -110,6 +110,7 @@ Mở **http://localhost:5173**, đăng nhập bằng tài khoản demo `hung` / 
 - [🛠️ Công nghệ sử dụng](#công-nghệ-sử-dụng)
 - [🐳 Chạy project bằng Docker](#chạy-project-bằng-docker)
 - [🔑 Tài khoản demo](#tài-khoản-demo)
+- [💳 Thanh toán VNPay (sandbox)](#thanh-toán-vnpay-sandbox)
 - [🧪 Kiểm thử](#kiểm-thử)
 - [🗃️ Cấu trúc thư mục](#cấu-trúc-thư-mục)
 - [📚 Tài liệu tham khảo](#tài-liệu-tham-khảo)
@@ -842,6 +843,79 @@ Seed Auth Service tạo các user demo với mật khẩu chung:
 
 > [!WARNING]
 > Đây là mật khẩu demo dùng chung cho môi trường local/seed. Tài khoản nhà cung cấp chỉ có quyền `supplier.portal.*`, không truy cập được các endpoint nhận/sửa tồn kho; quyền truy cập được ràng buộc theo email đăng nhập khớp với email nhà cung cấp trong Inventory Service.
+
+## 💳 Thanh Toán VNPay (Sandbox)
+
+SmartBook có hai luồng thanh toán online qua VNPay. Cả hai dùng chung một merchant và phân biệt nhau theo tiền tố mã giao dịch `vnp_TxnRef`:
+
+| Luồng | Ai dùng | Ở đâu | Mã giao dịch |
+|---|---|---|---|
+| Trả phí phạt | Bạn đọc | Web `/customer/fines` (trang "Tiền phạt & ví"), nút **Thanh toán online qua VNPay**. App mobile: màn trả phạt `customer/wallet/pay/[fineId]` | `SB…` |
+| Nạp tiền vào ví | Bạn đọc | Web `/customer/fines`: chọn mức ở ô **Số tiền nạp vào ví (VND)** rồi bấm **Nạp qua VNPay** | `TU…` |
+
+Dự án chạy với **VNPay sandbox**, môi trường thử nghiệm của VNPay. Tiền và thẻ đều là giả, không có giao dịch thật nào xảy ra.
+
+### 1. Cấu hình (làm một lần)
+
+1. Đăng ký merchant sandbox miễn phí tại https://pay.vnpaytest.vn/dev-registration. Không cần hợp đồng. VNPay gửi **mã TMN** và **hash secret** về email đăng ký.
+2. Điền vào `.env` (file này đã bị gitignore; **không commit** hash secret):
+
+   ```env
+   VNPAY_TMN_CODE=<mã TMN sandbox>
+   VNPAY_HASH_SECRET=<hash secret sandbox>
+   VNPAY_PAYMENT_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+   VNPAY_RETURN_URL=http://localhost:3000/webhooks/vnpay/return
+   ```
+
+3. Áp cấu hình: `docker compose up -d borrow-service`. Thiếu bất kỳ biến nào thì các endpoint VNPay trả `503`.
+
+### 2. Dùng tài khoản nào
+
+| Bước | Tài khoản | Vì sao |
+|---|---|---|
+| Đăng nhập SmartBook | `customer01` / `123456` (đăng nhập tại `/customer/login`) | Chỉ **bạn đọc** mới có ví và phí phạt của riêng mình. Tài khoản nhân viên không có nút thanh toán VNPay |
+| Nạp tiền tại quầy (đối chiếu) | `librarian01` / `123456`, trang khách hàng → ví | Nhân viên nạp tiền mặt hộ bạn đọc; không đi qua VNPay |
+| Trang VNPay | Không cần tài khoản | Trang thanh toán sandbox của VNPay mở công khai; chỉ cần nhập **thẻ test** ở mục 3 |
+
+Muốn thử trả phạt thì `customer01` phải đang có một khoản phạt chưa trả. Có thể tạo bằng cách cho mượn rồi trả sách tại quầy với tình trạng mất hoặc hư hỏng. Tiền cọc của cuốn đó được trừ vào phạt trước; phần vượt quá tiền cọc mới còn nợ và hiện nút thanh toán VNPay.
+
+### 3. Thẻ test, mã OTP, các bước trên trang VNPay
+
+Trên trang VNPay chọn **Thẻ nội địa và tài khoản ngân hàng**, sau đó chọn ngân hàng **NCB** và nhập:
+
+| Trường hợp | Số thẻ | Tên chủ thẻ | Ngày phát hành | OTP | Kết quả mong đợi |
+|---|---|---|---|---|---|
+| Thanh toán thành công | `9704198526191432198` | `NGUYEN VAN A` | `07/15` | `123456` | Trang "Thanh toán thành công"; ví được cộng hoặc khoản phạt chuyển sang `PAID` |
+| Thẻ không đủ số dư | `9704195798459170488` | `NGUYEN VAN A` | `07/15` | `123456` (nếu được hỏi) | VNPay báo "không đủ số dư". Bấm **Hủy thanh toán** để quay về; không cộng ví, phạt vẫn còn nợ |
+| Hủy giữa chừng | (không cần nhập thẻ) | | | | Bấm **Hủy thanh toán** → **Xác nhận hủy**: trang "Thanh toán không thành công", không ghi nhận tiền |
+
+Ở bước nhập thẻ, VNPay hiện điều khoản sử dụng của sandbox; bấm **Đồng ý & Tiếp tục**. Danh sách đầy đủ thẻ test (thẻ bị khóa, thẻ hết hạn, thẻ quốc tế…) có tại https://sandbox.vnpayment.vn/apis/vnpay-demo/.
+
+**Vì sao lại là các giá trị này:**
+
+- **Chỉ thẻ test của VNPay dùng được.** Sandbox không nối với ngân hàng thật. Nó chỉ nhận các số thẻ mà VNPay công bố cho thử nghiệm và tự giả lập kết quả theo từng số thẻ (thành công, không đủ số dư, bị khóa…). **Tuyệt đối không nhập thẻ thật**: thẻ thật không chạy được trên sandbox và còn làm lộ thông tin.
+- **Vì sao là NCB.** Bộ thẻ nội địa test mà VNPay công bố là thẻ NCB, nên ngân hàng NCB là lựa chọn dùng được trong sandbox. Khi lên production, bạn đọc sẽ chọn được mọi ngân hàng hoặc ví mà VNPay hỗ trợ.
+- **Vì sao OTP luôn là `123456`.** Sandbox không gửi SMS. OTP cố định là một phần của bộ dữ liệu test VNPay công bố. Tên chủ thẻ và ngày phát hành cũng là giá trị cố định đi kèm thẻ test.
+- **Mã QR trên trang sandbox không quét bằng app ngân hàng hay ví thật được.** Các app đó chỉ làm việc với VNPay production. Khi demo, hãy thanh toán bằng thẻ NCB test ở trên.
+- **Chỉ có 5 mức nạp: 10.000, 20.000, 50.000, 100.000, 200.000 VND.** Quy tắc này áp dụng cho cả nạp online và nạp tại quầy. Mức khác bị từ chối với `400 INVALID_TOPUP_AMOUNT`.
+- **Ví chỉ được cộng khi VNPay xác nhận có chữ ký hợp lệ.**
+  - Hệ thống kiểm chữ ký HMAC-SHA512 trên return URL và IPN.
+  - Mỗi giao dịch chỉ được ghi nhận đúng một lần: mở lại return URL hay VNPay gọi lại nhiều lần đều không cộng thêm.
+  - Return URL có chữ ký sai trả `400`; IPN có chữ ký sai trả `RspCode 97`.
+- **IPN khi chạy local.** VNPay chỉ gọi IPN tới một URL public (cần tunnel hoặc VPS). Trên máy cá nhân, giao dịch được ghi nhận qua return URL khi trình duyệt quay về SmartBook. Thiếu IPN không làm sai kết quả.
+- **Chuyển sang production** chỉ cần đổi 4 biến `VNPAY_*` sang thông tin merchant thật (cần ký hợp đồng với VNPay), không phải sửa code.
+
+### 4. Kiểm thử tự động
+
+```powershell
+cd apps/web
+# VNPay sandbox thật: nạp thành công, thẻ thiếu số dư, hủy, trả phạt (bỏ qua nếu customer01 không còn nợ phạt)
+$env:VNPAY_SANDBOX=1; npx playwright test e2e/vnpay-sandbox.spec.ts
+# Không cần tài khoản VNPay: chạy với trình giả lập (pnpm vnpay:simulator, xem docs/SERVICES/BORROW_SERVICE.md)
+$env:VNPAY_SIMULATOR=1; npx playwright test e2e/vnpay-payment.spec.ts
+```
+
+Mỗi lần chạy spec sandbox, ví của `customer01` được cộng 50.000 VND tiền thử. Đặt `VNPAY_EVIDENCE_DIR=<thư mục>` để giữ ảnh chụp từng bước làm bằng chứng. Chi tiết API và luồng tiền cọc: [docs/SERVICES/BORROW_SERVICE.md](docs/SERVICES/BORROW_SERVICE.md), [docs/SERVICES/BOOK_DEPOSIT.md](docs/SERVICES/BOOK_DEPOSIT.md).
 
 ## 🧪 Kiểm Thử
 

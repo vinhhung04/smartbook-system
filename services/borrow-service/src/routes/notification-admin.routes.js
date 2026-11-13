@@ -8,10 +8,10 @@ const router = express.Router();
 router.post('/send', authorizeBorrowAdminWrite, async (req, res) => {
   try {
     const { customer_id, subject, body } = req.body;
-    if (!customer_id || !body) return res.status(400).json({ message: 'customer_id and body are required' });
+    if (!customer_id || !body) return res.status(400).json({ message: 'Cần có đủ customer_id và body' });
 
     const customer = await prisma.customers.findUnique({ where: { id: customer_id } });
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
 
     const record = await prisma.$transaction(async (tx) => {
       return createNotificationRecord(tx, {

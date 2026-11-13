@@ -90,15 +90,15 @@ async function assignTransferReceiving(req, res) {
   const actorUserId = parseId(req.user?.id || req.user?.sub);
 
   if (!transferId) {
-    return res.status(400).json({ message: "Invalid transfer id" });
+    return res.status(400).json({ message: "Mã phiếu chuyển kho không hợp lệ" });
   }
   if (!assignedUserId) {
-    return res.status(400).json({ message: "received_by_user_id is required" });
+    return res.status(400).json({ message: "Thiếu received_by_user_id" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
   if (!scope.canManageAssignment) {
-    return res.status(403).json({ message: "Only manager or admin can assign transfer receiving tasks" });
+    return res.status(403).json({ message: "Chỉ quản lý hoặc quản trị viên được giao công việc nhận hàng chuyển kho" });
   }
 
   try {
@@ -106,10 +106,10 @@ async function assignTransferReceiving(req, res) {
       where: { id: transferId },
       select: { id: true, transfer_number: true, status: true, to_warehouse_id: true },
     });
-    if (!order) return res.status(404).json({ message: "Transfer order not found" });
+    if (!order) return res.status(404).json({ message: "Không tìm thấy phiếu chuyển kho" });
     if (!(await requireAssignableUser(res, assignedUserId, order.to_warehouse_id))) return undefined;
     if (order.status !== "IN_TRANSIT") {
-      return res.status(400).json({ message: "Transfer order must be IN_TRANSIT to assign receiver" });
+      return res.status(400).json({ message: "Phiếu chuyển kho phải ở trạng thái IN_TRANSIT mới giao người nhận được" });
     }
 
     await prisma.transfer_orders.update({
@@ -142,7 +142,7 @@ async function confirmTransferReceiving(req, res) {
   const rawActor = parseId(req.user?.id);
 
   if (!transferId) {
-    return res.status(400).json({ message: "Invalid transfer id" });
+    return res.status(400).json({ message: "Mã phiếu chuyển kho không hợp lệ" });
   }
   if (!rawActor) {
     return res.status(401).json({ message: "Invalid current user context" });
@@ -179,7 +179,7 @@ async function confirmTransferReceiving(req, res) {
         });
 
         if (!order)
-          return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+          return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu chuyển kho" };
 
         // Idempotent re-confirm: already received
         if (order.status === "RECEIVED") {
@@ -201,7 +201,7 @@ async function confirmTransferReceiving(req, res) {
           return {
             invalid: true,
             statusCode: 400,
-            message: "Transfer order must be IN_TRANSIT to confirm receiving",
+            message: "Phiếu chuyển kho phải ở trạng thái IN_TRANSIT mới xác nhận nhận hàng được",
           };
         }
 
@@ -211,7 +211,7 @@ async function confirmTransferReceiving(req, res) {
             return {
               invalid: true,
               statusCode: 403,
-              message: "Transfer receiving task must be assigned to current warehouse staff",
+              message: "Công việc nhận hàng chuyển kho phải được giao cho nhân viên kho hiện tại",
             };
           }
         }
@@ -276,7 +276,7 @@ async function confirmTransferReceiving(req, res) {
             (line) => Number(line.shipped_qty || 0) > 0,
           );
           if (shippedLines.length === 0) {
-            return { invalid: true, statusCode: 400, message: "No shipped items to receive" };
+            return { invalid: true, statusCode: 400, message: "Không có hàng đã gửi để nhận" };
           }
           destinationReceipt = await tx.goods_receipts.create({
             data: {
@@ -350,7 +350,7 @@ async function confirmTransferReceiving(req, res) {
   } catch (error) {
     if (toSerializableError(error)) {
       return res.status(409).json({
-        message: "Data changed during receiving confirmation. Please reload and try again.",
+        message: "Dữ liệu đã thay đổi trong lúc xác nhận nhận hàng. Vui lòng tải lại và thử lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }
@@ -363,7 +363,7 @@ async function claimSelfTransferReceiving(req, res) {
   const transferId = parseId(req.params.id);
 
   if (!transferId) {
-    return res.status(400).json({ message: "Invalid transfer id" });
+    return res.status(400).json({ message: "Mã phiếu chuyển kho không hợp lệ" });
   }
 
   const scope = getTaskPermissionScope(req.user || {});
@@ -386,7 +386,7 @@ async function claimSelfTransferReceiving(req, res) {
       });
 
       if (!order) {
-        return { invalid: true, statusCode: 404, message: "Transfer order not found" };
+        return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu chuyển kho" };
       }
       if (order.received_by_user_id && order.received_by_user_id !== currentUserId) {
         return { invalid: true, statusCode: 409, message: "Task đã được nhân viên khác nhận" };
@@ -395,7 +395,7 @@ async function claimSelfTransferReceiving(req, res) {
         return { data: { transfer_id: transferId, status: order.status } };
       }
       if (order.status !== "IN_TRANSIT") {
-        return { invalid: true, statusCode: 400, message: "Only IN_TRANSIT orders are available for self-claim" };
+        return { invalid: true, statusCode: 400, message: "Chỉ phiếu ở trạng thái IN_TRANSIT mới tự nhận được" };
       }
 
       await tx.transfer_orders.update({

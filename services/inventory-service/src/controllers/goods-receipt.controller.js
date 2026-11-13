@@ -311,7 +311,7 @@ async function getGoodsReceiptById(req, res) {
   const id = parseId(req.params.id);
 
   if (!id) {
-    return res.status(400).json({ message: "Invalid goods receipt id" });
+    return res.status(400).json({ message: "Mã phiếu nhập kho không hợp lệ" });
   }
 
   try {
@@ -358,11 +358,11 @@ async function getGoodsReceiptById(req, res) {
     });
 
     if (!receipt) {
-      return res.status(404).json({ message: "Goods receipt not found" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu nhập kho" });
     }
 
     if (!canViewAllReceivingTasks(req.user || {}) && receipt.received_by_user_id !== req.user?.id) {
-      return res.status(403).json({ message: "Forbidden" });
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
     }
     if (receipt.received_by_user_id !== req.user?.id) {
       const canRead = await requireWarehouseReadAccess(req, res, receipt.warehouse_id);
@@ -475,13 +475,13 @@ async function createGoodsReceipt(req, res) {
 
   if (!managerScope && (purchase_order_id || supplier_delivery_invoice_id || invoice_number)) {
     return res.status(403).json({
-      message: "Warehouse staff can only create manual receiving draft receipts",
+      message: "Nhân viên kho chỉ được tạo phiếu nhập nháp nhận hàng thủ công",
     });
   }
 
   if ((!warehouse_id && !purchase_order_id) || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({
-      message: "warehouse_id (or purchase_order_id) and non-empty items are required",
+      message: "Cần có warehouse_id (hoặc purchase_order_id) và items không rỗng",
     });
   }
 
@@ -492,25 +492,25 @@ async function createGoodsReceipt(req, res) {
     if ((!variantId && !isbn13) || !isPositiveInteger(item?.quantity)) {
       return res.status(400).json({
         message:
-          "Each item must include isbn13 (or variant_id) and quantity > 0",
+          "Mỗi dòng hàng phải có isbn13 (hoặc variant_id) và quantity > 0",
       });
     }
 
     if (isbn13 && !/^\d{13}$/.test(isbn13)) {
       return res.status(400).json({
-        message: "isbn13 must contain exactly 13 digits",
+        message: "isbn13 phải gồm đúng 13 chữ số",
       });
     }
 
     if (!managerScope && item?.unit_cost !== undefined && Number(item.unit_cost) < 0) {
       return res.status(400).json({
-        message: "Each item must include unit_cost >= 0",
+        message: "Mỗi dòng hàng phải có unit_cost >= 0",
       });
     }
 
     if (managerScope && !isValidNumber(item?.unit_cost)) {
       return res.status(400).json({
-        message: "Each item must include unit_cost >= 0",
+        message: "Mỗi dòng hàng phải có unit_cost >= 0",
       });
     }
   }
@@ -729,53 +729,53 @@ async function createGoodsReceipt(req, res) {
     });
   } catch (error) {
     if (error.message === "WAREHOUSE_NOT_FOUND") {
-      return res.status(404).json({ message: "Warehouse not found" });
+      return res.status(404).json({ message: "Không tìm thấy kho" });
     }
     if (error.message === "WAREHOUSE_ACCESS_DENIED") {
-      return res.status(403).json({ message: "You do not have write access to this warehouse" });
+      return res.status(403).json({ message: "Bạn không có quyền thao tác trên kho này" });
     }
     if (error.message === "PURCHASE_ORDER_NOT_FOUND") {
-      return res.status(404).json({ message: "Purchase order not found" });
+      return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
     }
     if (error.message === "PURCHASE_ORDER_NOT_RECEIVABLE") {
       return res
         .status(400)
-        .json({ message: "Purchase order must be sent to supplier or supplier-confirmed before receiving" });
+        .json({ message: "Đơn đặt hàng phải được gửi hoặc được nhà cung cấp xác nhận trước khi nhận hàng" });
     }
     if (error.message === "PURCHASE_ORDER_REQUIRES_SUPPLIER_INVOICE") {
       return res
         .status(400)
-        .json({ message: "Create goods receipt from supplier invoice/delivery note instead of directly from purchase order" });
+        .json({ message: "Hãy tạo phiếu nhập kho từ hóa đơn/phiếu giao hàng của nhà cung cấp, không tạo trực tiếp từ đơn đặt hàng" });
     }
     if (error.message === "SUPPLIER_INVOICE_NOT_FOUND") {
-      return res.status(404).json({ message: "Supplier invoice/delivery note not found for purchase order" });
+      return res.status(404).json({ message: "Không tìm thấy hóa đơn/phiếu giao hàng của nhà cung cấp cho đơn đặt hàng" });
     }
     if (error.message === "PURCHASE_ORDER_WAREHOUSE_MISMATCH") {
       return res
         .status(400)
-        .json({ message: "warehouse_id must match purchase order warehouse" });
+        .json({ message: "warehouse_id phải trùng kho của đơn đặt hàng" });
     }
     if (error.message === "PURCHASE_ORDER_ITEM_MISMATCH") {
       return res
         .status(400)
-        .json({ message: "One or more receipt variants do not belong to the purchase order" });
+        .json({ message: "Có ấn bản trong phiếu nhập không thuộc đơn đặt hàng" });
     }
     if (error.message === "PURCHASE_ORDER_OVER_RECEIVED") {
       return res
         .status(400)
-        .json({ message: "Cannot receive more than remaining purchase order quantity" });
+        .json({ message: "Không thể nhận vượt số lượng còn lại của đơn đặt hàng" });
     }
     if (error.message === "INVALID_VARIANTS") {
       return res
         .status(400)
-        .json({ message: "One or more variant_id values are invalid" });
+        .json({ message: "Có variant_id không hợp lệ" });
     }
     if (error.message === "INVALID_LOCATIONS") {
       return res
         .status(400)
         .json({
           message:
-            "One or more location_id values are invalid for this warehouse",
+            "Có location_id không hợp lệ với kho này",
         });
     }
     console.error("Error while creating goods receipt:", error);
@@ -1217,11 +1217,11 @@ async function updateGoodsReceipt(req, res) {
   }
 
   if (!id) {
-    return res.status(400).json({ message: "Invalid goods receipt id" });
+    return res.status(400).json({ message: "Mã phiếu nhập kho không hợp lệ" });
   }
 
   if (status && !["DRAFT", "POSTED", "CANCELLED"].includes(status)) {
-    return res.status(400).json({ message: "Invalid status value" });
+    return res.status(400).json({ message: "Giá trị trạng thái không hợp lệ" });
   }
 
   try {
@@ -1244,7 +1244,7 @@ async function updateGoodsReceipt(req, res) {
       if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
         return {
           forbidden: true,
-          message: "You do not have write access to this warehouse",
+          message: "Bạn không có quyền thao tác trên kho này",
         };
       }
 
@@ -1373,11 +1373,11 @@ async function updateGoodsReceipt(req, res) {
     });
 
     if (result.notFound) {
-      return res.status(404).json({ message: "Goods receipt not found" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu nhập kho" });
     }
 
     if (result.forbidden) {
-      return res.status(403).json({ message: result.message || "Forbidden" });
+      return res.status(403).json({ message: result.message || "Bạn không có quyền thực hiện thao tác này" });
     }
 
     if (result.invalidTransition) {
@@ -1394,18 +1394,18 @@ async function updateGoodsReceipt(req, res) {
       return res
         .status(400)
         .json({
-          message: "Receipt contains locations outside the selected warehouse",
+          message: "Phiếu nhập có vị trí nằm ngoài kho đã chọn",
         });
     }
     if (error.message === "PO_RECEIPT_VARIANT_MISMATCH") {
       return res
         .status(400)
-        .json({ message: "Receipt contains variants outside the linked purchase order" });
+        .json({ message: "Phiếu nhập có ấn bản không thuộc đơn đặt hàng liên kết" });
     }
     if (error.message === "PO_RECEIPT_OVER_RECEIVED") {
       return res
         .status(400)
-        .json({ message: "Cannot post receipt because it exceeds remaining purchase order quantity" });
+        .json({ message: "Không thể ghi sổ phiếu nhập vì vượt số lượng còn lại của đơn đặt hàng" });
     }
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -1417,17 +1417,17 @@ async function assignGoodsReceipt(req, res) {
 
   if (!id || !receivedByUserId) {
     return res.status(400).json({
-      message: "goods receipt id and received_by_user_id are required",
+      message: "Cần có đủ mã phiếu nhập kho và received_by_user_id",
     });
   }
 
   try {
     const existing = await prisma.goods_receipts.findUnique({ where: { id }, select: { warehouse_id: true } });
     if (!existing) {
-      return res.status(404).json({ message: "Goods receipt not found" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu nhập kho" });
     }
     if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
-      return res.status(403).json({ message: "You do not have write access to this warehouse" });
+      return res.status(403).json({ message: "Bạn không có quyền thao tác trên kho này" });
     }
 
     const updated = await prisma.goods_receipts.update({
@@ -1457,7 +1457,7 @@ async function assignGoodsReceipt(req, res) {
     });
   } catch (error) {
     if (error?.code === "P2025") {
-      return res.status(404).json({ message: "Goods receipt not found" });
+      return res.status(404).json({ message: "Không tìm thấy phiếu nhập kho" });
     }
     console.error("Error while assigning goods receipt:", error);
     return res.status(500).json({ message: "Internal server error" });

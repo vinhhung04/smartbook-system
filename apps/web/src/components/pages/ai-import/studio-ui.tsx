@@ -3,7 +3,7 @@ import { Check, Loader2, ScanText } from "lucide-react";
 import type { OcrAvailability } from "@/lib/book-ocr";
 
 // Shared building blocks of the cataloging studio. Indigo (primary) marks the
-// action you are on, violet is reserved for AI suggestions, and every status
+// action you are on, one blue (#1d5fbf) marks the AI's own output, and every status
 // pairs an icon with words so nothing depends on color alone.
 
 export type StepState = "todo" | "active" | "done";
@@ -35,15 +35,14 @@ export function StudioHeader({ session, steps, ocrAvailability }: {
   ocrAvailability: OcrAvailability;
 }) {
   return (
-    <header data-reveal className="space-y-5">
+    <header data-reveal className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 space-y-1.5">
-          <p className="text-[12px] font-medium text-primary">Cataloging studio</p>
-          <h1 className="font-[family-name:var(--font-display)] text-[26px] font-medium leading-tight tracking-[-0.01em] text-foreground sm:text-[30px]">
+        <div className="min-w-0 space-y-2">
+          <h1 className="text-balance font-[family-name:var(--font-display)] text-[28px] font-medium leading-tight tracking-[-0.015em] text-foreground sm:text-[32px]">
             Nhập sách bằng AI
           </h1>
-          <p className="max-w-[70ch] text-[13.5px] leading-relaxed text-muted-foreground">
-            Tra ISBN hoặc chụp sách, đối chiếu các nguồn, rồi duyệt từng trường. AI chỉ đề xuất — sách chỉ được lưu khi bạn bấm Lưu.
+          <p className="max-w-[68ch] text-[14px] leading-relaxed text-muted-foreground">
+            Tra mã ISBN hoặc chụp sách, xem từng nguồn đã tìm thấy gì, rồi duyệt metadata theo từng trường. AI chỉ đề xuất — sách chỉ được lưu khi bạn bấm Lưu.
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2" aria-live="polite">
@@ -59,24 +58,21 @@ export function StudioHeader({ session, steps, ocrAvailability }: {
         </div>
       </div>
 
-      <ol aria-label="Các bước nhập sách" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <ol aria-label="Các giai đoạn nhập sách" className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-border py-4 sm:grid-cols-4">
         {steps.map((step, index) => (
           <li
             key={step.label}
             aria-current={step.state === "active" ? "step" : undefined}
-            className={`relative flex min-w-0 items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors duration-200 ${
-              step.state === "active" ? "border-primary/40 bg-card shadow-sm ring-1 ring-primary/10"
-                : step.state === "done" ? "border-border bg-card/70" : "border-dashed border-border bg-transparent"
-            }`}
+            className="relative flex min-w-0 items-start gap-2.5"
           >
-            <span className={`mt-px grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold ${
-              step.state === "done" ? "bg-emerald-500 text-white" : step.state === "active" ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground"
+            <span className={`mt-px grid h-6 w-6 shrink-0 place-items-center rounded-full text-[12px] font-semibold tabular-nums transition-colors duration-200 ${
+              step.state === "done" ? "bg-emerald-600 text-white" : step.state === "active" ? "bg-primary text-primary-foreground ring-4 ring-primary/15" : "border border-border text-muted-foreground"
             }`}>
-              {step.state === "done" ? <Check className="h-3 w-3" aria-hidden="true" /> : index + 1}
+              {step.state === "done" ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : index + 1}
             </span>
             <span className="min-w-0">
-              <span className={`block text-[13px] font-semibold leading-tight ${step.state === "todo" ? "text-muted-foreground" : "text-foreground"}`}>{step.label}</span>
-              <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-foreground">{step.hint}</span>
+              <span className={`block text-[13.5px] font-semibold leading-tight ${step.state === "todo" ? "text-muted-foreground" : "text-foreground"}`}>{step.label}</span>
+              <span className="mt-0.5 block text-[12px] leading-snug text-muted-foreground">{step.hint}</span>
               <span className="sr-only">{step.state === "done" ? " — đã xong" : step.state === "active" ? " — đang thực hiện" : " — chưa tới"}</span>
             </span>
           </li>
@@ -128,7 +124,7 @@ export function StateLabel({ icon: Icon, tone, children, spin = false }: {
     ok: "text-emerald-700 dark:text-emerald-400",
     warn: "text-amber-700 dark:text-amber-400",
     error: "text-red-700 dark:text-red-400",
-    ai: "text-violet-700 dark:text-violet-300",
+    ai: "text-[#1d5fbf] dark:text-[#8ab4f8]",
   }[tone];
   return (
     <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${color}`}>

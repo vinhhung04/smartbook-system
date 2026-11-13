@@ -7,7 +7,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 async function getMyWishlist(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const items = await prisma.book_wishlists.findMany({
       where: { customer_id: customer.id },
@@ -23,11 +23,11 @@ async function getMyWishlist(req, res) {
 async function addToWishlist(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const bookId = String(req.body?.book_id || '').trim();
-    if (!bookId) return res.status(400).json({ message: 'book_id is required' });
-    if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id must be a valid UUID' });
+    if (!bookId) return res.status(400).json({ message: 'Thiếu book_id' });
+    if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id phải là UUID hợp lệ' });
 
     const item = await prisma.book_wishlists.upsert({
       where: { customer_id_book_id: { customer_id: customer.id, book_id: bookId } },
@@ -44,7 +44,7 @@ async function addToWishlist(req, res) {
 async function removeFromWishlist(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const bookId = String(req.params.bookId || '').trim();
     await prisma.book_wishlists.deleteMany({
@@ -60,7 +60,7 @@ async function removeFromWishlist(req, res) {
 async function getMyAvailabilityAlerts(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const alerts = await prisma.availability_alerts.findMany({
       where: { customer_id: customer.id },
@@ -99,11 +99,11 @@ async function undoAlertWrite(alert, previous) {
 async function subscribeAvailabilityAlert(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const bookId = String(req.body?.book_id || '').trim();
-    if (!bookId) return res.status(400).json({ message: 'book_id is required' });
-    if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id must be a valid UUID' });
+    if (!bookId) return res.status(400).json({ message: 'Thiếu book_id' });
+    if (!UUID_RE.test(bookId)) return res.status(400).json({ message: 'book_id phải là UUID hợp lệ' });
 
     // "Báo khi có sách" only makes sense for a book no reader can pick up today.
     // Checked here (not trusted to the UI) against inventory's live public
@@ -165,7 +165,7 @@ async function subscribeAvailabilityAlert(req, res) {
 async function unsubscribeAvailabilityAlert(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const bookId = String(req.params.bookId || '').trim();
     await prisma.availability_alerts.deleteMany({

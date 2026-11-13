@@ -23,7 +23,7 @@ function readFilter(status) {
 async function getMyNotifications(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
 
     const pagination = parsePagination(req.query);
     const where = { customer_id: customer.id, ...readFilter(req.query.status) };
@@ -57,7 +57,7 @@ async function getMyNotifications(req, res) {
 async function getMyUnreadNotificationCount(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer profile not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     const unreadCount = await prisma.customer_notifications.count({ where: { customer_id: customer.id, read_at: null } });
     return res.json({ data: { unread_count: unreadCount } });
   } catch (error) {
@@ -69,16 +69,16 @@ async function getMyUnreadNotificationCount(req, res) {
 async function markMyNotificationRead(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
 
     const id = String(req.params.id || '');
-    if (!UUID_PATTERN.test(id)) return res.status(400).json({ message: 'Invalid notification id' });
+    if (!UUID_PATTERN.test(id)) return res.status(400).json({ message: 'Mã thông báo không hợp lệ' });
 
     const notification = await prisma.customer_notifications.findFirst({
       where: { id, customer_id: customer.id },
       select: { id: true, read_at: true },
     });
-    if (!notification) return res.status(404).json({ message: 'Notification not found' });
+    if (!notification) return res.status(404).json({ message: 'Không tìm thấy thông báo' });
 
     // Idempotent: marking an already-read notification keeps its first read time.
     if (!notification.read_at) {
@@ -98,7 +98,7 @@ async function markMyNotificationRead(req, res) {
 async function markAllMyNotificationsRead(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
-    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+    if (!customer) return res.status(404).json({ message: 'Không tìm thấy bạn đọc' });
     const result = await prisma.customer_notifications.updateMany({
       where: { customer_id: customer.id, read_at: null },
       data: { read_at: new Date() },

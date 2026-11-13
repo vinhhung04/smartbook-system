@@ -23,17 +23,17 @@ async function upsertStockAlert({
   const normalizedAlertLevel = String(alert_level).toUpperCase();
 
   if (!variant_id || !warehouse_id || !normalizedAlertType || !normalizedAlertLevel) {
-    const err = new Error('variant_id, warehouse_id, alert_type, alert_level are required');
+    const err = new Error('Cần có đủ variant_id, warehouse_id, alert_type và alert_level');
     err.statusCode = 400;
     throw err;
   }
   if (!VALID_ALERT_TYPES.includes(normalizedAlertType)) {
-    const err = new Error(`alert_type must be one of: ${VALID_ALERT_TYPES.join(', ')}`);
+    const err = new Error(`alert_type phải là một trong: ${VALID_ALERT_TYPES.join(', ')}`);
     err.statusCode = 400;
     throw err;
   }
   if (!VALID_ALERT_LEVELS.includes(normalizedAlertLevel)) {
-    const err = new Error(`alert_level must be one of: ${VALID_ALERT_LEVELS.join(', ')}`);
+    const err = new Error(`alert_level phải là một trong: ${VALID_ALERT_LEVELS.join(', ')}`);
     err.statusCode = 400;
     throw err;
   }
@@ -44,12 +44,12 @@ async function upsertStockAlert({
   ]);
 
   if (!variant) {
-    const err = new Error('book_variant not found');
+    const err = new Error('Không tìm thấy book_variant');
     err.statusCode = 404;
     throw err;
   }
   if (!warehouse) {
-    const err = new Error('warehouse not found');
+    const err = new Error('Không tìm thấy kho');
     err.statusCode = 404;
     throw err;
   }

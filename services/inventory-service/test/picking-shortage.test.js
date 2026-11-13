@@ -83,7 +83,7 @@ test('outbound: a fully picked order still reports "no shortage" (existing rule,
   });
   const res = await call(declareOutboundShortage);
   assert.equal(res.statusCode, 400);
-  assert.match(res.body.message, /fully picked/);
+  assert.match(res.body.message, /đã lấy đủ/);
 });
 
 test('transfer: declaring a shortage before shipping/picking anything is rejected', async () => {

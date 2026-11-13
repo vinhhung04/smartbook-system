@@ -18,12 +18,12 @@ async function createVnpayFinePayment(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const fineId = String(req.body?.fine_id || '').trim();
     if (!isUuid(fineId)) {
-      return res.status(400).json({ message: 'fine_id must be a valid uuid' });
+      return res.status(400).json({ message: 'fine_id phải là UUID hợp lệ' });
     }
 
     if (!vnpayService.getEnvConfig()) {
@@ -34,16 +34,16 @@ async function createVnpayFinePayment(req, res) {
 
     const fine = await prisma.fines.findUnique({ where: { id: fineId }, include: { fine_payments: true } });
     if (!fine || fine.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Fine not found' });
+      return res.status(404).json({ message: 'Không tìm thấy khoản phạt' });
     }
     if (fine.status === 'PAID' || fine.status === 'WAIVED') {
-      return res.status(409).json({ message: `Cannot pay fine with status ${fine.status}` });
+      return res.status(409).json({ message: `Không thể thanh toán khoản phạt ở trạng thái ${fine.status}` });
     }
 
     const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + normalizeMoney(item.amount), 0);
     const remaining = Math.max(0, normalizeMoney(fine.amount) - normalizeMoney(fine.waived_amount) - paidSoFar);
     if (remaining <= 0) {
-      return res.status(409).json({ message: 'Fine is already fully settled' });
+      return res.status(409).json({ message: 'Khoản phạt đã được thanh toán đủ' });
     }
 
     // One live payment per fine. If the reader already paid an earlier link that VNPay
@@ -102,13 +102,13 @@ async function getVnpayFinePaymentStatus(req, res) {
   try {
     const customer = await ensureCurrentCustomer(req);
     if (!customer) {
-      return res.status(404).json({ message: 'Customer profile not found' });
+      return res.status(404).json({ message: 'Không tìm thấy hồ sơ bạn đọc' });
     }
 
     const txnRef = String(req.params.txnRef || '').trim();
     const intent = await prisma.fine_payment_intents.findUnique({ where: { txn_ref: txnRef } });
     if (!intent || intent.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Payment intent not found' });
+      return res.status(404).json({ message: 'Không tìm thấy giao dịch thanh toán' });
     }
 
     let status = intent.status;

@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 // flows (counter loans, reservations made on a customer's behalf) send no channel and
 // keep access to every warehouse.
 const CUSTOMER_RESERVATION_CHANNEL = 'CUSTOMER';
-const INVALID_PICKUP_WAREHOUSE_MESSAGE = 'Selected warehouse is not a valid pickup location';
+const INVALID_PICKUP_WAREHOUSE_MESSAGE = 'Chi nhánh đã chọn không phải điểm nhận sách hợp lệ';
 
 function isCustomerReservation(channel) {
   return String(channel || '').trim().toUpperCase() === CUSTOMER_RESERVATION_CHANNEL;
@@ -40,7 +40,7 @@ function createMovementNumber(baseTimestamp, index) {
 
 function requireIdempotencyKey(res, idempotency_key) {
   if (!idempotency_key || typeof idempotency_key !== 'string' || !idempotency_key.trim()) {
-    res.status(400).json({ message: 'idempotency_key is required' });
+    res.status(400).json({ message: 'Thiếu idempotency_key' });
     return null;
   }
   return idempotency_key.trim();
@@ -143,11 +143,11 @@ async function getAvailability(req, res) {
   const quantity = parsePositiveInteger(req.query.quantity, 1);
 
   if (!variant_id || !warehouse_id || !quantity) {
-    return res.status(400).json({ message: 'variant_id, warehouse_id and quantity > 0 are required' });
+    return res.status(400).json({ message: 'Cần có đủ variant_id, warehouse_id và quantity > 0' });
   }
 
   if (![variant_id, warehouse_id].every(isUuid)) {
-    return res.status(400).json({ message: 'variant_id and warehouse_id must be valid UUID values' });
+    return res.status(400).json({ message: 'variant_id và warehouse_id phải là UUID hợp lệ' });
   }
 
   try {
@@ -173,7 +173,7 @@ async function getAvailability(req, res) {
 
     if (totalAvailable < quantity) {
       return res.status(409).json({
-        message: 'Insufficient available stock',
+        message: 'Không đủ tồn kho khả dụng',
         data: {
           total_available: totalAvailable,
           requested_quantity: quantity,
@@ -214,12 +214,12 @@ async function reserveFromBorrow(req, res) {
 
   if (!reservation_id || !reservation_number || !variant_id || !warehouse_id || !normalizedQuantity || !expires_at) {
     return res.status(400).json({
-      message: 'reservation_id, reservation_number, variant_id, warehouse_id, quantity and expires_at are required',
+      message: 'Cần có đủ reservation_id, reservation_number, variant_id, warehouse_id, quantity và expires_at',
     });
   }
 
   if (![reservation_id, variant_id, warehouse_id].every(isUuid)) {
-    return res.status(400).json({ message: 'reservation_id, variant_id and warehouse_id must be valid UUID values' });
+    return res.status(400).json({ message: 'reservation_id, variant_id và warehouse_id phải là UUID hợp lệ' });
   }
 
   const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
@@ -373,14 +373,14 @@ async function reserveFromBorrow(req, res) {
       return res.status(409).json({ message: INVALID_PICKUP_WAREHOUSE_MESSAGE });
     }
     if (error.message === 'VARIANT_NOT_BORROWABLE') {
-      return res.status(409).json({ message: 'Variant is not borrowable' });
+      return res.status(409).json({ message: 'Ấn bản này hiện không cho mượn.' });
     }
     if (error.message === 'INSUFFICIENT_AVAILABLE_STOCK') {
       reservationConflictCounter.add(1, { reason: error.reason || 'unknown' });
-      return res.status(409).json({ message: 'Insufficient available stock to reserve' });
+      return res.status(409).json({ message: 'Không đủ tồn kho khả dụng để đặt trước' });
     }
     if (error.code === 'P2002') {
-      return res.status(409).json({ message: 'Reservation already exists' });
+      return res.status(409).json({ message: 'Đặt trước đã tồn tại' });
     }
 
     console.error('Error while reserving stock for borrow:', error);
@@ -392,11 +392,11 @@ async function releaseBorrowReservation(req, res) {
   const { reservation_id, reason, idempotency_key } = req.body;
 
   if (!reservation_id) {
-    return res.status(400).json({ message: 'reservation_id is required' });
+    return res.status(400).json({ message: 'Thiếu reservation_id' });
   }
 
   if (!isUuid(reservation_id)) {
-    return res.status(400).json({ message: 'reservation_id must be a valid UUID value' });
+    return res.status(400).json({ message: 'reservation_id phải là UUID hợp lệ' });
   }
 
   const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
@@ -498,10 +498,10 @@ async function releaseBorrowReservation(req, res) {
     return res.json(result);
   } catch (error) {
     if (error.message === 'RESERVATION_LOCATION_MISSING') {
-      return res.status(409).json({ message: 'Reservation location is missing and cannot be released safely' });
+      return res.status(409).json({ message: 'Thiếu vị trí giữ hàng của đặt trước, không thể trả lại tồn an toàn' });
     }
     if (error.message === 'RESERVATION_STOCK_ALREADY_RELEASED') {
-      return res.status(409).json({ message: 'Reservation stock changed concurrently; retry' });
+      return res.status(409).json({ message: 'Tồn kho vừa thay đổi do có yêu cầu đồng thời, vui lòng thử lại' });
     }
     console.error('Error while releasing borrow reservation:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -519,11 +519,11 @@ async function consumeBorrowReservation(req, res) {
   } = req.body;
 
   if (!reservation_id || !loan_id || !loan_number || !warehouse_id) {
-    return res.status(400).json({ message: 'reservation_id, loan_id, loan_number and warehouse_id are required' });
+    return res.status(400).json({ message: 'Cần có đủ reservation_id, loan_id, loan_number và warehouse_id' });
   }
 
   if (![reservation_id, loan_id, warehouse_id].every(isUuid)) {
-    return res.status(400).json({ message: 'reservation_id, loan_id and warehouse_id must be valid UUID values' });
+    return res.status(400).json({ message: 'reservation_id, loan_id và warehouse_id phải là UUID hợp lệ' });
   }
 
   const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
@@ -614,13 +614,13 @@ async function consumeBorrowReservation(req, res) {
     return res.status(result.idempotent ? 200 : 201).json(result);
   } catch (error) {
     if (error.message === 'RESERVATION_NOT_ACTIVE') {
-      return res.status(409).json({ message: 'Reservation is not ACTIVE in inventory and cannot be consumed' });
+      return res.status(409).json({ message: 'Phần giữ hàng của đặt trước không còn ACTIVE trong kho, không thể xuất cho mượn' });
     }
     if (error.message === 'RESERVATION_LOCATION_MISSING') {
-      return res.status(409).json({ message: 'Reservation location is missing and cannot be consumed safely' });
+      return res.status(409).json({ message: 'Thiếu vị trí giữ hàng của đặt trước, không thể xuất cho mượn an toàn' });
     }
     if (error.message === 'RESERVATION_STOCK_ALREADY_CONSUMED') {
-      return res.status(409).json({ message: 'Reservation stock changed concurrently; retry' });
+      return res.status(409).json({ message: 'Tồn kho vừa thay đổi do có yêu cầu đồng thời, vui lòng thử lại' });
     }
     console.error('Error while consuming borrow reservation:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -648,23 +648,23 @@ async function returnBorrowedLoan(req, res) {
   const isDamaged = !isLost && ['DAMAGED', 'POOR'].includes(normalizedCondition);
 
   if (!loan_id || !variant_id || !warehouse_id || !normalizedQuantity) {
-    return res.status(400).json({ message: 'loan_id, variant_id, warehouse_id and quantity are required' });
+    return res.status(400).json({ message: 'Cần có đủ loan_id, variant_id, warehouse_id và quantity' });
   }
 
   if (![loan_id, variant_id, warehouse_id].every(isUuid)) {
-    return res.status(400).json({ message: 'loan_id, variant_id and warehouse_id must be valid UUID values' });
+    return res.status(400).json({ message: 'loan_id, variant_id và warehouse_id phải là UUID hợp lệ' });
   }
 
   if (loan_item_id && !isUuid(loan_item_id)) {
-    return res.status(400).json({ message: 'loan_item_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'loan_item_id phải là UUID hợp lệ (nếu có)' });
   }
 
   if (location_id && !isUuid(location_id)) {
-    return res.status(400).json({ message: 'location_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'location_id phải là UUID hợp lệ (nếu có)' });
   }
 
   if (inventory_unit_id && !isUuid(inventory_unit_id)) {
-    return res.status(400).json({ message: 'inventory_unit_id must be a valid UUID when provided' });
+    return res.status(400).json({ message: 'inventory_unit_id phải là UUID hợp lệ (nếu có)' });
   }
 
   const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
@@ -822,10 +822,10 @@ async function returnBorrowedLoan(req, res) {
     return res.status(result.idempotent ? 200 : 201).json(result);
   } catch (error) {
     if (error.message === 'BORROWED_STOCK_NOT_FOUND') {
-      return res.status(409).json({ message: 'No borrowed stock available to return for this variant/warehouse' });
+      return res.status(409).json({ message: 'Không có tồn đang cho mượn để nhận trả cho ấn bản/kho này' });
     }
     if (error.message === 'ON_HAND_STOCK_NOT_FOUND') {
-      return res.status(409).json({ message: 'No on-hand stock available to mark as lost for this variant/warehouse' });
+      return res.status(409).json({ message: 'Không có tồn thực tế để đánh dấu mất cho ấn bản/kho này' });
     }
     console.error('Error while returning borrowed stock:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -879,13 +879,13 @@ async function getVariantDetails(req, res) {
 async function getVariantPublicAvailability(req, res) {
   const variantId = String(req.params.variantId || '');
   if (!isUuid(variantId)) {
-    return res.status(400).json({ message: 'variantId must be a valid UUID value' });
+    return res.status(400).json({ message: 'variantId phải là UUID hợp lệ' });
   }
 
   try {
     const availability = await readPublicAvailabilityByVariant(prisma, variantId);
     if (!availability) {
-      return res.status(404).json({ message: 'Book not found in the public catalog' });
+      return res.status(404).json({ message: 'Không tìm thấy sách trong danh mục công khai' });
     }
     return res.json({ data: availability });
   } catch (error) {
@@ -897,13 +897,13 @@ async function getVariantPublicAvailability(req, res) {
 async function getBookPublicAvailability(req, res) {
   const bookId = String(req.params.bookId || '');
   if (!isUuid(bookId)) {
-    return res.status(400).json({ message: 'bookId must be a valid UUID value' });
+    return res.status(400).json({ message: 'bookId phải là UUID hợp lệ' });
   }
 
   try {
     const availability = await readPublicAvailabilityByBook(prisma, bookId);
     if (!availability) {
-      return res.status(404).json({ message: 'Book not found in the public catalog' });
+      return res.status(404).json({ message: 'Không tìm thấy sách trong danh mục công khai' });
     }
     return res.json({ data: availability });
   } catch (error) {
@@ -915,7 +915,7 @@ async function getBookPublicAvailability(req, res) {
 async function getBookVariantIds(req, res) {
   const bookId = String(req.params.bookId || '');
   if (!isUuid(bookId)) {
-    return res.status(400).json({ message: 'bookId must be a valid UUID value' });
+    return res.status(400).json({ message: 'bookId phải là UUID hợp lệ' });
   }
 
   try {

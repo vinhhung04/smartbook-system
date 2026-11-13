@@ -66,3 +66,16 @@ export interface AiFieldCandidate {
 }
 
 export type AiFieldCandidates = Record<AiFieldKey, AiFieldCandidate | null>;
+
+/** The form field each AI suggestion writes to. */
+export const AI_FORM_FIELD: Record<AiFieldKey, "description" | "summaryVi" | "keywordsText" | "categoriesText"> = {
+  description: "description", summaryVi: "summaryVi", keywords: "keywordsText", categories: "categoriesText",
+};
+
+/** An applied suggestion, kept so the user can undo it from the same place. */
+export interface AiAppliedChange {
+  previous: string;
+  applied: string;
+  /** Applied by a click on this field (focus moves to its Undo), not by "apply all". */
+  direct: boolean;
+}

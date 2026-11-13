@@ -88,6 +88,26 @@ function add(name, ok, detail) {
   results.push({ name, ok, detail });
 }
 
+// Book deposits (membership_plans.deposit_per_item): when the plan charges one, the
+// pickup needs that much in the customer's wallet, so the customer tops up at the
+// counter first. The deposit checks only run when a deposit is configured.
+async function depositPerItem(id) {
+  const membership = await request('GET', `/borrow/customers/${id}/membership/active`);
+  return Number(membership.data?.data?.limits?.deposit_per_item || 0);
+}
+
+// Counter top-ups of 100.000đ (an allowed amount) until the wallet holds `needed`.
+async function topUpWallet(id, needed) {
+  const account = await request('GET', `/borrow/customers/${id}/account`);
+  let available = Number(account.data?.data?.available_balance || 0);
+  while (available < needed) {
+    const topup = await request('POST', `/borrow/customers/${id}/account/topups`, { amount: 100000, method: 'CASH', note: 'integration test top-up' }, idemHeader());
+    if (!topup.ok) return { ok: false, detail: JSON.stringify(topup.data) };
+    available = Number(topup.data?.data?.available_balance || 0);
+  }
+  return { ok: true, detail: `available=${available}` };
+}
+
 // Seeded demo customer with an active membership and no unpaid fine balance
 // (same customer used by scripts/borrow-phase2-integration.mjs).
 let customerId = '00000000-0000-0000-0000-000000000809';
@@ -104,6 +124,8 @@ async function run() {
   if (profile.ok && profile.data?.data?.id) {
     customerId = profile.data.data.id;
   }
+  // The test actor is new on every run, so its customer's wallet starts empty.
+  const deposit = await depositPerItem(customerId);
 
   // 1. Create reservation — holds real stock (available_qty -> reserved_qty)
   const reservation = await request(
@@ -169,6 +191,23 @@ async function run() {
     `status=${directBlocked.status} ${JSON.stringify(directBlocked.data)}`,
   );
 
+  // 4b. With a deposit configured, an empty wallet cannot pick the book up, and the
+  // refusal leaves the reservation (and its pickup code) waiting for pickup.
+  if (deposit > 0 && pickupCode) {
+    const refused = await request('POST', '/borrow/reservations/pickup/convert-to-loan', { pickup_code: pickupCode }, idemHeader());
+    const stillReady = await request('GET', `/borrow/reservations/${reservationId}`);
+    add(
+      '4b.pickup refused while the wallet cannot cover the deposit',
+      refused.status === 409 && refused.data?.code === 'INSUFFICIENT_DEPOSIT_FUNDS' && stillReady.data?.data?.status === 'READY_FOR_PICKUP',
+      `status=${refused.status} code=${refused.data?.code} reservation=${stillReady.data?.data?.status}`,
+    );
+
+    const topup = await topUpWallet(customerId, deposit);
+    add('4c.counter top-up covers the deposit', topup.ok, topup.detail);
+  } else if (deposit === 0) {
+    console.log('deposit_per_item = 0: deposit checks skipped');
+  }
+
   // 5. Convert via pickup code using the QR payload format from README ("SMARTBOOK:PICKUP:PU-XXXX-XXXX")
   if (pickupCode) {
     const qrPayload = `SMARTBOOK:PICKUP:${pickupCode}`;
@@ -176,6 +215,9 @@ async function run() {
     if (converted.ok && converted.data?.data?.id && converted.data.data.status === 'BORROWED') {
       loanId = converted.data.data.id;
       add('5.convert via pickup QR -> loan BORROWED', true, loanId);
+      if (deposit > 0) {
+        add('5b.loan holds the deposit', converted.data.data.deposit_total === deposit, `deposit_total=${converted.data.data.deposit_total}`);
+      }
     } else {
       add('5.convert via pickup QR -> loan BORROWED', false, JSON.stringify(converted.data));
     }
@@ -211,6 +253,10 @@ async function run() {
     const afterReturn = await request('GET', `/borrow/loans/${loanId}`);
     const status = afterReturn.data?.data?.status || afterReturn.data?.status;
     add('10.loan status RETURNED after return', status === 'RETURNED', `status=${status}`);
+    if (deposit > 0) {
+      const settled = afterReturn.data?.data?.loan_items?.[0]?.loan_item_deposits;
+      add('10b.on-time return gives the whole deposit back', settled?.status === 'RELEASED' && Number(settled.refunded_amount) === deposit, JSON.stringify(settled));
+    }
   } else {
     add('9.return loan', false, 'Skipped: no loan id from step 5');
     add('10.loan status RETURNED after return', false, 'Skipped: no loan id from step 5');

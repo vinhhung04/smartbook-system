@@ -11,7 +11,7 @@ router.get('/', async (_req, res) => {
   // No fallback key: index.js refuses to start without INTERNAL_SERVICE_KEY,
   // and an unset key must reject every caller rather than accept a public default.
   if (!isValidInternalKey(_req.headers['x-internal-service-key'], process.env.INTERNAL_SERVICE_KEY)) {
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
 
   try {

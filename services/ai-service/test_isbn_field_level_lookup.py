@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from cache import isbn_lookup_cache
+from isbn_rounds import BookProvider
 from main import IsbnLookupRequest, _fetch_marketplace_provider, lookup_book_by_isbn
 
 # 13 digits with an invalid ISBN/EAN checksum -> the legacy "barcode mode" branch.
@@ -23,9 +24,11 @@ class BarcodeModeCharacterizationTests(unittest.IsolatedAsyncioTestCase):
             "categories": [], "language": "vi", "pageCount": 200, "thumbnail": None,
             "sourceUrl": "https://fahasa.test/x",
         }
-        marketplace = (fahasa, 0.8, None, 0.0, None, 0.0, True, {})
+        async def by_code(_client, code):
+            return {**fahasa, "identifiers": [code]}
+        store = BookProvider("dinhTi", by_code=by_code, round1=True, accepts_raw_barcode=True, retries=0)
         with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), \
-             patch("main._fetch_all_marketplace", new=AsyncMock(return_value=marketplace)):
+             patch("main._book_providers", return_value=[store]), patch("main.ISBN_ROUND1_ORDER", "dinhTi"):
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=NON_ISBN_BARCODE))
 
         self.assertTrue(result["found"])

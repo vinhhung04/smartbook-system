@@ -79,7 +79,7 @@ router.get('/', authorizeBorrowAdminRead, async (req, res) => {
 router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
   try {
     const { code, name, description } = req.body;
-    if (!code || !name) return res.status(400).json({ message: 'code and name are required' });
+    if (!code || !name) return res.status(400).json({ message: 'Cần có đủ code và name' });
     const { values, error } = parsePlanNumbers(req.body, { withDefaults: true });
     if (error) return res.status(400).json({ message: error });
     const isDefault = parseOptionalBoolean(req.body, 'is_default');
@@ -99,7 +99,7 @@ router.post('/', authorizeBorrowAdminWrite, async (req, res) => {
     });
     return res.status(201).json({ data: plan });
   } catch (error) {
-    if (error.code === 'P2002') return res.status(409).json({ message: 'Plan code already exists' });
+    if (error.code === 'P2002') return res.status(409).json({ message: 'Mã gói đã tồn tại' });
     console.error('createMembershipPlan error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -126,14 +126,14 @@ router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
     // The default flag can only be moved to another plan (is_default: true on
     // that plan), never simply removed: new accounts must always get a card.
     if (isDefault.value === false) {
-      return res.status(400).json({ message: 'Choose another plan as default instead of unsetting it' });
+      return res.status(400).json({ message: 'Hãy chọn gói khác làm mặc định thay vì bỏ mặc định gói này' });
     }
 
     const result = await prisma.$transaction(async (tx) => {
       const current = await tx.membership_plans.findUnique({ where: { id } });
-      if (!current) return { status: 404, message: 'Plan not found' };
+      if (!current) return { status: 404, message: 'Không tìm thấy gói thành viên' };
       if (data.is_active === false && current.is_default) {
-        return { status: 409, message: 'The default plan cannot be deactivated; choose another default first' };
+        return { status: 409, message: 'Không thể ngừng gói mặc định, hãy chọn gói mặc định khác trước' };
       }
       const updated = await tx.membership_plans.update({ where: { id }, data });
       if (isDefault.value === true) {
@@ -148,8 +148,8 @@ router.patch('/:id', authorizeBorrowAdminWrite, async (req, res) => {
     if (result.status) return res.status(result.status).json({ message: result.message });
     return res.json({ data: result.plan });
   } catch (error) {
-    if (error.message === 'INACTIVE_DEFAULT') return res.status(409).json({ message: 'An inactive plan cannot be the default plan' });
-    if (error.code === 'P2025') return res.status(404).json({ message: 'Plan not found' });
+    if (error.message === 'INACTIVE_DEFAULT') return res.status(409).json({ message: 'Gói đã ngừng hoạt động không thể làm gói mặc định' });
+    if (error.code === 'P2025') return res.status(404).json({ message: 'Không tìm thấy gói thành viên' });
     console.error('updateMembershipPlan error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }

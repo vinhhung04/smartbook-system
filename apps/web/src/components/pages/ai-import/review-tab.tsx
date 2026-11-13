@@ -1,39 +1,22 @@
-import { useState, type ReactNode } from "react";
-import { BadgeCheck, BookCopy, FileSearch, GitCompareArrows, Wand2 } from "lucide-react";
+import { BookCopy, GitCompareArrows, Wand2 } from "lucide-react";
 import type { LookupBookByIsbnResponse } from "@/services/ai";
 import type { DuplicateReview, ReconciliationDraft } from "@/services/metadata-intelligence";
 import { AuthorityReviewPanel } from "./authority-review-panel";
 import { CatalogDuplicateWarning, DuplicateReviewPanel } from "./duplicate-review-panel";
-import { IsbnIntelligencePanel } from "./isbn-intelligence-panel";
 import { VerificationCategoryCard } from "./verification-category-card";
-import { hasIsbnEvidence } from "./utils";
+import { SOURCE_LABELS, displayEvidenceValue, fieldLabel } from "./utils";
 import type { DuplicateMatch } from "./types";
 import { REVIEW_CARD_IDS } from "./review-ids";
 
 /**
- * The review rail: every decision the import still needs, in one column next to
- * the form. Read-only facts (sources, coverage) stay folded; anything that blocks
- * saving or needs a choice opens by default.
+ * The decisions the import still needs: duplicates & editions, authority
+ * normalization and source conflicts. Anything that blocks saving or needs a
+ * choice opens by default; settled cards stay closed.
  */
 export function ReviewTab({
-  lookupData,
-  reconciliationDraft,
-  duplicateReview,
-  duplicateMatches,
-  confirmDuplicateSave,
-  onConfirmDuplicateSave,
-  activeReviewId,
-  onToggleReview,
-  duplicateNeedsReview,
-  authorityNeedsReview,
-  evidenceNeedsReview,
-  reviewIssueCount,
-  sourceCount,
-  onAuthorityDecision,
-  onCreateAuthorityEntity,
-  onDuplicateAction,
-  ocrPanel,
-  ocrDecisionCount,
+  lookupData, reconciliationDraft, duplicateReview, duplicateMatches, confirmDuplicateSave, onConfirmDuplicateSave,
+  activeReviewId, onToggleReview, duplicateNeedsReview, authorityNeedsReview, evidenceNeedsReview,
+  onAuthorityDecision, onCreateAuthorityEntity, onDuplicateAction, onShowConflict,
 }: {
   lookupData: LookupBookByIsbnResponse;
   reconciliationDraft: ReconciliationDraft | null;
@@ -46,54 +29,19 @@ export function ReviewTab({
   duplicateNeedsReview: boolean;
   authorityNeedsReview: boolean;
   evidenceNeedsReview: boolean;
-  reviewIssueCount: number;
-  sourceCount: number;
   onAuthorityDecision: (field: string, status: "ACCEPTED" | "REJECTED") => void;
   onCreateAuthorityEntity: (field: string) => void;
   onDuplicateAction: (action: string, candidate?: DuplicateReview["candidates"][number]) => void;
-  /** The OCR result panel, when this import came from photos. */
-  ocrPanel?: ReactNode;
-  /** OCR fields waiting on a choice (conflicts, review required). */
-  ocrDecisionCount: number;
+  /** Opens the metadata review on that field's evidence. */
+  onShowConflict: (evidenceField: string) => void;
 }) {
-  // The evidence card can stay expandable even when there's nothing to act on (just
-  // informational sourcing) — that state isn't part of the single-open accordion the
-  // other two cards share, so it gets its own small local toggle.
-  const [evidenceClearOpen, setEvidenceClearOpen] = useState(false);
-  const [ocrOpen, setOcrOpen] = useState(true);
-  const evidenceHasContent = hasIsbnEvidence(lookupData);
-  // A catalog-level duplicate match (client-side title/ISBN scan) also has to block the
-  // card from collapsing into "clear", even if the AI/backend duplicate check itself
-  // came back NEW_TITLE — otherwise a real save-blocking warning could hide.
+  // A catalog-level duplicate match (client-side title/ISBN scan) also keeps the card
+  // open, even if the backend duplicate check came back NEW_TITLE.
   const duplicatePending = duplicateNeedsReview || (duplicateMatches.length > 0 && !confirmDuplicateSave);
-  const total = reviewIssueCount + (ocrDecisionCount ? 1 : 0);
+  const conflicts = lookupData.conflicts || [];
 
   return (
     <div className="space-y-3">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-[15px] font-semibold text-foreground">Kiểm duyệt</h2>
-          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-            {total ? `${total} nhóm cần bạn xem trước khi lưu` : "Không còn mục nào cần quyết định"}
-          </p>
-        </div>
-      </div>
-
-      {ocrPanel ? (
-        <VerificationCategoryCard
-          id={REVIEW_CARD_IDS.ocr}
-          icon={FileSearch}
-          title="Kết quả đọc ảnh"
-          description={ocrDecisionCount ? `${ocrDecisionCount} trường xung đột hoặc cần kiểm tra — không có giá trị nào tự áp dụng.` : "Các giá trị AI đọc từ ảnh, so với biểu mẫu."}
-          pending={ocrDecisionCount > 0}
-          expandable
-          open={ocrOpen}
-          onToggle={() => setOcrOpen((value) => !value)}
-        >
-          {ocrPanel}
-        </VerificationCategoryCard>
-      ) : null}
-
       <VerificationCategoryCard
         id={REVIEW_CARD_IDS.duplicate}
         icon={BookCopy}
@@ -115,8 +63,8 @@ export function ReviewTab({
       <VerificationCategoryCard
         id={REVIEW_CARD_IDS.authority}
         icon={Wand2}
-        title="Chuẩn hóa dữ liệu"
-        description={authorityNeedsReview ? "Duyệt tác giả, nhà xuất bản, thể loại theo danh mục chuẩn." : "Tác giả, NXB, thể loại theo danh mục chuẩn."}
+        title="Chuẩn hóa tác giả, NXB, thể loại"
+        description={authorityNeedsReview ? "Duyệt theo danh mục chuẩn của catalog." : "Theo danh mục chuẩn của catalog."}
         pending={authorityNeedsReview}
         expandable={authorityNeedsReview}
         open={activeReviewId === "authority"}
@@ -130,27 +78,35 @@ export function ReviewTab({
       <VerificationCategoryCard
         id={REVIEW_CARD_IDS.evidence}
         icon={GitCompareArrows}
-        title="Đối chiếu nguồn dữ liệu"
+        title="Xung đột giữa các nguồn"
         description={evidenceNeedsReview
-          ? `${lookupData.conflicts?.length || 0} trường có nguồn ghi khác nhau — kiểm tra giá trị đã chọn.`
-          : evidenceHasContent ? `${sourceCount ? `${sourceCount} nguồn có dữ liệu` : "Nguồn đã kiểm tra"} · mở để xem nguồn của từng trường.` : "Chưa có nguồn xác nhận."}
+          ? `${conflicts.length} trường có nguồn ghi khác nhau — hệ thống đã chọn một giá trị, bạn nên kiểm tra.`
+          : "Các nguồn không ghi khác nhau ở trường nào."}
         pending={evidenceNeedsReview}
-        expandable={evidenceHasContent}
-        open={evidenceNeedsReview ? activeReviewId === "evidence" : evidenceClearOpen}
-        onToggle={() => (evidenceNeedsReview ? onToggleReview("evidence") : setEvidenceClearOpen((value) => !value))}
+        expandable={evidenceNeedsReview}
+        open={activeReviewId === "evidence"}
+        onToggle={() => onToggleReview("evidence")}
       >
-        {evidenceHasContent ? <IsbnIntelligencePanel lookup={lookupData} /> : "Nhập thủ công — chưa có nguồn xác nhận."}
+        {evidenceNeedsReview ? <ul className="divide-y divide-border/70">
+          {conflicts.map((conflict) => (
+            <li key={conflict.field} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
+              <div className="min-w-0 text-[13px]">
+                <p className="font-semibold text-foreground">{fieldLabel(conflict.field)}</p>
+                <p className="mt-0.5 break-words text-muted-foreground">
+                  Đang dùng: <span className="text-foreground">{displayEvidenceValue(conflict.selectedValue)}</span>
+                </p>
+                <p className="mt-0.5 break-words text-muted-foreground">
+                  Khác: {conflict.alternatives.map((item) => `${SOURCE_LABELS[item.source] || item.source} — ${displayEvidenceValue(item.value)}`).join(" · ")}
+                </p>
+              </div>
+              <button type="button" onClick={() => onShowConflict(conflict.field)}
+                className="inline-flex min-h-8 shrink-0 cursor-pointer items-center rounded-md border border-border px-2.5 text-[12.5px] font-semibold text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                So sánh và chọn<span className="sr-only"> {fieldLabel(conflict.field)}</span>
+              </button>
+            </li>
+          ))}
+        </ul> : "Không có trường nào cần so sánh."}
       </VerificationCategoryCard>
-
-      {total === 0 ? (
-        <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/50 px-3.5 py-3 dark:border-emerald-500/25 dark:bg-emerald-500/[0.06]" role="status">
-          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          <div>
-            <p className="text-[13px] font-semibold text-foreground">Không còn mục kiểm duyệt</p>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Vẫn nên so các trường quan trọng với sách thật trước khi bấm Lưu.</p>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

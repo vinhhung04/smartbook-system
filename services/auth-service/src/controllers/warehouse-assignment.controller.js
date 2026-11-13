@@ -89,7 +89,7 @@ function createWarehouseAssignmentController({ prisma = defaultPrisma, directory
 
   async function getUserWarehouseScopes(req, res) {
     const userId = String(req.params.id || '').trim().toLowerCase();
-    if (!isUuid(userId)) return res.status(400).json({ message: 'User id must be a UUID', code: 'INVALID_USER_ID' });
+    if (!isUuid(userId)) return res.status(400).json({ message: 'User id phải là UUID', code: 'INVALID_USER_ID' });
     const actor = describeReader(req.auth);
     const writer = describeActor(req.auth);
     try {
@@ -121,7 +121,7 @@ function createWarehouseAssignmentController({ prisma = defaultPrisma, directory
 
   async function replaceUserWarehouseScopes(req, res) {
     const userId = String(req.params.id || '').trim().toLowerCase();
-    if (!isUuid(userId)) return res.status(400).json({ message: 'User id must be a UUID', code: 'INVALID_USER_ID' });
+    if (!isUuid(userId)) return res.status(400).json({ message: 'User id phải là UUID', code: 'INVALID_USER_ID' });
     const actor = describeActor(req.auth);
     try {
       const requested = normalizeScopeInput(req.body?.scopes);
@@ -217,11 +217,11 @@ function createWarehouseAssignmentController({ prisma = defaultPrisma, directory
 
   async function listStaffOfWarehouse(req, res) {
     const warehouseId = String(req.params.warehouseId || '').trim().toLowerCase();
-    if (!isUuid(warehouseId)) return res.status(400).json({ message: 'warehouse id must be a UUID', code: 'INVALID_WAREHOUSE_ID' });
+    if (!isUuid(warehouseId)) return res.status(400).json({ message: 'warehouse id phải là UUID', code: 'INVALID_WAREHOUSE_ID' });
     const actor = describeReader(req.auth);
     const assignableOnly = ['1', 'true'].includes(String(req.query.assignable || '').toLowerCase());
     try {
-      if (!actor.isAdmin && !actor.isManager) throw new AssignmentError(403, 'FORBIDDEN', 'Forbidden');
+      if (!actor.isAdmin && !actor.isManager) throw new AssignmentError(403, 'FORBIDDEN', 'Bạn không có quyền thực hiện thao tác này');
       if (!actor.isAdmin) {
         const own = await actorScopes(prisma, actor);
         if (!own.some((r) => String(r.warehouse_id).toLowerCase() === warehouseId)) {
@@ -257,7 +257,7 @@ function createWarehouseAssignmentController({ prisma = defaultPrisma, directory
   function authorizeAssignmentManager(req, res, next) {
     const actor = req.method === 'GET' ? describeReader(req.auth) : describeActor(req.auth);
     if (actor.isAdmin || actor.isManager) return next();
-    return res.status(403).json({ message: 'Forbidden' });
+    return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
   }
 
   return { getUserWarehouseScopes, replaceUserWarehouseScopes, listStaffOfWarehouse, authorizeAssignmentManager };

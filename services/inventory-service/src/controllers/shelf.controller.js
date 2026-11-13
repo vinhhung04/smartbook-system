@@ -159,7 +159,7 @@ async function getShelfDetail(req, res) {
   const shelfId = parseId(req.params.id);
 
   if (!shelfId) {
-    return res.status(400).json({ message: 'Invalid shelf id' });
+    return res.status(400).json({ message: 'Mã kệ không hợp lệ' });
   }
 
   try {
@@ -187,7 +187,7 @@ async function getShelfDetail(req, res) {
     });
 
     if (!shelf) {
-      return res.status(404).json({ message: 'Shelf not found' });
+      return res.status(404).json({ message: 'Không tìm thấy kệ' });
     }
 
     const compartments = await prisma.locations.findMany({

@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
-const { isValidInternalKey, mapCorpusBook, parseCorpusPageParams } = require('../services/internal-catalog.service');
+const {
+  isValidInternalKey, mapCatalogRecord, mapCorpusBook, normalizeCatalogCode, parseCorpusPageParams,
+} = require('../services/internal-catalog.service');
 
 const prisma = new PrismaClient();
 
@@ -12,7 +14,7 @@ const prisma = new PrismaClient();
 function listCorpusBooks(db) {
   return async (req, res) => {
     if (!isValidInternalKey(req.headers['x-internal-service-key'], process.env.INTERNAL_SERVICE_KEY)) {
-      return res.status(403).json({ message: 'Forbidden' });
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
     const page = parseCorpusPageParams(req.query);
@@ -61,7 +63,45 @@ function listCorpusBooks(db) {
   };
 }
 
+// Exact lookup of one catalogued edition by its printed code, for ai-service's
+// ISBN search (the library's own catalog is checked before any external source).
+function findCatalogBookByCode(db) {
+  return async (req, res) => {
+    if (!isValidInternalKey(req.headers['x-internal-service-key'], process.env.INTERNAL_SERVICE_KEY)) {
+      return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
+    }
+    const code = normalizeCatalogCode(req.params.code);
+    if (!code) return res.status(400).json({ message: 'code phải là ISBN-10, ISBN-13 hoặc EAN-13' });
+
+    try {
+      const variant = await db.book_variants.findFirst({
+        where: { is_active: true, books: { is: { is_active: true } }, OR: [{ isbn13: code }, { isbn10: code }] },
+        select: {
+          id: true, book_id: true, isbn13: true, isbn10: true, language_code: true, publish_year: true,
+          cover_image_url: true,
+          books: {
+            select: {
+              id: true, title: true, subtitle: true, description: true, metadata: true, page_count: true,
+              published_date: true, default_language: true, updated_at: true,
+              publishers: { select: { name: true } },
+              book_authors: { orderBy: { author_order: 'asc' }, select: { authors: { select: { full_name: true } } } },
+              book_categories: { select: { categories: { select: { name: true } } } },
+            },
+          },
+        },
+      });
+      if (!variant) return res.status(404).json({ message: 'Không tìm thấy' });
+      return res.json(mapCatalogRecord(variant));
+    } catch (error) {
+      console.error('Unable to look up catalog book by code', error);
+      return res.status(500).json({ message: 'Unable to look up catalog book' });
+    }
+  };
+}
+
+router.get('/by-code/:code', findCatalogBookByCode(prisma));
 router.get('/', listCorpusBooks(prisma));
 
 module.exports = router;
 module.exports.listCorpusBooks = listCorpusBooks;
+module.exports.findCatalogBookByCode = findCatalogBookByCode;

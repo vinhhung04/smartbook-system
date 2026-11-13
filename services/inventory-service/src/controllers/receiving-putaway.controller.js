@@ -91,7 +91,7 @@ async function getWarehouseReceivings(req, res) {
   const warehouseId = parseId(req.params.warehouseId);
 
   if (!warehouseId) {
-    return res.status(400).json({ message: "Invalid warehouse id" });
+    return res.status(400).json({ message: "Mã kho không hợp lệ" });
   }
 
   try {
@@ -129,7 +129,7 @@ async function getReceivingItems(req, res) {
   const receivingId = parseId(req.params.receivingId);
 
   if (!receivingId) {
-    return res.status(400).json({ message: "Invalid receiving location id" });
+    return res.status(400).json({ message: "Mã vị trí nhận hàng không hợp lệ" });
   }
 
   try {
@@ -145,14 +145,14 @@ async function getReceivingItems(req, res) {
     });
 
     if (!receiving) {
-      return res.status(404).json({ message: "Receiving location not found" });
+      return res.status(404).json({ message: "Không tìm thấy vị trí nhận hàng" });
     }
 
     const locationType = normalizeLocationType(receiving.location_type);
     if (!RECEIVING_LOCATION_TYPES.includes(locationType)) {
       return res
         .status(400)
-        .json({ message: "source location must be RECEIVING or STAGING" });
+        .json({ message: "Vị trí nguồn phải là RECEIVING hoặc STAGING" });
     }
 
     const rows = await prisma.stock_balances.findMany({
@@ -214,7 +214,7 @@ async function getCompartmentCandidates(req, res) {
   if (!receivingId || !variantId) {
     return res
       .status(400)
-      .json({ message: "receivingId and variant_id are required" });
+      .json({ message: "Cần có đủ receivingId và variant_id" });
   }
 
   try {
@@ -228,7 +228,7 @@ async function getCompartmentCandidates(req, res) {
     });
 
     if (!sourceReceiving) {
-      return res.status(404).json({ message: "Receiving location not found" });
+      return res.status(404).json({ message: "Không tìm thấy vị trí nhận hàng" });
     }
 
     if (
@@ -238,7 +238,7 @@ async function getCompartmentCandidates(req, res) {
     ) {
       return res
         .status(400)
-        .json({ message: "source location must be RECEIVING or STAGING" });
+        .json({ message: "Vị trí nguồn phải là RECEIVING hoặc STAGING" });
     }
 
     const allLocations = await prisma.locations.findMany({
@@ -410,7 +410,7 @@ async function lookupCompartmentByBarcode(req, res) {
   if (!warehouseId || !rawInput) {
     return res
       .status(400)
-      .json({ message: "warehouse_id and barcode are required" });
+      .json({ message: "Cần có đủ warehouse_id và barcode" });
   }
 
   // Location codes are not all "<letter>-NN-NNN" (e.g. HN-A-01-001, BR-SHELF-01), so only the
@@ -501,13 +501,13 @@ async function lookupVariantByBarcode(req, res) {
     .replace(/[^0-9]/g, "");
 
   if (!isbn13) {
-    return res.status(400).json({ message: "isbn13 is required" });
+    return res.status(400).json({ message: "Thiếu isbn13" });
   }
 
   if (!/^\d{13}$/.test(isbn13)) {
     return res
       .status(400)
-      .json({ message: "isbn13 must contain exactly 13 digits" });
+      .json({ message: "isbn13 phải gồm đúng 13 chữ số" });
   }
 
   try {
@@ -531,7 +531,7 @@ async function lookupVariantByBarcode(req, res) {
     });
 
     if (rows.length === 0) {
-      return res.status(404).json({ message: "No variant matched isbn13" });
+      return res.status(404).json({ message: "Không có ấn bản nào khớp isbn13" });
     }
 
     const matches = rows
@@ -574,7 +574,7 @@ async function lookupVariantByBarcode(req, res) {
 async function getOccupiedCompartments(req, res) {
   const warehouseId = parseId(req.params.warehouseId);
   if (!warehouseId) {
-    return res.status(400).json({ message: "Invalid warehouse id" });
+    return res.status(400).json({ message: "Mã kho không hợp lệ" });
   }
 
   try {
@@ -632,7 +632,7 @@ async function getOccupiedCompartments(req, res) {
 async function getCompartmentItems(req, res) {
   const compartmentId = parseId(req.params.compartmentId);
   if (!compartmentId) {
-    return res.status(400).json({ message: "Invalid compartment id" });
+    return res.status(400).json({ message: "Mã ô kệ không hợp lệ" });
   }
 
   try {
@@ -647,7 +647,7 @@ async function getCompartmentItems(req, res) {
     });
 
     if (!location) {
-      return res.status(404).json({ message: "Compartment not found" });
+      return res.status(404).json({ message: "Không tìm thấy ô kệ" });
     }
 
     if (
@@ -655,7 +655,7 @@ async function getCompartmentItems(req, res) {
     ) {
       return res
         .status(400)
-        .json({ message: "source location must be SHELF_COMPARTMENT" });
+        .json({ message: "Vị trí nguồn phải là SHELF_COMPARTMENT" });
     }
 
     const rows = await prisma.stock_balances.findMany({
@@ -726,12 +726,12 @@ async function transferReceivingToShelf(req, res) {
       .status(400)
       .json({
         message:
-          "warehouse_id, source_receiving_location_id and variant_id are required",
+          "Cần có đủ warehouse_id, source_receiving_location_id và variant_id",
       });
   }
 
   if (allocations.length === 0) {
-    return res.status(400).json({ message: "allocations is required" });
+    return res.status(400).json({ message: "Thiếu allocations" });
   }
 
   const normalizedAllocations = [];
@@ -751,14 +751,14 @@ async function transferReceivingToShelf(req, res) {
         .status(400)
         .json({
           message:
-            "Each allocation must include target_location_id and quantity > 0",
+            "Mỗi dòng phân bổ phải có target_location_id và quantity > 0",
         });
     }
 
     if (!reason) {
       return res
         .status(400)
-        .json({ message: "Each allocation must include a reason" });
+        .json({ message: "Mỗi dòng phân bổ phải có lý do" });
     }
 
     normalizedAllocations.push({
@@ -830,14 +830,14 @@ async function transferReceivingToShelf(req, res) {
         if (!sourceLocation) {
           return {
             invalid: true,
-            message: "Source receiving location not found",
+            message: "Không tìm thấy vị trí nhận hàng nguồn",
           };
         }
 
         if (sourceLocation.warehouse_id !== warehouseId) {
           return {
             invalid: true,
-            message: "Source receiving location does not belong to warehouse",
+            message: "Vị trí nhận hàng nguồn không thuộc kho",
           };
         }
 
@@ -849,7 +849,7 @@ async function transferReceivingToShelf(req, res) {
         ) {
           return {
             invalid: true,
-            message: "source location must be active RECEIVING/STAGING",
+            message: "Vị trí nguồn phải là RECEIVING/STAGING đang hoạt động",
           };
         }
 
@@ -874,7 +874,7 @@ async function transferReceivingToShelf(req, res) {
         if (targetLocations.length !== targetIds.length) {
           return {
             invalid: true,
-            message: "One or more target locations are invalid or inactive",
+            message: "Có vị trí đích không hợp lệ hoặc đã ngừng hoạt động",
           };
         }
 
@@ -956,7 +956,7 @@ async function transferReceivingToShelf(req, res) {
           ) {
             return {
               invalid: true,
-              message: "target location must be SHELF_COMPARTMENT",
+              message: "Vị trí đích phải là SHELF_COMPARTMENT",
             };
           }
         }
@@ -974,14 +974,14 @@ async function transferReceivingToShelf(req, res) {
         if (!sourceBalance) {
           return {
             invalid: true,
-            message: "No stock balance found in selected RECEIVING source",
+            message: "Không có tồn kho tại vị trí RECEIVING nguồn đã chọn",
           };
         }
 
         if (Number(sourceBalance.on_hand_qty || 0) < totalQuantity) {
           return {
             invalid: true,
-            message: "Not enough on_hand quantity in selected RECEIVING source",
+            message: "Không đủ số lượng on_hand tại vị trí RECEIVING nguồn đã chọn",
           };
         }
 
@@ -1012,7 +1012,7 @@ async function transferReceivingToShelf(req, res) {
           if (allocation.quantity > remaining) {
             return {
               invalid: true,
-              message: `Target ${target.location_code} only has ${remaining} remaining capacity`,
+              message: `Vị trí đích ${target.location_code} chỉ còn chứa được ${remaining}`,
             };
           }
         }
@@ -1155,7 +1155,7 @@ async function transferReceivingToShelf(req, res) {
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:
-          "Data changed during confirmation. Please reload and allocate again.",
+          "Dữ liệu đã thay đổi trong lúc xác nhận. Vui lòng tải lại và phân bổ lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }
@@ -1186,12 +1186,12 @@ async function reverseShelfToReceiving(req, res) {
   ) {
     return res.status(400).json({
       message:
-        "warehouse_id, source_compartment_location_id, target_receiving_location_id, variant_id and quantity > 0 are required",
+        "Cần có đủ warehouse_id, source_compartment_location_id, target_receiving_location_id, variant_id và quantity > 0",
     });
   }
 
   if (!reason) {
-    return res.status(400).json({ message: "reason is required" });
+    return res.status(400).json({ message: "Thiếu lý do (reason)" });
   }
 
   try {
@@ -1223,7 +1223,7 @@ async function reverseShelfToReceiving(req, res) {
         if (!sourceLocation || !targetLocation) {
           return {
             invalid: true,
-            message: "Source or target location not found",
+            message: "Không tìm thấy vị trí nguồn hoặc vị trí đích",
           };
         }
 
@@ -1233,7 +1233,7 @@ async function reverseShelfToReceiving(req, res) {
         ) {
           return {
             invalid: true,
-            message: "Source and target must belong to selected warehouse",
+            message: "Vị trí nguồn và đích phải thuộc kho đã chọn",
           };
         }
 
@@ -1244,7 +1244,7 @@ async function reverseShelfToReceiving(req, res) {
         ) {
           return {
             invalid: true,
-            message: "source location must be active SHELF_COMPARTMENT",
+            message: "Vị trí nguồn phải là SHELF_COMPARTMENT đang hoạt động",
           };
         }
 
@@ -1256,7 +1256,7 @@ async function reverseShelfToReceiving(req, res) {
         ) {
           return {
             invalid: true,
-            message: "target location must be active RECEIVING/STAGING",
+            message: "Vị trí đích phải là RECEIVING/STAGING đang hoạt động",
           };
         }
 
@@ -1273,21 +1273,21 @@ async function reverseShelfToReceiving(req, res) {
         if (!sourceBalance) {
           return {
             invalid: true,
-            message: "No stock balance found in selected shelf compartment",
+            message: "Không có tồn kho tại ô kệ đã chọn",
           };
         }
 
         if (Number(sourceBalance.on_hand_qty || 0) < quantity) {
           return {
             invalid: true,
-            message: "Not enough stock in selected shelf compartment",
+            message: "Không đủ tồn kho tại ô kệ đã chọn",
           };
         }
 
         if (Number(sourceBalance.available_qty || 0) < quantity) {
           return {
             invalid: true,
-            message: "Not enough available stock in selected shelf compartment",
+            message: "Không đủ tồn kho khả dụng tại ô kệ đã chọn",
           };
         }
 
@@ -1415,7 +1415,7 @@ async function reverseShelfToReceiving(req, res) {
     if (toSerializableError(error)) {
       return res.status(409).json({
         message:
-          "Data changed during confirmation. Please reload and try again.",
+          "Dữ liệu đã thay đổi trong lúc xác nhận. Vui lòng tải lại và thử lại.",
         code: "CONCURRENCY_CONFLICT",
       });
     }

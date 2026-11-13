@@ -63,7 +63,7 @@ async function getTitlesByVariantIds(variantIds) {
 function parsePositiveInteger(value, defaultValue, maxValue, fieldName) {
   const parsed = Number(value || defaultValue);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > maxValue) {
-    throw createHttpError(400, `${fieldName} must be an integer from 1 to ${maxValue}`);
+    throw createHttpError(400, `${fieldName} phải là số nguyên từ 1 đến ${maxValue}`);
   }
   return parsed;
 }
@@ -74,7 +74,7 @@ function parseOptionalBudget(value) {
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) {
-    throw createHttpError(400, 'budgetVnd must be a non-negative number');
+    throw createHttpError(400, 'budgetVnd phải là số không âm');
   }
   return parsed;
 }
@@ -84,7 +84,7 @@ function parseBoolean(value, defaultValue = false) {
   const normalized = String(value).toLowerCase();
   if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
   if (['false', '0', 'no', 'n'].includes(normalized)) return false;
-  throw createHttpError(400, 'includeLowDemand must be a boolean');
+  throw createHttpError(400, 'includeLowDemand phải là true hoặc false');
 }
 
 function parseReorderDateRanges(queryParams) {
@@ -98,13 +98,13 @@ function parseReorderDateRanges(queryParams) {
   const from = queryParams.from ? new Date(String(queryParams.from)) : new Date(to.getTime() - days * DAY_MS);
 
   if (Number.isNaN(from.getTime())) {
-    throw createHttpError(400, 'from must be a valid ISO date');
+    throw createHttpError(400, 'from phải là ngày hợp lệ theo định dạng ISO');
   }
   if (Number.isNaN(to.getTime())) {
-    throw createHttpError(400, 'to must be a valid ISO date');
+    throw createHttpError(400, 'to phải là ngày hợp lệ theo định dạng ISO');
   }
   if (from > to) {
-    throw createHttpError(400, 'from must be before or equal to to');
+    throw createHttpError(400, 'from phải trước hoặc bằng to');
   }
 
   if (queryParams.from || queryParams.to) {
@@ -488,14 +488,14 @@ const STOCK_ITEM_STATUSES = new Set(['ATTENTION', 'OUT_OF_STOCK', 'LOW_STOCK', '
 const getWarehouseStockItems = asyncHandler(async (req, res) => {
   const warehouseId = String(req.query.warehouseId || '').trim();
   if (!UUID_RE.test(warehouseId)) {
-    throw createHttpError(400, 'warehouseId must be a UUID');
+    throw createHttpError(400, 'warehouseId phải là UUID');
   }
   if (!inScope(req.warehouseScope, warehouseId)) {
-    throw createHttpError(403, 'You do not have read access to this warehouse');
+    throw createHttpError(403, 'Bạn không có quyền xem kho này');
   }
   const status = String(req.query.status || 'ATTENTION').toUpperCase();
   if (!STOCK_ITEM_STATUSES.has(status)) {
-    throw createHttpError(400, 'status must be one of ATTENTION, OUT_OF_STOCK, LOW_STOCK, ALL');
+    throw createHttpError(400, 'status phải là một trong ATTENTION, OUT_OF_STOCK, LOW_STOCK, ALL');
   }
   const limit = parseLimit(req.query.limit, 50, 200);
   const rows = (await getWarehouseVariantStock(warehouseId)).filter((row) => row.variant_id);
@@ -505,7 +505,7 @@ const getWarehouseStockItems = asyncHandler(async (req, res) => {
     [warehouseId],
   ));
   if (!warehouse) {
-    throw createHttpError(404, 'warehouse not found');
+    throw createHttpError(404, 'Không tìm thấy kho');
   }
   const classified = rows.map((row) => ({ ...row, status: stockStatus(row, LOW_STOCK_THRESHOLD) }));
   const selected = classified
@@ -899,17 +899,17 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     ? 0 : parsePositiveInteger(req.query.leadTimeDelayDays, 0, 180, 'leadTimeDelayDays');
   const priorityWarehouseId = req.query.priorityWarehouseId ? String(req.query.priorityWarehouseId).trim() : null;
   if (priorityWarehouseId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(priorityWarehouseId)) {
-    throw createHttpError(400, 'priorityWarehouseId must be a UUID');
+    throw createHttpError(400, 'priorityWarehouseId phải là UUID');
   }
   if (priorityWarehouseId && budgetVnd === null) {
-    throw createHttpError(400, 'priorityWarehouseId needs budgetVnd');
+    throw createHttpError(400, 'priorityWarehouseId cần đi kèm budgetVnd');
   }
   if (priorityWarehouseId && req.user && !(await canReadWarehouseScope(req.user, priorityWarehouseId))) {
-    throw createHttpError(403, 'You do not have read access to this warehouse');
+    throw createHttpError(403, 'Bạn không có quyền xem kho này');
   }
 
   if (!REORDER_PRIORITIES.has(priority)) {
-    throw createHttpError(400, 'priority must be one of ALL, HIGH, MEDIUM, LOW');
+    throw createHttpError(400, 'priority phải là một trong ALL, HIGH, MEDIUM, LOW');
   }
 
   const [

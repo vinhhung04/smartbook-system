@@ -90,6 +90,35 @@ function add(name, ok, detail) {
   results.push({ name, ok, detail });
 }
 
+// Book deposits (membership_plans.deposit_per_item): when the plan charges one, a
+// loan needs that much in the customer's wallet, so the test customers top up at
+// the counter first. The D-checks only run when a deposit is configured.
+async function depositPerItem(customerId) {
+  const membership = await request('GET', `/borrow/customers/${customerId}/membership/active`);
+  return Number(membership.data?.data?.limits?.deposit_per_item || 0);
+}
+
+async function walletBalance(customerId) {
+  const account = await request('GET', `/borrow/customers/${customerId}/account`);
+  return { available: Number(account.data?.data?.available_balance || 0), held: Number(account.data?.data?.held_balance || 0) };
+}
+
+// Counter top-ups of 100.000đ (an allowed amount) until the wallet holds `needed`.
+async function topUpWallet(customerId, needed) {
+  let { available } = await walletBalance(customerId);
+  while (available < needed) {
+    const topup = await request(
+      'POST',
+      `/borrow/customers/${customerId}/account/topups`,
+      { amount: 100000, method: 'CASH', note: 'integration test top-up' },
+      { 'Idempotency-Key': crypto.randomUUID() }
+    );
+    if (!topup.ok) return { ok: false, detail: JSON.stringify(topup.data) };
+    available = Number(topup.data?.data?.available_balance || 0);
+  }
+  return { ok: true, detail: `available=${available}` };
+}
+
 let customerId = '00000000-0000-0000-0000-000000000809';
 let directLoanId = null;
 let reservationLoanId = null;
@@ -105,6 +134,31 @@ async function run() {
     add('1.self customer ensure', true, customerId);
   } else {
     add('1.self customer ensure', false, JSON.stringify(profile.data));
+  }
+
+  // The test actor is new on every run, so its customer's wallet starts empty.
+  const deposit = await depositPerItem(customerId);
+  if (deposit > 0) {
+    const refused = await request(
+      'POST',
+      '/borrow/loans/direct',
+      {
+        customer_id: customerId,
+        variant_id: variantId,
+        warehouse_id: warehouseId,
+        quantity: 1,
+        source_channel: 'COUNTER',
+        notes: 'deposit check: empty wallet',
+      },
+      { 'Idempotency-Key': crypto.randomUUID() }
+    );
+    add('D1.loan refused while the wallet cannot cover the deposit', refused.status === 409 && refused.data?.code === 'INSUFFICIENT_DEPOSIT_FUNDS', `status=${refused.status} ${JSON.stringify(refused.data)}`);
+
+    // The direct, reservation and lost-book loans can be out at the same time.
+    const topup = await topUpWallet(customerId, deposit * 3);
+    add('D2.counter top-up covers three deposits', topup.ok, topup.detail);
+  } else {
+    console.log('deposit_per_item = 0: deposit checks skipped');
   }
 
   const direct = await request(
@@ -125,6 +179,10 @@ async function run() {
     add('2.direct loan create', true, directLoanId);
   } else {
     add('2.direct loan create', false, JSON.stringify(direct.data));
+  }
+  if (deposit > 0) {
+    const { held } = await walletBalance(customerId);
+    add('D3.direct loan holds one deposit', direct.data?.data?.deposit_total === deposit && held === deposit, `deposit_total=${direct.data?.data?.deposit_total} held=${held}`);
   }
 
   const reservation = await request(
@@ -186,6 +244,11 @@ async function run() {
   if (reservationLoanId) {
     const returnNormal = await request('POST', `/borrow/loans/${reservationLoanId}/return`, {}, { 'Idempotency-Key': crypto.randomUUID() });
     add('6.return normal', returnNormal.ok, JSON.stringify(returnNormal.data));
+    if (deposit > 0) {
+      const returnedLoan = await request('GET', `/borrow/loans/${reservationLoanId}`);
+      const settled = returnedLoan.data?.data?.loan_items?.[0]?.loan_item_deposits;
+      add('D4.on-time return gives the whole deposit back', settled?.status === 'RELEASED' && Number(settled.refunded_amount) === deposit, JSON.stringify(settled));
+    }
   } else {
     add('6.return normal', false, 'Skipped: no reservation loan id');
   }
@@ -208,7 +271,7 @@ async function run() {
     const detail = await request('GET', `/borrow/loans/${lostLoanId}`);
     const itemId = detail.data?.data?.loan_items?.[0]?.id;
     const markLost = itemId
-      ? await request('POST', `/borrow/loans/${lostLoanId}/return`, { loan_item_id: itemId, mark_lost: true, item_condition_on_return: 'LOST' }, { 'Idempotency-Key': crypto.randomUUID() })
+      ? await request('POST', `/borrow/loans/${lostLoanId}/return`, { loan_item_id: itemId, mark_lost: true, item_condition_on_return: 'LOST', settlement_reason: 'integration test: book lost' }, { 'Idempotency-Key': crypto.randomUUID() })
       : { ok: false, data: { message: 'No loan item found' } };
     add('7.return mark lost', markLost.ok, JSON.stringify(markLost.data));
   } else {
@@ -228,6 +291,10 @@ async function run() {
   const damagedProfile = await request('GET', '/borrow/my/profile', undefined, {}, damagedActorToken);
   const damagedCustomerId = damagedProfile.data?.data?.id;
   const damagedTarget = await findStockTarget(1, new Set([variantId]));
+  const damagedDeposit = damagedCustomerId ? await depositPerItem(damagedCustomerId) : 0;
+  if (damagedDeposit > 0) {
+    await topUpWallet(damagedCustomerId, damagedDeposit);
+  }
 
   const damagedSeedLoan = await request(
     'POST',
@@ -248,7 +315,7 @@ async function run() {
     const damaged = await request(
       'POST',
       `/borrow/loans/${damagedLoanId}/return`,
-      { item_condition_on_return: 'DAMAGED' },
+      { item_condition_on_return: 'DAMAGED', settlement_reason: 'integration test: cover torn' },
       { 'Idempotency-Key': crypto.randomUUID() },
       damagedActorToken
     );
