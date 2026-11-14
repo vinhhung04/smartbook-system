@@ -61,6 +61,22 @@ function computeLineOutcome({ noteQty, poRemainingQty, delivered, damaged = 0, r
 }
 
 /**
+ * P1.2 Close Remaining Quantity: a manager can mark a PO line's remainder (ordered_qty -
+ * received_qty) as never-to-be-delivered. Once closed, nothing may invoice or receive against
+ * that line anymore — call this wherever a new invoice line or goods receipt is created for a PO
+ * item, before any quantity math runs.
+ */
+function assertLineNotClosed(poItem) {
+  if (poItem.closure_status === "CLOSED_WITH_REMAINING") {
+    throw new ProcurementError(
+      "PO_LINE_CLOSED",
+      "Dòng đơn đặt hàng đã được đóng phần còn lại, không thể nhận thêm hàng hoặc lập hóa đơn thêm",
+      409,
+    );
+  }
+}
+
+/**
  * How much of a PO line can still be put on a new (non-redelivery) delivery note / invoice,
  * counting every ordinary delivery note already submitted for it — not just what has been
  * received so far. A supplier can issue several delivery notes before any of them is received,
@@ -71,19 +87,26 @@ function computeLineOutcome({ noteQty, poRemainingQty, delivered, damaged = 0, r
  * already bounded by that shortage's own shortage_qty (see supplier-portal.controller.js). Call
  * this only for a non-redelivery line; skip it when creating a redelivery invoice.
  * Locks the PO item row first so two notes submitted at the same instant can't both read the
- * same pre-update sum and together exceed ordered_qty (same race as GRN posting).
+ * same pre-update sum and together exceed ordered_qty (same race as GRN posting). Also re-reads
+ * ordered_qty itself after the lock rather than trusting the caller's pre-fetched poItem: a
+ * purchase order revision (P1.1) can change ordered_qty on this exact row while this call was
+ * blocked waiting for the lock, so using the stale value here would let an invoice note fit under
+ * a cap that no longer applies.
  * @returns {number|null} null if invoicedQty fits, otherwise the quantity actually still available
  */
 async function assertInvoiceQtyWithinRemaining(tx, poItem, invoicedQty) {
   await tx.$queryRawUnsafe("SELECT id FROM purchase_order_items WHERE id = $1::uuid FOR UPDATE", poItem.id);
-  const rows = await tx.supplier_delivery_invoice_items.findMany({
-    where: { purchase_order_item_id: poItem.id },
-    select: { invoiced_qty: true, supplier_delivery_invoices: { select: { raw_payload: true } } },
-  });
+  const [fresh, rows] = await Promise.all([
+    tx.purchase_order_items.findUnique({ where: { id: poItem.id }, select: { ordered_qty: true } }),
+    tx.supplier_delivery_invoice_items.findMany({
+      where: { purchase_order_item_id: poItem.id },
+      select: { invoiced_qty: true, supplier_delivery_invoices: { select: { raw_payload: true } } },
+    }),
+  ]);
   const alreadyNoted = rows
     .filter((row) => row.supplier_delivery_invoices?.raw_payload?.redelivery !== true)
     .reduce((sum, row) => sum + Number(row.invoiced_qty || 0), 0);
-  const remaining = Number(poItem.ordered_qty || 0) - alreadyNoted;
+  const remaining = Number(fresh?.ordered_qty ?? poItem.ordered_qty ?? 0) - alreadyNoted;
   return invoicedQty > remaining ? remaining : null;
 }
 
@@ -320,6 +343,7 @@ module.exports = {
   revertSupplierReceiptOutcome,
   ProcurementError,
   computeLineOutcome,
+  assertLineNotClosed,
   assertInvoiceQtyWithinRemaining,
   buildDiscrepancyLines,
   summarizeDiscrepancyType,

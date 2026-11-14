@@ -12,6 +12,7 @@ const {
 const {
   ProcurementError,
   isSupplierReceipt,
+  assertLineNotClosed,
   settleSupplierReceiptQuantities,
   recordSupplierReceiptOutcome,
   revertSupplierReceiptOutcome,
@@ -134,7 +135,7 @@ async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
       purchase_order_id: goodsReceipt.purchase_order_id,
       variant_id: { in: variantIds },
     },
-    select: { id: true, variant_id: true, ordered_qty: true, received_qty: true },
+    select: { id: true, variant_id: true, ordered_qty: true, received_qty: true, closure_status: true },
   });
 
   if (poItems.length !== variantIds.length) {
@@ -142,6 +143,7 @@ async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
   }
 
   for (const poItem of poItems) {
+    assertLineNotClosed(poItem);
     const receiptQty = Number(qtyByVariant.get(String(poItem.variant_id)) || 0);
     const nextReceived = Number(poItem.received_qty || 0) + receiptQty;
     if (nextReceived > Number(poItem.ordered_qty || 0)) {

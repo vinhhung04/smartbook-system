@@ -8,9 +8,21 @@ const {
   settleSupplierReceiptQuantities,
   recordSupplierReceiptOutcome,
   revertSupplierReceiptOutcome,
+  assertLineNotClosed,
   ProcurementError,
 } = require('../src/services/procurement-receipt.service');
 const { createFakeDb } = require('./helpers/procurement-fake-db');
+
+// ── P1.2 Close Remaining Quantity guard ─────────────────────────────────────
+
+test('assertLineNotClosed blocks a line that was closed with a remainder', () => {
+  assert.throws(() => assertLineNotClosed({ closure_status: 'CLOSED_WITH_REMAINING' }), ProcurementError);
+});
+
+test('assertLineNotClosed allows an open line (undefined or OPEN)', () => {
+  assert.doesNotThrow(() => assertLineNotClosed({ closure_status: 'OPEN' }));
+  assert.doesNotThrow(() => assertLineNotClosed({}));
+});
 
 // ── Pure line rules ─────────────────────────────────────────────────────────
 

@@ -182,6 +182,7 @@ model goods_receipt_items {
   locations        locations?     @relation(fields: [location_id], references: [id], onUpdate: NoAction)
   book_variants    book_variants  @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
   smart_receiving_items smart_receiving_items[]
+  supplier_return_items supplier_return_items[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -211,6 +212,7 @@ model goods_receipts {
   supplier_shortage_reports supplier_shortage_reports[]
   warehouse_exception_reports warehouse_exception_reports[]
   procurement_documents procurement_documents[]
+  supplier_returns    supplier_returns[]
 
   @@index([status, received_at], map: "idx_goods_receipts_status")
   @@index([supplier_delivery_invoice_id, status], map: "idx_goods_receipts_delivery_status")
@@ -620,11 +622,22 @@ model purchase_order_items {
   received_qty      Int             @default(0)
   unit_cost         Decimal         @default(0) @db.Decimal(12, 2)
   note              String?
+  /// P1.2 Close Remaining Quantity. OPEN | CLOSED_WITH_REMAINING. Never changes ordered_qty or
+  /// received_qty — it only marks that ordered_qty - received_qty will never be delivered.
+  closure_status    String          @default("OPEN") @db.VarChar(30)
+  closed_reason     String?
+  closed_evidence_reference String?
+  closed_by_user_id String?         @db.Uuid
+  closed_at         DateTime?       @db.Timestamptz(6)
+  reopened_reason   String?
+  reopened_by_user_id String?       @db.Uuid
+  reopened_at       DateTime?       @db.Timestamptz(6)
   purchase_orders   purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   book_variants     book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
   supplier_delivery_invoice_items supplier_delivery_invoice_items[]
   supplier_shortage_report_items supplier_shortage_report_items[]
   procurement_document_lines procurement_document_lines[]
+  supplier_return_items supplier_return_items[]
 
   @@unique([purchase_order_id, variant_id])
 }
@@ -655,6 +668,8 @@ model purchase_orders {
   purchase_order_supplier_responses purchase_order_supplier_responses[]
   procurement_documents procurement_documents[]
   procurement_reconciliations procurement_reconciliations[]
+  purchase_order_revisions purchase_order_revisions[]
+  supplier_returns     supplier_returns[]
   suppliers            suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
   warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
 
@@ -843,6 +858,7 @@ model suppliers {
   supplier_variants supplier_variants[]
   purchase_order_supplier_responses purchase_order_supplier_responses[]
   procurement_documents procurement_documents[]
+  supplier_returns  supplier_returns[]
 }
 
 model supplier_order_dispatches {
@@ -1052,6 +1068,7 @@ model warehouses {
   stock_balances                                                stock_balances[]
   stock_movements                                               stock_movements[]
   stock_reservations                                            stock_reservations[]
+  supplier_returns                                               supplier_returns[]
   transfer_orders_transfer_orders_from_warehouse_idTowarehouses transfer_orders[]    @relation("transfer_orders_from_warehouse_idTowarehouses")
   transfer_orders_transfer_orders_to_warehouse_idTowarehouses   transfer_orders[]    @relation("transfer_orders_to_warehouse_idTowarehouses")
   warehouse_settings                                            warehouse_settings?
@@ -1234,6 +1251,89 @@ model purchase_order_supplier_responses {
   suppliers              suppliers       @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
 
   @@index([purchase_order_id, created_at], map: "idx_po_supplier_responses_po")
+}
+
+/// A requested change to an already-dispatched PO's lines/header (P1.1). purchase_order_items is
+/// never overwritten until a revision reaches EFFECTIVE, so GRNs/invoices posted while a revision
+/// is pending keep reading the still-current values; this is also what makes "cannot receive
+/// against a revision that isn't yet effective" true without any change to GRN posting code.
+model purchase_order_revisions {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id      String          @db.Uuid
+  revision_number        Int
+  /// PENDING_APPROVAL | PENDING_SUPPLIER_RECONFIRMATION | EFFECTIVE | REJECTED | SUPPLIER_REJECTED | CANCELLED
+  status                 String          @default("PENDING_APPROVAL") @db.VarChar(40)
+  reason                 String
+  requires_supplier_reconfirmation Boolean @default(true)
+  /// { header: { expected_date, note }, lines: [{ purchase_order_item_id, variant_id, ordered_qty, unit_cost }] }
+  before_snapshot        Json
+  after_snapshot         Json
+  requested_by_user_id   String          @db.Uuid
+  approved_by_user_id    String?         @db.Uuid
+  rejected_reason        String?
+  supplier_decision_user_id String?      @db.Uuid
+  effective_at           DateTime?       @db.Timestamptz(6)
+  created_at             DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime        @default(now()) @db.Timestamptz(6)
+  purchase_orders        purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([purchase_order_id, revision_number])
+  @@index([purchase_order_id, status], map: "idx_po_revisions_po_status")
+}
+
+/// Return to Supplier (P1.3): damaged/wrong/defective goods already accepted into stock via a
+/// POSTED goods receipt. Never deletes the original GRN or its stock_movements — execution writes
+/// a new OUTBOUND movement (reference_type "SUPPLIER_RETURN") that reverses the original inbound.
+model supplier_returns {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  return_number          String                 @unique @db.VarChar(40)
+  purchase_order_id      String                 @db.Uuid
+  goods_receipt_id       String                 @db.Uuid
+  supplier_id            String                 @db.Uuid
+  warehouse_id           String                 @db.Uuid
+  /// PENDING_APPROVAL | APPROVED | REJECTED | PENDING_SUPPLIER_CONFIRMATION | SUPPLIER_REJECTED |
+  /// STOCK_RETURNED | COMPLETED | CANCELLED
+  status                 String                 @default("PENDING_APPROVAL") @db.VarChar(40)
+  reason                 String
+  evidence_reference     String?
+  requires_supplier_confirmation Boolean        @default(true)
+  requested_by_user_id   String                 @db.Uuid
+  approved_by_user_id    String?                @db.Uuid
+  rejected_reason        String?
+  supplier_decision_user_id String?             @db.Uuid
+  executed_by_user_id    String?                @db.Uuid
+  executed_at            DateTime?              @db.Timestamptz(6)
+  /// Outcome once executed: REFUND | REDELIVERY | EXCHANGE | CREDIT_NOTE | OTHER
+  resolution_outcome     String?                @db.VarChar(30)
+  resolution_note        String?
+  resolved_by_user_id    String?                @db.Uuid
+  resolved_at            DateTime?              @db.Timestamptz(6)
+  created_at             DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime               @default(now()) @db.Timestamptz(6)
+  purchase_orders        purchase_orders        @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
+  goods_receipts         goods_receipts         @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
+  suppliers              suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  warehouses             warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  supplier_return_items  supplier_return_items[]
+
+  @@index([goods_receipt_id, status], map: "idx_supplier_returns_grn_status")
+  @@index([purchase_order_id], map: "idx_supplier_returns_po")
+}
+
+model supplier_return_items {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplier_return_id     String                 @db.Uuid
+  goods_receipt_item_id  String                 @db.Uuid
+  purchase_order_item_id String?                @db.Uuid
+  variant_id             String                 @db.Uuid
+  return_qty             Int
+  unit_cost              Decimal                @default(0) @db.Decimal(12, 2)
+  note                   String?
+  supplier_returns       supplier_returns       @relation(fields: [supplier_return_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goods_receipt_items    goods_receipt_items    @relation(fields: [goods_receipt_item_id], references: [id], onUpdate: NoAction)
+  purchase_order_items   purchase_order_items?  @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
+
+  @@index([goods_receipt_item_id], map: "idx_supplier_return_items_grn_item")
 }
 
 /// Shared procurement document registry. ONE record per document, seen by both the supplier and

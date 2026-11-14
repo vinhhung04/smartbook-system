@@ -23,6 +23,27 @@ const {
   getDocumentReconciliation,
   completeDocumentReconciliation,
 } = require("../controllers/procurement-workflow.controller");
+const {
+  requestPurchaseOrderRevision,
+  approveRevision,
+  rejectRevision,
+  cancelRevision,
+  supplierConfirmRevision,
+  supplierRejectRevision,
+  getPurchaseOrderRevisions,
+} = require("../controllers/purchase-order-revision.controller");
+const { closeRemainingLine, reopenLine } = require("../controllers/purchase-order-line-closure.controller");
+const {
+  requestSupplierReturn,
+  approveSupplierReturn,
+  rejectSupplierReturn,
+  cancelSupplierReturn,
+  supplierConfirmReturn,
+  supplierRejectReturn,
+  executeSupplierReturn,
+  completeSupplierReturn,
+  getSupplierReturns,
+} = require("../controllers/supplier-return.controller");
 const { authorizeManagerRead, authorizePurchaseManager } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
@@ -44,6 +65,24 @@ router.get("/:id/shortage-reports", canRead, getShortageReports);
 router.get("/:id/document-reconciliation", canRead, getDocumentReconciliation);
 router.post("/:id/document-reconciliation/complete", canWrite, completeDocumentReconciliation);
 router.post("/:id/supplier-responses/:responseId/review", canApprove, reviewSupplierResponse);
+router.get("/:id/revisions", canRead, getPurchaseOrderRevisions);
+router.post("/:id/revisions", canWrite, requestPurchaseOrderRevision);
+router.post("/:id/revisions/:revisionId/approve", canApprove, approveRevision);
+router.post("/:id/revisions/:revisionId/reject", canApprove, rejectRevision);
+router.post("/:id/revisions/:revisionId/cancel", canWrite, cancelRevision);
+router.post("/:id/revisions/:revisionId/supplier-confirm", canWrite, supplierConfirmRevision);
+router.post("/:id/revisions/:revisionId/supplier-reject", canWrite, supplierRejectRevision);
+router.post("/:id/items/:itemId/close-remaining", canWrite, closeRemainingLine);
+router.post("/:id/items/:itemId/reopen-remaining", canApprove, reopenLine);
+router.get("/:id/returns", canRead, getSupplierReturns);
+router.post("/:id/returns", canWrite, requestSupplierReturn);
+router.post("/:id/returns/:returnId/approve", canApprove, approveSupplierReturn);
+router.post("/:id/returns/:returnId/reject", canApprove, rejectSupplierReturn);
+router.post("/:id/returns/:returnId/cancel", canWrite, cancelSupplierReturn);
+router.post("/:id/returns/:returnId/supplier-confirm", canWrite, supplierConfirmReturn);
+router.post("/:id/returns/:returnId/supplier-reject", canWrite, supplierRejectReturn);
+router.post("/:id/returns/:returnId/execute", canWrite, executeSupplierReturn);
+router.post("/:id/returns/:returnId/complete", canWrite, completeSupplierReturn);
 router.post("/:id/submit", canWrite, submitPurchaseOrder);
 router.post("/:id/approve", canApprove, approvePurchaseOrder);
 router.post("/:id/reject", canApprove, rejectPurchaseOrder);

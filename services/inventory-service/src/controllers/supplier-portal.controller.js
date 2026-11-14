@@ -410,6 +410,9 @@ async function createPortalInvoice(req, res) {
         if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
         if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
         seen.add(poItem.variant_id);
+        if (poItem.closure_status === "CLOSED_WITH_REMAINING") {
+          return { invalid: true, message: "Dòng đơn đặt hàng đã được đóng phần còn lại, không thể lập hóa đơn thêm" };
+        }
         if (!sourceShortageReportId) {
           // A redelivery note is bounded by its shortage report's shortage_qty below instead:
           // it re-declares quantity an earlier note already claimed but that was never accepted.

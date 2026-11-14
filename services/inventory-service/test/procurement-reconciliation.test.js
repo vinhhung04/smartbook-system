@@ -117,6 +117,71 @@ test('invoice price differs from the PO price -> DISCREPANCY (PRICE_MISMATCH)', 
   assert.ok(r.lines[0].flags.includes('PRICE_MISMATCH'));
 });
 
+// ── P1.4 Three-Way Matching: amount reconciliation, traceability, named result vocabulary ──
+
+test('three_way_match_status maps PENDING_DOCUMENT/NEEDS_REVIEW to the P1.4 vocabulary without changing status', () => {
+  const matched = buildDocumentReconciliation({ poItems: PO_ITEMS, documents: [invoice('i1', 100)], deliveryNotes: [note('d1', 100)], receipts: [receipt('g1', 'd1', 100)] });
+  assert.equal(matched.status, RESULT.MATCHED);
+  assert.equal(matched.three_way_match_status, 'MATCHED');
+  assert.equal(matched.lines[0].three_way_match_status, 'MATCHED');
+
+  const pending = buildDocumentReconciliation({ poItems: PO_ITEMS, documents: [], deliveryNotes: [], receipts: [] });
+  assert.equal(pending.status, RESULT.PENDING_DOCUMENT);
+  assert.equal(pending.three_way_match_status, 'PENDING');
+
+  const needsReview = buildDocumentReconciliation({
+    poItems: PO_ITEMS,
+    documents: [invoice('i1', 100)],
+    deliveryNotes: [note('d1', 100)],
+    receipts: [receipt('g1', 'd1', 95)],
+    discrepancyReports: [resolvedReport],
+  });
+  assert.equal(needsReview.status, RESULT.NEEDS_REVIEW);
+  assert.equal(needsReview.three_way_match_status, 'REQUIRES_APPROVAL');
+});
+
+test('per-line amount fields reconcile ordered/invoiced/accepted amounts, reusing a stored line_amount when present', () => {
+  const r = buildDocumentReconciliation({
+    poItems: PO_ITEMS, // ordered_qty 100, unit_cost 50000 -> po_amount 5,000,000
+    documents: [invoice('i1', 100, 50000, { lines: [{ purchase_order_item_id: 'poi-1', variant_id: 'v1', quantity: 100, unit_price: 50000, line_amount: 4999999 }] } )],
+    deliveryNotes: [note('d1', 100)],
+    receipts: [receipt('g1', 'd1', 100)],
+  });
+  const line = r.lines[0];
+  assert.equal(line.po_amount, 5000000);
+  assert.equal(line.invoiced_amount, 4999999, 'uses the stored line_amount rather than recomputing qty*price');
+  assert.equal(line.accepted_amount, 5000000);
+  assert.equal(r.totals.po_amount, 5000000);
+  assert.equal(r.totals.invoiced_amount, 4999999);
+});
+
+test('invoiced_amount falls back to quantity*unit_price when a line has no stored line_amount (older/fixture data)', () => {
+  const r = buildDocumentReconciliation({ poItems: PO_ITEMS, documents: [invoice('i1', 60, 50000)], deliveryNotes: [note('d1', 60)], receipts: [receipt('g1', 'd1', 60)] });
+  assert.equal(r.lines[0].invoiced_amount, 60 * 50000);
+});
+
+test('each line is traceable back to the specific invoice(s) and posted GRN(s) that contributed it', () => {
+  const r = buildDocumentReconciliation({
+    poItems: PO_ITEMS,
+    documents: [invoice('i1', 60), invoice('i2', 40)],
+    deliveryNotes: [note('d1', 60), note('d2', 40)],
+    receipts: [receipt('g1', 'd1', 60), receipt('g2', 'd2', 40)],
+  });
+  const line = r.lines[0];
+  assert.deepEqual(new Set(line.invoice_ids), new Set(['i1', 'i2']));
+  assert.deepEqual(new Set(line.goods_receipt_ids), new Set(['g1', 'g2']));
+});
+
+test('a draft receipt with zero accepted qty is not listed as a contributing GRN', () => {
+  const r = buildDocumentReconciliation({
+    poItems: PO_ITEMS,
+    documents: [invoice('i1', 100)],
+    deliveryNotes: [note('d1', 100)],
+    receipts: [receipt('g1', 'd1', 100, { status: 'DRAFT' })],
+  });
+  assert.deepEqual(r.lines[0].goods_receipt_ids, []);
+});
+
 test('goods received but no invoice issued yet -> PENDING_DOCUMENT', () => {
   const r = buildDocumentReconciliation({ poItems: PO_ITEMS, documents: [], deliveryNotes: [note('d1', 100)], receipts: [receipt('g1', 'd1', 100)] });
   assert.equal(r.status, RESULT.PENDING_DOCUMENT);

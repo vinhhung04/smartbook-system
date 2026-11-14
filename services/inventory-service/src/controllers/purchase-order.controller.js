@@ -8,6 +8,7 @@ const { claimApprovedOrderForDispatch } = require("../services/purchase-order-di
 const { registerDeliveryNote } = require("../services/procurement-document.service");
 const { recordFullAcceptance, RESOLUTION_ACTIONS } = require("../services/purchase-order-response.service");
 const { assertInvoiceQtyWithinRemaining } = require("../services/procurement-receipt.service");
+const { calculateLineFulfillmentStatus } = require("../services/purchase-order-line-closure.service");
 const {
   getReadableWarehouseIds,
   canWriteWarehouse,
@@ -134,7 +135,7 @@ function mapPurchaseOrderSummary(po) {
   };
 }
 
-function mapPurchaseOrderItem(item) {
+function mapPurchaseOrderItem(item, poStatus) {
   const orderedQty = Number(item.ordered_qty || 0);
   const receivedQty = Number(item.received_qty || 0);
   const unitCost = numberValue(item.unit_cost);
@@ -151,6 +152,17 @@ function mapPurchaseOrderItem(item) {
     unit_cost: unitCost,
     line_total: orderedQty * unitCost,
     reconciliation_status: calculateLineStatus(orderedQty, receivedQty),
+    // P1.2 Close Remaining Quantity: distinguishes a manually-closed or cancelled line from an
+    // ordinary open/partial/full receipt (reconciliation_status above never collapses this away).
+    closure_status: item.closure_status,
+    fulfillment_status: calculateLineFulfillmentStatus(poStatus, item),
+    closed_reason: item.closed_reason,
+    closed_evidence_reference: item.closed_evidence_reference,
+    closed_by_user_id: item.closed_by_user_id,
+    closed_at: item.closed_at,
+    reopened_reason: item.reopened_reason,
+    reopened_by_user_id: item.reopened_by_user_id,
+    reopened_at: item.reopened_at,
     note: item.note,
   };
 }
@@ -217,7 +229,7 @@ function buildTimeline(po, totals) {
 }
 
 function mapPurchaseOrderDetail(po) {
-  const items = (po.purchase_order_items || []).map(mapPurchaseOrderItem);
+  const items = (po.purchase_order_items || []).map((item) => mapPurchaseOrderItem(item, po.status));
   const totals = summarizeItems(po.purchase_order_items || []);
   return {
     id: po.id,
@@ -513,6 +525,9 @@ async function createSupplierInvoice(tx, po, payload, userId) {
     if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
     seen.add(poItem.variant_id);
 
+    if (poItem.closure_status === "CLOSED_WITH_REMAINING") {
+      return { invalid: true, message: "Dòng đơn đặt hàng đã được đóng phần còn lại, không thể lập hóa đơn thêm" };
+    }
     const overBy = await assertInvoiceQtyWithinRemaining(tx, poItem, invoicedQty);
     if (overBy !== null) {
       return {

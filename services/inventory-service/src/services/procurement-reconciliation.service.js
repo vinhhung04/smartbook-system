@@ -17,6 +17,18 @@ const RESULT = {
   NEEDS_REVIEW: "NEEDS_REVIEW",
 };
 
+// P1.4 Three-Way Matching names its five result buckets MATCHED / PARTIALLY_MATCHED /
+// DISCREPANCY / PENDING / REQUIRES_APPROVAL. This engine already computed exactly those five
+// cases under the names above (chosen before P1.4 was scoped) — mapped here rather than renamed,
+// so existing UI/API consumers keyed on PENDING_DOCUMENT/NEEDS_REVIEW keep working unchanged.
+const THREE_WAY_MATCH_STATUS = {
+  [RESULT.MATCHED]: "MATCHED",
+  [RESULT.PARTIALLY_MATCHED]: "PARTIALLY_MATCHED",
+  [RESULT.DISCREPANCY]: "DISCREPANCY",
+  [RESULT.PENDING_DOCUMENT]: "PENDING",
+  [RESULT.NEEDS_REVIEW]: "REQUIRES_APPROVAL",
+};
+
 function num(value) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
@@ -54,15 +66,30 @@ function buildDocumentReconciliation({ poItems = [], documents = [], deliveryNot
 
   const lines = poItems.map((poItem) => {
     const key = String(poItem.variant_id);
-    const invoiceLines = invoices.flatMap((doc) => (doc.lines || []).filter((line) => String(line.variant_id) === key));
-    const invoiced = invoiceLines.reduce((sum, line) => sum + num(line.quantity), 0);
-    const invoicePrices = [...new Set(invoiceLines.map((line) => num(line.unit_price)))];
+    // Keep each invoice line paired with its parent document id so invoiced_qty/invoiced_amount
+    // stay traceable back to the specific invoice(s) that contributed them (Invoice -> PO -> GRN).
+    const invoiceLineEntries = invoices.flatMap((doc) => (doc.lines || [])
+      .filter((line) => String(line.variant_id) === key)
+      .map((line) => ({ ...line, document_id: doc.id })));
+    const invoiced = invoiceLineEntries.reduce((sum, line) => sum + num(line.quantity), 0);
+    const invoicePrices = [...new Set(invoiceLineEntries.map((line) => num(line.unit_price)))];
+    // Reuse each line's own stored line_amount (set when the invoice was issued) rather than
+    // recomputing quantity*unit_price, so rounding/discounts baked into the document are kept.
+    const invoicedAmount = invoiceLineEntries.reduce(
+      (sum, line) => sum + (line.line_amount != null ? num(line.line_amount) : num(line.quantity) * num(line.unit_price)),
+      0,
+    );
+    const invoiceIds = [...new Set(invoiceLineEntries.map((line) => String(line.document_id)))];
     const noted = deliveryNotes.reduce(
       (sum, note) => sum + (note.items || []).filter((item) => String(item.variant_id) === key).reduce((s, item) => s + num(item.invoiced_qty), 0),
       0,
     );
-    const receiptItems = postedReceipts.flatMap((receipt) => (receipt.items || []).filter((item) => String(item.variant_id) === key));
+    const receiptEntries = postedReceipts.flatMap((receipt) => (receipt.items || [])
+      .filter((item) => String(item.variant_id) === key)
+      .map((item) => ({ ...item, receipt_id: receipt.id })));
+    const receiptItems = receiptEntries;
     const accepted = receiptItems.reduce((sum, item) => sum + num(item.quantity), 0);
+    const goodsReceiptIds = [...new Set(receiptEntries.filter((item) => num(item.quantity) > 0).map((item) => String(item.receipt_id)))];
     const damaged = receiptItems.reduce((sum, item) => sum + num(item.damaged_qty), 0);
     const rejected = receiptItems.reduce((sum, item) => sum + num(item.rejected_qty), 0);
     const delivered = receiptItems.reduce(
@@ -115,8 +142,15 @@ function buildDocumentReconciliation({ poItems = [], documents = [], deliveryNot
       damaged_qty: damaged,
       rejected_qty: rejected,
       remaining_to_receive_qty: Math.max(0, ordered - accepted),
+      // P1.4: amount reconciliation and Invoice -> PO -> GRN traceability per line.
+      po_amount: ordered * unitCost,
+      invoiced_amount: invoicedAmount,
+      accepted_amount: accepted * unitCost,
+      invoice_ids: invoiceIds,
+      goods_receipt_ids: goodsReceiptIds,
       flags,
       status,
+      three_way_match_status: THREE_WAY_MATCH_STATUS[status] || status,
     };
   });
 
@@ -166,13 +200,21 @@ function buildDocumentReconciliation({ poItems = [], documents = [], deliveryNot
     acc.damaged_qty += line.damaged_qty;
     acc.rejected_qty += line.rejected_qty;
     acc.remaining_to_receive_qty += line.remaining_to_receive_qty;
+    acc.po_amount += line.po_amount;
+    acc.invoiced_amount += line.invoiced_amount;
+    acc.accepted_amount += line.accepted_amount;
     return acc;
-  }, { ordered_qty: 0, invoiced_qty: 0, delivery_note_qty: 0, delivered_qty: 0, accepted_qty: 0, damaged_qty: 0, rejected_qty: 0, remaining_to_receive_qty: 0 });
+  }, {
+    ordered_qty: 0, invoiced_qty: 0, delivery_note_qty: 0, delivered_qty: 0, accepted_qty: 0,
+    damaged_qty: 0, rejected_qty: 0, remaining_to_receive_qty: 0,
+    po_amount: 0, invoiced_amount: 0, accepted_amount: 0,
+  });
 
   const invoicedAmount = invoices.reduce((sum, doc) => sum + num(doc.total_amount), 0);
 
   return {
     status,
+    three_way_match_status: THREE_WAY_MATCH_STATUS[status] || status,
     can_complete_without_exception: status === RESULT.MATCHED,
     totals: { ...totals, invoice_count: invoices.length, delivery_count: deliveryNotes.length, invoiced_total_amount: invoicedAmount, open_discrepancy_count: openReports.length },
     lines,
@@ -181,4 +223,4 @@ function buildDocumentReconciliation({ poItems = [], documents = [], deliveryNot
   };
 }
 
-module.exports = { buildDocumentReconciliation, RESULT, INVOICE_TYPES };
+module.exports = { buildDocumentReconciliation, RESULT, THREE_WAY_MATCH_STATUS, INVOICE_TYPES };
