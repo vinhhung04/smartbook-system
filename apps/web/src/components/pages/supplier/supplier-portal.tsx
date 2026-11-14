@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import { useParams } from "react-router";
 import {
   AlertCircle,
@@ -13,7 +12,6 @@ import {
   Truck,
   XCircle,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   supplierPortalService,
@@ -21,7 +19,8 @@ import {
   type SupplierPortalShortageReport,
 } from "@/services/supplier-portal";
 import { getApiErrorMessage } from "@/services/api";
-import { PageWrapper, FadeItem } from "../../motion-utils";
+import { SupplierFigures, SupplierSection, SupplierShell, SupplierTabs } from "./supplier-shell";
+import { supplierStatusLabel, supplierStatusVariant } from "./supplier-status";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -46,56 +45,16 @@ function formatCurrency(value: number) {
   return `${Number(value || 0).toLocaleString("vi-VN")} VND`;
 }
 
-function statusVariant(status: string) {
-  if (["RECEIVED", "RESOLVED", "ACKNOWLEDGED", "SUPPLIER_CONFIRMED", "MATCHED"].includes(status)) return "success";
-  if (["SENT_TO_SUPPLIER", "SUBMITTED", "PARTIALLY_RECEIVED", "OPEN", "SHORTAGE_REPORTED"].includes(status)) return "warning";
-  if (["CANCELLED", "REJECTED", "FAILED"].includes(status)) return "danger";
-  return "neutral";
-}
-
-function statusLabel(status: string) {
-  const labels: Record<string, string> = {
-    SENT_TO_SUPPLIER: "Chờ xác nhận từ nhà cung cấp",
-    SUPPLIER_CONFIRMED: "NCC đã xác nhận",
-    SUBMITTED: "Đã gửi chứng từ giao hàng",
-    SHORTAGE_REPORTED: "Thư viện báo thiếu hàng",
-    PARTIALLY_RECEIVED: "Nhận một phần",
-    RECEIVED: "Thư viện đã nhận đủ",
-    ACKNOWLEDGED: "NCC đã ghi nhận",
-    RESOLVED: "Đã xử lý xong",
-    OPEN: "Đang mở",
-    SENT: "Đã gửi cho NCC",
-    MATCHED: "Khớp",
-    READY: "Đủ số còn lại",
-    PARTIAL: "Giao một phần",
-    OVER_LIMIT: "Vượt số còn lại",
-    SKIP: "Không giao",
-    FULL_REDELIVERY: "Giao bù đủ",
-    PARTIAL_REDELIVERY: "Giao bù một phần",
-    CANCELLED: "Đã hủy",
-    REJECTED: "Từ chối",
-  };
-  return labels[status] || status;
-}
+const statusLabel = supplierStatusLabel;
+const statusVariant = supplierStatusVariant;
+const Section = SupplierSection;
 
 function StatBox({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="min-w-0 bg-card px-4 py-3">
       <p className="text-[12px] text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-[22px] font-semibold leading-tight tabular-nums text-foreground">{value}</p>
+      <p className="mt-1 truncate font-display text-[22px] font-semibold leading-tight tabular-nums text-foreground">{value}</p>
     </div>
-  );
-}
-
-function Section({ title, icon: Icon, children }: { title: string; icon?: LucideIcon; children: ReactNode }) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card">
-      <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-        {Icon ? <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> : null}
-        <h2 className="font-display text-[18px] font-semibold tracking-tight text-foreground">{title}</h2>
-      </div>
-      <div>{children}</div>
-    </section>
   );
 }
 
@@ -388,78 +347,59 @@ export function SupplierPortalPage() {
   const openShortages = order.shortage_reports.filter((report) => ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status));
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-display text-[26px] font-semibold leading-tight tracking-tight text-foreground">Đơn đặt hàng {order.purchase_order.po_number}</h1>
-              <StatusBadge label={statusLabel(order.purchase_order.status)} variant={statusVariant(order.purchase_order.status)} dot />
-            </div>
-            <p className="mt-1 text-[14px] text-muted-foreground">
-              Cổng nhà cung cấp SmartBook, {order.purchase_order.supplier?.name || "-"}. Phiếu gửi <span className="font-mono text-[13px]">{order.dispatch.dispatch_number}</span>
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(order.purchase_order.po_number).then(() => toast.success("Đã sao chép số đơn"))}>
-              <Clipboard className="h-3.5 w-3.5" /> Sao chép số đơn
+    <SupplierShell
+      supplierName={order.purchase_order.supplier?.name}
+      access="Truy cập bằng link đơn hàng"
+      actions={
+        <>
+          <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(order.purchase_order.po_number).then(() => toast.success("Đã sao chép số đơn"))}>
+            <Clipboard className="h-3.5 w-3.5" /> Sao chép số đơn
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={working}>
+            <RefreshCw className={`h-3.5 w-3.5 motion-reduce:animate-none ${working ? "animate-spin" : ""}`} /> Làm mới
+          </Button>
+          {canConfirm ? (
+            <Button size="sm" onClick={() => void confirmOrder()} disabled={working} data-testid="supplier-confirm-order-button">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Xác nhận đơn
             </Button>
-            <Button variant="outline" size="sm" onClick={() => void load()} disabled={working}>
-              <RefreshCw className={`h-3.5 w-3.5 motion-reduce:animate-none ${working ? "animate-spin" : ""}`} /> Làm mới
-            </Button>
-            {canConfirm ? (
-              <Button size="sm" onClick={() => void confirmOrder()} disabled={working} data-testid="supplier-confirm-order-button">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Xác nhận đơn
-              </Button>
-            ) : null}
+          ) : null}
+        </>
+      }
+    >
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-foreground">Đơn đặt hàng {order.purchase_order.po_number}</h1>
+            <StatusBadge label={statusLabel(order.purchase_order.status)} variant={statusVariant(order.purchase_order.status)} dot />
           </div>
-        </div>
-      </header>
-
-      <PageWrapper className="space-y-5">
-        <FadeItem>
-          <p className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-[13px] text-muted-foreground">
-            Tại đây bạn xác nhận đơn, gửi hóa đơn và phiếu giao hàng, xử lý báo thiếu. Việc kiểm đếm và nhập kho do nhân viên kho SmartBook thực hiện.
+          <p className="mt-1 text-[14px] text-muted-foreground">
+            Giao đến {order.purchase_order.warehouse?.code || "-"}{order.purchase_order.warehouse?.name ? `, ${order.purchase_order.warehouse.name}` : ""}. Phiếu gửi <span className="font-mono text-[13px]">{order.dispatch.dispatch_number}</span>, {statusLabel(order.dispatch.status).toLocaleLowerCase("vi")}.
           </p>
-        </FadeItem>
+        </div>
 
-        <FadeItem>
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-3 lg:grid-cols-5">
-            <StatBox label="Phiếu gửi" value={statusLabel(order.dispatch.status)} />
-            <StatBox label="Số dòng sách" value={summary.itemCount} />
-            <StatBox label="Đã đặt, cuốn" value={summary.orderedQty} />
-            <StatBox label="Thư viện đã nhận, cuốn" value={summary.receivedQty} />
-            <StatBox label="Còn phải giao, cuốn" value={summary.remainingQty} />
-          </div>
-        </FadeItem>
+        <SupplierFigures items={[
+          { label: "Số dòng sách", value: summary.itemCount },
+          { label: "Đã đặt, cuốn", value: summary.orderedQty },
+          { label: "Thư viện đã nhận, cuốn", value: summary.receivedQty },
+          { label: "Còn phải giao, cuốn", value: summary.remainingQty },
+          { label: "Đã ghi hóa đơn, cuốn", value: summary.invoiceQty },
+        ]} />
 
-        <FadeItem>
-          <nav aria-label="Mục của đơn" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
-            {[
-              ["overview", "Tổng quan"],
-              ["order", "Sách đặt mua"],
-              ["invoices", "Hóa đơn giao hàng"],
-              ["shortages", `Báo thiếu${openShortages.length ? ` (${openShortages.length})` : ""}`],
-              ["redelivery", "Giao bù"],
-              ["activity", "Lịch sử"],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={tab === key}
-                onClick={() => setTab(key as PortalTab)}
-                className={`shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-                  tab === key ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium text-foreground hover:bg-muted/60"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        </FadeItem>
+        <SupplierTabs<PortalTab>
+          label="Mục của đơn"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            ["overview", "Tổng quan"],
+            ["order", "Sách đặt mua"],
+            ["invoices", "Hóa đơn giao hàng"],
+            ["shortages", `Báo thiếu${openShortages.length ? ` (${openShortages.length})` : ""}`],
+            ["redelivery", "Giao bù"],
+            ["activity", "Lịch sử"],
+          ]}
+        />
 
         {tab === "overview" ? (
-          <FadeItem className="space-y-5">
+          <div className="space-y-5">
             <Section title="Thông tin chung" icon={PackageCheck}>
               <div className="grid gap-4 p-5 md:grid-cols-3">
                 <div>
@@ -524,11 +464,11 @@ export function SupplierPortalPage() {
                 />
               </div>
             </Section>
-          </FadeItem>
+          </div>
         ) : null}
 
         {tab === "order" ? (
-          <FadeItem>
+          <div>
             <Section title="Sách đặt mua" icon={Truck}>
               <div className="overflow-x-auto">
                 <Table className="min-w-[900px]">
@@ -554,11 +494,11 @@ export function SupplierPortalPage() {
                 </Table>
               </div>
             </Section>
-          </FadeItem>
+          </div>
         ) : null}
 
         {tab === "invoices" ? (
-          <FadeItem className="space-y-5">
+          <div className="space-y-5">
             <Section title="Lập hóa đơn và phiếu giao hàng" icon={FileText}>
               <div className="space-y-4 p-5">
                 {!canInvoice ? (
@@ -684,7 +624,7 @@ export function SupplierPortalPage() {
                 </div>
               )}
             </Section>
-          </FadeItem>
+          </div>
         ) : null}
 
         {tab === "shortages" ? (
@@ -856,8 +796,6 @@ export function SupplierPortalPage() {
             </div>
           </Section>
         ) : null}
-      </PageWrapper>
-
       <ConfirmDialog
         open={confirmState.open}
         onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}
@@ -867,6 +805,6 @@ export function SupplierPortalPage() {
         onConfirm={confirmState.onConfirm}
         loading={working}
       />
-    </div>
+    </SupplierShell>
   );
 }

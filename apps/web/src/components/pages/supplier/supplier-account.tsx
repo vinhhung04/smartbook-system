@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { AlertTriangle, BookOpen, FileText, LogOut, PackageCheck, RefreshCw, Truck } from "lucide-react";
+import { AlertTriangle, FileText, LogOut, PackageCheck, RefreshCw, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,8 +14,12 @@ import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 import { AIChatbot } from "@/components/ai-chatbot";
 import { SupplierOrderDocuments, SupplierOrderResponsePanel } from "@/components/procurement/supplier-order-documents";
 import { DISCREPANCY_TYPE_LABEL, SUPPLIER_PROPOSAL_LABEL, supplierResponseMeta } from "@/lib/procurement-document-status";
+import { SupplierFigures, SupplierSection, SupplierShell, SupplierTabs } from "./supplier-shell";
+import { SUPPLIER_INPUT } from "./supplier-status";
 
 type InvoiceLines = Record<string, number>;
+type OrderGroup = "waiting" | "delivering" | "shortage" | "done";
+type AccountTab = "response" | "delivery" | "shortages" | "deliveries" | "documents";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -60,6 +64,9 @@ export function SupplierAccountPage() {
   const [lines, setLines] = useState<InvoiceLines>({});
   const [redeliveryReportId, setRedeliveryReportId] = useState("");
   const [cannotReason, setCannotReason] = useState("");
+  // View state only: which list filter and which detail tab are showing (null = the tab that fits the order).
+  const [groupFilter, setGroupFilter] = useState<"all" | OrderGroup>("all");
+  const [tab, setTab] = useState<AccountTab | null>(null);
   const [confirmState, setConfirmState] = useState<{
     open: boolean; title: string; description?: string;
     variant: "default" | "destructive"; onConfirm: () => Promise<void>;
@@ -225,203 +232,265 @@ export function SupplierAccountPage() {
     }
   }
 
+  // Which pile an order sits in, for the list filter. Presentation only.
+  const groupOf = (order: SupplierPortalOrder): OrderGroup => {
+    const status = order.purchase_order.status;
+    if (order.shortage_reports.some((report) => ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) || status === "SHORTAGE_REPORTED") return "shortage";
+    if (status === "SENT_TO_SUPPLIER") return "waiting";
+    if (["SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED"].includes(status)) return "delivering";
+    return "done";
+  };
+  const groupCounts = orders.reduce<Record<string, number>>((acc, order) => {
+    const group = groupOf(order);
+    acc[group] = (acc[group] || 0) + 1;
+    return acc;
+  }, {});
+  const visibleOrders = groupFilter === "all" ? orders : orders.filter((order) => groupOf(order) === groupFilter);
+  const defaultTab: AccountTab = selectedOrder
+    ? ({ waiting: "response", shortage: "shortages", delivering: "delivery", done: "deliveries" } as const)[groupOf(selectedOrder)]
+    : "response";
+  const activeTab = tab ?? defaultTab;
+  const chooseOrder = (poId: string) => {
+    setSelectedPoId(poId);
+    setTab(null);
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-[13px] text-muted-foreground">Tài khoản nhà cung cấp SmartBook</p>
-              <h1 className="font-display text-[24px] font-semibold leading-tight tracking-tight">{supplierName || "Nhà cung cấp"}</h1>
-            </div>
-          </div>
-          <Button variant="outline" onClick={() => void logout()}>
-            <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
+    <SupplierShell
+      supplierName={supplierName}
+      access="Đăng nhập bằng tài khoản nhà cung cấp"
+      actions={
+        <>
+          <Button variant="outline" size="sm" onClick={() => void load()} disabled={isLoading || working} className="gap-2">
+            <RefreshCw className={`h-3.5 w-3.5 motion-reduce:animate-none ${isLoading ? "animate-spin" : ""}`} /> Làm mới
           </Button>
+          <Button variant="outline" size="sm" onClick={() => void logout()} className="gap-2">
+            <LogOut className="h-3.5 w-3.5" /> Đăng xuất
+          </Button>
+        </>
+      }
+    >
+      <div>
+        <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-foreground">Đơn hàng của bạn</h1>
+        <p className="mt-1 text-[14px] text-muted-foreground">
+          {isLoading
+            ? "Đang tải đơn hàng..."
+            : `${orders.length} đơn: ${groupCounts.waiting || 0} chờ phản hồi, ${groupCounts.delivering || 0} đang giao, ${groupCounts.shortage || 0} có báo thiếu.`}
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="rounded-2xl border border-border bg-card p-8 text-[13px] text-muted-foreground">Đang tải đơn hàng...</div>
+      ) : error ? (
+        <div className="rounded-2xl border border-red-200 bg-card p-8">
+          <p className="text-[14px] font-semibold text-red-700">{error}</p>
+          <Button className="mt-4" variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" /> Thử lại</Button>
         </div>
-      </header>
-
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-5 flex items-start gap-3 rounded-xl border border-border bg-muted/50 px-4 py-3 text-[13px] text-muted-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <p>Nhà cung cấp phản hồi đơn hàng, phát hành hóa đơn và phiếu giao hàng. Việc kiểm nhận, lập phiếu nhập kho và ghi sổ kho do nhân viên kho SmartBook thực hiện, kết quả được chia sẻ lại ở mục Chứng từ dùng chung.</p>
+      ) : orders.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-10 text-center">
+          <Truck className="mx-auto mb-3 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          <h2 className="font-display text-[18px] font-semibold">Chưa có đơn hàng nào</h2>
+          <p className="mt-1 text-[13px] text-muted-foreground">Đơn hàng sẽ hiện ở đây khi SmartBook gửi đơn mua hàng cho tài khoản này.</p>
         </div>
-
-        {isLoading ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-[13px] text-muted-foreground">Đang tải đơn hàng...</div>
-        ) : error ? (
-          <div className="rounded-xl border border-red-200 bg-card p-8">
-            <p className="text-[14px] font-semibold text-red-700">{error}</p>
-            <Button className="mt-4" variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" /> Thử lại</Button>
-          </div>
-        ) : orders.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-10 text-center">
-            <Truck className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-            <h2 className="font-display text-[18px] font-semibold">Chưa có đơn hàng nào</h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">Đơn hàng sẽ hiện ở đây khi SmartBook gửi đơn mua hàng cho tài khoản này.</p>
-          </div>
-        ) : selectedOrder ? (
-          <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="min-w-0 space-y-3">
-              {orders.map((order) => (
-                <button
-                  key={order.purchase_order.id}
-                  onClick={() => setSelectedPoId(order.purchase_order.id)}
-                  className={`w-full rounded-xl border bg-card p-4 text-left transition ${selectedOrder.purchase_order.id === order.purchase_order.id ? "border-border ring-2 ring-sky-100" : "border-border hover:border-slate-300"}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[14px] font-semibold">{order.purchase_order.po_number}</p>
-                    <Badge className={statusTone(order.purchase_order.status)}>{purchaseOrderStatusLabel(order.purchase_order.status)}</Badge>
-                  </div>
-                  <p className="mt-2 text-[12px] text-muted-foreground">{order.purchase_order.warehouse?.name || "Kho"} - {order.dispatch.dispatch_number}</p>
-                </button>
-              ))}
-            </aside>
-
-            <section className="min-w-0 space-y-5">
-              <div className="rounded-xl border border-border bg-card p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-[12px] text-muted-foreground">Đơn mua hàng</p>
-                    <h2 className="font-mono text-[24px] font-semibold">{selectedOrder.purchase_order.po_number}</h2>
-                    <p className="text-[13px] text-muted-foreground">Kho: {selectedOrder.purchase_order.warehouse?.name || "-"} | Dự kiến giao: {selectedOrder.purchase_order.expected_date ? new Date(selectedOrder.purchase_order.expected_date).toLocaleDateString("vi-VN") : "-"}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge className={statusTone(selectedOrder.purchase_order.status)}>{purchaseOrderStatusLabel(selectedOrder.purchase_order.status)}</Badge>
-                    <Badge className={statusTone(selectedOrder.dispatch.status)}>{purchaseOrderStatusLabel(selectedOrder.dispatch.status)}</Badge>
-                    {supplierResponseMeta(selectedOrder.purchase_order.supplier_response_status) ? (
-                      <Badge className={statusTone(selectedOrder.purchase_order.supplier_response_status || "")}>{supplierResponseMeta(selectedOrder.purchase_order.supplier_response_status)?.label}</Badge>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-5">
-                  {[
-                    ["Đã đặt", totals.ordered],
-                    ["Đã nhận", totals.received],
-                    ["Còn lại", totals.remaining],
-                    ["Đã lập phiếu giao", totals.invoiced],
-                    ["Thiếu chưa xử lý", totals.shortage],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-xl border border-border bg-muted/40 p-3">
-                      <p className="text-[12px] text-muted-foreground">{label}</p>
-                      <p className="mt-1 text-[20px] font-bold">{value}</p>
-                    </div>
-                  ))}
-                </div>
+      ) : selectedOrder ? (
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside aria-label="Danh sách đơn" className="min-w-0 rounded-2xl border border-border bg-card lg:sticky lg:top-4">
+            <div className="border-b border-border p-3">
+              <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5 [scrollbar-width:thin] lg:flex-wrap" role="group" aria-label="Lọc đơn theo tình trạng">
+                {([
+                  ["all", "Tất cả", orders.length],
+                  ["waiting", "Chờ phản hồi", groupCounts.waiting || 0],
+                  ["delivering", "Đang giao", groupCounts.delivering || 0],
+                  ["shortage", "Báo thiếu", groupCounts.shortage || 0],
+                  ["done", "Đã xong", groupCounts.done || 0],
+                ] as const).map(([key, label, count]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={groupFilter === key}
+                    onClick={() => setGroupFilter(key)}
+                    className={`shrink-0 rounded-full border px-3 py-1 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                      groupFilter === key ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium text-foreground hover:bg-muted/60"
+                    }`}
+                  >
+                    {label} <span className="tabular-nums text-muted-foreground">{count}</span>
+                  </button>
+                ))}
               </div>
+            </div>
+            <ul className="max-h-[40vh] divide-y divide-border overflow-y-auto lg:max-h-[60vh]">
+              {visibleOrders.length === 0 ? (
+                <li className="px-4 py-6 text-[13px] text-muted-foreground">Không có đơn nào ở nhóm này.</li>
+              ) : visibleOrders.map((order) => {
+                const active = selectedOrder.purchase_order.id === order.purchase_order.id;
+                return (
+                  <li key={order.purchase_order.id}>
+                    <button
+                      type="button"
+                      onClick={() => chooseOrder(order.purchase_order.id)}
+                      aria-current={active ? "true" : undefined}
+                      className={`w-full px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 ${active ? "bg-primary/[0.07]" : "hover:bg-muted/40"}`}
+                    >
+                      <p className="truncate font-mono text-[13px] font-semibold text-foreground">{order.purchase_order.po_number}</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">{purchaseOrderStatusLabel(order.purchase_order.status)}</p>
+                      <p className="truncate text-[12px] text-muted-foreground">Giao đến {order.purchase_order.warehouse?.name || "kho"}</p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </aside>
 
+          <div className="min-w-0 space-y-5">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-mono text-[24px] font-semibold text-foreground">{selectedOrder.purchase_order.po_number}</h2>
+                <Badge className={statusTone(selectedOrder.purchase_order.status)}>{purchaseOrderStatusLabel(selectedOrder.purchase_order.status)}</Badge>
+                {supplierResponseMeta(selectedOrder.purchase_order.supplier_response_status) ? (
+                  <Badge className={statusTone(selectedOrder.purchase_order.supplier_response_status || "")}>{supplierResponseMeta(selectedOrder.purchase_order.supplier_response_status)?.label}</Badge>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[14px] text-muted-foreground">
+                Giao đến {selectedOrder.purchase_order.warehouse?.name || "-"}, dự kiến {selectedOrder.purchase_order.expected_date ? new Date(selectedOrder.purchase_order.expected_date).toLocaleDateString("vi-VN") : "chưa hẹn ngày"}. Phiếu gửi <span className="font-mono text-[13px]">{selectedOrder.dispatch.dispatch_number}</span>, {purchaseOrderStatusLabel(selectedOrder.dispatch.status).toLocaleLowerCase("vi")}.
+              </p>
+            </div>
+
+            <SupplierFigures items={[
+              { label: "Đã đặt, cuốn", value: totals.ordered },
+              { label: "Thư viện đã nhận, cuốn", value: totals.received },
+              { label: "Còn phải giao, cuốn", value: totals.remaining },
+              { label: "Đã lập phiếu giao, cuốn", value: totals.invoiced },
+              { label: "Thiếu chưa xử lý, cuốn", value: totals.shortage },
+            ]} />
+
+            <SupplierTabs<AccountTab>
+              label="Mục của đơn"
+              value={activeTab}
+              onChange={setTab}
+              tabs={[
+                ["response", "Phản hồi đơn"],
+                ["delivery", "Lập phiếu giao"],
+                ["shortages", `Báo thiếu${openShortages.length ? ` (${openShortages.length})` : ""}`],
+                ["deliveries", `Các đợt giao (${selectedOrder.invoices.length})`],
+                ["documents", "Chứng từ"],
+              ]}
+            />
+
+            {activeTab === "response" ? (
               <SupplierOrderResponsePanel key={`resp-${selectedOrder.purchase_order.id}`} order={selectedOrder} onChanged={load} />
+            ) : null}
 
+            {activeTab === "documents" ? (
               <SupplierOrderDocuments key={`docs-${selectedOrder.purchase_order.id}-${selectedOrder.invoices.length}-${selectedOrder.purchase_order.status}`} order={selectedOrder} />
+            ) : null}
 
-              <div className="rounded-xl border border-border bg-card p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-[16px] font-semibold">Lập phiếu giao hàng</h3>
-                </div>
-                <p className="-mt-2 mb-3 text-[12px] text-muted-foreground">Mỗi đợt giao một phiếu. Một đơn có thể giao nhiều đợt; hóa đơn chính thức phát hành riêng ở mục Chứng từ dùng chung.</p>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="space-y-1 text-[12px] font-medium text-muted-foreground">Số phiếu giao hàng (bắt buộc)
-                    <input value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} className="block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground" />
+            {activeTab === "delivery" ? (
+              <SupplierSection title="Lập phiếu giao hàng" icon={FileText} description="Mỗi đợt giao một phiếu. Một đơn có thể giao nhiều đợt, hóa đơn chính thức phát hành riêng ở mục Chứng từ.">
+                <div className="space-y-4 p-5">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className="text-[12px] text-muted-foreground">Số phiếu giao hàng (bắt buộc)
+                      <input value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} className={`mt-1 ${SUPPLIER_INPUT} font-mono`} />
+                    </label>
+                    <label className="text-[12px] text-muted-foreground">Ngày lập phiếu
+                      <input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} className={`mt-1 ${SUPPLIER_INPUT}`} />
+                    </label>
+                    <label className="text-[12px] text-muted-foreground">Ngày giao dự kiến
+                      <input type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} className={`mt-1 ${SUPPLIER_INPUT}`} />
+                    </label>
+                    <label className="text-[12px] text-muted-foreground">Đơn vị vận chuyển
+                      <input value={carrierName} onChange={(event) => setCarrierName(event.target.value)} className={`mt-1 ${SUPPLIER_INPUT}`} />
+                    </label>
+                    <label className="text-[12px] text-muted-foreground">Người giao
+                      <input value={delivererName} onChange={(event) => setDelivererName(event.target.value)} className={`mt-1 ${SUPPLIER_INPUT}`} />
+                    </label>
+                    <label className="text-[12px] text-muted-foreground">Số hóa đơn tham chiếu (nếu đã có)
+                      <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} className={`mt-1 ${SUPPLIER_INPUT} font-mono`} />
+                    </label>
+                  </div>
+                  <label className="block text-[12px] text-muted-foreground">Ghi chú của nhà cung cấp
+                    <textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-1 min-h-20 w-full rounded-xl border border-input bg-background px-3 py-2 text-[13px] text-foreground outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/10" />
                   </label>
-                  <label className="space-y-1 text-[12px] font-medium text-muted-foreground">Ngày lập phiếu
-                    <input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} className="block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground" />
-                  </label>
-                  <label className="space-y-1 text-[12px] font-medium text-muted-foreground">Ngày giao dự kiến
-                    <input type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} className="block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground" />
-                  </label>
-                  <label className="space-y-1 text-[12px] font-medium text-muted-foreground">Đơn vị vận chuyển
-                    <input value={carrierName} onChange={(event) => setCarrierName(event.target.value)} className="block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground" />
-                  </label>
-                  <label className="space-y-1 text-[12px] font-medium text-muted-foreground">Người giao
-                    <input value={delivererName} onChange={(event) => setDelivererName(event.target.value)} className="block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground" />
-                  </label>
-                  <label className="space-y-1 text-[12px] font-medium text-muted-foreground">Số hóa đơn tham chiếu (nếu đã có)
-                    <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} className="block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground" />
-                  </label>
-                </div>
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-3 min-h-20 w-full rounded-xl border border-border px-3 py-2 text-[13px]" placeholder="Ghi chú của nhà cung cấp" />
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-[13px]">
-                    <thead className="bg-muted/40 text-left text-[12px] font-normal text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2">Sách</th>
-                        <th className="px-3 py-2">SKU</th>
-                        <th className="px-3 py-2">Đặt</th>
-                        <th className="px-3 py-2">Đã nhận</th>
-                        <th className="px-3 py-2">Còn lại</th>
-                        <th className="px-3 py-2">SL giao đợt này</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedOrder.purchase_order.items.map((item) => (
-                        <tr key={item.id} className="border-b border-border">
-                          <td className="px-3 py-2 font-medium">{item.title || item.variant_id}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{item.sku || item.isbn13 || "-"}</td>
-                          <td className="px-3 py-2">{item.ordered_qty}</td>
-                          <td className="px-3 py-2">{item.received_qty}</td>
-                          <td className="px-3 py-2">{item.remaining_qty}</td>
-                          <td className="px-3 py-2">
-                            <input type="number" aria-label={`Số lượng giao — ${item.title || item.variant_id}`} min={0} max={item.remaining_qty} {...zeroFieldProps} value={lines[item.id] || 0} onChange={(event) => setLineQty(item.id, Number(numberInputValue(event)), item.remaining_qty)} className="w-24 rounded-xl border border-border px-2 py-1" />
-                          </td>
+                  <div className="overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full min-w-[640px] text-[13px]">
+                      <thead className="text-left text-[12px] text-muted-foreground">
+                        <tr className="border-b border-border">
+                          <th className="px-3 py-2 font-normal">Sách</th>
+                          <th className="px-3 py-2 font-normal">Mã</th>
+                          <th className="px-3 py-2 text-right font-normal">Đặt</th>
+                          <th className="px-3 py-2 text-right font-normal">Đã nhận</th>
+                          <th className="px-3 py-2 text-right font-normal">Còn lại</th>
+                          <th className="px-3 py-2 font-normal">Giao đợt này</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {selectedOrder.purchase_order.items.map((item) => (
+                          <tr key={item.id} className="border-b border-border last:border-0">
+                            <td className="px-3 py-2 font-medium">{item.title || item.variant_id}</td>
+                            <td className="px-3 py-2 font-mono text-[12px] text-muted-foreground">{item.sku || item.isbn13 || "-"}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{item.ordered_qty}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{item.received_qty}</td>
+                            <td className="px-3 py-2 text-right tabular-nums">{item.remaining_qty}</td>
+                            <td className="px-3 py-2">
+                              <input type="number" aria-label={`Số lượng giao, ${item.title || item.variant_id}`} min={0} max={item.remaining_qty} {...zeroFieldProps} value={lines[item.id] || 0} onChange={(event) => setLineQty(item.id, Number(numberInputValue(event)), item.remaining_qty)} className="w-24 rounded-lg border border-input bg-background px-2 py-1.5 text-[13px] tabular-nums" />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Button onClick={() => void submitInvoice()} disabled={working || totals.remaining <= 0} className="gap-2">
+                    <PackageCheck className="h-4 w-4" /> Gửi phiếu giao hàng
+                  </Button>
                 </div>
-                <Button className="mt-4" onClick={() => void submitInvoice()} disabled={working || totals.remaining <= 0}>
-                  <PackageCheck className="mr-2 h-4 w-4" /> Gửi phiếu giao hàng
-                </Button>
-              </div>
+              </SupplierSection>
+            ) : null}
 
-              <div className="rounded-xl border border-border bg-card p-5">
-                <h3 className="text-[16px] font-semibold">Chênh lệch khi nhận hàng</h3>
+            {activeTab === "shortages" ? (
+              <SupplierSection title="Chênh lệch khi nhận hàng" icon={AlertTriangle} description="Kho thư viện báo thiếu hoặc lệch khi kiểm đếm. Ghi nhận, đề xuất cách xử lý hoặc lập phiếu giao bù.">
                 {openShortages.length === 0 ? (
-                  <p className="mt-3 text-[13px] text-muted-foreground">Không có báo cáo thiếu hàng nào đang mở.</p>
+                  <p className="p-5 text-[13px] text-muted-foreground">Không có báo cáo thiếu hàng nào đang mở.</p>
                 ) : (
-                  <div className="mt-4 space-y-4">
+                  <div className="space-y-4 p-5">
                     {openShortages.map((report) => (
                       <div key={report.id} className="rounded-xl border border-border p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-[13px] font-semibold">{DISCREPANCY_TYPE_LABEL[report.discrepancy_type || "SHORTAGE"] || "Chênh lệch"} · {report.id.slice(0, 8)}</p>
-                            <p className="text-[12px] text-muted-foreground">{report.reason || "Không có lý do"}</p>
+                            <p className="text-[14px] font-semibold">{DISCREPANCY_TYPE_LABEL[report.discrepancy_type || "SHORTAGE"] || "Chênh lệch"} <span className="font-mono text-[12px] font-normal text-muted-foreground">{report.id.slice(0, 8)}</span></p>
+                            <p className="text-[13px] text-muted-foreground">{report.reason || "Không có lý do"}</p>
                           </div>
                           <Badge className={statusTone(report.status)}>{purchaseOrderStatusLabel(report.status)}</Badge>
                         </div>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <ul className="mt-3 divide-y divide-border rounded-lg border border-border text-[13px]">
                           {report.items.map((item) => (
-                            <div key={item.id} className="rounded-xl bg-amber-50 p-3 text-[13px] text-amber-900">
-                              <span className="font-semibold">{item.title || item.variant_id}</span> - {(DISCREPANCY_TYPE_LABEL[item.discrepancy_type || "SHORTAGE"] || "thiếu").toLowerCase()} {item.shortage_qty}
-                            </div>
+                            <li key={item.id} className="flex justify-between gap-3 px-3 py-2">
+                              <span className="font-medium">{item.title || item.variant_id}</span>
+                              <span className="shrink-0 text-red-700 dark:text-red-400">{(DISCREPANCY_TYPE_LABEL[item.discrepancy_type || "SHORTAGE"] || "thiếu").toLowerCase()} {item.shortage_qty}</span>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Button size="sm" variant="outline" onClick={() => void acknowledge(report.id)} disabled={working}>Ghi nhận</Button>
                           <Button size="sm" variant="outline" onClick={() => setRedeliveryReportId(report.id)}>Dùng để giao bù</Button>
                         </div>
                         {report.supplier_proposed_action ? (
-                          <p className="mt-2 text-[12px] text-muted-foreground">Đề xuất đã gửi: <span className="font-medium">{SUPPLIER_PROPOSAL_LABEL[report.supplier_proposed_action] || report.supplier_proposed_action}</span>{report.supplier_response_note ? ` — ${report.supplier_response_note}` : ""}</p>
+                          <p className="mt-2 text-[12px] text-muted-foreground">Đề xuất đã gửi: <span className="font-medium text-foreground">{SUPPLIER_PROPOSAL_LABEL[report.supplier_proposed_action] || report.supplier_proposed_action}</span>{report.supplier_response_note ? `, ${report.supplier_response_note}` : ""}</p>
                         ) : null}
                         <div className="mt-3 grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)_auto]">
-                          <label className="text-[12px] font-medium text-muted-foreground">Phương án xử lý
+                          <label className="text-[12px] text-muted-foreground">Phương án xử lý
                             <select
                               value={proposals[report.id]?.action || ""}
                               onChange={(event) => setProposals((current) => ({ ...current, [report.id]: { action: event.target.value, note: current[report.id]?.note || "" } }))}
-                              className="mt-1 block w-full rounded-xl border border-border px-2 py-2 text-[13px] font-normal text-foreground"
+                              className={`mt-1 ${SUPPLIER_INPUT}`}
                             >
-                              <option value="">— Chọn —</option>
+                              <option value="">Chọn phương án</option>
                               {Object.entries(SUPPLIER_PROPOSAL_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </select>
                           </label>
-                          <label className="text-[12px] font-medium text-muted-foreground">Ghi chú
+                          <label className="text-[12px] text-muted-foreground">Ghi chú
                             <input
                               value={proposals[report.id]?.note || ""}
                               onChange={(event) => setProposals((current) => ({ ...current, [report.id]: { action: current[report.id]?.action || "", note: event.target.value } }))}
-                              className="mt-1 block w-full rounded-xl border border-border px-3 py-2 text-[13px] font-normal text-foreground"
+                              className={`mt-1 ${SUPPLIER_INPUT}`}
                             />
                           </label>
                           <Button size="sm" className="self-end" onClick={() => void propose(report.id)} disabled={working}>Gửi đề xuất</Button>
@@ -429,64 +498,66 @@ export function SupplierAccountPage() {
                       </div>
                     ))}
                     {selectedShortage ? (
-                      <div className="rounded-xl border border-border bg-muted p-4">
-                        <p className="text-[14px] font-semibold">Tạo phiếu giao bù cho chênh lệch {selectedShortage.id.slice(0, 8)}</p>
+                      <div className="rounded-xl border border-border bg-muted/40 p-4">
+                        <p className="text-[14px] font-semibold">Phiếu giao bù cho chênh lệch <span className="font-mono text-[13px]">{selectedShortage.id.slice(0, 8)}</span></p>
                         <div className="mt-3 space-y-2">
                           {selectedShortage.items.map((item) => (
                             <label key={item.id} className="flex items-center justify-between gap-3 text-[13px]">
                               <span>{item.title || item.variant_id}</span>
-                              <input type="number" min={0} max={item.shortage_qty} value={Math.min(Number(lines[item.purchase_order_item_id] ?? item.shortage_qty), item.shortage_qty)} onChange={(event) => setLineQty(item.purchase_order_item_id, Number(event.target.value), item.shortage_qty)} className="w-24 rounded-xl border border-border px-2 py-1" />
+                              <input type="number" aria-label={`Số lượng giao bù, ${item.title || item.variant_id}`} min={0} max={item.shortage_qty} value={Math.min(Number(lines[item.purchase_order_item_id] ?? item.shortage_qty), item.shortage_qty)} onChange={(event) => setLineQty(item.purchase_order_item_id, Number(event.target.value), item.shortage_qty)} className="w-24 rounded-lg border border-input bg-background px-2 py-1.5 tabular-nums" />
                             </label>
                           ))}
                         </div>
-                        <Button className="mt-4" onClick={() => void submitInvoice(selectedShortage)} disabled={working}>
-                          <Truck className="mr-2 h-4 w-4" /> Gửi phiếu giao bù
+                        <Button className="mt-4 gap-2" onClick={() => void submitInvoice(selectedShortage)} disabled={working}>
+                          <Truck className="h-4 w-4" /> Gửi phiếu giao bù
                         </Button>
                         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                          <input value={cannotReason} onChange={(event) => setCannotReason(event.target.value)} className="flex-1 rounded-xl border border-border px-3 py-2 text-[13px]" placeholder="Lý do nếu không thể cung cấp" />
+                          <input value={cannotReason} onChange={(event) => setCannotReason(event.target.value)} aria-label="Lý do nếu không thể cung cấp" className={`flex-1 ${SUPPLIER_INPUT}`} placeholder="Lý do nếu không thể cung cấp" />
                           <Button variant="outline" onClick={() => void cannotFulfill(selectedShortage.id)} disabled={working}>Không thể cung cấp</Button>
                         </div>
                       </div>
                     ) : null}
                   </div>
                 )}
-              </div>
+              </SupplierSection>
+            ) : null}
 
-              <div className="rounded-xl border border-border bg-card p-5">
-                <h3 className="text-[16px] font-semibold">Các đợt giao hàng</h3>
+            {activeTab === "deliveries" ? (
+              <SupplierSection title="Các đợt giao hàng" icon={Truck}>
                 {selectedOrder.invoices.length === 0 ? (
-                  <p className="mt-3 text-[13px] text-muted-foreground">Chưa gửi phiếu giao hàng nào.</p>
+                  <p className="p-5 text-[13px] text-muted-foreground">Chưa gửi phiếu giao hàng nào.</p>
                 ) : (
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-[13px]">
-                      <thead className="bg-muted/40 text-left text-[12px] font-normal text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2">Phiếu giao</th>
-                          <th className="px-3 py-2">Số tham chiếu</th>
-                          <th className="px-3 py-2">Trạng thái</th>
-                          <th className="px-3 py-2">SL</th>
-                          <th className="px-3 py-2">Phiếu nhập</th>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-[13px]">
+                      <thead className="text-left text-[12px] text-muted-foreground">
+                        <tr className="border-b border-border">
+                          <th className="px-5 py-2 font-normal">Phiếu giao</th>
+                          <th className="px-3 py-2 font-normal">Số tham chiếu</th>
+                          <th className="px-3 py-2 font-normal">Trạng thái</th>
+                          <th className="px-3 py-2 text-right font-normal">Số cuốn</th>
+                          <th className="px-5 py-2 font-normal">Phiếu nhập kho</th>
                         </tr>
                       </thead>
                       <tbody>
                         {selectedOrder.invoices.map((invoice) => (
-                          <tr key={invoice.id} className="border-b border-border">
-                            <td className="px-3 py-2 font-medium">{invoice.delivery_number || invoice.invoice_number}</td>
-                            <td className="px-3 py-2">{invoice.delivery_number && invoice.invoice_number !== invoice.delivery_number ? invoice.invoice_number : "-"}</td>
-                            <td className="px-3 py-2"><Badge className={statusTone(invoice.status)}>{purchaseOrderStatusLabel(invoice.status)}</Badge></td>
-                            <td className="px-3 py-2">{invoice.items.reduce((sum, item) => sum + item.invoiced_qty, 0)}</td>
-                            <td className="px-3 py-2">{invoice.goods_receipts?.map((receipt) => `${receipt.receipt_number} (${purchaseOrderStatusLabel(receipt.status)})`).join(", ") || "-"}</td>
+                          <tr key={invoice.id} className="border-b border-border last:border-0">
+                            <td className="px-5 py-2.5 font-mono text-[12px] font-medium">{invoice.delivery_number || invoice.invoice_number}</td>
+                            <td className="px-3 py-2.5 font-mono text-[12px] text-muted-foreground">{invoice.delivery_number && invoice.invoice_number !== invoice.delivery_number ? invoice.invoice_number : "-"}</td>
+                            <td className="px-3 py-2.5"><Badge className={statusTone(invoice.status)}>{purchaseOrderStatusLabel(invoice.status)}</Badge></td>
+                            <td className="px-3 py-2.5 text-right tabular-nums">{invoice.items.reduce((sum, item) => sum + item.invoiced_qty, 0)}</td>
+                            <td className="px-5 py-2.5 text-[12px]">{invoice.goods_receipts?.map((receipt) => `${receipt.receipt_number} (${purchaseOrderStatusLabel(receipt.status)})`).join(", ") || "-"}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
-              </div>
-            </section>
+              </SupplierSection>
+            ) : null}
           </div>
-        ) : null}
-      </main>
+        </div>
+      ) : null}
+
       <ConfirmDialog
         open={confirmState.open}
         onOpenChange={(open) => setConfirmState((s) => ({ ...s, open }))}
@@ -498,6 +569,6 @@ export function SupplierAccountPage() {
       />
       {/* Phase F: Supplier Assistant - reads only this supplier's own orders (ai-service supplier.orders). */}
       <AIChatbot />
-    </div>
+    </SupplierShell>
   );
 }
