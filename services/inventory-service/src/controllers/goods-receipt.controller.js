@@ -90,6 +90,18 @@ async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
   const qtyByVariant = aggregateQuantitiesByVariant(receiptItems);
   const variantIds = Array.from(qtyByVariant.keys());
 
+  // Lock these PO item rows before reading received_qty: without this, two GRNs
+  // for the same PO posted at the same time can both read the same pre-update
+  // received_qty, both pass the over-received check below, and together push the
+  // PO past ordered_qty once each transaction's increment commits.
+  if (variantIds.length > 0) {
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM purchase_order_items WHERE purchase_order_id = $1::uuid AND variant_id = ANY($2::uuid[]) FOR UPDATE",
+      goodsReceipt.purchase_order_id,
+      variantIds,
+    );
+  }
+
   const poItems = await tx.purchase_order_items.findMany({
     where: {
       purchase_order_id: goodsReceipt.purchase_order_id,
@@ -155,6 +167,16 @@ async function reversePurchaseOrderReceipt(tx, goodsReceipt, userId) {
   });
   const qtyByVariant = aggregateQuantitiesByVariant(receiptItems);
   const variantIds = Array.from(qtyByVariant.keys());
+
+  // Same lock as applyPurchaseOrderReceipt: a concurrent post/reversal on another
+  // GRN for this PO must not read received_qty before this one's change commits.
+  if (variantIds.length > 0) {
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM purchase_order_items WHERE purchase_order_id = $1::uuid AND variant_id = ANY($2::uuid[]) FOR UPDATE",
+      goodsReceipt.purchase_order_id,
+      variantIds,
+    );
+  }
 
   const poItems = await tx.purchase_order_items.findMany({
     where: {
