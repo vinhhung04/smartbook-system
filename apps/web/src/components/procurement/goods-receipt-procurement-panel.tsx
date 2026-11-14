@@ -88,7 +88,7 @@ export function GoodsReceiptProcurementPanel({ receiptId }: { receiptId: string 
       <div className="overflow-x-auto border-t border-border">
         <table className="w-full min-w-[680px] text-[13px]">
           <thead>
-            <tr className="bg-muted/30 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+            <tr className="bg-muted/30 text-left text-[12px] text-muted-foreground">
               <th className="px-4 py-2">Sách</th>
               <th className="px-3 py-2 text-right">Phiếu giao</th>
               <th className="px-3 py-2 text-right">Thực nhận</th>

@@ -375,11 +375,11 @@ export function AIAssistantPage() {
         .map((g) => `${g.wh}: ${g.prs.join(', ')}`)
         .join('\n');
     }
-    const skippedLine = skippedItems.length > 0 ? `Bỏ qua (thiếu variant_id): ${skippedItems.join(', ')}` : '';
-    const noWhLine = noWhItems.length > 0 ? `Bỏ qua (thiếu kho): ${noWhItems.join(', ')}` : '';
+    const skippedLine = skippedItems.length > 0 ? `Bỏ qua vì chưa xác định được ấn bản sách: ${skippedItems.join(', ')}` : '';
+    const noWhLine = noWhItems.length > 0 ? `Bỏ qua vì chưa chọn kho: ${noWhItems.join(', ')}` : '';
 
-    const content = ['✅ Đã xác nhận hành động.', requestLine, skippedLine, noWhLine].filter(Boolean).join('\n');
-    setMessages((prev) => [...prev, { role: 'assistant', content: content || '✅ Đã xác nhận hành động.' }]);
+    const content = ['Đã xác nhận hành động.', requestLine, skippedLine, noWhLine].filter(Boolean).join('\n');
+    setMessages((prev) => [...prev, { role: 'assistant', content: content || 'Đã xác nhận hành động.' }]);
   }, []);
 
   const handleActionCancelled = useCallback(() => {
@@ -532,7 +532,7 @@ export function AIAssistantPage() {
     <MotionConfig reducedMotion="user">
       <Tabs value={tab} onValueChange={(value) => setTab(value as 'chat' | 'actions')} className="flex h-full min-h-0 flex-row gap-0">
         {tab === 'chat' && !railCollapsed && (
-          <aside className="hidden w-[272px] shrink-0 border-r border-border bg-card/50 xl:block">
+          <aside className="hidden w-[272px] shrink-0 border-r border-border bg-card xl:block">
             <ConversationSidebar {...sidebarProps} onCollapse={() => setRail(true)} />
           </aside>
         )}
@@ -547,14 +547,13 @@ export function AIAssistantPage() {
               </button>
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-[11.5px] font-medium text-muted-foreground">Trợ lý AI</p>
-              <h1 className="truncate text-[14.5px] font-semibold leading-tight text-foreground" title={tab === 'chat' ? title : undefined}>
+              <h1 className="truncate font-display text-[17px] font-semibold leading-tight tracking-tight text-foreground" title={tab === 'chat' ? title : undefined}>
                 {tab === 'chat' ? title : 'Trung tâm hành động AI'}
               </h1>
+              <p className="hidden truncate text-[12px] text-muted-foreground sm:block">
+                {tab === 'chat' ? subtitle : 'Đề xuất do trợ lý soạn, chờ bạn xác nhận, và lịch sử thực thi'}
+              </p>
             </div>
-            {tab === 'chat' && (
-              <span className="hidden max-w-[16rem] truncate text-[12px] text-muted-foreground lg:block">{subtitle}</span>
-            )}
             <TabsList className="h-9 shrink-0 rounded-lg">
               <TabsTrigger value="chat" className="rounded-md px-2.5 text-[13px]">
                 <MessagesSquare className="h-3.5 w-3.5" aria-hidden="true" />
@@ -566,7 +565,7 @@ export function AIAssistantPage() {
                 <span className="hidden sm:inline">Hành động AI</span>
                 <span className="sr-only sm:hidden">Hành động AI</span>
                 {pendingActionCount > 0 && (
-                  <span className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10.5px] font-semibold tabular-nums text-white"
+                  <span className="ml-0.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold tabular-nums text-primary-foreground"
                     aria-label={`${pendingActionCount > 50 ? 'Hơn 50' : pendingActionCount} hành động chờ xác nhận`}>
                     {pendingActionCount > 50 ? '50+' : pendingActionCount}
                   </span>
@@ -575,7 +574,7 @@ export function AIAssistantPage() {
             </TabsList>
             {tab === 'chat' && (
               <Button type="button" variant="outline" size="sm" onClick={startNewConversation} disabled={busy}
-                title="Bắt đầu hội thoại mới" aria-label="Hội thoại mới" className="h-9 shrink-0 px-2.5 sm:px-3">
+                title="Bắt đầu hội thoại mới" aria-label="Hội thoại mới" className={cn('h-9 shrink-0 px-2.5 sm:px-3', !railCollapsed && 'xl:hidden')}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 <span className="hidden md:inline">Hội thoại mới</span>
               </Button>
@@ -587,15 +586,15 @@ export function AIAssistantPage() {
             <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
             <div ref={scrollRef} data-assistant-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <div ref={contentRef}
-                className={cn('mx-auto flex w-full max-w-[50rem] 2xl:max-w-[56rem] flex-col px-4 pb-8 pt-6 sm:px-6', messages.length === 0 && 'min-h-full justify-center')}>
+                className={cn('mx-auto flex w-full max-w-[50rem] 2xl:max-w-[56rem] flex-col px-5 pb-8 pt-6 sm:px-6', messages.length === 0 && 'min-h-full justify-center')}>
                 {messages.length === 0 ? (
                   hydrating ? (
                     <div className="space-y-6 py-6" aria-label="Đang mở hội thoại">
                       {[0, 1].map((i) => (
                         <div key={i} className="space-y-3">
-                          <span className="ml-auto block h-9 w-1/2 animate-pulse rounded-2xl bg-muted" />
-                          <span className="block h-3 w-3/4 animate-pulse rounded bg-muted" />
-                          <span className="block h-3 w-2/3 animate-pulse rounded bg-muted" />
+                          <span className="ml-auto block h-9 w-1/2 rounded-2xl bg-muted" />
+                          <span className="block h-3 w-3/4 rounded bg-muted" />
+                          <span className="block h-3 w-2/3 rounded bg-muted" />
                         </div>
                       ))}
                     </div>
@@ -628,7 +627,7 @@ export function AIAssistantPage() {
               </div>
             </div>
 
-            <div className="relative shrink-0 bg-gradient-to-t from-background via-background to-background/0 px-3 pb-3 pt-1 sm:px-6 sm:pb-4">
+            <div className="relative shrink-0 bg-background px-3 pb-3 pt-1 sm:px-6 sm:pb-4">
               {!atBottom && messages.length > 0 && (
                 <button type="button" onClick={() => scrollToBottom()}
                   className="absolute -top-11 left-1/2 inline-flex h-8 -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[12.5px] font-medium text-foreground shadow-md transition-colors hover:border-primary/40 focus-visible:outline-2 focus-visible:outline-ring">

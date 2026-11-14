@@ -132,7 +132,7 @@ export function CustomerNotificationsPage() {
               onClick={() => void markAllRead()}
               disabled={loading || markingAll || unreadCount === 0}
               data-testid="notifications-mark-all-read"
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-indigo-50 hover:text-indigo-600 disabled:opacity-50 dark:hover:bg-indigo-950/20 dark:hover:text-indigo-400"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-primary/[0.06] hover:text-primary disabled:opacity-50 dark:hover:bg-primary/15 dark:hover:text-primary"
             >
               <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
               Đọc tất cả
@@ -179,7 +179,7 @@ export function CustomerNotificationsPage() {
         />
       ) : (
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold text-muted-foreground" data-testid="notifications-total">
+          <p className="text-[12px] font-semibold text-muted-foreground" data-testid="notifications-total">
             {filter === 'UNREAD' ? 'Chưa đọc' : filter === 'READ' ? 'Đã đọc' : 'Tất cả'} ({total})
           </p>
           <ul className="space-y-2" data-testid="notification-list">
@@ -197,7 +197,7 @@ export function CustomerNotificationsPage() {
                   type="button"
                   onClick={() => setRequestedPage(Math.max(1, page - 1))}
                   disabled={page <= 1 || loading}
-                  className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="px-3 py-1 rounded border border-input text-primary dark:text-primary cursor-pointer hover:bg-primary/[0.06] dark:hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   Trước
                 </button>
@@ -205,7 +205,7 @@ export function CustomerNotificationsPage() {
                   type="button"
                   onClick={() => setRequestedPage(Math.min(totalPages, page + 1))}
                   disabled={page >= totalPages || loading}
-                  className="px-3 py-1 rounded border border-input text-indigo-600 dark:text-indigo-400 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="px-3 py-1 rounded border border-input text-primary dark:text-primary cursor-pointer hover:bg-primary/[0.06] dark:hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   Tiếp
                 </button>

@@ -145,11 +145,11 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
           ) : availableWarehouses.length === 1 ? (
             <div className="space-y-3">
               <p className="text-[12px] text-muted-foreground">Chi nhánh có sách:</p>
-              <div className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 dark:border-indigo-800/40 dark:bg-indigo-950/30">
-                <CheckCircle className="h-4 w-4 text-indigo-500 shrink-0" />
+              <div className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] px-4 py-3 dark:border-primary/25 dark:bg-primary/15">
+                <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] text-foreground" style={{ fontWeight: 600 }}>{availableWarehouses[0].warehouse_name}</p>
-                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400">{availableWarehouses[0].available_quantity} cuốn sẵn sàng</p>
+                  <p className="text-[12px] text-primary dark:text-primary">{availableWarehouses[0].available_quantity} cuốn sẵn sàng</p>
                 </div>
               </div>
             </div>
@@ -165,18 +165,18 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
                       onClick={() => setSelectedWarehouseId(wh.warehouse_id)}
                       className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
                         selected
-                          ? 'border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200 dark:border-indigo-700 dark:bg-indigo-950/30 dark:ring-indigo-800/50'
+                          ? 'border-primary/25 bg-primary/[0.06] ring-1 ring-primary/40 dark:border-primary/25 dark:bg-primary/15 dark:ring-primary/40'
                           : 'border-border bg-card hover:border-slate-300 dark:border-slate-600 hover:bg-muted'
                       }`}
                     >
                       <div className={`h-4 w-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
-                        selected ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300 dark:border-slate-600'
+                        selected ? 'border-primary/25 bg-primary' : 'border-slate-300 dark:border-slate-600'
                       }`}>
                         {selected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] text-foreground" style={{ fontWeight: 600 }}>{wh.warehouse_name}</p>
-                        <p className="text-[11px] text-emerald-600 dark:text-emerald-400">{wh.available_quantity} cuốn sẵn sàng</p>
+                        <p className="text-[12px] text-primary dark:text-primary">{wh.available_quantity} cuốn sẵn sàng</p>
                       </div>
                     </button>
                   );
@@ -211,7 +211,7 @@ export function ReserveModal({ book, onClose, onSuccess }: ReserveModalProps) {
               onClick={() => void handleConfirm()}
               disabled={!effectiveWarehouseId || submitting || blockedByFines}
               data-testid="confirm-reserve-button"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-[13px] text-white hover:bg-primary disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground transition-colors"
               style={{ fontWeight: 600 }}
             >
               {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}

@@ -20,14 +20,14 @@ export function CoverSearchResultCard({ candidate, onReserve, reserving = false 
 
   const confidencePct = Math.round(candidate.confidence * 100);
   const confidenceTone =
-    confidencePct >= 85 ? 'bg-emerald-500' : confidencePct >= 65 ? 'bg-amber-500' : 'bg-slate-500';
+    confidencePct >= 85 ? 'bg-primary' : confidencePct >= 65 ? 'bg-amber-500' : 'bg-slate-500';
 
   return (
-    <article className="rounded-[14px] border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
+    <article className="rounded-[14px] border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)]">
       <div className="relative">
         <BookCoverPlaceholder category={candidate.category} title={candidate.title} imageUrl={candidate.cover_image_url} />
         <span
-          className={`absolute right-2 top-2 rounded-full ${confidenceTone} px-2 py-0.5 text-[10px] text-white shadow-sm`}
+          className={`absolute right-2 top-2 rounded-full ${confidenceTone} px-2 py-0.5 text-[12px] text-white shadow-sm`}
           style={{ fontWeight: 700 }}
         >
           {confidencePct}% khớp
@@ -35,7 +35,7 @@ export function CoverSearchResultCard({ candidate, onReserve, reserving = false 
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="max-w-[70%] truncate rounded-[8px] border border-border bg-muted/90 px-2 py-1 text-[10px] text-muted-foreground">
+        <span className="max-w-[70%] truncate rounded-[8px] border border-border bg-muted/90 px-2 py-1 text-[12px] text-muted-foreground">
           {candidate.category || 'Chưa phân loại'}
         </span>
         <StatusBadge status={isAvailable ? 'AVAILABLE' : 'OUT_OF_STOCK'} />
@@ -47,19 +47,19 @@ export function CoverSearchResultCard({ candidate, onReserve, reserving = false 
       <p className="mt-1 text-[12px] text-muted-foreground">{candidate.author || 'Không rõ tác giả'}</p>
 
       {candidate.evidence.length > 0 && (
-        <p className="mt-1.5 truncate text-[11px] text-slate-400 dark:text-slate-500">
+        <p className="mt-1.5 truncate text-[12px] text-slate-400 dark:text-slate-500">
           {candidate.evidence.map((item) => item.label).join(' · ')}
         </p>
       )}
 
-      <div className={`mt-2 text-[11px] ${isAvailable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>
+      <div className={`mt-2 text-[12px] ${isAvailable ? 'text-primary dark:text-primary' : 'text-red-500 dark:text-red-400'}`}>
         {stockLabel}
       </div>
 
       <button
         disabled={!canReserve || reserving}
         onClick={() => onReserve(candidate)}
-        className="mt-3 w-full rounded-[10px] bg-indigo-600 px-3 py-2 text-[12px] text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground"
+        className="mt-3 w-full rounded-[10px] bg-primary px-3 py-2 text-[12px] text-white hover:bg-primary disabled:cursor-not-allowed disabled:bg-slate-200 dark:bg-slate-700 disabled:text-muted-foreground"
         style={{ fontWeight: 600 }}
       >
         {reserving ? 'Đang đặt trước...' : canReserve ? 'Đặt trước' : 'Hết sách'}

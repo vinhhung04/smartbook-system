@@ -85,7 +85,7 @@ export function CustomerLoansPage() {
       />
 
       {!loading && !error && overdueCount > 0 && (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             Bạn có <span className="font-semibold">{overdueCount} phiếu mượn quá hạn</span>. Hãy mang sách đến trả sớm để tránh phát sinh thêm tiền phạt.
@@ -104,7 +104,7 @@ export function CustomerLoansPage() {
               { value: 'history', label: `Lịch sử (${historyLoans.length})` },
               { value: 'all', label: `Tất cả (${rows.length})` },
             ]}
-            gradientClassName="from-emerald-600 to-teal-600"
+            gradientClassName=""
             className="w-max"
           />
         </div>

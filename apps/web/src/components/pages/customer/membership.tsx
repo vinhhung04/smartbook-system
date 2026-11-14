@@ -87,7 +87,7 @@ export function CustomerMembershipPage() {
         {/* The library card: what the reader shows at the desk */}
         <section
           aria-label="Thẻ thành viên"
-          className="relative overflow-hidden rounded-2xl bg-indigo-700 p-5 text-white shadow-md dark:bg-indigo-900 md:col-span-3"
+          className="relative overflow-hidden rounded-2xl bg-primary p-5 text-white shadow-md dark:bg-primary/85 md:col-span-3"
         >
           <div className="pointer-events-none absolute -right-10 -top-10 h-44 w-44 rounded-full bg-white/10" />
           <div className="relative flex h-full flex-col justify-between gap-6">
@@ -107,9 +107,9 @@ export function CustomerMembershipPage() {
               </div>
             </div>
             <div>
-              <p className="text-[11px] text-white/75">Số thẻ</p>
+              <p className="text-[12px] text-white/75">Số thẻ</p>
               <p className="font-mono text-[18px] font-semibold tracking-[0.08em]">{cardNumber}</p>
-              <p className="mt-1 text-[11px] text-white/75">Đưa mã QR này tại quầy để mượn hoặc trả sách nhanh hơn.</p>
+              <p className="mt-1 text-[12px] text-white/75">Đưa mã QR này tại quầy để mượn hoặc trả sách nhanh hơn.</p>
             </div>
           </div>
         </section>
@@ -122,7 +122,7 @@ export function CustomerMembershipPage() {
           </p>
           <p className="mt-1 text-[12px] text-muted-foreground">cuốn đang mượn</p>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã dùng ${usagePct}% số suất mượn`}>
-            <div className="h-full rounded-full bg-indigo-500" style={{ width: `${usagePct}%` }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: `${usagePct}%` }} />
           </div>
           <p className="mt-2 text-[13px] font-medium text-foreground">Còn {membership.remaining_loan_slots} suất mượn</p>
         </section>

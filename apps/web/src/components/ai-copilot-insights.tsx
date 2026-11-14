@@ -282,7 +282,7 @@ function ClaimItem({ claim }: { claim: AiExplanationClaim }) {
       )}
       {claim.kind === 'INFERENCE' && claim.basis && (
         <p className="text-[11.5px] text-muted-foreground">
-          Mức chắc chắn {claim.certainty ?? '—'} · Cơ sở: {claim.basis}
+          Mức chắc chắn {claim.certainty ? claim.certainty.toLocaleLowerCase('vi') : '—'} · Cơ sở: {claim.basis}
         </p>
       )}
     </li>
@@ -321,7 +321,7 @@ export function CopilotExplanation({ explanation }: { explanation?: AiExplanatio
           {facts > 0 && <span>{facts} dữ kiện</span>}
           {tone && (
             <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>
-              Mức chắc chắn: {explanation.certainty}
+              Mức chắc chắn: {explanation.certainty?.toLocaleLowerCase('vi')}
             </span>
           )}
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />

@@ -133,20 +133,20 @@ function getActionDialogConfig(pendingAction: PendingAction | null, poNumber: st
 type Tone = "primary" | "warning" | "danger" | "success" | "neutral" | "info";
 
 const TONE_STRIP: Record<Tone, string> = {
-  primary: "bg-indigo-50/70 dark:bg-indigo-500/10",
-  info: "bg-sky-50/70 dark:bg-sky-500/10",
+  primary: "bg-primary/[0.05]",
+  info: "bg-muted/40",
   warning: "bg-amber-50/70 dark:bg-amber-500/10",
   danger: "bg-red-50/70 dark:bg-red-500/10",
-  success: "bg-emerald-50/70 dark:bg-emerald-500/10",
+  success: "bg-primary/[0.05]",
   neutral: "bg-muted/40",
 };
 
 const TONE_ICON: Record<Tone, string> = {
-  primary: "bg-indigo-600 text-white",
-  info: "bg-sky-600 text-white",
+  primary: "bg-primary text-primary-foreground",
+  info: "bg-slate-600 text-white",
   warning: "bg-amber-500 text-white",
   danger: "bg-red-600 text-white",
-  success: "bg-emerald-600 text-white",
+  success: "bg-primary text-primary-foreground",
   neutral: "bg-slate-500 text-white",
 };
 
@@ -176,7 +176,7 @@ function NextStep({ tone, icon: Icon, title, description, children }: {
 
 function ProgressBar({ value, max, tone = "success" }: { value: number; max: number; tone?: "success" | "warning" | "danger" }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
-  const color = tone === "danger" ? "bg-red-500" : tone === "warning" ? "bg-amber-500" : "bg-emerald-500";
+  const color = tone === "danger" ? "bg-red-600" : tone === "warning" ? "bg-amber-500" : "bg-primary";
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`${value}/${max}`}>
       <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${pct}%` }} />
@@ -515,7 +515,7 @@ export function PurchaseOrderDetailPage() {
     .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
   const activityDot: Record<Tone, string> = {
-    neutral: "bg-slate-400", info: "bg-sky-500", primary: "bg-indigo-500", success: "bg-emerald-500", warning: "bg-amber-500", danger: "bg-red-500",
+    neutral: "bg-slate-400", info: "bg-slate-500", primary: "bg-primary", success: "bg-primary", warning: "bg-amber-500", danger: "bg-red-600",
   };
 
   const defaultDocTab = po.status === "SHORTAGE_REPORTED" && shortageReports.length ? "shortages"
@@ -542,16 +542,13 @@ export function PurchaseOrderDetailPage() {
       <FadeItem>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-gradient-to-br from-indigo-600 to-sky-600 shadow-lg shadow-indigo-500/20">
-              <ClipboardList className="h-5 w-5 text-white" />
-            </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="break-all font-mono text-xl font-semibold tracking-tight text-foreground">{po.po_number}</h1>
+                <h1 className="break-all font-mono text-[26px] font-semibold tracking-tight text-foreground sm:text-[28px]">{po.po_number}</h1>
                 <StatusBadge label={statusLabel(po.status)} variant={statusVariant(po.status)} dot />
                 {responseMeta ? <StatusBadge label={responseMeta.label} variant={responseMeta.tone} /> : null}
               </div>
-              <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[14px] text-muted-foreground">
                 <span className="text-foreground">{supplierName}</span>
                 <ArrowRight className="h-3.5 w-3.5" aria-label="giao đến" />
                 <span>{warehouseCode}{warehouseName ? ` · ${warehouseName}` : ""}</span>
@@ -570,7 +567,7 @@ export function PurchaseOrderDetailPage() {
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => void load()} disabled={working || loading} aria-label="Làm mới">
-              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+              <RefreshCw className={cn("h-3.5 w-3.5 motion-reduce:animate-none", loading && "animate-spin")} />
               <span className="hidden sm:inline">Làm mới</span>
             </Button>
           </div>
@@ -578,7 +575,7 @@ export function PurchaseOrderDetailPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="overflow-x-auto px-5 py-5">
             <WorkflowStepper steps={buildSteps(po.status)} className="min-w-[540px]" />
           </div>
@@ -594,11 +591,11 @@ export function PurchaseOrderDetailPage() {
                 <Table className="min-w-[720px]">
                   <TableHeader>
                     <TableRow className="bg-muted/30">
-                      <TableHead className="text-[12px] font-semibold text-muted-foreground">Sách</TableHead>
-                      <TableHead className="w-[150px] text-[12px] font-semibold text-muted-foreground">Đã nhận / đặt</TableHead>
-                      <TableHead className="text-right text-[12px] font-semibold text-muted-foreground">Đơn giá</TableHead>
-                      <TableHead className="text-right text-[12px] font-semibold text-muted-foreground">Thành tiền</TableHead>
-                      <TableHead className="text-[12px] font-semibold text-muted-foreground">Đối soát</TableHead>
+                      <TableHead className="text-[12px] font-normal text-muted-foreground">Sách</TableHead>
+                      <TableHead className="w-[150px] text-[12px] font-normal text-muted-foreground">Đã nhận / đặt</TableHead>
+                      <TableHead className="text-right text-[12px] font-normal text-muted-foreground">Đơn giá</TableHead>
+                      <TableHead className="text-right text-[12px] font-normal text-muted-foreground">Thành tiền</TableHead>
+                      <TableHead className="text-[12px] font-normal text-muted-foreground">Đối soát</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -608,13 +605,13 @@ export function PurchaseOrderDetailPage() {
                         <TableRow key={item.id}>
                           <TableCell className="whitespace-normal">
                             <p className="text-[13px] font-medium text-foreground">{item.title}</p>
-                            <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{item.isbn13 || item.sku || "-"}</p>
-                            {item.note ? <p className="mt-1 text-[11px] text-muted-foreground">{item.note}</p> : null}
+                            <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{item.isbn13 || item.sku || "-"}</p>
+                            {item.note ? <p className="mt-1 text-[12px] text-muted-foreground">{item.note}</p> : null}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-baseline justify-between gap-2 text-[13px] tabular-nums">
                               <span><span className="font-semibold">{item.received_qty}</span><span className="text-muted-foreground">/{item.ordered_qty}</span></span>
-                              {item.remaining_qty > 0 ? <span className="text-[11px] text-muted-foreground">còn {item.remaining_qty}</span> : null}
+                              {item.remaining_qty > 0 ? <span className="text-[12px] text-muted-foreground">còn {item.remaining_qty}</span> : null}
                             </div>
                             <div className="mt-1.5"><ProgressBar value={item.received_qty} max={item.ordered_qty} tone={over ? "danger" : item.received_qty < item.ordered_qty && item.received_qty > 0 ? "warning" : "success"} /></div>
                           </TableCell>
@@ -648,7 +645,7 @@ export function PurchaseOrderDetailPage() {
                       {docTabs.map((tab) => (
                         <TabsTrigger key={tab.value} value={tab.value} className="px-3 text-[12px]">
                           {tab.label}
-                          <span className="rounded-full bg-muted-foreground/10 px-1.5 text-[11px] tabular-nums text-muted-foreground">{tab.count}</span>
+                          <span className="rounded-full bg-muted-foreground/10 px-1.5 text-[12px] tabular-nums text-muted-foreground">{tab.count}</span>
                         </TabsTrigger>
                       ))}
                     </TabsList>
@@ -673,7 +670,7 @@ export function PurchaseOrderDetailPage() {
                             <Button variant="outline" size="sm" onClick={() => void copyText(`${window.location.origin}/supplier/portal/${dispatch.portal_token}`, "liên kết cổng NCC")}>
                               <Clipboard className="h-3.5 w-3.5" />Sao chép
                             </Button>
-                            <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" data-testid="supplier-portal-link" className={cn(linkButtonClass, "text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300")}>
+                            <NavLink to={`/supplier/portal/${dispatch.portal_token}`} target="_blank" data-testid="supplier-portal-link" className={cn(linkButtonClass, "text-primary hover:text-primary/80")}>
                               Mở cổng NCC <ExternalLink className="h-3.5 w-3.5" />
                             </NavLink>
                           </div>
@@ -762,7 +759,7 @@ export function PurchaseOrderDetailPage() {
                       <DocRow key={receipt.id}>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <NavLink to={`/orders/${receipt.id}`} className="rounded font-mono text-[13px] font-semibold text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-indigo-400">{receipt.receipt_number}</NavLink>
+                            <NavLink to={`/orders/${receipt.id}`} className="rounded font-mono text-[13px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{receipt.receipt_number}</NavLink>
                             <StatusBadge label={statusLabel(receipt.status)} variant={statusVariant(receipt.status)} />
                           </div>
                           <p className="mt-0.5 text-[12px] text-muted-foreground">{receipt.total_quantity} cuốn · {receipt.item_count} dòng · {formatDate(receipt.received_at)}</p>
@@ -795,7 +792,7 @@ export function PurchaseOrderDetailPage() {
                   { label: "Lệch", value: (summary?.over_received_lines ?? 0) + (summary?.under_received_lines ?? 0) },
                 ].map((stat) => (
                   <div key={stat.label} className="rounded-lg bg-muted/40 px-2 py-2">
-                    <dt className="text-[11px] text-muted-foreground">{stat.label}</dt>
+                    <dt className="text-[12px] text-muted-foreground">{stat.label}</dt>
                     <dd className="text-[15px] font-semibold tabular-nums">{stat.value}</dd>
                   </div>
                 ))}
@@ -808,7 +805,7 @@ export function PurchaseOrderDetailPage() {
               <dl className="-my-2.5 divide-y divide-border">
                 <InfoRow label="Tổng tiền">
                   <span className="font-mono text-[15px] font-semibold tabular-nums">{formatCurrency(po.total_amount)}</span>
-                  {missingPrices ? <span className="mt-0.5 block text-[11px] text-amber-700 dark:text-amber-400">Có dòng chưa nhập đơn giá</span> : null}
+                  {missingPrices ? <span className="mt-0.5 block text-[12px] text-amber-700 dark:text-amber-400">Có dòng chưa nhập đơn giá</span> : null}
                 </InfoRow>
                 <InfoRow label="Nhà cung cấp">
                   {supplierName}
@@ -836,7 +833,7 @@ export function PurchaseOrderDetailPage() {
                       <span className={cn("relative mt-[5px] h-[9px] w-[9px] shrink-0 rounded-full ring-2 ring-card", activityDot[event.tone])} />
                       <div className="min-w-0">
                         <p className="text-[13px] text-foreground">{event.label}</p>
-                        <p className="text-[11px] tabular-nums text-muted-foreground">{formatDate(event.time)}</p>
+                        <p className="text-[12px] tabular-nums text-muted-foreground">{formatDate(event.time)}</p>
                       </div>
                     </li>
                   ))}
@@ -860,7 +857,7 @@ export function PurchaseOrderDetailPage() {
         {pendingAction?.type === "resolveShortage" && (
           <div className="space-y-2">
             <div>
-              <label htmlFor="po-resolution-action" className="mb-1.5 block text-[11px] font-medium text-muted-foreground">Kết quả xử lý (bắt buộc)</label>
+              <label htmlFor="po-resolution-action" className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Kết quả xử lý (bắt buộc)</label>
               <select
                 id="po-resolution-action"
                 value={resolution.action}
@@ -872,14 +869,14 @@ export function PurchaseOrderDetailPage() {
               </select>
             </div>
             <div>
-              <label htmlFor="po-resolution-note" className="mb-1.5 block text-[11px] font-medium text-muted-foreground">Ghi chú</label>
+              <label htmlFor="po-resolution-note" className="mb-1.5 block text-[12px] font-medium text-muted-foreground">Ghi chú</label>
               <Textarea id="po-resolution-note" rows={2} value={resolution.note} onChange={(event) => setResolution((current) => ({ ...current, note: event.target.value }))} placeholder="Ví dụ: NCC xuất hóa đơn điều chỉnh giảm 2 cuốn" />
             </div>
           </div>
         )}
         {pendingAction?.type === "reject" && (
           <div>
-            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Lý do từ chối</p>
+            <p className="mb-1.5 text-[12px] font-medium text-muted-foreground">Lý do từ chối</p>
             <Textarea
               value={rejectReason}
               onChange={(event) => setRejectReason(event.target.value)}

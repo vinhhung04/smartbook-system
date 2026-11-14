@@ -120,21 +120,21 @@ export function CustomerFinesPage() {
         <EmptyState variant="error" title="Không tải được tiền phạt" description={error} action={<button onClick={() => void loadFines()} className="font-medium text-primary hover:underline">Thử lại</button>} />
       ) : (
         <>
-          <section aria-label="Tổng quan tiền phạt" className="grid overflow-hidden rounded-xl border border-border bg-card sm:grid-cols-2">
-            <div className={cn('p-5', totalFine > 0 ? 'bg-rose-50/60 dark:bg-rose-950/20' : 'bg-emerald-50/50 dark:bg-emerald-950/15')}>
+          <section aria-label="Tổng quan tiền phạt" className="grid overflow-hidden rounded-2xl border border-border bg-card sm:grid-cols-2">
+            <div className={cn('p-5', totalFine > 0 ? 'bg-red-50/60 dark:bg-red-950/20' : '')}>
               <p className="text-[12px] font-medium text-muted-foreground">Tiền phạt còn lại</p>
-              <p className={cn('mt-1.5 text-[28px] font-bold leading-none tabular-nums', totalFine > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+              <p className={cn('mt-1.5 font-display text-[30px] font-semibold leading-none tabular-nums', totalFine > 0 ? 'text-red-700 dark:text-red-400' : 'text-foreground')}>
                 {formatCurrencyVnd(totalFine)}
               </p>
               <p className="mt-2 text-[12px] text-muted-foreground">
                 {totalFine > 0
-                  ? 'Thanh toán online bên dưới, hoặc đến quầy thư viện — nhân viên sẽ ghi nhận ngay.'
+                  ? 'Thanh toán online bên dưới, hoặc đến quầy thư viện, nhân viên sẽ ghi nhận ngay.'
                   : 'Bạn không có tiền phạt. Tiếp tục đọc sách nhé!'}
               </p>
             </div>
             <div className="border-t border-border p-5 sm:border-l sm:border-t-0">
               <p className="text-[12px] font-medium text-muted-foreground">Số dư ví</p>
-              <p className={cn('mt-1.5 text-[28px] font-bold leading-none tabular-nums', walletBalance < 100000 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground')}>
+              <p className={cn('mt-1.5 font-display text-[30px] font-semibold leading-none tabular-nums', walletBalance < 100000 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>
                 {formatCurrencyVnd(walletBalance)}
               </p>
               <p className="mt-2 text-[12px] text-muted-foreground">
@@ -202,9 +202,9 @@ export function CustomerFinesPage() {
                     <li key={entry.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[13px] font-medium text-foreground">{entry.entry_type ? getBorrowLabel('ledgerEntry', entry.entry_type) : entry.reference_type || 'Giao dịch'}</p>
-                        <p className="text-[11px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
+                        <p className="text-[12px] text-muted-foreground">{formatDateTime(entry.created_at)}</p>
                       </div>
-                      <span className={cn('shrink-0 text-[14px] font-bold tabular-nums', outflow ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400')}>
+                      <span className={cn('shrink-0 text-[14px] font-bold tabular-nums', outflow ? 'text-red-700 dark:text-red-400' : 'text-foreground')}>
                         {outflow ? '−' : '+'}{formatCurrencyVnd(amount)}
                       </span>
                     </li>

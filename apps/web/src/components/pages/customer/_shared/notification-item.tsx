@@ -66,7 +66,7 @@ export function NotificationItem({ item, onMarkedRead }: NotificationItemProps) 
     <div
       data-testid="notification-item"
       data-unread={unread ? 'true' : 'false'}
-      className={`rounded-[12px] border p-3.5 ${unread ? 'border-indigo-100 bg-indigo-50/40 dark:border-indigo-500/20 dark:bg-indigo-950/20' : 'border-border bg-card'}`}
+      className={`rounded-[12px] border p-3.5 ${unread ? 'border-primary/25 bg-primary/[0.06] dark:border-primary/25 dark:bg-primary/15' : 'border-border bg-card'}`}
     >
       <div className="flex items-start gap-3">
         <div className="rounded-[9px] border border-border bg-card p-2 text-slate-600 dark:text-slate-300">
@@ -78,10 +78,10 @@ export function NotificationItem({ item, onMarkedRead }: NotificationItemProps) 
               <button
                 type="button"
                 onClick={() => void open()}
-                className="group min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 rounded"
+                className="group min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
                 aria-label={`${title} — mở chi tiết`}
               >
-                <span className="inline-flex items-center gap-1 text-[13px] text-foreground group-hover:text-indigo-700 dark:group-hover:text-indigo-300" style={{ fontWeight: 700 }}>
+                <span className="inline-flex items-center gap-1 text-[13px] text-foreground group-hover:text-primary dark:group-hover:text-primary" style={{ fontWeight: 700 }}>
                   {title}
                   <ChevronRight className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
                 </span>
@@ -97,18 +97,18 @@ export function NotificationItem({ item, onMarkedRead }: NotificationItemProps) 
                     onClick={() => void markRead()}
                     disabled={marking}
                     data-testid="notification-mark-read"
-                    className="inline-flex items-center gap-1 rounded-[8px] border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700 transition-colors hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-500/30 dark:bg-indigo-950/30 dark:text-indigo-300"
+                    className="inline-flex items-center gap-1 rounded-[8px] border border-primary/25 bg-primary/[0.06] px-2 py-0.5 text-[12px] text-primary transition-colors hover:bg-primary/10 disabled:opacity-50 dark:border-primary/25 dark:bg-primary/15 dark:text-primary"
                   >
                     <Check className="h-3 w-3" aria-hidden="true" />
                     {marking ? 'Đang lưu…' : 'Đánh dấu đã đọc'}
                   </button>
-                  <span className="rounded-[8px] bg-indigo-100 px-2 py-0.5 text-[10px] text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">Chưa đọc</span>
+                  <span className="rounded-[8px] bg-primary/10 px-2 py-0.5 text-[12px] text-primary dark:bg-primary/15 dark:text-primary">Chưa đọc</span>
                 </>
               ) : null}
             </div>
           </div>
           {item.body ? <div className="mt-1.5 text-[13px] text-slate-600 dark:text-slate-300">{item.body}</div> : null}
-          <div className="mt-1.5 text-[11px] text-muted-foreground">{formatDateTime(item.created_at || item.scheduled_at)}</div>
+          <div className="mt-1.5 text-[12px] text-muted-foreground">{formatDateTime(item.created_at || item.scheduled_at)}</div>
         </div>
       </div>
     </div>

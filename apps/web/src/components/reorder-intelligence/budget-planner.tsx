@@ -70,7 +70,7 @@ export function BudgetPlanner({ data, budgetVnd, onBudgetChange, selection, hasM
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <h2 id="budget-planner-title" className="text-[14px] font-semibold text-foreground">Kế hoạch ngân sách</h2>
+            <h2 id="budget-planner-title" className="font-display text-[17px] font-semibold tracking-tight text-foreground">Kế hoạch ngân sách</h2>
           </div>
           <p className="text-[12.5px] leading-relaxed text-muted-foreground">
             Nhập ngân sách để hệ thống phân bổ số bản cho từng đề xuất. Để trống nếu chỉ cần xem nhu cầu.
@@ -138,7 +138,7 @@ export function BudgetPlanner({ data, budgetVnd, onBudgetChange, selection, hasM
               ) : null}
               {budget.unreliable_lines ? (
               <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-                {formatCount(budget.unreliable_lines)} dòng có dữ liệu mượn lệch giữa dịch vụ mượn và kho (số phiếu mượn đang mở nhiều hơn số bản kho ghi nhận đang cho mượn) nên chưa được cấp ngân sách — cần đối soát dữ liệu trước khi đặt mua.
+                {formatCount(budget.unreliable_lines)} dòng có dữ liệu mượn lệch giữa dịch vụ mượn và kho (số phiếu mượn đang mở nhiều hơn số bản kho ghi nhận đang cho mượn) nên chưa được cấp ngân sách, cần đối soát dữ liệu trước khi đặt mua.
               </p>
             ) : null}
             {selection && selection.lines > 0 ? (
@@ -179,19 +179,19 @@ export function BudgetPlanner({ data, budgetVnd, onBudgetChange, selection, hasM
 
             {budget.unpriced_lines ? (
               <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-                {formatCount(budget.unpriced_lines)} dòng cần nhập ({formatCount(budget.unpriced_qty ?? 0)} bản) chưa có đơn giá trong danh mục nên chưa được cấp ngân sách và không tính vào nhu cầu ở trên — bổ sung đơn giá để đưa vào phân bổ.
+                {formatCount(budget.unpriced_lines)} dòng cần nhập ({formatCount(budget.unpriced_qty ?? 0)} bản) chưa có đơn giá trong danh mục nên chưa được cấp ngân sách và không tính vào nhu cầu ở trên, bổ sung đơn giá để đưa vào phân bổ.
               </p>
             ) : null}
             {selection && selection.lines > 0 ? (
               <p className={cn('text-[12px] leading-relaxed', selection.cost > budget.budget_vnd ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground')}>
                 Lựa chọn hiện tại: {formatVnd(selection.cost)}
                 {selection.missingCost ? ` (chưa gồm ${selection.missingCost} dòng chưa có giá)` : ''}
-                {selection.cost > budget.budget_vnd ? ` — vượt ngân sách nhập vào ${formatVnd(selection.cost - budget.budget_vnd)}.` : ` — trong ngân sách nhập vào.`}
+                {selection.cost > budget.budget_vnd ? `, vượt ngân sách nhập vào ${formatVnd(selection.cost - budget.budget_vnd)}.` : `, trong ngân sách nhập vào.`}
               </p>
             ) : null}
             {hasManualEdits ? (
               <p className="text-[12px] leading-relaxed text-amber-800 dark:text-amber-300">
-                Bạn đã chỉnh số lượng thủ công. Phân bổ ở trên vẫn là kết quả hệ thống trả về cho số lượng gốc — hệ thống không phân bổ lại theo phần đã chỉnh.
+                Bạn đã chỉnh số lượng thủ công. Phân bổ ở trên vẫn là kết quả hệ thống trả về cho số lượng gốc, hệ thống không phân bổ lại theo phần đã chỉnh.
               </p>
             ) : null}
 

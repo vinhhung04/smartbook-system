@@ -10,7 +10,7 @@ import { loginStaff } from './helpers';
 const REDESIGNED_PAGES: Array<{ route: string; open?: RegExp }> = [
   { route: '/warehouses' },
   { route: '/purchase-orders' },
-  { route: '/orders' },
+  { route: '/orders', open: /^GR-/ },
   { route: '/inventory' },
   { route: '/order-requests' },
   { route: '/picking', open: /^(Xem|Bắt đầu|Tiếp tục)/ },
@@ -31,6 +31,22 @@ const REDESIGNED_PAGES: Array<{ route: string; open?: RegExp }> = [
   { route: '/purchase-requests' },
   { route: '/supplier-deliveries', open: /^INV-/ },
   { route: '/suppliers' },
+  { route: '/borrow' },
+  { route: '/borrow/customers' },
+  { route: '/borrow/reservations' },
+  { route: '/borrow/loans', open: /LOAN-/ },
+  { route: '/borrow/fines' },
+  { route: '/membership-plans' },
+  { route: '/reorder-suggestions' },
+  { route: '/reports' },
+  { route: '/users' },
+  { route: '/roles' },
+  { route: '/admin/monitor' },
+  { route: '/audit-trail' },
+  { route: '/orders/new' },
+  { route: '/purchase-orders/new' },
+  { route: '/transfer-receiving' },
+  { route: '/account' },
 ];
 
 // POST endpoints that only read: storage-suggestions ranks locations (DB reads + Redis cache, no row written).

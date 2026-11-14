@@ -56,7 +56,7 @@ export function SectionCard({
             )}
             <div className="min-w-0">
               {title && (
-                <h3 className="font-serif text-[17px] font-semibold leading-snug tracking-tight text-foreground">{title}</h3>
+                <h3 className="font-display text-[18px] font-semibold leading-snug tracking-tight text-foreground">{title}</h3>
               )}
               {subtitle && (
                 <p className="mt-0.5 text-[13px] text-muted-foreground">{subtitle}</p>

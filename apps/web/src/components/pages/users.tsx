@@ -10,12 +10,11 @@ import { roleService } from "@/services/role";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
 import { staffTaskService, type OpenTaskSummaryRow } from "@/services/staff-tasks";
 import { getApiErrorMessage } from "@/services/api";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
+import { RowsSkeleton } from "@/components/ops/ops-kit";
 import { PageHeader } from "@/components/ui/page-header";
-import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { StatusBadge } from "@/components/status-badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -26,6 +25,7 @@ import {
 } from "@/components/ui/pagination";
 import { cn } from "@/components/ui/utils";
 import { getPaginationRange } from "@/lib/pagination";
+import { roleLabel } from "@/lib/role-labels";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
 import { WarehouseAssignmentFields } from "./user-management/warehouse-assignment-fields";
 import { WarehouseStaffPanel } from "./user-management/warehouse-staff-panel";
@@ -112,8 +112,7 @@ function statusBadgeVariant(status: UserRow["status"]): "success" | "danger" | "
 
 const PAGE_SIZE = 10;
 
-const ROLE_CHIP_CLASS = "whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:bg-blue-500/15 dark:text-blue-400";
-const ICON_BUTTON_CLASS = "inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60";
+const ROLE_CHIP_CLASS = "whitespace-nowrap rounded-full border border-border px-2 py-0.5 text-[12px] font-medium text-foreground";
 const MAX_VISIBLE_ROLES = 2;
 
 function userInitials(fullName: string, username: string) {
@@ -129,10 +128,10 @@ function RoleChips({ roles }: { roles: RoleItem[] }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {roles.slice(0, MAX_VISIBLE_ROLES).map((role) => (
-        <span key={role.id} className={ROLE_CHIP_CLASS}>{role.code}</span>
+        <span key={role.id} className={ROLE_CHIP_CLASS} title={role.code}>{roleLabel(role.code, role.name)}</span>
       ))}
       {hidden.length > 0 ? (
-        <span className={cn(ROLE_CHIP_CLASS, "bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground")} title={hidden.map((role) => role.code).join(", ")}>
+        <span className={cn(ROLE_CHIP_CLASS, "text-muted-foreground")} title={hidden.map((role) => roleLabel(role.code, role.name)).join(", ")}>
           +{hidden.length}
         </span>
       ) : null}
@@ -141,13 +140,13 @@ function RoleChips({ roles }: { roles: RoleItem[] }) {
 }
 
 function ScopeSummary({ scopes, warehouseById }: { scopes: WarehouseScope[]; warehouseById: Map<string, Warehouse> }) {
-  if (scopes.length === 0) return <span className="whitespace-nowrap text-[12px] text-muted-foreground">Chưa phân công</span>;
+  if (scopes.length === 0) return <span className="whitespace-nowrap">Chưa phân công kho</span>;
   const detail = scopes
     .map((s) => `${warehouseById.get(s.warehouse_id)?.code || s.warehouse_id.slice(0, 8)}: ${ACCESS_LEVEL_LABELS[s.access_level] || s.access_level}`)
     .join("\n");
   return (
-    <span className="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-[12px] font-medium tabular-nums" title={detail}>
-      {scopes.length} kho
+    <span className="tabular-nums" title={detail}>
+      Được phân công {scopes.length} kho
     </span>
   );
 }
@@ -469,15 +468,42 @@ export function UsersPage() {
     }
   };
 
-  const columns = [
-    { label: "Người dùng", className: "" },
-    { label: "Vai trò", className: "hidden w-[200px] md:table-cell" },
-    { label: "Kho chính", className: "hidden w-[190px] lg:table-cell" },
-    { label: "Phạm vi kho", className: "hidden w-[130px] sm:table-cell" },
-    { label: "Trạng thái", className: "hidden w-[120px] sm:table-cell" },
-    { label: "Ngày tạo", className: "hidden w-[110px] 2xl:table-cell" },
-    { label: "Hành động", className: "w-[124px] text-right" },
-  ];
+  const statusCounts = users.reduce<Record<string, number>>((acc, user) => {
+    acc[user.status] = (acc[user.status] || 0) + 1;
+    return acc;
+  }, {});
+  const roleCounts = users.reduce<Record<string, number>>((acc, user) => {
+    for (const role of user.roles || []) acc[role.code] = (acc[role.code] || 0) + 1;
+    return acc;
+  }, {});
+  const vn = (value: number) => value.toLocaleString("vi-VN");
+  const waitingCount = (statusCounts.PENDING || 0) + (statusCounts.PENDING_VERIFICATION || 0);
+  const lede = loading
+    ? "Quản lý tài khoản, vai trò và kho làm việc của nhân sự."
+    : `${vn(users.length)} tài khoản: ${vn(statusCounts.ACTIVE || 0)} đang hoạt động${waitingCount ? `, ${vn(waitingCount)} chờ kích hoạt hoặc xác thực email` : ""}${statusCounts.LOCKED ? `, ${vn(statusCounts.LOCKED)} đã khóa` : ""}.`;
+
+  const railButton = (key: string, label: string, count: number | undefined, active: boolean, onClick: () => void, attention = false) => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("min-w-0 truncate text-[13px]", active ? "font-semibold" : "font-medium")}>{label}</span>
+      {count !== undefined ? (
+        <span className={cn(
+          "min-w-6 shrink-0 rounded-full px-1.5 text-center text-[12px] tabular-nums",
+          attention && count > 0 ? "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : active ? "text-primary" : "text-muted-foreground",
+        )}>
+          {loading ? "–" : vn(count)}
+        </span>
+      ) : null}
+    </button>
+  );
 
   return (
     <PageWrapper className="space-y-5">
@@ -485,11 +511,9 @@ export function UsersPage() {
         <PageHeader
           icon={Users}
           title="Người dùng"
-          description="Quản lý tài khoản, vai trò và kho làm việc của nhân sự"
-          iconBg="bg-gradient-to-br from-slate-500 to-indigo-600 shadow-lg shadow-slate-500/25"
-          iconColor="text-white"
+          description={lede}
           actions={
-            <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }} data-testid="create-user-button">
+            <Button onClick={() => { setEditingUser(null); setForm(EMPTY_FORM); setShowCreateModal(true); }} data-testid="create-user-button" className="gap-2">
               <Plus className="h-3.5 w-3.5" /> Tạo người dùng mới
             </Button>
           }
@@ -497,247 +521,275 @@ export function UsersPage() {
       </FadeItem>
 
       <FadeItem>
-        <SegmentedControl
-          layoutId="users-view"
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "users", label: "Danh sách người dùng" },
-            { value: "by-warehouse", label: "Nhân sự theo kho" },
-          ]}
-          className="w-fit"
-        />
-      </FadeItem>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[240px_minmax(0,1fr)]">
+            <nav aria-label="Bộ lọc người dùng" className="hidden rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p id="users-view-label" className="px-3 pb-1.5 text-[12px] font-medium text-muted-foreground">Cách xem</p>
+              <div role="group" aria-labelledby="users-view-label">
+                {railButton("view-users", "Danh sách người dùng", undefined, view === "users", () => setView("users"))}
+                {railButton("view-wh", "Nhân sự theo kho", undefined, view === "by-warehouse", () => setView("by-warehouse"))}
+              </div>
+              {view === "users" ? (
+                <>
+                  <p id="users-status-label" className="mt-3 border-t border-border px-3 pb-1.5 pt-3 text-[12px] font-medium text-muted-foreground">Trạng thái</p>
+                  <div role="group" aria-labelledby="users-status-label">
+                    {railButton("status-all", "Mọi trạng thái", users.length, statusFilter === ALL, () => setStatusFilter(ALL))}
+                    {(Object.keys(STATUS_LABELS) as UserRow["status"][]).filter((status) => statusCounts[status]).map((status) =>
+                      railButton(`status-${status}`, STATUS_LABELS[status], statusCounts[status], statusFilter === status, () => setStatusFilter(status), status === "PENDING" || status === "PENDING_VERIFICATION"))}
+                  </div>
+                  <p id="users-role-label" className="mt-3 border-t border-border px-3 pb-1.5 pt-3 text-[12px] font-medium text-muted-foreground">Vai trò</p>
+                  <div role="group" aria-labelledby="users-role-label">
+                    {railButton("role-all", "Mọi vai trò", undefined, roleFilter === ALL, () => setRoleFilter(ALL))}
+                    {roles.map((role) => railButton(`role-${role.id}`, roleLabel(role.code, role.name), roleCounts[role.code] || 0, roleFilter === role.code, () => setRoleFilter(role.code)))}
+                  </div>
+                </>
+              ) : null}
+            </nav>
 
-      {view === "by-warehouse" ? (
-        <FadeItem>
-          <WarehouseStaffPanel
-            warehouses={warehouses}
-            warehouseId={staffWarehouseId}
-            onWarehouseChange={setStaffWarehouseId}
-            onEditUser={openEditUserById}
-            refreshKey={staffRefreshKey}
-          />
-        </FadeItem>
-      ) : (
-      <>
-      <FadeItem>
-        <FilterBar
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Tìm theo tên đăng nhập, họ tên, email..."
-          showSearchClear
-          filters={(
-            <div className="flex flex-wrap items-center gap-2">
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[170px]" size="sm" aria-label="Lọc theo vai trò">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Mọi vai trò</SelectItem>
-                  {roles.map((role) => (
-                    <SelectItem key={role.id} value={role.code}>{role.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
-                <SelectTrigger className="w-[190px]" size="sm" aria-label="Lọc theo kho">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Mọi kho</SelectItem>
-                  {warehouses.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>{w.code} · {w.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[170px]" size="sm" aria-label="Lọc theo trạng thái">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
-                  {(Object.keys(STATUS_LABELS) as UserRow["status"][]).map((status) => (
-                    <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="@4xl/page:hidden">
+              <SegmentedControl
+                layoutId="users-view"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: "users", label: "Danh sách người dùng" },
+                  { value: "by-warehouse", label: "Nhân sự theo kho" },
+                ]}
+                className="w-fit max-w-full overflow-x-auto"
+              />
             </div>
-          )}
-        />
-      </FadeItem>
 
-      <FadeItem>
-        <SectionCard noPadding>
-          <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                {columns.map((header) => (
-                  <th key={header.label} className={cn("px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground", header.className)}>
-                    {header.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={columns.length} rows={5} />
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length}>
-                    <EmptyState
-                      variant="no-data"
-                      title={hasFilters ? "Không tìm thấy người dùng phù hợp" : "Không có người dùng nào"}
-                      description={hasFilters ? "Thử từ khóa khác hoặc bỏ bớt bộ lọc" : "Tạo người dùng mới để bắt đầu"}
-                      className="py-12"
-                    />
-                  </td>
-                </tr>
+            <div className="min-w-0">
+              {view === "by-warehouse" ? (
+                <WarehouseStaffPanel
+                  warehouses={warehouses}
+                  warehouseId={staffWarehouseId}
+                  onWarehouseChange={setStaffWarehouseId}
+                  onEditUser={openEditUserById}
+                  refreshKey={staffRefreshKey}
+                />
               ) : (
-                paginatedUsers.map((user) => {
-                  const scopes = user.warehouse_scopes || [];
-                  const primary = warehouseLabel(user.primary_warehouse_id, warehouseById);
-                  return (
-                  <motion.tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <td className="px-4 py-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold",
-                            user.status === "LOCKED"
-                              ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                              : "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
-                          )}
-                        >
-                          {userInitials(user.full_name, user.username)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-semibold" title={user.full_name}>{user.full_name || user.username}</p>
-                          <p className="truncate text-[12px] text-muted-foreground" title={`${user.username} · ${user.email || "-"}`}>
-                            {user.username} · {user.email || "-"}
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
-                            <RoleChips roles={user.roles || []} />
-                            <span className="sm:hidden"><StatusBadge label={STATUS_LABELS[user.status] ?? user.status} variant={statusBadgeVariant(user.status)} /></span>
-                            <span className="sm:hidden"><ScopeSummary scopes={scopes} warehouseById={warehouseById} /></span>
-                          </div>
+                <section aria-label="Danh sách người dùng" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+                  <div className="px-5 pb-1 pt-4">
+                    <h2 className="font-display text-[18px] font-semibold tracking-tight">
+                      {statusFilter === ALL ? "Tất cả người dùng" : STATUS_LABELS[statusFilter as UserRow["status"]]}
+                      {roleFilter !== ALL ? <span className="font-sans text-[14px] font-normal text-muted-foreground">, vai trò {roleLabel(roleFilter, roles.find((role) => role.code === roleFilter)?.name)}</span> : null}
+                    </h2>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">Sửa để đổi vai trò, trạng thái và kho làm việc. Khóa sẽ đăng xuất người dùng ngay.</p>
+                  </div>
+                  <div className="border-b border-border px-4 py-3">
+                    <FilterBar
+                      searchValue={search}
+                      onSearchChange={setSearch}
+                      searchPlaceholder="Tìm theo tên đăng nhập, họ tên, email..."
+                      showSearchClear
+                      filters={(
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Select value={roleFilter} onValueChange={setRoleFilter}>
+                            <SelectTrigger className="w-[170px] @4xl/page:hidden" size="sm" aria-label="Lọc theo vai trò">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={ALL}>Mọi vai trò</SelectItem>
+                              {roles.map((role) => (
+                                <SelectItem key={role.id} value={role.code}>{roleLabel(role.code, role.name)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                            <SelectTrigger className="w-[190px]" size="sm" aria-label="Lọc theo kho">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={ALL}>Mọi kho</SelectItem>
+                              {warehouses.map((w) => (
+                                <SelectItem key={w.id} value={w.id}>{w.code} · {w.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-[170px] @4xl/page:hidden" size="sm" aria-label="Lọc theo trạng thái">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
+                              {(Object.keys(STATUS_LABELS) as UserRow["status"][]).map((status) => (
+                                <SelectItem key={status} value={status}>{STATUS_LABELS[status]}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                      </div>
-                    </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      <RoleChips roles={user.roles || []} />
-                    </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
-                      {primary ? (
-                        <span className="flex min-w-0 items-center gap-1.5 text-[12px]" title={primary}>
-                          <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" aria-hidden="true" />
-                          <span className="truncate">{primary}</span>
-                        </span>
-                      ) : (
-                        <span className="text-[12px] text-muted-foreground">—</span>
                       )}
-                    </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
-                      <ScopeSummary scopes={scopes} warehouseById={warehouseById} />
-                    </td>
-                    <td className="hidden whitespace-nowrap px-4 py-3 sm:table-cell">
-                      <StatusBadge label={STATUS_LABELS[user.status] ?? user.status} variant={statusBadgeVariant(user.status)} />
-                    </td>
-                    <td className="hidden px-4 py-3 text-[12px] text-muted-foreground 2xl:table-cell">{formatDate(user.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openEditUser(user)}
-                          aria-label={`Sửa ${user.username}`}
-                          title="Sửa"
-                          className={cn(ICON_BUTTON_CLASS, "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20")}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => void requestToggleLock(user)}
-                          data-testid="toggle-lock-user-button"
-                          aria-label={`${user.status === "LOCKED" ? "Mở khóa" : "Khóa"} ${user.username}`}
-                          title={user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
-                          className={cn(ICON_BUTTON_CLASS, "border-input hover:bg-muted")}
-                        >
-                          <MorphIcon icon={user.status === "LOCKED" ? Unlock : Lock} className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setPendingDeleteUser(user)}
-                          disabled={deletingUserId === user.id}
-                          aria-label={`Xóa ${user.username}`}
-                          title={deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
-                          className={cn(ICON_BUTTON_CLASS, "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20")}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                  );
-                })
+                    />
+                  </div>
+
+                  {loading ? (
+                    <RowsSkeleton rows={6} />
+                  ) : filteredUsers.length === 0 ? (
+                    <div className="px-5 py-10">
+                      <EmptyState
+                        variant="no-data"
+                        title={hasFilters ? "Không tìm thấy người dùng phù hợp" : "Không có người dùng nào"}
+                        description={hasFilters ? "Thử từ khóa khác hoặc bỏ bớt bộ lọc" : "Tạo người dùng mới để bắt đầu"}
+                        className="py-0"
+                      />
+                    </div>
+                  ) : (
+                    <table className="w-full table-fixed">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="px-5 py-2.5 text-left text-[12px] font-normal text-muted-foreground">Người dùng</th>
+                          <th className="hidden w-[24%] px-3 py-2.5 text-left text-[12px] font-normal text-muted-foreground @3xl:table-cell">Vai trò</th>
+                          <th className="hidden w-[24%] px-3 py-2.5 text-left text-[12px] font-normal text-muted-foreground @2xl:table-cell">Kho làm việc</th>
+                          <th className="w-[124px] px-5 py-2.5 text-right text-[12px] font-normal text-muted-foreground @xl:w-[180px]">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedUsers.map((user) => {
+                          const scopes = user.warehouse_scopes || [];
+                          const primary = warehouseLabel(user.primary_warehouse_id, warehouseById);
+                          const warehouseBlock = (
+                            <>
+                              {primary ? (
+                                <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-foreground" title={`Kho chính: ${primary}`}>
+                                  <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-600" aria-label="Kho chính" />
+                                  <span className="truncate">{primary}</span>
+                                </span>
+                              ) : null}
+                              <span className="block text-[12px] text-muted-foreground"><ScopeSummary scopes={scopes} warehouseById={warehouseById} /></span>
+                            </>
+                          );
+                          return (
+                            <tr key={user.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                              <td className="px-5 py-3 align-top">
+                                <div className="flex min-w-0 items-start gap-3">
+                                  <span
+                                    aria-hidden="true"
+                                    className={cn(
+                                      "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold",
+                                      user.status === "LOCKED" ? "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400" : "bg-primary/[0.08] text-primary",
+                                    )}
+                                  >
+                                    {userInitials(user.full_name, user.username)}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[14px] font-semibold text-foreground" title={user.full_name}>{user.full_name || user.username}</p>
+                                    <p className="truncate text-[12px] text-muted-foreground" title={`${user.username} · ${user.email || "-"}`}>
+                                      {user.username}, {user.email || "chưa có email"}
+                                    </p>
+                                    <p className="text-[12px] tabular-nums text-muted-foreground">Tạo ngày {formatDate(user.created_at)}</p>
+                                    {/* Columns the container hides move here, so no field is dropped. */}
+                                    <div className="mt-1.5 @3xl:hidden"><RoleChips roles={user.roles || []} /></div>
+                                    <div className="mt-1.5 @2xl:hidden">{warehouseBlock}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="hidden px-3 py-3 align-top @3xl:table-cell">
+                                <RoleChips roles={user.roles || []} />
+                              </td>
+                              <td className="hidden px-3 py-3 align-top @2xl:table-cell">{warehouseBlock}</td>
+                              <td className="px-5 py-3 text-right align-top">
+                                <div className="flex flex-col items-end gap-1.5">
+                                  <StatusBadge label={STATUS_LABELS[user.status] ?? user.status} variant={statusBadgeVariant(user.status)} />
+                                  <div className="flex items-center justify-end gap-0.5">
+                                    <IconButton
+                                      variant="ghost"
+                                      size="sm-icon"
+                                      onClick={() => openEditUser(user)}
+                                      label={`Sửa ${user.username}`}
+                                      title="Sửa"
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </IconButton>
+                                    <IconButton
+                                      variant="ghost"
+                                      size="sm-icon"
+                                      onClick={() => void requestToggleLock(user)}
+                                      data-testid="toggle-lock-user-button"
+                                      label={`${user.status === "LOCKED" ? "Mở khóa" : "Khóa"} ${user.username}`}
+                                      title={user.status === "LOCKED" ? "Mở khóa" : "Khóa"}
+                                      className="text-muted-foreground hover:text-foreground"
+                                    >
+                                      <MorphIcon icon={user.status === "LOCKED" ? Unlock : Lock} className="h-3.5 w-3.5" />
+                                    </IconButton>
+                                    <IconButton
+                                      variant="ghost"
+                                      size="sm-icon"
+                                      onClick={() => setPendingDeleteUser(user)}
+                                      disabled={deletingUserId === user.id}
+                                      label={`Xóa ${user.username}`}
+                                      title={deletingUserId === user.id ? "Đang xóa..." : "Xóa"}
+                                      className="text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </IconButton>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                  <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>Hiển thị {paginatedUsers.length} trên {filteredUsers.length} người dùng</span>
+                    {totalPages > 1 && (
+                      <Pagination className="mx-0 w-auto justify-end">
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setPage((current) => Math.max(1, current - 1));
+                              }}
+                              className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                            />
+                          </PaginationItem>
+                          {getPaginationRange(currentPage, totalPages).map((item) => (
+                            <PaginationItem key={item}>
+                              {typeof item === "number" ? (
+                                <PaginationLink
+                                  isActive={item === currentPage}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    setPage(item);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              ) : (
+                                <PaginationEllipsis />
+                              )}
+                            </PaginationItem>
+                          ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setPage((current) => Math.min(totalPages, current + 1));
+                              }}
+                              className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    )}
+                  </div>
+                </section>
               )}
-            </tbody>
-          </table>
+            </div>
           </div>
-          <div className="flex flex-col gap-3 px-5 py-3 border-t border-border text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>Hiển thị {paginatedUsers.length} / {filteredUsers.length} người dùng</span>
-            {totalPages > 1 && (
-              <Pagination className="mx-0 w-auto justify-end">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setPage((current) => Math.max(1, current - 1));
-                      }}
-                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                  {getPaginationRange(currentPage, totalPages).map((item) => (
-                    <PaginationItem key={item}>
-                      {typeof item === "number" ? (
-                        <PaginationLink
-                          isActive={item === currentPage}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            setPage(item);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          {item}
-                        </PaginationLink>
-                      ) : (
-                        <PaginationEllipsis />
-                      )}
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setPage((current) => Math.min(totalPages, current + 1));
-                      }}
-                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </div>
-        </SectionCard>
+        </div>
       </FadeItem>
-      </>
-      )}
 
       {modalVisible ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
-          <motion.div ref={modalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col rounded-xl bg-card shadow-2xl">
+          <motion.div ref={modalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
-              <h3 id="user-modal-title" className="text-[16px] font-semibold">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
+              <h3 id="user-modal-title" className="font-display text-[20px] font-semibold tracking-tight">{editingUser ? "Sửa người dùng" : "Tạo người dùng mới"}</h3>
               <button onClick={closeUserModal} aria-label="Đóng" className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -757,11 +809,11 @@ export function UsersPage() {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {!editingUser && <input type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="Mật khẩu *" aria-label="Mật khẩu" data-testid="new-user-password" className="rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10" />}
                 <select value={form.status} onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as CreateUserForm["status"] }))} aria-label="Trạng thái" className={`rounded-lg border border-input bg-background px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 ${editingUser ? 'sm:col-span-2' : ''}`}>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="PENDING">PENDING</option>
-                  {editingUser?.status === "PENDING_VERIFICATION" ? <option value="PENDING_VERIFICATION">PENDING_VERIFICATION</option> : null}
-                  <option value="LOCKED">LOCKED</option>
-                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="ACTIVE">{STATUS_LABELS.ACTIVE}</option>
+                  <option value="PENDING">{STATUS_LABELS.PENDING}</option>
+                  {editingUser?.status === "PENDING_VERIFICATION" ? <option value="PENDING_VERIFICATION">{STATUS_LABELS.PENDING_VERIFICATION}</option> : null}
+                  <option value="LOCKED">{STATUS_LABELS.LOCKED}</option>
+                  <option value="INACTIVE">{STATUS_LABELS.INACTIVE}</option>
                 </select>
               </div>
 
@@ -771,7 +823,7 @@ export function UsersPage() {
                     type="checkbox"
                     checked={form.email_otp_2fa_enabled}
                     onChange={(event) => setForm((prev) => ({ ...prev, email_otp_2fa_enabled: event.target.checked }))}
-                    className="mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                   />
                   <span>
                     <span className="block font-medium text-foreground">Yêu cầu mã đăng nhập qua email</span>
@@ -785,7 +837,7 @@ export function UsersPage() {
               ) : null}
 
               <div>
-                <p className="mb-2 text-[12px] font-semibold text-muted-foreground">Gán vai trò *</p>
+                <p className="mb-2 text-[13px] font-semibold text-foreground">Gán vai trò *</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {loading ? (
                     <div className="col-span-full rounded-lg border border-dashed border-input px-3 py-3 text-[12px] text-muted-foreground">
@@ -797,9 +849,9 @@ export function UsersPage() {
                     </div>
                   ) : (
                     roles.map((role) => (
-                      <label key={role.id} className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-[12px]">
+                      <label key={role.id} className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-[13px]">
                         <input type="checkbox" checked={form.role_ids.includes(role.id)} onChange={() => handleToggleRole(role.id)} data-testid={`new-user-role-${role.code}`} />
-                        {role.name} ({role.code})
+                        {roleLabel(role.code, role.name)} ({role.code})
                       </label>
                     ))
                   )}

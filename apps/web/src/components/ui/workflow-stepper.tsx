@@ -20,14 +20,14 @@ interface WorkflowStepperProps {
 }
 
 const stepIconClasses: Record<StepStatus, string> = {
-  completed: "bg-emerald-500 border-emerald-500 text-white",
+  completed: "bg-primary border-primary text-primary-foreground",
   active: "bg-primary border-primary text-primary-foreground ring-2 ring-primary/20",
   pending: "bg-card border-border text-muted-foreground",
   error: "bg-red-50 border-red-400 text-red-600 dark:bg-red-500/10 dark:border-red-500/40 dark:text-red-400",
 };
 
 const stepLabelClasses: Record<StepStatus, string> = {
-  completed: "text-emerald-700 dark:text-emerald-400 font-medium",
+  completed: "text-primary font-medium",
   active: "text-primary font-semibold",
   pending: "text-muted-foreground",
   error: "text-red-600 dark:text-red-400 font-medium",
@@ -68,7 +68,7 @@ function HorizontalStepper({ steps, compact }: { steps: WorkflowStep[]; compact:
         style={{ top: circleCenterPx, left: `${edgeOffsetPct}%`, right: `${edgeOffsetPct}%` }}
       />
       <div
-        className="absolute h-[2px] rounded bg-emerald-400 transition-all duration-300"
+        className="absolute h-[2px] rounded bg-primary/70 transition-all duration-300"
         style={{ top: circleCenterPx, left: `${edgeOffsetPct}%`, width: `${filledPct}%` }}
       />
       <div className="relative grid" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
@@ -99,7 +99,7 @@ function VerticalStepper({ steps, compact }: { steps: WorkflowStep[]; compact: b
               <div className={cn(
                 "w-[2px] flex-1 my-1 rounded",
                 compact ? "min-h-[16px]" : "min-h-[24px]",
-                step.status === "completed" ? "bg-emerald-400" : "bg-border",
+                step.status === "completed" ? "bg-primary/70" : "bg-border",
               )} />
             )}
           </div>

@@ -215,9 +215,9 @@ export function RiskWorkspace({ config, data, rows, loading, error, onRetry }: {
       <Panel aria-labelledby={`${config.id}-list-title`} className="overflow-hidden">
         <div className="space-y-3 border-b border-border px-4 py-3">
           <div>
-            <h2 id={`${config.id}-list-title`} className="text-[14px] font-semibold text-foreground">
+            <h2 id={`${config.id}-list-title`} className="font-display text-[17px] font-semibold tracking-tight text-foreground">
               {config.title}
-              <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">{formatCount(rows.length)} {config.subjectNoun} đã chấm điểm</span>
+              <span className="ml-2 font-sans text-[13px] font-normal text-muted-foreground">{formatCount(rows.length)} {config.subjectNoun} đã chấm điểm</span>
             </h2>
             <p className="mt-1 max-w-[95ch] text-[12.5px] leading-relaxed text-muted-foreground">
               {config.modelSummary} Điểm là xác suất ước tính, không phải sự kiện chắc chắn. Nhóm được chia theo ngưỡng của mô hình:

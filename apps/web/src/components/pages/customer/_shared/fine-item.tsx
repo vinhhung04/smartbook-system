@@ -29,11 +29,11 @@ export function FineItem({ fine }: FineItemProps) {
   }
 
   const toneClassName = status === 'UNPAID'
-    ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20'
+    ? 'border-red-200 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/20'
     : status === 'PARTIALLY_PAID'
       ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
       : status === 'PAID' || status === 'WAIVED'
-        ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+        ? 'border-primary/20 bg-primary/[0.05] dark:border-primary/20 dark:bg-primary/10'
         : 'border-border bg-card';
 
   return (
@@ -46,7 +46,7 @@ export function FineItem({ fine }: FineItemProps) {
         </div>
         <div className="text-right">
           <div className="text-[12px] text-muted-foreground">Tổng {formatCurrencyVnd(fine.amount)}</div>
-          <div className={`mt-0.5 text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-rose-700 dark:text-rose-400' : 'text-foreground') : 'text-emerald-600 dark:text-emerald-400'}`} style={{ fontWeight: 700 }}>
+          <div className={`mt-0.5 text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-red-700 dark:text-red-400' : 'text-foreground') : 'text-primary dark:text-primary'}`} style={{ fontWeight: 700 }}>
             {remaining > 0 ? `Còn ${formatCurrencyVnd(remaining)}` : 'Đã xong'}
           </div>
         </div>
@@ -61,7 +61,7 @@ export function FineItem({ fine }: FineItemProps) {
           >
             {isStartingPayment ? 'Đang khởi tạo...' : 'Thanh toán online qua VNPay'}
           </button>
-          <p className="text-center text-[11px] text-muted-foreground">
+          <p className="text-center text-[12px] text-muted-foreground">
             Hoặc thanh toán trực tiếp tại quầy thư viện — nhân viên sẽ ghi nhận vào hệ thống.
           </p>
         </div>

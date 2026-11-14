@@ -99,7 +99,7 @@ export function CustomerReservationsPage() {
       />
 
       {!loading && !error && readyCount > 0 && (
-        <div role="status" className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+        <div role="status" className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] px-4 py-3 text-[13px] text-primary dark:border-primary/20 dark:bg-primary/10 dark:text-primary">
           <PackageCheck className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             <span className="font-semibold">{readyCount} cuốn đã sẵn sàng để nhận.</span> Mang mã QR bên dưới đến quầy thư viện trước khi hết hạn.
@@ -118,7 +118,7 @@ export function CustomerReservationsPage() {
               { value: 'history', label: `Lịch sử (${historyRows.length})` },
               { value: 'all', label: `Tất cả (${rows.length})` },
             ]}
-            gradientClassName="from-amber-500 to-orange-500"
+            gradientClassName=""
             className="w-max"
           />
         </div>

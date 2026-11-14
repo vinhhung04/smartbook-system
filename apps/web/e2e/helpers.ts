@@ -13,7 +13,8 @@ export async function loginStaff(page: Page, username = 'hung') {
   await page.getByPlaceholder('Nhập mật khẩu').fill(DEMO_PASSWORD);
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
   await expect(page).not.toHaveURL(/\/login$/, { timeout: 15_000 });
-  await expect(page.getByRole('button', { name: 'Toggle sidebar' })).toBeVisible({ timeout: 15_000 });
+  // Wide screens show the sidebar toggle; phones show the topbar menu button instead.
+  await expect(page.getByRole('button', { name: 'Toggle sidebar' }).or(page.getByRole('button', { name: 'Mở menu' })).first()).toBeVisible({ timeout: 15_000 });
 }
 
 /** Customer portal login (`/customer`). Demo account seeded by `pnpm demo:seed`. */

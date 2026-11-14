@@ -9,10 +9,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FilterBar } from '@/components/ui/filter-bar';
-import { StatusBadge } from '@/components/status-badge';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { useMediaQuery } from './ai-import/use-media-query';
 import { cn } from '@/components/ui/utils';
@@ -28,14 +26,39 @@ interface AuditLog {
   created_at: string;
 }
 
-const ACTION_VARIANTS: Record<string, string> = {
-  CREATE: 'success',
-  UPDATE: 'info',
-  DELETE: 'rose',
-  PAY: 'amber',
-  RETURN: 'violet',
-  REQUEST: 'cyan',
+// Codes written by borrow-service (src/lib/audit.js callers); unknown codes still show as-is.
+const ACTION_LABELS: Record<string, string> = {
+  CREATE_CUSTOMER: 'Tạo khách hàng',
+  UPDATE_CUSTOMER: 'Cập nhật khách hàng',
+  AUTO_ASSIGN_CUSTOMER_MEMBERSHIP: 'Tự gán gói hội viên',
+  RENEW_CUSTOMER_MEMBERSHIP: 'Gia hạn gói hội viên',
+  COUNTER_WALLET_TOPUP: 'Nạp ví tại quầy',
+  CUSTOMER_WALLET_TOPUP_VNPAY: 'Nạp ví qua VNPay',
+  CREATE_RESERVATION: 'Tạo đặt trước',
+  CONFIRM_RESERVATION: 'Xác nhận đặt trước',
+  MARK_RESERVATION_READY: 'Báo sách sẵn sàng',
+  CANCEL_RESERVATION: 'Hủy đặt trước',
+  ROLLBACK_CANCEL_RESERVATION: 'Hoàn tác hủy đặt trước',
+  EXPIRE_RESERVATION: 'Đặt trước hết hạn',
+  CONVERT_RESERVATION_TO_LOAN: 'Chuyển đặt trước thành phiếu mượn',
+  CREATE_DIRECT_LOAN: 'Cho mượn trực tiếp',
+  HOLD_LOAN_DEPOSITS: 'Giữ tiền cọc',
+  SETTLE_LOAN_DEPOSIT: 'Tất toán tiền cọc',
+  RETURN_LOAN_ITEMS: 'Trả sách',
+  MARK_ITEM_OVERDUE: 'Đánh dấu quá hạn',
+  REQUEST_LOAN_RENEWAL: 'Xin gia hạn',
+  APPROVE_LOAN_RENEWAL: 'Duyệt gia hạn',
+  REJECT_LOAN_RENEWAL: 'Từ chối gia hạn',
+  GENERATE_RETURN_FINES: 'Tạo tiền phạt khi trả',
+  PAY_FINE: 'Thanh toán tiền phạt',
+  STAFF_PAY_FINE: 'Thu tiền phạt tại quầy',
+  CUSTOMER_PAY_FINE_VNPAY: 'Thanh toán phạt qua VNPay',
+  WAIVE_FINE: 'Miễn giảm tiền phạt',
 };
+
+function actionLabel(code: string) {
+  return ACTION_LABELS[code] ?? code;
+}
 
 const ENTITY_LABELS: Record<string, string> = {
   LOAN_TRANSACTION: 'Phiếu mượn',
@@ -46,13 +69,6 @@ const ENTITY_LABELS: Record<string, string> = {
 };
 
 const ENTITY_TYPES = Object.keys(ENTITY_LABELS);
-
-function getActionVariant(action: string) {
-  for (const [key, variant] of Object.entries(ACTION_VARIANTS)) {
-    if (action.toUpperCase().includes(key)) return variant;
-  }
-  return 'neutral';
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -91,13 +107,14 @@ function LogDetail({ log }: { log: AuditLog }) {
   return (
     <div className="space-y-5">
       <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-[12px] sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+        <div className="min-w-0 sm:col-span-2 lg:col-span-1 xl:col-span-2"><dt className="text-muted-foreground">Hành động</dt><dd className="text-[13px] text-foreground">{actionLabel(log.action_name)} <span className="font-mono text-[12px] text-muted-foreground">{log.action_name}</span></dd></div>
         <div className="min-w-0"><dt className="text-muted-foreground">Mã đối tượng</dt><dd className="break-all font-mono text-foreground">{log.entity_id || '—'}</dd></div>
         <div className="min-w-0"><dt className="text-muted-foreground">Người thực hiện</dt><dd className="break-all font-mono text-foreground">{log.actor_user_id || 'Hệ thống'}</dd></div>
         <div className="min-w-0 sm:col-span-2 lg:col-span-1 xl:col-span-2"><dt className="text-muted-foreground">Mã nhật ký</dt><dd className="break-all font-mono text-foreground">{log.id}</dd></div>
       </dl>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold text-foreground">Thay đổi</p>
+        <p className="mb-2 text-[13px] font-semibold text-foreground">Thay đổi</p>
         {diff.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-3 py-4 text-[12px] text-muted-foreground">
             Không có giá trị nào thay đổi trong bản ghi này.
@@ -109,9 +126,9 @@ function LogDetail({ log }: { log: AuditLog }) {
                 <p className="break-words font-mono font-medium text-foreground">{row.key}</p>
                 <p className="mt-0.5 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2">
                   <span className="text-muted-foreground">Trước</span>
-                  <span className={cn('break-words font-mono', row.before === undefined ? 'text-muted-foreground' : 'text-rose-700 dark:text-rose-400')}>{formatValue(row.before)}</span>
+                  <span className={cn('break-words font-mono', row.before === undefined ? 'text-muted-foreground' : 'text-muted-foreground line-through decoration-muted-foreground/50')}>{formatValue(row.before)}</span>
                   <span className="text-muted-foreground">Sau</span>
-                  <span className={cn('break-words font-mono', row.after === undefined ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-400')}>{formatValue(row.after)}</span>
+                  <span className={cn('break-words font-mono', row.after === undefined ? 'text-muted-foreground' : 'font-medium text-foreground')}>{formatValue(row.after)}</span>
                 </p>
               </li>
             ))}
@@ -127,16 +144,16 @@ function LogDetail({ log }: { log: AuditLog }) {
           <div className="space-y-3 border-t border-border p-3">
             {log.before_data ? (
               <div>
-                <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Trước</p>
-                <pre className="overflow-x-auto rounded-lg border border-rose-100 bg-rose-50 p-3 font-mono text-[11px] text-foreground dark:border-rose-500/20 dark:bg-rose-500/10">
+                <p className="mb-1 text-[12px] font-semibold text-muted-foreground">Trước</p>
+                <pre className="overflow-x-auto rounded-lg border border-border bg-muted/50 p-3 font-mono text-[12px] text-foreground">
                   {JSON.stringify(log.before_data, null, 2)}
                 </pre>
               </div>
             ) : null}
             {log.after_data ? (
               <div>
-                <p className="mb-1 text-[11px] font-semibold text-muted-foreground">Sau</p>
-                <pre className="overflow-x-auto rounded-lg border border-emerald-100 bg-emerald-50 p-3 font-mono text-[11px] text-foreground dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                <p className="mb-1 text-[12px] font-semibold text-muted-foreground">Sau</p>
+                <pre className="overflow-x-auto rounded-lg border border-border bg-muted/50 p-3 font-mono text-[12px] text-foreground">
                   {JSON.stringify(log.after_data, null, 2)}
                 </pre>
               </div>
@@ -192,53 +209,54 @@ export function AuditTrailPage() {
     return Array.from(byDay.values());
   }, [logs]);
 
-  const entitySelect = (
-    <Select value={entityFilter || 'all'} onValueChange={(value) => { setEntityFilter(value === 'all' ? '' : value); setPage(1); }}>
-      <SelectTrigger className="h-9 w-full sm:w-[220px]" aria-label="Lọc theo đối tượng">
-        <SelectValue placeholder="Tất cả đối tượng" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">Tất cả đối tượng</SelectItem>
-        {ENTITY_TYPES.map((type) => <SelectItem key={type} value={type}>{ENTITY_LABELS[type]}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={ScrollText}
           title="Nhật ký thao tác"
-          description="Ai đã làm gì, lúc nào, trên phiếu mượn, đặt trước, tiền phạt và khách hàng"
-          iconBg="bg-slate-100 dark:bg-slate-500/15"
-          iconColor="text-slate-600 dark:text-slate-400"
+          description="Ai đã làm gì, lúc nào, trên phiếu mượn, đặt trước, tiền phạt và khách hàng. Bấm một dòng để xem trường nào đã đổi."
           actions={
             <Button variant="outline" size="sm" onClick={() => void loadLogs()} disabled={loading} className="gap-2">
-              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} /> Làm mới
+              <RefreshCw className={cn('h-4 w-4 motion-reduce:animate-none', loading && 'animate-spin')} /> Làm mới
             </Button>
           }
         />
       </FadeItem>
 
-      <FadeItem>
-        <div className="rounded-xl border border-border bg-card px-4 py-3">
-          <FilterBar
-            searchValue={searchAction}
-            onSearchChange={(value) => { setSearchAction(value); setPage(1); }}
-            searchPlaceholder="Tìm theo tên hành động, ví dụ MARK_ITEM_OVERDUE..."
-            showSearchClear
-            filters={entitySelect}
-          />
-        </div>
-      </FadeItem>
-
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
         <FadeItem>
-          <SectionCard noPadding className="overflow-hidden">
+          <section aria-label="Nhật ký" className="overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="space-y-3 border-b border-border px-4 py-3 sm:px-5">
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:thin]" role="group" aria-label="Lọc theo đối tượng">
+                {[{ value: '', label: 'Tất cả đối tượng' }, ...ENTITY_TYPES.map((type) => ({ value: type, label: ENTITY_LABELS[type] }))].map((option) => {
+                  const active = entityFilter === option.value;
+                  return (
+                    <button
+                      key={option.value || 'all'}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => { setEntityFilter(option.value); setPage(1); }}
+                      className={cn(
+                        'shrink-0 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                        active ? 'border-primary/30 bg-primary/[0.08] font-semibold text-primary' : 'border-border bg-card font-medium hover:bg-muted/60',
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <FilterBar
+                searchValue={searchAction}
+                onSearchChange={(value) => { setSearchAction(value); setPage(1); }}
+                searchPlaceholder="Tìm theo mã hành động, ví dụ MARK_ITEM_OVERDUE..."
+                showSearchClear
+              />
+            </div>
             {loading ? (
               <div className="space-y-2 p-4" aria-busy="true">
-                {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-14 animate-pulse rounded-lg bg-muted/60 motion-reduce:animate-none" />)}
+                {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-14 rounded-lg bg-muted/60" />)}
               </div>
             ) : logs.length === 0 ? (
               <EmptyState
@@ -250,7 +268,7 @@ export function AuditTrailPage() {
             ) : (
               groups.map((group) => (
                 <section key={group.label} aria-label={group.label}>
-                  <h2 className="sticky top-0 z-10 border-y border-border bg-muted/80 px-4 py-2 text-[12px] font-semibold text-foreground backdrop-blur first:border-t-0 sm:px-5">
+                  <h2 className="sticky top-0 z-10 border-y border-border bg-muted px-4 py-2 text-[13px] font-semibold text-foreground first:border-t-0 sm:px-5">
                     {group.label}
                     <span className="ml-2 font-normal text-muted-foreground">{group.items.length} thao tác</span>
                   </h2>
@@ -265,22 +283,19 @@ export function AuditTrailPage() {
                             aria-current={active ? 'true' : undefined}
                             className={cn(
                               'group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors focus-visible:bg-muted/40 focus-visible:outline-none sm:gap-4 sm:px-5',
-                              active ? 'bg-indigo-50/70 dark:bg-indigo-500/10' : 'hover:bg-muted/40',
+                              active ? 'bg-primary/[0.07]' : 'hover:bg-muted/40',
                             )}
                           >
-                            <time dateTime={log.created_at} className="w-11 shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">
+                            <time dateTime={log.created_at} className="w-11 shrink-0 text-[13px] tabular-nums text-muted-foreground">
                               {new Date(log.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                             </time>
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="text-[13px] font-medium text-foreground">{ENTITY_LABELS[log.entity_type] ?? log.entity_type}</span>
-                                <StatusBadge label={log.action_name} variant={getActionVariant(log.action_name)} />
-                              </div>
-                              <p className="mt-1 truncate text-[12px] text-muted-foreground">
-                                <span className="font-mono">#{shortId(log.entity_id)}</span>, bởi {log.actor_user_id ? <span className="font-mono">{shortId(log.actor_user_id)}</span> : 'hệ thống'}
+                              <p className="text-[14px] font-medium text-foreground" title={log.action_name}>{actionLabel(log.action_name)}</p>
+                              <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                                {ENTITY_LABELS[log.entity_type] ?? log.entity_type} <span className="font-mono">#{shortId(log.entity_id)}</span>, bởi {log.actor_user_id ? <span className="font-mono">{shortId(log.actor_user_id)}</span> : 'hệ thống'}
                               </p>
                             </div>
-                            <ChevronRight className={cn('h-4 w-4 shrink-0 transition-colors', active ? 'text-indigo-500' : 'text-muted-foreground/40 group-hover:text-muted-foreground')} aria-hidden="true" />
+                            <ChevronRight className={cn('h-4 w-4 shrink-0 transition-colors', active ? 'text-primary' : 'text-muted-foreground/40 group-hover:text-muted-foreground')} aria-hidden="true" />
                           </button>
                         </li>
                       );
@@ -300,14 +315,14 @@ export function AuditTrailPage() {
                 </Button>
               </div>
             </div>
-          </SectionCard>
+          </section>
         </FadeItem>
 
         {wide && (
           <FadeItem className="lg:sticky lg:top-4 lg:self-start">
             <SectionCard
               title={selectedLog ? (ENTITY_LABELS[selectedLog.entity_type] ?? selectedLog.entity_type) : 'Chi tiết thao tác'}
-              subtitle={selectedLog ? `${selectedLog.action_name}, ${new Date(selectedLog.created_at).toLocaleString('vi-VN')}` : undefined}
+              subtitle={selectedLog ? `${actionLabel(selectedLog.action_name)}, ${new Date(selectedLog.created_at).toLocaleString('vi-VN')}` : undefined}
               actions={selectedLog ? (
                 <button onClick={closeLog} aria-label="Bỏ chọn" className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <X className="h-4 w-4" />
@@ -327,14 +342,14 @@ export function AuditTrailPage() {
       {selectedLog && !wide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeLog} role="dialog" aria-modal="true" aria-labelledby="audit-log-modal-title">
           <motion.div ref={modalRef} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
               <div className="min-w-0">
-                <h3 id="audit-log-modal-title" className="text-[14px] font-semibold text-foreground">
+                <h3 id="audit-log-modal-title" className="font-display text-[18px] font-semibold tracking-tight text-foreground">
                   {ENTITY_LABELS[selectedLog.entity_type] ?? selectedLog.entity_type}
                 </h3>
                 <p className="mt-0.5 text-[12px] text-muted-foreground">
-                  <span className="font-mono">{selectedLog.action_name}</span>, {new Date(selectedLog.created_at).toLocaleString('vi-VN')}
+                  {actionLabel(selectedLog.action_name)}, {new Date(selectedLog.created_at).toLocaleString('vi-VN')}
                 </p>
               </div>
               <button onClick={closeLog} aria-label="Đóng" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

@@ -23,7 +23,7 @@ function RankedList({ items, unit, empty }: { items: { name: string; count: numb
             <span className="shrink-0 tabular-nums text-muted-foreground">{item.count} {unit}</span>
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <div className="h-full rounded-full bg-indigo-500" style={{ width: `${(item.count / max) * 100}%` }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: `${(item.count / max) * 100}%` }} />
           </div>
         </li>
       ))}
@@ -102,7 +102,7 @@ export function CustomerReadingAnalyticsPage() {
         title="Thống kê đọc sách"
         subtitle="Hành trình đọc sách của bạn"
         actions={
-          <button onClick={() => void loadStats()} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+          <button onClick={() => void loadStats()} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-input bg-card px-3 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Làm mới
           </button>
         }
@@ -114,7 +114,7 @@ export function CustomerReadingAnalyticsPage() {
             <div key={item.label} className="min-w-0">
               <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
               <dd className="mt-1 truncate font-mono text-[22px] font-bold leading-none tabular-nums text-foreground">{item.value}</dd>
-              <p className="mt-1.5 truncate text-[11px] text-muted-foreground">{item.hint}</p>
+              <p className="mt-1.5 truncate text-[12px] text-muted-foreground">{item.hint}</p>
             </div>
           ))}
         </dl>
@@ -137,7 +137,7 @@ export function CustomerReadingAnalyticsPage() {
                 labelFormatter={(label) => `Tháng ${label}`}
                 contentStyle={{ fontSize: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--foreground)' }}
               />
-              <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={28} />
+              <Bar dataKey="count" fill="var(--primary)" radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </SectionCard>

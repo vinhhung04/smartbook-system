@@ -86,19 +86,31 @@ export function CustomerProfilePage() {
   const initials = (profile.full_name || 'U').trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || '').join('') || 'U';
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8 *:max-w-3xl">
-      <CustomerPageHeader title="Hồ sơ của tôi" subtitle="Thông tin cá nhân, thông báo và bảo mật tài khoản" />
+    <div className="mx-auto max-w-7xl space-y-5 p-5 sm:p-6 lg:p-8">
+      <CustomerPageHeader title="Hồ sơ của tôi" subtitle="Thông tin liên lạc, cách nhận thông báo và mật khẩu đăng nhập." />
 
-      <div className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-        <span aria-hidden="true" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[18px] font-bold text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-          {initials}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-[16px] font-bold text-foreground">{profile.full_name}</p>
-          <p className="truncate text-[13px] text-muted-foreground">{profile.email || 'Chưa có email'}</p>
-          <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">Mã khách hàng: {profile.customer_code || '—'}</p>
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <aside aria-label="Tóm tắt hồ sơ" className="rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-20">
+        <div className="flex items-center gap-4">
+          <span aria-hidden="true" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary/[0.08] text-[18px] font-semibold text-primary">
+            {initials}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-display text-[19px] font-semibold leading-tight text-foreground">{profile.full_name}</p>
+            <p className="truncate text-[13px] text-muted-foreground">{profile.email || 'Chưa có email'}</p>
+          </div>
         </div>
-      </div>
+        <dl className="mt-4 space-y-2.5 border-t border-border pt-4 text-[13px]">
+          <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Mã khách hàng</dt><dd className="font-mono text-[12px] text-foreground">{profile.customer_code || '–'}</dd></div>
+          <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Số điện thoại</dt><dd className="text-foreground">{profile.phone || 'Chưa có'}</dd></div>
+        </dl>
+        <nav aria-label="Liên kết tài khoản" className="mt-4 grid gap-1.5 border-t border-border pt-4 text-[13px]">
+          <NavLink to="/customer/membership" className="rounded-lg px-2 py-1.5 font-medium text-primary hover:bg-primary/[0.06]">Thẻ hội viên và quyền lợi</NavLink>
+          <NavLink to="/customer/fines" className="rounded-lg px-2 py-1.5 font-medium text-primary hover:bg-primary/[0.06]">Tiền phạt và ví</NavLink>
+        </nav>
+      </aside>
+
+      <div className="min-w-0 space-y-5">
 
       <SectionCard
         title="Thông tin cá nhân"
@@ -148,6 +160,8 @@ export function CustomerProfilePage() {
 
       {/* Change Password (Feature 5) */}
       <ChangePasswordSection />
+      </div>
+      </div>
     </div>
   );
 }
@@ -194,7 +208,7 @@ function NotificationPreferencesSection() {
 
   const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) => (
     <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${checked ? 'bg-indigo-600' : 'bg-muted'}`}>
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${checked ? 'bg-primary' : 'bg-muted'}`}>
       <span className={`inline-block h-4 w-4 transform rounded-full bg-card shadow-sm transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
     </button>
   );
@@ -203,19 +217,19 @@ function NotificationPreferencesSection() {
     <SectionCard title="Cài đặt thông báo" subtitle="Kiểm soát cách bạn nhận thông báo">
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-indigo-500" /><span className="text-[13px]">Thông báo trong ứng dụng</span></div>
+          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-primary" /><span className="text-[13px]">Thông báo trong ứng dụng</span></div>
           <Toggle checked={prefs.notify_in_app} onChange={(v) => setPrefs({ ...prefs, notify_in_app: v })} />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-blue-500" /><span className="text-[13px]">Thông báo Email</span></div>
+          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-muted-foreground" /><span className="text-[13px]">Thông báo Email</span></div>
           <Toggle checked={prefs.notify_email} onChange={(v) => setPrefs({ ...prefs, notify_email: v })} />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-500" /><span className="text-[13px]">Thông báo SMS</span></div>
+          <div className="flex items-center gap-2"><Bell className="w-4 h-4 text-primary" /><span className="text-[13px]">Thông báo SMS</span></div>
           <Toggle checked={prefs.notify_sms} onChange={(v) => setPrefs({ ...prefs, notify_sms: v })} />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Globe className="w-4 h-4 text-amber-500" /><span className="text-[13px]">Ngôn ngữ</span></div>
+          <div className="flex items-center gap-2"><Globe className="w-4 h-4 text-muted-foreground" /><span className="text-[13px]">Ngôn ngữ</span></div>
           <select value={prefs.preferred_language} onChange={(e) => setPrefs({ ...prefs, preferred_language: e.target.value })}
             className="h-9 rounded-lg border border-input bg-background px-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10">
             <option value="vi">Tiếng Việt</option>
@@ -273,7 +287,7 @@ function ChangePasswordSection() {
       </div>
       <div className="mt-5 flex justify-end">
         <button onClick={() => void handleChange()} disabled={saving}
-          className="inline-flex items-center gap-2 h-10 rounded-xl bg-rose-600 text-white px-6 text-[13px] font-semibold hover:bg-rose-700 disabled:opacity-50 transition-colors">
+          className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-6 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
           <Lock className="w-4 h-4" />
           {saving ? 'Đang đổi...' : 'Đổi mật khẩu'}
         </button>

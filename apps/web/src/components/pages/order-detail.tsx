@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
 import { StatusBadge } from "../status-badge";
 import { NavLink, useParams } from "react-router";
-import { ArrowLeft, Download, FileText, CheckCircle, XCircle, AlertCircle, ClipboardCheck, ScanBarcode, Save, Truck } from "lucide-react";
+import { ArrowLeft, Download, FileText, CheckCircle, XCircle, ClipboardCheck, ScanBarcode, Save, UserCheck } from "lucide-react";
 import { goodsReceiptService } from "@/services/goods-receipt";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { toast } from "sonner";
-import { SectionCard } from "@/components/ui/section-card";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/components/ui/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
@@ -27,6 +29,8 @@ export interface ReceiptDetailItem {
   actual_quantity: number | null;
   unit_cost: number;
   line_total: number;
+  damaged_qty?: number | null;
+  rejected_qty?: number | null;
 }
 
 export interface InvoiceItem {
@@ -62,9 +66,14 @@ export interface ReceiptDetail {
   note?: string;
   total_amount: number;
   received_by_user_id?: string | null;
+  received_at?: string | null;
   items: ReceiptDetailItem[];
   invoice?: EmbeddedInvoice | null;
 }
+
+// Staff read Vietnamese; the API keeps its codes.
+const STATUS_LABELS: Record<string, string> = { DRAFT: "Nháp", POSTED: "Đã duyệt", CANCELLED: "Đã hủy" };
+const SOURCE_LABELS: Record<string, string> = { SUPPLIER_INVOICE: "Theo phiếu giao nhà cung cấp", PURCHASE_ORDER: "Theo đơn đặt hàng" };
 
 export function OrderDetailPage() {
   const { id } = useParams();
@@ -225,17 +234,6 @@ export function OrderDetailPage() {
     () => Boolean(receipt && receipt.items.length > 0 && receipt.items.every((i) => i.actual_quantity !== null)),
     [receipt],
   );
-  const timeline = useMemo(() => {
-    const created = { step: 1, title: "Tạo phiếu nhập", time: formatDate(receipt?.created_at || ""), completed: true, description: "Đã tạo bản nháp" };
-    const posted = {
-      step: 2,
-      title: receipt?.status === "POSTED" ? "Đã duyệt" : "Chờ duyệt",
-      time: receipt?.status === "POSTED" ? "Hoàn tất" : "Đang chờ",
-      completed: receipt?.status === "POSTED",
-      description: receipt?.status === "POSTED" ? "Tồn kho đã được cập nhật" : "Phiếu vẫn ở trạng thái nháp",
-    };
-    return [created, posted];
-  }, [receipt]);
 
   if (loading) {
     return (
@@ -253,8 +251,88 @@ export function OrderDetailPage() {
     );
   }
 
+  const isDraft = receipt.status === "DRAFT";
+  const isPosted = receipt.status === "POSTED";
+  const isCancelled = receipt.status === "CANCELLED";
+  const countedTotal = receipt.items.reduce((sum, item) => sum + (item.actual_quantity ?? 0), 0);
+  const hasExceptions = receipt.items.some((item) => (item.damaged_qty ?? 0) > 0 || (item.rejected_qty ?? 0) > 0);
+  const receiverLabel = receiverName
+    || (receipt.received_by_user_id && receipt.received_by_user_id === currentUser?.id ? "Bạn" : null)
+    || (receipt.received_by_user_id ? "Đã giao nhân viên" : "Chưa giao nhân viên");
+  const steps: Array<{ key: string; title: string; detail: string; state: "done" | "current" | "todo" | "stopped" }> = [
+    { key: "created", title: "Tạo phiếu", detail: formatDate(receipt.created_at), state: "done" },
+    {
+      key: "count",
+      title: "Kiểm đếm",
+      detail: isVerified || isPosted ? `${receiverLabel}, đã lưu số đếm` : receiverLabel,
+      state: isVerified || isPosted ? "done" : isDraft ? "current" : "todo",
+    },
+    {
+      key: "approve",
+      title: "Quản lý duyệt",
+      detail: isPosted ? "Tồn kho đã cập nhật" : isCancelled ? "Phiếu đã hủy" : isVerified ? "Đang chờ duyệt" : "Sau khi kiểm đếm",
+      state: isPosted ? "done" : isCancelled ? "stopped" : isVerified ? "current" : "todo",
+    },
+    { key: "putaway", title: "Cất hàng vào kệ", detail: isPosted ? "Bước tiếp theo" : "Sau khi duyệt", state: isPosted ? "current" : "todo" },
+  ];
+  const facts: Array<{ label: string; value: ReactNode }> = [
+    { label: "Kho nhận", value: receipt.warehouse_name ? `${receipt.warehouse_name}${receipt.warehouse_code ? ` (${receipt.warehouse_code})` : ""}` : receipt.warehouse_code || "-" },
+    ...(receipt.purchase_order_id ? [{ label: "Đơn đặt hàng", value: <NavLink to={`/purchase-orders/${receipt.purchase_order_id}`} className="font-mono text-primary underline-offset-2 hover:underline">{receipt.po_number || receipt.purchase_order_id}</NavLink> }] : []),
+    ...(receipt.invoice ? [
+      { label: "Hóa đơn nhà cung cấp", value: <span className="font-mono">{receipt.invoice.invoice_number}</span> },
+      { label: "Nhà cung cấp", value: receipt.invoice.supplier_name || "-" },
+    ] : []),
+    { label: "Nguồn phiếu", value: SOURCE_LABELS[receipt.source_type ?? ""] ?? receipt.source_type ?? "Tạo tay" },
+    { label: "Người kiểm đếm", value: receiverLabel },
+    ...(receipt.received_at ? [{ label: "Nhận hàng lúc", value: formatDate(receipt.received_at) }] : []),
+    ...(receipt.note ? [{ label: "Ghi chú", value: receipt.note }] : []),
+  ];
+  const diffTone = (diff: number) => (diff > 0 ? "text-red-700 dark:text-red-400" : diff < 0 ? "text-amber-700 dark:text-amber-300" : "text-foreground");
+  const countInput = (itemId: string, value: number, label: string) => (
+    <input
+      type="number"
+      min={0}
+      value={value}
+      aria-label={`Số thực đếm — ${label}`}
+      onChange={(e) => setCountedQty((prev) => ({ ...prev, [itemId]: Math.max(0, Number(e.target.value) || 0) }))}
+      className="h-9 w-20 rounded-md border border-input bg-input-background px-2 text-right text-[14px] tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-muted/40"
+    />
+  );
+  const scanBar = (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="relative min-w-0 flex-1">
+        <ScanBarcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <input
+          ref={scanInputRef}
+          type="text"
+          value={scanInput}
+          onChange={(e) => setScanInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
+          placeholder="Quét hoặc nhập mã vạch rồi Enter, mỗi lần cộng 1 cuốn"
+          aria-label="Quét mã vạch để đếm"
+          className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-muted/40"
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" onClick={() => setShowScannerModal(true)}>
+          <ScanBarcode className="h-4 w-4" /> Camera
+        </Button>
+        <Button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems} data-testid="save-received-count-button">
+          <Save className="h-4 w-4" />
+          {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
+        </Button>
+      </div>
+    </div>
+  );
+  const verifiedNote = (
+    <p className="flex items-center gap-2 rounded-xl bg-primary/[0.05] px-4 py-3 text-[13px] font-medium text-foreground">
+      <CheckCircle className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+      Đã kiểm đếm xong, chờ manager duyệt phiếu nhập.
+    </p>
+  );
+
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-5">
       <GoodsReceiptPrintSheet
         receipt={receipt}
         totalQty={totalQty}
@@ -263,440 +341,130 @@ export function OrderDetailPage() {
         receiverName={receiverName}
       />
       {showManageReceiving ? (
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <NavLink to="/orders" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors font-medium">
-          <ArrowLeft className="w-3.5 h-3.5" /> Quay lại danh sách phiếu
+        <NavLink to="/orders" className="-ml-1 inline-flex items-center gap-1.5 rounded px-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Phiếu nhập kho
         </NavLink>
-      </motion.div>
       ) : null}
 
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-        className="flex items-start justify-between gap-4"
-      >
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">{receipt.receipt_number}</h1>
-          <p className="text-[12px] text-muted-foreground mt-1">Tạo lúc {formatDate(receipt.created_at)}</p>
+      {/* Object header: which receipt, where it stands, and what it holds. */}
+      <motion.header initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] text-muted-foreground">Phiếu nhập kho</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2.5">
+            <h1 className="break-all font-mono text-[22px] font-semibold tracking-tight text-foreground">{receipt.receipt_number}</h1>
+            <span data-testid="goods-receipt-status">
+              <StatusBadge label={STATUS_LABELS[receipt.status] ?? receipt.status} variant={isPosted ? "success" : isDraft ? "info" : "danger"} dot />
+            </span>
+          </div>
+          <p className="mt-1 max-w-prose text-[14px] text-muted-foreground">
+            {totalQty.toLocaleString("vi-VN")} cuốn, {receipt.items.length} đầu sách vào {receipt.warehouse_code || receipt.warehouse_name || "kho"}
+            {receipt.invoice?.supplier_name ? ` từ ${receipt.invoice.supplier_name}` : ""}. Tạo lúc {formatDate(receipt.created_at)}.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <StatusBadge label={receipt.status} variant={receipt.status === "POSTED" ? "success" : receipt.status === "DRAFT" ? "info" : "danger"} dot />
-          <button onClick={handleDownload} className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-100 bg-card text-blue-700 text-[13px] hover:bg-blue-50 transition-all shadow-sm font-medium dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
-            <Download className="w-3.5 h-3.5" /> Tải xuống
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleDownload}>
+            <Download className="h-3.5 w-3.5" /> Tải CSV
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
+            <FileText className="h-3.5 w-3.5" /> In phiếu
+          </Button>
         </div>
-      </motion.div>
+      </motion.header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <SectionCard title="Tiến trình phiếu" subtitle="Theo dõi tiến trình phiếu nhập">
-              <div className="space-y-3">
-                {timeline.map((t, i) => (
-                  <div key={t.step} className="flex gap-4">
-                    <div className="flex flex-col items-center gap-2">
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: i * 0.1 }}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${t.completed ? "bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-400 text-white" : "bg-card border-muted-foreground/30 text-muted-foreground"}`}>
-                        {t.completed ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                      </motion.div>
-                      {i < timeline.length - 1 && <div className="w-0.5 h-12 bg-gradient-to-b from-emerald-400 to-muted-foreground/20" />}
-                    </div>
-                    <div className="pb-4">
-                      <div className="flex items-center gap-2.5 mb-0.5">
-                        <span className="text-[13px] font-semibold">{t.title}</span>
-                        <span className="text-[11px] text-muted-foreground">{t.time}</span>
-                      </div>
-                      <p className="text-[12px] text-muted-foreground">{t.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-          >
-            <SectionCard title={`Danh sách hàng nhận (${receipt.items.length})`} noPadding>
-              <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40">
-                    <th className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">Mã vạch</th>
-                    <th className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">Tên sách</th>
-                    {showLocation ? <th className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">Vị trí</th> : null}
-                    <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">SL kế hoạch</th>
-                    <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">SL thực đếm</th>
-                    {showUnitCost ? <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">Đơn giá</th> : null}
-                    {showUnitCost ? <th className="text-right text-[12px] text-muted-foreground px-5 py-3 font-medium">Thành tiền</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {receipt.items.map(item => {
-                    const diff = item.actual_quantity !== null ? item.actual_quantity - item.quantity : null;
-                    return (
-                    <tr key={item.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition-colors ${diff !== null && diff !== 0 ? "bg-amber-50/40 dark:bg-amber-500/10" : ""}`}>
-                      <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{item.barcode || "-"}</td>
-                      <td className="px-5 py-3.5 text-[13px] font-medium">{item.book_title}</td>
-                      {showLocation ? <td className="px-5 py-3.5 text-[12px] font-mono text-muted-foreground">{item.location_code || "-"}</td> : null}
-                      <td className="px-5 py-3.5 text-right text-[13px] font-medium">{item.quantity}</td>
-                      <td className="px-5 py-3.5 text-right text-[13px] font-medium">
-                        {item.actual_quantity !== null ? (
-                          <span className={diff === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
-                            {item.actual_quantity}
-                            {diff !== 0 && diff !== null && (
-                              <span className="ml-1 text-[11px]">({diff > 0 ? "+" : ""}{diff})</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-[12px]">—</span>
-                        )}
-                      </td>
-                      {showUnitCost ? <td className="px-5 py-3.5 text-right text-[12px] font-mono text-muted-foreground">{formatCurrency(item.unit_cost)}</td> : null}
-                      {showUnitCost ? <td className="px-5 py-3.5 text-right text-[13px] font-mono font-medium">{formatCurrency(item.line_total)}</td> : null}
-                    </tr>
-                  );})}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-border bg-muted/30">
-                    <td colSpan={showLocation ? 3 : 2} className="px-5 py-3 text-right text-[13px] font-semibold">Tổng:</td>
-                    <td className="px-5 py-3 text-right text-[14px] font-mono font-bold">{totalQty}</td>
-                    <td className="px-5 py-3 text-right text-[13px] text-muted-foreground">—</td>
-                    {showUnitCost ? <td colSpan={2} className="px-5 py-3 text-right text-[14px] font-mono font-bold">{formatCurrency(receipt.total_amount || 0)}</td> : null}
-                  </tr>
-                </tfoot>
-              </table>
-              </div>
-            </SectionCard>
-          </motion.div>
-        </div>
-
-        <div className="space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.1 }}
-          >
-            <SectionCard title="Tóm tắt phiếu nhập" className="bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-blue-100/60 dark:from-blue-500/10 dark:to-indigo-500/5 dark:border-blue-500/20">
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[12px] text-muted-foreground font-medium">Kho</p>
-                  <p className="text-[13px] font-medium mt-1">{receipt.warehouse_code || receipt.warehouse_name || "-"}</p>
-                </div>
-                {receipt.purchase_order_id && (
-                  <>
-                    <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
-                    <div>
-                      <p className="text-[12px] text-muted-foreground font-medium">PO liên kết</p>
-                      <NavLink to={`/purchase-orders/${receipt.purchase_order_id}`} className="text-[13px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
-                        {receipt.po_number || receipt.purchase_order_id}
-                      </NavLink>
-                    </div>
-                  </>
+      {/* Step strip: the receipt's whole path, with the current step marked. */}
+      <ol className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4" aria-label="Tiến trình phiếu nhập">
+        {steps.map((step, index) => (
+          <li key={step.key} className="bg-card p-4" aria-current={step.state === "current" ? "step" : undefined}>
+            <span className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tabular-nums",
+                  step.state === "done" && "bg-primary text-primary-foreground",
+                  step.state === "current" && "bg-primary/10 text-primary ring-2 ring-primary/40",
+                  step.state === "todo" && "bg-muted text-muted-foreground",
+                  step.state === "stopped" && "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
                 )}
-                <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
+                aria-hidden="true"
+              >
+                {step.state === "done" ? <CheckCircle className="h-3.5 w-3.5" /> : step.state === "stopped" ? <XCircle className="h-3.5 w-3.5" /> : index + 1}
+              </span>
+              <span className={cn("text-[14px]", step.state === "todo" ? "text-muted-foreground" : "font-semibold text-foreground")}>{step.title}</span>
+            </span>
+            <span className="mt-1 block pl-8 text-[12px] text-muted-foreground">{step.detail}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-5">
+          {/* Staff verification — shown for ANY DRAFT GR, not restricted to invoice GRs */}
+          {isDraft && !receipt.invoice ? (
+            <section aria-labelledby="count-title" className="@container overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="space-y-3 px-5 pb-4 pt-4">
                 <div>
-                  <p className="text-[12px] text-muted-foreground font-medium">Số dòng sách</p>
-                  <p className="text-[26px] text-blue-700 dark:text-blue-400 font-bold mt-1" style={{ lineHeight: 1 }}>{receipt.items.length}</p>
+                  <h2 id="count-title" className="font-serif text-[18px] font-semibold tracking-tight">Kiểm đếm hàng nhận</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">Nhập hoặc quét số lượng thực tế trước khi quản lý duyệt.</p>
                 </div>
-                <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
+                {!isVerified ? scanBar : verifiedNote}
+              </div>
+              {!isVerified ? (
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Sách</TableHead>
+                      <TableHead className="w-[88px] text-right text-[12px] font-normal text-muted-foreground">Kế hoạch</TableHead>
+                      <TableHead className="w-[132px] pr-5 text-right text-[12px] font-normal text-muted-foreground">Thực đếm</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {receipt.items.map((item) => {
+                      const counted = countedQty[item.id] ?? item.quantity;
+                      const diff = counted - item.quantity;
+                      return (
+                        <TableRow key={item.id} className={cn("transition-colors", item.id === highlightedItemId ? "bg-primary/[0.08]" : "hover:bg-muted/30")}>
+                          <TableCell className="whitespace-normal py-3 pl-5 pr-3 align-top">
+                            <p className="text-[14px] font-medium text-foreground">{item.book_title}</p>
+                            <p className="font-mono text-[12px] text-muted-foreground">{item.barcode || "-"}</p>
+                          </TableCell>
+                          <TableCell className="py-3 text-right align-top text-[14px] tabular-nums">{item.quantity}</TableCell>
+                          <TableCell className="py-2 pr-5 text-right align-top">
+                            <div className="flex items-center justify-end gap-2">
+                              {diff !== 0 ? <span className={cn("text-[12px] font-semibold tabular-nums", diffTone(diff))}>{diff > 0 ? `+${diff}` : diff}</span> : null}
+                              {countInput(item.id, counted, item.book_title)}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              ) : null}
+            </section>
+          ) : null}
+
+          {/* NCC invoice comparison — visible to all roles */}
+          {receipt.invoice ? (
+            <section aria-labelledby="invoice-count-title" className="@container overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="space-y-3 px-5 pb-4 pt-4">
                 <div>
-                  <p className="text-[12px] text-muted-foreground font-medium">Tổng số lượng</p>
-                  <p className="text-[26px] text-emerald-700 dark:text-emerald-400 font-bold mt-1" style={{ lineHeight: 1 }}>{totalQty}</p>
+                  <h2 id="invoice-count-title" className="font-serif text-[18px] font-semibold tracking-tight">Kiểm đếm theo phiếu giao nhà cung cấp</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    So số nhà cung cấp xuất trên hóa đơn <span className="font-mono">{receipt.invoice.invoice_number}</span> với số đếm thực tế.
+                  </p>
                 </div>
-                {showUnitCost ? (
-                  <>
-                    <div className="h-px bg-blue-200/40 dark:bg-blue-500/20" />
-                    <div>
-                      <p className="text-[12px] text-muted-foreground font-medium">Tổng giá trị</p>
-                      <p className="text-[18px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-1">{formatCurrency(receipt.total_amount || 0)}</p>
-                    </div>
-                  </>
-                ) : null}
+                {isDraft && !isVerified ? scanBar : null}
+                {isDraft && isVerified ? verifiedNote : null}
               </div>
-            </SectionCard>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.15 }}
-          >
-            <SectionCard title="Thao tác" className="overflow-hidden">
-              <div className="space-y-2">
-                {showManageReceiving && receipt.status === "DRAFT" ? (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3 space-y-2 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                    {receipt.received_by_user_id && !selectedReceiverId ? (
-                      // Already assigned — show who + option to reassign
-                      <>
-                        <p className="text-[12px] font-semibold text-emerald-800 dark:text-emerald-300">Nhân viên kiểm đếm</p>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <span className="text-[12px] font-medium text-emerald-900 dark:text-emerald-300">
-                              {warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.full_name
-                                || warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.username
-                                || "Đã giao"}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setSelectedReceiverId(receipt.received_by_user_id ?? "")}
-                            className="text-[11px] text-emerald-700 underline hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
-                          >
-                            Đổi
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      // Not assigned or reassigning
-                      <>
-                        <p className="text-[12px] font-semibold text-emerald-800 dark:text-emerald-300">
-                          {receipt.received_by_user_id ? "Đổi nhân viên kiểm đếm" : "Giao phiếu cho nhân viên kho"}
-                        </p>
-                        <div className="flex gap-2">
-                          <select
-                            value={selectedReceiverId}
-                            onChange={(event) => setSelectedReceiverId(event.target.value)}
-                            className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-card px-2.5 py-2 text-[12px] dark:border-emerald-500/20"
-                          >
-                            <option value="">Chọn nhân viên</option>
-                            {warehouseStaff.map((staff) => (
-                              <option key={staff.id} value={staff.id}>
-                                {staff.full_name || staff.username || staff.email}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => void handleAssignReceiver()}
-                            disabled={isAssigning || !selectedReceiverId}
-                            className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-60"
-                          >
-                            {isAssigning ? "Đang giao" : "Giao"}
-                          </button>
-                          {receipt.received_by_user_id && (
-                            <button
-                              onClick={() => setSelectedReceiverId("")}
-                              className="rounded-lg border border-border px-3 py-2 text-[12px] text-muted-foreground hover:bg-muted"
-                            >
-                              Hủy
-                            </button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-                <button onClick={() => window.print()} className="w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[13px] hover:shadow-lg transition-all shadow-md shadow-blue-500/15 font-medium">
-                  <FileText className="w-3.5 h-3.5" /> In phiếu
-                </button>
-                <NavLink
-                  to={`/putaway/${receipt.id}`}
-                  data-testid="go-to-putaway-link"
-                  className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
-                    receipt.status === "POSTED"
-                      ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white"
-                      : "cursor-not-allowed border border-input bg-muted text-muted-foreground pointer-events-none"
-                  }`}
-                >
-                  <ClipboardCheck className="w-3.5 h-3.5" /> Cất hàng vào kệ
-                </NavLink>
-                <button
-                  disabled={!showManageReceiving || receipt.status !== "DRAFT" || isUpdatingStatus}
-                  onClick={() => void handleUpdateStatus("POSTED")}
-                  data-testid="approve-goods-receipt-button"
-                  className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
-                    showManageReceiving && receipt.status === "DRAFT" && !isUpdatingStatus
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white"
-                      : "cursor-not-allowed border border-input bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <CheckCircle className="w-3.5 h-3.5" /> {isUpdatingStatus ? "Đang xử lý..." : "Duyệt phiếu"}
-                </button>
-                <button
-                  disabled={!showManageReceiving || receipt.status !== "DRAFT" || isUpdatingStatus}
-                  onClick={() => void handleUpdateStatus("CANCELLED")}
-                  className={`w-full inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-[13px] transition-all font-medium ${
-                    showManageReceiving && receipt.status === "DRAFT" && !isUpdatingStatus
-                      ? "border border-red-200 bg-red-50 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
-                      : "cursor-not-allowed border border-input bg-muted text-muted-foreground"
-                  }`}
-                >
-                  <XCircle className="w-3.5 h-3.5" /> Hủy phiếu
-                </button>
-              </div>
-            </SectionCard>
-          </motion.div>
-        </div>
-      </div>
-      {receipt.purchase_order_id ? <GoodsReceiptProcurementPanel receiptId={receipt.id} /> : null}
-      {/* Staff verification scan bar — shown for ANY DRAFT GR, not restricted to invoice GRs */}
-      {receipt.status === "DRAFT" && !receipt.invoice && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
-          <SectionCard title="Kiểm đếm hàng nhận" subtitle="Nhập hoặc scan số lượng thực tế trước khi manager duyệt">
-            {!isVerified ? (
-              <>
-                <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                      ref={scanInputRef}
-                      type="text"
-                      value={scanInput}
-                      onChange={(e) => setScanInput(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
-                      placeholder="Scan hoặc nhập mã vạch để đếm..."
-                      className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-border focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
-                    />
-                  </div>
-                  <button type="button" onClick={() => setShowScannerModal(true)}
-                    className="px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-[13px] font-medium flex items-center gap-1.5">
-                    <ScanBarcode className="h-4 w-4" /> Camera
-                  </button>
-                  <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems} data-testid="save-received-count-button"
-                    className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
-                    <Save className="h-4 w-4" />
-                    {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
-                  </button>
-                </div>
-                {/* Per-item quantity inputs — allows manual entry without barcode scanner */}
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-muted border-b border-border">
-                        {["Tên sách", "Mã vạch", "SL kế hoạch", "SL thực đếm"].map((h) => (
-                          <th key={h} className="px-4 py-2.5 text-left text-[12px] font-semibold text-muted-foreground">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {receipt.items.map((item) => {
-                        const counted = countedQty[item.id] ?? item.quantity;
-                        const diff = counted - item.quantity;
-                        const isHighlighted = item.id === highlightedItemId;
-                        return (
-                          <tr key={item.id} className={`border-b border-border last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50 dark:bg-indigo-500/10" : "hover:bg-muted/40"}`}>
-                            <td className="px-4 py-3 text-[13px] font-medium">{item.book_title}</td>
-                            <td className="px-4 py-3 font-mono text-[12px] text-muted-foreground">{item.barcode || "-"}</td>
-                            <td className="px-4 py-3 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{item.quantity}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  value={counted}
-                                  onChange={(e) => setCountedQty((prev) => ({ ...prev, [item.id]: Math.max(0, Number(e.target.value) || 0) }))}
-                                  className="w-20 rounded-[6px] border border-border px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
-                                />
-                                {diff !== 0 && (
-                                  <span className={`text-[11px] font-semibold ${diff > 0 ? "text-rose-600 dark:text-rose-400" : "text-amber-600 dark:text-amber-400"}`}>
-                                    {diff > 0 ? `+${diff}` : diff}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                <p className="text-[13px] text-emerald-800 dark:text-emerald-300 font-medium">Đã kiểm đếm xong — chờ manager duyệt phiếu nhập</p>
-              </div>
-            )}
-          </SectionCard>
-        </motion.div>
-      )}
-
-      {/* NCC invoice comparison — full width, below the main grid, visible to all roles */}
-      {receipt.invoice && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.2 }}>
-          <SectionCard
-            title="Kiểm đếm theo phiếu xuất nhà cung cấp"
-            subtitle={`${receipt.invoice.po_number || ""} · ${receipt.invoice.supplier_name || ""} · Hóa đơn ${receipt.invoice.invoice_number}`}
-          >
-            {/* Invoice info banner */}
-            <div className="flex flex-wrap gap-4 mb-4 p-3 rounded-lg bg-sky-50 border border-sky-100 dark:bg-sky-500/10 dark:border-sky-500/20">
-              <div className="flex items-center gap-2 text-[12px]">
-                <Truck className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-                <span className="text-muted-foreground">NCC:</span>
-                <span className="font-semibold">{receipt.invoice.supplier_name || "-"}</span>
-              </div>
-              <div className="text-[12px]">
-                <span className="text-muted-foreground">PO:</span>{" "}
-                <span className="font-semibold">{receipt.invoice.po_number || "-"}</span>
-              </div>
-              <div className="text-[12px]">
-                <span className="text-muted-foreground">Hóa đơn NCC:</span>{" "}
-                <span className="font-semibold">{receipt.invoice.invoice_number}</span>
-              </div>
-              <div className="text-[12px]">
-                <span className="text-muted-foreground">Kho nhận:</span>{" "}
-                <span className="font-semibold">{receipt.warehouse_code || receipt.warehouse_name || "-"}</span>
-              </div>
-            </div>
-
-            {/* Scan bar — only on DRAFT and not yet verified */}
-            {receipt.status === "DRAFT" && !isVerified && (
-              <div className="flex gap-2 mb-4">
-                <div className="relative flex-1">
-                  <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    ref={scanInputRef}
-                    type="text"
-                    value={scanInput}
-                    onChange={(e) => setScanInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { handleScanBarcode(scanInput); } }}
-                    placeholder="Scan hoặc nhập mã vạch để đếm..."
-                    className="w-full pl-9 pr-3 py-2 text-[13px] rounded-lg border border-border focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10"
-                  />
-                </div>
-                <button type="button" onClick={() => setShowScannerModal(true)}
-                  className="px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-[13px] font-medium flex items-center gap-1.5">
-                  <ScanBarcode className="h-4 w-4" /> Camera
-                </button>
-                <button type="button" onClick={() => void handleSaveItemQty()} disabled={isSavingItems} data-testid="save-received-count-button"
-                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
-                  <Save className="h-4 w-4" />
-                  {isSavingItems ? "Đang lưu..." : "Lưu kiểm đếm"}
-                </button>
-              </div>
-            )}
-            {/* Locked banner — shown after verification is saved */}
-            {receipt.status === "DRAFT" && isVerified && (
-              <div className="flex items-center gap-2 mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-                <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                <p className="text-[13px] text-emerald-800 dark:text-emerald-300 font-medium">
-                  Đã kiểm đếm xong — chờ manager duyệt phiếu nhập
-                </p>
-              </div>
-            )}
-
-            {/* Comparison table */}
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-muted border-b border-border">
-                    {["Tên sách", "ISBN/Mã vạch", "NCC xuất", "Thực đếm", "Lệch", "Trạng thái"].map((h) => (
-                      <th key={h} className="px-4 py-2.5 text-left text-[12px] font-semibold text-muted-foreground">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Sách</TableHead>
+                    <TableHead className="w-[80px] text-right text-[12px] font-normal text-muted-foreground">NCC xuất</TableHead>
+                    <TableHead className="w-[112px] pr-5 text-right text-[12px] font-normal text-muted-foreground @2xl:pr-2">Thực đếm</TableHead>
+                    <TableHead className="hidden w-[112px] pr-5 text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Kết quả</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {receipt.invoice.items.map((invItem) => {
                     const receiptItem = receipt.items.find(
                       (ri) => ri.barcode === invItem.barcode || ri.barcode === invItem.isbn13 || ri.barcode === invItem.sku || ri.book_title === invItem.title
@@ -704,40 +472,211 @@ export function OrderDetailPage() {
                     const expected = Number(invItem.invoiced_qty || 0);
                     const counted = receiptItem ? (countedQty[receiptItem.id] ?? receiptItem.quantity) : 0;
                     const diff = counted - expected;
-                    const isHighlighted = receiptItem?.id === highlightedItemId;
-                    const statusLabel = diff === 0 ? "Đủ" : diff > 0 ? "Thừa" : "Thiếu";
-                    const statusColor = diff === 0 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400" : diff > 0 ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400";
+                    const result = (
+                      <>
+                        <StatusBadge label={diff === 0 ? "Đủ" : diff > 0 ? `Thừa ${diff}` : `Thiếu ${Math.abs(diff)}`} variant={diff === 0 ? "success" : diff > 0 ? "danger" : "warning"} />
+                      </>
+                    );
                     return (
-                      <tr key={invItem.id} className={`border-b border-border last:border-0 transition-colors ${isHighlighted ? "bg-indigo-50 dark:bg-indigo-500/10" : "hover:bg-muted/60"}`}>
-                        <td className="px-4 py-3 text-[13px] font-medium">{invItem.title || "-"}</td>
-                        <td className="px-4 py-2.5 font-mono text-[12px] text-muted-foreground">{invItem.isbn13 || invItem.sku || "-"}</td>
-                        <td className="px-4 py-2.5 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400">{expected}</td>
-                        <td className="px-4 py-2.5">
-                          {receiptItem && receipt.status === "DRAFT" && !isVerified ? (
-                            <input type="number" min={0}
-                              value={countedQty[receiptItem.id] ?? receiptItem.quantity}
-                              onChange={(e) => setCountedQty((prev) => ({ ...prev, [receiptItem.id]: Math.max(0, Number(e.target.value) || 0) }))}
-                              className="w-20 rounded-[6px] border border-border px-2 py-1 text-[12px] outline-none focus:border-indigo-400"
-                            />
+                      <TableRow key={invItem.id} className={cn("transition-colors", receiptItem?.id === highlightedItemId ? "bg-primary/[0.08]" : "hover:bg-muted/30")}>
+                        <TableCell className="whitespace-normal py-3 pl-5 pr-3 align-top">
+                          <p className="text-[14px] font-medium text-foreground">{invItem.title || "-"}</p>
+                          <p className="font-mono text-[12px] text-muted-foreground">{invItem.isbn13 || invItem.sku || "-"}</p>
+                          <div className="mt-1.5 @2xl:hidden">{result}</div>
+                        </TableCell>
+                        <TableCell className="py-3 text-right align-top text-[14px] tabular-nums">{expected}</TableCell>
+                        <TableCell className="py-2 pr-5 text-right align-top @2xl:pr-2">
+                          {receiptItem && isDraft && !isVerified ? (
+                            <div className="flex justify-end">{countInput(receiptItem.id, countedQty[receiptItem.id] ?? receiptItem.quantity, invItem.title || invItem.variant_id)}</div>
                           ) : (
-                            <span className="text-[13px]">{counted}</span>
+                            <span className={cn("text-[14px] font-semibold tabular-nums", diffTone(diff))}>{counted}</span>
                           )}
-                        </td>
-                        <td className={`px-4 py-2.5 text-[13px] font-semibold ${diff > 0 ? "text-rose-600 dark:text-rose-400" : diff < 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                          {diff > 0 ? `+${diff}` : diff}
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${statusColor}`}>{statusLabel}</span>
-                        </td>
-                      </tr>
+                        </TableCell>
+                        <TableCell className="hidden py-3 pr-5 text-right align-top @2xl:table-cell">{result}</TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
+            </section>
+          ) : null}
+
+          <section aria-labelledby="items-title" className="@container overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="px-5 pb-3 pt-4">
+              <h2 id="items-title" className="font-serif text-[18px] font-semibold tracking-tight">Danh sách hàng nhận</h2>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">{receipt.items.length} đầu sách trên phiếu, số kế hoạch và số đã đếm.</p>
             </div>
-          </SectionCard>
-        </motion.div>
-      )}
+            <Table className="table-fixed">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Sách</TableHead>
+                  {showLocation ? <TableHead className="hidden w-[120px] text-[12px] font-normal text-muted-foreground @3xl:table-cell">Vị trí</TableHead> : null}
+                  <TableHead className="w-[80px] text-right text-[12px] font-normal text-muted-foreground">Kế hoạch</TableHead>
+                  <TableHead className={cn("w-[88px] text-right text-[12px] font-normal text-muted-foreground", showUnitCost ? "pr-5 @2xl:pr-2" : "pr-5")}>Thực đếm</TableHead>
+                  {showUnitCost ? <TableHead className="hidden w-[112px] text-right text-[12px] font-normal text-muted-foreground @4xl:table-cell">Đơn giá</TableHead> : null}
+                  {showUnitCost ? <TableHead className="hidden w-[124px] pr-5 text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Thành tiền</TableHead> : null}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {receipt.items.map((item) => {
+                  const diff = item.actual_quantity !== null ? item.actual_quantity - item.quantity : null;
+                  const damaged = item.damaged_qty ?? 0;
+                  const rejected = item.rejected_qty ?? 0;
+                  return (
+                    <TableRow key={item.id} className="hover:bg-muted/30">
+                      <TableCell className="whitespace-normal py-3 pl-5 pr-3 align-top">
+                        <p className="text-[14px] font-medium text-foreground">{item.book_title}</p>
+                        <p className="font-mono text-[12px] text-muted-foreground">{item.barcode || "-"}</p>
+                        {/* Columns the container hides move here, so no field is dropped. */}
+                        {showLocation ? <p className="mt-0.5 text-[12px] text-muted-foreground @3xl:hidden">Vị trí <span className="font-mono">{item.location_code || "-"}</span></p> : null}
+                        {showUnitCost ? (
+                          <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground @4xl:hidden">
+                            {formatCurrency(item.unit_cost)} mỗi cuốn<span className="@2xl:hidden">, thành tiền {formatCurrency(item.line_total)}</span>
+                          </p>
+                        ) : null}
+                        {damaged > 0 || rejected > 0 ? (
+                          <p className="mt-0.5 text-[12px] font-medium text-amber-800 dark:text-amber-300">{[damaged ? `${damaged} hỏng` : null, rejected ? `${rejected} từ chối` : null].filter(Boolean).join(", ")}</p>
+                        ) : null}
+                      </TableCell>
+                      {showLocation ? <TableCell className="hidden py-3 align-top font-mono text-[12px] text-muted-foreground @3xl:table-cell">{item.location_code || "-"}</TableCell> : null}
+                      <TableCell className="py-3 text-right align-top text-[14px] tabular-nums">{item.quantity}</TableCell>
+                      <TableCell className={cn("py-3 text-right align-top", showUnitCost ? "pr-5 @2xl:pr-2" : "pr-5")}>
+                        {item.actual_quantity !== null ? (
+                          <span className={cn("text-[14px] font-semibold tabular-nums", diffTone(diff ?? 0))}>
+                            {item.actual_quantity}
+                            {diff ? <span className="ml-1 text-[12px] font-medium">({diff > 0 ? "+" : ""}{diff})</span> : null}
+                          </span>
+                        ) : (
+                          <span className="text-[12px] text-muted-foreground">Chưa đếm</span>
+                        )}
+                      </TableCell>
+                      {showUnitCost ? <TableCell className="hidden py-3 text-right align-top text-[13px] tabular-nums text-muted-foreground @4xl:table-cell">{formatCurrency(item.unit_cost)}</TableCell> : null}
+                      {showUnitCost ? <TableCell className="hidden py-3 pr-5 text-right align-top text-[14px] font-medium tabular-nums @2xl:table-cell">{formatCurrency(item.line_total)}</TableCell> : null}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            {/* Totals sit under the table, not in a colSpan row that would fight the hidden columns. */}
+            <dl className="flex flex-wrap justify-end gap-x-8 gap-y-2 border-t border-border px-5 py-3 text-[13px]">
+              <div className="flex items-baseline gap-2"><dt className="text-muted-foreground">Kế hoạch</dt><dd className="font-semibold tabular-nums">{totalQty} cuốn</dd></div>
+              <div className="flex items-baseline gap-2"><dt className="text-muted-foreground">Đã đếm</dt><dd className="font-semibold tabular-nums">{isVerified ? `${countedTotal} cuốn` : "Chưa đủ"}</dd></div>
+              {hasExceptions ? (
+                <div className="flex items-baseline gap-2"><dt className="text-muted-foreground">Hỏng, từ chối</dt><dd className="font-semibold tabular-nums">{receipt.items.reduce((s, i) => s + (i.damaged_qty ?? 0) + (i.rejected_qty ?? 0), 0)} cuốn</dd></div>
+              ) : null}
+              {showUnitCost ? <div className="flex items-baseline gap-2"><dt className="text-muted-foreground">Tổng giá trị</dt><dd className="font-semibold tabular-nums">{formatCurrency(receipt.total_amount || 0)}</dd></div> : null}
+            </dl>
+          </section>
+
+          {receipt.purchase_order_id ? <GoodsReceiptProcurementPanel receiptId={receipt.id} /> : null}
+        </div>
+
+        <aside className="space-y-5 lg:sticky lg:top-4">
+          <section aria-labelledby="actions-title" className="rounded-2xl border border-border bg-card p-5">
+            <h2 id="actions-title" className="font-serif text-[18px] font-semibold tracking-tight">Việc cần làm</h2>
+            <div className="mt-3 space-y-3">
+              {isPosted ? (
+                <>
+                  <p className="text-[13px] text-muted-foreground">Phiếu đã duyệt, tồn kho đã cộng. Bước tiếp theo là cất hàng lên kệ.</p>
+                  <Button asChild className="w-full">
+                    <NavLink to={`/putaway/${receipt.id}`} data-testid="go-to-putaway-link">
+                      <ClipboardCheck className="h-4 w-4" /> Cất hàng vào kệ
+                    </NavLink>
+                  </Button>
+                </>
+              ) : isCancelled ? (
+                <p className="text-[13px] text-muted-foreground">Phiếu đã hủy, không còn thao tác nào.</p>
+              ) : showManageReceiving ? (
+                <>
+                  {receipt.received_by_user_id && !selectedReceiverId ? (
+                    // Already assigned — show who + option to reassign
+                    <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/50 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-[12px] text-muted-foreground">Nhân viên kiểm đếm</p>
+                        <p className="truncate text-[13px] font-medium text-foreground">
+                          {warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.full_name
+                            || warehouseStaff.find((s) => s.id === receipt.received_by_user_id)?.username
+                            || "Đã giao"}
+                        </p>
+                      </div>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedReceiverId(receipt.received_by_user_id ?? "")}>Đổi</Button>
+                    </div>
+                  ) : (
+                    // Not assigned or reassigning
+                    <div className="space-y-2">
+                      <label htmlFor="receipt-receiver" className="block text-[13px] font-medium text-foreground">
+                        {receipt.received_by_user_id ? "Đổi nhân viên kiểm đếm" : "Giao phiếu cho nhân viên kho"}
+                      </label>
+                      <select
+                        id="receipt-receiver"
+                        value={selectedReceiverId}
+                        onChange={(event) => setSelectedReceiverId(event.target.value)}
+                        className="h-10 w-full rounded-md border border-input bg-input-background px-3 text-[14px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-muted/40"
+                      >
+                        <option value="">Chọn nhân viên</option>
+                        {warehouseStaff.map((staff) => (
+                          <option key={staff.id} value={staff.id}>
+                            {staff.full_name || staff.username || staff.email}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <Button type="button" variant="outline" className="flex-1" onClick={() => void handleAssignReceiver()} disabled={isAssigning || !selectedReceiverId}>
+                          <UserCheck className="h-4 w-4" /> {isAssigning ? "Đang giao" : "Giao"}
+                        </Button>
+                        {receipt.received_by_user_id && (
+                          <Button type="button" variant="ghost" onClick={() => setSelectedReceiverId("")}>Hủy</Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!isVerified ? <p className="text-[12px] text-amber-800 dark:text-amber-300">Nhân viên chưa lưu số kiểm đếm cho mọi dòng.</p> : null}
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={isUpdatingStatus}
+                    onClick={() => void handleUpdateStatus("POSTED")}
+                    data-testid="approve-goods-receipt-button"
+                  >
+                    <CheckCircle className="h-4 w-4" /> {isUpdatingStatus ? "Đang xử lý..." : "Duyệt phiếu"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
+                    disabled={isUpdatingStatus}
+                    onClick={() => void handleUpdateStatus("CANCELLED")}
+                  >
+                    <XCircle className="h-4 w-4" /> Hủy phiếu
+                  </Button>
+                </>
+              ) : (
+                <p className="text-[13px] text-muted-foreground">
+                  {isVerified ? "Bạn đã lưu số đếm. Quản lý sẽ duyệt phiếu để cộng tồn kho." : "Đếm hàng thực tế rồi bấm Lưu kiểm đếm. Quản lý duyệt phiếu sau đó."}
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section aria-labelledby="facts-title" className="rounded-2xl border border-border bg-card p-5">
+            <h2 id="facts-title" className="font-serif text-[18px] font-semibold tracking-tight">Thông tin phiếu</h2>
+            <dl className="mt-3 space-y-2.5">
+              {facts.map((fact) => (
+                <div key={fact.label}>
+                  <dt className="text-[12px] text-muted-foreground">{fact.label}</dt>
+                  <dd className="mt-0.5 break-words text-[13px] text-foreground">{fact.value}</dd>
+                </div>
+              ))}
+              {showUnitCost ? (
+                <div className="border-t border-border pt-2.5">
+                  <dt className="text-[12px] text-muted-foreground">Tổng giá trị</dt>
+                  <dd className="mt-0.5 font-serif text-[22px] font-semibold tabular-nums text-foreground">{formatCurrency(receipt.total_amount || 0)}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        </aside>
+      </div>
 
       {showScannerModal && (
         <BarcodeScanModal

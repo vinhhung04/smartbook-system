@@ -64,7 +64,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await supplierPage.goto(portalHref!);
   await supplierPage.getByTestId('supplier-confirm-order-button').click();
   await supplierPage.getByTestId('confirm-dialog-action').click();
-  await supplierPage.getByRole('button', { name: 'Invoices' }).click();
+  await supplierPage.getByRole('button', { name: 'Hóa đơn giao hàng' }).click();
   await supplierPage.getByTestId('supplier-portal-autofill').click();
   await supplierPage.getByTestId('supplier-portal-submit').click();
   await supplierPage.getByTestId('confirm-dialog-action').click();
@@ -104,7 +104,8 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await loginAs(page, { identifier: 'manager01', password: '123456' });
   await page.goto(receiptUrl.replace(/^https?:\/\/[^/]+/, ''));
   await page.getByTestId('approve-goods-receipt-button').click();
-  await expect(page.getByText('POSTED')).toBeVisible();
+  // The badge shows the Vietnamese label; the raw POSTED code is no longer printed on the page.
+  await expect(page.getByTestId('goods-receipt-status')).toHaveText(/Đã duyệt/);
 
   await page.getByTestId('go-to-putaway-link').click();
   await page.getByTestId('start-putaway-button').first().click();

@@ -138,15 +138,15 @@ export function NotificationBellDropdown() {
           type="button"
           aria-label={unreadCount > 0 ? `Thông báo, ${unreadCount} chưa đọc` : 'Thông báo'}
           data-testid="notification-bell"
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-[11px] border border-border bg-card text-slate-600 dark:text-slate-300 transition-all duration-200 hover:border-cyan-200 hover:bg-cyan-50 dark:hover:border-cyan-800/40 dark:hover:bg-cyan-950/20">
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-[11px] border border-border bg-card text-slate-600 dark:text-slate-300 transition-all duration-200 hover:border-border hover:bg-muted dark:hover:border-border dark:hover:bg-muted">
           <Bell className={`h-4 w-4 transition-transform ${hasNewPush ? 'animate-bounce' : ''}`} />
           {unreadCount > 0 ? (
-            <span data-testid="notification-unread-count" className="absolute -right-1 -top-1 inline-flex min-w-[18px] animate-pulse items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] text-white" style={{ fontWeight: 700 }}>
+            <span data-testid="notification-unread-count" className="absolute -right-1 -top-1 inline-flex min-w-[18px] animate-pulse items-center justify-center rounded-full bg-primary px-1 text-[12px] text-white" style={{ fontWeight: 700 }}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           ) : null}
           {/* Connection status indicator */}
-          <span className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-white ${connected ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+          <span className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-white ${connected ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`} />
         </button>
       </DropdownMenuTrigger>
 
@@ -154,7 +154,7 @@ export function NotificationBellDropdown() {
         <div className="flex items-center justify-between px-2 py-1.5">
           <div className="flex items-center gap-1.5">
             <p className="text-[12px] text-foreground" style={{ fontWeight: 700 }}>Thông báo</p>
-            <MorphIcon icon={connected ? Wifi : WifiOff} className={`h-3 w-3 ${connected ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`} />
+            <MorphIcon icon={connected ? Wifi : WifiOff} className={`h-3 w-3 ${connected ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}`} />
           </div>
           <button
             onClick={async () => {
@@ -165,7 +165,7 @@ export function NotificationBellDropdown() {
               } catch { /* ignore */ }
             }}
             disabled={unreadCount === 0}
-            className={`rounded-[8px] border border-border px-2 py-1 text-[10px] transition-colors ${unreadCount > 0 ? 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer' : 'text-slate-400 dark:text-slate-500'}`}
+            className={`rounded-[8px] border border-border px-2 py-1 text-[12px] transition-colors ${unreadCount > 0 ? 'text-primary dark:text-primary hover:bg-primary/[0.06] dark:hover:bg-primary/15 cursor-pointer' : 'text-slate-400 dark:text-slate-500'}`}
           >
             Đọc tất cả
           </button>
@@ -179,23 +179,23 @@ export function NotificationBellDropdown() {
         ) : (
           <div className="max-h-[360px] overflow-y-auto">
             {recentRows.map((row) => (
-              <DropdownMenuItem key={row.id} onSelect={() => void openNotification(row)} className="items-start rounded-[10px] px-2 py-2.5 text-[12px] transition-colors duration-200 hover:bg-cyan-50/40 dark:hover:bg-cyan-950/20">
+              <DropdownMenuItem key={row.id} onSelect={() => void openNotification(row)} className="items-start rounded-[10px] px-2 py-2.5 text-[12px] transition-colors duration-200 hover:bg-muted dark:hover:bg-muted">
                 <div className="mt-0.5">
-                  <MorphIcon icon={row.read_at ? BellData : BellRingData} className={`h-4 w-4 ${row.read_at ? 'text-slate-400 dark:text-slate-500' : 'text-indigo-600 dark:text-indigo-400'}`} />
+                  <MorphIcon icon={row.read_at ? BellData : BellRingData} className={`h-4 w-4 ${row.read_at ? 'text-slate-400 dark:text-slate-500' : 'text-primary dark:text-primary'}`} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="line-clamp-1 text-foreground" style={{ fontWeight: 600 }}>{row.subject || 'Thông báo'}</p>
-                  <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{row.body || ''}</p>
-                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">{formatDateTime(row.created_at || row.scheduled_at)}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{row.body || ''}</p>
+                  <p className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">{formatDateTime(row.created_at || row.scheduled_at)}</p>
                 </div>
-                {!row.read_at ? <span className="mt-1 h-2 w-2 rounded-full bg-indigo-500" /> : null}
+                {!row.read_at ? <span className="mt-1 h-2 w-2 rounded-full bg-primary" /> : null}
               </DropdownMenuItem>
             ))}
           </div>
         )}
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => navigate('/customer/notifications')} className="justify-center rounded-[9px] text-[12px] text-indigo-700 dark:text-indigo-400" style={{ fontWeight: 600 }}>
+        <DropdownMenuItem onSelect={() => navigate('/customer/notifications')} className="justify-center rounded-[9px] text-[12px] text-primary dark:text-primary" style={{ fontWeight: 600 }}>
           Xem tất cả thông báo
         </DropdownMenuItem>
       </DropdownMenuContent>

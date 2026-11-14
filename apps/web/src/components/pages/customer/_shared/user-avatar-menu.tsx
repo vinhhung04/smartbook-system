@@ -35,8 +35,8 @@ export function UserAvatarMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="inline-flex items-center gap-2 rounded-[11px] border border-border bg-card px-2 py-1.5 hover:bg-muted">
-          <Avatar className="h-8 w-8 border border-indigo-200 dark:border-indigo-800/40">
-            <AvatarFallback className="bg-indigo-50 text-[12px] text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400">{initials}</AvatarFallback>
+          <Avatar className="h-8 w-8 border border-primary/25 dark:border-primary/25">
+            <AvatarFallback className="bg-primary/[0.06] text-[12px] text-primary dark:bg-primary/15 dark:text-primary">{initials}</AvatarFallback>
           </Avatar>
           <div className="hidden text-left sm:block">
             <p className="text-[12px] text-slate-700 dark:text-slate-300" style={{ fontWeight: 600 }}>{user?.full_name || user?.username}</p>
@@ -47,7 +47,7 @@ export function UserAvatarMenu() {
       <DropdownMenuContent align="end" className="w-64 rounded-[12px] border-border p-1.5">
         <div className="px-2 py-1.5">
           <p className="text-[12px] text-foreground" style={{ fontWeight: 700 }}>{user?.full_name || user?.username}</p>
-          <p className="text-[11px] text-muted-foreground">{user?.email}</p>
+          <p className="text-[12px] text-muted-foreground">{user?.email}</p>
         </div>
         <DropdownMenuSeparator />
         {ACCOUNT_NAV.map((item) => (

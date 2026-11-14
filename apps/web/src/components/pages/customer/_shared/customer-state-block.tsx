@@ -13,7 +13,7 @@ export function CustomerStateBlock({ mode, message, action, illustration }: Cust
 
   const toneClassName =
     mode === 'error'
-      ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-400'
+      ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400'
       : mode === 'loading'
         ? 'border-border bg-card text-muted-foreground'
         : 'border-border bg-muted text-muted-foreground';

@@ -118,12 +118,12 @@ export function CustomerWishlistPage() {
                   <BookCoverPlaceholder title={title} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <NavLink to={`/customer/books/${item.book_id}`} className="block truncate text-[14px] font-bold text-foreground hover:text-indigo-600 dark:hover:text-indigo-400" title={title}>
+                  <NavLink to={`/customer/books/${item.book_id}`} className="block truncate text-[14px] font-bold text-foreground hover:text-primary dark:hover:text-primary" title={title}>
                     {title}
                   </NavLink>
                   <p className="truncate text-[12px] text-muted-foreground">{item.book_author || 'Không rõ tác giả'}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px]">
-                    <span className={cn('font-semibold', inStock ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                    <span className={cn('font-semibold', inStock ? 'text-primary dark:text-primary' : 'text-red-600 dark:text-red-400')}>
                       {inStock ? 'Còn sách' : 'Hết sách'}
                     </span>
                     <span className="text-muted-foreground">Thêm {new Date(item.created_at).toLocaleDateString('vi-VN')}</span>
@@ -149,7 +149,7 @@ export function CustomerWishlistPage() {
                     onClick={() => void handleRemove(item.book_id)}
                     aria-label={`Xóa khỏi yêu thích: ${title}`}
                     title="Xóa khỏi yêu thích"
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-500/20 dark:bg-rose-950/30 dark:text-rose-400"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-950/30 dark:text-red-400"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

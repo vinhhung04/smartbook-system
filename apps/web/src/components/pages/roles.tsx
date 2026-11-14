@@ -1,20 +1,19 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { PageWrapper, FadeItem } from "../motion-utils";
-import { Shield, Search, Plus, Settings2, Loader2, X, LayoutList, Grid3x3, Check } from "lucide-react";
+import { Shield, Search, Plus, Settings2, Loader2, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { roleService } from "@/services/role";
 import { getApiErrorMessage } from "@/services/api.ts";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/components/ui/utils";
-import { StageTabs, type StageTab } from "./borrow-shared/stage-tabs";
+import { type StageTab } from "./borrow-shared/stage-tabs";
+import { RowsSkeleton } from "@/components/ops/ops-kit";
 import { PageHeader } from "@/components/ui/page-header";
-import { StatusBadge } from "@/components/status-badge";
-import { SkeletonTableRow } from "@/components/ui/loading-state";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
+import { roleLabel } from "@/lib/role-labels";
 
 interface RoleRow {
   id: string;
@@ -49,6 +48,25 @@ interface RoleCreateForm {
 
 type RoleScope = "all" | "system" | "custom";
 
+// Permission modules come from the auth-service seed in English; staff read them in Vietnamese.
+const MODULE_LABELS: Record<string, string> = {
+  inventory: "Kho và danh mục",
+  borrow: "Mượn trả",
+  auth: "Tài khoản và phân quyền",
+  analytics: "Phân tích",
+  platform: "Hệ thống",
+  customer: "Cổng bạn đọc",
+  supplier: "Nhà cung cấp",
+  ai: "Trợ lý AI",
+  chatbot: "Chatbot",
+  audit: "Nhật ký",
+  other: "Khác",
+};
+
+function moduleLabel(name: string) {
+  return MODULE_LABELS[name] ?? name;
+}
+
 function groupByModule<T extends { module_name: string }>(items: T[]) {
   return items.reduce<Record<string, T[]>>((acc, item) => {
     (acc[item.module_name || "other"] ??= []).push(item);
@@ -71,11 +89,11 @@ function RoleCreateModal(props: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4" role="dialog" aria-modal="true" aria-labelledby="role-create-modal-title">
-      <div ref={modalRef} className="w-full max-w-xl rounded-xl border border-border bg-card shadow-[0_12px_38px_rgba(15,23,42,0.2)]">
+      <div ref={modalRef} className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h3 id="role-create-modal-title" className="text-[16px] font-semibold text-foreground">Tạo vai trò mới</h3>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Vai trò sẽ được lưu trực tiếp vào auth_db</p>
+            <h3 id="role-create-modal-title" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Tạo vai trò mới</h3>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Vai trò mới chưa có quyền nào. Tạo xong, bấm Phân quyền để cấp quyền.</p>
           </div>
           <button onClick={onClose} aria-label="Đóng" className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground">
             <X className="h-4 w-4" />
@@ -84,7 +102,7 @@ function RoleCreateModal(props: {
 
         <div className="space-y-4 px-5 py-4">
           <label className="block space-y-1">
-            <span className="text-[12px] font-medium text-foreground">Code</span>
+            <span className="text-[13px] font-medium text-foreground">Mã vai trò</span>
             <input
               value={form.code}
               onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value.toUpperCase().replace(/\s+/g, "_") }))}
@@ -94,7 +112,7 @@ function RoleCreateModal(props: {
           </label>
 
           <label className="block space-y-1">
-            <span className="text-[12px] font-medium text-foreground">Tên vai trò</span>
+            <span className="text-[13px] font-medium text-foreground">Tên vai trò</span>
             <input
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
@@ -104,7 +122,7 @@ function RoleCreateModal(props: {
           </label>
 
           <label className="block space-y-1">
-            <span className="text-[12px] font-medium text-foreground">Mô tả</span>
+            <span className="text-[13px] font-medium text-foreground">Mô tả</span>
             <textarea
               rows={3}
               value={form.description}
@@ -192,11 +210,11 @@ function RolePermissionModal(props: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-5" role="dialog" aria-modal="true" aria-labelledby="role-permission-modal-title">
-      <div ref={modalRef} className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[0_12px_42px_rgba(15,23,42,0.28)]">
+      <div ref={modalRef} className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <h3 id="role-permission-modal-title" className="text-[16px] font-semibold text-foreground">Phân quyền: {role.name}</h3>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">Code: {role.code} · Tick để cấp/thu hồi quyền và lưu vào DB</p>
+            <h3 id="role-permission-modal-title" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Phân quyền: {roleLabel(role.code, role.name)}</h3>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Mã {role.code}. Đánh dấu để cấp hoặc thu hồi quyền, rồi bấm Lưu thay đổi.</p>
           </div>
           <button onClick={onClose} aria-label="Đóng" className="rounded-md p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground">
             <X className="h-4 w-4" />
@@ -209,7 +227,7 @@ function RolePermissionModal(props: {
               <input
                 value={keyword}
                 onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Tìm quyền theo code/module/mô tả"
+                placeholder="Tìm quyền theo mã, nhóm hoặc mô tả"
                 className="w-full rounded-lg border border-input bg-card py-2.5 pl-9 pr-3 text-[13px] outline-none focus:ring-2 focus:ring-primary/10"
               />
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -234,23 +252,23 @@ function RolePermissionModal(props: {
             <div className="space-y-4">
               {groupedPermissions.map(([moduleName, modulePermissions]) => (
                 <div key={moduleName} className="rounded-xl border border-border">
-                  <div className="border-b border-border bg-muted/50 px-3 py-2 text-[12px] font-semibold text-foreground">
-                    {moduleName}
+                  <div className="border-b border-border bg-muted/50 px-3 py-2 text-[13px] font-semibold text-foreground">
+                    {moduleLabel(moduleName)}
                   </div>
                   <div className="divide-y divide-border">
                     {modulePermissions.map((permission) => {
                       const checked = selected.has(permission.id);
                       return (
-                        <label key={permission.id} className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-violet-50/40 dark:hover:bg-violet-500/10">
+                        <label key={permission.id} className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-primary/[0.04]">
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => onToggle(permission.id)}
-                            className="mt-0.5 h-4 w-4 rounded border-input text-violet-600 dark:text-violet-500 focus:ring-violet-400 dark:focus:ring-violet-500/40"
+                            className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
                           />
                           <div>
-                            <p className="text-[13px] font-semibold text-foreground">{permission.code}</p>
-                            <p className="text-[12px] text-muted-foreground">{permission.description || `${permission.module_name}.${permission.action_name}`}</p>
+                            <p className="text-[13px] font-medium text-foreground">{permission.description || `${permission.module_name}.${permission.action_name}`}</p>
+                            <p className="font-mono text-[12px] text-muted-foreground">{permission.code}</p>
                           </div>
                         </label>
                       );
@@ -458,15 +476,49 @@ export function RolesPage() {
   ];
   const visibleRoles = filteredRoles.filter((role) => scope === "all" || (scope === "system") === role.is_system);
 
+  const railButton = (key: string, label: string, count: number | undefined, active: boolean, onClick: () => void) => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("min-w-0 truncate text-[13px]", active ? "font-semibold" : "font-medium")}>{label}</span>
+      {count !== undefined ? <span className={cn("shrink-0 text-[12px] tabular-nums", active ? "text-primary" : "text-muted-foreground")}>{loading ? "–" : count}</span> : null}
+    </button>
+  );
+  const chip = (key: string, label: string, active: boolean, onClick: () => void, count?: number) => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium hover:bg-muted/60",
+      )}
+    >
+      <span className="whitespace-nowrap">{label}</span>
+      {count !== undefined ? <span className="tabular-nums text-muted-foreground">{loading ? "–" : count}</span> : null}
+    </button>
+  );
+  const chooseView = (mode: "list" | "matrix") => {
+    setViewMode(mode);
+    if (mode === "matrix") void loadPermissions();
+  };
+  const moduleCount = new Set(roles.flatMap((role) => (role.permissions || []).map((perm) => perm.module_name))).size;
+
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={Shield}
-          title="Quản lý vai trò"
-          description={`${roles.length} vai trò, gán cho ${totalUsers} người dùng với ${totalGrantedPermissions} lượt cấp quyền`}
-          iconBg="bg-violet-50 dark:bg-violet-500/10"
-          iconColor="text-violet-600 dark:text-violet-400"
+          title="Vai trò và phân quyền"
+          description={loading ? "Vai trò quyết định người dùng được xem và làm gì." : `${roles.length} vai trò, gán cho ${totalUsers} người dùng với ${totalGrantedPermissions} lượt cấp quyền trên ${moduleCount} nhóm chức năng.`}
           actions={
             <Button size="sm" onClick={() => setShowCreateModal(true)} className="gap-2">
               <Plus className="h-4 w-4" /> Tạo vai trò
@@ -476,184 +528,164 @@ export function RolesPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card">
-          <StageTabs label="Lọc theo loại vai trò" tabs={tabs} value={scope} onChange={setScope} loading={loading} />
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={search}
-              onSearchChange={setSearch}
-              searchPlaceholder="Tìm theo code, tên, mô tả vai trò..."
-              showSearchClear
-              actions={
-                <div role="group" aria-label="Kiểu hiển thị" className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 p-0.5">
-                  {([
-                    { key: "list", label: "Danh sách", icon: LayoutList },
-                    { key: "matrix", label: "Ma trận quyền", icon: Grid3x3 },
-                  ] as const).map((mode) => (
-                    <button
-                      key={mode.key}
-                      type="button"
-                      aria-pressed={viewMode === mode.key}
-                      onClick={() => {
-                        setViewMode(mode.key);
-                        if (mode.key === "matrix") void loadPermissions();
-                      }}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        viewMode === mode.key ? "bg-background font-medium text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      <mode.icon className="h-3.5 w-3.5" /> {mode.label}
-                    </button>
-                  ))}
-                </div>
-              }
-            />
-          </div>
-        </div>
-      </FadeItem>
-
-      {viewMode === "matrix" && (
-        <FadeItem>
-          <SectionCard
-            noPadding
-            title="Ma trận vai trò và quyền"
-            subtitle="Mỗi dòng là một quyền, mỗi cột là một vai trò. Bấm mã vai trò để sửa quyền."
-            actions={loadingPermissions ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : undefined}
-          >
-            {permissions.length === 0 && !loadingPermissions ? (
-              <p className="p-5 text-center text-[13px] text-muted-foreground">Chưa tải được dữ liệu quyền</p>
-            ) : (
-              <div className="max-h-[70vh] overflow-auto border-t border-border">
-                <table className="w-full text-[12px]">
-                  <thead className="sticky top-0 z-20 bg-card">
-                    <tr className="border-b border-border">
-                      <th scope="col" className="sticky left-0 z-10 min-w-[220px] bg-card px-4 py-2.5 text-left font-medium text-muted-foreground">Quyền</th>
-                      {visibleRoles.map((role) => (
-                        <th key={role.id} scope="col" className="min-w-[96px] px-2 py-2.5 text-center font-medium">
-                          <button
-                            type="button"
-                            onClick={() => void openPermissionModal(role)}
-                            title={`Sửa quyền của ${role.name}`}
-                            className="mx-auto block max-w-[96px] truncate rounded px-1 font-mono text-[11px] text-violet-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-violet-400"
-                          >
-                            {role.code}
-                          </button>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(groupByModule(permissions)).map(([moduleName, modulePerms]) => (
-                      <Fragment key={moduleName}>
-                        <tr className="border-b border-border bg-muted/40">
-                          <th scope="rowgroup" colSpan={visibleRoles.length + 1} className="sticky left-0 px-4 py-1.5 text-left text-[12px] font-semibold text-foreground">
-                            {moduleName}
-                            <span className="ml-2 font-normal text-muted-foreground">{modulePerms.length} quyền</span>
-                          </th>
-                        </tr>
-                        {modulePerms.map((perm) => (
-                          <tr key={perm.id} className="border-b border-border/60 hover:bg-muted/20">
-                            <th scope="row" className="sticky left-0 bg-card px-4 py-2 text-left font-normal">
-                              <span className="block text-foreground">{perm.action_name}</span>
-                              {perm.description ? <span className="block text-[11px] text-muted-foreground">{perm.description}</span> : null}
-                            </th>
-                            {visibleRoles.map((role) => (
-                              <td key={role.id} className="px-2 py-2 text-center">
-                                {role.permissions.some((rp) => rp.id === perm.id) ? (
-                                  <Check className="mx-auto h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-label="Có quyền" />
-                                ) : (
-                                  <span className="text-muted-foreground/30" aria-label="Không có quyền">–</span>
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[232px_minmax(0,1fr)]">
+            <nav aria-label="Bộ lọc vai trò" className="hidden rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p id="roles-scope-label" className="px-3 pb-1.5 text-[12px] font-medium text-muted-foreground">Loại vai trò</p>
+              <div role="group" aria-labelledby="roles-scope-label">
+                {tabs.map((tab) => railButton(`scope-${tab.key}`, tab.label, tab.count, scope === tab.key, () => setScope(tab.key)))}
               </div>
-            )}
-          </SectionCard>
-        </FadeItem>
-      )}
+              <p id="roles-view-label" className="mt-3 border-t border-border px-3 pb-1.5 pt-3 text-[12px] font-medium text-muted-foreground">Cách xem</p>
+              <div role="group" aria-labelledby="roles-view-label">
+                {railButton("view-list", "Danh sách vai trò", undefined, viewMode === "list", () => chooseView("list"))}
+                {railButton("view-matrix", "Ma trận quyền", undefined, viewMode === "matrix", () => chooseView("matrix"))}
+              </div>
+              <p className="mt-3 border-t border-border px-3 pt-3 text-[12px] leading-relaxed text-muted-foreground">
+                Vai trò hệ thống có sẵn khi cài đặt. Đổi quyền của chúng ảnh hưởng mọi người dùng mang vai trò đó.
+              </p>
+            </nav>
 
-      {viewMode === "list" && (
-        <FadeItem>
-          <SectionCard noPadding>
-            {!loading && visibleRoles.length === 0 ? (
-              <EmptyState
-                variant={search ? "no-results" : "no-data"}
-                title={search ? "Không tìm thấy vai trò" : "Chưa có vai trò nào ở mục này"}
-                description={search ? "Thử tìm theo code, tên hoặc mô tả." : "Tạo vai trò mới để bắt đầu phân quyền."}
-                className="py-12"
-              />
-            ) : (
-              <Table className="table-fixed">
-                <TableHeader className="bg-muted/50">
-                  <TableRow className="hover:bg-transparent">
-                    {[
-                      { label: "Vai trò", className: "" },
-                      { label: "Mô tả", className: "hidden w-[30%] xl:table-cell" },
-                      { label: "Người dùng", className: "hidden w-[110px] text-right md:table-cell" },
-                      { label: "Quyền theo module", className: "hidden w-[260px] lg:table-cell" },
-                      { label: "Thao tác", className: "w-[132px] text-right" },
-                    ].map((header) => (
-                      <TableHead key={header.label} className={cn("px-4 py-3 text-xs font-medium text-muted-foreground", header.className)}>
-                        {header.label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <SkeletonTableRow columns={5} rows={5} />
-                  ) : (
-                    visibleRoles.map((role) => {
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl/page:hidden" role="group" aria-label="Lọc theo loại vai trò">
+              {tabs.map((tab) => chip(`chip-${tab.key}`, tab.label, scope === tab.key, () => setScope(tab.key), tab.count))}
+              {chip("chip-matrix", viewMode === "matrix" ? "Xem danh sách" : "Xem ma trận quyền", false, () => chooseView(viewMode === "matrix" ? "list" : "matrix"))}
+            </div>
+
+            <section aria-label={viewMode === "matrix" ? "Ma trận vai trò và quyền" : "Danh sách vai trò"} className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-1 pt-4">
+                <div>
+                  <h2 className="font-display text-[18px] font-semibold tracking-tight">{viewMode === "matrix" ? "Ma trận vai trò và quyền" : tabs.find((tab) => tab.key === scope)?.label}</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    {viewMode === "matrix" ? "Mỗi dòng là một quyền, mỗi cột là một vai trò. Bấm tên vai trò để sửa quyền." : "Bấm Phân quyền để cấp hoặc thu hồi quyền của vai trò."}
+                  </p>
+                </div>
+                {loadingPermissions && viewMode === "matrix" ? <Loader2 className="mt-1 h-4 w-4 animate-spin text-muted-foreground" aria-label="Đang tải quyền" /> : null}
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Tìm theo mã, tên, mô tả vai trò..."
+                  showSearchClear
+                />
+              </div>
+
+              {viewMode === "matrix" ? (
+                permissions.length === 0 && !loadingPermissions ? (
+                  <p className="p-5 text-center text-[13px] text-muted-foreground">Chưa tải được dữ liệu quyền</p>
+                ) : (
+                  <div className="max-h-[70vh] overflow-auto">
+                    <table className="w-full text-[13px]">
+                      <thead className="sticky top-0 z-20 bg-card">
+                        <tr className="border-b border-border">
+                          <th scope="col" className="sticky left-0 z-10 min-w-[240px] bg-card px-5 py-2.5 text-left text-[12px] font-normal text-muted-foreground">Quyền</th>
+                          {visibleRoles.map((role) => (
+                            <th key={role.id} scope="col" className="min-w-[104px] px-2 py-2.5 text-center font-medium">
+                              <button
+                                type="button"
+                                onClick={() => void openPermissionModal(role)}
+                                title={`Sửa quyền của ${roleLabel(role.code, role.name)} (${role.code})`}
+                                className="mx-auto block max-w-[104px] truncate rounded px-1 text-[12px] font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                {roleLabel(role.code, role.name)}
+                              </button>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(groupByModule(permissions)).map(([moduleName, modulePerms]) => (
+                          <Fragment key={moduleName}>
+                            <tr className="border-b border-border bg-muted/40">
+                              <th scope="rowgroup" colSpan={visibleRoles.length + 1} className="sticky left-0 px-5 py-1.5 text-left text-[13px] font-semibold text-foreground">
+                                {moduleLabel(moduleName)}
+                                <span className="ml-2 font-normal text-muted-foreground">{modulePerms.length} quyền</span>
+                              </th>
+                            </tr>
+                            {modulePerms.map((perm) => (
+                              <tr key={perm.id} className="border-b border-border/60 hover:bg-muted/20">
+                                <th scope="row" className="sticky left-0 bg-card px-5 py-2 text-left font-normal">
+                                  <span className="block text-foreground">{perm.description || perm.action_name}</span>
+                                  <span className="block font-mono text-[12px] text-muted-foreground">{perm.code}</span>
+                                </th>
+                                {visibleRoles.map((role) => (
+                                  <td key={role.id} className="px-2 py-2 text-center">
+                                    {role.permissions.some((rp) => rp.id === perm.id) ? (
+                                      <Check className="mx-auto h-4 w-4 text-primary" aria-label="Có quyền" />
+                                    ) : (
+                                      <span className="text-muted-foreground/40" aria-label="Không có quyền">–</span>
+                                    )}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : loading ? (
+                <RowsSkeleton rows={6} />
+              ) : visibleRoles.length === 0 ? (
+                <div className="px-5 py-10">
+                  <EmptyState
+                    variant={search ? "no-results" : "no-data"}
+                    title={search ? "Không tìm thấy vai trò" : "Chưa có vai trò nào ở mục này"}
+                    description={search ? "Thử tìm theo mã, tên hoặc mô tả." : "Tạo vai trò mới để bắt đầu phân quyền."}
+                    className="py-0"
+                  />
+                </div>
+              ) : (
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Vai trò</TableHead>
+                      <TableHead className="hidden w-[96px] text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Người dùng</TableHead>
+                      <TableHead className="hidden w-[34%] text-[12px] font-normal text-muted-foreground @3xl:table-cell">Quyền theo nhóm chức năng</TableHead>
+                      <TableHead className="w-[140px] pr-5 text-right text-[12px] font-normal text-muted-foreground">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleRoles.map((role) => {
                       const modules = Object.entries(groupByModule(role.permissions || [])).sort((a, b) => b[1].length - a[1].length);
+                      const modulesLine = modules.length
+                        ? modules.slice(0, 3).map(([name, list]) => `${moduleLabel(name)} ${list.length}`).join(", ") + (modules.length > 3 ? `, thêm ${modules.length - 3} nhóm` : "")
+                        : "Chưa cấp quyền nào";
                       return (
                         <TableRow key={role.id} className="hover:bg-muted/30">
-                          <TableCell className="px-4 py-3 align-top">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-semibold text-foreground">{role.name}</span>
-                              <StatusBadge label={role.is_system ? "Hệ thống" : "Tùy chỉnh"} variant={role.is_system ? "amber" : "neutral"} />
-                            </div>
-                            <p className="mt-0.5 font-mono text-xs text-violet-700 dark:text-violet-400">{role.code}</p>
-                            {role.description ? <p className="mt-1 line-clamp-2 whitespace-normal text-xs text-muted-foreground xl:hidden">{role.description}</p> : null}
-                            <p className="mt-1 text-xs text-muted-foreground lg:hidden">
-                              {role.user_count || 0} người dùng, {(role.permissions || []).length} quyền
+                          <TableCell className="whitespace-normal py-3.5 pl-5 pr-3 align-top">
+                            <p className="flex flex-wrap items-baseline gap-x-2">
+                              <span className="text-[14px] font-semibold text-foreground">{roleLabel(role.code, role.name)}</span>
+                              <span className="font-mono text-[12px] text-muted-foreground">{role.code}</span>
                             </p>
+                            <p className="text-[12px] text-muted-foreground">{role.is_system ? "Vai trò hệ thống" : "Vai trò tùy chỉnh"}</p>
+                            {role.description ? <p className="mt-1 line-clamp-2 max-w-prose text-[13px] text-muted-foreground" title={role.description}>{role.description}</p> : null}
+                            {/* Columns the container hides move here, so no field is dropped. */}
+                            <p className="mt-1 text-[12px] text-muted-foreground @2xl:hidden">{role.user_count || 0} người dùng</p>
+                            <p className="mt-1 text-[12px] text-muted-foreground @3xl:hidden">{(role.permissions || []).length} quyền: {modulesLine}</p>
                           </TableCell>
-                          <TableCell className="hidden px-4 py-3 align-top xl:table-cell">
-                            <p className="line-clamp-3 whitespace-normal text-[13px] text-muted-foreground">{role.description || "Chưa có mô tả"}</p>
+                          <TableCell className="hidden py-3.5 text-right align-top @2xl:table-cell">
+                            <span className="text-[14px] font-semibold tabular-nums text-foreground">{role.user_count || 0}</span>
                           </TableCell>
-                          <TableCell className="hidden px-4 py-3 text-right align-top md:table-cell">
-                            <span className="text-sm font-semibold tabular-nums text-foreground">{role.user_count || 0}</span>
-                          </TableCell>
-                          <TableCell className="hidden px-4 py-3 align-top lg:table-cell">
+                          <TableCell className="hidden whitespace-normal py-3.5 align-top @3xl:table-cell">
                             <p className="text-[13px] text-foreground"><span className="font-semibold tabular-nums">{(role.permissions || []).length}</span> quyền</p>
-                            <p className="mt-0.5 line-clamp-2 whitespace-normal text-xs text-muted-foreground">
-                              {modules.length
-                                ? modules.slice(0, 3).map(([name, list]) => `${name} ${list.length}`).join(", ") + (modules.length > 3 ? `, thêm ${modules.length - 3} module` : "")
-                                : "Chưa cấp quyền nào"}
-                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">{modulesLine}</p>
                           </TableCell>
-                          <TableCell className="px-4 py-3 text-right align-top">
+                          <TableCell className="py-3.5 pr-5 text-right align-top">
                             <Button variant="outline" size="sm" onClick={() => void openPermissionModal(role)} className="gap-1.5">
                               <Settings2 className="h-3.5 w-3.5" /> Phân quyền
                             </Button>
                           </TableCell>
                         </TableRow>
                       );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            )}
-          </SectionCard>
-        </FadeItem>
-      )}
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </section>
+          </div>
+        </div>
+      </FadeItem>
 
       {showCreateModal && <RoleCreateModal
         open={showCreateModal}

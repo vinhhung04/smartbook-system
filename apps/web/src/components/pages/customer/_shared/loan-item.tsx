@@ -29,7 +29,7 @@ function dueLabel(status: string, dueDate: Date | null, now: number): { text: st
 }
 
 const TONE_TEXT = {
-  overdue: 'text-rose-700 dark:text-rose-400',
+  overdue: 'text-red-700 dark:text-red-400',
   soon: 'text-amber-700 dark:text-amber-400',
   ok: 'text-foreground',
   closed: 'text-muted-foreground',
@@ -47,7 +47,7 @@ export function LoanItem({ item, onView }: LoanItemProps) {
     <div
       className={`rounded-xl border p-3.5 transition-all duration-200 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] sm:p-4 ${
         due.tone === 'overdue'
-          ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20'
+          ? 'border-red-200 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/20'
           : due.tone === 'soon'
             ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
             : 'border-border bg-card'
@@ -62,7 +62,7 @@ export function LoanItem({ item, onView }: LoanItemProps) {
           <p className="truncate text-[14px] text-foreground" style={{ fontWeight: 700 }} title={bookTitle}>
             {bookTitle}{extraCount > 0 ? ` (+${extraCount} khác)` : ''}
           </p>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{item.loan_number || 'Phiếu mượn'}</p>
+          <p className="mt-0.5 truncate font-mono text-[12px] text-muted-foreground">{item.loan_number || 'Phiếu mượn'}</p>
           <p className="mt-1 text-[12px] text-muted-foreground">
             Mượn {formatDay(item.borrow_date)} · Hạn trả {formatDay(item.due_date)}
           </p>

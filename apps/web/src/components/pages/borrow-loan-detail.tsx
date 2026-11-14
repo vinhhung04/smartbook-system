@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, BookOpen, Printer } from 'lucide-react';
+import { ArrowLeft, Check, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { StatusBadge } from '../status-badge';
-import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
@@ -14,6 +13,8 @@ import { getApiErrorMessage } from '@/services/api';
 import { LoanReceiptPrintSheet } from './loan-receipt-print-sheet';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
+import { cn } from '@/components/ui/utils';
+import { warehouseService } from '@/services/warehouse';
 
 function daysOverdue(dueDate: string): number {
   const diffMs = Date.now() - new Date(dueDate).getTime();
@@ -146,36 +147,56 @@ export function BorrowLoanDetailPage() {
 
   const canAct = loan && (loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED');
 
+  // Which branch lent the books: a read-only lookup, the same list the loans list loads.
+  const [branchNames, setBranchNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let active = true;
+    warehouseService.getAll()
+      .then((rows) => { if (active) setBranchNames(new Map((Array.isArray(rows) ? rows : []).map((w) => [w.id, w.name || w.code]))); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const day = (value: string | null | undefined) => (value ? new Date(value).toLocaleDateString('vi-VN') : '–');
+  const dateTime = (value: string | null | undefined) => (value ? new Date(value).toLocaleString('vi-VN') : '–');
+  const items = loan?.loan_items || [];
+  const fineTotal = items.reduce((sum, item) => sum + Number(item.fine_amount || 0), 0);
+  const depositTotal = items.reduce((sum, item) => sum + Number(item.loan_item_deposits?.amount || 0), 0);
+  const overdueDays = loan && loan.status === 'OVERDUE' ? daysOverdue(loan.due_date) : 0;
+  const closed = Boolean(loan?.closed_at) || loan?.status === 'RETURNED' || loan?.status === 'RETURNED_LATE';
+  const steps = loan ? [
+    { label: 'Cho mượn', detail: day(loan.borrow_date), done: true },
+    { label: 'Đến hạn trả', detail: day(loan.due_date), done: closed || overdueDays > 0, alert: overdueDays > 0 && !closed },
+    { label: 'Đã trả', detail: loan.closed_at ? day(loan.closed_at) : 'Chưa trả', done: closed },
+  ] : [];
+
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <PageHeader
-          icon={BookOpen}
-          title={loan ? `Phiếu mượn ${loan.loan_number}` : 'Chi tiết phiếu mượn'}
-          description="Xem chi tiết từng sách và trạng thái của phiếu mượn."
-          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 border border-blue-200/40 shadow-sm dark:from-blue-500/15 dark:to-indigo-500/10 dark:border-blue-500/20"
-          iconColor="text-blue-600 dark:text-blue-400"
-          actions={
-            <>
-              <Link
-                to="/borrow/loans"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-muted-foreground hover:bg-muted"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách
-              </Link>
-              {loan && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => window.print()}
-                >
-                  <Printer className="h-3.5 w-3.5" /> In phiếu
-                </Button>
-              )}
-            </>
-          }
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <Link to="/borrow/loans" className="inline-flex items-center gap-1.5 rounded-md text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Phiếu mượn
+            </Link>
+            <h1 className="mt-2 font-mono text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">{loan ? loan.loan_number : 'Chi tiết phiếu mượn'}</h1>
+            {loan ? (
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[14px] text-muted-foreground">
+                <span data-testid="loan-status-badge">
+                  <StatusBadge label={getBorrowLabel('loan', loan.status)} variant={getStatusVariant('loan', loan.status)} dot />
+                </span>
+                <span>
+                  {loan.customers?.full_name || loan.customer_id}, {loan.total_items} cuốn
+                  {overdueDays > 0 ? <span className="font-medium text-red-700 dark:text-red-400">, quá hạn {overdueDays} ngày</span> : null}
+                </span>
+              </div>
+            ) : null}
+          </div>
+          {loan ? (
+            <Button variant="outline" size="sm" className="gap-1.5 self-start" onClick={() => window.print()}>
+              <Printer className="h-3.5 w-3.5" /> In phiếu
+            </Button>
+          ) : null}
+        </div>
       </FadeItem>
 
       {loan ? (
@@ -202,114 +223,136 @@ export function BorrowLoanDetailPage() {
 
       {loading ? (
         <FadeItem>
-          <div className="bg-card border border-border rounded-[14px] p-8">
+          <div className="rounded-2xl border border-border bg-card p-8">
             <LoadingOverlay />
           </div>
         </FadeItem>
       ) : !loan ? (
         <FadeItem>
-          <div className="bg-card border border-border rounded-[14px] p-8">
+          <div className="rounded-2xl border border-border bg-card p-8">
             <EmptyState variant="no-data" title="Không tìm thấy phiếu mượn" />
           </div>
         </FadeItem>
       ) : (
         <>
           <FadeItem>
-            <div className="bg-card border border-border rounded-[14px] p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <p className="text-[11px] text-muted-foreground">Mã phiếu mượn</p>
-                <p className="font-mono text-[14px] font-semibold text-foreground">{loan.loan_number}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Khách hàng</p>
-                <p className="text-[14px] font-semibold text-foreground">{loan.customers?.full_name || loan.customer_id}</p>
-                {loan.customers?.customer_code ? (
-                  <p className="font-mono text-[11px] text-muted-foreground">{loan.customers.customer_code}</p>
-                ) : null}
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Trạng thái</p>
-                <div data-testid="loan-status-badge">
-                  <StatusBadge label={getBorrowLabel('loan', loan.status)} variant={getStatusVariant('loan', loan.status)} dot />
-                </div>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Ngày mượn</p>
-                <p className="text-[13px] text-foreground">{new Date(loan.borrow_date).toLocaleString('vi-VN')}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Hạn trả</p>
-                <p className="text-[13px] text-foreground">{new Date(loan.due_date).toLocaleString('vi-VN')}</p>
-                {loan.status === 'OVERDUE' && daysOverdue(loan.due_date) > 0 && (
-                  <p className="font-mono text-[11px] font-semibold text-rose-600 dark:text-rose-400">
-                    Quá hạn {daysOverdue(loan.due_date)} ngày
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Số sách</p>
-                <p className="text-[13px] text-foreground">{loan.total_items}</p>
-              </div>
-            </div>
+            <ol aria-label="Tiến trình phiếu mượn" className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-2xl border border-border bg-card">
+              {steps.map((step, index) => (
+                <li key={step.label} className="flex items-start gap-3 px-4 py-3 sm:px-5" aria-current={!step.done && (index === 0 || steps[index - 1].done) ? 'step' : undefined}>
+                  <span className={cn(
+                    'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tabular-nums',
+                    step.alert ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400' : step.done ? 'bg-primary text-primary-foreground' : 'border border-border text-muted-foreground',
+                  )}>
+                    {step.done && !step.alert ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : index + 1}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-foreground">{step.label}</span>
+                    <span className={cn('block text-[12px] tabular-nums', step.alert ? 'font-medium text-red-700 dark:text-red-400' : 'text-muted-foreground')}>{step.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
           </FadeItem>
 
-          {canAct && (
-            <FadeItem>
-              <div className="flex flex-wrap items-center gap-2 rounded-[14px] border border-border bg-card p-3">
-                <span className="mr-1 text-[12px] text-muted-foreground">Thao tác trên phiếu này:</span>
-                <Button size="sm" variant="success-outline" onClick={returnLoan} data-testid="return-loan-button">Trả sách</Button>
-                <Button size="sm" variant="warning-outline" onClick={reportDamage}>Báo hư hỏng</Button>
-                <Button size="sm" variant="danger-outline" onClick={markLost}>Đánh dấu mất</Button>
-              </div>
-            </FadeItem>
-          )}
-
           <FadeItem>
-            <div className="bg-card border border-border rounded-[14px] overflow-hidden">
-              <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border bg-muted/80">
-                    {['Mã vạch sách', 'Sách', 'Hạn trả', 'Ngày trả', 'Trạng thái', 'Tiền phạt', 'Tiền cọc'].map((header) => (
-                      <th key={header} className="text-left text-[12px] text-muted-foreground px-4 py-3" style={{ fontWeight: 550 }}>
-                        {header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(loan.loan_items || []).map((item) => (
-                    <tr key={item.id} className="border-b border-border/50 last:border-0">
-                      <td className="px-4 py-3 font-mono text-[12px] text-foreground">{item.item_barcode || item.id.slice(0, 8)}</td>
-                      <td className="px-4 py-3 text-[12px] text-foreground">{getBookTitle(item.variant_id)}</td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{new Date(item.due_date).toLocaleString('vi-VN')}</td>
-                      <td className="px-4 py-3 text-[12px] text-muted-foreground">{item.return_date ? new Date(item.return_date).toLocaleString('vi-VN') : '-'}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge label={getBorrowLabel('loan', item.status)} variant={getStatusVariant('loan', item.status)} dot />
-                      </td>
-                      <td className="px-4 py-3 font-mono text-[12px] tabular-nums text-foreground">
-                        {Number(item.fine_amount || 0).toLocaleString('vi-VN')} VND
-                      </td>
-                      <td className="px-4 py-3">
-                        {item.loan_item_deposits ? (
-                          <div className="space-y-1">
-                            <p className="font-mono text-[12px] tabular-nums text-foreground">{formatVnd(item.loan_item_deposits.amount)}</p>
-                            <StatusBadge
-                              label={getBorrowLabel('deposit', item.loan_item_deposits.status)}
-                              variant={getStatusVariant('deposit', item.loan_item_deposits.status)}
-                            />
-                            {Number(item.loan_item_deposits.captured_amount) > 0 && (
-                              <p className="font-mono text-[11px] text-muted-foreground">Khấu trừ {formatVnd(item.loan_item_deposits.captured_amount)}</p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[12px] text-muted-foreground">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="@container/page">
+              <div className="grid grid-cols-1 items-start gap-5 @4xl/page:grid-cols-[minmax(0,1fr)_320px]">
+                <section aria-labelledby="loan-items-title" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+                  <div className="px-5 pb-3 pt-4">
+                    <h2 id="loan-items-title" className="font-display text-[18px] font-semibold tracking-tight">Sách trong phiếu</h2>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">{items.length} cuốn, mỗi cuốn có hạn trả, tiền phạt và tiền cọc riêng.</p>
+                  </div>
+                  <table className="w-full table-fixed border-t border-border">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="px-5 py-2.5 text-left text-[12px] font-normal text-muted-foreground">Sách</th>
+                        <th className="hidden w-[150px] px-3 py-2.5 text-left text-[12px] font-normal text-muted-foreground @2xl:table-cell">Hạn trả</th>
+                        <th className="hidden w-[150px] px-3 py-2.5 text-right text-[12px] font-normal text-muted-foreground @3xl:table-cell">Phạt, cọc</th>
+                        <th className="w-[124px] px-5 py-2.5 text-right text-[12px] font-normal text-muted-foreground">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => {
+                        const dueBlock = (
+                          <>
+                            <span className="block text-[13px] tabular-nums text-foreground">{day(item.due_date)}</span>
+                            <span className="block text-[12px] tabular-nums text-muted-foreground">{item.return_date ? `Trả ${dateTime(item.return_date)}` : 'Chưa trả'}</span>
+                          </>
+                        );
+                        const moneyBlock = (
+                          <>
+                            <span className="block text-[13px] tabular-nums text-foreground">Phạt {formatVnd(item.fine_amount)}</span>
+                            {item.loan_item_deposits ? (
+                              <span className="block text-[12px] tabular-nums text-muted-foreground">
+                                Cọc {formatVnd(item.loan_item_deposits.amount)}, {getBorrowLabel('deposit', item.loan_item_deposits.status).toLocaleLowerCase('vi')}
+                                {Number(item.loan_item_deposits.captured_amount) > 0 ? `, khấu trừ ${formatVnd(item.loan_item_deposits.captured_amount)}` : ''}
+                              </span>
+                            ) : <span className="block text-[12px] text-muted-foreground">Không giữ cọc</span>}
+                          </>
+                        );
+                        return (
+                          <tr key={item.id} className="border-b border-border last:border-0">
+                            <td className="px-5 py-3 align-top">
+                              <p className="text-[14px] font-medium text-foreground">{getBookTitle(item.variant_id)}</p>
+                              <p className="font-mono text-[12px] text-muted-foreground">{item.item_barcode || item.id.slice(0, 8)}</p>
+                              {item.notes ? <p className="mt-0.5 text-[12px] text-muted-foreground">Ghi chú: {item.notes}</p> : null}
+                              {/* Columns the container hides move here, so no field is dropped. */}
+                              <div className="mt-1.5 @2xl:hidden">{dueBlock}</div>
+                              <div className="mt-1 @3xl:hidden">{moneyBlock}</div>
+                            </td>
+                            <td className="hidden px-3 py-3 align-top @2xl:table-cell">{dueBlock}</td>
+                            <td className="hidden px-3 py-3 text-right align-top @3xl:table-cell">{moneyBlock}</td>
+                            <td className="px-5 py-3 text-right align-top">
+                              <StatusBadge label={getBorrowLabel('loan', item.status)} variant={getStatusVariant('loan', item.status)} dot />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </section>
+
+                <aside className="space-y-4 @4xl/page:sticky @4xl/page:top-4">
+                  <section aria-labelledby="loan-actions-title" className="rounded-2xl border border-border bg-card p-5">
+                    <h2 id="loan-actions-title" className="font-display text-[17px] font-semibold tracking-tight">Việc cần làm</h2>
+                    {canAct ? (
+                      <>
+                        <p className="mt-1 text-[13px] text-muted-foreground">
+                          {activeItems.length} cuốn đang mượn. Trả sách sẽ tính tiền phạt trễ hạn và hoàn tiền cọc nếu có.
+                        </p>
+                        <Button className="mt-3 w-full" onClick={returnLoan} data-testid="return-loan-button">Trả sách</Button>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <Button variant="outline" size="sm" onClick={reportDamage}>Báo hư hỏng</Button>
+                          <Button variant="outline" size="sm" onClick={markLost} className="text-red-700 hover:text-red-800 dark:text-red-400">Đánh dấu mất</Button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-[13px] text-muted-foreground">Phiếu đã đóng{loan.closed_at ? ` ngày ${day(loan.closed_at)}` : ''}, không còn thao tác trả sách.</p>
+                    )}
+                  </section>
+
+                  <section aria-labelledby="loan-facts-title" className="rounded-2xl border border-border bg-card p-5">
+                    <h2 id="loan-facts-title" className="font-display text-[17px] font-semibold tracking-tight">Thông tin phiếu</h2>
+                    <dl className="mt-3 space-y-2.5 text-[13px]">
+                      <div className="flex justify-between gap-4">
+                        <dt className="text-muted-foreground">Khách hàng</dt>
+                        <dd className="text-right">
+                          <span className="block font-medium text-foreground">{loan.customers?.full_name || loan.customer_id}</span>
+                          {loan.customers?.customer_code ? <span className="block font-mono text-[12px] text-muted-foreground">{loan.customers.customer_code}</span> : null}
+                          {loan.customers?.phone ? <a href={`tel:${loan.customers.phone}`} className="block text-[12px] text-primary hover:underline">{loan.customers.phone}</a> : null}
+                        </dd>
+                      </div>
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Ngày mượn</dt><dd className="text-right tabular-nums">{dateTime(loan.borrow_date)}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Hạn trả</dt><dd className="text-right tabular-nums">{dateTime(loan.due_date)}</dd></div>
+                      {loan.closed_at ? <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Đóng phiếu</dt><dd className="text-right tabular-nums">{dateTime(loan.closed_at)}</dd></div> : null}
+                      {branchNames.get(loan.warehouse_id) ? <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Chi nhánh</dt><dd className="text-right">{branchNames.get(loan.warehouse_id)}</dd></div> : null}
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Nguồn</dt><dd className="text-right">{loan.source_reservation_id ? 'Từ đặt trước' : 'Mượn trực tiếp'}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Tổng tiền phạt</dt><dd className={cn('text-right tabular-nums', fineTotal > 0 ? 'font-medium text-red-700 dark:text-red-400' : '')}>{formatVnd(fineTotal)}</dd></div>
+                      <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Tổng tiền cọc</dt><dd className="text-right tabular-nums">{formatVnd(depositTotal)}</dd></div>
+                      {loan.notes ? <div className="border-t border-border pt-2.5"><dt className="text-muted-foreground">Ghi chú</dt><dd className="mt-0.5 whitespace-pre-line text-foreground">{loan.notes}</dd></div> : null}
+                    </dl>
+                  </section>
+                </aside>
               </div>
             </div>
           </FadeItem>
@@ -324,7 +367,7 @@ export function BorrowLoanDetailPage() {
         variant={dialogCopy.variant}
         onConfirm={confirmReturn}
       >
-        <div className="space-y-3 text-[12px]">
+        <div className="space-y-3 text-[13px]">
           {returnDialog.mode !== 'return' && activeItems.length > 1 && (
             <label className="block space-y-1">
               <span className="text-muted-foreground">Sách</span>
@@ -336,7 +379,7 @@ export function BorrowLoanDetailPage() {
                 {returnDialog.mode === 'damage' && <option value="">Tất cả sách đang mượn</option>}
                 {activeItems.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {(item.item_barcode || item.id.slice(0, 8))} — {getBookTitle(item.variant_id)}
+                    {(item.item_barcode || item.id.slice(0, 8))}, {getBookTitle(item.variant_id)}
                   </option>
                 ))}
               </select>
@@ -348,17 +391,17 @@ export function BorrowLoanDetailPage() {
           ) : preview && preview.totals.deposit_amount > 0 ? (
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/40 p-3">
               <dt className="text-muted-foreground">Tiền cọc đang giữ</dt>
-              <dd className="text-right font-mono tabular-nums">{formatVnd(preview.totals.deposit_amount)}</dd>
+              <dd className="text-right tabular-nums">{formatVnd(preview.totals.deposit_amount)}</dd>
               <dt className="text-muted-foreground">Tiền phạt dự kiến</dt>
-              <dd className="text-right font-mono tabular-nums">{formatVnd(preview.totals.penalty)}</dd>
+              <dd className="text-right tabular-nums">{formatVnd(preview.totals.penalty)}</dd>
               <dt className="text-muted-foreground">Khấu trừ từ cọc</dt>
-              <dd className="text-right font-mono tabular-nums">{formatVnd(preview.totals.deposit_captured)}</dd>
+              <dd className="text-right tabular-nums">{formatVnd(preview.totals.deposit_captured)}</dd>
               <dt className="text-muted-foreground">Hoàn về ví khách</dt>
-              <dd className="text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{formatVnd(preview.totals.deposit_refunded)}</dd>
+              <dd className="text-right tabular-nums font-medium text-foreground">{formatVnd(preview.totals.deposit_refunded)}</dd>
               {preview.totals.additional_due > 0 && (
                 <>
                   <dt className="text-muted-foreground">Khách còn phải trả</dt>
-                  <dd className="text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{formatVnd(preview.totals.additional_due)}</dd>
+                  <dd className="text-right tabular-nums font-medium text-red-700 dark:text-red-400">{formatVnd(preview.totals.additional_due)}</dd>
                 </>
               )}
             </dl>

@@ -74,7 +74,7 @@ export function ModelQuality({ evaluation, model, subjectNoun, eventNoun }: {
         <ul id="model-quality-explain" className="mt-1 max-w-[95ch] list-disc space-y-1.5 pl-5 text-[12px] leading-relaxed text-muted-foreground">
           <li>
             Mô hình được đánh giá trên các {subjectNoun} gần nhất theo thời gian mà nó chưa thấy khi huấn luyện, nên các số dưới đây
-            phản ánh dữ liệu quá khứ của thư viện — không bảo đảm cho từng trường hợp mới.
+            phản ánh dữ liệu quá khứ của thư viện, không bảo đảm cho từng trường hợp mới.
           </li>
           <li><strong className="font-medium text-foreground">AUC</strong>: xác suất mô hình chấm điểm một trường hợp {eventNoun} thật cao hơn một trường hợp không {eventNoun}, chọn ngẫu nhiên. 0,5 tương đương đoán ngẫu nhiên.</li>
           <li>
@@ -89,7 +89,7 @@ export function ModelQuality({ evaluation, model, subjectNoun, eventNoun }: {
             </li>
           ) : null}
           {evaluation.brier !== null ? (
-            <li><strong className="font-medium text-foreground">Brier</strong> {evaluation.brier.toFixed(3).replace('.', ',')}: sai số bình phương giữa xác suất dự đoán và kết quả thật — càng thấp, xác suất càng sát thực tế.</li>
+            <li><strong className="font-medium text-foreground">Brier</strong> {evaluation.brier.toFixed(3).replace('.', ',')}: sai số bình phương giữa xác suất dự đoán và kết quả thật, càng thấp, xác suất càng sát thực tế.</li>
           ) : null}
         </ul>
       ) : null}

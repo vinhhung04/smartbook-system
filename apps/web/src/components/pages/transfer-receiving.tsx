@@ -146,7 +146,7 @@ export function TransferReceivingPage() {
     if (assignedName && !selectedStaffId) {
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-400">
+          <span className="inline-flex items-center gap-1 text-[13px] font-medium text-primary">
             <UserCheck className="h-3.5 w-3.5" /> {assignedName}
           </span>
           <button
@@ -208,9 +208,9 @@ export function TransferReceivingPage() {
         <PageHeader
           icon={PackageCheck}
           title="Nhận hàng chuyển kho"
-          description={canManageQueue ? 'Giao việc và xác nhận nhận hàng cho các chuyến đang đến kho của bạn' : 'Xác nhận nhận hàng cho các chuyến được giao cho bạn'}
-          iconBg="bg-amber-50 dark:bg-amber-500/10"
-          iconColor="text-amber-600 dark:text-amber-400"
+          description={queue.length === 0
+            ? (canManageQueue ? 'Không có chuyến nào đang đến kho này. Chuyến mới hiện ở đây khi kho nguồn xác nhận xuất kho.' : 'Chưa có chuyến nào được giao cho bạn.')
+            : `${queue.length} chuyến đang đến${canManageQueue && unassigned > 0 ? `, ${unassigned} chưa có người nhận` : ''}. ${canManageQueue ? 'Giao người nhận rồi xác nhận khi hàng tới.' : 'Xác nhận khi hàng tới kho.'}`}
           actions={
             canManageQueue ? (
               <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
@@ -230,15 +230,15 @@ export function TransferReceivingPage() {
       </FadeItem>
 
       <FadeItem>
-        <ol className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
+        <ol aria-label="Các bước nhận hàng chuyển kho" className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-border bg-border md:grid-cols-3">
           {flow.map((step, index) => (
             <li key={step.title} className="flex gap-3 bg-card px-4 py-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[12px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-[12px] font-semibold tabular-nums text-foreground">
                 {index + 1}
               </span>
               <div className="min-w-0">
                 <p className="text-[13px] font-medium text-foreground">{step.title}</p>
-                <p className="text-xs text-muted-foreground">{step.text}</p>
+                <p className="text-[12px] text-muted-foreground">{step.text}</p>
               </div>
             </li>
           ))}
@@ -246,11 +246,11 @@ export function TransferReceivingPage() {
       </FadeItem>
 
       <FadeItem>
-        <SectionCard
-          noPadding
-          title="Chuyến đang đến"
-          subtitle={`${queue.length} chuyến${canManageQueue && unassigned > 0 ? `, ${unassigned} chưa có người nhận` : ''}`}
-        >
+        <section aria-labelledby="transfer-queue-title" className="@container overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="px-5 pb-3 pt-4">
+            <h2 id="transfer-queue-title" className="font-display text-[18px] font-semibold tracking-tight">Chuyến đang đến</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">{`${queue.length} chuyến${canManageQueue && unassigned > 0 ? `, ${unassigned} chưa có người nhận` : ''}`}</p>
+          </div>
           <div className="border-t border-border px-4 py-3">
             <FilterBar searchValue={query} onSearchChange={setQuery} searchPlaceholder="Tìm mã chuyển kho hoặc mã kho..." showSearchClear />
           </div>
@@ -263,17 +263,17 @@ export function TransferReceivingPage() {
             />
           ) : (
             <Table className="table-fixed">
-              <TableHeader className="bg-muted/50">
+              <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   {[
-                    { label: 'Chuyển kho', className: '' },
-                    { label: 'Tuyến', className: 'hidden w-[180px] xl:table-cell' },
-                    { label: 'Số lượng', className: 'hidden w-[100px] text-right md:table-cell' },
-                    { label: 'Xuất lúc', className: 'hidden w-[110px] lg:table-cell' },
-                    ...(canManageQueue ? [{ label: 'Người nhận', className: 'hidden w-[250px] lg:table-cell' }] : []),
-                    { label: 'Thao tác', className: 'w-[150px] text-right' },
+                    { label: 'Chuyển kho', className: 'pl-5' },
+                    { label: 'Tuyến', className: 'hidden w-[180px] @5xl:table-cell' },
+                    { label: 'Số lượng', className: 'hidden w-[100px] text-right @2xl:table-cell' },
+                    { label: 'Xuất lúc', className: 'hidden w-[110px] @3xl:table-cell' },
+                    ...(canManageQueue ? [{ label: 'Người nhận', className: 'hidden w-[250px] @3xl:table-cell' }] : []),
+                    { label: 'Thao tác', className: 'w-[160px] pr-5 text-right' },
                   ].map((header) => (
-                    <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium text-muted-foreground', header.className)}>
+                    <TableHead key={header.label} className={cn('px-4 py-3 text-[12px] font-normal text-muted-foreground', header.className)}>
                       {header.label}
                     </TableHead>
                   ))}
@@ -284,27 +284,27 @@ export function TransferReceivingPage() {
                   const route = `${item.from_warehouse_code || '-'} → ${item.to_warehouse_code || '-'}`;
                   return (
                     <TableRow key={item.id} className="hover:bg-muted/30">
-                      <TableCell className="px-4 py-3 align-top">
-                        <p className="truncate text-sm font-semibold text-foreground">{item.transfer_number}</p>
+                      <TableCell className="whitespace-normal py-3 pl-5 pr-4 align-top">
+                        <p className="truncate font-mono text-[14px] font-semibold text-foreground">{item.transfer_number}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <StatusBadge label={statusLabel(item.status)} variant="warning" dot />
-                          <span className="text-xs text-muted-foreground xl:hidden">{route}</span>
+                          <span className="font-mono text-[12px] text-muted-foreground @5xl:hidden">{route}</span>
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground md:hidden">{item.total_quantity} cuốn, xuất {shippedAt(item)}</p>
-                        <p className="mt-1 hidden text-xs text-muted-foreground md:block lg:hidden">xuất {shippedAt(item)}</p>
-                        {canManageQueue && <div className="mt-2 lg:hidden">{assignControl(item)}</div>}
+                        {/* Columns the container hides move here, so no field is dropped. */}
+                        <p className="mt-1 text-[12px] tabular-nums text-muted-foreground @2xl:hidden">{item.total_quantity} cuốn, xuất {shippedAt(item)}</p>
+                        <p className="mt-1 hidden text-[12px] tabular-nums text-muted-foreground @2xl:block @3xl:hidden">Xuất {shippedAt(item)}</p>
+                        {canManageQueue && <div className="mt-2 @3xl:hidden">{assignControl(item)}</div>}
                       </TableCell>
-                      <TableCell className="hidden px-4 py-3 align-top font-mono text-xs text-muted-foreground xl:table-cell">{route}</TableCell>
-                      <TableCell className="hidden px-4 py-3 text-right align-top md:table-cell">
-                        <span className="text-sm font-semibold tabular-nums">{item.total_quantity}</span>
-                        <span className="text-xs text-muted-foreground"> cuốn</span>
+                      <TableCell className="hidden px-4 py-3 align-top font-mono text-[12px] text-muted-foreground @5xl:table-cell">{route}</TableCell>
+                      <TableCell className="hidden px-4 py-3 text-right align-top @2xl:table-cell">
+                        <span className="text-[14px] font-semibold tabular-nums">{item.total_quantity}</span>
+                        <span className="text-[12px] text-muted-foreground"> cuốn</span>
                       </TableCell>
-                      <TableCell className="hidden px-4 py-3 align-top text-xs text-muted-foreground lg:table-cell">{shippedAt(item)}</TableCell>
-                      {canManageQueue && <TableCell className="hidden px-4 py-3 align-top lg:table-cell">{assignControl(item)}</TableCell>}
-                      <TableCell className="px-4 py-3 text-right align-top">
+                      <TableCell className="hidden px-4 py-3 align-top text-[13px] tabular-nums text-muted-foreground @3xl:table-cell">{shippedAt(item)}</TableCell>
+                      {canManageQueue && <TableCell className="hidden px-4 py-3 align-top @3xl:table-cell">{assignControl(item)}</TableCell>}
+                      <TableCell className="py-3 pl-4 pr-5 text-right align-top">
                         <Button
                           size="sm"
-                          variant="success-outline"
                           onClick={() => void handleConfirmReceiving(item)}
                           disabled={!canManageQueue && !item.received_by_user_id}
                           loading={confirming === item.id}
@@ -319,7 +319,7 @@ export function TransferReceivingPage() {
               </TableBody>
             </Table>
           )}
-        </SectionCard>
+        </section>
       </FadeItem>
     </PageWrapper>
   );

@@ -125,7 +125,7 @@ export function CustomerLoanDetailPage() {
             <button
               onClick={() => void handleRenewRequest()}
               disabled={isSubmittingRenew || !canRequestRenewal}
-              className="inline-flex h-9 items-center rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center rounded-xl bg-primary px-4 text-[13px] font-semibold text-white transition-colors hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
               title={canRequestRenewal ? 'Yêu cầu gia hạn' : 'Chỉ phiếu đang mượn hoặc quá hạn mới được gia hạn'}
             >
               {isSubmittingRenew ? 'Đang gửi...' : 'Yêu cầu gia hạn'}
@@ -143,7 +143,7 @@ export function CustomerLoanDetailPage() {
           {summary.map((item) => (
             <div key={item.label}>
               <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
-              <dd className={`mt-0.5 text-[14px] font-semibold ${item.emphasis ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>{item.value}</dd>
+              <dd className={`mt-0.5 text-[14px] font-semibold ${item.emphasis ? 'text-red-600 dark:text-red-400' : 'text-foreground'}`}>{item.value}</dd>
             </div>
           ))}
         </dl>
@@ -170,13 +170,13 @@ export function CustomerLoanDetailPage() {
                       </p>
                     )}
                     {Number(item.outstanding_fine_amount) > 0 && (
-                      <p className="text-[12px] text-rose-600 dark:text-rose-400">
+                      <p className="text-[12px] text-red-600 dark:text-red-400">
                         Còn phải thanh toán {formatCurrencyVnd(Number(item.outstanding_fine_amount))} ·{' '}
                         <NavLink to="/customer/fines" className="font-medium underline">Thanh toán</NavLink>
                       </p>
                     )}
                   </div>
-                  <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-medium ${itemTone.className}`}>{itemTone.label}</span>
+                  <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[12px] font-medium ${itemTone.className}`}>{itemTone.label}</span>
                 </li>
               );
             })}

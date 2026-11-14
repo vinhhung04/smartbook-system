@@ -14,7 +14,7 @@ import { otpStepCopy } from '@/lib/otp';
 type Field = 'full_name' | 'email' | 'username' | 'password' | 'confirm_password';
 type FieldErrors = Partial<Record<Field | 'agreed', string>>;
 const FIELD_ORDER: Field[] = ['full_name', 'email', 'username', 'password', 'confirm_password'];
-const LINK = 'rounded-sm font-semibold text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:text-indigo-300';
+const LINK = 'rounded-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-primary';
 
 /** Guidance only: the rule that blocks sign-up is still "at least 6 characters". */
 function strengthOf(password: string) {
@@ -25,8 +25,8 @@ function strengthOf(password: string) {
   if (/[^A-Za-z0-9]/.test(password)) score++;
   if (score <= 1) return { score, label: 'Yếu', bar: 'bg-red-500' };
   if (score === 2) return { score, label: 'Trung bình', bar: 'bg-amber-500' };
-  if (score === 3) return { score, label: 'Tốt', bar: 'bg-indigo-500' };
-  return { score, label: 'Mạnh', bar: 'bg-emerald-500' };
+  if (score === 3) return { score, label: 'Tốt', bar: 'bg-primary' };
+  return { score, label: 'Mạnh', bar: 'bg-primary' };
 }
 
 export function CustomerRegisterPage() {
@@ -147,7 +147,7 @@ export function CustomerRegisterPage() {
             <Link to={withReturnUrl('/customer/login', returnUrl)} className={LINK}>Đăng nhập</Link>
           </p>
           <p className="text-[14px]">
-            <Link to={returnUrl || '/'} className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60">
+            <Link to={returnUrl || '/'} className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               Tiếp tục xem sách mà không cần tài khoản
             </Link>
           </p>
@@ -160,7 +160,7 @@ export function CustomerRegisterPage() {
       <form className="space-y-5" noValidate onSubmit={handleSubmit} aria-busy={isSubmitting || undefined}>
         <AuthFormAlert message={formError} />
         <AuthField {...bind('full_name')} id="register-full-name" label="Họ tên" icon={User} placeholder="Nguyễn Văn A" autoComplete="name" />
-        <AuthField {...bind('email')} id="register-email" label="Email" icon={Mail} type="email" placeholder="ban@example.com" autoComplete="email" autoCapitalize="none" spellCheck={false} />
+        <AuthField {...bind('email')} id="register-email" label="Email" icon={Mail} type="email" placeholder="ten.ban@gmail.com" autoComplete="email" autoCapitalize="none" spellCheck={false} />
         <AuthField {...bind('username')} id="register-username" label="Tên đăng nhập" icon={AtSign} placeholder="ten_dang_nhap" autoComplete="username" autoCapitalize="none" spellCheck={false} />
         <div>
           <AuthPasswordField {...bind('password')} id="register-password" label="Mật khẩu" icon={Lock} placeholder="Tối thiểu 6 ký tự" autoComplete="new-password" />

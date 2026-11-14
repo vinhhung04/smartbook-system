@@ -7,7 +7,7 @@ import { AuthField, AuthFormAlert, AuthPasswordField, AuthPortalSwitch, AuthReme
 import { OtpVerificationStep } from '@/components/auth/otp-verification';
 import { otpStepCopy } from '@/lib/otp';
 
-const LINK = 'rounded-sm font-semibold text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 dark:text-indigo-300';
+const LINK = 'rounded-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-primary';
 
 export function CustomerLoginPage() {
   const navigate = useNavigate();
@@ -59,7 +59,7 @@ export function CustomerLoginPage() {
             <Link to={withReturnUrl('/customer/register', returnUrl)} className={LINK}>Tạo tài khoản bạn đọc</Link>
           </p>
           <p className="text-[14px]">
-            <Link to={returnUrl || '/'} className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60">
+            <Link to={returnUrl || '/'} className="rounded-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               Tiếp tục xem sách mà không cần đăng nhập
             </Link>
           </p>

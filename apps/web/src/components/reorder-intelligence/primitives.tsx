@@ -12,7 +12,7 @@ import { URGENCY_META } from './meta';
 
 export function Panel({ className, children, ...props }: React.ComponentProps<'section'>) {
   return (
-    <section className={cn('rounded-xl border border-border bg-card', className)} {...props}>
+    <section className={cn('rounded-2xl border border-border bg-card', className)} {...props}>
       {children}
     </section>
   );
@@ -36,18 +36,17 @@ export function Figure({ label, value, unit, hint, tone = 'default' }: {
 }) {
   return (
     <div className="min-w-0 px-4 py-3">
-      <p className="text-[12px] leading-snug text-muted-foreground">{label}</p>
+      <p className="text-[13px] leading-snug text-muted-foreground">{unit ? `${label}, ${unit}` : label}</p>
       <p className={cn(
-        'mt-1 text-[22px] font-semibold leading-none tracking-[-0.01em] tabular-nums',
-        tone === 'critical' && 'text-red-600 dark:text-red-400',
-        tone === 'warning' && 'text-amber-700 dark:text-amber-400',
+        'mt-1 font-display text-[26px] font-semibold leading-none tracking-[-0.01em] tabular-nums',
+        tone === 'critical' && 'text-red-700 dark:text-red-400',
+        tone === 'warning' && 'text-amber-700 dark:text-amber-300',
         tone === 'muted' && 'text-muted-foreground',
         tone === 'default' && 'text-foreground',
       )}>
         {value}
-        {unit ? <span className="ml-1 text-[13px] font-medium tracking-normal text-muted-foreground">{unit}</span> : null}
       </p>
-      {hint ? <p className="mt-1.5 text-[11.5px] leading-snug text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-[12px] leading-snug text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
@@ -100,16 +99,16 @@ export function FilterPills<T extends string>({ label, value, onChange, options,
             title={option.title}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 text-[12.5px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              'inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
               active
-                ? 'border-primary/40 bg-primary/10 font-medium text-foreground'
-                : 'border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                ? 'border-primary/30 bg-primary/[0.08] font-semibold text-primary'
+                : 'border-border bg-card text-foreground hover:bg-muted/60',
             )}
           >
             {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : null}
             <span className="whitespace-nowrap">{option.label}</span>
             {option.count !== undefined ? (
-              <span className={cn('rounded px-1 text-[11.5px] tabular-nums', active ? 'bg-primary/15 text-foreground' : 'bg-muted text-muted-foreground')}>
+              <span className={cn('rounded px-1 text-[12px] tabular-nums', active ? 'text-primary' : 'text-muted-foreground')}>
                 {option.count}
               </span>
             ) : null}
@@ -149,16 +148,14 @@ export function StateMessage({ icon: Icon, title, children, tone = 'neutral', on
 }) {
   return (
     <div role={tone === 'error' ? 'alert' : undefined} className="flex flex-col items-start gap-3 px-5 py-8 sm:flex-row sm:px-6">
-      <span className={cn(
-        'grid h-10 w-10 shrink-0 place-items-center rounded-xl border',
-        tone === 'error' && 'border-red-200 bg-red-50 text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400',
-        tone === 'notice' && 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300',
-        tone === 'neutral' && 'border-border bg-muted/50 text-muted-foreground',
-      )}>
-        <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-      </span>
+      <Icon className={cn(
+        'mt-0.5 h-5 w-5 shrink-0',
+        tone === 'error' && 'text-red-700 dark:text-red-400',
+        tone === 'notice' && 'text-amber-700 dark:text-amber-300',
+        tone === 'neutral' && 'text-muted-foreground',
+      )} aria-hidden="true" />
       <div className="min-w-0 max-w-[68ch] space-y-1.5">
-        <p className="text-[14.5px] font-semibold text-foreground">{title}</p>
+        <p className="font-display text-[17px] font-semibold tracking-tight text-foreground">{title}</p>
         {children ? <div className="space-y-2 text-[13px] leading-relaxed text-muted-foreground">{children}</div> : null}
         {onRetry ? (
           <Button type="button" size="sm" variant="outline" onClick={onRetry} className="mt-2">
