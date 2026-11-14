@@ -550,6 +550,9 @@ importers:
       multer:
         specifier: ^1.4.5-lts.1
         version: 1.4.5-lts.2
+      nodemailer:
+        specifier: 9.0.1
+        version: 9.0.1
       prisma:
         specifier: 5.21.0
         version: 5.21.0

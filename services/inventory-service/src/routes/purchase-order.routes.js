@@ -18,6 +18,11 @@ const {
   getPurchaseOrderReconciliation,
   createGoodsReceiptFromPurchaseOrder,
 } = require("../controllers/purchase-order.controller");
+const {
+  reviewSupplierResponse,
+  getDocumentReconciliation,
+  completeDocumentReconciliation,
+} = require("../controllers/procurement-workflow.controller");
 const { authorizeManagerRead, authorizePurchaseManager } = require("../middlewares/auth.middleware");
 
 const router = express.Router();
@@ -36,6 +41,9 @@ router.post("/", canWrite, createPurchaseOrder);
 router.get("/:id/reconciliation", canRead, getPurchaseOrderReconciliation);
 router.get("/:id/supplier-documents", canRead, getSupplierDocuments);
 router.get("/:id/shortage-reports", canRead, getShortageReports);
+router.get("/:id/document-reconciliation", canRead, getDocumentReconciliation);
+router.post("/:id/document-reconciliation/complete", canWrite, completeDocumentReconciliation);
+router.post("/:id/supplier-responses/:responseId/review", canApprove, reviewSupplierResponse);
 router.post("/:id/submit", canWrite, submitPurchaseOrder);
 router.post("/:id/approve", canApprove, approvePurchaseOrder);
 router.post("/:id/reject", canApprove, rejectPurchaseOrder);

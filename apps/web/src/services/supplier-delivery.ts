@@ -36,6 +36,8 @@ export interface CreateGoodsReceiptFromInvoicePayload {
     purchase_order_item_id?: string | null;
     variant_id: string;
     delivered_qty: number;
+    damaged_qty?: number;
+    rejected_qty?: number;
     unit_cost: number;
     location_id?: string | null;
     note?: string | null;
@@ -53,8 +55,11 @@ export const supplierDeliveryService = {
     return response.data as { data: SupplierDeliveryDetail };
   },
 
-  createGoodsReceiptFromInvoice: async (invoiceId: string, payload: CreateGoodsReceiptFromInvoicePayload) => {
-    const response = await inventoryAPI.post(`/api/supplier-deliveries/${invoiceId}/create-goods-receipt`, payload);
+  createGoodsReceiptFromInvoice: async (invoiceId: string, payload: CreateGoodsReceiptFromInvoicePayload, idempotencyKey?: string) => {
+    // Same key on a retry => the server returns the receipt it already created (no duplicate GRN).
+    const response = await inventoryAPI.post(`/api/supplier-deliveries/${invoiceId}/create-goods-receipt`, payload, {
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+    });
     return response.data as {
       message: string;
       data: {

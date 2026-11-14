@@ -3,6 +3,14 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText } = require("../utils/validation");
+const { registerDeliveryNote } = require("../services/procurement-document.service");
+const { assertInvoiceQtyWithinRemaining } = require("../services/procurement-receipt.service");
+const {
+  buildSupplierResponse,
+  recordFullAcceptance,
+  assertSupplierMayDeliver,
+  SHORTAGE_PROPOSAL_ACTIONS,
+} = require("../services/purchase-order-response.service");
 
 // Centralizing token lookup here means every portal endpoint (read + all writes) picks up
 // the expiry check below for free. A leaked/forwarded portal link stops working once
@@ -31,6 +39,7 @@ function mapPortalOrder(dispatch) {
       id: po.id,
       po_number: po.po_number,
       status: po.status,
+      supplier_response_status: po.supplier_response_status || null,
       expected_date: po.expected_date,
       warehouse: po.warehouses,
       supplier: po.suppliers,
@@ -53,6 +62,8 @@ function mapPortalOrder(dispatch) {
       status: invoice.status,
       invoice_date: invoice.invoice_date,
       expected_delivery_date: invoice.expected_delivery_date,
+      carrier_name: invoice.carrier_name || null,
+      deliverer_name: invoice.deliverer_name || null,
       supplier_note: invoice.supplier_note,
       raw_payload: invoice.raw_payload || {},
       goods_receipts: (invoice.goods_receipts || []).map((receipt) => ({
@@ -84,6 +95,11 @@ function mapPortalOrder(dispatch) {
       invoice_id: report.invoice_id,
       status: report.status,
       reason: report.reason,
+      discrepancy_type: report.discrepancy_type || "SHORTAGE",
+      supplier_proposed_action: report.supplier_proposed_action || null,
+      supplier_response_note: report.supplier_response_note || null,
+      resolution_action: report.resolution_action || null,
+      resolution_note: report.resolution_note || null,
       sent_at: report.sent_at,
       resolved_at: report.resolved_at,
       created_at: report.created_at,
@@ -98,8 +114,21 @@ function mapPortalOrder(dispatch) {
         ordered_qty: Number(item.ordered_qty || 0),
         received_qty: Number(item.received_qty || 0),
         shortage_qty: Number(item.shortage_qty || 0),
+        discrepancy_type: item.discrepancy_type || "SHORTAGE",
         note: item.note,
       })),
+    })),
+    supplier_responses: (po.purchase_order_supplier_responses || []).map((response) => ({
+      id: response.id,
+      decision: response.decision,
+      reason: response.reason,
+      proposed_delivery_date: response.proposed_delivery_date,
+      lines: response.lines,
+      has_variance: response.has_variance,
+      review_status: response.review_status,
+      review_note: response.review_note,
+      reviewed_at: response.reviewed_at,
+      created_at: response.created_at,
     })),
   };
 }
@@ -141,6 +170,7 @@ async function findDispatchByToken(token) {
             },
             orderBy: { created_at: "desc" },
           },
+          purchase_order_supplier_responses: { orderBy: { created_at: "desc" } },
         },
       },
     },
@@ -245,7 +275,7 @@ async function confirmPortalOrder(req, res) {
     const result = await prisma.$transaction(async (tx) => {
       const dispatch = await tx.supplier_order_dispatches.findFirst({
         where: getPortalTokenWhere(token),
-        include: { purchase_orders: true },
+        include: { purchase_orders: { include: { purchase_order_items: true } } },
       });
       if (!dispatch) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn trên cổng nhà cung cấp" };
       const po = dispatch.purchase_orders;
@@ -257,9 +287,10 @@ async function confirmPortalOrder(req, res) {
         where: { id: dispatch.id },
         data: { status: "ACKNOWLEDGED", acknowledged_at: new Date(), updated_at: new Date() },
       });
+      await recordFullAcceptance(tx, po, parseId(req.user?.id) || null);
       const updatedPo = await tx.purchase_orders.update({
         where: { id: po.id },
-        data: { status: "SUPPLIER_CONFIRMED", updated_at: new Date() },
+        data: { status: "SUPPLIER_CONFIRMED", supplier_response_status: "ACCEPTED", updated_at: new Date() },
       });
       await tx.inventory_audit_logs.create({
         data: {
@@ -283,11 +314,13 @@ async function confirmPortalOrder(req, res) {
 
 async function createPortalInvoice(req, res) {
   const token = normalizeText(req.params.token);
-  const invoiceNumber = normalizeText(req.body?.invoice_number);
+  // A delivery note may carry no invoice number (the formal invoice can be issued later as its
+  // own document); the delivery-note number then identifies the batch.
+  const invoiceNumber = normalizeText(req.body?.invoice_number) || normalizeText(req.body?.delivery_number);
   const sourceShortageReportId = parseId(req.body?.source_shortage_report_id || req.body?.shortage_report_id);
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
   if (!token) return res.status(400).json({ message: "Thiếu mã truy cập cổng nhà cung cấp" });
-  if (!invoiceNumber) return res.status(400).json({ message: "Thiếu invoice_number" });
+  if (!invoiceNumber) return res.status(400).json({ message: "Thiếu số phiếu giao hàng (delivery_number) hoặc invoice_number" });
   if (items.length === 0) return res.status(400).json({ message: "Thiếu items" });
 
   try {
@@ -301,11 +334,15 @@ async function createPortalInvoice(req, res) {
       if (!["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(po.status)) {
         return { invalid: true, message: "Đơn đặt hàng chưa sẵn sàng để lập hóa đơn nhà cung cấp" };
       }
+      const blocked = await assertSupplierMayDeliver(tx, po);
+      if (blocked) return blocked;
 
       if (po.status === "SENT_TO_SUPPLIER") {
+        // Shipping against a sent PO is an implicit acceptance of it as ordered.
+        await recordFullAcceptance(tx, po, parseId(req.user?.id) || null);
         await tx.purchase_orders.update({
           where: { id: po.id },
-          data: { status: "SUPPLIER_CONFIRMED", updated_at: new Date() },
+          data: { status: "SUPPLIER_CONFIRMED", supplier_response_status: "ACCEPTED", updated_at: new Date() },
         });
         await tx.supplier_order_dispatches.update({
           where: { id: dispatch.id },
@@ -328,9 +365,36 @@ async function createPortalInvoice(req, res) {
         if (!shortageReport) {
           return { invalid: true, statusCode: 404, message: "Không tìm thấy báo cáo thiếu hàng cho đơn này của nhà cung cấp" };
         }
-        shortageItemsByPoItemId = new Map(
-          shortageReport.supplier_shortage_report_items.map((item) => [String(item.purchase_order_item_id), item]),
-        );
+        // Lock the shortage report before reading what's already been redelivered against it:
+        // two redelivery notes submitted for the same report at the same instant must not both
+        // read "nothing redelivered yet" and each claim the full shortage_qty.
+        await tx.$queryRawUnsafe("SELECT id FROM supplier_shortage_reports WHERE id = $1::uuid FOR UPDATE", shortageReport.id);
+        // One PO line can carry several discrepancy rows (e.g. 2 missing + 3 damaged): the
+        // redelivery limit is their sum. Overage rows are excess goods, never "to redeliver".
+        shortageItemsByPoItemId = new Map();
+        for (const item of shortageReport.supplier_shortage_report_items) {
+          if ((item.discrepancy_type || "SHORTAGE") === "OVERAGE") continue;
+          const key = String(item.purchase_order_item_id);
+          const previous = shortageItemsByPoItemId.get(key);
+          shortageItemsByPoItemId.set(key, { ...item, shortage_qty: Number(previous?.shortage_qty || 0) + Number(item.shortage_qty || 0) });
+        }
+        // Subtract redelivery notes already submitted against this same report so the limit
+        // below is "what's still owed", not "what was ever owed".
+        const priorRedeliveryRows = await tx.supplier_delivery_invoice_items.findMany({
+          where: { purchase_order_item_id: { in: Array.from(shortageItemsByPoItemId.keys()) } },
+          select: { purchase_order_item_id: true, invoiced_qty: true, supplier_delivery_invoices: { select: { raw_payload: true } } },
+        });
+        const alreadyRedeliveredByPoItemId = new Map();
+        for (const row of priorRedeliveryRows) {
+          const payload = row.supplier_delivery_invoices?.raw_payload;
+          if (payload?.redelivery !== true || String(payload?.source_shortage_report_id) !== String(shortageReport.id)) continue;
+          const key = String(row.purchase_order_item_id);
+          alreadyRedeliveredByPoItemId.set(key, Number(alreadyRedeliveredByPoItemId.get(key) || 0) + Number(row.invoiced_qty || 0));
+        }
+        for (const [key, item] of shortageItemsByPoItemId) {
+          const already = Number(alreadyRedeliveredByPoItemId.get(key) || 0);
+          shortageItemsByPoItemId.set(key, { ...item, shortage_qty: Math.max(0, Number(item.shortage_qty || 0) - already) });
+        }
       }
 
       const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
@@ -346,8 +410,17 @@ async function createPortalInvoice(req, res) {
         if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
         if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
         seen.add(poItem.variant_id);
-        const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
-        if (invoicedQty > remainingQty) return { invalid: true, message: "Số lượng hóa đơn không được vượt số lượng còn lại của đơn đặt hàng" };
+        if (!sourceShortageReportId) {
+          // A redelivery note is bounded by its shortage report's shortage_qty below instead:
+          // it re-declares quantity an earlier note already claimed but that was never accepted.
+          const overBy = await assertInvoiceQtyWithinRemaining(tx, poItem, invoicedQty);
+          if (overBy !== null) {
+            return {
+              invalid: true,
+              message: `Số lượng hóa đơn không được vượt số lượng còn lại chưa lập hóa đơn của đơn đặt hàng (còn ${overBy})`,
+            };
+          }
+        }
         if (sourceShortageReportId) {
           const shortageItem = shortageItemsByPoItemId.get(String(poItem.id));
           if (!shortageItem) {
@@ -374,6 +447,8 @@ async function createPortalInvoice(req, res) {
           delivery_number: normalizeText(req.body?.delivery_number),
           invoice_date: req.body?.invoice_date ? new Date(req.body.invoice_date) : null,
           expected_delivery_date: req.body?.expected_delivery_date ? new Date(req.body.expected_delivery_date) : null,
+          carrier_name: normalizeText(req.body?.carrier_name),
+          deliverer_name: normalizeText(req.body?.deliverer_name),
           status: "SUBMITTED",
           supplier_note: normalizeText(req.body?.supplier_note),
           raw_payload: {
@@ -387,6 +462,7 @@ async function createPortalInvoice(req, res) {
       await tx.supplier_delivery_invoice_items.createMany({
         data: invoiceItems.map((item) => ({ ...item, invoice_id: invoice.id })),
       });
+      await registerDeliveryNote(tx, { delivery: invoice, items: invoiceItems, actorUserId: parseId(req.user?.id) || null });
       await tx.inventory_audit_logs.create({
         data: {
           actor_user_id: parseId(req.user?.id) || null,
@@ -565,6 +641,7 @@ async function getSupplierAccountOrders(req, res) {
               },
               orderBy: { created_at: "desc" },
             },
+            purchase_order_supplier_responses: { orderBy: { created_at: "desc" } },
           },
         },
       },
@@ -632,6 +709,122 @@ async function createSupplierAccountRedeliveryInvoice(req, res) {
   }
 }
 
+/** Supplier answers a sent PO: accept all, accept part (qty/price changes need SmartBook review) or reject. */
+async function respondSupplierAccountOrder(req, res) {
+  try {
+    const { dispatch } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    const userId = parseId(req.user?.id) || null;
+    const result = await prisma.$transaction(async (tx) => {
+      const po = await tx.purchase_orders.findUnique({
+        where: { id: dispatch.purchase_order_id },
+        include: { purchase_order_items: { orderBy: { id: "asc" } } },
+      });
+      if (!po || po.status !== "SENT_TO_SUPPLIER") {
+        return { invalid: true, statusCode: 409, message: "Chỉ phản hồi được đơn đang chờ nhà cung cấp xác nhận" };
+      }
+      let response;
+      try {
+        response = buildSupplierResponse(po, req.body || {});
+      } catch (error) {
+        return { invalid: true, statusCode: error.statusCode || 400, message: error.message };
+      }
+      await tx.purchase_order_supplier_responses.updateMany({
+        where: { purchase_order_id: po.id, review_status: "PENDING_REVIEW" },
+        data: { review_status: "WITHDRAWN" },
+      });
+      const row = await tx.purchase_order_supplier_responses.create({
+        data: {
+          purchase_order_id: po.id,
+          supplier_id: po.supplier_id,
+          decision: response.decision,
+          reason: response.reason,
+          proposed_delivery_date: response.proposed_delivery_date,
+          lines: response.lines,
+          has_variance: response.has_variance,
+          review_status: response.review_status,
+          responded_by_user_id: userId,
+        },
+      });
+      const confirmsNow = response.decision !== "REJECTED" && !response.has_variance;
+      await tx.purchase_orders.update({
+        where: { id: po.id },
+        data: {
+          supplier_response_status: response.decision,
+          ...(confirmsNow ? { status: "SUPPLIER_CONFIRMED" } : {}),
+          updated_at: new Date(),
+        },
+      });
+      await tx.supplier_order_dispatches.update({
+        where: { id: dispatch.id },
+        data: { status: "ACKNOWLEDGED", acknowledged_at: dispatch.acknowledged_at || new Date(), updated_at: new Date() },
+      });
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: userId,
+          action_name: "SUPPLIER_ORDER_RESPONDED",
+          entity_type: "PURCHASE_ORDER",
+          entity_id: po.id,
+          before_data: { status: po.status, supplier_response_status: po.supplier_response_status },
+          after_data: {
+            response_id: row.id,
+            decision: response.decision,
+            has_variance: response.has_variance,
+            review_status: response.review_status,
+            reason: response.reason,
+            lines: response.lines,
+            actor_party: "SUPPLIER",
+          },
+        },
+      });
+      return { data: row };
+    });
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    return res.status(201).json({ message: "Đã gửi phản hồi đơn hàng", data: result.data });
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while recording supplier order response:");
+  }
+}
+
+/** Supplier answers a discrepancy report with a proposal (redeliver, exchange, return, adjust documents...). */
+async function proposeSupplierAccountShortageAction(req, res) {
+  try {
+    const { supplier, dispatch } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
+    const reportId = parseId(req.params.reportId);
+    const action = String(req.body?.action || "").trim().toUpperCase();
+    const note = normalizeText(req.body?.note);
+    if (!SHORTAGE_PROPOSAL_ACTIONS.has(action)) {
+      return res.status(400).json({ message: "Đề xuất phải là REDELIVER, EXCHANGE, RETURN, DOCUMENT_ADJUSTMENT hoặc CANNOT_FULFILL" });
+    }
+    const report = await prisma.supplier_shortage_reports.findFirst({
+      where: { id: reportId || "", purchase_order_id: dispatch.purchase_order_id, supplier_id: supplier.id },
+    });
+    if (!report) return res.status(404).json({ message: "Không tìm thấy biên bản chênh lệch" });
+    if (!["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status)) {
+      return res.status(409).json({ message: "Biên bản chênh lệch đã được xử lý" });
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.supplier_shortage_reports.update({
+        where: { id: report.id },
+        data: { status: "ACKNOWLEDGED", supplier_proposed_action: action, supplier_response_note: note, updated_at: new Date() },
+      });
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: parseId(req.user?.id) || null,
+          action_name: "SUPPLIER_DISCREPANCY_PROPOSAL",
+          entity_type: "SUPPLIER_SHORTAGE_REPORT",
+          entity_id: report.id,
+          before_data: { status: report.status, supplier_proposed_action: report.supplier_proposed_action },
+          after_data: { status: row.status, supplier_proposed_action: action, note, purchase_order_id: report.purchase_order_id, actor_party: "SUPPLIER" },
+        },
+      });
+      return row;
+    });
+    return res.json({ message: "Đã gửi đề xuất xử lý chênh lệch", data: updated });
+  } catch (error) {
+    return handleSupplierAccountError(res, error, "Error while recording supplier discrepancy proposal:");
+  }
+}
+
 function supplierCannotPostStock(_req, res) {
   return res.status(403).json({ message: "Cổng nhà cung cấp không được tạo hoặc ghi sổ phiếu nhập kho" });
 }
@@ -650,4 +843,7 @@ module.exports = {
   cannotFulfillSupplierAccountShortage,
   createSupplierAccountRedeliveryInvoice,
   supplierCannotPostStock,
+  respondSupplierAccountOrder,
+  proposeSupplierAccountShortageAction,
+  findAuthenticatedSupplier,
 };

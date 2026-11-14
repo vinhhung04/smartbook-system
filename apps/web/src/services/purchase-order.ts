@@ -1,4 +1,5 @@
 import { inventoryAPI } from './http-clients';
+import type { SupplierOrderResponse } from './supplier-portal';
 
 export type PurchaseOrderStatus =
   | 'DRAFT'
@@ -80,6 +81,8 @@ export interface PurchaseOrderDetail extends PurchaseOrderSummary {
     total_quantity: number;
   }>;
   timeline: Array<{ label: string; completed: boolean; time?: string | null }>;
+  supplier_response_status?: string | null;
+  supplier_responses?: SupplierOrderResponse[];
 }
 
 export interface SupplierDispatch {
@@ -117,6 +120,8 @@ export interface SupplierInvoice {
   delivery_number?: string | null;
   invoice_date?: string | null;
   expected_delivery_date?: string | null;
+  carrier_name?: string | null;
+  deliverer_name?: string | null;
   status: string;
   supplier_note?: string | null;
   created_at: string;
@@ -132,6 +137,11 @@ export interface ShortageReport {
   invoice_id?: string | null;
   status: string;
   reason?: string | null;
+  discrepancy_type?: string;
+  supplier_proposed_action?: string | null;
+  supplier_response_note?: string | null;
+  resolution_action?: string | null;
+  resolution_note?: string | null;
   sent_at?: string | null;
   resolved_at?: string | null;
   created_at: string;
@@ -144,6 +154,7 @@ export interface ShortageReport {
     ordered_qty: number;
     received_qty: number;
     shortage_qty: number;
+    discrepancy_type?: string;
     note?: string | null;
   }>;
 }
@@ -297,8 +308,8 @@ export const purchaseOrderService = {
     return response.data;
   },
 
-  resolveShortageReport: async (poId: string, reportId: string) => {
-    const response = await inventoryAPI.post(`/api/purchase-orders/${poId}/shortage-reports/${reportId}/resolve`);
+  resolveShortageReport: async (poId: string, reportId: string, resolution?: { resolution_action: string; resolution_note?: string }) => {
+    const response = await inventoryAPI.post(`/api/purchase-orders/${poId}/shortage-reports/${reportId}/resolve`, resolution);
     return response.data;
   },
 

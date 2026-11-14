@@ -5,6 +5,9 @@ const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText, normalizeIsbn13 } = require("../utils/validation");
 const { claimApprovedOrderForDispatch } = require("../services/purchase-order-dispatch.service");
+const { registerDeliveryNote } = require("../services/procurement-document.service");
+const { recordFullAcceptance, RESOLUTION_ACTIONS } = require("../services/purchase-order-response.service");
+const { assertInvoiceQtyWithinRemaining } = require("../services/procurement-receipt.service");
 const {
   getReadableWarehouseIds,
   canWriteWarehouse,
@@ -224,6 +227,7 @@ function mapPurchaseOrderDetail(po) {
     supplier: po.suppliers || null,
     warehouse: po.warehouses || null,
     status: po.status,
+    supplier_response_status: po.supplier_response_status || null,
     ordered_by_user_id: po.ordered_by_user_id,
     approved_by_user_id: po.approved_by_user_id,
     order_date: po.order_date,
@@ -242,6 +246,19 @@ function mapPurchaseOrderDetail(po) {
     items,
     goods_receipts: (po.goods_receipts || []).map(mapGoodsReceiptSummary),
     timeline: buildTimeline(po, totals),
+    supplier_responses: (po.purchase_order_supplier_responses || []).map((response) => ({
+      id: response.id,
+      decision: response.decision,
+      reason: response.reason,
+      proposed_delivery_date: response.proposed_delivery_date,
+      lines: response.lines,
+      has_variance: response.has_variance,
+      review_status: response.review_status,
+      review_note: response.review_note,
+      reviewed_by_user_id: response.reviewed_by_user_id,
+      reviewed_at: response.reviewed_at,
+      created_at: response.created_at,
+    })),
   };
 }
 
@@ -407,6 +424,8 @@ function mapSupplierInvoice(invoice) {
     delivery_number: invoice.delivery_number,
     invoice_date: invoice.invoice_date,
     expected_delivery_date: invoice.expected_delivery_date,
+    carrier_name: invoice.carrier_name || null,
+    deliverer_name: invoice.deliverer_name || null,
     status: invoice.status,
     supplier_note: invoice.supplier_note,
     created_at: invoice.created_at,
@@ -436,6 +455,11 @@ function mapShortageReport(report) {
     invoice_id: report.invoice_id,
     status: report.status,
     reason: report.reason,
+    discrepancy_type: report.discrepancy_type || "SHORTAGE",
+    supplier_proposed_action: report.supplier_proposed_action || null,
+    supplier_response_note: report.supplier_response_note || null,
+    resolution_action: report.resolution_action || null,
+    resolution_note: report.resolution_note || null,
     sent_at: report.sent_at,
     resolved_at: report.resolved_at,
     created_at: report.created_at,
@@ -448,6 +472,7 @@ function mapShortageReport(report) {
       ordered_qty: Number(item.ordered_qty || 0),
       received_qty: Number(item.received_qty || 0),
       shortage_qty: Number(item.shortage_qty || 0),
+      discrepancy_type: item.discrepancy_type || "SHORTAGE",
       note: item.note,
     })),
   };
@@ -488,9 +513,12 @@ async function createSupplierInvoice(tx, po, payload, userId) {
     if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
     seen.add(poItem.variant_id);
 
-    const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
-    if (invoicedQty > remainingQty) {
-      return { invalid: true, message: "Số lượng hóa đơn không được vượt số lượng còn lại của đơn đặt hàng" };
+    const overBy = await assertInvoiceQtyWithinRemaining(tx, poItem, invoicedQty);
+    if (overBy !== null) {
+      return {
+        invalid: true,
+        message: `Số lượng hóa đơn không được vượt số lượng còn lại chưa lập hóa đơn của đơn đặt hàng (còn ${overBy})`,
+      };
     }
 
     invoiceItems.push({
@@ -527,6 +555,7 @@ async function createSupplierInvoice(tx, po, payload, userId) {
   await tx.supplier_delivery_invoice_items.createMany({
     data: invoiceItems.map((item) => ({ ...item, invoice_id: invoice.id })),
   });
+  await registerDeliveryNote(tx, { delivery: invoice, items: invoiceItems, actorUserId: userId, recordedBy: "SMARTBOOK" });
 
   await tx.inventory_audit_logs.create({
     data: {
@@ -607,7 +636,10 @@ async function getPurchaseOrderById(req, res) {
   try {
     const po = await prisma.purchase_orders.findUnique({
       where: { id },
-      include: getPurchaseOrderInclude(),
+      include: {
+        ...getPurchaseOrderInclude(),
+        purchase_order_supplier_responses: { orderBy: { created_at: "desc" } },
+      },
     });
     if (!po) return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
 
@@ -886,7 +918,9 @@ async function cancelPurchaseOrder(req, res) {
       const scopeError = await checkWarehouseWriteOrFail(req.user, po.warehouse_id);
       if (scopeError) return scopeError;
 
-      if (![PO_STATUSES.DRAFT, PO_STATUSES.REJECTED, PO_STATUSES.PENDING_APPROVAL, PO_STATUSES.APPROVED].includes(po.status)) {
+      const supplierDeclined = po.status === PO_STATUSES.SENT_TO_SUPPLIER
+        && ["REJECTED", "CHANGES_REJECTED"].includes(po.supplier_response_status);
+      if (![PO_STATUSES.DRAFT, PO_STATUSES.REJECTED, PO_STATUSES.PENDING_APPROVAL, PO_STATUSES.APPROVED].includes(po.status) && !supplierDeclined) {
         return { invalid: true, message: "Không thể hủy đơn đặt hàng ở trạng thái hiện tại" };
       }
       const totalReceived = po.purchase_order_items.reduce((sum, item) => sum + Number(item.received_qty || 0), 0);
@@ -962,6 +996,11 @@ async function sendToSupplier(req, res) {
         }
         return { invalid: true, message: "Trạng thái đơn đặt hàng đã thay đổi trong lúc gửi" };
       }
+
+      await tx.purchase_orders.update({
+        where: { id },
+        data: { supplier_response_status: "PENDING_SUPPLIER" },
+      });
 
       const portalToken = makePortalToken();
       const channel = requestedChannel || (po.suppliers?.email ? "EMAIL" : "MOCK");
@@ -1065,9 +1104,10 @@ async function supplierConfirm(req, res) {
         data: { status: "ACKNOWLEDGED", acknowledged_at: new Date(), updated_at: new Date() },
       });
 
+      await recordFullAcceptance(tx, po, userId);
       const updated = await tx.purchase_orders.update({
         where: { id },
-        data: { status: PO_STATUSES.SUPPLIER_CONFIRMED, updated_at: new Date() },
+        data: { status: PO_STATUSES.SUPPLIER_CONFIRMED, supplier_response_status: "ACCEPTED", updated_at: new Date() },
       });
 
       await audit(tx, userId, "SUPPLIER_ORDER_ACKNOWLEDGED", id, {
@@ -1208,10 +1248,16 @@ async function updateShortageReportStatus(req, res, targetStatus) {
         return { invalid: true, message: "Không thể xử lý báo cáo thiếu hàng ở trạng thái hiện tại" };
       }
 
+      const resolutionAction = String(req.body?.resolution_action || "").trim().toUpperCase() || null;
+      if (targetStatus === "RESOLVED" && resolutionAction && !RESOLUTION_ACTIONS.has(resolutionAction)) {
+        return { invalid: true, message: "Kết quả xử lý không hợp lệ" };
+      }
+      const resolutionNote = normalizeText(req.body?.resolution_note);
       const updated = await tx.supplier_shortage_reports.update({
         where: { id: reportId },
         data: {
           status: targetStatus,
+          ...(targetStatus === "RESOLVED" ? { resolution_action: resolutionAction || "OTHER", resolution_note: resolutionNote } : {}),
           updated_at: new Date(),
           ...(targetStatus === "SENT_TO_SUPPLIER" ? { sent_at: new Date() } : {}),
           ...(targetStatus === "RESOLVED" ? { resolved_at: new Date() } : {}),
@@ -1225,7 +1271,11 @@ async function updateShortageReportStatus(req, res, targetStatus) {
           entity_type: "SUPPLIER_SHORTAGE_REPORT",
           entity_id: reportId,
           before_data: { status: report.status },
-          after_data: { status: updated.status, purchase_order_id: id },
+          after_data: {
+            status: updated.status,
+            purchase_order_id: id,
+            ...(targetStatus === "RESOLVED" ? { resolution_action: updated.resolution_action, resolution_note: updated.resolution_note } : {}),
+          },
         },
       });
 

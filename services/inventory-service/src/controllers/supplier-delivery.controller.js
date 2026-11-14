@@ -3,6 +3,8 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 const { parseId, toInt, normalizeText } = require("../utils/validation");
+const { computeLineOutcome } = require("../services/procurement-receipt.service");
+const { registerDeliveryNote } = require("../services/procurement-document.service");
 const {
   getReadableWarehouseIds,
   canWriteWarehouse,
@@ -35,8 +37,11 @@ function mapInvoice(invoice) {
     delivery_number: invoice.delivery_number,
     invoice_date: invoice.invoice_date,
     expected_delivery_date: invoice.expected_delivery_date,
+    carrier_name: invoice.carrier_name || null,
+    deliverer_name: invoice.deliverer_name || null,
     status: invoice.status,
     supplier_note: invoice.supplier_note,
+    goods_receipts: (invoice.goods_receipts || []).map((receipt) => ({ id: receipt.id, receipt_number: receipt.receipt_number, status: receipt.status })),
     created_at: invoice.created_at,
     updated_at: invoice.updated_at,
     items: (invoice.supplier_delivery_invoice_items || []).map((item) => {
@@ -65,6 +70,7 @@ function mapInvoice(invoice) {
 function invoiceInclude() {
   return {
     suppliers: { select: { id: true, name: true } },
+    goods_receipts: { select: { id: true, receipt_number: true, status: true }, orderBy: { created_at: "desc" } },
     purchase_orders: {
       select: {
         id: true,
@@ -204,6 +210,8 @@ async function createSupplierDelivery(req, res) {
           delivery_number: normalizeText(req.body?.delivery_number),
           invoice_date: req.body?.invoice_date ? new Date(req.body.invoice_date) : null,
           expected_delivery_date: req.body?.expected_delivery_date ? new Date(req.body.expected_delivery_date) : null,
+          carrier_name: normalizeText(req.body?.carrier_name),
+          deliverer_name: normalizeText(req.body?.deliverer_name),
           status: "SUBMITTED",
           supplier_note: normalizeText(req.body?.supplier_note),
           raw_payload: req.body || {},
@@ -214,6 +222,7 @@ async function createSupplierDelivery(req, res) {
       await tx.supplier_delivery_invoice_items.createMany({
         data: invoiceItems.map((item) => ({ ...item, invoice_id: invoice.id })),
       });
+      await registerDeliveryNote(tx, { delivery: invoice, items: invoiceItems, actorUserId: userId, recordedBy: "SMARTBOOK" });
 
       await audit(tx, userId, "SUPPLIER_INVOICE_CREATED", "SUPPLIER_DELIVERY_INVOICE", invoice.id, {
         purchase_order_id: po.id,
@@ -239,11 +248,23 @@ async function createGoodsReceiptFromInvoice(req, res) {
   const warehouseId = parseId(req.body?.warehouse_id);
   const note = normalizeText(req.body?.note);
   const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  // Retry-safe: the same Idempotency-Key always returns the receipt created the first time.
+  const idempotencyKey = normalizeText(req.get?.("Idempotency-Key") || req.body?.idempotency_key)?.slice(0, 100) || null;
 
   if (!invoiceId) return res.status(400).json({ message: "Mã lần giao hàng của nhà cung cấp không hợp lệ" });
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
   if (!warehouseId) return res.status(400).json({ message: "Thiếu warehouse_id" });
   if (items.length === 0) return res.status(400).json({ message: "Thiếu items" });
+
+  if (idempotencyKey) {
+    const previous = await prisma.goods_receipts.findUnique({ where: { idempotency_key: idempotencyKey } });
+    if (previous) {
+      if (previous.supplier_delivery_invoice_id !== invoiceId) {
+        return res.status(409).json({ message: "Idempotency-Key đã được dùng cho một phiếu giao khác" });
+      }
+      return res.status(200).json({ message: "Goods receipt already created for this request", data: mapCreatedReceipt(previous, invoiceId), idempotent: true });
+    }
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -268,19 +289,31 @@ async function createGoodsReceiptFromInvoice(req, res) {
         return { invalid: true, message: "warehouse_id phải trùng kho của đơn đặt hàng" };
       }
 
+      // One delivery note = one goods receipt. A second (non-cancelled) receipt for the same
+      // delivery would let the same goods be counted twice.
+      const existing = await tx.goods_receipts.findFirst({
+        where: { supplier_delivery_invoice_id: invoice.id, status: { not: "CANCELLED" } },
+        select: { id: true, receipt_number: true, status: true },
+      });
+      if (existing) {
+        return {
+          invalid: true,
+          statusCode: 409,
+          message: `Phiếu giao này đã có phiếu nhập ${existing.receipt_number} (${existing.status}). Hủy phiếu đó trước nếu cần lập lại.`,
+          existing_goods_receipt_id: existing.id,
+        };
+      }
+
       const invoiceItemsById = new Map(invoice.supplier_delivery_invoice_items.map((item) => [String(item.id), item]));
       const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
       const receiptItems = [];
-      const shortageItems = [];
       const seen = new Set();
 
       for (const rawLine of items) {
         const invoiceItemId = parseId(rawLine?.invoice_item_id);
         const invoiceItem = invoiceItemsById.get(String(invoiceItemId));
-        const deliveredQty = toInt(rawLine?.delivered_qty ?? rawLine?.quantity);
         const unitCost = Number(rawLine?.unit_cost ?? invoiceItem?.unit_cost ?? 0);
         if (!invoiceItem) return { invalid: true, message: "invoice_item_id không hợp lệ" };
-        if (!deliveredQty || deliveredQty <= 0) return { invalid: true, message: "Mỗi dòng phiếu nhập phải có delivered_qty > 0" };
         if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng phiếu nhập phải có unit_cost >= 0" };
         if (seen.has(invoiceItem.variant_id)) return { invalid: true, message: "Phiếu nhập kho có ấn bản bị lặp" };
         seen.add(invoiceItem.variant_id);
@@ -289,36 +322,32 @@ async function createGoodsReceiptFromInvoice(req, res) {
         if (!poItem || poItem.variant_id !== invoiceItem.variant_id) {
           return { invalid: true, message: "Ấn bản trong hóa đơn không thuộc đơn đặt hàng" };
         }
-        const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
-        if (deliveredQty > remainingQty) {
-          return { invalid: true, message: "Không thể nhận vượt số lượng còn lại của đơn đặt hàng" };
-        }
-        if (deliveredQty > Number(invoiceItem.invoiced_qty || 0)) {
-          return { invalid: true, message: "Không thể nhận vượt số lượng trên hóa đơn của nhà cung cấp" };
+        let outcome;
+        try {
+          outcome = computeLineOutcome({
+            noteQty: invoiceItem.invoiced_qty,
+            poRemainingQty: Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0),
+            delivered: rawLine?.delivered_qty ?? rawLine?.quantity,
+            damaged: rawLine?.damaged_qty,
+            rejected: rawLine?.rejected_qty,
+          });
+        } catch (error) {
+          return { invalid: true, statusCode: error.statusCode || 400, message: error.message };
         }
 
-        const locationId = parseId(rawLine?.location_id);
         receiptItems.push({
-          invoice_item_id: invoiceItem.id,
-          purchase_order_item_id: poItem.id,
           variant_id: invoiceItem.variant_id,
-          location_id: locationId,
-          quantity: deliveredQty,
+          location_id: parseId(rawLine?.location_id),
+          quantity: outcome.accepted,
+          delivered_qty: outcome.delivered,
+          damaged_qty: outcome.damaged,
+          rejected_qty: outcome.rejected,
           unit_cost: unitCost,
           note: normalizeText(rawLine?.note),
         });
-
-        const shortageQty = Math.max(0, remainingQty - deliveredQty, Number(invoiceItem.invoiced_qty || 0) - deliveredQty);
-        if (shortageQty > 0) {
-          shortageItems.push({
-            purchase_order_item_id: poItem.id,
-            variant_id: invoiceItem.variant_id,
-            ordered_qty: Number(poItem.ordered_qty || 0),
-            received_qty: Number(poItem.received_qty || 0) + deliveredQty,
-            shortage_qty: shortageQty,
-            note: normalizeText(rawLine?.note) || `Supplier delivered ${deliveredQty}/${remainingQty}`,
-          });
-        }
+      }
+      if (receiptItems.every((item) => item.delivered_qty === 0)) {
+        return { invalid: true, message: "Chưa có dòng nào thực nhận — không cần lập phiếu nhập" };
       }
 
       const locationIds = [...new Set(receiptItems.map((item) => item.location_id).filter(Boolean))];
@@ -339,6 +368,7 @@ async function createGoodsReceiptFromInvoice(req, res) {
           supplier_delivery_invoice_id: invoice.id,
           source_type: "SUPPLIER_INVOICE",
           source_reference_id: invoice.id,
+          idempotency_key: idempotencyKey,
           status: "DRAFT",
           received_by_user_id: userId,
           note: note || `Created from supplier invoice ${invoice.invoice_number}`,
@@ -346,121 +376,54 @@ async function createGoodsReceiptFromInvoice(req, res) {
       });
 
       await tx.goods_receipt_items.createMany({
-        data: receiptItems.map((item) => ({
-          goods_receipt_id: receipt.id,
-          variant_id: item.variant_id,
-          location_id: item.location_id,
-          quantity: item.quantity,
-          unit_cost: item.unit_cost,
-          note: item.note,
-        })),
+        data: receiptItems.map((item) => ({ goods_receipt_id: receipt.id, ...item })),
       });
 
-      for (const item of receiptItems) {
-        await tx.supplier_delivery_invoice_items.update({
-          where: { id: item.invoice_item_id },
-          data: {
-            delivered_qty: item.quantity,
-            accepted_qty: { increment: item.quantity },
-            updated_at: new Date(),
-          },
-        });
-      }
-
-      let shortageReport = null;
-      if (shortageItems.length > 0) {
-        shortageReport = await tx.supplier_shortage_reports.create({
-          data: {
-            purchase_order_id: po.id,
-            supplier_id: invoice.supplier_id,
-            goods_receipt_id: receipt.id,
-            invoice_id: invoice.id,
-            status: "OPEN",
-            reason: "Supplier delivered less than remaining purchase order quantity or invoice quantity",
-            created_by_user_id: userId,
-          },
-        });
-        await tx.supplier_shortage_report_items.createMany({
-          data: shortageItems.map((item) => ({
-            shortage_report_id: shortageReport.id,
-            ...item,
-          })),
-        });
-        await tx.purchase_orders.update({
-          where: { id: po.id },
-          data: { status: "SHORTAGE_REPORTED", updated_at: new Date() },
-        });
-        await audit(tx, userId, "SUPPLIER_SHORTAGE_REPORTED", "SUPPLIER_SHORTAGE_REPORT", shortageReport.id, {
-          purchase_order_id: po.id,
-          invoice_id: invoice.id,
-          goods_receipt_id: receipt.id,
-          line_count: shortageItems.length,
-        });
-      }
-
-      // A prior invoice for this same PO may have left an open shortage report. Once every
-      // line it flagged as short is now fully received (across this delivery plus whatever
-      // was already received), close it out — otherwise it sits at ACKNOWLEDGED forever even
-      // though the shortage is gone, and staff have to remember to resolve it by hand.
-      const openShortageReports = await tx.supplier_shortage_reports.findMany({
-        where: { purchase_order_id: po.id, status: { in: ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"] } },
-        include: { supplier_shortage_report_items: true },
-      });
-      for (const sourceReport of openShortageReports) {
-        const deliveredNowByPoItemId = new Map(
-          receiptItems.map((item) => [String(item.purchase_order_item_id), item.quantity]),
-        );
-        const stillShort = sourceReport.supplier_shortage_report_items.some((reportItem) => {
-          const poItem = poItemsById.get(String(reportItem.purchase_order_item_id));
-          const deliveredNow = deliveredNowByPoItemId.get(String(reportItem.purchase_order_item_id)) || 0;
-          const remaining = Number(poItem?.ordered_qty || 0) - Number(poItem?.received_qty || 0) - deliveredNow;
-          return remaining > 0;
-        });
-        if (!stillShort) {
-          await tx.supplier_shortage_reports.update({
-            where: { id: sourceReport.id },
-            data: { status: "RESOLVED", resolved_at: new Date(), updated_at: new Date() },
-          });
-          await audit(tx, userId, "SUPPLIER_SHORTAGE_RESOLVED", "SUPPLIER_SHORTAGE_REPORT", sourceReport.id, {
-            purchase_order_id: po.id,
-            resolved_by_invoice_id: invoice.id,
-            goods_receipt_id: receipt.id,
-          });
-        }
-      }
-
-      await tx.supplier_delivery_invoices.update({
-        where: { id: invoice.id },
-        data: { status: shortageItems.length > 0 ? "SHORTAGE_REPORTED" : "RECEIVED", updated_at: new Date() },
-      });
-
+      // Discrepancies (missing / damaged / rejected / overage) are recorded when the receipt is
+      // POSTED, from the final counted quantities — not here, where the count can still change.
       await audit(tx, userId, "GOODS_RECEIPT_CREATED_FROM_SUPPLIER_INVOICE", "GOODS_RECEIPT", receipt.id, {
         purchase_order_id: po.id,
         invoice_id: invoice.id,
         receipt_number: receipt.receipt_number,
-        total_quantity: receiptItems.reduce((sum, item) => sum + item.quantity, 0),
-        shortage_report_id: shortageReport?.id || null,
+        total_delivered_qty: receiptItems.reduce((sum, item) => sum + item.delivered_qty, 0),
+        total_accepted_qty: receiptItems.reduce((sum, item) => sum + item.quantity, 0),
+        total_damaged_qty: receiptItems.reduce((sum, item) => sum + item.damaged_qty, 0),
+        total_rejected_qty: receiptItems.reduce((sum, item) => sum + item.rejected_qty, 0),
       });
 
-      return { data: { receipt, shortageReport } };
+      return { data: { receipt } };
     });
 
-    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    if (result.invalid) {
+      return res.status(result.statusCode || 400).json({
+        message: result.message,
+        ...(result.existing_goods_receipt_id ? { existing_goods_receipt_id: result.existing_goods_receipt_id } : {}),
+      });
+    }
     return res.status(201).json({
       message: "Goods receipt draft created from supplier invoice",
-      data: {
-        id: result.data.receipt.id,
-        receipt_number: result.data.receipt.receipt_number,
-        status: result.data.receipt.status,
-        purchase_order_id: result.data.receipt.purchase_order_id,
-        supplier_delivery_invoice_id: invoiceId,
-        shortage_report_id: result.data.shortageReport?.id || null,
-      },
+      data: mapCreatedReceipt(result.data.receipt, invoiceId),
     });
   } catch (error) {
+    if (error.code === "P2002" && idempotencyKey) {
+      const previous = await prisma.goods_receipts.findUnique({ where: { idempotency_key: idempotencyKey } });
+      if (previous) return res.status(200).json({ message: "Goods receipt already created for this request", data: mapCreatedReceipt(previous, invoiceId), idempotent: true });
+    }
     console.error("Error while creating goods receipt from supplier invoice:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
+}
+
+function mapCreatedReceipt(receipt, invoiceId) {
+  return {
+    id: receipt.id,
+    receipt_number: receipt.receipt_number,
+    status: receipt.status,
+    purchase_order_id: receipt.purchase_order_id,
+    supplier_delivery_invoice_id: invoiceId,
+    // Kept for API compatibility: discrepancy reports are now created when the receipt is posted.
+    shortage_report_id: null,
+  };
 }
 
 module.exports = {

@@ -39,6 +39,21 @@ export const supplierAccountService = {
     return response.data;
   },
 
+  respond: async (poId: string, payload: {
+    decision: 'ACCEPTED' | 'PARTIALLY_ACCEPTED' | 'REJECTED';
+    reason?: string;
+    proposed_delivery_date?: string;
+    lines?: { purchase_order_item_id: string; confirmed_qty: number; confirmed_unit_cost: number }[];
+  }) => {
+    const response = await inventoryAPI.post(`/api/supplier-account/orders/${poId}/respond`, payload);
+    return response.data;
+  },
+
+  proposeShortageAction: async (poId: string, reportId: string, action: string, note?: string) => {
+    const response = await inventoryAPI.post(`/api/supplier-account/orders/${poId}/shortage-reports/${reportId}/propose`, { action, note });
+    return response.data;
+  },
+
   createRedeliveryInvoice: async (poId: string, reportId: string, payload: SupplierPortalRedeliveryPayload) => {
     const response = await inventoryAPI.post(`/api/supplier-account/orders/${poId}/shortage-reports/${reportId}/redelivery-invoice`, payload);
     return response.data;

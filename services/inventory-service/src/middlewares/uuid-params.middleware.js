@@ -15,6 +15,10 @@ const UUID_PARAMS = [
   'variantId',
   'pickingTaskId',
   'compartmentId',
+  'docId',
+  'fileId',
+  'grId',
+  'responseId',
 ];
 
 function rejectInvalidUuidParams(router) {
