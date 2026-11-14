@@ -49,7 +49,8 @@ export function BookCoverPlaceholder({ category, title, imageUrl }: BookCoverPla
     <div className={`relative aspect-[4/5] w-full overflow-hidden rounded-[11px] border border-white/80 dark:border-white/10 bg-gradient-to-b ${style.gradient}`}>
       {imageUrl && !imgError ? (
         <img
-          src={imageUrl}
+          // Some sources (Google Books) return http:// cover URLs, which the CSP's https-only img-src blocks.
+          src={imageUrl.replace(/^http:\/\//i, 'https://')}
           alt={title}
           className="h-full w-full object-cover"
           onError={() => setImgError(true)}

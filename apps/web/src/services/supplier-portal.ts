@@ -12,6 +12,7 @@ export interface SupplierPortalOrder {
     id: string;
     po_number: string;
     status: string;
+    supplier_response_status?: string | null;
     expected_date?: string | null;
     warehouse?: { id: string; code?: string | null; name: string } | null;
     supplier?: { id: string; code?: string | null; name: string } | null;
@@ -34,6 +35,8 @@ export interface SupplierPortalOrder {
     status: string;
     invoice_date?: string | null;
     expected_delivery_date?: string | null;
+    carrier_name?: string | null;
+    deliverer_name?: string | null;
     supplier_note?: string | null;
     raw_payload?: Record<string, unknown>;
     goods_receipts?: Array<{
@@ -58,6 +61,29 @@ export interface SupplierPortalOrder {
     }>;
   }>;
   shortage_reports: SupplierPortalShortageReport[];
+  supplier_responses?: SupplierOrderResponse[];
+}
+
+export interface SupplierOrderResponseLine {
+  purchase_order_item_id: string;
+  variant_id: string;
+  ordered_qty: number;
+  unit_cost: number;
+  confirmed_qty: number;
+  confirmed_unit_cost: number;
+}
+
+export interface SupplierOrderResponse {
+  id: string;
+  decision: 'ACCEPTED' | 'PARTIALLY_ACCEPTED' | 'REJECTED';
+  reason?: string | null;
+  proposed_delivery_date?: string | null;
+  lines: SupplierOrderResponseLine[];
+  has_variance: boolean;
+  review_status: 'NOT_REQUIRED' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN';
+  review_note?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
 }
 
 export interface SupplierPortalShortageReportItem {
@@ -70,6 +96,7 @@ export interface SupplierPortalShortageReportItem {
   ordered_qty: number;
   received_qty: number;
   shortage_qty: number;
+  discrepancy_type?: string;
   note?: string | null;
 }
 
@@ -81,6 +108,11 @@ export interface SupplierPortalShortageReport {
   invoice_id?: string | null;
   status: string;
   reason?: string | null;
+  discrepancy_type?: string;
+  supplier_proposed_action?: string | null;
+  supplier_response_note?: string | null;
+  resolution_action?: string | null;
+  resolution_note?: string | null;
   sent_at?: string | null;
   resolved_at?: string | null;
   created_at: string;
@@ -89,8 +121,10 @@ export interface SupplierPortalShortageReport {
 }
 
 export interface SupplierPortalInvoicePayload {
-  invoice_number: string;
+  invoice_number?: string;
   delivery_number?: string;
+  carrier_name?: string;
+  deliverer_name?: string;
   invoice_date?: string;
   expected_delivery_date?: string;
   supplier_note?: string;

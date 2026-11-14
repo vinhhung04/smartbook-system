@@ -8,7 +8,8 @@ export function CatalogBookThumbnail({ category, title, imageUrl }: { category?:
   if (imageUrl && !imgError) {
     return (
       <img
-        src={imageUrl}
+        // Some sources (Google Books) return http:// cover URLs, which the CSP's https-only img-src blocks.
+        src={imageUrl.replace(/^http:\/\//i, 'https://')}
         alt={title}
         className="h-11 w-8 shrink-0 rounded-md border border-border object-cover"
         onError={() => setImgError(true)}

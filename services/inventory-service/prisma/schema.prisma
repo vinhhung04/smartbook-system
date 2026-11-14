@@ -100,6 +100,7 @@ model book_variants {
   purchase_order_items purchase_order_items[]
   supplier_delivery_invoice_items supplier_delivery_invoice_items[]
   supplier_shortage_report_items supplier_shortage_report_items[]
+  procurement_document_lines procurement_document_lines[]
   stock_alerts         stock_alerts[]
   stock_audit_lines    stock_audit_lines[]
   stock_balances       stock_balances[]
@@ -169,6 +170,11 @@ model goods_receipt_items {
   location_id      String?        @db.Uuid
   quantity         Int
   actual_quantity  Int?
+  /// Supplier receiving outcome. For supplier receipts `quantity` is the ACCEPTED qty posted to stock;
+  /// delivered = physically arrived, damaged/rejected are recorded but never posted.
+  delivered_qty    Int?
+  damaged_qty      Int            @default(0)
+  rejected_qty     Int            @default(0)
   unit_cost        Decimal        @default(0) @db.Decimal(12, 2)
   condition_grade  String         @default("NEW") @db.VarChar(20)
   note             String?
@@ -176,6 +182,7 @@ model goods_receipt_items {
   locations        locations?     @relation(fields: [location_id], references: [id], onUpdate: NoAction)
   book_variants    book_variants  @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
   smart_receiving_items smart_receiving_items[]
+  supplier_return_items supplier_return_items[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -187,6 +194,7 @@ model goods_receipts {
   source_type         String                @default("PURCHASE_ORDER") @db.VarChar(20)
   source_reference_id String?               @db.Uuid
   supplier_delivery_invoice_id String?       @db.Uuid
+  idempotency_key     String?               @unique @db.VarChar(100)
   status              String                @default("DRAFT") @db.VarChar(20)
   received_by_user_id String?               @db.Uuid
   putaway_assignee_user_id String?           @db.Uuid
@@ -203,8 +211,11 @@ model goods_receipts {
   smart_receiving_drafts smart_receiving_drafts[]
   supplier_shortage_reports supplier_shortage_reports[]
   warehouse_exception_reports warehouse_exception_reports[]
+  procurement_documents procurement_documents[]
+  supplier_returns    supplier_returns[]
 
   @@index([status, received_at], map: "idx_goods_receipts_status")
+  @@index([supplier_delivery_invoice_id, status], map: "idx_goods_receipts_delivery_status")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -611,10 +622,22 @@ model purchase_order_items {
   received_qty      Int             @default(0)
   unit_cost         Decimal         @default(0) @db.Decimal(12, 2)
   note              String?
+  /// P1.2 Close Remaining Quantity. OPEN | CLOSED_WITH_REMAINING. Never changes ordered_qty or
+  /// received_qty — it only marks that ordered_qty - received_qty will never be delivered.
+  closure_status    String          @default("OPEN") @db.VarChar(30)
+  closed_reason     String?
+  closed_evidence_reference String?
+  closed_by_user_id String?         @db.Uuid
+  closed_at         DateTime?       @db.Timestamptz(6)
+  reopened_reason   String?
+  reopened_by_user_id String?       @db.Uuid
+  reopened_at       DateTime?       @db.Timestamptz(6)
   purchase_orders   purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   book_variants     book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
   supplier_delivery_invoice_items supplier_delivery_invoice_items[]
   supplier_shortage_report_items supplier_shortage_report_items[]
+  procurement_document_lines procurement_document_lines[]
+  supplier_return_items supplier_return_items[]
 
   @@unique([purchase_order_id, variant_id])
 }
@@ -626,6 +649,9 @@ model purchase_orders {
   supplier_id          String                 @db.Uuid
   warehouse_id         String                 @db.Uuid
   status               String                 @default("DRAFT") @db.VarChar(30)
+  /// Supplier answer to the dispatched PO: PENDING_SUPPLIER | ACCEPTED | PARTIALLY_ACCEPTED | REJECTED | CHANGES_REJECTED.
+  /// NULL for orders dispatched before this column existed.
+  supplier_response_status String?            @db.VarChar(30)
   ordered_by_user_id   String                 @db.Uuid
   approved_by_user_id  String?                @db.Uuid
   order_date           DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
@@ -639,6 +665,11 @@ model purchase_orders {
   supplier_delivery_invoices supplier_delivery_invoices[]
   supplier_shortage_reports supplier_shortage_reports[]
   purchase_requests    purchase_requests[]
+  purchase_order_supplier_responses purchase_order_supplier_responses[]
+  procurement_documents procurement_documents[]
+  procurement_reconciliations procurement_reconciliations[]
+  purchase_order_revisions purchase_order_revisions[]
+  supplier_returns     supplier_returns[]
   suppliers            suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
   warehouses           warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
 
@@ -825,6 +856,9 @@ model suppliers {
   supplier_delivery_invoices supplier_delivery_invoices[]
   supplier_shortage_reports supplier_shortage_reports[]
   supplier_variants supplier_variants[]
+  purchase_order_supplier_responses purchase_order_supplier_responses[]
+  procurement_documents procurement_documents[]
+  supplier_returns  supplier_returns[]
 }
 
 model supplier_order_dispatches {
@@ -856,6 +890,10 @@ model supplier_delivery_invoices {
   delivery_number       String?                           @db.VarChar(80)
   invoice_date          DateTime?                         @db.Date
   expected_delivery_date DateTime?                        @db.Date
+  /// Delivery-note details (this table is the supplier's delivery batch; invoice_number holds the
+  /// supplier document number for legacy rows, formal invoices live in procurement_documents).
+  carrier_name          String?                           @db.VarChar(150)
+  deliverer_name        String?                           @db.VarChar(150)
   status                String                            @default("SUBMITTED") @db.VarChar(30)
   supplier_note         String?
   uploaded_file_name    String?
@@ -869,6 +907,7 @@ model supplier_delivery_invoices {
   supplier_delivery_invoice_items supplier_delivery_invoice_items[]
   goods_receipts        goods_receipts[]
   supplier_shortage_reports supplier_shortage_reports[]
+  procurement_documents procurement_documents[]
 
   @@unique([supplier_id, invoice_number])
   @@index([purchase_order_id, status], map: "idx_supplier_invoices_po_status")
@@ -901,6 +940,14 @@ model supplier_shortage_reports {
   invoice_id           String?                        @db.Uuid
   status               String                         @default("OPEN") @db.VarChar(30)
   reason               String?
+  /// SHORTAGE | DAMAGED | REJECTED | OVERAGE | WRONG_ITEM | PRICE_MISMATCH | MIXED
+  discrepancy_type     String                         @default("SHORTAGE") @db.VarChar(30)
+  /// Supplier proposal: REDELIVER | EXCHANGE | RETURN | DOCUMENT_ADJUSTMENT | CANNOT_FULFILL
+  supplier_proposed_action String?                    @db.VarChar(30)
+  supplier_response_note String?
+  /// Outcome recorded by SmartBook: REDELIVERED | EXCHANGED | RETURNED | DOCUMENT_ADJUSTED | ACCEPTED_LOSS | OTHER
+  resolution_action    String?                        @db.VarChar(30)
+  resolution_note      String?
   created_by_user_id   String                         @db.Uuid
   sent_at              DateTime?                      @db.Timestamptz(6)
   resolved_at          DateTime?                      @db.Timestamptz(6)
@@ -911,6 +958,7 @@ model supplier_shortage_reports {
   goods_receipts       goods_receipts?                 @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
   supplier_delivery_invoices supplier_delivery_invoices? @relation(fields: [invoice_id], references: [id], onUpdate: NoAction)
   supplier_shortage_report_items supplier_shortage_report_items[]
+  procurement_documents procurement_documents[]
 
   @@index([purchase_order_id, status], map: "idx_supplier_shortages_po_status")
 }
@@ -922,7 +970,10 @@ model supplier_shortage_report_items {
   variant_id               String                    @db.Uuid
   ordered_qty              Int
   received_qty             Int
+  /// Discrepancy quantity of this line (name kept for backward compatibility).
   shortage_qty             Int
+  /// SHORTAGE | DAMAGED | REJECTED | OVERAGE | WRONG_ITEM
+  discrepancy_type         String                    @default("SHORTAGE") @db.VarChar(30)
   note                     String?
   supplier_shortage_reports supplier_shortage_reports @relation(fields: [shortage_report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   purchase_order_items     purchase_order_items      @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
@@ -1017,6 +1068,7 @@ model warehouses {
   stock_balances                                                stock_balances[]
   stock_movements                                               stock_movements[]
   stock_reservations                                            stock_reservations[]
+  supplier_returns                                               supplier_returns[]
   transfer_orders_transfer_orders_from_warehouse_idTowarehouses transfer_orders[]    @relation("transfer_orders_from_warehouse_idTowarehouses")
   transfer_orders_transfer_orders_to_warehouse_idTowarehouses   transfer_orders[]    @relation("transfer_orders_to_warehouse_idTowarehouses")
   warehouse_settings                                            warehouse_settings?
@@ -1173,4 +1225,244 @@ model staff_tasks {
 
   @@index([assignee_user_id], map: "idx_staff_tasks_assignee")
   @@index([status, created_at], map: "idx_staff_tasks_status")
+}
+
+/// Supplier's answer to a dispatched purchase order (history: one row per response).
+/// The PO lines are never overwritten silently: quantity/price changes wait for a SmartBook review.
+model purchase_order_supplier_responses {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id      String          @db.Uuid
+  supplier_id            String          @db.Uuid
+  /// ACCEPTED | PARTIALLY_ACCEPTED | REJECTED
+  decision               String          @db.VarChar(30)
+  reason                 String?
+  proposed_delivery_date DateTime?       @db.Date
+  /// [{ purchase_order_item_id, variant_id, ordered_qty, unit_cost, confirmed_qty, confirmed_unit_cost }]
+  lines                  Json            @default("[]")
+  has_variance           Boolean         @default(false)
+  /// NOT_REQUIRED | PENDING_REVIEW | APPROVED | REJECTED
+  review_status          String          @default("NOT_REQUIRED") @db.VarChar(20)
+  review_note            String?
+  reviewed_by_user_id    String?         @db.Uuid
+  reviewed_at            DateTime?       @db.Timestamptz(6)
+  responded_by_user_id   String?         @db.Uuid
+  created_at             DateTime        @default(now()) @db.Timestamptz(6)
+  purchase_orders        purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers              suppliers       @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+
+  @@index([purchase_order_id, created_at], map: "idx_po_supplier_responses_po")
+}
+
+/// A requested change to an already-dispatched PO's lines/header (P1.1). purchase_order_items is
+/// never overwritten until a revision reaches EFFECTIVE, so GRNs/invoices posted while a revision
+/// is pending keep reading the still-current values; this is also what makes "cannot receive
+/// against a revision that isn't yet effective" true without any change to GRN posting code.
+model purchase_order_revisions {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id      String          @db.Uuid
+  revision_number        Int
+  /// PENDING_APPROVAL | PENDING_SUPPLIER_RECONFIRMATION | EFFECTIVE | REJECTED | SUPPLIER_REJECTED | CANCELLED
+  status                 String          @default("PENDING_APPROVAL") @db.VarChar(40)
+  reason                 String
+  requires_supplier_reconfirmation Boolean @default(true)
+  /// { header: { expected_date, note }, lines: [{ purchase_order_item_id, variant_id, ordered_qty, unit_cost }] }
+  before_snapshot        Json
+  after_snapshot         Json
+  requested_by_user_id   String          @db.Uuid
+  approved_by_user_id    String?         @db.Uuid
+  rejected_reason        String?
+  supplier_decision_user_id String?      @db.Uuid
+  effective_at           DateTime?       @db.Timestamptz(6)
+  created_at             DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime        @default(now()) @db.Timestamptz(6)
+  purchase_orders        purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([purchase_order_id, revision_number])
+  @@index([purchase_order_id, status], map: "idx_po_revisions_po_status")
+}
+
+/// Return to Supplier (P1.3): damaged/wrong/defective goods already accepted into stock via a
+/// POSTED goods receipt. Never deletes the original GRN or its stock_movements — execution writes
+/// a new OUTBOUND movement (reference_type "SUPPLIER_RETURN") that reverses the original inbound.
+model supplier_returns {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  return_number          String                 @unique @db.VarChar(40)
+  purchase_order_id      String                 @db.Uuid
+  goods_receipt_id       String                 @db.Uuid
+  supplier_id            String                 @db.Uuid
+  warehouse_id           String                 @db.Uuid
+  /// PENDING_APPROVAL | APPROVED | REJECTED | PENDING_SUPPLIER_CONFIRMATION | SUPPLIER_REJECTED |
+  /// STOCK_RETURNED | COMPLETED | CANCELLED
+  status                 String                 @default("PENDING_APPROVAL") @db.VarChar(40)
+  reason                 String
+  evidence_reference     String?
+  requires_supplier_confirmation Boolean        @default(true)
+  requested_by_user_id   String                 @db.Uuid
+  approved_by_user_id    String?                @db.Uuid
+  rejected_reason        String?
+  supplier_decision_user_id String?             @db.Uuid
+  executed_by_user_id    String?                @db.Uuid
+  executed_at            DateTime?              @db.Timestamptz(6)
+  /// Outcome once executed: REFUND | REDELIVERY | EXCHANGE | CREDIT_NOTE | OTHER
+  resolution_outcome     String?                @db.VarChar(30)
+  resolution_note        String?
+  resolved_by_user_id    String?                @db.Uuid
+  resolved_at            DateTime?              @db.Timestamptz(6)
+  created_at             DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime               @default(now()) @db.Timestamptz(6)
+  purchase_orders        purchase_orders        @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
+  goods_receipts         goods_receipts         @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
+  suppliers              suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  warehouses             warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  supplier_return_items  supplier_return_items[]
+
+  @@index([goods_receipt_id, status], map: "idx_supplier_returns_grn_status")
+  @@index([purchase_order_id], map: "idx_supplier_returns_po")
+}
+
+model supplier_return_items {
+  id                     String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplier_return_id     String                 @db.Uuid
+  goods_receipt_item_id  String                 @db.Uuid
+  purchase_order_item_id String?                @db.Uuid
+  variant_id             String                 @db.Uuid
+  return_qty             Int
+  unit_cost              Decimal                @default(0) @db.Decimal(12, 2)
+  note                   String?
+  supplier_returns       supplier_returns       @relation(fields: [supplier_return_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  goods_receipt_items    goods_receipt_items    @relation(fields: [goods_receipt_item_id], references: [id], onUpdate: NoAction)
+  purchase_order_items   purchase_order_items?  @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
+
+  @@index([goods_receipt_item_id], map: "idx_supplier_return_items_grn_item")
+}
+
+/// Shared procurement document registry. ONE record per document, seen by both the supplier and
+/// SmartBook (never one copy per role). Issued documents are immutable: corrections go through
+/// cancel / supersede, and every file upload is a new version row.
+model procurement_documents {
+  id                           String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_number              String                        @unique @db.VarChar(60)
+  /// VAT_INVOICE | SALES_INVOICE | PROFORMA_INVOICE | DELIVERY_NOTE | GOODS_RECEIPT_CONFIRMATION |
+  /// DELIVERY_ACCEPTANCE_MINUTES | DISCREPANCY_REPORT | PAYMENT_EVIDENCE | OTHER
+  document_type                String                        @db.VarChar(40)
+  /// SUPPLIER | SMARTBOOK
+  issuer_party                 String                        @db.VarChar(20)
+  /// Number printed on the document (invoice number, minutes number...).
+  external_number              String?                       @db.VarChar(80)
+  /// Invoice template/series symbol (ký hiệu hóa đơn).
+  invoice_series               String?                       @db.VarChar(30)
+  /// DRAFT | ISSUED | PENDING_SIGNED_DOCUMENT | SCAN_UPLOADED | SUPERSEDED | CANCELLED
+  status                       String                        @default("DRAFT") @db.VarChar(40)
+  purchase_order_id            String                        @db.Uuid
+  supplier_id                  String                        @db.Uuid
+  supplier_delivery_invoice_id String?                       @db.Uuid
+  goods_receipt_id             String?                       @db.Uuid
+  shortage_report_id           String?                       @db.Uuid
+  supersedes_document_id       String?                       @db.Uuid
+  issue_date                   DateTime?                     @db.Date
+  subtotal_amount              Decimal?                      @db.Decimal(14, 2)
+  tax_rate                     Decimal?                      @db.Decimal(5, 2)
+  tax_amount                   Decimal?                      @db.Decimal(14, 2)
+  total_amount                 Decimal?                      @db.Decimal(14, 2)
+  /// Type-specific fields (lookup code, tax codes, payment due date, carrier, signatories...).
+  metadata                     Json                          @default("{}")
+  /// SmartBook-only note, never returned to the supplier.
+  internal_note                String?
+  cancel_reason                String?
+  created_by_user_id           String?                       @db.Uuid
+  issued_at                    DateTime?                     @db.Timestamptz(6)
+  cancelled_at                 DateTime?                     @db.Timestamptz(6)
+  cancelled_by_user_id         String?                       @db.Uuid
+  created_at                   DateTime                      @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                      @default(now()) @db.Timestamptz(6)
+  purchase_orders              purchase_orders               @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers                    suppliers                     @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  supplier_delivery_invoices   supplier_delivery_invoices?   @relation(fields: [supplier_delivery_invoice_id], references: [id], onUpdate: NoAction)
+  goods_receipts               goods_receipts?               @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
+  supplier_shortage_reports    supplier_shortage_reports?    @relation(fields: [shortage_report_id], references: [id], onUpdate: NoAction)
+  supersedes                   procurement_documents?        @relation("procurement_document_supersede", fields: [supersedes_document_id], references: [id], onUpdate: NoAction)
+  superseded_by                procurement_documents[]       @relation("procurement_document_supersede")
+  procurement_document_lines   procurement_document_lines[]
+  procurement_document_files   procurement_document_files[]
+  procurement_document_shares  procurement_document_shares[]
+
+  @@index([purchase_order_id, document_type], map: "idx_procurement_documents_po_type")
+  @@index([supplier_id, document_type, external_number], map: "idx_procurement_documents_supplier_number")
+}
+
+model procurement_document_lines {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_id            String                @db.Uuid
+  purchase_order_item_id String?               @db.Uuid
+  variant_id             String                @db.Uuid
+  quantity               Int
+  unit_price             Decimal               @default(0) @db.Decimal(12, 2)
+  line_amount            Decimal               @default(0) @db.Decimal(14, 2)
+  note                   String?
+  procurement_documents  procurement_documents @relation(fields: [document_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  purchase_order_items   purchase_order_items? @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
+  book_variants          book_variants         @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+
+  @@index([document_id], map: "idx_procurement_document_lines_doc")
+}
+
+/// Immutable file versions. A new upload never overwrites an earlier version.
+model procurement_document_files {
+  id                    String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_id           String                @db.Uuid
+  version_no            Int
+  storage_ref           String                @db.VarChar(255)
+  original_name         String                @db.VarChar(255)
+  mime_type             String                @db.VarChar(100)
+  size_bytes            Int
+  sha256                String                @db.Char(64)
+  uploaded_by_user_id   String?               @db.Uuid
+  /// SUPPLIER | SMARTBOOK
+  uploaded_by_party     String                @db.VarChar(20)
+  created_at            DateTime              @default(now()) @db.Timestamptz(6)
+  procurement_documents procurement_documents @relation(fields: [document_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([document_id, version_no])
+}
+
+/// Delivery tracking per recipient/channel. SENT, DELIVERED and ACKNOWLEDGED are distinct facts:
+/// SENT = we handed it over (portal published / SMTP accepted), DELIVERED = the recipient's side
+/// opened or downloaded it, ACKNOWLEDGED = the recipient explicitly confirmed receipt.
+model procurement_document_shares {
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  document_id             String                @db.Uuid
+  /// PORTAL | EMAIL
+  channel                 String                @db.VarChar(20)
+  /// SUPPLIER | SMARTBOOK
+  recipient_party         String                @db.VarChar(20)
+  recipient_email         String?               @db.VarChar(150)
+  /// SENT | DELIVERED | ACKNOWLEDGED | FAILED
+  status                  String                @db.VarChar(20)
+  message_id              String?               @db.VarChar(255)
+  error_message           String?
+  shared_by_user_id       String?               @db.Uuid
+  shared_at               DateTime              @default(now()) @db.Timestamptz(6)
+  delivered_at            DateTime?             @db.Timestamptz(6)
+  acknowledged_at         DateTime?             @db.Timestamptz(6)
+  acknowledged_by_user_id String?               @db.Uuid
+  updated_at              DateTime              @default(now()) @db.Timestamptz(6)
+  procurement_documents   procurement_documents @relation(fields: [document_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([document_id, recipient_party], map: "idx_procurement_document_shares_doc")
+}
+
+/// One row per completed PO <-> invoice <-> delivery note <-> GRN reconciliation run.
+model procurement_reconciliations {
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchase_order_id    String          @db.Uuid
+  /// MATCHED | PARTIALLY_MATCHED | DISCREPANCY | PENDING_DOCUMENT | NEEDS_REVIEW
+  result_status        String          @db.VarChar(30)
+  exception_approved   Boolean         @default(false)
+  note                 String?
+  snapshot             Json            @default("{}")
+  completed_by_user_id String          @db.Uuid
+  created_at           DateTime        @default(now()) @db.Timestamptz(6)
+  purchase_orders      purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([purchase_order_id, created_at], map: "idx_procurement_reconciliations_po")
 }

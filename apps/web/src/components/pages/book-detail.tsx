@@ -344,7 +344,8 @@ export function BookDetailPage() {
       <FadeItem>
         <header className="flex flex-col gap-5 sm:flex-row sm:items-start">
           {book.cover_image_url ? (
-            <img src={book.cover_image_url} alt={`Bìa sách ${book.title}`} className="h-44 w-32 shrink-0 rounded-xl border border-border object-cover sm:h-48 sm:w-[132px]" />
+            // Some sources (Google Books) return http:// cover URLs, which the CSP's https-only img-src blocks.
+            <img src={book.cover_image_url.replace(/^http:\/\//i, 'https://')} alt={`Bìa sách ${book.title}`} className="h-44 w-32 shrink-0 rounded-xl border border-border object-cover sm:h-48 sm:w-[132px]" />
           ) : (
             <div className="flex h-44 w-32 shrink-0 items-center justify-center rounded-xl border border-border bg-primary/[0.05] sm:h-48 sm:w-[132px]">
               <BookOpen className="h-8 w-8 text-primary/60" aria-hidden="true" />
@@ -615,7 +616,7 @@ export function BookDetailPage() {
                   placeholder="https://..."
                   className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 {editForm.cover_image_url && (
-                  <img src={editForm.cover_image_url} alt="Xem trước ảnh bìa" className="mt-2 max-h-24 rounded-lg object-contain border border-border" />
+                  <img src={editForm.cover_image_url.replace(/^http:\/\//i, 'https://')} alt="Xem trước ảnh bìa" className="mt-2 max-h-24 rounded-lg object-contain border border-border" />
                 )}
               </div>
 

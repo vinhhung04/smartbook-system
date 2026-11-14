@@ -11,7 +11,7 @@ import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Loan, type ReturnPreview } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
-import { printLoanReceipt } from '@/lib/print-utils';
+import { LoanReceiptPrintSheet } from './loan-receipt-print-sheet';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
 
@@ -168,7 +168,7 @@ export function BorrowLoanDetailPage() {
                   variant="outline"
                   size="sm"
                   className="gap-1.5"
-                  onClick={() => printLoanReceipt({ ...loan, customer_name: loan.customers?.full_name })}
+                  onClick={() => window.print()}
                 >
                   <Printer className="h-3.5 w-3.5" /> In phiếu
                 </Button>
@@ -177,6 +177,28 @@ export function BorrowLoanDetailPage() {
           }
         />
       </FadeItem>
+
+      {loan ? (
+        <LoanReceiptPrintSheet
+          loanNumber={loan.loan_number}
+          statusLabel={getBorrowLabel('loan', loan.status)}
+          customerName={loan.customers?.full_name || loan.customer_id}
+          customerCode={loan.customers?.customer_code}
+          borrowDate={loan.borrow_date}
+          dueDate={loan.due_date}
+          totalItems={loan.total_items}
+          showFinance
+          items={(loan.loan_items || []).map((item) => ({
+            title: getBookTitle(item.variant_id),
+            code: item.item_barcode || item.id.slice(0, 8),
+            dueDate: item.due_date,
+            returnDate: item.return_date,
+            statusLabel: getBorrowLabel('loan', item.status),
+            fineAmount: item.fine_amount,
+            depositAmount: item.loan_item_deposits?.amount,
+          }))}
+        />
+      ) : null}
 
       {loading ? (
         <FadeItem>

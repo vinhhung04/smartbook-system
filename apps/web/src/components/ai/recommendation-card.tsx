@@ -16,7 +16,8 @@ function Cover({ title, imageUrl }: { title: string; imageUrl?: string | null })
   if (imageUrl && !failed) {
     return (
       <img
-        src={imageUrl}
+        // Some sources (Google Books) return http:// cover URLs, which the CSP's https-only img-src blocks.
+        src={imageUrl.replace(/^http:\/\//i, 'https://')}
         alt={`Bìa sách ${title}`}
         className="h-24 w-16 shrink-0 rounded-md border border-border object-cover"
         onError={() => setFailed(true)}

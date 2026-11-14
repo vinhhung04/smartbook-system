@@ -36,6 +36,7 @@ const purchaseOrderRoutes = require('./routes/purchase-order.routes');
 const supplierDeliveryRoutes = require('./routes/supplier-delivery.routes');
 const supplierPortalRoutes = require('./routes/supplier-portal.routes');
 const supplierAccountRoutes = require('./routes/supplier-account.routes');
+const procurementDocumentRoutes = require('./routes/procurement-document.routes');
 const purchaseRequestRoutes = require('./routes/purchase-request.routes');
 const exceptionReportRoutes = require('./routes/exception-report.routes');
 const staffTaskRoutes = require('./routes/staff-task.routes');
@@ -419,6 +420,7 @@ app.use('/api/reslotting-suggestions', rejectInvalidUuidParams(reslottingSuggest
 app.use('/api/purchase-orders', rejectInvalidUuidParams(purchaseOrderRoutes));
 app.use('/api/supplier-deliveries', rejectInvalidUuidParams(supplierDeliveryRoutes));
 app.use('/api/supplier-account', rejectInvalidUuidParams(supplierAccountRoutes));
+app.use('/api/procurement-documents', rejectInvalidUuidParams(procurementDocumentRoutes));
 app.use('/api/purchase-requests', rejectInvalidUuidParams(purchaseRequestRoutes));
 app.use('/api/stock-alerts', rejectInvalidUuidParams(stockAlertRoutes));
 app.use('/api/stock-balances', rejectInvalidUuidParams(stockBalanceRoutes));

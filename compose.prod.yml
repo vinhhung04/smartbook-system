@@ -122,8 +122,16 @@ services:
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AGING_INVENTORY_DAYS_THRESHOLD=${AGING_INVENTORY_DAYS_THRESHOLD:-90}
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      # Procurement document sharing e-mails; unset SMTP_HOST = e-mail shares are recorded as FAILED
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-SmartBook Library <noreply@smartbook.io.vn>}
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
     volumes:
       - packing_evidence_data:/app/evidence/packing
+      - procurement_document_data:/app/evidence/procurement
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -435,6 +443,7 @@ volumes:
   redis_data:
   rabbitmq_data:
   packing_evidence_data:
+  procurement_document_data:
   ai_model_cache:
   ai_cloakbrowser_cache:
   caddy_data:

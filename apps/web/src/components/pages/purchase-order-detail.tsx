@@ -23,6 +23,8 @@ import { authService } from "@/services/auth";
 import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 import { getStatusVariant } from "@/lib/status-registry";
 import { purchaseOrderStatusLabel } from "@/lib/purchase-order-status";
+import { DISCREPANCY_TYPE_LABEL, RESOLUTION_LABEL, SUPPLIER_PROPOSAL_LABEL, supplierResponseMeta } from "@/lib/procurement-document-status";
+import { ProcurementDocumentCenter } from "@/components/procurement/procurement-document-center";
 
 type PendingAction =
   | { type: "submit" }
@@ -122,7 +124,7 @@ function getActionDialogConfig(pendingAction: PendingAction | null, poNumber: st
     case "reject":
       return { title: "Từ chối đơn đặt hàng", description: `Từ chối ${label}. Người tạo đơn sẽ thấy lý do bên dưới.`, confirmLabel: "Từ chối", variant: "destructive" as const };
     case "resolveShortage":
-      return { title: "Đóng báo thiếu hàng", description: "Đánh dấu báo thiếu này là đã xử lý xong?", confirmLabel: "Đã xử lý", variant: "default" as const };
+      return { title: "Đóng biên bản chênh lệch", description: "Chọn kết quả xử lý thực tế. Thao tác này không tự sửa hóa đơn hay tồn kho.", confirmLabel: "Đã xử lý", variant: "default" as const };
     default:
       return null;
   }
@@ -211,6 +213,7 @@ export function PurchaseOrderDetailPage() {
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [rejectReason, setRejectReason] = useState(DEFAULT_REJECT_REASON);
+  const [resolution, setResolution] = useState({ action: "", note: "" });
 
   const load = async () => {
     if (!id) return;
@@ -293,7 +296,15 @@ export function PurchaseOrderDetailPage() {
       }
       ok = await runAction("Đã từ chối đơn đặt hàng", () => purchaseOrderService.reject(id, reason));
     } else if (pendingAction.type === "resolveShortage") {
-      ok = await runAction("Đã đóng báo thiếu hàng", () => purchaseOrderService.resolveShortageReport(id, pendingAction.reportId));
+      if (!resolution.action) {
+        toast.error("Chọn kết quả xử lý");
+        return;
+      }
+      ok = await runAction("Đã đóng biên bản chênh lệch", () => purchaseOrderService.resolveShortageReport(id, pendingAction.reportId, {
+        resolution_action: resolution.action,
+        resolution_note: resolution.note.trim() || undefined,
+      }));
+      if (ok) setResolution({ action: "", note: "" });
     }
 
     if (ok) {
@@ -323,7 +334,11 @@ export function PurchaseOrderDetailPage() {
   const canSubmit = canManagePurchaseOrder && ["DRAFT", "REJECTED"].includes(po.status);
   const canApprove = canApprovePurchaseOrder && po.status === "PENDING_APPROVAL";
   const canSendToSupplier = canManagePurchaseOrder && po.status === "APPROVED";
-  const canCancel = canManagePurchaseOrder && ["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) && po.total_received_qty === 0;
+  const supplierDeclined = po.status === "SENT_TO_SUPPLIER" && ["REJECTED", "CHANGES_REJECTED"].includes(po.supplier_response_status || "");
+  const canCancel = canManagePurchaseOrder && (["DRAFT", "REJECTED", "PENDING_APPROVAL", "APPROVED"].includes(po.status) || supplierDeclined) && po.total_received_qty === 0;
+  const responseMeta = supplierResponseMeta(po.supplier_response_status);
+  const latestResponse = po.supplier_responses?.[0];
+  const pendingResponse = po.supplier_responses?.find((row) => row.review_status === "PENDING_REVIEW");
   const dispatches = supplierDocs?.dispatches ?? [];
   const invoices = supplierDocs?.invoices ?? [];
   const shortageReports = supplierDocs?.shortage_reports ?? [];
@@ -393,6 +408,30 @@ export function PurchaseOrderDetailPage() {
           </NextStep>
         );
       case "SENT_TO_SUPPLIER":
+        if (pendingResponse) {
+          return (
+            <NextStep
+              tone="warning"
+              icon={AlertTriangle}
+              title="NCC đề xuất thay đổi số lượng/giá — chờ duyệt"
+              description={pendingResponse.reason ? `Lý do NCC: ${pendingResponse.reason}` : "Xem so sánh đơn gốc và đề xuất ở mục Bộ chứng từ dùng chung."}
+            >
+              <a href="#po-procurement-documents" className={linkButtonClass}>Xem đề xuất<ArrowRight className="h-3.5 w-3.5" /></a>
+            </NextStep>
+          );
+        }
+        if (supplierDeclined) {
+          return (
+            <NextStep
+              tone="danger"
+              icon={XCircle}
+              title={po.supplier_response_status === "REJECTED" ? "Nhà cung cấp từ chối đơn" : "Đã không chấp nhận thay đổi — chờ NCC phản hồi lại"}
+              description={latestResponse?.reason || latestResponse?.review_note || "Có thể hủy đơn và đặt nhà cung cấp khác."}
+            >
+              {canCancel && <Button variant="outline" size="sm" onClick={cancel} disabled={working}><Ban className="h-3.5 w-3.5" />Hủy đơn</Button>}
+            </NextStep>
+          );
+        }
         return (
           <NextStep
             tone="info"
@@ -486,7 +525,7 @@ export function PurchaseOrderDetailPage() {
 
   const docTabs = [
     { value: "dispatches", label: "Gửi NCC", count: dispatches.length },
-    { value: "invoices", label: "Hóa đơn / phiếu giao", count: invoices.length },
+    { value: "invoices", label: "Phiếu giao hàng", count: invoices.length },
     { value: "shortages", label: "Báo thiếu", count: shortageReports.length },
     { value: "receipts", label: "Phiếu nhập kho", count: po.goods_receipts.length },
   ];
@@ -510,6 +549,7 @@ export function PurchaseOrderDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="break-all font-mono text-xl font-semibold tracking-tight text-foreground">{po.po_number}</h1>
                 <StatusBadge label={statusLabel(po.status)} variant={statusVariant(po.status)} dot />
+                {responseMeta ? <StatusBadge label={responseMeta.label} variant={responseMeta.tone} /> : null}
               </div>
               <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
                 <span className="text-foreground">{supplierName}</span>
@@ -679,7 +719,7 @@ export function PurchaseOrderDetailPage() {
                         <DocRow key={report.id} className="sm:items-start">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-[13px] font-semibold">Thiếu {shortageQty} cuốn</span>
+                              <span className="text-[13px] font-semibold">{DISCREPANCY_TYPE_LABEL[report.discrepancy_type || "SHORTAGE"] || "Chênh lệch"} · {shortageQty} cuốn</span>
                               <StatusBadge label={statusLabel(report.status)} variant={statusVariant(report.status)} />
                               <span className="text-[12px] text-muted-foreground">{formatDate(report.created_at)}</span>
                             </div>
@@ -687,10 +727,16 @@ export function PurchaseOrderDetailPage() {
                             <ul className="mt-1.5 space-y-0.5 text-[12px]">
                               {report.items.map((item) => (
                                 <li key={item.id} className="text-muted-foreground">
-                                  <span className="text-foreground">{item.title || "-"}</span> · nhận {item.received_qty}/{item.ordered_qty}, thiếu <span className="font-medium text-amber-700 dark:text-amber-400">{item.shortage_qty}</span>
+                                  <span className="text-foreground">{item.title || "-"}</span> · nhận {item.received_qty}/{item.ordered_qty}, {(DISCREPANCY_TYPE_LABEL[item.discrepancy_type || "SHORTAGE"] || "thiếu").toLowerCase()} <span className="font-medium text-amber-700 dark:text-amber-400">{item.shortage_qty}</span>
                                 </li>
                               ))}
                             </ul>
+                            {report.supplier_proposed_action ? (
+                              <p className="mt-1 text-[12px]"><span className="text-muted-foreground">NCC đề xuất: </span>{SUPPLIER_PROPOSAL_LABEL[report.supplier_proposed_action] || report.supplier_proposed_action}{report.supplier_response_note ? ` — ${report.supplier_response_note}` : ""}</p>
+                            ) : null}
+                            {report.resolution_action ? (
+                              <p className="mt-1 text-[12px]"><span className="text-muted-foreground">Kết quả: </span>{RESOLUTION_LABEL[report.resolution_action] || report.resolution_action}{report.resolution_note ? ` — ${report.resolution_note}` : ""}</p>
+                            ) : null}
                           </div>
                           <div className="flex shrink-0 gap-2">
                             {canManagePurchaseOrder && report.status === "OPEN" ? (
@@ -727,6 +773,10 @@ export function PurchaseOrderDetailPage() {
                 </Tabs>
               </SectionCard>
             </div>
+          </FadeItem>
+
+          <FadeItem>
+            <ProcurementDocumentCenter po={po} canManage={canManagePurchaseOrder} canApprove={canApprovePurchaseOrder} onChanged={load} />
           </FadeItem>
         </div>
 
@@ -807,6 +857,26 @@ export function PurchaseOrderDetailPage() {
         loading={working}
         onConfirm={handleConfirmAction}
       >
+        {pendingAction?.type === "resolveShortage" && (
+          <div className="space-y-2">
+            <div>
+              <label htmlFor="po-resolution-action" className="mb-1.5 block text-[11px] font-medium text-muted-foreground">Kết quả xử lý (bắt buộc)</label>
+              <select
+                id="po-resolution-action"
+                value={resolution.action}
+                onChange={(event) => setResolution((current) => ({ ...current, action: event.target.value }))}
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">— Chọn —</option>
+                {Object.entries(RESOLUTION_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="po-resolution-note" className="mb-1.5 block text-[11px] font-medium text-muted-foreground">Ghi chú</label>
+              <Textarea id="po-resolution-note" rows={2} value={resolution.note} onChange={(event) => setResolution((current) => ({ ...current, note: event.target.value }))} placeholder="Ví dụ: NCC xuất hóa đơn điều chỉnh giảm 2 cuốn" />
+            </div>
+          </div>
+        )}
         {pendingAction?.type === "reject" && (
           <div>
             <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Lý do từ chối</p>

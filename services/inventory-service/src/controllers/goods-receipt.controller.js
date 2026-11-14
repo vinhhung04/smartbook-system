@@ -9,6 +9,14 @@ const {
   claimDraftReceiptForPosting,
 } = require("../services/goods-receipt-posting.service");
 const {
+  ProcurementError,
+  isSupplierReceipt,
+  assertLineNotClosed,
+  settleSupplierReceiptQuantities,
+  recordSupplierReceiptOutcome,
+  revertSupplierReceiptOutcome,
+} = require("../services/procurement-receipt.service");
+const {
   getReadableWarehouseIds,
   canWriteWarehouse,
   requireWarehouseReadAccess,
@@ -28,8 +36,17 @@ function createReceiptNumber(baseTimestamp) {
   return `GR-${baseTimestamp}-${suffix}`;
 }
 
-function calculatePoStatus(totalOrderedQty, totalReceivedQty, hasOpenShortage = false) {
-  if (totalReceivedQty <= 0) return "APPROVED";
+function calculatePoStatus(totalOrderedQty, totalReceivedQty, hasOpenShortage = false, supplierResponseStatus = null) {
+  if (totalReceivedQty <= 0) {
+    // Reversing the last GRN for a PO (received_qty back to 0) must not erase that the PO was
+    // already dispatched to / confirmed by the supplier — only a PO the supplier never
+    // responded to falls all the way back to APPROVED. supplier_response_status is set by
+    // sendToSupplier/the supplier's own response and is untouched by GRN posting or reversal,
+    // so it's a reliable record of that milestone independent of received_qty.
+    if (supplierResponseStatus === "ACCEPTED" || supplierResponseStatus === "PARTIALLY_ACCEPTED") return "SUPPLIER_CONFIRMED";
+    if (supplierResponseStatus === "PENDING_SUPPLIER") return "SENT_TO_SUPPLIER";
+    return "APPROVED";
+  }
   if (totalReceivedQty >= totalOrderedQty) return "RECEIVED";
   if (hasOpenShortage) return "SHORTAGE_REPORTED";
   return "PARTIALLY_RECEIVED";
@@ -60,6 +77,16 @@ async function getPoTotals(tx, purchaseOrderId) {
 }
 
 async function updatePurchaseOrderStatusFromTotals(tx, purchaseOrderId) {
+  const po = await tx.purchase_orders.findUnique({
+    where: { id: purchaseOrderId },
+    select: { status: true, supplier_response_status: true },
+  });
+  // A cancelled PO's status is a terminal, manually-set decision — a GRN reversal recomputing
+  // totals afterwards must not resurrect it into an active status.
+  if (po?.status === "CANCELLED") {
+    const totals = await getPoTotals(tx, purchaseOrderId);
+    return { ...totals, status: "CANCELLED" };
+  }
   const totals = await getPoTotals(tx, purchaseOrderId);
   const openShortageCount = await tx.supplier_shortage_reports.count({
     where: {
@@ -71,6 +98,7 @@ async function updatePurchaseOrderStatusFromTotals(tx, purchaseOrderId) {
     totals.total_ordered_qty,
     totals.total_received_qty,
     openShortageCount > 0,
+    po?.supplier_response_status,
   );
   await tx.purchase_orders.update({
     where: { id: purchaseOrderId },
@@ -89,12 +117,24 @@ async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
   const qtyByVariant = aggregateQuantitiesByVariant(receiptItems);
   const variantIds = Array.from(qtyByVariant.keys());
 
+  // Lock these PO item rows before reading received_qty: without this, two GRNs
+  // for the same PO posted at the same time can both read the same pre-update
+  // received_qty, both pass the over-received check below, and together push the
+  // PO past ordered_qty once each transaction's increment commits.
+  if (variantIds.length > 0) {
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM purchase_order_items WHERE purchase_order_id = $1::uuid AND variant_id = ANY($2::uuid[]) FOR UPDATE",
+      goodsReceipt.purchase_order_id,
+      variantIds,
+    );
+  }
+
   const poItems = await tx.purchase_order_items.findMany({
     where: {
       purchase_order_id: goodsReceipt.purchase_order_id,
       variant_id: { in: variantIds },
     },
-    select: { id: true, variant_id: true, ordered_qty: true, received_qty: true },
+    select: { id: true, variant_id: true, ordered_qty: true, received_qty: true, closure_status: true },
   });
 
   if (poItems.length !== variantIds.length) {
@@ -102,6 +142,7 @@ async function applyPurchaseOrderReceipt(tx, goodsReceipt, userId) {
   }
 
   for (const poItem of poItems) {
+    assertLineNotClosed(poItem);
     const receiptQty = Number(qtyByVariant.get(String(poItem.variant_id)) || 0);
     const nextReceived = Number(poItem.received_qty || 0) + receiptQty;
     if (nextReceived > Number(poItem.ordered_qty || 0)) {
@@ -154,6 +195,16 @@ async function reversePurchaseOrderReceipt(tx, goodsReceipt, userId) {
   });
   const qtyByVariant = aggregateQuantitiesByVariant(receiptItems);
   const variantIds = Array.from(qtyByVariant.keys());
+
+  // Same lock as applyPurchaseOrderReceipt: a concurrent post/reversal on another
+  // GRN for this PO must not read received_qty before this one's change commits.
+  if (variantIds.length > 0) {
+    await tx.$queryRawUnsafe(
+      "SELECT id FROM purchase_order_items WHERE purchase_order_id = $1::uuid AND variant_id = ANY($2::uuid[]) FOR UPDATE",
+      goodsReceipt.purchase_order_id,
+      variantIds,
+    );
+  }
 
   const poItems = await tx.purchase_order_items.findMany({
     where: {
@@ -384,6 +435,9 @@ async function getGoodsReceiptById(req, res) {
       location_type: item.locations?.location_type || null,
       quantity: item.quantity,
       actual_quantity: item.actual_quantity ?? null,
+      delivered_qty: item.delivered_qty ?? null,
+      damaged_qty: Number(item.damaged_qty || 0),
+      rejected_qty: Number(item.rejected_qty || 0),
       unit_cost: Number(item.unit_cost),
       line_total: Number(item.unit_cost) * item.quantity,
     }));
@@ -783,7 +837,7 @@ async function createGoodsReceipt(req, res) {
 }
 
 async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
-  const items = await tx.goods_receipt_items.findMany({
+  const items = (await tx.goods_receipt_items.findMany({
     where: { goods_receipt_id: goodsReceipt.id },
     select: {
       variant_id: true,
@@ -791,7 +845,7 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
       quantity: true,
       unit_cost: true,
     },
-  });
+  })).filter((item) => Number(item.quantity) > 0);
 
   const itemsWithLocation = items.filter((item) => item.location_id);
   const itemsWithoutLocation = items.filter((item) => !item.location_id);
@@ -1295,10 +1349,21 @@ async function updateGoodsReceipt(req, res) {
       const itemUpdates = req.body.items;
       if (Array.isArray(itemUpdates) && existing.status === "DRAFT") {
         for (const item of itemUpdates) {
+          // Supplier receipts: staff can also record damaged / rejected copies; they are kept
+          // out of stock when the receipt is posted (see procurement-receipt.service.js).
+          const countData = {};
+          for (const field of ["damaged_qty", "rejected_qty"]) {
+            if (Number.isInteger(item[field]) && item[field] >= 0) countData[field] = item[field];
+          }
           if (item.id && typeof item.actual_quantity === "number" && item.actual_quantity >= 0) {
             await tx.goods_receipt_items.updateMany({
               where: { id: item.id, goods_receipt_id: id },
-              data: { actual_quantity: item.actual_quantity },
+              data: { actual_quantity: item.actual_quantity, ...countData },
+            });
+          } else if (item.id && Object.keys(countData).length > 0) {
+            await tx.goods_receipt_items.updateMany({
+              where: { id: item.id, goods_receipt_id: id },
+              data: countData,
             });
           } else if (item.id && typeof item.quantity === "number" && item.quantity >= 0 && !('actual_quantity' in item)) {
             // Backwards compat: nếu chỉ có quantity thì vẫn lưu vào quantity
@@ -1327,6 +1392,14 @@ async function updateGoodsReceipt(req, res) {
       if (postingClaimed) {
         if (existing.source_type === "TRANSFER") {
           await postTransferReceiptToReceiving(tx, updated, userId);
+        } else if (isSupplierReceipt(updated)) {
+          // Post only the ACCEPTED quantity (count - damaged - rejected), then record what was
+          // missing / damaged / rejected against the supplier's delivery note.
+          const outcomes = await settleSupplierReceiptQuantities(tx, updated);
+          await applyPurchaseOrderReceipt(tx, updated, userId);
+          await postDraftGoodsReceipt(tx, updated, userId);
+          await recordSupplierReceiptOutcome(tx, updated, outcomes, userId);
+          await updatePurchaseOrderStatusFromTotals(tx, updated.purchase_order_id);
         } else {
           await applyPurchaseOrderReceipt(tx, updated, userId);
           await postDraftGoodsReceipt(tx, updated, userId);
@@ -1366,6 +1439,10 @@ async function updateGoodsReceipt(req, res) {
       if (targetStatus === "CANCELLED" && existing.status === "POSTED") {
         await cancelStockMovements(tx, id);
         await reversePurchaseOrderReceipt(tx, updated, userId);
+        if (isSupplierReceipt(updated)) {
+          await revertSupplierReceiptOutcome(tx, updated, userId);
+          await updatePurchaseOrderStatusFromTotals(tx, updated.purchase_order_id);
+        }
       }
 
       return { data: updated };
@@ -1388,6 +1465,9 @@ async function updateGoodsReceipt(req, res) {
       data: result.data,
     });
   } catch (error) {
+    if (error instanceof ProcurementError) {
+      return res.status(error.statusCode).json({ message: error.message, code: error.code });
+    }
     console.error("Error while updating goods receipt:", error);
     if (error.message === "INVALID_LOCATIONS_FOR_RECEIPT") {
       return res

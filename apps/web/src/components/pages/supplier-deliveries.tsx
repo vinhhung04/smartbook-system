@@ -407,6 +407,11 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   const [note, setNote] = useState("");
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState("");
+  // Damaged / refused copies seen at the dock. Counted copies are confirmed again by staff; only
+  // the accepted remainder is ever posted to stock.
+  const [exceptions, setExceptions] = useState<Record<string, { damaged: number; rejected: number }>>({});
+  // One key per screen visit: a double click or a network retry cannot create a second GRN.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   const load = useCallback(async () => {
     try {
@@ -434,13 +439,16 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
     const invoiced = Number(item.invoiced_qty || 0);
     const remaining = Number(item.remaining_qty || 0);
     const willReceive = Math.min(invoiced, remaining);
-    return { item, invoiced, remaining, willReceive, over: Math.max(0, invoiced - remaining), short: Math.max(0, remaining - invoiced) };
-  }), [invoice]);
+    const damaged = Math.min(willReceive, exceptions[item.id]?.damaged || 0);
+    const rejected = Math.min(willReceive - damaged, exceptions[item.id]?.rejected || 0);
+    const accepted = willReceive - damaged - rejected;
+    return { item, invoiced, remaining, willReceive, damaged, rejected, accepted, over: Math.max(0, invoiced - remaining), short: Math.max(0, remaining - invoiced) };
+  }), [invoice, exceptions]);
 
   const totals = useMemo(() => lines.reduce(
     (acc, line) => ({
-      planned: acc.planned + line.willReceive,
-      amount: acc.amount + line.willReceive * Number(line.item.unit_cost || 0),
+      planned: acc.planned + line.accepted,
+      amount: acc.amount + line.accepted * Number(line.item.unit_cost || 0),
       over: acc.over + line.over,
       short: acc.short + line.short,
     }),
@@ -454,11 +462,13 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
     if (!selectedStaffId) return toast.error("Vui lòng chọn nhân viên kho để giao phiếu");
 
     const items = lines
-      .map(({ item, willReceive, over }) => ({
+      .map(({ item, willReceive, damaged, rejected, over }) => ({
         invoice_item_id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
         variant_id: item.variant_id,
         delivered_qty: willReceive,
+        damaged_qty: damaged,
+        rejected_qty: rejected,
         unit_cost: item.unit_cost,
         location_id: null,
         note: over > 0 ? "Số lượng hóa đơn vượt PO còn lại" : null,
@@ -473,7 +483,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
         warehouse_id: invoice.warehouse_id || "",
         note,
         items,
-      });
+      }, idempotencyKey);
       const receiptId = response.data.id;
       const receiptNumber = response.data.receipt_number;
       await goodsReceiptService.assign(receiptId, selectedStaffId);
@@ -508,11 +518,13 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
         ? <NavLink to={`/purchase-orders/${invoice.purchase_order_id}`} className="font-mono text-primary underline-offset-2 hover:underline">{invoice.po_number || invoice.purchase_order_id}</NavLink>
         : "-",
     },
-    { label: "Phiếu giao", value: invoice.delivery_number ? <span className="font-mono">{invoice.delivery_number}</span> : "-" },
+    { label: "Hóa đơn", value: <span className="font-mono">{invoice.invoice_number}</span> },
     { label: "Ngày hóa đơn", value: formatDate(invoice.invoice_date) },
     { label: "Dự kiến giao", value: formatDate(invoice.expected_delivery_date) },
   ];
   const invoicedTotal = lines.reduce((sum, line) => sum + line.invoiced, 0);
+  const damagedTotal = lines.reduce((sum, line) => sum + line.damaged, 0);
+  const rejectedTotal = lines.reduce((sum, line) => sum + line.rejected, 0);
 
   return (
     <PageWrapper className="space-y-5">
@@ -523,9 +535,9 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
           </NavLink>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[13px] text-muted-foreground">Hóa đơn nhà cung cấp</p>
+              <p className="text-[13px] text-muted-foreground">Phiếu giao của nhà cung cấp</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-2.5">
-                <h1 className="break-all font-mono text-[22px] font-semibold tracking-tight text-foreground">{invoice.invoice_number}</h1>
+                <h1 className="break-all font-mono text-[22px] font-semibold tracking-tight text-foreground">{invoice.delivery_number || invoice.invoice_number}</h1>
                 <StatusBadge label={supplierDeliveryStatusLabel(invoice.status)} variant={getStatusVariant("purchaseOrder", invoice.status)} dot />
               </div>
             </div>
@@ -556,9 +568,11 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       <FadeItem>
         <dl className="grid grid-cols-1 divide-y divide-border rounded-2xl border border-border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <div className="p-5">
-            <dt className="text-[13px] text-muted-foreground">Sẽ nhận vào kho, cuốn</dt>
+            <dt className="text-[13px] text-muted-foreground">Nhập kho, cuốn</dt>
             <dd className="mt-1 font-display text-[30px] font-semibold leading-none tabular-nums text-foreground">{totals.planned.toLocaleString("vi-VN")}</dd>
-            <dd className="mt-2 text-[12px] text-muted-foreground">Trên {invoicedTotal.toLocaleString("vi-VN")} cuốn nhà cung cấp giao.</dd>
+            <dd className="mt-2 text-[12px] text-muted-foreground">
+              Trên {invoicedTotal.toLocaleString("vi-VN")} cuốn nhà cung cấp giao{damagedTotal || rejectedTotal ? `, đã trừ ${damagedTotal} hỏng và ${rejectedTotal} từ chối` : ""}.
+            </dd>
           </div>
           <div className="p-5">
             <dt className="text-[13px] text-muted-foreground">Giá trị ước tính</dt>
@@ -578,8 +592,8 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
       <FadeItem>
         <section aria-labelledby="reconcile-title" className="@container overflow-hidden rounded-2xl border border-border bg-card">
           <div className="px-5 pb-3 pt-4">
-            <h2 id="reconcile-title" className="font-display text-[18px] font-semibold tracking-tight">Đối chiếu hóa đơn với PO</h2>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">Mỗi dòng nhận tối đa số PO còn lại và không quá số nhà cung cấp giao.</p>
+            <h2 id="reconcile-title" className="font-display text-[18px] font-semibold tracking-tight">Đối chiếu phiếu giao với PO</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Mỗi dòng nhận tối đa số PO còn lại và không quá số nhà cung cấp giao. Ghi số cuốn hỏng hoặc từ chối nhận ngay tại cửa kho; chỉ phần còn lại được nhập kho.</p>
           </div>
           <Table className="table-fixed">
             <TableHeader>
@@ -589,17 +603,36 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                 <TableHead className="hidden w-[104px] text-right text-[12px] font-normal text-muted-foreground @3xl:table-cell">Đã nhận trước</TableHead>
                 <TableHead className="hidden w-[96px] text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">PO còn lại</TableHead>
                 <TableHead className="w-[80px] text-right text-[12px] font-normal text-muted-foreground">NCC giao</TableHead>
-                <TableHead className="w-[80px] text-right text-[12px] font-normal text-muted-foreground">Sẽ nhận</TableHead>
+                <TableHead className="hidden w-[100px] text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Hỏng</TableHead>
+                <TableHead className="hidden w-[100px] text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Từ chối</TableHead>
+                <TableHead className="w-[88px] pr-5 text-right text-[12px] font-normal text-muted-foreground @4xl:pr-4">Nhập kho</TableHead>
                 <TableHead className="hidden w-[200px] pr-5 text-[12px] font-normal text-muted-foreground @4xl:table-cell">Chênh lệch</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lines.map(({ item, invoiced, remaining, willReceive, over, short }) => {
+              {lines.map(({ item, invoiced, remaining, willReceive, damaged, rejected, accepted, over, short }) => {
                 const gap = over > 0
                   ? { label: `Giao vượt ${over}`, variant: "danger" as const, hint: `${over} cuốn vượt PO sẽ không nhập kho` }
                   : short > 0
                     ? { label: `Giao thiếu ${short}`, variant: "warning" as const, hint: `PO vẫn chờ ${short} cuốn sau lần giao này` }
                     : { label: "Khớp PO", variant: "success" as const, hint: null };
+                // khoa: damaged / refused copies are entered here and subtracted before posting.
+                const exceptionInput = (kind: "damaged" | "rejected", className?: string) => (
+                  <Input
+                    type="number"
+                    min={0}
+                    max={willReceive}
+                    inputMode="numeric"
+                    aria-label={`${kind === "damaged" ? "Số hỏng" : "Số từ chối"} — ${item.title || item.variant_id}`}
+                    value={kind === "damaged" ? damaged : rejected}
+                    disabled={!canReceive}
+                    onChange={(event) => {
+                      const value = Math.max(0, Math.floor(Number(event.target.value) || 0));
+                      setExceptions((current) => ({ ...current, [item.id]: { damaged: current[item.id]?.damaged || 0, rejected: current[item.id]?.rejected || 0, [kind]: value } }));
+                    }}
+                    className={cn("h-9 w-20 text-right tabular-nums", className)}
+                  />
+                );
                 return (
                   <TableRow key={item.id} className="hover:bg-muted/30">
                     <TableCell className="whitespace-normal py-3 pl-5 pr-3 align-top">
@@ -609,6 +642,10 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                       <p className="mt-1 text-[12px] tabular-nums text-muted-foreground @3xl:hidden">
                         PO đặt {item.ordered_qty}, đã nhận trước {item.previously_received_qty}<span className="@2xl:hidden">, còn lại {remaining}</span>
                       </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 @2xl:hidden">
+                        <label className="flex items-center gap-2 text-[12px] text-muted-foreground">Hỏng {exceptionInput("damaged")}</label>
+                        <label className="flex items-center gap-2 text-[12px] text-muted-foreground">Từ chối {exceptionInput("rejected")}</label>
+                      </div>
                       <div className="mt-1.5 @4xl:hidden">
                         <StatusBadge label={gap.label} variant={gap.variant} />
                         {gap.hint ? <p className="mt-1 text-[12px] leading-4 text-muted-foreground">{gap.hint}</p> : null}
@@ -618,7 +655,9 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                     <TableCell className="hidden py-3 text-right align-top text-[13px] tabular-nums text-muted-foreground @3xl:table-cell">{item.previously_received_qty}</TableCell>
                     <TableCell className="hidden py-3 text-right align-top text-[13px] tabular-nums @2xl:table-cell">{remaining}</TableCell>
                     <TableCell className="py-3 text-right align-top text-[13px] font-medium tabular-nums">{invoiced}</TableCell>
-                    <TableCell className="py-3 text-right align-top text-[15px] font-semibold tabular-nums text-foreground">{willReceive}</TableCell>
+                    <TableCell className="hidden py-2 text-right align-top @2xl:table-cell">{exceptionInput("damaged", "ml-auto")}</TableCell>
+                    <TableCell className="hidden py-2 text-right align-top @2xl:table-cell">{exceptionInput("rejected", "ml-auto")}</TableCell>
+                    <TableCell className="py-3 pr-5 text-right align-top text-[15px] font-semibold tabular-nums text-foreground @4xl:pr-4">{accepted}</TableCell>
                     <TableCell className="hidden whitespace-normal py-3 pr-5 align-top @4xl:table-cell">
                       <StatusBadge label={gap.label} variant={gap.variant} />
                       {gap.hint ? <p className="mt-1 text-[12px] leading-4 text-muted-foreground">{gap.hint}</p> : null}
@@ -652,7 +691,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
           <section aria-labelledby="assign-title" className="rounded-2xl border border-border bg-card p-5">
             <h2 id="assign-title" className="font-display text-[18px] font-semibold tracking-tight">Giao kiểm đếm cho nhân viên kho</h2>
             <p className="mt-1 max-w-[70ch] text-[13px] text-muted-foreground">
-              Hệ thống tạo phiếu nhập nháp với số "Sẽ nhận" ở trên. Nhân viên kho đếm thực tế trên phiếu; tồn kho chỉ tăng khi quản lý duyệt phiếu.
+              Hệ thống tạo phiếu nhập nháp với số "Nhập kho" ở trên (đã trừ hỏng và từ chối). Nhân viên kho đếm thực tế trên phiếu; tồn kho chỉ tăng đúng số được chấp nhận khi quản lý duyệt. Thiếu, hỏng và từ chối được lập biên bản chênh lệch gửi nhà cung cấp, hóa đơn gốc giữ nguyên.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div>

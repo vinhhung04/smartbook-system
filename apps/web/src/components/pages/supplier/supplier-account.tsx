@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { AlertTriangle, BookOpen, CheckCircle2, FileText, LogOut, PackageCheck, RefreshCw, Truck } from "lucide-react";
+import { AlertTriangle, BookOpen, FileText, LogOut, PackageCheck, RefreshCw, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,8 @@ import { purchaseOrderStatusLabel } from "@/lib/purchase-order-status";
 import type { SupplierPortalOrder, SupplierPortalShortageReport } from "@/services/supplier-portal";
 import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 import { AIChatbot } from "@/components/ai-chatbot";
+import { SupplierOrderDocuments, SupplierOrderResponsePanel } from "@/components/procurement/supplier-order-documents";
+import { DISCREPANCY_TYPE_LABEL, SUPPLIER_PROPOSAL_LABEL, supplierResponseMeta } from "@/lib/procurement-document-status";
 
 type InvoiceLines = Record<string, number>;
 
@@ -52,6 +54,9 @@ export function SupplierAccountPage() {
   const [invoiceDate, setInvoiceDate] = useState(todayIso());
   const [expectedDate, setExpectedDate] = useState(todayIso());
   const [note, setNote] = useState("");
+  const [carrierName, setCarrierName] = useState("");
+  const [delivererName, setDelivererName] = useState("");
+  const [proposals, setProposals] = useState<Record<string, { action: string; note: string }>>({});
   const [lines, setLines] = useState<InvoiceLines>({});
   const [redeliveryReportId, setRedeliveryReportId] = useState("");
   const [cannotReason, setCannotReason] = useState("");
@@ -101,7 +106,9 @@ export function SupplierAccountPage() {
       defaults[item.id] = item.remaining_qty;
     }
     setLines(defaults);
-    setInvoiceNumber(`INV-${selectedOrder.purchase_order.po_number}-${Date.now().toString().slice(-5)}`);
+    // The formal invoice is issued separately (Chứng từ dùng chung); this optional field only
+    // references it when the supplier already has one.
+    setInvoiceNumber("");
     setDeliveryNumber(`DN-${selectedOrder.purchase_order.po_number}-${Date.now().toString().slice(-5)}`);
     setRedeliveryReportId(openShortages[0]?.id || "");
   }, [selectedOrder, openShortages]);
@@ -109,21 +116,6 @@ export function SupplierAccountPage() {
   async function logout() {
     await authService.logout();
     navigate("/login");
-  }
-
-  function confirmOrder() {
-    if (!selectedOrder) return;
-    openConfirm("Xác nhận đơn đặt hàng", "Bạn xác nhận sẽ cung cấp hàng theo đơn này?", "default", async () => {
-      try {
-        setWorking(true);
-        await supplierAccountService.confirmOrder(selectedOrder.purchase_order.id);
-        toast.success("Đã xác nhận đơn hàng");
-        setConfirmState((s) => ({ ...s, open: false }));
-        await load();
-      } catch (confirmError) {
-        toast.error(getApiErrorMessage(confirmError, "Xác nhận thất bại"));
-      } finally { setWorking(false); }
-    });
   }
 
   function setLineQty(itemId: string, value: number, max: number) {
@@ -135,7 +127,7 @@ export function SupplierAccountPage() {
 
   async function submitInvoice(redeliveryReport?: SupplierPortalShortageReport) {
     if (!selectedOrder) return;
-    if (!invoiceNumber.trim()) return toast.error("Số hóa đơn là bắt buộc");
+    if (!deliveryNumber.trim()) return toast.error("Số phiếu giao hàng là bắt buộc");
 
     const sourceItems = redeliveryReport?.items || selectedOrder.purchase_order.items;
     const payloadItems = sourceItems
@@ -155,14 +147,16 @@ export function SupplierAccountPage() {
       .filter((item) => item.invoiced_qty > 0);
 
     if (payloadItems.length === 0) return toast.error("Phải có ít nhất một dòng hàng");
-    const title = redeliveryReport ? "Tạo hóa đơn giao bù" : "Gửi hóa đơn / chứng từ";
-    const desc = redeliveryReport ? "Xác nhận tạo hóa đơn giao bù?" : "Xác nhận gửi hóa đơn này?";
+    const title = redeliveryReport ? "Tạo phiếu giao bù" : "Gửi phiếu giao hàng";
+    const desc = redeliveryReport ? "Xác nhận tạo phiếu giao bù?" : "Xác nhận gửi phiếu giao hàng này cho kho SmartBook?";
     openConfirm(title, desc, "default", async () => {
       try {
         setWorking(true);
         const payload = {
-          invoice_number: invoiceNumber.trim(),
+          ...(invoiceNumber.trim() ? { invoice_number: invoiceNumber.trim() } : {}),
           delivery_number: deliveryNumber.trim(),
+          carrier_name: carrierName.trim() || undefined,
+          deliverer_name: delivererName.trim() || undefined,
           invoice_date: invoiceDate,
           expected_delivery_date: expectedDate,
           supplier_note: note.trim(),
@@ -174,7 +168,7 @@ export function SupplierAccountPage() {
         } else {
           await supplierAccountService.createInvoice(selectedOrder.purchase_order.id, payload);
         }
-        toast.success(redeliveryReport ? "Đã gửi hóa đơn giao bù" : "Đã gửi hóa đơn");
+        toast.success(redeliveryReport ? "Đã gửi phiếu giao bù" : "Đã gửi phiếu giao hàng");
         setNote("");
         setConfirmState((s) => ({ ...s, open: false }));
         await load();
@@ -197,6 +191,22 @@ export function SupplierAccountPage() {
         toast.error(getApiErrorMessage(ackError, "Ghi nhận thất bại"));
       } finally { setWorking(false); }
     });
+  }
+
+  async function propose(reportId: string) {
+    if (!selectedOrder) return;
+    const proposal = proposals[reportId];
+    if (!proposal?.action) return toast.error("Chọn phương án xử lý");
+    try {
+      setWorking(true);
+      await supplierAccountService.proposeShortageAction(selectedOrder.purchase_order.id, reportId, proposal.action, proposal.note.trim() || undefined);
+      toast.success("Đã gửi đề xuất xử lý chênh lệch");
+      await load();
+    } catch (proposeError) {
+      toast.error(getApiErrorMessage(proposeError, "Gửi đề xuất thất bại"));
+    } finally {
+      setWorking(false);
+    }
   }
 
   async function cannotFulfill(reportId: string) {
@@ -237,7 +247,7 @@ export function SupplierAccountPage() {
       <main className="mx-auto max-w-7xl px-4 py-6">
         <div className="mb-5 flex items-start gap-3 rounded-[8px] border border-amber-200 bg-amber-50 p-4 text-[13px] text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <p>Tài khoản nhà cung cấp chỉ xác nhận đơn hàng và gửi chứng từ giao hàng. Việc nhận hàng và ghi sổ kho do nhân viên kho SmartBook thực hiện.</p>
+          <p>Nhà cung cấp phản hồi đơn hàng, phát hành hóa đơn và phiếu giao hàng. Việc kiểm nhận, lập phiếu nhập kho và ghi sổ kho do nhân viên kho SmartBook thực hiện; kết quả được chia sẻ lại ở mục Chứng từ dùng chung.</p>
         </div>
 
         {isLoading ? (
@@ -255,7 +265,7 @@ export function SupplierAccountPage() {
           </div>
         ) : selectedOrder ? (
           <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="space-y-3">
+            <aside className="min-w-0 space-y-3">
               {orders.map((order) => (
                 <button
                   key={order.purchase_order.id}
@@ -271,7 +281,7 @@ export function SupplierAccountPage() {
               ))}
             </aside>
 
-            <section className="space-y-5">
+            <section className="min-w-0 space-y-5">
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -282,6 +292,9 @@ export function SupplierAccountPage() {
                   <div className="flex flex-wrap gap-2">
                     <Badge className={statusTone(selectedOrder.purchase_order.status)}>{purchaseOrderStatusLabel(selectedOrder.purchase_order.status)}</Badge>
                     <Badge className={statusTone(selectedOrder.dispatch.status)}>{purchaseOrderStatusLabel(selectedOrder.dispatch.status)}</Badge>
+                    {supplierResponseMeta(selectedOrder.purchase_order.supplier_response_status) ? (
+                      <Badge className={statusTone(selectedOrder.purchase_order.supplier_response_status || "")}>{supplierResponseMeta(selectedOrder.purchase_order.supplier_response_status)?.label}</Badge>
+                    ) : null}
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-5">
@@ -289,7 +302,7 @@ export function SupplierAccountPage() {
                     ["Đã đặt", totals.ordered],
                     ["Đã nhận", totals.received],
                     ["Còn lại", totals.remaining],
-                    ["Đã lập hóa đơn", totals.invoiced],
+                    ["Đã lập phiếu giao", totals.invoiced],
                     ["Thiếu chưa xử lý", totals.shortage],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-[8px] border border-slate-100 bg-slate-50 p-3">
@@ -298,23 +311,37 @@ export function SupplierAccountPage() {
                     </div>
                   ))}
                 </div>
-                {selectedOrder.purchase_order.status === "SENT_TO_SUPPLIER" ? (
-                  <Button className="mt-5" onClick={() => void confirmOrder()} disabled={working}>
-                    <CheckCircle2 className="mr-2 h-4 w-4" /> Xác nhận đơn hàng
-                  </Button>
-                ) : null}
               </div>
+
+              <SupplierOrderResponsePanel key={`resp-${selectedOrder.purchase_order.id}`} order={selectedOrder} onChanged={load} />
+
+              <SupplierOrderDocuments key={`docs-${selectedOrder.purchase_order.id}-${selectedOrder.invoices.length}-${selectedOrder.purchase_order.status}`} order={selectedOrder} />
 
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
                 <div className="mb-4 flex items-center gap-2">
                   <FileText className="h-4 w-4 text-sky-700" />
-                  <h3 className="text-[16px] font-semibold">Tạo hóa đơn / phiếu giao hàng</h3>
+                  <h3 className="text-[16px] font-semibold">Lập phiếu giao hàng</h3>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Số hóa đơn" />
-                  <input value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Số phiếu giao" />
-                  <input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" />
-                  <input type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} className="rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" />
+                <p className="-mt-2 mb-3 text-[12px] text-slate-500">Mỗi đợt giao một phiếu. Một đơn có thể giao nhiều đợt; hóa đơn chính thức phát hành riêng ở mục Chứng từ dùng chung.</p>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <label className="space-y-1 text-[12px] font-medium text-slate-600">Số phiếu giao hàng (bắt buộc)
+                    <input value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} className="block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950" />
+                  </label>
+                  <label className="space-y-1 text-[12px] font-medium text-slate-600">Ngày lập phiếu
+                    <input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} className="block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950" />
+                  </label>
+                  <label className="space-y-1 text-[12px] font-medium text-slate-600">Ngày giao dự kiến
+                    <input type="date" value={expectedDate} onChange={(event) => setExpectedDate(event.target.value)} className="block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950" />
+                  </label>
+                  <label className="space-y-1 text-[12px] font-medium text-slate-600">Đơn vị vận chuyển
+                    <input value={carrierName} onChange={(event) => setCarrierName(event.target.value)} className="block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950" />
+                  </label>
+                  <label className="space-y-1 text-[12px] font-medium text-slate-600">Người giao
+                    <input value={delivererName} onChange={(event) => setDelivererName(event.target.value)} className="block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950" />
+                  </label>
+                  <label className="space-y-1 text-[12px] font-medium text-slate-600">Số hóa đơn tham chiếu (nếu đã có)
+                    <input value={invoiceNumber} onChange={(event) => setInvoiceNumber(event.target.value)} className="block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950" />
+                  </label>
                 </div>
                 <textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-3 min-h-20 w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Ghi chú của nhà cung cấp" />
                 <div className="mt-4 overflow-x-auto">
@@ -326,7 +353,7 @@ export function SupplierAccountPage() {
                         <th className="px-3 py-2">Đặt</th>
                         <th className="px-3 py-2">Đã nhận</th>
                         <th className="px-3 py-2">Còn lại</th>
-                        <th className="px-3 py-2">SL hóa đơn</th>
+                        <th className="px-3 py-2">SL giao đợt này</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -338,7 +365,7 @@ export function SupplierAccountPage() {
                           <td className="px-3 py-2">{item.received_qty}</td>
                           <td className="px-3 py-2">{item.remaining_qty}</td>
                           <td className="px-3 py-2">
-                            <input type="number" min={0} max={item.remaining_qty} {...zeroFieldProps} value={lines[item.id] || 0} onChange={(event) => setLineQty(item.id, Number(numberInputValue(event)), item.remaining_qty)} className="w-24 rounded-[8px] border border-slate-200 px-2 py-1" />
+                            <input type="number" aria-label={`Số lượng giao — ${item.title || item.variant_id}`} min={0} max={item.remaining_qty} {...zeroFieldProps} value={lines[item.id] || 0} onChange={(event) => setLineQty(item.id, Number(numberInputValue(event)), item.remaining_qty)} className="w-24 rounded-[8px] border border-slate-200 px-2 py-1" />
                           </td>
                         </tr>
                       ))}
@@ -346,12 +373,12 @@ export function SupplierAccountPage() {
                   </table>
                 </div>
                 <Button className="mt-4" onClick={() => void submitInvoice()} disabled={working || totals.remaining <= 0}>
-                  <PackageCheck className="mr-2 h-4 w-4" /> Gửi hóa đơn
+                  <PackageCheck className="mr-2 h-4 w-4" /> Gửi phiếu giao hàng
                 </Button>
               </div>
 
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
-                <h3 className="text-[16px] font-semibold">Báo thiếu hàng và giao bù</h3>
+                <h3 className="text-[16px] font-semibold">Chênh lệch khi nhận hàng</h3>
                 {openShortages.length === 0 ? (
                   <p className="mt-3 text-[13px] text-slate-500">Không có báo cáo thiếu hàng nào đang mở.</p>
                 ) : (
@@ -360,7 +387,7 @@ export function SupplierAccountPage() {
                       <div key={report.id} className="rounded-[8px] border border-slate-200 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-[13px] font-semibold">Báo thiếu {report.id.slice(0, 8)}</p>
+                            <p className="text-[13px] font-semibold">{DISCREPANCY_TYPE_LABEL[report.discrepancy_type || "SHORTAGE"] || "Chênh lệch"} · {report.id.slice(0, 8)}</p>
                             <p className="text-[12px] text-slate-500">{report.reason || "Không có lý do"}</p>
                           </div>
                           <Badge className={statusTone(report.status)}>{purchaseOrderStatusLabel(report.status)}</Badge>
@@ -368,7 +395,7 @@ export function SupplierAccountPage() {
                         <div className="mt-3 grid gap-2 sm:grid-cols-2">
                           {report.items.map((item) => (
                             <div key={item.id} className="rounded-[8px] bg-amber-50 p-3 text-[13px] text-amber-900">
-                              <span className="font-semibold">{item.title || item.variant_id}</span> - thiếu {item.shortage_qty}
+                              <span className="font-semibold">{item.title || item.variant_id}</span> - {(DISCREPANCY_TYPE_LABEL[item.discrepancy_type || "SHORTAGE"] || "thiếu").toLowerCase()} {item.shortage_qty}
                             </div>
                           ))}
                         </div>
@@ -376,11 +403,34 @@ export function SupplierAccountPage() {
                           <Button size="sm" variant="outline" onClick={() => void acknowledge(report.id)} disabled={working}>Ghi nhận</Button>
                           <Button size="sm" variant="outline" onClick={() => setRedeliveryReportId(report.id)}>Dùng để giao bù</Button>
                         </div>
+                        {report.supplier_proposed_action ? (
+                          <p className="mt-2 text-[12px] text-slate-600">Đề xuất đã gửi: <span className="font-medium">{SUPPLIER_PROPOSAL_LABEL[report.supplier_proposed_action] || report.supplier_proposed_action}</span>{report.supplier_response_note ? ` — ${report.supplier_response_note}` : ""}</p>
+                        ) : null}
+                        <div className="mt-3 grid gap-2 sm:grid-cols-[200px_minmax(0,1fr)_auto]">
+                          <label className="text-[12px] font-medium text-slate-600">Phương án xử lý
+                            <select
+                              value={proposals[report.id]?.action || ""}
+                              onChange={(event) => setProposals((current) => ({ ...current, [report.id]: { action: event.target.value, note: current[report.id]?.note || "" } }))}
+                              className="mt-1 block w-full rounded-[8px] border border-slate-200 px-2 py-2 text-[13px] font-normal text-slate-950"
+                            >
+                              <option value="">— Chọn —</option>
+                              {Object.entries(SUPPLIER_PROPOSAL_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                            </select>
+                          </label>
+                          <label className="text-[12px] font-medium text-slate-600">Ghi chú
+                            <input
+                              value={proposals[report.id]?.note || ""}
+                              onChange={(event) => setProposals((current) => ({ ...current, [report.id]: { action: current[report.id]?.action || "", note: event.target.value } }))}
+                              className="mt-1 block w-full rounded-[8px] border border-slate-200 px-3 py-2 text-[13px] font-normal text-slate-950"
+                            />
+                          </label>
+                          <Button size="sm" className="self-end" onClick={() => void propose(report.id)} disabled={working}>Gửi đề xuất</Button>
+                        </div>
                       </div>
                     ))}
                     {selectedShortage ? (
                       <div className="rounded-[8px] border border-sky-200 bg-sky-50 p-4">
-                        <p className="text-[14px] font-semibold">Tạo giao bù cho báo thiếu {selectedShortage.id.slice(0, 8)}</p>
+                        <p className="text-[14px] font-semibold">Tạo phiếu giao bù cho chênh lệch {selectedShortage.id.slice(0, 8)}</p>
                         <div className="mt-3 space-y-2">
                           {selectedShortage.items.map((item) => (
                             <label key={item.id} className="flex items-center justify-between gap-3 text-[13px]">
@@ -390,7 +440,7 @@ export function SupplierAccountPage() {
                           ))}
                         </div>
                         <Button className="mt-4" onClick={() => void submitInvoice(selectedShortage)} disabled={working}>
-                          <Truck className="mr-2 h-4 w-4" /> Gửi hóa đơn giao bù
+                          <Truck className="mr-2 h-4 w-4" /> Gửi phiếu giao bù
                         </Button>
                         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                           <input value={cannotReason} onChange={(event) => setCannotReason(event.target.value)} className="flex-1 rounded-[8px] border border-slate-200 px-3 py-2 text-[13px]" placeholder="Lý do nếu không thể cung cấp" />
@@ -403,16 +453,16 @@ export function SupplierAccountPage() {
               </div>
 
               <div className="rounded-[8px] border border-slate-200 bg-white p-5">
-                <h3 className="text-[16px] font-semibold">Hóa đơn đã gửi</h3>
+                <h3 className="text-[16px] font-semibold">Các đợt giao hàng</h3>
                 {selectedOrder.invoices.length === 0 ? (
-                  <p className="mt-3 text-[13px] text-slate-500">Chưa gửi hóa đơn hoặc phiếu giao hàng nào.</p>
+                  <p className="mt-3 text-[13px] text-slate-500">Chưa gửi phiếu giao hàng nào.</p>
                 ) : (
                   <div className="mt-4 overflow-x-auto">
                     <table className="w-full min-w-[760px] text-[13px]">
                       <thead className="bg-slate-50 text-left text-[11px] uppercase text-slate-500">
                         <tr>
-                          <th className="px-3 py-2">Hóa đơn</th>
                           <th className="px-3 py-2">Phiếu giao</th>
+                          <th className="px-3 py-2">Số tham chiếu</th>
                           <th className="px-3 py-2">Trạng thái</th>
                           <th className="px-3 py-2">SL</th>
                           <th className="px-3 py-2">Phiếu nhập</th>
@@ -421,8 +471,8 @@ export function SupplierAccountPage() {
                       <tbody>
                         {selectedOrder.invoices.map((invoice) => (
                           <tr key={invoice.id} className="border-b border-slate-100">
-                            <td className="px-3 py-2 font-medium">{invoice.invoice_number}</td>
-                            <td className="px-3 py-2">{invoice.delivery_number || "-"}</td>
+                            <td className="px-3 py-2 font-medium">{invoice.delivery_number || invoice.invoice_number}</td>
+                            <td className="px-3 py-2">{invoice.delivery_number && invoice.invoice_number !== invoice.delivery_number ? invoice.invoice_number : "-"}</td>
                             <td className="px-3 py-2"><Badge className={statusTone(invoice.status)}>{purchaseOrderStatusLabel(invoice.status)}</Badge></td>
                             <td className="px-3 py-2">{invoice.items.reduce((sum, item) => sum + item.invoiced_qty, 0)}</td>
                             <td className="px-3 py-2">{invoice.goods_receipts?.map((receipt) => `${receipt.receipt_number} (${purchaseOrderStatusLabel(receipt.status)})`).join(", ") || "-"}</td>
