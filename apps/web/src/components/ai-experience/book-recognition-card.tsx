@@ -26,7 +26,8 @@ function Candidate({ c, choosable, chosen, onChoose }: {
   return (
     <li className={cn('flex gap-2.5 rounded-lg border p-2', chosen ? 'border-primary/60 bg-primary/5' : 'border-border bg-card')}>
       {c.cover_image_url ? (
-        <img src={c.cover_image_url} alt={`Bìa sách ${c.title ?? ''}`} className="h-16 w-11 shrink-0 rounded object-cover" loading="lazy" />
+        // Some sources (Google Books) return http:// cover URLs, which the CSP's https-only img-src blocks.
+        <img src={c.cover_image_url.replace(/^http:\/\//i, 'https://')} alt={`Bìa sách ${c.title ?? ''}`} className="h-16 w-11 shrink-0 rounded object-cover" loading="lazy" />
       ) : (
         <div className="grid h-16 w-11 shrink-0 place-items-center rounded bg-muted" aria-hidden="true">
           <BookOpen className="h-4 w-4 text-muted-foreground" />

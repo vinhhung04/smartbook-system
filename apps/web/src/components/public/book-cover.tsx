@@ -20,7 +20,8 @@ export function BookCover({ title, author, imageUrl, className, eager = false }:
     <div className={cn('relative aspect-[2/3] w-full overflow-hidden rounded-[6px] bg-muted', showImage && !loaded && 'animate-pulse', 'shadow-[0_1px_2px_rgba(15,23,42,0.12),0_8px_20px_-12px_rgba(15,23,42,0.45)]', className)}>
       {showImage ? (
         <img
-          src={imageUrl!}
+          // Some sources (Google Books) return http:// cover URLs, which the CSP's https-only img-src blocks.
+          src={imageUrl!.replace(/^http:\/\//i, 'https://')}
           alt={`Bìa sách ${title}`}
           loading={eager ? 'eager' : 'lazy'}
           decoding="async"
