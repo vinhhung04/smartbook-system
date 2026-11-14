@@ -101,17 +101,30 @@ function add(name, ok, detail) {
   console.log(`${ok ? 'PASS' : 'FAIL'} - ${name}${detail ? ` :: ${detail}` : ''}`);
 }
 
+// The production endpoints this script races against (getAvailability /
+// reserveFromBorrow) sum/pick across every stock_balances row of a given
+// (variant_id, warehouse_id), not just the one location this script patches.
+// A target whose variant+warehouse has a second location elsewhere would let
+// extra concurrent requests legitimately succeed from that other location,
+// breaking the "exactly 1 wins" assumption below without any app bug — so
+// this only picks a (variant, warehouse) that resolves to a single location.
 async function resolveTarget() {
   const rows = psqlRows(`
-    SELECT sb.variant_id, sb.warehouse_id, sb.location_id
-    FROM stock_balances sb
-    JOIN book_variants bv ON bv.id = sb.variant_id
-    WHERE sb.available_qty > 0 AND bv.is_borrowable = true
-    ORDER BY sb.available_qty DESC
+    WITH single_location AS (
+      SELECT variant_id, warehouse_id, (array_agg(location_id))[1] AS location_id, MIN(available_qty) AS available_qty
+      FROM stock_balances
+      GROUP BY variant_id, warehouse_id
+      HAVING COUNT(*) = 1
+    )
+    SELECT sl.variant_id, sl.warehouse_id, sl.location_id
+    FROM single_location sl
+    JOIN book_variants bv ON bv.id = sl.variant_id
+    WHERE sl.available_qty > 0 AND bv.is_borrowable = true
+    ORDER BY sl.available_qty DESC
     LIMIT 1;
   `);
   if (rows.length === 0) {
-    throw new Error('No borrowable variant with available stock found in inventory_db');
+    throw new Error('No borrowable variant with available stock in exactly one location found in inventory_db');
   }
   const [variant_id, warehouse_id, location_id] = rows[0];
   return { variant_id, warehouse_id, location_id };
