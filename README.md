@@ -109,6 +109,7 @@ Mở **http://localhost:5173**, đăng nhập bằng tài khoản demo `hung` / 
 - [🧱 Service catalog](#service-catalog)
 - [🛠️ Công nghệ sử dụng](#công-nghệ-sử-dụng)
 - [🐳 Chạy project bằng Docker](#chạy-project-bằng-docker)
+- [🚢 Triển khai production](#triển-khai-production)
 - [🔑 Tài khoản demo](#tài-khoản-demo)
 - [💳 Thanh toán VNPay (sandbox)](#thanh-toán-vnpay-sandbox)
 - [🧪 Kiểm thử](#kiểm-thử)
@@ -333,6 +334,8 @@ Hai kênh để nhà cung cấp tương tác với hệ thống, dùng chung m�
 
 - **Supplier Account** (`/api/supplier-account`): nhà cung cấp đăng nhập bằng tài khoản thật, được route tới `/supplier` trên Web UI.
 - **Supplier Portal công khai** (`/api/supplier-portal`): staff gửi link kèm token (`/supplier/portal/:token`), không cần đăng nhập, dùng cho các nhà cung cấp chưa có tài khoản.
+
+Giao diện Web của hai kênh dùng chung một khung (`apps/web/src/components/pages/supplier/supplier-shell.tsx`): cùng header, các mục, ô số liệu, tab và tên trạng thái. Trang tài khoản nhóm đơn theo **Chờ phản hồi / Đang giao / Báo thiếu / Đã xong**; trang theo link mở thẳng một đơn.
 
 Cả hai kênh chỉ cho phép: xác nhận đơn hàng, nộp hóa đơn/phiếu giao hàng, xác nhận (acknowledge) hoặc báo không thể giao khi thiếu hàng, nộp hóa đơn giao bù (redelivery).
 
@@ -809,6 +812,16 @@ docker compose stop prometheus grafana
 
 Lần `docker compose --profile ai up -d` sau, Prometheus/Grafana không được khởi động lại. Dữ liệu metric nằm trong container Prometheus (giữ tối đa 7 ngày) và mất khi container bị xóa — chấp nhận được cho demo.
 
+## 🚢 Triển Khai Production
+
+Production chạy trên một VPS sau Caddy (HTTPS tự động): web tại `smartbook.io.vn`, API tại `api.smartbook.io.vn`.
+
+- 🌿 **Nhánh:** code trên `hungg`, merge vào `main`. CI (`.github/workflows/ci.yml`) chạy cho mọi push/PR vào `main` và `hungg`.
+- 🚀 **Deploy:** push vào nhánh `production` → `deploy-production.yml` chạy test, build image (tag = commit SHA), đẩy lên GHCR, cập nhật VPS rồi kiểm tra health. Không nhánh nào khác deploy, và không cần SSH vào VPS để build.
+- 📱 **Mobile:** `mobile-release.yml` chạy thủ công (EAS build hoặc update, profile `preview`/`production`), xem `docs/MOBILE_DEPLOYMENT.md`.
+
+Biến môi trường, secrets, backup/restore, rollback và xử lý sự cố: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## 🔑 Tài Khoản Demo
 
 Seed Auth Service tạo các user demo với mật khẩu chung:
@@ -939,6 +952,7 @@ Ngoài các script tích hợp Node ở dưới, project còn có ba lớp kiể
   ```powershell
   npm --prefix apps/web run test:e2e
   ```
+  Mặc định chạy với `http://localhost:5173`, đặt `BASE_URL` để trỏ nơi khác. Các test tạo dữ liệu thật trên stack đó, nên không chạy vào môi trường dùng chung. Danh sách spec và cách chạy: [`apps/web/e2e/README.md`](apps/web/e2e/README.md).
 - **Contract test** — kiểm tra hợp đồng dữ liệu giữa các service (vd Analytics đọc đúng shape dữ liệu AI service trả về), chạy trong CI mỗi lần push/PR:
   ```powershell
   npm --prefix services/analytics-service run test:contract
@@ -1196,27 +1210,36 @@ PASS=10 TOTAL=10
 smartbook-system/
 |- apps/
 |  |- api-gateway/
-|  |- web/
-|  \- mobile/          # Expo/React Native — staff picking app + customer app
+|  |- web/              # React + Vite: staff, Customer Portal, Supplier Portal, site công khai
+|  \- mobile/           # Expo/React Native — staff picking app + customer app
 |- services/
 |  |- auth-service/
 |  |- inventory-service/
-|  |- borrow-service/   # prisma/simulation/: bộ sinh dữ liệu hành vi tổng hợp
-|  |- ai-service/       # eval/: đánh giá Recommendation V2 + báo cáo
+|  |- borrow-service/    # prisma/simulation/: bộ sinh dữ liệu hành vi tổng hợp
+|  |- ai-service/        # eval/: đánh giá Recommendation V2 + báo cáo
 |  \- analytics-service/
 |- packages/
 |  \- shared/
-|- observability/       # Config Prometheus + Grafana (profile monitoring)
-|- db-init/
+|- deploy/               # Caddyfile + script triển khai VPS
+|- observability/        # Config Prometheus + Grafana (profile monitoring)
+|- db-init/              # SQL khởi tạo database
+|- data/                 # SQL/JSON dữ liệu catalog
 |- docs/
 |  |- ARCHITECTURE/
 |  |- SERVICES/
 |  |- ANALYSIS/
-|  \- TEST_GUIDES/
+|  |- TEST_GUIDES/
+|  |- diagrams/          # Sơ đồ Mermaid / Draw.io / Diagram Design + bản xuất
+|  |- reports/           # Báo cáo rà soát và triển khai tính năng
+|  \- tasks/             # Kế hoạch công việc
+|- thesis/               # Tài liệu khóa luận: số liệu, hình, bảng, bản nháp (drafts/)
+|- research-inputs/      # Bộ dữ liệu nghiên cứu (tìm sách bằng ảnh bìa)
 |- scripts/
-|  \- k6/               # Load test scenarios (profile loadtest)
-|- tests/               # Test cấu hình workspace, AI decision, data enrichment
+|  \- k6/                # Load test scenarios (profile loadtest)
+|- tests/                # Test cấu hình workspace, AI decision, data enrichment
+|- .github/workflows/    # ci.yml, deploy-production.yml, mobile-release.yml
 |- docker-compose.yml
+|- compose.prod.yml
 \- README.md
 ```
 
@@ -1224,6 +1247,7 @@ smartbook-system/
 
 - 🏗️ Tổng quan kiến trúc: `docs/ARCHITECTURE/PROJECT_OVERVIEW.md`
 - 🐳 Hướng dẫn Docker: `docs/RUN_WITH_DOCKER.md`
+- 🚢 Triển khai production: `docs/DEPLOYMENT.md`, mobile: `docs/MOBILE_DEPLOYMENT.md`
 - 🗄️ Prisma migrations: `docs/MIGRATIONS.md`
 - 🌐 Catalog công khai & trang chi nhánh: `docs/public-discovery.md`
 - 🧠 AI catalog intelligence (ISBN/metadata): `docs/ai-catalog-intelligence.md`
@@ -1235,7 +1259,9 @@ smartbook-system/
 - 🧪 Dữ liệu hành vi tổng hợp: `docs/SYNTHETIC_BEHAVIOR_DATASET.md`
 - ✨ Báo cáo đánh giá Recommendation V2: `services/ai-service/eval/reports/recommendation_v2_report.md`
 - 🗂️ Kiểm thử gợi ý vị trí lưu kho: `docs/STORAGE_SUGGESTION_TEST.md`
-- 🧪 Test guides: `docs/TEST_GUIDES/`
+- 🧪 Test guides: `docs/TEST_GUIDES/`, E2E: `apps/web/e2e/README.md`
+- 🧭 Sơ đồ kỹ thuật: `docs/diagrams/README.md`
+- 📝 Báo cáo rà soát và triển khai: `docs/reports/` (nguồn dữ liệu sách, tra cứu sách hai vòng, quy trình chứng từ mua hàng, toàn vẹn nghiệp vụ…)
 
 ## 📝 Ghi Chú Phát Triển
 
