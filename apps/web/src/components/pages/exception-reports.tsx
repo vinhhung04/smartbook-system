@@ -1,16 +1,15 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
-import { AlertTriangle, ImageIcon, RefreshCw, CheckCircle, X, UserCheck, Info } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { NavLink } from "react-router";
+import { AlertTriangle, ArrowLeft, CheckCircle, RefreshCw, UserCheck, X } from "lucide-react";
 import { toast } from "sonner";
-import { SectionCard } from "@/components/ui/section-card";
+import { FadeItem, PageWrapper } from "../motion-utils";
 import { FilterBar } from "@/components/ui/filter-bar";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { Skeleton } from "@/components/ui/loading-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Pagination,
@@ -24,9 +23,11 @@ import {
 import { getPaginationRange } from "@/lib/pagination";
 import { cn } from "@/components/ui/utils";
 import { getApiErrorMessage } from "@/services/api";
+import { authService } from "@/services/auth";
 import { exceptionReportService, type ExceptionReport } from "@/services/exception-reports";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { getStatusVariant } from "@/lib/status-registry";
+import { timeAgo } from "@/lib/time-ago";
 
 const TASK_TYPE_LABELS: Record<string, string> = {
   RECEIVING: "Tiếp nhận",
@@ -50,6 +51,7 @@ const STATUS_LABELS: Record<string, string> = {
   OPEN: "Đang mở",
   ACKNOWLEDGED: "Đã tiếp nhận",
   RESOLVED: "Đã xử lý",
+  DISMISSED: "Đã bỏ qua",
 };
 
 const PAGE_SIZE = 20;
@@ -66,6 +68,46 @@ function formatDate(value: string | null | undefined) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** "17 ngày trước", "hôm qua", "vừa xong" or "ngày 08/09/2026": the age as a phrase inside a sentence. */
+function ageText(value: string | null | undefined) {
+  const t = timeAgo(value);
+  if (t.includes("/")) return `ngày ${t}`;
+  if (t === "Hôm qua" || t === "Vừa xong") return t.toLowerCase();
+  return `${t} trước`;
+}
+
+/** Expected → actual, with the actual figure signalled only when it differs. */
+function QtyChange({ report, size = "sm" }: { report: ExceptionReport; size?: "sm" | "lg" }) {
+  if (report.expected_qty === null || report.actual_qty === null) return null;
+  const delta = report.actual_qty - report.expected_qty;
+  const tone = delta < 0 ? "text-red-700 dark:text-red-400" : delta > 0 ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground";
+  if (size === "sm") {
+    return (
+      <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+        {report.expected_qty} → <span className={cn("font-semibold", tone)}>{report.actual_qty}</span>
+      </span>
+    );
+  }
+  return (
+    <dl className="flex flex-wrap gap-x-8 gap-y-3">
+      <div>
+        <dt className="text-[13px] text-muted-foreground">Theo chứng từ</dt>
+        <dd className="font-serif text-[24px] font-semibold leading-tight tabular-nums text-foreground">{report.expected_qty}<span className="font-sans text-[13px] font-normal text-muted-foreground"> cuốn</span></dd>
+      </div>
+      <div>
+        <dt className="text-[13px] text-muted-foreground">Thực tế</dt>
+        <dd className="font-serif text-[24px] font-semibold leading-tight tabular-nums text-foreground">{report.actual_qty}<span className="font-sans text-[13px] font-normal text-muted-foreground"> cuốn</span></dd>
+      </div>
+      <div>
+        <dt className="text-[13px] text-muted-foreground">Chênh lệch</dt>
+        <dd className={cn("font-serif text-[24px] font-semibold leading-tight tabular-nums", tone)}>
+          {delta === 0 ? "0" : delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`}
+        </dd>
+      </div>
+    </dl>
+  );
 }
 
 export function ExceptionReportsPage() {
@@ -161,111 +203,367 @@ export function ExceptionReportsPage() {
     }
   };
 
+  // Which report the right pane shows. On wide screens the first row opens by default;
+  // on a phone the list shows alone until a row is chosen (one region at a time).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const currentUser = authService.getCurrentUser();
+  const staffNames = useMemo(() => new Map(warehouseStaff.map((s) => [s.id, s.full_name || s.username])), [warehouseStaff]);
+  const personName = (userId: string | null | undefined) => {
+    if (!userId) return null;
+    if (currentUser?.id === userId) return "Bạn";
+    return staffNames.get(userId) ?? "Người dùng khác";
+  };
+  const selected = reports.find((r) => r.id === selectedId) ?? paged[0] ?? null;
+  const openReports = reports.filter((r) => r.status === "OPEN");
+  const oldestOpen = openReports.reduce<string | null>((oldest, r) => (!oldest || r.created_at < oldest ? r.created_at : oldest), null);
+  const unassignedOpen = openReports.filter((r) => !r.assigned_to_user_id).length;
+  const lede = loading
+    ? "Báo cáo thiếu, dư, hư hỏng hoặc sai sách từ nhân viên kho."
+    : stats.total === 0
+      ? "Chưa có báo cáo sự cố nào."
+      : stats.open === 0
+        ? `Không còn báo cáo nào đang mở. ${stats.resolved} báo cáo đã xử lý.`
+        : `${stats.open} báo cáo đang mở (cũ nhất ${ageText(oldestOpen)})${unassignedOpen > 0 ? `, ${unassignedOpen} chưa giao người xử lý` : ""}.`;
+  const tabs = [
+    { value: "OPEN" as const, count: stats.open },
+    { value: "ACKNOWLEDGED" as const, count: stats.acknowledged },
+    { value: "RESOLVED" as const, count: stats.resolved },
+    { value: "ALL" as const, count: stats.total },
+  ];
+  const exceptionLabel = (r: ExceptionReport) => EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type;
+  const bookTitle = (r: ExceptionReport) => r.book_variants?.books?.title ?? null;
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24 }}
-      >
+    <PageWrapper className="space-y-5">
+      <FadeItem>
         <PageHeader
           icon={AlertTriangle}
           title="Báo cáo sự cố"
-          description="Xem xét và xử lý báo cáo thiếu, dư, hư hỏng từ nhân viên kho"
-          iconBg="bg-red-50 dark:bg-red-500/10"
-          iconColor="text-red-700 dark:text-red-400"
+          description={lede}
           actions={
             <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
               Làm mới
             </Button>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24, delay: 0.05 }}
-        className="space-y-3"
-      >
-        <FilterBar
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Tìm mã báo cáo, kho, mô tả..."
-          showSearchClear
-          filters={
-            <div className="max-w-full overflow-x-auto">
-              <SegmentedControl
-                layoutId="exception-status-filter"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={STATUS_FILTERS.map((status) => ({
-                  value: status,
-                  label: `${STATUS_LABELS[status] ?? status} (${status === "ALL" ? stats.total : stats[status === "OPEN" ? "open" : status === "ACKNOWLEDGED" ? "acknowledged" : "resolved"]})`,
-                }))}
-                gradientClassName="from-red-600 to-rose-600"
-                className="w-max"
-              />
-            </div>
-          }
-        />
-        <p className="flex items-start gap-2 text-[12px] text-muted-foreground">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          Xử lý báo cáo sự cố không tự động điều chỉnh tồn kho. Nếu cần chỉnh tồn kho, dùng chức năng điều chỉnh tồn (Stock Adjustment) riêng.
-        </p>
-      </motion.div>
-
-      <SectionCard noPadding>
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                {[
-                  { label: "Báo cáo", className: "" },
-                  { label: "Sự cố", className: "hidden w-[170px] sm:table-cell" },
-                  { label: "Trạng thái", className: "hidden w-[170px] md:table-cell" },
-                  { label: "Giao xử lý", className: "hidden w-[200px] xl:table-cell" },
-                  { label: "Thao tác", className: "w-[110px] text-right" },
-                ].map((h) => (
-                  <th key={h.label} className={cn("px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground", h.className)}>{h.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={5} rows={4} />
-              ) : paged.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-10">
-                    <EmptyState
-                      icon={AlertTriangle}
-                      variant={filtered.length === 0 && reports.length > 0 ? "no-results" : "no-data"}
-                      title={reports.length === 0 ? "Chưa có báo cáo sự cố" : "Không tìm thấy báo cáo phù hợp"}
-                      description={reports.length === 0 ? "Các báo cáo từ nhân viên kho sẽ hiển thị tại đây." : "Thử điều chỉnh tìm kiếm hoặc bộ lọc."}
-                    />
-                  </td>
-                </tr>
-              ) : paged.map((r) => {
-                const hasQty = r.expected_qty !== null && r.actual_qty !== null;
-                const delta = hasQty ? (r.actual_qty as number) - (r.expected_qty as number) : 0;
-                const qtyChange = hasQty ? (
-                  <span className="whitespace-nowrap font-mono tabular-nums">
-                    {r.expected_qty} → <span className={cn(
-                      "font-semibold",
-                      delta < 0 && "text-rose-600 dark:text-rose-400",
-                      delta > 0 && "text-amber-600 dark:text-amber-400",
-                      delta === 0 && "text-muted-foreground",
-                    )}>{r.actual_qty}</span>
-                  </span>
-                ) : null;
-                const assignment = warehouseStaff.length > 0 && r.status !== "RESOLVED" ? (
-                  <div className="flex items-center gap-1.5">
-                    <Select
-                      value={assignState[r.id] || r.assigned_to_user_id || ""}
-                      onValueChange={(value) => setAssignState((prev) => ({ ...prev, [r.id]: value }))}
+      <FadeItem>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+            {/* The queue */}
+            <section
+              aria-labelledby="exception-queue-title"
+              className={cn("min-w-0 overflow-hidden rounded-2xl border border-border bg-card", selectedId ? "hidden @4xl/page:block" : "block")}
+            >
+              <h2 id="exception-queue-title" className="sr-only">Danh sách báo cáo</h2>
+              <div role="tablist" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-x-1 border-b border-border px-3 pt-2">
+                {tabs.map((tab) => {
+                  const active = statusFilter === tab.value;
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setStatusFilter(tab.value)}
+                      className={cn(
+                        "-mb-px shrink-0 border-b-2 px-2 pb-2.5 pt-2 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active ? "border-foreground font-semibold text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
+                      )}
                     >
-                      <SelectTrigger size="sm" className="h-8 min-w-0 flex-1 text-[11px]" aria-label={`Chọn nhân viên xử lý ${r.report_number}`}>
+                      {tab.value === "ACKNOWLEDGED" ? "Đã nhận" : STATUS_LABELS[tab.value]} <span className="tabular-nums text-muted-foreground">{tab.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="border-b border-border px-3 py-3">
+                <FilterBar searchValue={query} onSearchChange={setQuery} searchPlaceholder="Mã, kho, mô tả hoặc loại" showSearchClear />
+              </div>
+
+              {loading ? (
+                <ul aria-busy="true">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <li key={i} className="border-b border-border px-4 py-3.5 last:border-0">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="mt-2 h-3.5 w-56 max-w-full" />
+                    </li>
+                  ))}
+                </ul>
+              ) : paged.length === 0 ? (
+                <EmptyState
+                  icon={AlertTriangle}
+                  variant={filtered.length === 0 && reports.length > 0 ? "no-results" : "no-data"}
+                  title={reports.length === 0 ? "Chưa có báo cáo sự cố" : "Không có báo cáo nào ở đây"}
+                  description={reports.length === 0 ? "Báo cáo từ nhân viên kho sẽ hiện ở đây." : "Thử trạng thái khác hoặc đổi từ khóa."}
+                  className="py-10"
+                />
+              ) : (
+                <ul>
+                  {paged.map((r) => {
+                    const active = selected?.id === r.id;
+                    const open = r.status === "OPEN";
+                    return (
+                      <li key={r.id} className="border-b border-border last:border-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(r.id)}
+                          aria-current={active ? "true" : undefined}
+                          className={cn(
+                            "w-full px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                            active ? "bg-muted" : "hover:bg-muted/50",
+                          )}
+                        >
+                          <span className="flex items-baseline justify-between gap-3">
+                            <span className="flex min-w-0 items-center gap-2">
+                              {open && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-600" aria-label="Đang mở" />}
+                              <span className={cn("truncate text-[14px] text-foreground", open ? "font-semibold" : "font-medium")}>
+                                {exceptionLabel(r)}{bookTitle(r) ? `: ${bookTitle(r)}` : ""}
+                              </span>
+                            </span>
+                            <span className={cn("shrink-0 text-[12px] tabular-nums", active ? "text-foreground/75" : "text-muted-foreground")} title={formatDate(r.created_at)}>{timeAgo(r.created_at)}</span>
+                          </span>
+                          {/* On the selected row's grey fill, muted grey drops under 4.5:1, so meta takes a darker ink there. */}
+                          <span className={cn("mt-0.5 block truncate text-[13px]", active ? "text-foreground/75" : "text-muted-foreground")}>
+                            {r.warehouses?.code || r.warehouses?.name || "-"}, {TASK_TYPE_LABELS[r.task_type] || r.task_type}
+                            {r.expected_qty !== null && r.actual_qty !== null ? <>, <QtyChange report={r} /></> : null}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[13px] text-foreground/80" title={r.note}>{r.note || "-"}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {!loading && filtered.length > 0 && (
+                <div className="flex flex-col gap-2 border-t border-border px-4 py-3">
+                  <p className="text-[13px] text-muted-foreground" aria-live="polite">
+                    {(currentPage - 1) * PAGE_SIZE + 1}–{(currentPage - 1) * PAGE_SIZE + paged.length} trong {filtered.length} báo cáo
+                  </p>
+                  {totalPages > 1 && (
+                    <Pagination className="mx-0 w-auto justify-start">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.max(1, current - 1));
+                            }}
+                            className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                        {getPaginationRange(currentPage, totalPages).map((item, i) => (
+                          <PaginationItem key={typeof item === "number" ? item : `${item}-${i}`}>
+                            {typeof item === "number" ? (
+                              <PaginationLink
+                                isActive={item === currentPage}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  setPage(item);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                {item}
+                              </PaginationLink>
+                            ) : (
+                              <PaginationEllipsis />
+                            )}
+                          </PaginationItem>
+                        ))}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setPage((current) => Math.min(totalPages, current + 1));
+                            }}
+                            className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* The open report */}
+            <section
+              aria-labelledby="exception-detail-title"
+              className={cn("@container min-w-0 rounded-2xl border border-border bg-card @4xl/page:sticky @4xl/page:top-4", selectedId ? "block" : "hidden @4xl/page:block")}
+            >
+              {loading ? (
+                <div className="space-y-3 p-5">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-4 w-72 max-w-full" />
+                  <Skeleton className="h-20 w-full" />
+                </div>
+              ) : !selected ? (
+                <div className="p-5">
+                  <h2 id="exception-detail-title" className="text-[16px] font-semibold text-foreground">Chưa chọn báo cáo</h2>
+                  <p className="mt-1 text-[14px] text-muted-foreground">Chọn một báo cáo trong danh sách để xem chi tiết và xử lý.</p>
+                </div>
+              ) : (
+                <ReportDetail
+                  report={selected}
+                  exceptionLabel={exceptionLabel(selected)}
+                  personName={personName}
+                  onBack={() => setSelectedId(null)}
+                  onPreview={setPreviewUrl}
+                  warehouseStaff={warehouseStaff}
+                  // A current assignee outside the warehouse-staff list (e.g. an admin) would leave the select blank.
+                  assignValue={assignState[selected.id] || (staffNames.has(selected.assigned_to_user_id ?? "") ? selected.assigned_to_user_id! : "")}
+                  onAssignChange={(value) => setAssignState((prev) => ({ ...prev, [selected.id]: value }))}
+                  assigning={assigningId === selected.id}
+                  onAssign={() => void handleAssign(selected.id)}
+                  resolveNotes={resolveState?.id === selected.id ? resolveState.notes : null}
+                  onResolveStart={() => setResolveState({ id: selected.id, notes: "" })}
+                  onResolveNotes={(notes) => setResolveState({ id: selected.id, notes })}
+                  onResolveCancel={() => setResolveState(null)}
+                  resolving={resolving}
+                  onResolve={() => void handleResolve()}
+                />
+              )}
+            </section>
+          </div>
+        </div>
+      </FadeItem>
+
+      {previewUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Ảnh bằng chứng sự cố"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          onClick={() => setPreviewUrl(null)}
+        >
+          <img
+            src={previewUrl}
+            alt="Ảnh bằng chứng sự cố"
+            className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            onClick={() => setPreviewUrl(null)}
+            aria-label="Đóng"
+            className="absolute right-6 top-6 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+    </PageWrapper>
+  );
+}
+
+function ReportDetail({
+  report: r,
+  exceptionLabel,
+  personName,
+  onBack,
+  onPreview,
+  warehouseStaff,
+  assignValue,
+  onAssignChange,
+  assigning,
+  onAssign,
+  resolveNotes,
+  onResolveStart,
+  onResolveNotes,
+  onResolveCancel,
+  resolving,
+  onResolve,
+}: {
+  report: ExceptionReport;
+  exceptionLabel: string;
+  personName: (userId: string | null | undefined) => string | null;
+  onBack: () => void;
+  onPreview: (url: string) => void;
+  warehouseStaff: WarehouseStaffOption[];
+  assignValue: string;
+  onAssignChange: (value: string) => void;
+  assigning: boolean;
+  onAssign: () => void;
+  resolveNotes: string | null;
+  onResolveStart: () => void;
+  onResolveNotes: (notes: string) => void;
+  onResolveCancel: () => void;
+  resolving: boolean;
+  onResolve: () => void;
+}) {
+  const book = r.book_variants;
+  const resolved = r.status === "RESOLVED";
+  const details: Array<{ label: string; value: ReactNode }> = [
+    { label: "Kho", value: r.warehouses ? `${r.warehouses.name} (${r.warehouses.code})` : "-" },
+    { label: "Công việc", value: <>{TASK_TYPE_LABELS[r.task_type] || r.task_type} <span className="font-mono text-[12px] text-muted-foreground" title={r.task_id}>{r.task_id.slice(0, 8)}</span></> },
+    ...(r.goods_receipt_id ? [{ label: "Phiếu nhập", value: <NavLink to={`/orders/${r.goods_receipt_id}`} className="font-medium text-primary underline-offset-4 hover:underline">Mở phiếu nhập</NavLink> }] : []),
+    ...(book ? [{ label: "Sách", value: <>{book.books?.title ?? "-"}<span className="block font-mono text-[12px] text-muted-foreground">{[book.isbn13, book.sku].filter(Boolean).join(", ")}</span></> }] : []),
+    { label: "Người báo", value: personName(r.created_by_user_id) ?? "-" },
+    { label: "Báo lúc", value: formatDate(r.created_at) },
+    { label: "Giao cho", value: r.assigned_to_user_id ? <>{personName(r.assigned_to_user_id)}<span className="block text-[12px] text-muted-foreground">{formatDate(r.assigned_at)}</span></> : <span className="text-muted-foreground">Chưa giao</span> },
+    ...(resolved ? [{ label: "Xử lý bởi", value: <>{personName(r.resolved_by_user_id) ?? "-"}<span className="block text-[12px] text-muted-foreground">{formatDate(r.resolved_at)}</span></> }] : []),
+  ];
+
+  return (
+    <div>
+      <div className="border-b border-border p-5">
+        <Button variant="ghost" size="sm" onClick={onBack} className="-ml-3 mb-2 text-muted-foreground @4xl/page:hidden">
+          <ArrowLeft className="h-4 w-4" /> Danh sách báo cáo
+        </Button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h2 id="exception-detail-title" className="text-[20px] font-semibold tracking-tight text-foreground">{exceptionLabel}</h2>
+          <StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={statusVariant(r.status)} dot />
+        </div>
+        <p className="mt-1 text-[14px] text-muted-foreground">
+          <span className="font-mono text-[13px]">{r.report_number}</span>, báo {ageText(r.created_at)}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 @3xl:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="min-w-0 space-y-5 p-5">
+          {r.expected_qty !== null && r.actual_qty !== null && <QtyChange report={r} size="lg" />}
+
+          <div>
+            <h3 className="text-[13px] text-muted-foreground">Mô tả từ nhân viên</h3>
+            <p className="mt-1 whitespace-pre-line text-[15px] leading-relaxed text-foreground">{r.note || "-"}</p>
+          </div>
+          {r.evidence_notes && (
+            <div>
+              <h3 className="text-[13px] text-muted-foreground">Ghi chú bằng chứng</h3>
+              <p className="mt-1 whitespace-pre-line text-[14px] text-foreground">{r.evidence_notes}</p>
+            </div>
+          )}
+          {r.evidence_photo_url && (
+            <div>
+              <h3 className="text-[13px] text-muted-foreground">Ảnh bằng chứng</h3>
+              <button
+                type="button"
+                onClick={() => onPreview(r.evidence_photo_url!)}
+                className="mt-1.5 block overflow-hidden rounded-xl border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Phóng to ảnh bằng chứng"
+              >
+                <img src={r.evidence_photo_url} alt="Ảnh bằng chứng sự cố" className="h-32 w-44 bg-muted object-cover" />
+              </button>
+            </div>
+          )}
+
+          {resolved ? (
+            <div className="rounded-xl bg-muted/50 p-4">
+              <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                <CheckCircle className="h-4 w-4 text-emerald-700 dark:text-emerald-400" aria-hidden="true" /> Kết quả xử lý
+              </h3>
+              <p className="mt-1 whitespace-pre-line text-[14px] text-foreground">{r.resolution_notes || "Không có ghi chú."}</p>
+            </div>
+          ) : (
+            <div className="space-y-4 border-t border-border pt-5">
+              {warehouseStaff.length > 0 && (
+                <div>
+                  <label htmlFor="exception-assignee" className="mb-1.5 block text-[14px] font-medium text-foreground">Người xử lý</label>
+                  <div className="flex max-w-md items-center gap-2">
+                    <Select value={assignValue} onValueChange={onAssignChange}>
+                      <SelectTrigger id="exception-assignee" className="min-w-0 flex-1">
                         <SelectValue placeholder="Chọn nhân viên" />
                       </SelectTrigger>
                       <SelectContent>
@@ -274,176 +572,49 @@ export function ExceptionReportsPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button
-                      size="sm"
-                      variant="warning-outline"
-                      disabled={assigningId === r.id}
-                      onClick={() => void handleAssign(r.id)}
-                      aria-label={`Giao xử lý ${r.report_number}`}
-                      title="Giao xử lý"
-                      className="h-8 w-8 shrink-0 p-0"
-                    >
-                      <UserCheck className="h-3.5 w-3.5" />
+                    <Button variant="outline" onClick={onAssign} disabled={assigning} loading={assigning} className="shrink-0">
+                      <UserCheck className="h-4 w-4" /> Giao
                     </Button>
                   </div>
-                ) : r.assigned_to_user_id && warehouseStaff.length === 0 ? (
-                  <span className="text-[11px] text-muted-foreground">Đã giao</span>
-                ) : null;
-                return (
-                <React.Fragment key={r.id}>
-                  <tr className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-3 align-top">
-                      <p className="truncate font-mono text-[12px] font-semibold text-foreground">{r.report_number}</p>
-                      <p className="truncate text-[12px] text-muted-foreground">
-                        {[r.warehouses?.code, TASK_TYPE_LABELS[r.task_type] || r.task_type].filter(Boolean).join(" · ")} · {formatDate(r.created_at)}
-                      </p>
-                      {(r.note || r.evidence_photo_url) && (
-                        <div className="mt-1 flex items-start gap-1.5">
-                          {r.note ? <p className="line-clamp-2 text-[12px] text-foreground/80" title={r.note}>{r.note}</p> : null}
-                          {r.evidence_photo_url && (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewUrl(r.evidence_photo_url)}
-                              title="Xem ảnh bằng chứng"
-                              aria-label="Xem ảnh bằng chứng"
-                              className="mt-0.5 shrink-0 text-muted-foreground hover:text-primary"
-                            >
-                              <ImageIcon className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                        <span className="text-[12px] font-medium text-foreground">{EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type}</span>
-                        {qtyChange}
-                        <StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={statusVariant(r.status)} dot />
-                      </div>
-                      {assignment ? <div className="mt-2 xl:hidden">{assignment}</div> : null}
-                    </td>
-                    <td className="hidden px-4 py-3 align-top sm:table-cell">
-                      <p className="text-[13px] font-medium text-foreground">{EXCEPTION_TYPE_LABELS[r.exception_type] || r.exception_type}</p>
-                      {qtyChange ? <p className="text-[13px]">{qtyChange}</p> : null}
-                    </td>
-                    <td className="hidden px-4 py-3 align-top md:table-cell">
-                      <StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={statusVariant(r.status)} dot />
-                    </td>
-                    <td className="hidden px-4 py-3 align-top xl:table-cell">{assignment}</td>
-                    <td className="px-4 py-3 text-right align-top">
-                      {r.status !== "RESOLVED" && (
-                        <Button type="button" size="sm" variant="success-outline" disabled={resolving}
-                          onClick={() => setResolveState(resolveState?.id === r.id ? null : { id: r.id, notes: "" })}
-                        >
-                          <CheckCircle className="h-3 w-3" /> Xử lý
-                        </Button>
-                      )}
-                      {r.status === "RESOLVED" && r.resolution_notes && (
-                        <span className="block truncate text-[11px] italic text-muted-foreground" title={r.resolution_notes}>
-                          {r.resolution_notes}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                  {resolveState?.id === r.id && (
-                    <tr key={`${r.id}-resolve`} className="bg-emerald-50/50 dark:bg-emerald-500/10 border-b border-border">
-                      <td colSpan={5} className="px-4 py-3">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <Input
-                            className="flex-1"
-                            placeholder="Ghi chú xử lý (tùy chọn — không tự động điều chỉnh tồn kho)..."
-                            value={resolveState.notes}
-                            onChange={(e) => setResolveState({ ...resolveState, notes: e.target.value })}
-                          />
-                          <div className="flex items-center gap-2">
-                            <Button type="button" size="sm" variant="success-outline" disabled={resolving} onClick={() => void handleResolve()}>
-                              Xác nhận xử lý
-                            </Button>
-                            <Button type="button" size="sm" variant="outline" onClick={() => setResolveState(null)} aria-label="Hủy" className="h-8 px-2">
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                </div>
+              )}
+
+              {resolveNotes === null ? (
+                <Button onClick={onResolveStart} disabled={resolving}>
+                  <CheckCircle className="h-4 w-4" /> Đánh dấu đã xử lý
+                </Button>
+              ) : (
+                <div>
+                  <label htmlFor="exception-resolution" className="mb-1.5 block text-[14px] font-medium text-foreground">Ghi chú xử lý <span className="font-normal text-muted-foreground">(không bắt buộc)</span></label>
+                  <Input
+                    id="exception-resolution"
+                    placeholder="Ví dụ: đã liên hệ nhà cung cấp gửi bù"
+                    value={resolveNotes}
+                    onChange={(e) => onResolveNotes(e.target.value)}
+                    className="h-10"
+                  />
+                  <div className="mt-3 flex items-center gap-2">
+                    <Button onClick={onResolve} disabled={resolving} loading={resolving}>Xác nhận đã xử lý</Button>
+                    <Button variant="ghost" onClick={onResolveCancel}>Hủy</Button>
+                  </div>
+                </div>
+              )}
+              <p className="text-[13px] text-muted-foreground">
+                Xử lý báo cáo không tự điều chỉnh tồn kho. Nếu cần sửa số tồn, dùng kiểm kê kho hoặc điều chỉnh tồn riêng.
+              </p>
+            </div>
+          )}
         </div>
 
-        {!loading && filtered.length > 0 && (
-          <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[12px] text-muted-foreground">
-              Hiển thị <span className="font-medium text-foreground">{paged.length}</span> / {filtered.length} báo cáo
-            </p>
-            {totalPages > 1 && (
-              <Pagination className="mx-0 w-auto justify-end">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setPage((current) => Math.max(1, current - 1));
-                      }}
-                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                  {getPaginationRange(currentPage, totalPages).map((item, i) => (
-                    <PaginationItem key={typeof item === "number" ? item : `${item}-${i}`}>
-                      {typeof item === "number" ? (
-                        <PaginationLink
-                          isActive={item === currentPage}
-                          onClick={(event) => {
-                            event.preventDefault();
-                            setPage(item);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          {item}
-                        </PaginationLink>
-                      ) : (
-                        <PaginationEllipsis />
-                      )}
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={(event) => {
-                        event.preventDefault();
-                        setPage((current) => Math.min(totalPages, current + 1));
-                      }}
-                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </div>
-        )}
-      </SectionCard>
-
-      {previewUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
-          onClick={() => setPreviewUrl(null)}
-        >
-          <img
-            src={previewUrl}
-            alt="Ảnh bằng chứng sự cố"
-            className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            type="button"
-            onClick={() => setPreviewUrl(null)}
-            aria-label="Đóng"
-            className="absolute right-6 top-6 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-      )}
+        <dl className="border-t border-border p-5 @3xl:border-l @3xl:border-t-0">
+          {details.map((item) => (
+            <div key={item.label} className="flex items-baseline justify-between gap-4 py-1.5 @3xl:block">
+              <dt className="shrink-0 text-[13px] text-muted-foreground">{item.label}</dt>
+              <dd className="min-w-0 text-right text-[14px] text-foreground @3xl:mt-0.5 @3xl:text-left">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
     </div>
   );
 }

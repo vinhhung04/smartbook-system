@@ -238,7 +238,7 @@ const WAREHOUSE_TASK_STATUS_LABELS: Record<string, string> = {
   CONVERTED: 'Đã chuyển PO',
   PICKING: 'Đang lấy',
   PARTIAL_PICKED: 'Lấy một phần',
-  REPICKING: 'Đang re-pick',
+  REPICKING: 'Đang lấy bù',
   READY_FOR_OUTBOUND: 'Sẵn xuất kho',
   READY_TO_SHIP: 'Sẵn xuất kho',
   IN_PROGRESS: 'Đang thực hiện',

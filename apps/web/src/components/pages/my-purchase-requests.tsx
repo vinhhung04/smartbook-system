@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { BlockError } from "@/components/pages/dashboard/panel";
 import { ChoiceChips, Field, FormSheet, ListFooter, QueueTabs, RefCode, RowsSkeleton } from "@/components/ops/ops-kit";
-import { fieldAria, formatDateTime, formatShortDate, timeAgo, darkFieldClass } from "@/components/ops/ops-utils";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { elapsedSince, fieldAria, formatDateTime, formatShortDate, darkFieldClass } from "@/components/ops/ops-utils";
 import { cn } from "@/components/ui/utils";
 import { getApiErrorMessage } from "@/services/api";
 import { purchaseRequestService, type PurchaseRequest, type PurchaseRequestCreateInput } from "@/services/purchase-requests";
@@ -134,8 +135,8 @@ function RequestTrail({ req, canOpenPurchaseOrder }: { req: PurchaseRequest; can
             aria-hidden="true"
             className={cn(
               "h-2 w-2 shrink-0 rounded-full",
-              step.state === "done" && "bg-emerald-500",
-              step.state === "current" && "bg-amber-500 ring-2 ring-amber-500/20",
+              step.state === "done" && "bg-primary",
+              step.state === "current" && "bg-primary/25 ring-2 ring-primary/40",
               step.state === "todo" && "border border-muted-foreground/40",
               step.state === "stopped" && (s === "REJECTED" ? "bg-red-500" : "bg-muted-foreground/50"),
             )}
@@ -372,6 +373,23 @@ export function MyPurchaseRequestsPage() {
     .filter((key) => key === "ALL" || key === "PENDING" || (counts[key] ?? 0) > 0)
     .map((key) => ({ key, label: key === "ALL" ? "Tất cả" : statusLabel(key), count: counts[key] ?? 0 }));
 
+  // The finding first: what still waits on a manager, then what became a purchase order.
+  const pendingRequests = requests.filter((req) => String(req.status).toUpperCase() === "PENDING");
+  const oldestPending = pendingRequests.reduce<string | null>((oldest, req) => (!oldest || req.created_at < oldest ? req.created_at : oldest), null);
+  const oldestPendingAge = elapsedSince(oldestPending);
+  const ledeParts = [
+    (counts.PENDING ?? 0) > 0 ? `${counts.PENDING} đang chờ duyệt${oldestPendingAge ? ` (cũ nhất ${oldestPendingAge.text})` : ""}` : null,
+    (counts.APPROVED ?? 0) > 0 ? `${counts.APPROVED} đã duyệt, chờ vào đơn PO` : null,
+    (counts.CONVERTED ?? 0) > 0 ? `${counts.CONVERTED} đã vào đơn PO` : null,
+    (counts.REJECTED ?? 0) > 0 ? `${counts.REJECTED} bị từ chối` : null,
+    (counts.WITHDRAWN ?? 0) > 0 ? `${counts.WITHDRAWN} đã rút` : null,
+  ].filter(Boolean);
+  const lede = loading
+    ? "Báo cho quản lý những sách kho cần bổ sung và theo dõi kết quả duyệt."
+    : requests.length === 0
+      ? "Bạn chưa gửi yêu cầu nào. Khi kho thiếu sách, tạo yêu cầu để quản lý đặt hàng bổ sung."
+      : `${requests.length} yêu cầu${ledeParts.length ? `: ${ledeParts.join(", ")}` : ""}.`;
+
   const activeOptionId = showSuggestions && suggestions[highlight] ? fieldId(`book-opt-${highlight}`) : undefined;
   const quantityNumber = Number(form.quantity_requested);
 
@@ -381,7 +399,7 @@ export function MyPurchaseRequestsPage() {
         <PageHeader
           icon={ShoppingCart}
           title="Yêu cầu mua hàng của tôi"
-          description="Báo cho quản lý những sách kho cần bổ sung và theo dõi kết quả duyệt"
+          description={lede}
           iconBg="bg-orange-100 dark:bg-orange-500/15"
           iconColor="text-orange-700 dark:text-orange-400"
           actions={(
@@ -403,7 +421,7 @@ export function MyPurchaseRequestsPage() {
         <section aria-label="Yêu cầu của tôi" className="min-w-0 rounded-xl border border-border bg-card">
           <QueueTabs label="Lọc theo trạng thái" tabs={statusTabs} value={statusFilter} onChange={setStatusFilter} panelId={PANEL_ID} loading={loading} />
 
-          <div className="border-b border-border px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="relative min-w-0 sm:w-80">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input
@@ -412,9 +430,10 @@ export function MyPurchaseRequestsPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Tìm mã yêu cầu, tên sách, mã PO…"
                 aria-label="Tìm yêu cầu"
-                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9 sm:text-[13px]"
+                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9"
               />
             </div>
+            {!loading ? <p className="text-[13px] tabular-nums text-muted-foreground">{filteredRequests.length} yêu cầu</p> : null}
           </div>
 
           <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${statusFilter}`} aria-busy={loading || refreshing}>
@@ -438,45 +457,77 @@ export function MyPurchaseRequestsPage() {
                 />
               </div>
             ) : (
-              <ul className="divide-y divide-border">
-                {pagedRequests.map((req) => {
-                  const title = bookTitleOf(req);
-                  const isPending = String(req.status).toUpperCase() === "PENDING";
-                  return (
-                    <li key={req.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:gap-6 sm:px-5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <p className={cn("text-[14px] font-semibold", title ? "text-foreground" : "italic text-muted-foreground")}>{title || "Chưa ghi tên sách"}</p>
-                          {!req.book_variant_id && title ? (
-                            <span className="rounded border border-border px-1.5 py-px text-[11px] text-muted-foreground" title="Sách được nhập tên, chưa gắn với danh mục">Nhập tay</span>
-                          ) : null}
-                        </div>
-                        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted-foreground">
-                          <span className="font-semibold tabular-nums text-foreground">{req.quantity_requested} cuốn</span>
-                          <span aria-hidden="true">·</span>
-                          <span title={req.warehouses?.name}>{req.warehouses?.code || "Chưa rõ kho"}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{reasonLabel(req.reason)}</span>
-                          <span aria-hidden="true">·</span>
-                          <RefCode value={req.request_number} />
-                        </p>
-                        {req.note ? <p className="mt-1 line-clamp-2 max-w-prose text-[12px] text-muted-foreground" title={req.note}>Ghi chú: {req.note}</p> : null}
-                        <RequestTrail req={req} canOpenPurchaseOrder={canOpenPurchaseOrder} />
-                        <RejectionReason req={req} />
-                      </div>
-                      <div className="flex shrink-0 items-center justify-between gap-2 sm:flex-col sm:items-end">
-                        <StatusBadge label={statusLabel(req.status)} variant={getStatusVariant("purchaseRequest", req.status)} dot />
-                        <span className="text-[12px] tabular-nums text-muted-foreground" title={formatDateTime(req.created_at) ?? undefined}>Gửi {timeAgo(req.created_at)}</span>
-                        {isPending ? (
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setWithdrawTarget(req)} className="h-9 px-2 text-[12px] text-muted-foreground hover:text-foreground sm:h-7" aria-label={`Rút yêu cầu ${req.request_number}`}>
-                            <Undo2 className="h-3.5 w-3.5" />Rút yêu cầu
-                          </Button>
-                        ) : null}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="@container">
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Sách</TableHead>
+                      <TableHead className="hidden w-[96px] text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Số lượng</TableHead>
+                      <TableHead className="hidden w-[150px] text-[12px] font-normal text-muted-foreground @3xl:table-cell">Kho</TableHead>
+                      <TableHead className="hidden w-[150px] text-[12px] font-normal text-muted-foreground @4xl:table-cell">Lý do</TableHead>
+                      <TableHead className="w-[132px] pr-5 text-right text-[12px] font-normal text-muted-foreground">Trạng thái</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedRequests.map((req) => {
+                      const title = bookTitleOf(req);
+                      const isPending = String(req.status).toUpperCase() === "PENDING";
+                      const codes = [req.book_variants?.isbn13 ? `ISBN ${req.book_variants.isbn13}` : null, req.book_variants?.sku].filter(Boolean).join(", ");
+                      const waited = isPending ? elapsedSince(req.created_at) : null;
+                      return (
+                        <TableRow key={req.id} className="hover:bg-muted/30">
+                          <TableCell className="whitespace-normal py-3.5 pl-5 pr-3 align-top">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <p className={cn("text-[14px] font-semibold", title ? "text-foreground" : "italic text-muted-foreground")}>{title || "Chưa ghi tên sách"}</p>
+                              {!req.book_variant_id && title ? (
+                                <span className="rounded border border-border px-1.5 py-px text-[11px] text-muted-foreground" title="Sách được nhập tên, chưa gắn với danh mục">Nhập tay</span>
+                              ) : null}
+                            </div>
+                            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-muted-foreground">
+                              <RefCode value={req.request_number} />
+                              {codes ? <span className="font-mono">{codes}</span> : null}
+                            </p>
+                            {/* Columns that the container hides move here, so no field is dropped. */}
+                            <p className="mt-1 text-[13px] text-muted-foreground @2xl:hidden">
+                              <span className="font-semibold tabular-nums text-foreground">{req.quantity_requested} cuốn</span>, {req.warehouses?.code || "chưa rõ kho"}, {reasonLabel(req.reason).toLowerCase()}
+                            </p>
+                            <p className="mt-1 hidden text-[13px] text-muted-foreground @2xl:block @3xl:hidden">{req.warehouses?.name || req.warehouses?.code || "Chưa rõ kho"}, {reasonLabel(req.reason).toLowerCase()}</p>
+                            <p className="mt-1 hidden text-[13px] text-muted-foreground @3xl:block @4xl:hidden">{reasonLabel(req.reason)}</p>
+                            {req.note ? <p className="mt-1 line-clamp-2 max-w-prose text-[13px] text-muted-foreground" title={req.note}>Ghi chú: {req.note}</p> : null}
+                            <RequestTrail req={req} canOpenPurchaseOrder={canOpenPurchaseOrder} />
+                            <RejectionReason req={req} />
+                          </TableCell>
+                          <TableCell className="hidden py-3.5 text-right align-top @2xl:table-cell">
+                            <span className="text-[15px] font-semibold tabular-nums text-foreground">{req.quantity_requested}</span>
+                            <span className="text-[12px] text-muted-foreground"> cuốn</span>
+                          </TableCell>
+                          <TableCell className="hidden whitespace-normal py-3.5 align-top @3xl:table-cell">
+                            <p className="text-[13px] text-foreground">{req.warehouses?.code || "-"}</p>
+                            <p className="line-clamp-2 text-[12px] text-muted-foreground">{req.warehouses?.name}</p>
+                          </TableCell>
+                          <TableCell className="hidden whitespace-normal py-3.5 align-top text-[13px] text-foreground @4xl:table-cell">{reasonLabel(req.reason)}</TableCell>
+                          <TableCell className="py-3.5 pr-5 text-right align-top">
+                            <div className="flex flex-col items-end gap-1.5">
+                              <StatusBadge label={statusLabel(req.status)} variant={getStatusVariant("purchaseRequest", req.status)} dot />
+                              <span
+                                className={cn("text-[12px] tabular-nums", waited?.stale ? "font-medium text-amber-800 dark:text-amber-300" : "text-muted-foreground")}
+                                title={formatDateTime(req.created_at) ?? undefined}
+                              >
+                                {waited ? `Chờ ${waited.text}` : `Gửi ${formatShortDate(req.created_at) ?? "-"}`}
+                              </span>
+                              {isPending ? (
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setWithdrawTarget(req)} className="-mr-2 h-9 px-2 text-[12px] text-muted-foreground hover:text-foreground sm:h-7" aria-label={`Rút yêu cầu ${req.request_number}`}>
+                                  <Undo2 className="h-3.5 w-3.5" />Rút yêu cầu
+                                </Button>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
 

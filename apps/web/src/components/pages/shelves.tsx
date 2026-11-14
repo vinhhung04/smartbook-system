@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowRight, BookOpen, ClipboardList, Layers3, Warehouse } from "lucide-react";
-import { motion } from "motion/react";
+import { ArrowDown, ArrowRight, ClipboardList, Layers3 } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { warehouseService, type Warehouse as WarehouseItem } from "@/services/warehouse";
@@ -12,14 +11,14 @@ import {
 } from "@/services/shelf";
 import { reslottingSuggestionsService, type ReslottingSuggestionItem } from "@/services/reslotting-suggestions";
 import { occupancyBandFromRatio } from "@/lib/occupancy";
-import { SectionCard } from "@/components/ui/section-card";
+import { FadeItem, PageWrapper } from "../motion-utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { StatCard } from "@/components/ui/stat-card";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
-import { LoadingOverlay, SkeletonTableRow } from "@/components/ui/loading-state";
+import { LoadingOverlay, Skeleton } from "@/components/ui/loading-state";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/components/ui/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AIRecommendationNotice, DecisionSection } from "@/components/ai/decision-card";
 import { hasPermission } from "@/services/http-clients";
@@ -44,86 +43,67 @@ function formatDate(value: string | null): string {
   });
 }
 
-function UtilizationBar({ value }: { value: number | null }) {
+function formatPct(value: number | null): string {
+  return value == null ? "-" : `${value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
+}
+
+function UtilizationBar({ value, label }: { value: number | null; label: string }) {
   const width = value == null ? 0 : Math.min(Math.max(value, 0), 100);
   const band = occupancyBandFromRatio(width / 100);
   return (
     <div className="space-y-1">
-      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${width}%` }}
-          transition={{ duration: 0.45, ease: "easeOut" }}
-          className={`h-full rounded-full ${band.line}`}
-        />
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`${label}: lấp đầy ${formatPct(value)}, ${band.label.toLowerCase()}`}>
+        <div className={cn("h-full rounded-full", band.line)} style={{ width: `${width}%` }} />
       </div>
-      <p className={`text-[10px] font-medium ${band.ink}`}>
-        {value == null ? "-" : `${value.toFixed(2)}%`} · {band.label}
-      </p>
+      <p className={cn("text-[12px] font-medium", band.ink)} aria-hidden="true">{formatPct(value)}, {band.label.toLowerCase()}</p>
     </div>
   );
 }
 
-function CompartmentCard({ compartment }: { compartment: ShelfCompartmentItem }) {
+// One compartment: its fill, then the books in it as a compact list.
+function CompartmentBlock({ compartment }: { compartment: ShelfCompartmentItem }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[13px] text-foreground font-semibold">{compartment.code}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{formatQty(compartment.occupiedQty)} / {formatQty(compartment.capacityQty)} cuốn</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[11px] text-muted-foreground">Khả dụng</p>
-          <p className="text-[12px] text-emerald-700 dark:text-emerald-400 font-semibold">{formatQty(compartment.availableQty)}</p>
-        </div>
+    <li className="@container py-4 first:pt-0 last:pb-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="font-mono text-[14px] font-semibold text-foreground">{compartment.code}</p>
+        <p className="text-[13px] text-muted-foreground">
+          <span className="font-semibold tabular-nums text-foreground">{formatQty(compartment.occupiedQty)}</span> / {formatQty(compartment.capacityQty)} cuốn, còn trống {formatQty(compartment.availableQty)}
+        </p>
+      </div>
+      <div className="mt-2 max-w-sm">
+        <UtilizationBar value={compartment.utilizationPct} label={`Ngăn ${compartment.code}`} />
       </div>
 
-      <UtilizationBar value={compartment.utilizationPct} />
-
-      <div className="overflow-auto rounded-lg border border-border">
-        <table className="w-full min-w-[560px]">
-          <thead>
-            <tr className="bg-muted/50">
-              {[
-                "Sách",
-                "Mã sách",
-                "SKU",
-                "ISBN-13",
-                "Tồn hiện tại",
-                "Ngày nhập",
-              ].map((header) => (
-                <th key={header} className="text-left text-[12px] text-muted-foreground px-3 py-2 font-medium">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {compartment.books.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-4 text-[12px] text-muted-foreground text-center">Ngăn này chưa có sách.</td>
-              </tr>
-            ) : (
-              compartment.books.map((book) => (
-                <tr key={`${compartment.id}:${book.variantId}`} className="border-t border-border">
-                  <td className="px-3 py-2.5 text-[12px] text-foreground font-medium">{book.title}</td>
-                  <td className="px-3 py-2.5 text-[11px] text-muted-foreground">{book.bookCode || "-"}</td>
-                  <td className="px-3 py-2.5 text-[11px] text-muted-foreground">{book.sku}</td>
-                  <td className="px-3 py-2.5 text-[11px] text-muted-foreground">{book.isbn13 || "-"}</td>
-                  <td className="px-3 py-2.5 text-[12px] text-foreground font-medium">{formatQty(book.onHandQty)}</td>
-                  <td className="px-3 py-2.5 text-[11px] text-muted-foreground">{formatDate(book.inboundAt)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {compartment.books.length === 0 ? (
+        <p className="mt-3 text-[13px] text-muted-foreground">Ngăn này chưa có sách.</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-border rounded-xl border border-border">
+          {compartment.books.map((book) => (
+            <li key={`${compartment.id}:${book.variantId}`} className="flex items-start justify-between gap-4 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="line-clamp-2 text-[13px] font-medium text-foreground" title={book.title}>{book.title}</p>
+                <p className="mt-0.5 break-all font-mono text-[12px] text-muted-foreground">
+                  {[book.isbn13, book.sku, book.bookCode].filter(Boolean).join(", ")}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-serif text-[17px] font-semibold leading-tight tabular-nums text-foreground">
+                  {formatQty(book.onHandQty)}<span className="font-sans text-[12px] font-normal text-muted-foreground"> cuốn</span>
+                </p>
+                <p className="text-[12px] tabular-nums text-muted-foreground">Nhập {formatDate(book.inboundAt)}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
 function LocationBox({ label, code, emphasis }: { label: string; code: string; emphasis?: boolean }) {
   return (
-    <div className={`min-w-0 flex-1 rounded-lg border px-3 py-2 ${emphasis ? "border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-border bg-muted/40"}`}>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+    <div className={cn("min-w-0 flex-1 rounded-xl border px-3 py-2", emphasis ? "border-primary/30 bg-primary/[0.06]" : "border-border bg-muted/40")}>
+      <p className="text-[12px] text-muted-foreground">{label}</p>
       <p className="truncate font-mono text-[14px] font-semibold text-foreground">{code}</p>
     </div>
   );
@@ -144,18 +124,18 @@ function ReslottingSuggestionRow({
   onCreateTask: (item: ReslottingSuggestionItem) => void;
 }) {
   return (
-    <li className="space-y-3 py-4">
+    <li className="space-y-3 py-4 first:pt-0 last:pb-0">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
         <p className="text-[14px] font-semibold text-foreground">{item.title}</p>
         <p className="text-[12px] text-muted-foreground">
-          {formatQty(item.turnover_count)} lượt mượn / 90 ngày · phổ biến hạng {item.turnover_rank}/{total}
+          {formatQty(item.turnover_count)} lượt mượn trong 90 ngày, phổ biến hạng {item.turnover_rank}/{total}
         </p>
       </div>
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-        <LocationBox label={`Hiện tại · dễ lấy hạng ${item.accessibility_rank}/${total}`} code={item.current_location_code} />
+        <LocationBox label={`Hiện tại, dễ lấy hạng ${item.accessibility_rank}/${total}`} code={item.current_location_code} />
         <ArrowRight className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
         <ArrowDown className="mx-auto h-4 w-4 text-muted-foreground sm:hidden" aria-hidden="true" />
-        <LocationBox label="Đề xuất (dễ tiếp cận hơn)" code={item.suggested_location_code} emphasis />
+        <LocationBox label="Đề xuất, dễ tiếp cận hơn" code={item.suggested_location_code} emphasis />
       </div>
       <p className="text-[13px] text-foreground/85">
         Sách được mượn nhiều nhưng đang ở vị trí khó lấy hơn; đề xuất hoán đổi với sách ít được mượn đang ở {item.suggested_location_code}.
@@ -169,7 +149,7 @@ function ReslottingSuggestionRow({
         {canCreateTask && (
           <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => onCreateTask(item)}>
             <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
-            Tạo task di chuyển
+            Tạo nhiệm vụ di chuyển
           </Button>
         )}
       </div>
@@ -394,209 +374,202 @@ export function ShelvesPage() {
     );
   }, [shelves]);
 
+  const selectedWarehouse = warehouses.find((w) => w.id === warehouseId);
+  const totalPct = totals.capacity > 0 ? (totals.occupied / totals.capacity) * 100 : null;
+  const lede = loadingShelves && shelves.length === 0
+    ? "Sức chứa của từng kệ và ngăn, cùng sách đang nằm trong đó."
+    : `${shelves.length} kệ, ${formatQty(totals.compartments)} ngăn${selectedWarehouse ? ` ở ${selectedWarehouse.name}` : ""}: đang chứa ${formatQty(totals.occupied)} / ${formatQty(totals.capacity)} cuốn${totalPct == null ? "" : ` (${formatPct(totalPct)})`}.`;
+
+  const railButton = (active: boolean, onClick: () => void, label: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex w-full items-center rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("min-w-0 line-clamp-2 text-[13px]", active ? "font-semibold" : "font-medium")} title={label}>{label}</span>
+    </button>
+  );
+
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
-      >
-        <PageHeader
-          icon={Layers3}
-          title="Quản lý kệ sách"
-          description={`${shelves.length} kệ · ${totals.compartments} ngăn · ${formatQty(totals.occupied)} đang chứa`}
-        />
+    <PageWrapper className="space-y-6">
+      <FadeItem>
+        <PageHeader icon={Layers3} title="Quản lý kệ sách" description={lede} />
+      </FadeItem>
 
-        <div className="grid grid-cols-3 gap-2.5 sm:min-w-[300px]">
-          <StatCard label="Đang chứa" value={formatQty(totals.occupied)} variant="warning" />
-          <StatCard label="Sức chứa" value={formatQty(totals.capacity)} variant="info" />
-          <StatCard label="Ngăn kệ" value={formatQty(totals.compartments)} variant="default" />
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-      >
-        <FilterBar
-          searchValue={query}
-          onSearchChange={setQuery}
-          searchPlaceholder="Tìm kệ theo mã, khu vực, kho"
-          showSearchClear
-          filters={
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-2">
-                <Warehouse className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                <Select value={warehouseId || "all"} onValueChange={(v) => setWarehouseId(v === "all" ? "" : v)}>
-                  <SelectTrigger className="min-w-[220px] border-0 bg-transparent shadow-none">
-                    <SelectValue placeholder="Tất cả kho" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả kho</SelectItem>
-                    {warehouses.map((warehouse) => (
-                      <SelectItem key={warehouse.id} value={warehouse.id}>
-                        {warehouse.code} - {warehouse.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {!warehouseId && (
-                <p className="text-[10px] text-muted-foreground">Chọn kho để xem đề xuất tối ưu vị trí bên dưới</p>
-              )}
-            </div>
-          }
-        />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-      >
-        <SectionCard noPadding>
-          <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                {["Kệ", "Kho", "Ngăn", "Đang chứa", "Sức chứa", "Khả dụng", "Tỷ lệ lấp đầy"].map((header) => (
-                  <th key={header} className="text-left text-[12px] text-muted-foreground px-5 py-3 font-medium">{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loadingShelves ? (
-                <SkeletonTableRow columns={7} rows={4} />
-              ) : shelves.length === 0 ? (
-                <tr>
-                  <td colSpan={7}><EmptyState variant="no-data" title="Không tìm thấy kệ nào" description="Thử điều chỉnh tìm kiếm hoặc bộ lọc" className="py-12" /></td>
-                </tr>
-              ) : (
-                shelves.map((shelf) => (
-                  <tr
-                    key={shelf.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedShelfId(shelf.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedShelfId(shelf.id);
-                      }
-                    }}
-                    className={`border-b border-border last:border-0 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/40 ${selectedShelfId === shelf.id ? "bg-cyan-50/30 dark:bg-cyan-500/10" : "hover:bg-muted/60"}`}
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-                        <div>
-                          <p className="text-[13px] text-foreground font-semibold">{shelf.code}</p>
-                          <p className="text-[11px] text-muted-foreground">Khu vực: {shelf.zone || "-"}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{shelf.warehouse.code} - {shelf.warehouse.name}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatQty(shelf.compartmentCount)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-foreground font-semibold">{formatQty(shelf.occupiedQty)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground">{formatQty(shelf.capacityQty)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-emerald-700 dark:text-emerald-400 font-semibold">{formatQty(shelf.availableQty)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-muted-foreground min-w-[160px]">
-                      <UtilizationBar value={shelf.utilizationPct} />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          </div>
-        </SectionCard>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.15 }}
-      >
-        <SectionCard
-          title={selectedShelf ? `Chi tiết kệ - ${selectedShelf.code}` : "Chi tiết kệ"}
-          subtitle="Xem ngăn chứa, số lượng hiện tại và ngày nhập theo biến thể sách."
-          actions={detail?.shelf ? (
-            <div className="grid grid-cols-3 gap-2 sm:min-w-[280px]">
-              <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[11px] text-muted-foreground font-semibold">Đang chứa</p>
-                <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.occupiedQty)}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[11px] text-muted-foreground font-semibold">Sức chứa</p>
-                <p className="text-[14px] text-foreground font-bold">{formatQty(detail.shelf.capacityQty)}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-card px-3 py-2">
-                <p className="text-[11px] text-muted-foreground font-semibold">Khả dụng</p>
-                <p className="text-[14px] text-emerald-700 dark:text-emerald-400 font-bold">{formatQty(detail.shelf.availableQty)}</p>
-              </div>
-            </div>
-          ) : undefined}
-        >
-          {loadingDetail ? (
-            <LoadingOverlay />
-          ) : !detail ? (
-            <EmptyState variant="no-data" title="Chọn kệ để xem chi tiết" description="Nhấn vào một hàng kệ ở trên để xem ngăn và sách" />
-          ) : detail.compartments.length === 0 ? (
-            <EmptyState variant="no-data" title="Chưa có ngăn kệ" description="Kệ này chưa được cấu hình ngăn" />
-          ) : (
-            <div className="grid grid-cols-1 gap-3">
-              {detail.compartments.map((compartment) => (
-                <CompartmentCard key={compartment.id} compartment={compartment} />
+      <FadeItem>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[220px_minmax(0,1fr)]">
+            <nav aria-label="Lọc kệ theo kho" className="hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Kho</p>
+              {railButton(!warehouseId, () => setWarehouseId(""), "Tất cả kho")}
+              {warehouses.map((warehouse) => (
+                <div key={warehouse.id}>{railButton(warehouseId === warehouse.id, () => setWarehouseId(warehouse.id), warehouse.name)}</div>
               ))}
-            </div>
-          )}
-        </SectionCard>
-      </motion.div>
+            </nav>
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2 }}
-      >
-        <SectionCard
-          title="Đề xuất tối ưu vị trí"
-          subtitle="Sách được mượn nhiều nhưng đang ở vị trí khó lấy — hệ thống đề xuất hoán đổi với vị trí dễ tiếp cận hơn"
-        >
-          {!warehouseId ? (
-            <EmptyState variant="no-data" title="Chọn kho để xem đề xuất" description="Chọn một kho ở bộ lọc phía trên để xem đề xuất tối ưu vị trí" />
-          ) : loadingReslotting ? (
-            <LoadingOverlay />
-          ) : reslottingError ? (
-            <EmptyState
-              variant={reslottingError.forbidden ? "no-permission" : "error"}
-              title={reslottingError.forbidden ? "Không có quyền xem đề xuất" : "Không tải được đề xuất"}
-              description={reslottingError.message}
-              action={reslottingError.forbidden ? undefined : <Button variant="outline" size="sm" onClick={() => void loadReslotting()}>Thử lại</Button>}
-            />
-          ) : reslottingItems.length === 0 ? (
-            <EmptyState variant="no-data" title="Chưa có đề xuất" description="Vị trí sách trong kho này hiện đã hợp lý theo tần suất mượn 90 ngày gần nhất" />
-          ) : (
-            <div>
-              <AIRecommendationNotice />
-              <ul className="divide-y divide-border">
-                {reslottingItems.map((item) => (
-                  <ReslottingSuggestionRow
-                    key={`${item.variant_id}-${item.current_location_id}`}
-                    item={item}
-                    total={reslottingTotal}
-                    canCreateTask={canCreateMoveTask}
-                    onCreateTask={setTaskItem}
-                  />
-                ))}
-              </ul>
+            <div className="min-w-0 space-y-4">
+              <div className="@container/shelves">
+                <div className="grid grid-cols-1 items-start gap-4 @3xl/shelves:grid-cols-[minmax(0,17rem)_minmax(0,1fr)]">
+                  <section aria-labelledby="shelf-list-title" className="overflow-hidden rounded-2xl border border-border bg-card @3xl/shelves:sticky @3xl/shelves:top-4">
+                    <div className="px-4 pb-2 pt-4">
+                      <h2 id="shelf-list-title" className="font-serif text-[17px] font-semibold tracking-tight">Kệ</h2>
+                    </div>
+                    <div className="border-b border-border px-3 pb-3">
+                      <FilterBar
+                        searchValue={query}
+                        onSearchChange={setQuery}
+                        searchPlaceholder="Mã kệ hoặc khu vực"
+                        showSearchClear
+                        filters={(
+                          <div className="w-full @4xl/page:hidden">
+                            <Select value={warehouseId || "all"} onValueChange={(v) => setWarehouseId(v === "all" ? "" : v)}>
+                              <SelectTrigger size="sm" className="w-full" aria-label="Kho">
+                                <SelectValue placeholder="Tất cả kho" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">Tất cả kho</SelectItem>
+                                {warehouses.map((warehouse) => (
+                                  <SelectItem key={warehouse.id} value={warehouse.id}>
+                                    {warehouse.code} - {warehouse.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      />
+                    </div>
+                    {loadingShelves ? (
+                      <div className="space-y-3 p-4">
+                        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+                      </div>
+                    ) : shelves.length === 0 ? (
+                      <EmptyState variant="no-data" title="Không tìm thấy kệ nào" description="Thử đổi từ khóa hoặc kho." className="py-10" />
+                    ) : (
+                      <ul className="max-h-[calc(100vh-14rem)] divide-y divide-border overflow-y-auto">
+                        {shelves.map((shelf) => {
+                          const active = selectedShelfId === shelf.id;
+                          return (
+                            <li key={shelf.id}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedShelfId(shelf.id)}
+                                aria-pressed={active}
+                                className={cn(
+                                  "w-full px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40",
+                                  active ? "bg-primary/[0.06]" : "hover:bg-muted/50",
+                                )}
+                              >
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <span className={cn("font-mono text-[14px] font-semibold", active ? "text-primary" : "text-foreground")}>{shelf.code}</span>
+                                  <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">
+                                    <span className="font-semibold text-foreground">{formatQty(shelf.occupiedQty)}</span> / {formatQty(shelf.capacityQty)}
+                                  </span>
+                                </div>
+                                <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+                                  Khu {shelf.zone || "-"}, {shelf.compartmentCount} ngăn{warehouseId ? "" : `, ${shelf.warehouse.name}`}
+                                </p>
+                                <div className="mt-2">
+                                  <UtilizationBar value={shelf.utilizationPct} label={`Kệ ${shelf.code}`} />
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </section>
+
+                  <section aria-labelledby="shelf-detail-title" className="min-w-0 rounded-2xl border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+                      <div className="min-w-0">
+                        <h2 id="shelf-detail-title" className="font-serif text-[17px] font-semibold tracking-tight">
+                          {selectedShelf ? <>Kệ <span className="font-mono">{selectedShelf.code}</span></> : "Chi tiết kệ"}
+                        </h2>
+                        <p className="mt-0.5 text-[13px] text-muted-foreground">
+                          {selectedShelf ? `Khu ${selectedShelf.zone || "-"}, ${selectedShelf.warehouse.code} - ${selectedShelf.warehouse.name}` : "Chọn một kệ để xem ngăn và sách bên trong."}
+                        </p>
+                      </div>
+                      {detail?.shelf && (
+                        <dl className="flex gap-5">
+                          {[
+                            { label: "Đang chứa", value: formatQty(detail.shelf.occupiedQty) },
+                            { label: "Sức chứa", value: formatQty(detail.shelf.capacityQty) },
+                            { label: "Còn trống", value: formatQty(detail.shelf.availableQty) },
+                          ].map((item) => (
+                            <div key={item.label}>
+                              <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+                              <dd className="font-serif text-[20px] font-semibold leading-tight tabular-nums text-foreground">{item.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+
+                    <div className="mt-5 border-t border-border pt-4">
+                      {loadingDetail ? (
+                        <LoadingOverlay />
+                      ) : !detail ? (
+                        <EmptyState variant="no-data" title="Chọn kệ để xem chi tiết" description="Bấm vào một kệ trong danh sách để xem ngăn và sách." className="py-8" />
+                      ) : detail.compartments.length === 0 ? (
+                        <EmptyState variant="no-data" title="Chưa có ngăn kệ" description="Kệ này chưa được cấu hình ngăn." className="py-8" />
+                      ) : (
+                        <ul className="divide-y divide-border">
+                          {detail.compartments.map((compartment) => (
+                            <CompartmentBlock key={compartment.id} compartment={compartment} />
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              <section aria-labelledby="reslotting-title" className="rounded-2xl border border-border bg-card p-5">
+                <h2 id="reslotting-title" className="font-serif text-[17px] font-semibold tracking-tight">Đề xuất tối ưu vị trí</h2>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">Sách được mượn nhiều nhưng đang ở vị trí khó lấy. Hệ thống đề xuất hoán đổi với vị trí dễ tiếp cận hơn.</p>
+                <div className="mt-4">
+                  {!warehouseId ? (
+                    <p className="text-[13px] text-muted-foreground">Chọn một kho để xem đề xuất cho kho đó.</p>
+                  ) : loadingReslotting ? (
+                    <LoadingOverlay />
+                  ) : reslottingError ? (
+                    <EmptyState
+                      variant={reslottingError.forbidden ? "no-permission" : "error"}
+                      title={reslottingError.forbidden ? "Không có quyền xem đề xuất" : "Không tải được đề xuất"}
+                      description={reslottingError.message}
+                      action={reslottingError.forbidden ? undefined : <Button variant="outline" size="sm" onClick={() => void loadReslotting()}>Thử lại</Button>}
+                    />
+                  ) : reslottingItems.length === 0 ? (
+                    <p className="text-[13px] text-muted-foreground">Chưa có đề xuất: vị trí sách trong kho này đã hợp lý theo tần suất mượn 90 ngày gần nhất.</p>
+                  ) : (
+                    <div>
+                      <AIRecommendationNotice className="mb-4" />
+                      <ul className="divide-y divide-border">
+                        {reslottingItems.map((item) => (
+                          <ReslottingSuggestionRow
+                            key={`${item.variant_id}-${item.current_location_id}`}
+                            item={item}
+                            total={reslottingTotal}
+                            canCreateTask={canCreateMoveTask}
+                            onCreateTask={setTaskItem}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </section>
             </div>
-          )}
-        </SectionCard>
-      </motion.div>
+          </div>
+        </div>
+      </FadeItem>
 
       <MoveTaskDialog item={taskItem} warehouseId={warehouseId} onClose={() => setTaskItem(null)} />
-    </div>
+    </PageWrapper>
   );
 }

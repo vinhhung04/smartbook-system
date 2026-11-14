@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, BookOpen, Download, X, ScanBarcode, Camera, Sparkles, ChevronDown, Eye, RefreshCw, Package, AlertTriangle, AlertCircle, Trash2, Copy, Check } from "lucide-react";
-import { StatusBadge } from "../status-badge";
+import { Plus, BookOpen, Download, X, ScanBarcode, Camera, Sparkles, ChevronDown, Eye, RefreshCw, AlertTriangle, Trash2, Copy, Check } from "lucide-react";
 import { CatalogBookThumbnail } from "./catalog-book-thumbnail";
-import { getCategoryTone } from "./catalog-book-category";
 import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
 import { toast } from "sonner";
@@ -11,8 +9,6 @@ import { CoverSearchModal } from "../cover-search-modal";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
 import { PageWrapper, FadeItem } from "../motion-utils";
-import { SegmentedControl } from "@/components/ui/segmented-control";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -45,6 +41,11 @@ interface CatalogBook {
   updated_at?: string;
   cover_image_url?: string | null;
   list_price?: number;
+  publisher?: string | null;
+  publish_year?: number | null;
+  available_quantity: number;
+  receiving_quantity: number;
+  location_count: number;
 }
 
 function toDisplayPrice(value?: number) {
@@ -103,6 +104,11 @@ export function CatalogPage() {
         updated_at: row.updated_at,
         cover_image_url: row.cover_image_url || null,
         list_price: Number(row.list_price || 0),
+        publisher: row.publisher || null,
+        publish_year: row.publish_year || null,
+        available_quantity: Number(row.available_quantity || 0),
+        receiving_quantity: Number(row.receiving_quantity || 0),
+        location_count: Number(row.location_count || 0),
       })) as CatalogBook[];
       setBooks(rows);
     } catch (error) {
@@ -263,16 +269,102 @@ export function CatalogPage() {
   const lowStockCount = books.filter((book) => book.quantity > 0 && book.quantity <= 10).length;
   const outOfStockCount = books.filter((book) => book.quantity === 0).length;
 
+  const STATUS_OPTIONS = [
+    { value: "All", label: "Tất cả", count: books.length, hint: "Mọi đầu sách trong danh mục." },
+    { value: "Complete", label: "Hoàn chỉnh", count: completeCount, hint: "Đã đủ thông tin để bán và cho mượn." },
+    { value: "Incomplete", label: "Chưa hoàn chỉnh", count: incompleteCount, hint: "Thiếu thông tin, cần bổ sung trong trang chi tiết." },
+    { value: "Low Stock", label: "Sắp hết", count: lowStockCount, hint: "Còn từ 1 đến 10 cuốn trong kho." },
+    { value: "Out of Stock", label: "Hết hàng", count: outOfStockCount, hint: "Không còn cuốn nào trong kho." },
+  ];
+  const activeStatus = STATUS_OPTIONS.find((o) => o.value === activeFilter) ?? STATUS_OPTIONS[0];
+  const categoryCounts = new Map<string, number>();
+  for (const book of books) categoryCounts.set(book.category, (categoryCounts.get(book.category) ?? 0) + 1);
+  const receivingCount = books.filter((book) => book.receiving_quantity > 0).length;
+  const hasFilters = activeFilter !== "All" || selectedCategory !== "All" || searchQuery.trim() !== "";
+  const clearFilters = () => {
+    setSearchQuery("");
+    setActiveFilter("All");
+    setSelectedCategory("All");
+  };
+
+  // The finding first: how much of the catalog is stocked, and what needs attention.
+  const lede = loading
+    ? "Danh mục sách của thư viện, kèm tồn kho và vị trí."
+    : books.length === 0
+      ? "Danh mục chưa có sách nào. Thêm sách hoặc nhập bằng AI để bắt đầu."
+      : `${books.length} đầu sách. ${[
+          outOfStockCount ? `${outOfStockCount} hết hàng` : null,
+          lowStockCount ? `${lowStockCount} sắp hết` : null,
+          incompleteCount ? `${incompleteCount} chưa đủ thông tin` : null,
+          receivingCount ? `${receivingCount} đang có hàng ở khu nhận` : null,
+        ].filter(Boolean).join(", ") || "Tất cả đều đủ thông tin và còn hàng"}.`;
+
+  const railButton = (active: boolean, onClick: () => void, label: string, count: number, attention = false) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("min-w-0 truncate text-[13px]", active ? "font-semibold" : "font-medium")} title={label}>{label}</span>
+      <span
+        className={cn(
+          "min-w-6 shrink-0 rounded-full px-1.5 text-center text-[12px] tabular-nums",
+          attention && count > 0 ? "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : active ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {loading ? "–" : count}
+      </span>
+    </button>
+  );
+
+  const sortHead = (field: typeof sortField, label: string, className: string, alignEnd = false) => (
+    <TableHead className={className} aria-sort={sortField === field ? (sortDir === "asc" ? "ascending" : "descending") : "none"}>
+      <button
+        type="button"
+        onClick={() => toggleSort(field)}
+        className={cn("inline-flex items-center gap-1 rounded text-[12px] font-normal transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50", alignEnd && "flex-row-reverse")}
+      >
+        {label}
+        <ChevronDown className={cn("h-3 w-3 transition-transform", sortField === field ? "opacity-100" : "opacity-0", sortField === field && sortDir === "desc" && "rotate-180")} aria-hidden="true" />
+      </button>
+    </TableHead>
+  );
+
+  const rowActions = (book: CatalogBook) => (
+    <div className="flex items-center justify-end gap-1">
+      <IconButton asChild variant="ghost" size="sm-icon" label="Xem chi tiết sách">
+        <NavLink to={`/book/${book.id}`}>
+          <Eye className="w-3.5 h-3.5 text-primary" />
+        </NavLink>
+      </IconButton>
+      <IconButton
+        variant="ghost"
+        size="sm-icon"
+        label="Xóa sách"
+        onClick={(e) => {
+          e.stopPropagation();
+          setDeleteBook(book);
+        }}
+        className="hover:bg-red-50 dark:hover:bg-red-500/10"
+      >
+        <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+      </IconButton>
+    </div>
+  );
+
+  const stockTone = (quantity: number) => (quantity === 0 ? "text-red-700 dark:text-red-400" : quantity <= 10 ? "text-amber-700 dark:text-amber-300" : "text-foreground");
+
   return (
     <PageWrapper className="space-y-6">
-      {/* Header */}
       <FadeItem>
         <PageHeader
           icon={BookOpen}
           title="Danh mục sách"
-          description={`${books.length} đầu sách — ${completeCount} hoàn chỉnh, ${incompleteCount} chưa hoàn chỉnh`}
-          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/20 dark:to-indigo-500/10"
-          iconColor="text-blue-600 dark:text-blue-400"
+          description={lede}
           actions={
             <>
               <Button variant="outline" asChild>
@@ -291,273 +383,253 @@ export function CatalogPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="space-y-3">
-          <FilterBar
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder="Tìm theo tên sách, mã vạch, tác giả..."
-            showSearchClear
-            filters={
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[180px]" aria-label="Danh mục">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category === "All" ? "Tất cả danh mục" : category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            }
-            actions={
-              <>
-                <Button variant="outline" onClick={() => setShowCoverSearchModal(true)}>
-                  <Camera className="w-3.5 h-3.5" />
-                  Tìm bằng ảnh
-                </Button>
-                <Button variant="outline" onClick={handleExport}>
-                  <Download className="w-3.5 h-3.5" />
-                  Xuất file
-                </Button>
-                <Button variant="outline" onClick={() => void loadBooks()} loading={loading} aria-label="Làm mới danh sách">
-                  <RefreshCw className="w-3.5 h-3.5" />
-                </Button>
-              </>
-            }
-          />
+        {/* Named so the toolbar inside the list (its own container) can still ask whether the rail is showing. */}
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[232px_minmax(0,1fr)]">
+            <nav aria-label="Lọc danh mục sách" className="hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Tình trạng</p>
+              <div role="group" aria-label="Lọc theo tình trạng">
+                {STATUS_OPTIONS.map((o) => (
+                  <div key={o.value}>{railButton(activeFilter === o.value, () => setActiveFilter(o.value), o.label, o.count, o.value === "Low Stock" || o.value === "Incomplete")}</div>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-border pt-3" role="group" aria-label="Lọc theo danh mục">
+                <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Danh mục</p>
+                {categories.map((category) => (
+                  <div key={category}>
+                    {railButton(selectedCategory === category, () => setSelectedCategory(category), category === "All" ? "Tất cả danh mục" : category, category === "All" ? books.length : categoryCounts.get(category) ?? 0)}
+                  </div>
+                ))}
+              </div>
+            </nav>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl/page:hidden" role="group" aria-label="Lọc theo tình trạng">
+              {STATUS_OPTIONS.map((o) => {
+                const active = activeFilter === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setActiveFilter(o.value)}
+                    aria-pressed={active}
+                    className={cn(
+                      "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      active ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium hover:bg-muted/60",
+                    )}
+                  >
+                    <span className="whitespace-nowrap">{o.label}</span>
+                    <span className="tabular-nums text-muted-foreground">{loading ? "–" : o.count}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          {/* The status counts double as the filter, replacing the five big stat cards. */}
-          <div className="max-w-full overflow-x-auto">
-            <SegmentedControl
-              layoutId="catalog-status-filter"
-              value={activeFilter}
-              onChange={setActiveFilter}
-              options={[
-                { value: "All", label: `Tất cả (${books.length})` },
-                { value: "Complete", label: `Hoàn chỉnh (${completeCount})` },
-                { value: "Incomplete", label: `Chưa hoàn chỉnh (${incompleteCount})` },
-                { value: "Low Stock", label: `Sắp hết (${lowStockCount})` },
-                { value: "Out of Stock", label: `Hết hàng (${outOfStockCount})` },
-              ]}
-              className="w-max"
-            />
-          </div>
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        <SectionCard noPadding className="overflow-hidden">
-          {loading ? (
-            <LoadingOverlay />
-          ) : (
-            <div>
-              <div className="overflow-x-auto">
-              <Table className="table-fixed">
-                <TableHeader>
-                  <TableRow className="bg-muted/30 hover:bg-muted/30">
-                    <TableHead
-                      className="cursor-pointer select-none px-4 py-3 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-                      onClick={() => toggleSort("title")}
-                      aria-sort={sortField === "title" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        Sách {sortField === "title" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
-                      </span>
-                    </TableHead>
-                    <TableHead className="hidden w-[170px] px-4 py-3 text-[12px] text-muted-foreground md:table-cell">
-                      Phân loại
-                    </TableHead>
-                    <TableHead className="hidden w-[110px] px-4 py-3 text-right text-[12px] text-muted-foreground lg:table-cell">
-                      Giá
-                    </TableHead>
-                    <TableHead
-                      className="w-[110px] cursor-pointer select-none px-4 py-3 text-right text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-                      onClick={() => toggleSort("stock")}
-                      aria-sort={sortField === "stock" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                    >
-                      <span className="inline-flex items-center justify-end gap-1">
-                        Tồn kho {sortField === "stock" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
-                      </span>
-                    </TableHead>
-                    <TableHead
-                      className="hidden w-[120px] cursor-pointer select-none px-4 py-3 text-[12px] text-muted-foreground transition-colors hover:text-foreground xl:table-cell"
-                      onClick={() => toggleSort("updatedAt")}
-                      aria-sort={sortField === "updatedAt" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        Cập nhật {sortField === "updatedAt" && <ChevronDown className={`w-3 h-3 transition-transform ${sortDir === "desc" ? "rotate-180" : ""}`} />}
-                      </span>
-                    </TableHead>
-                    <TableHead className="w-[84px] px-4 py-3" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={6} className="whitespace-normal py-10 text-center">
-                        <EmptyState
-                          variant="no-results"
-                          title="Không tìm thấy sách"
-                          description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
-                          action={
-                            <button
-                              onClick={() => {
-                                setSearchQuery("");
-                                setActiveFilter("All");
-                                setSelectedCategory("All");
-                              }}
-                              className="mt-2 text-[12px] text-primary hover:underline font-medium"
-                            >
-                              Xóa tất cả bộ lọc
-                            </button>
-                          }
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ) : pagedBooks.map((book) => (
-                    <TableRow key={book.id} className="group">
-                      <TableCell className="px-4 py-3">
-                        <div className="flex items-start gap-3">
-                          <CatalogBookThumbnail category={book.category} title={book.title} imageUrl={book.cover_image_url} />
-                          <div className="min-w-0 flex-1">
-                            <NavLink
-                              to={`/book/${book.id}`}
-                              className="block truncate text-[13px] transition-colors hover:text-primary hover:underline"
-                              style={{ fontWeight: 550 }}
-                              title={book.title}
-                            >
-                              {book.title}
-                            </NavLink>
-                            <p className="truncate text-[12px] text-muted-foreground">{book.author || "-"}</p>
-                            {book.barcode && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCopyBarcode(book.barcode!);
-                                }}
-                                className="mt-0.5 inline-flex items-center gap-1.5 rounded font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-                                aria-label={`Sao chép mã vạch ${book.barcode}`}
-                              >
-                                {book.barcode}
-                                {copiedBarcode === book.barcode ? (
-                                  <Check className="h-3 w-3 text-success" />
-                                ) : (
-                                  <Copy className="h-3 w-3 opacity-40 group-hover:opacity-70" />
-                                )}
-                              </button>
-                            )}
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 md:hidden">
-                              <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
-                              {book.is_incomplete ? <StatusBadge label="Chưa hoàn chỉnh" variant="warning" dot /> : null}
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden px-4 py-3 md:table-cell">
-                        <div className="flex flex-col items-start gap-1.5">
-                          <StatusBadge label={book.category || "Chưa phân loại"} variant={getCategoryTone(book.category)} />
-                          <StatusBadge
-                            label={book.is_incomplete ? "Chưa hoàn chỉnh" : "Hoàn chỉnh"}
-                            variant={book.is_incomplete ? "warning" : "success"}
-                            dot
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden px-4 py-3 text-right text-[13px] text-muted-foreground lg:table-cell">{toDisplayPrice(book.list_price)}</TableCell>
-                      <TableCell className="px-4 py-3 text-right">
-                        <p
-                          className={cn(
-                            "font-mono text-[14px] font-semibold tabular-nums",
-                            book.quantity === 0 ? "text-destructive" : book.quantity <= 10 ? "text-amber-600" : "text-emerald-600",
-                          )}
-                        >
-                          {book.quantity}
-                        </p>
-                        <p className="truncate text-[11px] text-muted-foreground" title={book.location || undefined}>{book.location || "-"}</p>
-                      </TableCell>
-                      <TableCell className="hidden px-4 py-3 text-[12px] text-muted-foreground xl:table-cell">{toDisplayDate(book.updated_at)}</TableCell>
-                      <TableCell className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <IconButton asChild variant="ghost" size="sm-icon" label="Xem chi tiết sách">
-                            <NavLink to={`/book/${book.id}`}>
-                              <Eye className="w-3.5 h-3.5 text-primary" />
-                            </NavLink>
-                          </IconButton>
-                          <IconButton
-                            variant="ghost"
-                            size="sm-icon"
-                            label="Xóa sách"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteBook(book);
-                            }}
-                            className="hover:bg-red-50 dark:hover:bg-red-500/10"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
-                          </IconButton>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <section aria-label="Danh sách sách" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-1 pt-4">
+                <div className="min-w-0">
+                  <h2 className="font-serif text-[18px] font-semibold tracking-tight">{activeFilter === "All" ? "Tất cả đầu sách" : activeStatus.label}</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    {activeStatus.hint}{selectedCategory !== "All" ? ` Đang xem danh mục ${selectedCategory}.` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" onClick={() => setShowCoverSearchModal(true)}>
+                    <Camera className="h-3.5 w-3.5" />Tìm bằng ảnh
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleExport}>
+                    <Download className="h-3.5 w-3.5" />Xuất CSV
+                  </Button>
+                  <IconButton variant="ghost" size="sm-icon" label="Làm mới danh sách" onClick={() => void loadBooks()} disabled={loading}>
+                    <RefreshCw className={cn("h-3.5 w-3.5 motion-reduce:animate-none", loading && "animate-spin")} />
+                  </IconButton>
+                </div>
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="Tìm theo tên sách, mã vạch, tác giả..."
+                  showSearchClear
+                  filters={
+                    <>
+                      {/* The rail lists categories on wide screens; here it is a select. */}
+                      <div className="@4xl/page:hidden">
+                        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                          <SelectTrigger size="sm" className="w-[200px]" aria-label="Danh mục">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category === "All" ? "Tất cả danh mục" : category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {hasFilters && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                          <X className="h-3.5 w-3.5" />Xóa lọc
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
               </div>
 
-              {filtered.length > 0 && (
-                <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-[12px] text-muted-foreground">
-                    Hiển thị <span className="font-medium text-foreground">{pagedBooks.length}</span> / {filtered.length} sách
-                  </span>
-                  {totalPages > 1 && (
-                    <Pagination className="mx-0 w-auto justify-end">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.max(1, current - 1));
-                            }}
-                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                        {getPaginationRange(page, totalPages).map((item) => (
-                          <PaginationItem key={item}>
-                            {typeof item === "number" ? (
-                              <PaginationLink
-                                isActive={item === page}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  setPage(item);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                {item}
-                              </PaginationLink>
-                            ) : (
-                              <PaginationEllipsis />
-                            )}
-                          </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.min(totalPages, current + 1));
-                            }}
-                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  )}
+              {loading ? (
+                <LoadingOverlay />
+              ) : filtered.length === 0 ? (
+                <div className="px-5 py-10">
+                  <EmptyState
+                    variant="no-results"
+                    title="Không tìm thấy sách"
+                    description="Thử điều chỉnh tìm kiếm hoặc bộ lọc."
+                    action={<Button variant="outline" size="sm" onClick={clearFilters}>Xóa tất cả bộ lọc</Button>}
+                  />
                 </div>
+              ) : (
+                <>
+                  <Table className="table-fixed">
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        {sortHead("title", "Sách", "pl-5 text-[12px] font-normal text-muted-foreground")}
+                        <TableHead className="hidden w-[160px] text-[12px] font-normal text-muted-foreground @3xl:table-cell">Danh mục, giá bìa</TableHead>
+                        {sortHead("stock", "Tồn kho", "w-[92px] text-right @2xl:w-[132px] text-[12px] font-normal text-muted-foreground", true)}
+                        {sortHead("updatedAt", "Cập nhật", "hidden w-[104px] text-[12px] font-normal text-muted-foreground @4xl:table-cell")}
+                        <TableHead className="hidden w-[84px] pr-4 @2xl:table-cell"><span className="sr-only">Thao tác</span></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedBooks.map((book) => (
+                        <TableRow key={book.id} className="group hover:bg-muted/30">
+                          <TableCell className="whitespace-normal py-3 pl-5 pr-3 align-top">
+                            <div className="flex items-start gap-3">
+                              <CatalogBookThumbnail category={book.category} title={book.title} imageUrl={book.cover_image_url} />
+                              <div className="min-w-0 flex-1">
+                                <NavLink
+                                  to={`/book/${book.id}`}
+                                  className="line-clamp-2 text-[14px] font-semibold text-foreground underline-offset-2 transition-colors hover:text-primary hover:underline"
+                                  title={book.title}
+                                >
+                                  {book.title}
+                                </NavLink>
+                                <p className="truncate text-[13px] text-muted-foreground">
+                                  {book.author || "-"}
+                                  {book.publisher && book.publisher !== "Chưa cập nhật" ? `, ${book.publisher}` : ""}
+                                  {book.publish_year ? `, ${book.publish_year}` : ""}
+                                </p>
+                                {book.barcode && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopyBarcode(book.barcode!);
+                                    }}
+                                    className="mt-0.5 inline-flex items-center gap-1.5 rounded font-mono text-[12px] text-muted-foreground transition-colors hover:text-foreground"
+                                    aria-label={`Sao chép mã vạch ${book.barcode}`}
+                                  >
+                                    {book.barcode}
+                                    {copiedBarcode === book.barcode ? (
+                                      <Check className="h-3 w-3 text-success" />
+                                    ) : (
+                                      <Copy className="h-3 w-3 opacity-40 group-hover:opacity-70" />
+                                    )}
+                                  </button>
+                                )}
+                                {/* Columns the container hides move here, so no field is dropped. */}
+                                <p className="mt-1 text-[12px] text-muted-foreground @3xl:hidden">
+                                  {book.category}
+                                  {book.list_price ? `, ${toDisplayPrice(book.list_price)}` : ""}
+                                </p>
+                                <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground @4xl:hidden">Cập nhật {toDisplayDate(book.updated_at)}</p>
+                                {book.is_incomplete ? (
+                                  <p className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium text-amber-800 dark:text-amber-300">
+                                    <AlertTriangle className="h-3 w-3" aria-hidden="true" />Chưa hoàn chỉnh
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="hidden whitespace-normal py-3 align-top @3xl:table-cell">
+                            <p className="text-[13px] text-foreground">{book.category}</p>
+                            <p className="text-[12px] tabular-nums text-muted-foreground">{book.list_price ? toDisplayPrice(book.list_price) : "Chưa có giá"}</p>
+                          </TableCell>
+                          <TableCell className="whitespace-normal py-3 text-right align-top">
+                            <p className={cn("font-serif text-[18px] font-semibold leading-tight tabular-nums", stockTone(book.quantity))}>
+                              {book.quantity}<span className="font-sans text-[12px] font-normal text-muted-foreground"> cuốn</span>
+                            </p>
+                            {book.available_quantity !== book.quantity ? (
+                              <p className="text-[12px] tabular-nums text-muted-foreground">{book.available_quantity} sẵn sàng</p>
+                            ) : null}
+                            {book.receiving_quantity > 0 ? (
+                              <p className="text-[12px] tabular-nums text-muted-foreground">{book.receiving_quantity} ở khu nhận</p>
+                            ) : null}
+                            <p className="truncate text-[12px] text-muted-foreground" title={book.location || undefined}>
+                              {book.location || "-"}{book.location_count > 1 ? ` +${book.location_count - 1}` : ""}
+                            </p>
+                            <div className="mt-1 @2xl:hidden">{rowActions(book)}</div>
+                          </TableCell>
+                          <TableCell className="hidden py-3 align-top text-[12px] tabular-nums text-muted-foreground @4xl:table-cell">{toDisplayDate(book.updated_at)}</TableCell>
+                          <TableCell className="hidden py-3 pr-4 align-top @2xl:table-cell">
+                            {rowActions(book)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-[13px] text-muted-foreground">
+                      Hiển thị <span className="font-medium tabular-nums text-foreground">{(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + pagedBooks.length}</span> trong {filtered.length} sách
+                    </span>
+                    {totalPages > 1 && (
+                      <Pagination className="mx-0 w-auto justify-end">
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setPage((current) => Math.max(1, current - 1));
+                              }}
+                              className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
+                            />
+                          </PaginationItem>
+                          {getPaginationRange(page, totalPages).map((item) => (
+                            <PaginationItem key={item}>
+                              {typeof item === "number" ? (
+                                <PaginationLink
+                                  isActive={item === page}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    setPage(item);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  {item}
+                                </PaginationLink>
+                              ) : (
+                                <PaginationEllipsis />
+                              )}
+                            </PaginationItem>
+                          ))}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setPage((current) => Math.min(totalPages, current + 1));
+                              }}
+                              className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    )}
+                  </div>
+                </>
               )}
-            </div>
-          )}
-        </SectionCard>
+            </section>
+          </div>
+        </div>
       </FadeItem>
 
       {/* Drawer */}
@@ -584,8 +656,8 @@ export function CatalogPage() {
             >
               <div className="flex items-center justify-between px-6 py-5 border-b border-border">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-50 border border-blue-200/40 flex items-center justify-center">
-                    <Plus className="w-4 h-4 text-blue-600" />
+                  <div className="w-9 h-9 rounded-xl bg-primary/[0.08] flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-primary" />
                   </div>
                   <div>
                     <h3 id="add-book-drawer-title" className="text-[15px]" style={{ fontWeight: 650 }}>Thêm sách mới</h3>
@@ -598,8 +670,8 @@ export function CatalogPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                <div className="relative overflow-hidden p-4 rounded-xl bg-gradient-to-r from-blue-50/80 to-indigo-50/40 border border-blue-100/50">
-                  <div className="flex items-center gap-2 text-[12px] text-blue-700">
+                <div className="p-4 rounded-xl bg-primary/[0.05]">
+                  <div className="flex items-center gap-2 text-[13px] text-foreground">
                     <ScanBarcode className="w-4 h-4" />
                     <span style={{ fontWeight: 550 }}>
                       Nhập mã vạch và tên sách để tạo bản ghi sách mới
@@ -616,8 +688,7 @@ export function CatalogPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => setShowBarcodeModal(true)}
-                      className="border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/15"
-                    >
+                                          >
                       <ScanBarcode className="h-3.5 w-3.5" />
                       Quét mã vạch
                     </Button>
@@ -650,7 +721,7 @@ export function CatalogPage() {
 
               <div className="p-6 border-t border-border space-y-2">
                 <Button
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
+                  className="w-full"
                   onClick={() => void handleAddBook()}
                   loading={saving}
                 >

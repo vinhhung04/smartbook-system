@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
-import { AlertTriangle, ArrowRightLeft, ChevronDown, Filter, Lock, RefreshCw, ScanLine, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, CheckCircle2, ChevronDown, Plus, RefreshCw, ScanLine, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { getApiErrorMessage } from "@/services/api.ts";
@@ -18,11 +18,12 @@ import { canManageReceiving } from "@/lib/rbac";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button, IconButton } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/components/ui/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
@@ -601,6 +602,9 @@ export function ReceivingPutawayPage() {
     );
   };
 
+  // Presentation only: managers switch between the two jobs instead of seeing both stacked.
+  const [mode, setMode] = useState<"putaway" | "reverse">("putaway");
+
   if (loading) {
     return (
       <PageWrapper>
@@ -609,427 +613,487 @@ export function ReceivingPutawayPage() {
     );
   }
 
+  const overAllocated = totalDraftQty > neededQty;
+  const allocatedPct = neededQty > 0 ? Math.min(100, Math.round((totalDraftQty / neededQty) * 100)) : 0;
+  const fieldLabel = "mb-1.5 block text-[12px] font-medium text-foreground";
+
   return (
     <PageWrapper className="space-y-6">
       <FadeItem>
+        {lockedCtx.goodsReceiptId && (
+          <Button asChild variant="ghost" size="sm" className="-ml-3 mb-2 text-muted-foreground">
+            <Link to={`/putaway/${lockedCtx.goodsReceiptId}`}><ArrowLeft className="h-4 w-4" /> Phiếu nhập</Link>
+          </Button>
+        )}
         <PageHeader
           icon={ArrowRightLeft}
           title="Nhận & cất hàng lên kệ"
-          description="Chuyển sách từ khu nhận hàng lên ngăn kệ, hoặc hoàn trả về khu nhận hàng"
-          iconBg="bg-violet-100 dark:bg-violet-500/15"
-          iconColor="text-violet-600 dark:text-violet-400"
+          description={isVariantLocked ? (
+            <>Đang cất theo phiếu nhập: chỉ xếp <span className="font-semibold text-foreground">{lockedCtx.bookTitle || "sách đã chọn"}</span>. Kho và sách đã được khoá theo phiếu.</>
+          ) : (
+            <>
+              Chuyển sách đang nằm ở khu nhận hàng lên ngăn kệ. Việc đã giao cho nhân viên nằm ở{" "}
+              <Link to="/putaway" className="whitespace-nowrap rounded font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Cất hàng vào kệ</Link>.
+            </>
+          )}
+          actions={(
+            <Button variant="outline" size="sm" onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}>
+              <RefreshCw className="h-3.5 w-3.5" /> Tải lại
+            </Button>
+          )}
         />
-        {isVariantLocked ? (
-          <Alert className="mt-3 border-violet-200 bg-violet-50 dark:border-violet-500/20 dark:bg-violet-500/10">
-            <Lock className="text-violet-600 dark:text-violet-400" />
-            <AlertDescription className="text-violet-800 dark:text-violet-300">
-              <p>
-                Chế độ nhập hàng theo phiếu — chỉ xếp:{' '}
-                <span className="font-semibold">{lockedCtx.bookTitle || "sách đã chọn"}</span>.
-                {' '}Kho và sách đã được khoá theo phiếu nhập.
-              </p>
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert className="mt-3 border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
-            <AlertTriangle className="text-amber-600 dark:text-amber-400" />
-            <AlertDescription className="text-amber-800 dark:text-amber-300">
-              <p>
-              Màn này dùng cho thao tác điều chuyển trực tiếp. Nếu cần giao việc cho nhân viên, hãy dùng{' '}
-              <Link to="/putaway" className="font-semibold underline hover:text-amber-900 dark:hover:text-amber-200">Cất hàng vào kệ</Link>.
-              </p>
-            </AlertDescription>
-          </Alert>
-        )}
       </FadeItem>
 
-      {/* Warehouse Filter */}
       <FadeItem>
-        <SectionCard title="Phạm vi làm việc" subtitle="Chọn kho và khu nhận hàng đang thao tác" icon={Filter}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Kho {isWarehouseLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}</p>
-              <Select
-                value={selectedWarehouseId || "none"}
-                onValueChange={(value) => setSelectedWarehouseId(value === "none" ? "" : value)}
-                disabled={isWarehouseLocked}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn kho" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-border bg-card p-4">
+          <div className="min-w-[14rem] flex-1">
+            <label htmlFor="rp-warehouse" className={fieldLabel}>
+              Kho {isWarehouseLocked && <span className="font-normal text-muted-foreground">(khoá theo phiếu)</span>}
+            </label>
+            <Select
+              value={selectedWarehouseId}
+              onValueChange={(value) => setSelectedWarehouseId(value === "none" ? "" : value)}
+              disabled={isWarehouseLocked}
+            >
+              <SelectTrigger id="rp-warehouse" className="w-full">
+                <SelectValue placeholder="Chọn kho" />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map((warehouse) => (
+                  <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-[14rem] flex-1">
+            <label htmlFor="rp-receiving" className={fieldLabel}>Khu nhận hàng nguồn</label>
+            <Select value={selectedReceivingId} onValueChange={(value) => setSelectedReceivingId(value === "none" ? "" : value)}>
+              <SelectTrigger id="rp-receiving" className="w-full">
+                <SelectValue placeholder="Chọn khu nhận hàng" />
+              </SelectTrigger>
+              <SelectContent>
+                {receivings.map((location) => (
+                  <SelectItem key={location.id} value={location.id}>{location.location_code}, {LOCATION_TYPE_LABEL[location.location_type] ?? location.location_type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {isManager && (
+            <div className="max-w-full overflow-x-auto">
+              <SegmentedControl
+                options={[
+                  { value: "putaway", label: "Cất lên kệ" },
+                  { value: "reverse", label: "Hoàn trả về khu nhận" },
+                ]}
+                value={mode}
+                onChange={(v) => setMode(v as "putaway" | "reverse")}
+                layoutId="receiving-putaway-mode"
+                className="w-max"
+              />
             </div>
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu nhận hàng nguồn</p>
-              <Select value={selectedReceivingId || "none"} onValueChange={(value) => setSelectedReceivingId(value === "none" ? "" : value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn khu nhận hàng" />
-                </SelectTrigger>
-                <SelectContent>
-                  {receivings.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>{location.location_code} · {LOCATION_TYPE_LABEL[location.location_type] ?? location.location_type}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          )}
+        </div>
+      </FadeItem>
+
+      {mode === "putaway" ? (
+        <FadeItem>
+          <div className="@container/page">
+            <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="min-w-0 space-y-4">
+                <section aria-labelledby="rp-step-1" className="rounded-2xl border border-border bg-card p-5">
+                  <StepHeading id="rp-step-1" n={1}>Sách cần cất</StepHeading>
+                  {receivingItems.length === 0 ? (
+                    <p className="mt-3 text-[13px] text-muted-foreground">Khu nhận hàng này không có sách nào chờ cất. Chọn khu nhận hàng hoặc kho khác.</p>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-1 gap-4 @2xl:grid-cols-2">
+                      <div className="min-w-0">
+                        <label htmlFor="rp-variant" className={fieldLabel}>
+                          Sách trong khu nhận hàng {isVariantLocked && <span className="font-normal text-muted-foreground">(khoá theo phiếu)</span>}
+                        </label>
+                        <Select
+                          value={selectedVariantId}
+                          onValueChange={(value) => setSelectedVariantId(value === "none" ? "" : value)}
+                          disabled={isVariantLocked}
+                        >
+                          <SelectTrigger id="rp-variant" className="w-full">
+                            <SelectValue placeholder="Chọn sách" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {receivingItems.map((item) => (
+                              <SelectItem key={item.variant_id} value={item.variant_id}>
+                                {item.book_title} ({item.on_hand_qty} cuốn)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selectedVariantItem && (
+                          <p className="mt-1.5 text-[12px] text-muted-foreground">
+                            <span className="font-mono">{selectedVariantItem.isbn13 || selectedVariantItem.sku || selectedVariantItem.barcode || selectedVariantItem.variant_id.slice(0, 8)}</span>, đang có {selectedVariantItem.on_hand_qty} cuốn ở khu nhận hàng
+                          </p>
+                        )}
+                      </div>
+
+                      {!isVariantLocked && (
+                        <div className="min-w-0">
+                          <label htmlFor="rp-scan-isbn" className={fieldLabel}>Hoặc quét ISBN-13</label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="rp-scan-isbn"
+                              value={scanSkuInput}
+                              onChange={(event) => setScanSkuInput(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void handleScanSku();
+                                }
+                              }}
+                              placeholder="13 chữ số"
+                              inputMode="numeric"
+                              autoComplete="off"
+                              className="h-10 min-w-0 flex-1 font-mono"
+                            />
+                            <IconButton variant="outline" onClick={handleScanSku} label="Quét ISBN-13" className="h-10 w-10 shrink-0">
+                              <ScanLine className="h-4 w-4" />
+                            </IconButton>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {ambiguousVariantMatches.length > 0 ? (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+                      <p className="text-[13px] font-medium text-amber-900 dark:text-amber-200">ISBN-13 này khớp nhiều SKU. Chọn đúng SKU:</p>
+                      <Select
+                        onValueChange={(variantId) => {
+                          setSelectedVariantId(variantId);
+                          setAmbiguousVariantMatches([]);
+                        }}
+                      >
+                        <SelectTrigger className="mt-2 w-full border-amber-200 dark:border-amber-500/20" aria-label="Chọn SKU đúng">
+                          <SelectValue placeholder="Chọn SKU đúng" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ambiguousVariantMatches.map((item) => (
+                            <SelectItem key={item.variant_id} value={item.variant_id}>
+                              {item.book_title}, {item.isbn13 || item.sku || item.internal_barcode || item.isbn10} (khớp theo {item.matched_by})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                </section>
+
+                <section aria-labelledby="rp-step-2" className="rounded-2xl border border-border bg-card p-5">
+                  <StepHeading id="rp-step-2" n={2}>Chọn ngăn kệ</StepHeading>
+                  {receiptDone ? (
+                    <p role="status" className="mt-3 flex items-start gap-1.5 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>
+                        Đã cất đủ số lượng của phiếu cho sách này.{" "}
+                        {lockedCtx.goodsReceiptId && (
+                          <Link to={`/putaway/${lockedCtx.goodsReceiptId}`} className="underline underline-offset-4">Quay lại phiếu nhập</Link>
+                        )}
+                      </span>
+                    </p>
+                  ) : !selectedVariantItem ? (
+                    <p className="mt-3 text-[13px] text-muted-foreground">Chọn sách ở bước 1 để xem các ngăn còn chỗ.</p>
+                  ) : loadingCandidates ? (
+                    <p className="mt-3 text-[13px] text-muted-foreground">Đang tính toán vị trí...</p>
+                  ) : candidates.length === 0 ? (
+                    <EmptyState
+                      variant="no-data"
+                      title="Không có ngăn còn chỗ trống"
+                      description="Kho này chưa có ngăn kệ nào còn chỗ. Hãy kiểm tra cấu hình kệ và ngăn của kho trước khi cất hàng."
+                      action={<Link to="/shelves" className="text-[13px] font-medium text-primary underline-offset-4 hover:underline">Mở trang Kệ hàng</Link>}
+                      className="mt-2 py-6"
+                    />
+                  ) : (
+                    <div className="mt-4 space-y-4">
+                      {/* Primary path: ranked suggestions for what is still left to place. */}
+                      <StorageSuggestionPanel
+                        warehouseId={selectedWarehouseId}
+                        variantId={selectedVariantId}
+                        quantity={suggestionQty}
+                        autoRequest
+                        disabled={suggestionsPaused}
+                        selectedLocationIds={draftLines.filter((line) => line.id !== defaultLineId).map((line) => line.target_location_id)}
+                        onSelectLocation={handleSelectSuggestedLocation}
+                      />
+
+                      <div className="max-w-md">
+                        <label htmlFor="rp-scan-location" className={fieldLabel}>Hoặc quét mã ngăn cho dòng đầu tiên</label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="rp-scan-location"
+                            value={scanTargetBarcodeInput}
+                            onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void handleScanTargetLocation();
+                              }
+                            }}
+                            placeholder="Mã vạch ngăn kệ"
+                            autoComplete="off"
+                            className="h-10 min-w-0 flex-1 font-mono"
+                          />
+                          <IconButton variant="outline" onClick={handleScanTargetLocation} label="Quét vị trí đích" className="h-10 w-10 shrink-0">
+                            <ScanLine className="h-4 w-4" />
+                          </IconButton>
+                        </div>
+                      </div>
+
+                      <Collapsible>
+                        <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md py-1 text-left text-[13px] font-medium text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50">
+                          Tất cả ngăn còn chỗ ({candidates.length})
+                          <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="pt-2">
+                          <div className="overflow-x-auto rounded-xl border border-border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="hover:bg-transparent">
+                                  {["Ngăn", "Khu", "Kệ", "Hiện có", "Tối đa", "Còn lại", "SKU khác nhau", "Ưu tiên"].map((head) => (
+                                    <TableHead key={head} className="text-[12px] font-medium text-muted-foreground">{head}</TableHead>
+                                  ))}
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {candidates.map((candidate) => (
+                                  <TableRow key={candidate.id} className="hover:bg-muted/40">
+                                    <TableCell className="font-mono text-[12px] font-semibold">{candidate.location_code}</TableCell>
+                                    <TableCell className="text-[12px] text-muted-foreground">{candidate.zone_code}</TableCell>
+                                    <TableCell className="text-[12px] text-muted-foreground">{candidate.shelf_code}</TableCell>
+                                    <TableCell className="text-[12px] tabular-nums text-muted-foreground">{candidate.current_on_hand}</TableCell>
+                                    <TableCell className="text-[12px] tabular-nums text-muted-foreground">{candidate.max_capacity}</TableCell>
+                                    <TableCell className="text-[12px] font-semibold tabular-nums text-foreground">{candidate.remaining_capacity}</TableCell>
+                                    <TableCell className="text-[12px] tabular-nums text-muted-foreground">{candidate.mixed_sku_count}</TableCell>
+                                    <TableCell className="text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? "Cùng kệ" : candidate.priority_group === 1 ? "Cùng khu" : "Khác"}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    </div>
+                  )}
+                </section>
+
+                {!receiptDone && selectedVariantItem && candidates.length > 0 && (
+                  <section aria-labelledby="rp-step-3" className="rounded-2xl border border-border bg-card p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <StepHeading id="rp-step-3" n={3}>Số lượng cho từng ngăn</StepHeading>
+                      <Button variant="outline" size="sm" onClick={addDraftLine}><Plus className="h-3.5 w-3.5" /> Thêm ngăn thủ công</Button>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {draftLines.length === 0 ? (
+                        <p className="text-[13px] text-muted-foreground">Chưa có dòng nào. Chọn một vị trí gợi ý ở bước 2 hoặc thêm ngăn thủ công.</p>
+                      ) : draftLines.map((line, index) => {
+                        const lineCandidate = candidateMap.get(line.target_location_id);
+                        return (
+                          <div key={line.id} className="grid grid-cols-[minmax(0,1fr)_96px_auto] items-end gap-3 rounded-xl border border-border p-4 @2xl:grid-cols-[minmax(0,12rem)_96px_minmax(0,1fr)_auto]">
+                            <div className="min-w-0">
+                              <label htmlFor={`rp-line-${line.id}-loc`} className={fieldLabel}>Ngăn đích</label>
+                              <Select
+                                value={line.target_location_id || "none"}
+                                // A barcode scanned for the previous target says nothing about the new one — the server checks it.
+                                onValueChange={(value) => updateLine(line.id, { target_location_id: value === "none" ? "" : value, scanned_location_barcode: "" })}
+                              >
+                                <SelectTrigger id={`rp-line-${line.id}-loc`} className="w-full font-mono">
+                                  <SelectValue placeholder="Chọn vị trí đích" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {candidates.map((candidate) => (
+                                    <SelectItem key={candidate.id} value={candidate.id}>{candidate.location_code} (còn {candidate.remaining_capacity})</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <label htmlFor={`rp-line-${line.id}-qty`} className={fieldLabel}>Số lượng</label>
+                              <Input
+                                id={`rp-line-${line.id}-qty`}
+                                type="number"
+                                min={1}
+                                max={Math.min(
+                                  lineCandidate?.remaining_capacity ?? Infinity,
+                                  receiptMaxQty !== null ? receiptMaxQty : Infinity,
+                                )}
+                                value={line.quantity}
+                                onChange={(event) => updateLine(line.id, { quantity: Math.max(1, Math.trunc(Number(event.target.value || 1))) })}
+                                className="h-10 tabular-nums"
+                              />
+                            </div>
+                            <IconButton
+                              variant="ghost"
+                              onClick={() => removeLine(line.id)}
+                              label={`Xóa dòng ${index + 1}`}
+                              className="h-10 w-10 text-muted-foreground hover:text-red-600 @2xl:order-last"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </IconButton>
+                            <div className="col-span-3 min-w-0 @2xl:col-span-1">
+                              <label htmlFor={`rp-line-${line.id}-reason`} className={fieldLabel}>Lý do <span className="font-normal text-muted-foreground">(bắt buộc)</span></label>
+                              <Input
+                                id={`rp-line-${line.id}-reason`}
+                                value={line.reason}
+                                onChange={(event) => updateLine(line.id, { reason: event.target.value })}
+                                placeholder="Ví dụ: sắp xếp lại"
+                                data-testid="putaway-reason-input"
+                                className="h-10"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+              </div>
+
+              <aside aria-labelledby="rp-summary-title" className="@4xl/page:sticky @4xl/page:top-4">
+                <section className="rounded-2xl border border-border bg-card p-5">
+                  <h2 id="rp-summary-title" className="font-serif text-[17px] font-semibold tracking-tight">Xác nhận cất hàng</h2>
+                  {selectedVariantItem ? (
+                    <div className="mt-4" aria-live="polite">
+                      <p className="text-[12px] text-muted-foreground">Đã phân bổ</p>
+                      <p className="font-serif text-[32px] font-semibold leading-none tabular-nums text-foreground">
+                        {totalDraftQty}<span className="font-sans text-[14px] font-normal text-muted-foreground"> / {neededQty} cuốn</span>
+                      </p>
+                      <Progress value={allocatedPct} className="mt-2.5 h-1.5" aria-label={`Đã phân bổ ${allocatedPct}%`} />
+                      <p className={cn(
+                        "mt-1.5 text-[12px]",
+                        overAllocated ? "font-medium text-red-600 dark:text-red-400" : remainingToAllocate === 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-800 dark:text-amber-300",
+                      )}>
+                        {overAllocated ? `Vượt ${totalDraftQty - neededQty} cuốn so với số cần cất.` : remainingToAllocate === 0 ? "Đã phân bổ đủ." : `Còn ${remainingToAllocate} cuốn chưa có ngăn.`}
+                      </p>
+                      {receiptMaxQty !== null && <p className="mt-1 text-[12px] text-muted-foreground">Giới hạn theo phiếu: {receiptMaxQty} cuốn.</p>}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-[13px] text-muted-foreground">Chọn sách cần cất để bắt đầu.</p>
+                  )}
+                  <Button
+                    onClick={handleConfirmTransfer}
+                    disabled={draftLines.length === 0 || receiptDone}
+                    loading={savingTransfer}
+                    data-testid="putaway-confirm-button"
+                    className="mt-4 h-11 w-full"
+                  >
+                    Xác nhận chuyển lên kệ
+                  </Button>
+                  <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">Mỗi dòng cần ngăn đích, số lượng và lý do. Tồn kho chỉ thay đổi sau khi bạn xác nhận.</p>
+                </section>
+              </aside>
             </div>
-            <div className="flex items-end justify-end">
-              <Button variant="outline" onClick={() => selectedWarehouseId && loadWarehouseContext(selectedWarehouseId)}>
-                <RefreshCw className="w-3.5 h-3.5" /> Tải lại
+          </div>
+        </FadeItem>
+      ) : (
+        <FadeItem>
+          <section aria-labelledby="rp-reverse-title" className="@container rounded-2xl border border-border bg-card p-5">
+            <h2 id="rp-reverse-title" className="font-serif text-[18px] font-semibold tracking-tight">Hoàn trả từ kệ về khu nhận hàng</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Trả sách đang nằm trên một ngăn kệ về khu nhận hàng, ví dụ khi cất nhầm ngăn.</p>
+            <div className="mt-4 grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
+              <div className="min-w-0">
+                <label htmlFor="rp-rev-compartment" className={fieldLabel}>Ngăn nguồn</label>
+                <Select
+                  value={selectedReverseCompartmentId}
+                  onValueChange={(value) => setSelectedReverseCompartmentId(value === "none" ? "" : value)}
+                >
+                  <SelectTrigger id="rp-rev-compartment" className="w-full">
+                    <SelectValue placeholder="Chọn ngăn" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {occupiedCompartments.map((compartment) => (
+                      <SelectItem key={compartment.id} value={compartment.id}>{compartment.location_code} ({compartment.on_hand_qty} cuốn)</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="min-w-0">
+                <label htmlFor="rp-rev-variant" className={fieldLabel}>Sách trong ngăn</label>
+                <Select
+                  value={reverseVariantId}
+                  onValueChange={(value) => setReverseVariantId(value === "none" ? "" : value)}
+                  disabled={loadingReverseItems}
+                >
+                  <SelectTrigger id="rp-rev-variant" className="w-full">
+                    <SelectValue placeholder="Chọn sách" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reverseItems.map((item) => (
+                      <SelectItem key={item.variant_id} value={item.variant_id}>
+                        {item.book_title || item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8)} ({item.on_hand_qty} cuốn)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="min-w-0">
+                <label htmlFor="rp-rev-receiving" className={fieldLabel}>Khu nhận hàng đích</label>
+                <Select
+                  value={reverseReceivingId}
+                  onValueChange={(value) => setReverseReceivingId(value === "none" ? "" : value)}
+                >
+                  <SelectTrigger id="rp-rev-receiving" className="w-full">
+                    <SelectValue placeholder="Chọn khu nhận hàng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {receivings.map((receiving) => (
+                      <SelectItem key={receiving.id} value={receiving.id}>{receiving.location_code}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label htmlFor="rp-rev-qty" className={fieldLabel}>Số lượng</label>
+                <Input
+                  id="rp-rev-qty"
+                  type="number"
+                  min={1}
+                  max={reverseItem?.on_hand_qty || 1}
+                  {...zeroFieldProps}
+                  value={reverseQuantity}
+                  onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(numberInputValue(event) || 0))))}
+                  className="h-10 tabular-nums"
+                />
+                {reverseItem && <p className="mt-1 text-[12px] text-muted-foreground">Tối đa {reverseItem.on_hand_qty} cuốn.</p>}
+              </div>
+
+              <div className="min-w-0 @xl:col-span-2">
+                <label htmlFor="rp-rev-reason" className={fieldLabel}>Lý do <span className="font-normal text-muted-foreground">(bắt buộc)</span></label>
+                <Input
+                  id="rp-rev-reason"
+                  value={reverseReason}
+                  onChange={(event) => setReverseReason(event.target.value)}
+                  placeholder="Ví dụ: cất nhầm ngăn"
+                  className="h-10"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <Button onClick={handleReverse} loading={savingReverse} className="bg-amber-600 text-white hover:bg-amber-700">
+                <Undo2 className="h-4 w-4" /> Hoàn trả về khu nhận hàng
               </Button>
             </div>
-          </div>
-        </SectionCard>
-      </FadeItem>
-
-      {/* Section A: Receiving -> Shelf */}
-      <FadeItem>
-        <SectionCard title="A. Cất hàng lên kệ" subtitle="Chuyển sách từ khu nhận hàng lên ngăn kệ" icon={ArrowRightLeft}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">
-                Sách trong khu nhận hàng {isVariantLocked && <Lock className="inline w-3 h-3 text-violet-500 dark:text-violet-400 ml-1" />}
-              </p>
-              <Select
-                value={selectedVariantId || "none"}
-                onValueChange={(value) => setSelectedVariantId(value === "none" ? "" : value)}
-                disabled={isVariantLocked}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn sách" />
-                </SelectTrigger>
-                <SelectContent>
-                  {receivingItems.map((item) => (
-                    <SelectItem key={item.variant_id} value={item.variant_id}>
-                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | {item.book_title} | tồn {item.on_hand_qty}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {!isVariantLocked && (
-              <div>
-                <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Quét ISBN13</p>
-                <div className="flex gap-2">
-                  <Input
-                    value={scanSkuInput}
-                    onChange={(event) => setScanSkuInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleScanSku();
-                      }
-                    }}
-                    placeholder="Nhập ISBN13"
-                    className="flex-1 h-auto py-2.5"
-                  />
-                  <IconButton variant="outline" onClick={handleScanSku} label="Quét ISBN13">
-                    <ScanLine className="w-4 h-4" />
-                  </IconButton>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Quét vị trí đích</p>
-              <div className="flex gap-2">
-                <Input
-                  value={scanTargetBarcodeInput}
-                  onChange={(event) => setScanTargetBarcodeInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleScanTargetLocation();
-                    }
-                  }}
-                  placeholder="Mã vạch ngăn kệ"
-                  className="flex-1 h-auto py-2.5"
-                />
-                <IconButton variant="outline" onClick={handleScanTargetLocation} label="Quét vị trí đích">
-                  <ScanLine className="w-4 h-4" />
-                </IconButton>
-              </div>
-            </div>
-          </div>
-
-          {ambiguousVariantMatches.length > 0 ? (
-            <div className="mt-4 p-4 rounded-[12px] border border-amber-200/60 dark:border-amber-500/20 bg-amber-50/50 dark:bg-amber-500/10">
-              <p className="text-[12px] text-amber-800 dark:text-amber-300 font-semibold">ISBN13 trùng nhiều SKU, vui lòng chọn thủ công:</p>
-              <Select
-                onValueChange={(variantId) => {
-                  setSelectedVariantId(variantId);
-                  setAmbiguousVariantMatches([]);
-                }}
-              >
-                <SelectTrigger className="mt-2 w-full border-amber-200 dark:border-amber-500/20">
-                  <SelectValue placeholder="Chọn SKU đúng" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ambiguousVariantMatches.map((item) => (
-                    <SelectItem key={item.variant_id} value={item.variant_id}>
-                      {item.isbn13 || item.sku || item.internal_barcode || item.isbn10} | {item.book_title} | {item.matched_by}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-
-          {receiptDone ? (
-            <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
-              Đã cất đủ số lượng của phiếu cho sách này.{" "}
-              {lockedCtx.goodsReceiptId && (
-                <Link to={`/putaway/${lockedCtx.goodsReceiptId}`} className="font-semibold underline">Quay lại phiếu nhập</Link>
-              )}
-            </div>
-          ) : (<>
-          {loadingCandidates ? (
-            <p className="mt-4 py-4 text-center text-[12px] text-muted-foreground">Đang tính toán vị trí...</p>
-          ) : candidates.length === 0 ? (
-            <EmptyState
-              variant="no-data"
-              title="Không có ngăn còn chỗ trống"
-              description="Kho này chưa có ngăn kệ nào còn chỗ. Hãy kiểm tra cấu hình kệ/ngăn của kho trước khi cất hàng."
-              action={<Link to="/shelves" className="text-[12px] font-medium text-indigo-600 hover:underline">Mở trang Kệ hàng</Link>}
-              className="mt-4 py-6"
-            />
-          ) : null}
-
-          {/* Primary path: ranked suggestions for what is still left to place. */}
-          {selectedWarehouseId && selectedVariantId && candidates.length > 0 && (
-            <div className="mt-4">
-              <StorageSuggestionPanel
-                warehouseId={selectedWarehouseId}
-                variantId={selectedVariantId}
-                quantity={suggestionQty}
-                autoRequest
-                disabled={suggestionsPaused}
-                selectedLocationIds={draftLines.filter((line) => line.id !== defaultLineId).map((line) => line.target_location_id)}
-                onSelectLocation={handleSelectSuggestedLocation}
-              />
-            </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[13px] text-muted-foreground" aria-live="polite">
-              {selectedVariantItem && (<>
-              Cần cất: <span className="font-semibold text-foreground">{neededQty}</span> cuốn
-              {" · "}Đã phân bổ: <span className="font-semibold text-foreground">{totalDraftQty}</span>
-              {" · "}Còn lại:{" "}
-              <span className={`font-semibold ${totalDraftQty > neededQty ? "text-red-600 dark:text-red-400" : remainingToAllocate === 0 ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>
-                {totalDraftQty > neededQty ? `vượt ${totalDraftQty - neededQty}` : remainingToAllocate}
-              </span>
-              {receiptMaxQty !== null && <span className="ml-1">(giới hạn theo phiếu: {receiptMaxQty} cuốn)</span>}
-              </>)}
-            </p>
-            <Button variant="outline" size="sm" onClick={addDraftLine}>Thêm vị trí thủ công</Button>
-          </div>
-          <div className="mt-3 space-y-2">
-            {draftLines.length === 0 ? (
-              <p className="text-[12px] text-muted-foreground text-center py-4">Chưa có dòng phân bổ nào — chọn một vị trí đề xuất ở trên hoặc thêm vị trí thủ công.</p>
-            ) : draftLines.map((line) => {
-              const lineCandidate = candidateMap.get(line.target_location_id);
-              return (
-                <div key={line.id} className="rounded-[12px] border border-border p-4 grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
-                  <div>
-                    <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn đích</p>
-                    <Select
-                      value={line.target_location_id || "none"}
-                      // A barcode scanned for the previous target says nothing about the new one — the server checks it.
-                      onValueChange={(value) => updateLine(line.id, { target_location_id: value === "none" ? "" : value, scanned_location_barcode: "" })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Chọn vị trí đích" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {candidates.map((candidate) => (
-                          <SelectItem key={candidate.id} value={candidate.id}>{candidate.location_code} (còn {candidate.remaining_capacity})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={Math.min(
-                        lineCandidate?.remaining_capacity ?? Infinity,
-                        receiptMaxQty !== null ? receiptMaxQty : Infinity,
-                      )}
-                      value={line.quantity}
-                      onChange={(event) => updateLine(line.id, { quantity: Math.max(1, Math.trunc(Number(event.target.value || 1))) })}
-                      className="h-auto py-2.5"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Lý do (bắt buộc)</p>
-                    <Input
-                      value={line.reason}
-                      onChange={(event) => updateLine(line.id, { reason: event.target.value })}
-                      placeholder="Ví dụ: sắp xếp lại"
-                      data-testid="putaway-reason-input"
-                      className="h-auto py-2.5"
-                    />
-                  </div>
-                  <div>
-                    <Button variant="danger-outline" className="w-full" onClick={() => removeLine(line.id)}>
-                      <Trash2 className="w-3.5 h-3.5" /> Xóa
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {candidates.length > 0 && !loadingCandidates && (
-            <Collapsible className="mt-4">
-              <CollapsibleTrigger className="group flex w-full items-center justify-between rounded-md py-1 text-left text-[12px] font-semibold text-foreground outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring/50">
-                Tất cả ngăn còn chỗ ({candidates.length})
-                <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2">
-                <div className="overflow-hidden rounded-[12px] border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  {['Ngăn', 'Khu', 'Kệ', 'Hiện có', 'Tối đa', 'Còn lại', 'SKU hỗn hợp', 'Ưu tiên'].map((head) => (
-                    <TableHead key={head} className="text-[12px] font-semibold text-muted-foreground">{head}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {candidates.map((candidate) => (
-                  <TableRow key={candidate.id} className="hover:bg-muted/30">
-                    <TableCell className="text-[12px] font-semibold">{candidate.location_code}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.zone_code}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.shelf_code}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.current_on_hand}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.max_capacity}</TableCell>
-                    <TableCell className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">{candidate.remaining_capacity}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.mixed_sku_count}</TableCell>
-                    <TableCell className="text-[12px] text-muted-foreground">{candidate.priority_group === 0 ? 'Cùng kệ' : candidate.priority_group === 1 ? 'Cùng khu' : 'Khác'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-
-          <div className="flex justify-end mt-4">
-            <Button
-              onClick={handleConfirmTransfer}
-              disabled={draftLines.length === 0}
-              loading={savingTransfer}
-              data-testid="putaway-confirm-button"
-            >
-              Xác nhận chuyển lên kệ
-            </Button>
-          </div>
-          </>)}
-        </SectionCard>
-      </FadeItem>
-
-      {/* Section B: Reverse — chỉ manager/admin mới thấy */}
-      {isManager && <FadeItem>
-        <SectionCard title="B. Hoàn trả từ kệ về khu nhận hàng" subtitle="Trả sách từ ngăn kệ về khu nhận hàng" icon={RefreshCw}>
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Ngăn nguồn</p>
-              <Select
-                value={selectedReverseCompartmentId || "none"}
-                onValueChange={(value) => setSelectedReverseCompartmentId(value === "none" ? "" : value)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn ngăn" />
-                </SelectTrigger>
-                <SelectContent>
-                  {occupiedCompartments.map((compartment) => (
-                    <SelectItem key={compartment.id} value={compartment.id}>{compartment.location_code} (tồn {compartment.on_hand_qty})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Sách trong ngăn</p>
-              <Select
-                value={reverseVariantId || "none"}
-                onValueChange={(value) => setReverseVariantId(value === "none" ? "" : value)}
-                disabled={loadingReverseItems}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn sách" />
-                </SelectTrigger>
-                <SelectContent>
-                  {reverseItems.map((item) => (
-                    <SelectItem key={item.variant_id} value={item.variant_id}>
-                      {(item.isbn13 || item.sku || item.barcode || item.variant_id.slice(0, 8))} | tồn {item.on_hand_qty}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Khu nhận hàng đích</p>
-              <Select
-                value={reverseReceivingId || "none"}
-                onValueChange={(value) => setReverseReceivingId(value === "none" ? "" : value)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn khu nhận hàng" />
-                </SelectTrigger>
-                <SelectContent>
-                  {receivings.map((receiving) => (
-                    <SelectItem key={receiving.id} value={receiving.id}>{receiving.location_code}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Số lượng</p>
-              <Input
-                type="number"
-                min={1}
-                max={reverseItem?.on_hand_qty || 1}
-                {...zeroFieldProps}
-                value={reverseQuantity}
-                onChange={(event) => setReverseQuantity(Math.max(0, Math.trunc(Number(numberInputValue(event) || 0))))}
-                className="h-auto py-2.5"
-              />
-            </div>
-
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1.5 font-semibold">Lý do</p>
-              <Input
-                value={reverseReason}
-                onChange={(event) => setReverseReason(event.target.value)}
-                placeholder="Lý do (bắt buộc)"
-                className="h-auto py-2.5"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end mt-4">
-            <Button
-              onClick={handleReverse}
-              loading={savingReverse}
-              className="bg-gradient-to-r from-amber-600 to-orange-600 hover:opacity-90"
-            >
-              Hoàn trả về khu nhận hàng
-            </Button>
-          </div>
-        </SectionCard>
-      </FadeItem>}
+          </section>
+        </FadeItem>
+      )}
     </PageWrapper>
+  );
+}
+
+function StepHeading({ id, n, children }: { id: string; n: number; children: ReactNode }) {
+  return (
+    <h2 id={id} className="flex items-center gap-2.5 font-serif text-[18px] font-semibold tracking-tight">
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-sans text-[12px] font-semibold text-primary-foreground" aria-hidden="true">{n}</span>
+      {children}
+    </h2>
   );
 }

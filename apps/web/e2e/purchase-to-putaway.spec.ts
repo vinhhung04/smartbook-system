@@ -112,8 +112,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await page.getByTestId('putaway-reason-input').fill('E2E test putaway');
   await page.getByTestId('putaway-confirm-button').click();
 
-  // Assertion cuối: on_hand at the receiving location has decreased,
-  // confirming the shelf-transfer mutation actually happened. The book picker
-  // labels stock as "tồn N".
-  await expect(page.getByText(/tồn \d+/).first()).toBeVisible();
+  // Final assertion: the shelf-transfer mutation actually happened. The success
+  // toast is only shown after the transfer API call returns.
+  await expect(page.getByText(/Đã chuyển \d+ quyển lên kệ/)).toBeVisible();
 });

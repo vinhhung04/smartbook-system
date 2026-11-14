@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageWrapper, FadeItem } from '../motion-utils';
 import { motion } from 'motion/react';
-import { StatusBadge } from '../status-badge';
+import { Button } from '@/components/ui/button';
 import { NavLink, useParams } from 'react-router';
 import { ArrowLeft, Edit, ScanBarcode, Sparkles, MapPin, BookOpen, Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ interface BookLocation {
   warehouse_name: string;
   location_code: string;
   quantity: number;
+  is_receiving?: boolean;
 }
 
 interface BookDetailData {
@@ -35,6 +36,10 @@ interface BookDetailData {
   is_incomplete?: boolean;
   cover_image_url?: string | null;
   locations?: BookLocation[];
+  reservable?: boolean | null;
+  variant_count?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface EditForm {
@@ -57,6 +62,12 @@ function formatCurrency(value: number): string {
   return `${value.toLocaleString("vi-VN")} VND`;
 }
 
+function formatDate(value?: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('vi-VN');
+}
+
 function formatDescriptionText(value?: string | null): string {
   if (!value || !value.trim()) return "-";
   return value.replace(/\n{3,}/g, "\n\n").trim();
@@ -66,9 +77,9 @@ const LOW_STOCK_THRESHOLD = 10;
 const DESCRIPTION_PREVIEW_CHARS = 420;
 
 function stockTone(total: number): { label: string; variant: 'danger' | 'warning' | 'success'; text: string } {
-  if (total <= 0) return { label: 'Hết hàng', variant: 'danger', text: 'text-destructive' };
-  if (total <= LOW_STOCK_THRESHOLD) return { label: 'Sắp hết', variant: 'warning', text: 'text-amber-600 dark:text-amber-400' };
-  return { label: 'Còn hàng', variant: 'success', text: 'text-emerald-600 dark:text-emerald-400' };
+  if (total <= 0) return { label: 'Hết hàng', variant: 'danger', text: 'text-red-700 dark:text-red-400' };
+  if (total <= LOW_STOCK_THRESHOLD) return { label: 'Sắp hết', variant: 'warning', text: 'text-amber-700 dark:text-amber-300' };
+  return { label: 'Còn hàng', variant: 'success', text: 'text-foreground' };
 }
 
 function DetailItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -296,67 +307,84 @@ export function BookDetailPage() {
     !book.cover_image_url && 'ảnh bìa',
   ].filter(Boolean) as string[];
 
+  // Shelf vs receiving, summed from the same location rows as the total.
+  const receivingStock = locations.reduce((sum, l) => sum + (l.is_receiving ? Number(l.quantity || 0) : 0), 0);
+  const shelfStock = totalStock - receivingStock;
+  const byWarehouse = locations.reduce<Array<{ name: string; total: number; rows: BookLocation[] }>>((groups, location) => {
+    const name = location.warehouse_name || '-';
+    const group = groups.find((g) => g.name === name);
+    if (group) { group.rows.push(location); group.total += Number(location.quantity || 0); }
+    else groups.push({ name, total: Number(location.quantity || 0), rows: [location] });
+    return groups;
+  }, []).sort((a, b) => b.total - a.total);
+  const listPrice = Number(book.list_price || 0);
+  const unitCost = Number(book.unit_cost || 0);
+  const details: Array<{ label: string; value: string; mono?: boolean }> = [
+    { label: 'ISBN / Mã vạch', value: book.isbn || '-', mono: true },
+    { label: 'Ngôn ngữ', value: book.language || 'vi' },
+    { label: 'Tác giả', value: book.author || '-' },
+    { label: 'Nhà xuất bản', value: book.publisher || '-' },
+    { label: 'Năm xuất bản', value: book.publish_year ? String(book.publish_year) : '-' },
+    { label: 'Thể loại', value: book.category || '-' },
+    { label: 'Cho đặt trước', value: book.reservable == null ? '-' : book.reservable ? 'Có' : 'Không' },
+    { label: 'Phiên bản', value: book.variant_count ? `${book.variant_count}` : '-' },
+    { label: 'Tạo lúc', value: formatDate(book.created_at) },
+    { label: 'Cập nhật', value: formatDate(book.updated_at) },
+  ];
+
   return (
     <PageWrapper className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       <FadeItem>
-        <NavLink to="/catalog" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-3.5 h-3.5" /> Quay lại danh mục
+        <NavLink to="/catalog" className="-ml-1 inline-flex items-center gap-1.5 rounded px-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+          <ArrowLeft className="w-3.5 h-3.5" /> Danh mục sách
         </NavLink>
       </FadeItem>
 
-      {/* Hero: who the book is, and whether we have it */}
+      {/* Object header: which book this is, and the one or two things to do with it. */}
       <FadeItem>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none sm:p-6">
-          <div className="flex flex-col gap-5 sm:flex-row">
-            {book.cover_image_url ? (
-              <img src={book.cover_image_url} alt={`Bìa sách ${book.title}`} className="h-44 w-32 shrink-0 rounded-xl border border-border object-cover shadow-sm sm:h-52 sm:w-36" />
-            ) : (
-              <div className="flex h-44 w-32 shrink-0 items-center justify-center rounded-xl border border-blue-200/40 bg-gradient-to-br from-blue-100 to-teal-50 dark:border-blue-500/20 dark:from-blue-500/15 dark:to-teal-500/10 sm:h-52 sm:w-36">
-                <BookOpen className="h-8 w-8 text-blue-500 dark:text-blue-400" aria-hidden="true" />
-              </div>
-            )}
+        <header className="flex flex-col gap-5 sm:flex-row sm:items-start">
+          {book.cover_image_url ? (
+            <img src={book.cover_image_url} alt={`Bìa sách ${book.title}`} className="h-44 w-32 shrink-0 rounded-xl border border-border object-cover sm:h-48 sm:w-[132px]" />
+          ) : (
+            <div className="flex h-44 w-32 shrink-0 items-center justify-center rounded-xl border border-border bg-primary/[0.05] sm:h-48 sm:w-[132px]">
+              <BookOpen className="h-8 w-8 text-primary/60" aria-hidden="true" />
+            </div>
+          )}
 
-            <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex flex-wrap items-center gap-2">
-                {book.category ? <StatusBadge label={book.category} variant="info" /> : null}
-                <StatusBadge label={book.is_incomplete ? 'Chưa hoàn chỉnh' : 'Hoàn chỉnh'} variant={book.is_incomplete ? 'warning' : 'success'} dot />
-              </div>
-              <h1 className="mt-2 text-[24px] font-bold leading-tight tracking-tight text-foreground">{book.title}</h1>
-              {book.subtitle ? <p className="mt-1 text-[14px] text-muted-foreground">{book.subtitle}</p> : null}
-              <p className="mt-3 text-[14px] text-foreground">{book.author || <span className="text-muted-foreground">Chưa có tác giả</span>}</p>
-              <p className="text-[13px] text-muted-foreground">
-                {[book.publisher, book.publish_year ? String(book.publish_year) : null].filter(Boolean).join(', ') || 'Chưa có nhà xuất bản'}
-              </p>
-              {book.isbn ? <p className="mt-2 font-mono text-[12px] text-muted-foreground">ISBN {book.isbn}</p> : null}
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] text-muted-foreground">
+              {book.category || 'Chưa có thể loại'}
+              {book.is_incomplete ? <span className="ml-2 inline-flex items-center gap-1 font-medium text-amber-800 dark:text-amber-300"><Info className="h-3 w-3" aria-hidden="true" />Chưa hoàn chỉnh</span> : null}
+            </p>
+            <h1 className="mt-1 font-display text-[28px] font-semibold leading-tight tracking-tight text-foreground">{book.title}</h1>
+            {book.subtitle ? <p className="mt-1 text-[15px] text-muted-foreground">{book.subtitle}</p> : null}
+            <p className="mt-3 text-[15px] text-foreground">{book.author || <span className="text-muted-foreground">Chưa có tác giả</span>}</p>
+            <p className="text-[13px] text-muted-foreground">
+              {[book.publisher, book.publish_year ? String(book.publish_year) : null].filter(Boolean).join(', ') || 'Chưa có nhà xuất bản'}
+            </p>
+            {book.isbn ? <p className="mt-2 font-mono text-[12px] text-muted-foreground">ISBN {book.isbn}</p> : null}
 
-              <div className="mt-4 flex flex-wrap items-center gap-2 sm:mt-auto sm:pt-4">
+            {canEditBook || canCreateReceivingDraft ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 {canEditBook ? (
-                  <button onClick={() => setShowEditModal(true)}
-                    className="inline-flex items-center gap-2 rounded-[10px] border border-blue-100 bg-card px-3.5 py-2 text-[13px] text-blue-700 shadow-sm transition-all hover:bg-blue-50 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/10">
+                  <Button variant="outline" onClick={() => setShowEditModal(true)}>
                     <Edit className="h-3.5 w-3.5" /> Chỉnh sửa
-                  </button>
+                  </Button>
                 ) : null}
                 {canCreateReceivingDraft ? (
-                  <NavLink to="/orders/new"
-                    className="inline-flex items-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-3.5 py-2 text-[13px] text-white shadow-md shadow-blue-500/15 transition-all hover:shadow-lg">
-                    <ScanBarcode className="h-3.5 w-3.5" /> Tạo phiếu nhập
-                  </NavLink>
+                  <Button asChild>
+                    <NavLink to="/orders/new"><ScanBarcode className="h-3.5 w-3.5" /> Tạo phiếu nhập</NavLink>
+                  </Button>
                 ) : null}
               </div>
-            </div>
-
-            <div className="flex shrink-0 flex-row items-baseline gap-2 border-t border-border pt-4 sm:w-36 sm:flex-col sm:items-end sm:gap-0 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0 sm:text-right">
-              <p className={`font-mono text-[40px] font-bold leading-none tabular-nums ${tone.text}`}>{totalStock}</p>
-              <p className="text-[12px] text-muted-foreground sm:mt-1">bản trong kho</p>
-              <div className="ml-auto sm:ml-0 sm:mt-2"><StatusBadge label={tone.label} variant={tone.variant} dot /></div>
-            </div>
+            ) : null}
           </div>
-        </div>
+        </header>
       </FadeItem>
 
       {book.is_incomplete ? (
         <FadeItem>
-          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
             <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <p className="flex-1">
               Sách này chưa hoàn chỉnh{missingFields.length > 0 ? <>: còn thiếu <span className="font-semibold">{missingFields.join(', ')}</span></> : null}.
@@ -369,14 +397,86 @@ export function BookDetailPage() {
         </FadeItem>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+      {/* Stock at a glance: the total, then where it actually is. */}
+      <FadeItem>
+        <dl className="grid grid-cols-1 divide-y divide-border rounded-2xl border border-border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="p-5">
+            <dt className="text-[13px] text-muted-foreground">Tổng trong kho, cuốn</dt>
+            <dd className={`mt-1 font-display text-[32px] font-semibold leading-none tabular-nums ${tone.text}`}>
+              {totalStock}
+            </dd>
+            <dd className="mt-2 text-[12px] text-muted-foreground">
+              {tone.label}{locations.length ? `, ở ${locations.length} vị trí thuộc ${byWarehouse.length} kho` : ''}
+            </dd>
+          </div>
+          <div className="p-5">
+            <dt className="text-[13px] text-muted-foreground">Trên kệ, sẵn sàng, cuốn</dt>
+            <dd className="mt-1 font-display text-[32px] font-semibold leading-none tabular-nums text-foreground">
+              {shelfStock}
+            </dd>
+            <dd className="mt-2 text-[12px] text-muted-foreground">Có thể bán, cho mượn hoặc lấy hàng.</dd>
+          </div>
+          <div className="p-5">
+            <dt className="text-[13px] text-muted-foreground">Ở khu nhận chờ cất, cuốn</dt>
+            <dd className="mt-1 font-display text-[32px] font-semibold leading-none tabular-nums text-foreground">
+              {receivingStock}
+            </dd>
+            <dd className="mt-2 text-[12px] text-muted-foreground">{receivingStock > 0 ? 'Cần cất lên kệ trước khi dùng được.' : 'Không có hàng chờ cất.'}</dd>
+          </div>
+        </dl>
+      </FadeItem>
+
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-5">
           <FadeItem>
-            <section className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none sm:p-6">
-              <h2 className="text-[15px] font-semibold">Giới thiệu</h2>
+            <section aria-labelledby="book-stock-title" className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="px-5 pb-3 pt-4">
+                <h2 id="book-stock-title" className="font-display text-[18px] font-semibold tracking-tight">Tồn kho theo vị trí</h2>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">Nhóm theo kho, nhiều nhất ở trên.</p>
+              </div>
+              {byWarehouse.length === 0 ? (
+                <p className="border-t border-border px-5 py-8 text-center text-[13px] text-muted-foreground">Chưa có bản nào của sách này trong kho.</p>
+              ) : (
+                <div className="border-t border-border">
+                  {byWarehouse.map((group) => (
+                    <div key={group.name} className="border-b border-border last:border-0">
+                      <div className="flex items-baseline justify-between gap-3 bg-muted/40 px-5 py-2">
+                        <h3 className="min-w-0 truncate text-[13px] font-semibold text-foreground">{group.name}</h3>
+                        <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">{group.total} cuốn</span>
+                      </div>
+                      <ul className="divide-y divide-border">
+                        {group.rows.map((location, index) => {
+                          const share = totalStock > 0 ? Math.round((Number(location.quantity || 0) / totalStock) * 100) : 0;
+                          return (
+                            <li key={`${location.location_code}-${index}`} className="flex items-center gap-4 px-5 py-2.5">
+                              <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-mono text-[13px] text-foreground">{location.location_code || '-'}</p>
+                                {location.is_receiving ? <p className="text-[12px] text-amber-800 dark:text-amber-300">Khu nhận, chờ cất lên kệ</p> : null}
+                              </div>
+                              <div className="hidden w-24 sm:block" aria-hidden="true">
+                                <div className="h-1.5 overflow-hidden rounded-full bg-primary/10">
+                                  <div className="h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
+                                </div>
+                              </div>
+                              <span className="w-12 text-right text-[15px] font-semibold tabular-nums text-foreground">{location.quantity}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </FadeItem>
+
+          <FadeItem>
+            <section aria-labelledby="book-about-title" className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+              <h2 id="book-about-title" className="font-display text-[18px] font-semibold tracking-tight">Giới thiệu</h2>
               {hasDescription ? (
                 <>
-                  <p className="mt-3 whitespace-pre-line text-[14px] leading-relaxed text-foreground/80">{shownDescription}</p>
+                  <p className="mt-3 max-w-prose whitespace-pre-line text-[14px] leading-relaxed text-foreground/85">{shownDescription}</p>
                   {longDescription ? (
                     <button
                       type="button"
@@ -393,81 +493,52 @@ export function BookDetailPage() {
               )}
 
               {book.summary_vi ? (
-                <div className="mt-5 rounded-lg border border-cyan-200/60 bg-cyan-50/50 p-4 dark:border-cyan-500/20 dark:bg-cyan-500/5">
-                  <p className="flex items-center gap-1.5 text-[12px] font-semibold text-cyan-700 dark:text-cyan-400">
+                <div className="mt-5 rounded-xl bg-primary/[0.05] p-4">
+                  <p className="flex items-center gap-1.5 text-[12px] font-semibold text-primary">
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> Tóm tắt do AI tạo (tiếng Việt)
                   </p>
-                  <p className="mt-2 whitespace-pre-line text-[13px] leading-relaxed text-foreground/80">{formatDescriptionText(book.summary_vi)}</p>
+                  <p className="mt-2 max-w-prose whitespace-pre-line text-[13px] leading-relaxed text-foreground/85">{formatDescriptionText(book.summary_vi)}</p>
                 </div>
               ) : null}
             </section>
           </FadeItem>
-
-          <FadeItem>
-            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-              <div className="flex items-center justify-between gap-3 px-5 py-4">
-                <h2 className="text-[15px] font-semibold">Tồn kho theo vị trí</h2>
-                <StatusBadge label={`${totalStock} bản`} variant="info" />
-              </div>
-              {locations.length === 0 ? (
-                <p className="border-t border-border px-5 py-8 text-center text-[13px] text-muted-foreground">Chưa có bản nào của sách này trong kho.</p>
-              ) : (
-                <ul className="divide-y divide-border border-t border-border">
-                  {locations.map((location, index) => {
-                    const share = totalStock > 0 ? Math.round((Number(location.quantity || 0) / totalStock) * 100) : 0;
-                    return (
-                      <li key={`${location.warehouse_name}-${location.location_code}-${index}`} className="flex items-center gap-4 px-5 py-3">
-                        <MapPin className="h-4 w-4 shrink-0 text-teal-500 dark:text-teal-400" aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-medium text-foreground">{location.warehouse_name || '-'}</p>
-                          <p className="truncate font-mono text-[12px] text-muted-foreground">{location.location_code || '-'}</p>
-                        </div>
-                        <div className="hidden w-24 sm:block" aria-hidden="true">
-                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div className="h-full rounded-full bg-teal-500" style={{ width: `${share}%` }} />
-                          </div>
-                        </div>
-                        <span className="w-12 text-right font-mono text-[15px] font-bold tabular-nums">{location.quantity}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          </FadeItem>
         </div>
 
-        <div className="space-y-5">
+        <aside className="space-y-5 lg:sticky lg:top-4">
           <FadeItem>
-            <section className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-              <h2 className="text-[15px] font-semibold">Thông tin chi tiết</h2>
-              <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
-                <DetailItem label="ISBN / Mã vạch" value={book.isbn || '-'} mono />
-                <DetailItem label="Ngôn ngữ" value={book.language || 'vi'} />
-                <DetailItem label="Tác giả" value={book.author || '-'} />
-                <DetailItem label="Nhà xuất bản" value={book.publisher || '-'} />
-                <DetailItem label="Năm xuất bản" value={book.publish_year ? String(book.publish_year) : '-'} />
-                <DetailItem label="Thể loại" value={book.category || '-'} />
-              </dl>
-            </section>
-          </FadeItem>
-
-          <FadeItem>
-            <section className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
-              <h2 className="text-[15px] font-semibold">Giá</h2>
-              <dl className="mt-4 space-y-3">
+            <section aria-labelledby="book-price-title" className="rounded-2xl border border-border bg-card p-5">
+              <h2 id="book-price-title" className="font-display text-[18px] font-semibold tracking-tight">Giá</h2>
+              <dl className="mt-3 space-y-2.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-[13px] text-muted-foreground">Giá bìa</dt>
-                  <dd className="font-mono text-[15px] font-bold tabular-nums">{formatCurrency(Number(book.list_price || 0))}</dd>
+                  <dd className="font-display text-[20px] font-semibold tabular-nums text-foreground">{formatCurrency(listPrice)}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-3">
                   <dt className="text-[13px] text-muted-foreground">Giá vốn</dt>
-                  <dd className="font-mono text-[13px] tabular-nums text-muted-foreground">{formatCurrency(Number(book.unit_cost || 0))}</dd>
+                  <dd className="text-[14px] tabular-nums text-foreground">{formatCurrency(unitCost)}</dd>
                 </div>
+                {listPrice > 0 && unitCost > 0 ? (
+                  <div className="flex items-baseline justify-between gap-3 border-t border-border pt-2.5">
+                    <dt className="text-[13px] text-muted-foreground">Chênh lệch</dt>
+                    <dd className="text-[14px] tabular-nums text-foreground">
+                      {formatCurrency(listPrice - unitCost)}
+                      <span className="ml-1 text-[12px] text-muted-foreground">({Math.round(((listPrice - unitCost) / listPrice) * 100)}%)</span>
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
             </section>
           </FadeItem>
-        </div>
+
+          <FadeItem>
+            <section aria-labelledby="book-info-title" className="rounded-2xl border border-border bg-card p-5">
+              <h2 id="book-info-title" className="font-display text-[18px] font-semibold tracking-tight">Thông tin chi tiết</h2>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3.5">
+                {details.map((item) => <DetailItem key={item.label} label={item.label} value={item.value} mono={item.mono} />)}
+              </dl>
+            </section>
+          </FadeItem>
+        </aside>
       </div>
 
       {/* Edit Modal */}
@@ -508,7 +579,7 @@ export function BookDetailPage() {
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-[12px] font-semibold text-muted-foreground">ISBN / Barcode</label>
                     <button type="button" onClick={() => void handleApplyAiMetadata()} disabled={isApplyingAiMetadata}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 transition-colors disabled:opacity-50">
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary/[0.08] px-2.5 py-1 text-[12px] font-semibold text-primary hover:bg-primary/[0.14] transition-colors disabled:opacity-50">
                       <Sparkles className="w-3.5 h-3.5" />
                       {isApplyingAiMetadata ? "Đang tải..." : "AI điền giúp"}
                     </button>
@@ -559,7 +630,7 @@ export function BookDetailPage() {
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-[12px] font-semibold text-muted-foreground">Tóm tắt AI (tiếng Việt)</label>
                   <button type="button" onClick={() => void handleGenerateSummaryVi()} disabled={summaryLoading || !editForm.title.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-semibold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:hover:bg-cyan-500/20 transition-colors disabled:opacity-40">
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary/[0.08] px-2.5 py-1 text-[12px] font-semibold text-primary hover:bg-primary/[0.14] transition-colors disabled:opacity-40">
                     {summaryLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                     {summaryLoading ? "Đang tạo..." : "Tạo bằng AI"}
                   </button>

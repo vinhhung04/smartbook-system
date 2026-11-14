@@ -6,7 +6,6 @@ import { NavLink } from "react-router";
 import { StatusBadge } from "../status-badge";
 import { bookService } from "@/services/book";
 import { getApiErrorMessage } from "@/services/api";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -87,29 +86,33 @@ function statusOf(available: number, total: number): StockStatus {
   return "OK";
 }
 
-const GAUGE_FILL: Record<StockStatus, string> = {
+const RULER_FILL: Record<StockStatus, string> = {
   OK: "bg-emerald-500",
   LOW: "bg-amber-500",
-  RECEIVING: "bg-violet-400",
+  RECEIVING: "bg-primary/40",
   ABSENT: "bg-muted-foreground/30",
 };
 
 /**
- * A vertical bin-level gauge — fills bottom-up relative to 2x the reorder
- * threshold, with a fixed tick at the halfway mark showing exactly where
- * that threshold sits.
+ * Copies ready to lend, read against the reorder line: the bar spans 0 to twice the
+ * threshold, so the tick in the middle is exactly where a row turns "sắp hết".
  */
-function StockGauge({ quantity, status }: { quantity: number; status: StockStatus }) {
-  const fillPct = Math.min(Math.max((quantity / (LOW_STOCK_THRESHOLD * 2)) * 100, 0), 100);
+function ThresholdRuler({ available, status }: { available: number; status: StockStatus }) {
+  const fillPct = Math.min(Math.max((available / (LOW_STOCK_THRESHOLD * 2)) * 100, 0), 100);
   return (
-    <div className="relative h-8 w-2 shrink-0 overflow-hidden rounded-full bg-muted" title={`Vạch giữa: ngưỡng ${LOW_STOCK_THRESHOLD} cuốn`} aria-hidden="true">
-      <motion.div
-        className={`absolute inset-x-0 bottom-0 rounded-full ${GAUGE_FILL[status]}`}
-        initial={{ height: 0 }}
-        animate={{ height: `${fillPct}%` }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-      />
-      <div className="absolute inset-x-0 top-1/2 h-px bg-background/70" />
+    <div className="flex items-center gap-2.5">
+      <span
+        className={cn(
+          "w-9 shrink-0 text-right font-serif text-[20px] font-semibold leading-none tabular-nums",
+          status === "LOW" ? "text-amber-700 dark:text-amber-300" : status === "OK" ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {available}
+      </span>
+      <span className="relative h-1.5 min-w-12 flex-1 rounded-full bg-muted" aria-hidden="true">
+        <span className={`absolute inset-y-0 left-0 rounded-full ${RULER_FILL[status]}`} style={{ width: `${fillPct}%` }} />
+        <span className="absolute -bottom-1 -top-1 left-1/2 w-px bg-foreground/40" />
+      </span>
     </div>
   );
 }
@@ -279,54 +282,83 @@ export function InventoryPage() {
     toast.success(`Đã xuất ${filtered.length} dòng`);
   };
 
-  const filterButton = (key: StockStatus | "ALL") => {
+  // Rows per warehouse, for the warehouse list in the rail (independent of the status filter).
+  const warehouseCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of allRows) if (row.warehouseId) map.set(row.warehouseId, (map.get(row.warehouseId) ?? 0) + 1);
+    return map;
+  }, [allRows]);
+
+  const statusKeys = FILTER_ORDER.filter((key) => key !== "ABSENT" || warehouseFilter === "all");
+  const activeLabel = statusFilter === "ALL" ? "Tất cả dòng tồn kho" : STATUS[statusFilter].label;
+  const activeWarehouse = warehouseFilter === "all" ? null : warehouseOptions.find((o) => o.value === warehouseFilter)?.label;
+
+  const railButton = (active: boolean, onClick: () => void, label: string, count: number, attention = false) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("min-w-0 truncate text-[13px]", active ? "font-semibold" : "font-medium")} title={label}>{label}</span>
+      <span
+        className={cn(
+          "min-w-6 shrink-0 rounded-full px-1.5 text-center text-[12px] tabular-nums",
+          attention && count > 0 ? "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : active ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {loading ? "–" : count}
+      </span>
+    </button>
+  );
+
+  const statusChip = (key: StockStatus | "ALL") => {
     const active = statusFilter === key;
     const count = counts[key] ?? 0;
-    const label = key === "ALL" ? "Tất cả" : STATUS[key].label;
-    const attention = key === "LOW" && count > 0;
     return (
       <button
         key={key}
         type="button"
         onClick={() => setStatusFilter(key)}
         aria-pressed={active}
-        title={key === "ALL" ? undefined : STATUS[key].hint}
         className={cn(
-          "flex flex-1 shrink-0 flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          active
-            ? "border-primary/30 bg-primary/[0.06] text-primary dark:border-primary/40 dark:bg-primary/15"
-            : "border-transparent hover:border-border hover:bg-muted/50",
+          "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          active ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium hover:bg-muted/60",
         )}
       >
-        <span className={cn("font-serif text-[20px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>{loading ? "–" : count}</span>
-        <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11px]", active ? "font-medium" : "text-muted-foreground")}>
-          {attention && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="cần chú ý" />}
-          {label}
-        </span>
+        <span className="whitespace-nowrap">{key === "ALL" ? "Tất cả" : STATUS[key].label}</span>
+        <span className={cn("tabular-nums", key === "LOW" && count > 0 ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>{loading ? "–" : count}</span>
       </button>
     );
   };
 
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={Package}
           title="Tồn kho"
-          description={loading ? "Đang tải…" : `${totals.titles} đầu sách có hàng · ${totals.available.toLocaleString("vi-VN")} cuốn sẵn sàng${totals.receiving ? ` · ${totals.receiving.toLocaleString("vi-VN")} cuốn chờ cất kệ` : ""}`}
+          description={
+            loading
+              ? "Đang tải tồn kho..."
+              : `${totals.titles} đầu sách có hàng, ${totals.available.toLocaleString("vi-VN")} cuốn sẵn sàng${totals.receiving ? `, ${totals.receiving.toLocaleString("vi-VN")} cuốn còn ở khu nhận` : ""}${activeWarehouse ? ` tại ${activeWarehouse}` : ""}.`
+          }
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => void loadInventory()} disabled={loading} aria-label="Làm mới">
-                <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            <>
+              <Button variant="ghost" size="sm" onClick={() => void loadInventory()} disabled={loading} aria-label="Làm mới">
+                <RefreshCw className={cn("h-3.5 w-3.5 motion-reduce:animate-none", loading && "animate-spin")} />
                 <span className="hidden sm:inline">Làm mới</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
+              <Button variant="ghost" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
                 <Download className="h-3.5 w-3.5" />Xuất CSV
               </Button>
               <Button asChild variant="outline" size="sm">
                 <NavLink to="/movements"><History className="h-3.5 w-3.5" />Lịch sử kho</NavLink>
               </Button>
-            </div>
+            </>
           }
         />
       </FadeItem>
@@ -334,8 +366,8 @@ export function InventoryPage() {
       <AnimatePresence>
         {hasNewData && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 dark:border-indigo-500/20 dark:bg-indigo-500/10" role="status">
-              <p className="flex items-center gap-2 text-[13px] text-indigo-700 dark:text-indigo-400">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/[0.05] px-5 py-3" role="status">
+              <p className="flex items-center gap-2 text-[13px] text-primary">
                 <Bell className="h-4 w-4 shrink-0" aria-hidden="true" />
                 Tồn kho vừa thay đổi. Số liệu bên dưới có thể đã cũ.
               </p>
@@ -347,203 +379,241 @@ export function InventoryPage() {
         )}
       </AnimatePresence>
 
-      <FadeItem>
-        <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="flex items-center gap-1 overflow-x-auto p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo tình trạng tồn kho">
-            {filterButton("ALL")}
-            <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
-            {FILTER_ORDER.filter((key) => key !== "ABSENT" || warehouseFilter === "all").map((key) => filterButton(key))}
-          </div>
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
-              searchPlaceholder="Tìm tên sách, tác giả, ISBN, vị trí..."
-              showSearchClear
-              filters={
-                <>
-                  <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
-                    <SelectTrigger size="sm" className="w-[200px]" aria-label="Kho">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tất cả kho</SelectItem>
-                      {warehouseOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-                    <SelectTrigger size="sm" className="w-[190px]" aria-label="Sắp xếp">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {hasFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-                      <X className="h-3.5 w-3.5" />Xóa lọc
-                    </Button>
-                  )}
-                </>
-              }
-            />
-          </div>
-          {lowCount > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border bg-amber-50/70 px-4 py-2.5 text-[12px] text-amber-800 dark:bg-amber-500/[0.07] dark:text-amber-300">
-              <p className="flex items-center gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span><span className="font-semibold">{lowCount} dòng sắp hết</span> (còn {LOW_STOCK_THRESHOLD} cuốn trở xuống sẵn sàng ở một kho)</span>
-              </p>
-              <NavLink to="/reorder-suggestions" className="inline-flex items-center gap-1 rounded font-semibold underline decoration-current/40 underline-offset-4 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                Xem đề xuất nhập hàng <ArrowRight className="h-3 w-3" aria-hidden="true" />
-              </NavLink>
+      {!loading && lowCount > 0 && (
+        <FadeItem>
+          <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-500/25 dark:bg-amber-500/[0.07]" role="note">
+            <div className="flex gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+              <div>
+                <p className="text-[14px] font-semibold text-amber-900 dark:text-amber-200">
+                  {lowCount.toLocaleString("vi-VN")} dòng sắp hết hàng{activeWarehouse ? ` tại ${activeWarehouse}` : ""}
+                </p>
+                <p className="text-[13px] text-amber-800/90 dark:text-amber-300/90">
+                  Còn {LOW_STOCK_THRESHOLD} cuốn trở xuống sẵn sàng ở một kho. Xem danh sách rồi lập đề xuất nhập hàng.
+                </p>
+              </div>
             </div>
-          )}
-        </div>
-      </FadeItem>
+            <div className="flex shrink-0 flex-wrap gap-2 pl-7 sm:pl-0">
+              {statusFilter !== "LOW" && (
+                <Button variant="outline" size="sm" onClick={() => setStatusFilter("LOW")} className="border-amber-300 bg-transparent text-amber-900 hover:bg-amber-100 dark:border-amber-500/40 dark:text-amber-200 dark:hover:bg-amber-500/15">
+                  Xem các dòng sắp hết
+                </Button>
+              )}
+              <Button asChild size="sm">
+                <NavLink to="/reorder-suggestions">Đề xuất nhập hàng <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" /></NavLink>
+              </Button>
+            </div>
+          </div>
+        </FadeItem>
+      )}
 
       <FadeItem>
-        <SectionCard noPadding>
-          <table className="w-full table-fixed">
-            <thead>
-              <tr className="border-b border-border bg-muted/40">
-                {[
-                  { label: "Sách", className: "" },
-                  { label: "Kho · vị trí", className: "hidden w-[260px] md:table-cell" },
-                  { label: "Sẵn sàng", className: "w-[120px] sm:w-[150px]" },
-                  { label: "Tình trạng", className: "hidden w-[150px] sm:table-cell" },
-                  { label: "Cập nhật", className: "hidden w-[100px] xl:table-cell" },
-                ].map((h) => (
-                  <th key={h.label} scope="col" className={cn("px-4 py-3 text-left text-[12px] font-medium text-muted-foreground", h.className)}>{h.label}</th>
+        {/* Named so the toolbar inside the list (its own container) can still ask whether the rail is showing. */}
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[232px_minmax(0,1fr)]">
+            <nav aria-label="Lọc tồn kho" className="hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Tình trạng</p>
+              <div role="group" aria-label="Lọc theo tình trạng tồn kho">
+                {railButton(statusFilter === "ALL", () => setStatusFilter("ALL"), "Tất cả", counts.ALL ?? 0)}
+                {statusKeys.map((key) => (
+                  <div key={key}>{railButton(statusFilter === key, () => setStatusFilter(key), STATUS[key].label, counts[key] ?? 0, key === "LOW")}</div>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <SkeletonTableRow columns={5} rows={6} />
-              ) : paged.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>
-                    <EmptyState
-                      variant={hasFilters ? "no-results" : "no-data"}
-                      title={hasFilters ? "Không có dòng tồn kho phù hợp" : "Chưa có dữ liệu tồn kho"}
-                      description={hasFilters ? "Thử đổi tình trạng, kho hoặc từ khóa tìm kiếm" : "Tồn kho xuất hiện sau khi phiếu nhập đầu tiên được ghi sổ"}
-                      action={hasFilters ? <Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button> : undefined}
-                      className="py-12"
-                    />
-                  </td>
-                </tr>
-              ) : paged.map((row) => {
-                const status = STATUS[row.status];
-                const absent = row.status === "ABSENT";
-                const shownLocs = row.locs.slice(0, 3);
-                const moreLocs = row.locs.length - shownLocs.length;
-                return (
-                  <tr key={row.key} className={cn("border-b border-border last:border-0 hover:bg-muted/40", absent && "text-muted-foreground")}>
-                    <td className="px-4 py-3 align-top">
-                      <p className={cn("line-clamp-2 text-[13px] font-semibold sm:line-clamp-none sm:truncate", absent ? "text-muted-foreground" : "text-foreground")} title={row.book.title}>{row.book.title}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        <span className="font-mono">{row.book.isbn || "-"}</span>
-                        {row.book.category ? ` · ${row.book.category}` : ""}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
-                        <StatusBadge label={status.label} variant={status.tone} dot />
-                      </div>
-                      {!absent && (
-                        <p className="mt-1 truncate text-[11px] text-muted-foreground md:hidden">
-                          {row.warehouseName} · <span className="font-mono">{row.locs.map((l) => l.location_code).join(", ")}</span>
-                        </p>
-                      )}
-                    </td>
-                    <td className="hidden px-4 py-3 align-top md:table-cell">
-                      {absent ? (
-                        <span className="text-[12px]">-</span>
-                      ) : (
-                        <>
-                          <p className="truncate text-[12px] font-medium text-foreground" title={row.warehouseName}>{row.warehouseName}</p>
-                          <div className="mt-1 flex flex-wrap gap-1" title={row.locs.map((l) => `${l.location_code}: ${l.quantity}`).join("\n")}>
-                            {shownLocs.map((loc) => (
-                              <span
-                                key={`${loc.location_code}-${loc.is_receiving ? "r" : "s"}`}
-                                className={cn(
-                                  "inline-flex items-center gap-1 rounded border px-1.5 py-px font-mono text-[10px]",
-                                  loc.is_receiving
-                                    ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
-                                    : "border-border bg-muted/40 text-muted-foreground",
-                                )}
-                              >
-                                {loc.location_code}<span className="font-semibold text-foreground/80">{loc.quantity}</span>
-                              </span>
-                            ))}
-                            {moreLocs > 0 && <span className="text-[10px] text-muted-foreground">+{moreLocs} vị trí</span>}
-                          </div>
-                        </>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="flex items-center gap-2.5">
-                        <span className={cn(
-                          "w-8 shrink-0 text-right font-mono text-[16px] font-bold tabular-nums",
-                          row.status === "LOW" ? "text-amber-600 dark:text-amber-400" : row.status === "OK" ? "text-foreground" : "text-muted-foreground",
-                        )}
-                        >
-                          {row.available}
-                        </span>
-                        <StockGauge quantity={row.available} status={row.status} />
-                      </div>
-                      {row.receiving > 0 && (
-                        <p className="mt-1 text-[10px] leading-tight text-violet-700 dark:text-violet-300">+{row.receiving} ở khu nhận</p>
-                      )}
-                    </td>
-                    <td className="hidden px-4 py-3 align-top sm:table-cell">
-                      <StatusBadge label={status.label} variant={status.tone} dot />
-                    </td>
-                    <td className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell" title={formatDateTime(row.book.updated_at)}>
-                      {formatDate(row.book.updated_at)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {filtered.length > 0
-                ? `Hiển thị ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} trong ${filtered.length} dòng`
-                : "Không có dòng nào"}
-            </span>
-            {totalPages > 1 && (
-              <Pagination className="mx-0 w-auto justify-end">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={(event) => { event.preventDefault(); setPage(Math.max(1, currentPage - 1)); }}
-                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                  {getPaginationRange(currentPage, totalPages).map((item, i) => (
-                    <PaginationItem key={`${item}-${i}`}>
-                      {typeof item === "number" ? (
-                        <PaginationLink isActive={item === currentPage} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
-                          {item}
-                        </PaginationLink>
-                      ) : (
-                        <PaginationEllipsis />
-                      )}
-                    </PaginationItem>
+              </div>
+              {warehouseOptions.length > 0 && (
+                <div className="mt-3 border-t border-border pt-3" role="group" aria-label="Lọc theo kho">
+                  <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Kho</p>
+                  {railButton(warehouseFilter === "all", () => setWarehouseFilter("all"), "Tất cả kho", allRows.length)}
+                  {warehouseOptions.map((o) => (
+                    <div key={o.value}>{railButton(warehouseFilter === o.value, () => setWarehouseFilter(o.value), o.label, warehouseCounts.get(o.value) ?? 0)}</div>
                   ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={(event) => { event.preventDefault(); setPage(Math.min(totalPages, currentPage + 1)); }}
-                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
+                </div>
+              )}
+            </nav>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl/page:hidden" role="group" aria-label="Lọc theo tình trạng tồn kho">
+              {statusChip("ALL")}
+              {statusKeys.map((key) => statusChip(key))}
+            </div>
+
+            <section aria-label="Danh sách tồn kho" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-1 pt-4">
+                <div className="min-w-0">
+                  <h2 className="font-serif text-[18px] font-semibold tracking-tight">{activeLabel}</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    {statusFilter === "ALL" ? "Mỗi dòng là một đầu sách tại một kho." : STATUS[statusFilter].hint}
+                    {activeWarehouse ? ` Đang xem ${activeWarehouse}.` : ""}
+                  </p>
+                </div>
+                <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                  <SelectTrigger size="sm" className="w-[190px]" aria-label="Sắp xếp">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="Tìm tên sách, tác giả, ISBN, vị trí"
+                  showSearchClear
+                  filters={
+                    <>
+                      {/* The rail lists warehouses on wide screens; here it is a select. */}
+                      <div className="@4xl/page:hidden">
+                        <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                          <SelectTrigger size="sm" className="w-[200px]" aria-label="Kho">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Tất cả kho</SelectItem>
+                            {warehouseOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {hasFilters && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                          <X className="h-3.5 w-3.5" />Xóa lọc
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              </div>
+
+              <table className="w-full table-fixed">
+                <thead>
+                  <tr className="border-b border-border">
+                    {[
+                      { label: "Sách", className: "pl-5" },
+                      { label: "Kho và vị trí", className: "hidden w-[230px] @2xl:table-cell" },
+                      { label: `Sẵn sàng (ngưỡng ${LOW_STOCK_THRESHOLD})`, className: "w-[150px] @xl:w-[176px]" },
+                      { label: "Cập nhật", className: "hidden w-[112px] pr-5 @5xl:table-cell" },
+                    ].map((h) => (
+                      <th key={h.label} scope="col" className={cn("px-3 py-3 text-left text-[12px] font-medium text-muted-foreground", h.className)}>{h.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <SkeletonTableRow columns={4} rows={6} />
+                  ) : paged.length === 0 ? (
+                    <tr>
+                      <td colSpan={4}>
+                        <EmptyState
+                          variant={hasFilters ? "no-results" : "no-data"}
+                          title={hasFilters ? "Không có dòng tồn kho phù hợp" : "Chưa có dữ liệu tồn kho"}
+                          description={hasFilters ? "Thử đổi tình trạng, kho hoặc từ khóa tìm kiếm" : "Tồn kho xuất hiện sau khi phiếu nhập đầu tiên được ghi sổ"}
+                          action={hasFilters ? <Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button> : undefined}
+                          className="py-12"
+                        />
+                      </td>
+                    </tr>
+                  ) : paged.map((row) => {
+                    const status = STATUS[row.status];
+                    const absent = row.status === "ABSENT";
+                    const shownLocs = row.locs.slice(0, 3);
+                    const moreLocs = row.locs.length - shownLocs.length;
+                    return (
+                      <tr key={row.key} className={cn("border-b border-border last:border-0 hover:bg-muted/40", absent && "text-muted-foreground")}>
+                        <td className="py-3.5 pl-5 pr-3 align-top">
+                          <p className={cn("line-clamp-2 text-[14px] font-semibold", absent ? "text-muted-foreground" : "text-foreground")} title={row.book.title}>{row.book.title}</p>
+                          <p className="mt-0.5 flex min-w-0 gap-x-2 truncate text-[12px] text-muted-foreground">
+                            <span className="font-mono">{row.book.isbn || "Không có ISBN"}</span>
+                            {row.book.category ? <span className="truncate">{row.book.category}</span> : null}
+                          </p>
+                          {!absent && (
+                            <p className="mt-1 truncate text-[12px] text-muted-foreground @2xl:hidden">
+                              {row.warehouseName}: <span className="font-mono">{row.locs.map((l) => l.location_code).join(", ")}</span>
+                            </p>
+                          )}
+                        </td>
+                        <td className="hidden px-3 py-3.5 align-top @2xl:table-cell">
+                          {absent ? (
+                            <span className="text-[13px]">Không có ở kho nào</span>
+                          ) : (
+                            <>
+                              <p className="truncate text-[13px] font-medium text-foreground" title={row.warehouseName}>{row.warehouseName}</p>
+                              <div className="mt-1.5 flex flex-wrap gap-1" title={row.locs.map((l) => `${l.location_code}: ${l.quantity}`).join("\n")}>
+                                {shownLocs.map((loc) => (
+                                  <span
+                                    key={`${loc.location_code}-${loc.is_receiving ? "r" : "s"}`}
+                                    className={cn(
+                                      "inline-flex items-center gap-1 rounded-md border px-1.5 py-px font-mono text-[11px]",
+                                      loc.is_receiving
+                                        ? "border-primary/25 bg-primary/[0.06] text-primary"
+                                        : "border-border bg-muted/40 text-muted-foreground",
+                                    )}
+                                  >
+                                    {loc.location_code}<span className="font-semibold text-foreground/80">{loc.quantity}</span>
+                                  </span>
+                                ))}
+                                {moreLocs > 0 && <span className="text-[11px] text-muted-foreground">và {moreLocs} vị trí khác</span>}
+                              </div>
+                              <p className="mt-1.5 text-[12px] tabular-nums text-muted-foreground @5xl:hidden" title={formatDateTime(row.book.updated_at)}>
+                                Cập nhật {formatDate(row.book.updated_at)}
+                              </p>
+                            </>
+                          )}
+                        </td>
+                        <td className="px-3 py-3.5 align-top">
+                          <ThresholdRuler available={row.available} status={row.status} />
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <StatusBadge label={status.label} variant={status.tone} dot />
+                            {row.receiving > 0 && (
+                              <span className="text-[12px] text-primary">+{row.receiving} ở khu nhận</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="hidden px-3 py-3.5 pr-5 align-top text-[13px] tabular-nums text-muted-foreground @5xl:table-cell" title={formatDateTime(row.book.updated_at)}>
+                          {formatDate(row.book.updated_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span aria-live="polite">
+                  {filtered.length > 0
+                    ? `Hiển thị ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} trong ${filtered.length} dòng`
+                    : "Không có dòng nào"}
+                </span>
+                {totalPages > 1 && (
+                  <Pagination className="mx-0 w-auto justify-end">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={(event) => { event.preventDefault(); setPage(Math.max(1, currentPage - 1)); }}
+                          className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                      {getPaginationRange(currentPage, totalPages).map((item, i) => (
+                        <PaginationItem key={`${item}-${i}`}>
+                          {typeof item === "number" ? (
+                            <PaginationLink isActive={item === currentPage} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
+                              {item}
+                            </PaginationLink>
+                          ) : (
+                            <PaginationEllipsis />
+                          )}
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={(event) => { event.preventDefault(); setPage(Math.min(totalPages, currentPage + 1)); }}
+                          className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                )}
+              </div>
+            </section>
           </div>
-        </SectionCard>
+        </div>
       </FadeItem>
     </PageWrapper>
   );

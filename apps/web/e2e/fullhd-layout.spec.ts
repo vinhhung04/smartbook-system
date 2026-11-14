@@ -12,7 +12,7 @@ const FULL_HD_VIEWPORTS = [
   { name: 'Full HD 150%', width: 1280, height: 595 },
 ] as const;
 
-const STAFF_ROUTES = ['/dashboard', '/receiving-smart', '/purchase-requests', '/exception-reports', '/borrow/fines', '/shelves', '/warehouses', '/purchase-orders'];
+const STAFF_ROUTES = ['/dashboard', '/receiving-smart', '/purchase-requests', '/exception-reports', '/borrow/fines', '/shelves', '/warehouses', '/purchase-orders', '/orders', '/inventory', '/order-requests', '/picking', '/outbound', '/receiving-check', '/putaway', '/receiving-putaway', '/movements', '/stock-audits', '/my-warehouse-tasks', '/my-purchase-requests', '/staff-tasks', '/my-exception-reports', '/catalog', '/supplier-deliveries', '/suppliers'];
 const CUSTOMER_ROUTES = ['/customer', '/customer/fines', '/customer/membership', '/customer/notifications'];
 const PUBLIC_ROUTES = ['/', '/books', '/branches'];
 
@@ -74,6 +74,7 @@ async function freshPage(browser: Browser) {
 
 test.describe('Full HD layout', () => {
   test('staff screens fit Full HD at 100%, 125% and 150% scaling', async ({ browser }) => {
+    test.setTimeout(240_000); // ~19 routes x 3 viewports; the 60s default no longer covers the list
     const { context, page } = await freshPage(browser);
     await loginStaff(page);
     await checkRoutes(page, STAFF_ROUTES);

@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink } from "react-router";
 import { ClipboardList, ArrowRight, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "motion/react";
 import { FadeItem, PageWrapper } from "../motion-utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SkeletonTableRow } from "@/components/ui/loading-state";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/components/ui/utils";
 import { getApiErrorMessage } from "@/services/api";
 import { goodsReceiptService } from "@/services/goods-receipt";
 
@@ -30,6 +32,36 @@ function formatDate(value: string) {
   return d.toLocaleString("vi-VN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+const GROUP_LABEL = ["Chờ kiểm đếm", "Đã kiểm đếm, chờ quản lý duyệt"];
+
+// Group rows repeat these cells instead of using colSpan: a spanning row keeps the
+// container-hidden columns in the table grid and squeezes the first column on phones.
+const COLUMNS = [
+  { label: "Phiếu nhập", className: "pl-5" },
+  { label: "Theo phiếu", className: "hidden w-[130px] @xl:table-cell" },
+  { label: "Thực đếm", className: "hidden w-[150px] @xl:table-cell" },
+  { label: "Ngày tạo", className: "hidden w-[170px] @3xl:table-cell" },
+  { label: "", className: "w-[130px] pr-5" },
+];
+
+/** Counted quantity against the receipt: the gap is what the manager will look at. */
+function CountResult({ receipt }: { receipt: DraftReceipt }) {
+  if (receipt.total_actual_quantity === null) {
+    return <p className="text-[13px] text-muted-foreground">Chưa đếm</p>;
+  }
+  const diff = receipt.total_actual_quantity - receipt.total_planned_quantity;
+  return (
+    <div>
+      <p className="font-serif text-[18px] font-semibold leading-tight tabular-nums text-foreground">
+        {receipt.total_actual_quantity}<span className="font-sans text-[12px] font-normal text-muted-foreground"> cuốn</span>
+      </p>
+      <p className={cn("text-[12px]", diff === 0 ? "text-emerald-700 dark:text-emerald-400" : "font-medium text-amber-800 dark:text-amber-300")}>
+        {diff === 0 ? "Khớp với phiếu" : diff > 0 ? `Dư ${diff} cuốn` : `Thiếu ${-diff} cuốn`}
+      </p>
+    </div>
+  );
+}
+
 export function ReceivingCheckPage() {
   const [receipts, setReceipts] = useState<DraftReceipt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,102 +80,119 @@ export function ReceivingCheckPage() {
 
   useEffect(() => { void load(); }, []);
 
+  // Uncounted receipts first; the server's newest-first order is kept inside each group.
+  const groups = [receipts.filter((r) => !r.is_verified), receipts.filter((r) => r.is_verified)];
+  const pendingCount = groups[0].length;
+  const lede = loading
+    ? "Đếm số lượng thực tế trong phiếu nhập kho được giao cho bạn, trước khi quản lý duyệt."
+    : receipts.length === 0
+      ? "Bạn chưa có phiếu nhập kho nào cần kiểm đếm."
+      : `${receipts.length} phiếu nhập kho được giao cho bạn, ${pendingCount > 0 ? `${pendingCount} phiếu chưa kiểm đếm` : "tất cả đã kiểm đếm xong"}.`;
+
   return (
     <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={ClipboardList}
           title="Kiểm đếm hàng nhận"
-          description="Xem và xác nhận số lượng thực tế trong phiếu nhập hàng trước khi manager duyệt"
-          iconBg="bg-blue-100 dark:bg-blue-500/15"
-          iconColor="text-blue-600 dark:text-blue-400"
-          actions={
-            <button
-              onClick={() => void load()}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-[10px] border border-border px-3 py-2 text-[13px] hover:bg-muted transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Làm mới
-            </button>
-          }
+          description={lede}
+          actions={(
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Làm mới
+            </Button>
+          )}
         />
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  {["Mã phiếu", "Kho", "Số mặt hàng", "SL kế hoạch", "SL thực đếm", "Trạng thái KĐ", "Ngày tạo", ""].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">{h}</th>
+        <section aria-label="Phiếu cần kiểm đếm" className="@container overflow-hidden rounded-2xl border border-border bg-card">
+          <Table className="table-fixed">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                {COLUMNS.map((head, index) => (
+                  <TableHead key={index} className={cn("px-3 text-[12px] font-medium text-muted-foreground", head.className)}>
+                    {head.label || <span className="sr-only">Thao tác</span>}
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <SkeletonTableRow columns={5} rows={4} />
+              ) : receipts.length === 0 ? (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="whitespace-normal py-12">
+                    <EmptyState
+                      variant="no-data"
+                      icon={ClipboardList}
+                      title="Không có phiếu nào cần kiểm đếm"
+                      description="Khi quản lý giao một phiếu nhập kho nháp cho bạn, phiếu sẽ hiện ở đây."
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : groups.map((rows, group) => rows.length === 0 ? null : (
+                <React.Fragment key={group}>
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell className="whitespace-normal bg-muted/40 py-2 pl-5 text-[12px] font-semibold text-muted-foreground">
+                      {GROUP_LABEL[group]} <span className="font-normal tabular-nums">({rows.length})</span>
+                    </TableCell>
+                    {COLUMNS.slice(1).map((column, index) => (
+                      <TableCell key={index} aria-hidden="true" className={cn("bg-muted/40", column.className)} />
+                    ))}
+                  </TableRow>
+                  {rows.map((r) => (
+                    <TableRow key={r.id} className="hover:bg-muted/40">
+                      <TableCell className="whitespace-normal py-3.5 pl-5 pr-3 align-top">
+                        <p className="truncate font-mono text-[13px] font-semibold text-foreground" title={r.receipt_number}>{r.receipt_number}</p>
+                        <p className="mt-0.5 truncate text-[12px] text-muted-foreground" title={r.warehouse_name || undefined}>
+                          {r.warehouse_name || r.warehouse_code || "-"}
+                        </p>
+                        <div className="mt-1.5">
+                          <StatusBadge label={r.is_verified ? "Đã kiểm đếm" : "Chờ kiểm đếm"} variant={r.is_verified ? "success" : "warning"} dot />
+                        </div>
+                        <div className="mt-2 space-y-0.5 text-[12px] text-muted-foreground @xl:hidden">
+                          <p>
+                            Theo phiếu <span className="font-semibold tabular-nums text-foreground">{r.total_planned_quantity}</span> cuốn, {r.item_count} dòng
+                          </p>
+                          {r.total_actual_quantity !== null && (
+                            <p>
+                              Thực đếm <span className="font-semibold tabular-nums text-foreground">{r.total_actual_quantity}</span> cuốn
+                              {r.total_actual_quantity !== r.total_planned_quantity && (
+                                <span className="text-amber-800 dark:text-amber-300">
+                                  , {r.total_actual_quantity > r.total_planned_quantity ? "dư" : "thiếu"} {Math.abs(r.total_actual_quantity - r.total_planned_quantity)}
+                                </span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <p className="mt-1 text-[12px] tabular-nums text-muted-foreground @3xl:hidden">Tạo lúc {formatDate(r.created_at)}</p>
+                      </TableCell>
+                      <TableCell className="hidden px-3 py-3.5 align-top @xl:table-cell">
+                        <p className="font-serif text-[18px] font-semibold leading-tight tabular-nums text-foreground">
+                          {r.total_planned_quantity}<span className="font-sans text-[12px] font-normal text-muted-foreground"> cuốn</span>
+                        </p>
+                        <p className="text-[12px] text-muted-foreground">{r.item_count} dòng</p>
+                      </TableCell>
+                      <TableCell className="hidden px-3 py-3.5 align-top @xl:table-cell">
+                        <CountResult receipt={r} />
+                      </TableCell>
+                      <TableCell className="hidden px-3 py-3.5 align-top text-[13px] tabular-nums text-muted-foreground @3xl:table-cell">
+                        {formatDate(r.created_at)}
+                      </TableCell>
+                      <TableCell className="py-3.5 pl-3 pr-5 text-right align-top">
+                        <Button asChild size="sm" variant={r.is_verified ? "outline" : "default"}>
+                          <NavLink to={`/orders/${r.id}`}>
+                            {r.is_verified ? "Xem lại" : <>Kiểm đếm <ArrowRight className="h-3.5 w-3.5" /></>}
+                          </NavLink>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <SkeletonTableRow columns={8} rows={4} />
-                ) : receipts.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-5 py-10">
-                      <EmptyState
-                        variant="no-data"
-                        icon={ClipboardList}
-                        title="Không có phiếu nào cần kiểm đếm"
-                        description="Các phiếu nhập hàng ở trạng thái DRAFT được giao cho bạn sẽ hiện ở đây"
-                      />
-                    </td>
-                  </tr>
-                ) : (
-                  receipts.map((r, idx) => (
-                    <motion.tr
-                      key={r.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: idx * 0.03 }}
-                      className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
-                    >
-                      <td className="px-4 py-3.5 text-[13px] font-semibold font-mono">{r.receipt_number}</td>
-                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{r.warehouse_code || r.warehouse_name || "-"}</td>
-                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{r.item_count}</td>
-                      <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{r.total_planned_quantity}</td>
-                      <td className="px-4 py-3.5 text-[13px]">
-                        {r.total_actual_quantity !== null ? (
-                          <span className={r.total_actual_quantity === r.total_planned_quantity ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-amber-600 dark:text-amber-400 font-semibold"}>
-                            {r.total_actual_quantity}
-                            {r.total_actual_quantity !== r.total_planned_quantity && (
-                              <span className="ml-1 text-[11px]">
-                                ({r.total_actual_quantity > r.total_planned_quantity ? "+" : ""}{r.total_actual_quantity - r.total_planned_quantity})
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-[12px]">Chưa đếm</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        {r.is_verified ? (
-                          <StatusBadge label="Đã kiểm đếm" variant="success" />
-                        ) : (
-                          <StatusBadge label="Chờ kiểm đếm" variant="warning" />
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-[12px] text-muted-foreground">{formatDate(r.created_at)}</td>
-                      <td className="px-4 py-3.5">
-                        <NavLink
-                          to={`/orders/${r.id}`}
-                          className="inline-flex items-center gap-1.5 rounded-[8px] bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1.5 text-[12px] text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/15 font-semibold transition-colors"
-                        >
-                          Kiểm đếm <ArrowRight className="w-3 h-3" />
-                        </NavLink>
-                      </td>
-                    </motion.tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                </React.Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
       </FadeItem>
     </PageWrapper>
   );

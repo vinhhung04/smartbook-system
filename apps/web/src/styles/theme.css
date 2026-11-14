@@ -137,6 +137,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* Same stack as <html>, so `font-sans` (used to step back out of a serif figure) stays Inter. */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
   /* Public-site display face (variable optical size, full Vietnamese set). */

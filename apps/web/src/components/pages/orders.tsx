@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
-import { ChevronRight, ClipboardCheck, Download, Package, Plus, RefreshCw, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ClipboardCheck, Download, Package, Plus, RefreshCw, X } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { StatusBadge } from "../status-badge";
@@ -9,7 +9,6 @@ import { putawayService, type PutawayReceiptSummary } from "@/services/putaway";
 import { userService } from "@/services/user";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
@@ -40,6 +39,16 @@ const STAGES: { key: Stage; label: string; tone: string; attention?: boolean }[]
   { key: "done", label: "Hoàn tất", tone: "success" },
 ];
 const CANCELLED_STAGE = { key: "cancelled" as const, label: "Đã hủy", tone: "danger" };
+// One line under the list heading: what this step means and who moves it on.
+const STAGE_GUIDE: Record<Stage | "ALL", string> = {
+  ALL: "Mọi phiếu nhập, mới nhất trước.",
+  unassigned: "Giao phiếu cho nhân viên kho để bắt đầu kiểm đếm.",
+  counting: "Nhân viên kho đang đếm hàng thực nhận theo từng dòng.",
+  review: "Đã đếm xong. Mở phiếu để đối chiếu và duyệt nhập kho.",
+  putaway: "Đã nhập kho, hàng đang chờ cất từ khu nhận lên kệ.",
+  done: "Hàng đã lên kệ, phiếu đã khép.",
+  cancelled: "Phiếu đã hủy, không ảnh hưởng tồn kho.",
+};
 const STAGE_BY_KEY = Object.fromEntries([...STAGES, CANCELLED_STAGE].map((stage) => [stage.key, stage])) as Record<Stage, (typeof STAGES)[number]>;
 
 function stageOf(receipt: GoodsReceipt, putawayReady: Map<string, PutawayReceiptSummary> | null): Stage {
@@ -197,7 +206,17 @@ export function OrdersPage() {
     }
   };
 
-  const pipelineButton = (key: Stage | "ALL", label: string, attention = false) => {
+  // The header names what waits on someone, straight from the stage counts (warehouse filter applied).
+  const lede = (() => {
+    if (loading) return "Đang tải phiếu nhập...";
+    const waiting = STAGES.filter((stage) => stage.attention && (counts[stage.key] ?? 0) > 0)
+      .map((stage) => `${counts[stage.key]} phiếu ${stage.label.toLowerCase()}`);
+    return waiting.length > 0
+      ? `${counts.ALL ?? 0} phiếu. Cần xử lý: ${waiting.join(", ")}.`
+      : `${counts.ALL ?? 0} phiếu. Không có phiếu nào đang chờ giao việc hay chờ duyệt.`;
+  })();
+
+  const stepButton = (key: Stage | "ALL", label: string, step: number | null, attention = false) => {
     const active = stageFilter === key;
     const count = counts[key] ?? 0;
     return (
@@ -207,242 +226,291 @@ export function OrdersPage() {
         onClick={() => setStageFilter(key)}
         aria-pressed={active}
         className={cn(
-          "flex flex-1 shrink-0 flex-col items-start rounded-lg border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          active
-            ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300"
-            : "border-transparent hover:border-border hover:bg-muted/50",
+          "relative flex w-full items-center gap-3 rounded-lg py-2 pl-2 pr-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
         )}
       >
-        <span className={cn("text-[18px] font-semibold leading-tight tabular-nums", !active && (count ? "text-foreground" : "text-muted-foreground/60"))}>
+        {step !== null ? (
+          <span
+            className={cn(
+              "relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums",
+              active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground",
+            )}
+            aria-hidden="true"
+          >
+            {step}
+          </span>
+        ) : (
+          <span className="size-6 shrink-0" aria-hidden="true" />
+        )}
+        <span className={cn("min-w-0 flex-1 text-[13px]", active ? "font-semibold" : "font-medium")}>{label}</span>
+        <span
+          className={cn(
+            "min-w-6 rounded-full px-1.5 text-center text-[12px] tabular-nums",
+            attention && count > 0 ? "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : active ? "text-primary" : "text-muted-foreground",
+          )}
+        >
           {loading ? "–" : count}
-        </span>
-        <span className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11px]", active ? "font-medium" : "text-muted-foreground")}>
-          {attention && count > 0 && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-label="cần xử lý" />}
-          {label}
         </span>
       </button>
     );
   };
 
+  const chip = (key: Stage | "ALL", label: string, attention = false) => {
+    const active = stageFilter === key;
+    const count = counts[key] ?? 0;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => setStageFilter(key)}
+        aria-pressed={active}
+        className={cn(
+          "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+          active ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium hover:bg-muted/60",
+        )}
+      >
+        <span className="whitespace-nowrap">{label}</span>
+        <span className={cn("tabular-nums", attention && count > 0 ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>
+          {loading ? "–" : count}
+        </span>
+      </button>
+    );
+  };
+
+  const activeLabel = stageFilter === "ALL" ? "Tất cả phiếu" : STAGE_BY_KEY[stageFilter].label;
+
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={Package}
           title="Phiếu nhập kho"
-          description="Theo dõi hàng nhận từ lúc kiểm đếm, duyệt đến khi lên kệ"
-          iconBg="bg-gradient-to-br from-blue-100 to-indigo-50 dark:from-blue-500/15 dark:to-indigo-500/10"
-          iconColor="text-blue-600 dark:text-blue-400"
+          description={lede}
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading} aria-label="Làm mới">
-                <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            <>
+              <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} aria-label="Làm mới">
+                <RefreshCw className={cn("h-3.5 w-3.5 motion-reduce:animate-none", loading && "animate-spin")} />
                 <span className="hidden sm:inline">Làm mới</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
+              <Button variant="ghost" size="sm" onClick={handleExport} disabled={filtered.length === 0}>
                 <Download className="h-3.5 w-3.5" />Xuất CSV
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <NavLink to="/putaway"><ClipboardCheck className="h-3.5 w-3.5" />Cất hàng</NavLink>
               </Button>
               <Button asChild size="sm">
                 <NavLink to="/orders/new"><Plus className="h-3.5 w-3.5" />Phiếu mới</NavLink>
               </Button>
-            </div>
+            </>
           }
         />
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <div className="flex items-center gap-0.5 overflow-x-auto p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo bước xử lý">
-            {pipelineButton("ALL", "Tất cả")}
-            <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
-            {STAGES.map((stage, i) => (
-              <Fragment key={stage.key}>
-                {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/40" aria-hidden="true" />}
-                {pipelineButton(stage.key, stage.label, stage.attention)}
-              </Fragment>
-            ))}
-            <span className="mx-1 h-8 w-px shrink-0 bg-border" aria-hidden="true" />
-            {pipelineButton(CANCELLED_STAGE.key, CANCELLED_STAGE.label)}
-          </div>
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
-              searchPlaceholder="Tìm mã phiếu, mã PO, nhà cung cấp, kho..."
-              showSearchClear
-              filters={
-                <>
-                  {warehouses.length > 1 && (
-                    <Select value={warehouseFilter || "__all__"} onValueChange={(v) => setWarehouseFilter(v === "__all__" ? "" : v)}>
-                      <SelectTrigger size="sm" className="w-[200px]" aria-label="Kho">
-                        <SelectValue placeholder="Tất cả kho" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">Tất cả kho</SelectItem>
-                        {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {hasFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-                      <X className="h-3.5 w-3.5" />Xóa lọc
-                    </Button>
-                  )}
-                </>
-              }
-            />
+        <div className="@container">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl:grid-cols-[232px_minmax(0,1fr)]">
+            {/* The receiving flow as a ladder: one numbered rung per step, joined by a line. */}
+            <nav aria-label="Lọc theo bước xử lý" className="hidden rounded-2xl border border-border bg-card p-3 @4xl:sticky @4xl:top-4 @4xl:block">
+              {stepButton("ALL", "Tất cả phiếu", null)}
+              <p className="mt-3 border-t border-border px-2 pb-1.5 pt-3 text-[12px] font-semibold text-muted-foreground">Quy trình nhận hàng</p>
+              <div className="relative">
+                <span className="absolute bottom-5 left-[19px] top-5 w-px bg-border" aria-hidden="true" />
+                {STAGES.map((stage, i) => stepButton(stage.key, stage.label, i + 1, stage.attention))}
+              </div>
+              <div className="mt-2 border-t border-border pt-2">
+                {stepButton(CANCELLED_STAGE.key, CANCELLED_STAGE.label, null)}
+              </div>
+            </nav>
+            <nav aria-label="Lọc theo bước xử lý" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl:hidden">
+              {chip("ALL", "Tất cả")}
+              {STAGES.map((stage) => chip(stage.key, stage.label, stage.attention))}
+              {chip(CANCELLED_STAGE.key, CANCELLED_STAGE.label)}
+            </nav>
+
+            <section aria-label="Danh sách phiếu nhập" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-1 pt-4">
+                <div className="min-w-0">
+                  <h2 className="font-serif text-[18px] font-semibold tracking-tight">{activeLabel}</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">{STAGE_GUIDE[stageFilter]}</p>
+                </div>
+                {stageFilter === "putaway" && (
+                  <Button asChild variant="outline" size="sm">
+                    <NavLink to="/putaway"><ClipboardCheck className="h-3.5 w-3.5" />Mở trang cất hàng</NavLink>
+                  </Button>
+                )}
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="Tìm mã phiếu, mã PO, nhà cung cấp, kho"
+                  showSearchClear
+                  filters={
+                    <>
+                      {warehouses.length > 1 && (
+                        <Select value={warehouseFilter || "__all__"} onValueChange={(v) => setWarehouseFilter(v === "__all__" ? "" : v)}>
+                          <SelectTrigger size="sm" className="w-[200px]" aria-label="Kho">
+                            <SelectValue placeholder="Tất cả kho" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">Tất cả kho</SelectItem>
+                            {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {hasFilters && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                          <X className="h-3.5 w-3.5" />Xóa lọc
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              </div>
+
+              <Table className="table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    {[
+                      { label: "Nguồn hàng và phiếu", className: "pl-5" },
+                      { label: "Bước xử lý", className: "hidden w-[196px] @xl:table-cell" },
+                      { label: "Số lượng", className: "hidden w-[132px] @2xl:table-cell" },
+                      { label: "Ngày tạo", className: "hidden w-[156px] pr-5 @4xl:table-cell" },
+                      { label: "Giá trị", className: "hidden w-[128px] pr-5 text-right @5xl:table-cell" },
+                    ].map((heading) => (
+                      <TableHead key={heading.label} className={cn("px-3 text-[12px] font-medium text-muted-foreground", heading.className)}>{heading.label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <SkeletonTableRow columns={5} rows={5} />
+                  ) : paginated.length === 0 ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={5} className="whitespace-normal py-12">
+                        {hasFilters ? (
+                          <EmptyState
+                            variant="no-results"
+                            title="Không có phiếu phù hợp"
+                            description="Thử bỏ bớt bộ lọc hoặc đổi từ khóa tìm kiếm"
+                            action={<Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button>}
+                          />
+                        ) : (
+                          <EmptyState variant="no-data" title="Chưa có phiếu nhập kho" description="Phiếu nhập được tạo khi nhận hàng theo hóa đơn nhà cung cấp hoặc nhập trực tiếp" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : paginated.map(({ receipt, stage }) => {
+                    const stageInfo = STAGE_BY_KEY[stage];
+                    const hint = stageHint(receipt, stage);
+                    const ready = stage === "putaway" ? putawayReady?.get(receipt.id) : undefined;
+                    const qty = receipt.total_quantity ?? null;
+                    const putawayPct = ready && ready.total_quantity > 0 ? Math.round((ready.putaway_quantity / ready.total_quantity) * 100) : 0;
+                    return (
+                      <TableRow key={receipt.id} onClick={() => navigate(`/orders/${receipt.id}`)} className="cursor-pointer">
+                        <TableCell className="py-3.5 pl-5 pr-3">
+                          <p className="truncate text-[14px] font-semibold text-foreground" title={receipt.supplier_name || undefined}>
+                            {receipt.po_number ? receipt.supplier_name || "Nhà cung cấp chưa rõ" : "Nhập trực tiếp, không theo PO"}
+                          </p>
+                          <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[12px] text-muted-foreground">
+                            <NavLink
+                              to={`/orders/${receipt.id}`}
+                              onClick={(event) => event.stopPropagation()}
+                              className="truncate rounded font-mono text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            >
+                              {receipt.receipt_number}
+                            </NavLink>
+                            {receipt.po_number ? (
+                              <span className="truncate">
+                                theo{" "}
+                                <NavLink
+                                  to={`/purchase-orders/${receipt.purchase_order_id}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="rounded font-mono hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                >
+                                  {receipt.po_number}
+                                </NavLink>
+                              </span>
+                            ) : null}
+                            <span className="shrink-0">về {receipt.warehouse_code || receipt.warehouse_name || "-"}</span>
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 @xl:hidden">
+                            <StatusBadge label={stageInfo.label} variant={stageInfo.tone} dot />
+                            {hint && <span className={cn("text-[12px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>{hint.text}</span>}
+                            <span className="text-[12px] tabular-nums text-muted-foreground">{qty !== null ? `${qty} cuốn` : `${receipt.item_count} dòng`}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 @xl:table-cell">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <StatusBadge label={stageInfo.label} variant={stageInfo.tone} dot />
+                            {hint && (
+                              <span className={cn("max-w-full truncate text-[12px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")} title={hint.text}>
+                                {hint.text}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 @2xl:table-cell">
+                          <p className="text-[13px] tabular-nums">
+                            {qty !== null ? <><span className="font-semibold">{qty}</span> cuốn</> : "-"}
+                          </p>
+                          <p className="text-[12px] text-muted-foreground">{receipt.item_count} dòng sách</p>
+                          {ready ? (
+                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã cất ${ready.putaway_quantity}/${ready.total_quantity} cuốn`}>
+                              <div className="h-full rounded-full bg-primary/70" style={{ width: `${putawayPct}%` }} />
+                            </div>
+                          ) : null}
+                          <p className="mt-1 text-[12px] tabular-nums text-muted-foreground @5xl:hidden">{formatCurrency(receipt.total_amount)}</p>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 pr-5 text-[13px] @4xl:table-cell" title={formatDate(receipt.created_at)}>
+                          <p className="tabular-nums text-foreground">{formatDate(receipt.created_at)}</p>
+                          <p className="text-[12px] text-muted-foreground">{timeAgo(receipt.created_at)}</p>
+                        </TableCell>
+                        <TableCell className={cn("hidden px-3 py-3.5 pr-5 text-right text-[13px] tabular-nums @5xl:table-cell", !receipt.total_amount && "text-muted-foreground")}>
+                          {formatCurrency(receipt.total_amount)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <div className="flex flex-col gap-2 border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span aria-live="polite">
+                  {filtered.length > 0
+                    ? `Hiển thị ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} trong ${filtered.length} phiếu`
+                    : "Không có phiếu"}
+                </span>
+                {totalPages > 1 && (
+                  <Pagination className="mx-0 w-auto justify-end">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={(event) => { event.preventDefault(); setPage(Math.max(1, currentPage - 1)); }}
+                          className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                      {getPaginationRange(currentPage, totalPages).map((item, i) => (
+                        <PaginationItem key={`${item}-${i}`}>
+                          {typeof item === "number" ? (
+                            <PaginationLink isActive={item === currentPage} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
+                              {item}
+                            </PaginationLink>
+                          ) : (
+                            <PaginationEllipsis />
+                          )}
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={(event) => { event.preventDefault(); setPage(Math.min(totalPages, currentPage + 1)); }}
+                          className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                )}
+              </div>
+            </section>
           </div>
         </div>
-      </FadeItem>
-
-      <FadeItem>
-        <SectionCard noPadding>
-          <Table className="table-fixed">
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                {[
-                  { label: "Phiếu nhập", className: "" },
-                  { label: "Trạng thái", className: "hidden w-[240px] sm:table-cell" },
-                  { label: "Số lượng", className: "hidden w-[150px] md:table-cell" },
-                  { label: "Giá trị", className: "hidden w-[140px] text-right xl:table-cell" },
-                  { label: "Ngày tạo", className: "hidden w-[150px] lg:table-cell" },
-                ].map((heading) => (
-                  <TableHead key={heading.label} className={cn("px-4 text-[12px] text-muted-foreground", heading.className)}>{heading.label}</TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <SkeletonTableRow columns={5} rows={5} />
-              ) : paginated.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="whitespace-normal py-12">
-                    {hasFilters ? (
-                      <EmptyState
-                        variant="no-results"
-                        title="Không có phiếu phù hợp"
-                        description="Thử bỏ bớt bộ lọc hoặc đổi từ khóa tìm kiếm"
-                        action={<Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button>}
-                      />
-                    ) : (
-                      <EmptyState variant="no-data" title="Chưa có phiếu nhập kho" description="Phiếu nhập được tạo khi nhận hàng theo hóa đơn nhà cung cấp hoặc nhập trực tiếp" />
-                    )}
-                  </TableCell>
-                </TableRow>
-              ) : paginated.map(({ receipt, stage }) => {
-                const stageInfo = STAGE_BY_KEY[stage];
-                const hint = stageHint(receipt, stage);
-                const ready = stage === "putaway" ? putawayReady?.get(receipt.id) : undefined;
-                const qty = receipt.total_quantity ?? null;
-                return (
-                  <TableRow key={receipt.id} onClick={() => navigate(`/orders/${receipt.id}`)} className="cursor-pointer">
-                    <TableCell className="px-4 py-3">
-                      <NavLink
-                        to={`/orders/${receipt.id}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="block truncate rounded font-mono text-[13px] font-semibold text-indigo-600 hover:text-indigo-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-indigo-400 dark:hover:text-indigo-300"
-                      >
-                        {receipt.receipt_number}
-                      </NavLink>
-                      <p className="truncate text-[12px] text-foreground/80">
-                        {receipt.po_number ? (
-                          <>
-                            <NavLink
-                              to={`/purchase-orders/${receipt.purchase_order_id}`}
-                              onClick={(event) => event.stopPropagation()}
-                              className="rounded font-mono hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              {receipt.po_number}
-                            </NavLink>
-                            {receipt.supplier_name ? ` · ${receipt.supplier_name}` : ""}
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">Nhập trực tiếp, không theo PO</span>
-                        )}
-                      </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {receipt.warehouse_code || receipt.warehouse_name || "-"}
-                        <span className="md:hidden"> · {qty !== null ? `${qty} cuốn` : `${receipt.item_count} dòng`}</span>
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 sm:hidden">
-                        <StatusBadge label={stageInfo.label} variant={stageInfo.tone} dot />
-                        {hint && <span className={cn("text-[11px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>{hint.text}</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden px-4 py-3 sm:table-cell">
-                      <div className="flex flex-col items-start gap-1">
-                        <StatusBadge label={stageInfo.label} variant={stageInfo.tone} dot />
-                        {hint && (
-                          <span className={cn("max-w-full truncate text-[11px]", hint.attention ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")} title={hint.text}>
-                            {hint.text}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden px-4 py-3 md:table-cell">
-                      <p className="text-[13px] tabular-nums">
-                        {qty !== null ? <><span className="font-semibold">{qty}</span> cuốn</> : "-"}
-                        <span className="text-[11px] text-muted-foreground"> · {receipt.item_count} dòng</span>
-                      </p>
-                      {ready ? (
-                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã cất ${ready.putaway_quantity}/${ready.total_quantity} cuốn`}>
-                          <div className="h-full rounded-full bg-violet-500" style={{ width: `${ready.total_quantity > 0 ? Math.round((ready.putaway_quantity / ready.total_quantity) * 100) : 0}%` }} />
-                        </div>
-                      ) : null}
-                      <p className="mt-1 font-mono text-[11px] text-muted-foreground xl:hidden">{formatCurrency(receipt.total_amount)}</p>
-                    </TableCell>
-                    <TableCell className={cn("hidden px-4 py-3 text-right font-mono text-[12px] tabular-nums xl:table-cell", !receipt.total_amount && "text-muted-foreground")}>
-                      {formatCurrency(receipt.total_amount)}
-                    </TableCell>
-                    <TableCell className="hidden px-4 py-3 text-[12px] text-muted-foreground lg:table-cell" title={formatDate(receipt.created_at)}>
-                      <p>{formatDate(receipt.created_at)}</p>
-                      <p className="text-[11px]">{timeAgo(receipt.created_at)}</p>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="flex flex-col gap-2 border-t border-border px-5 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              {filtered.length > 0
-                ? `Hiển thị ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} trong ${filtered.length} phiếu`
-                : "Không có phiếu"}
-            </span>
-            {totalPages > 1 && (
-              <Pagination className="mx-0 w-auto justify-end">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={(event) => { event.preventDefault(); setPage(Math.max(1, currentPage - 1)); }}
-                      className={cn("cursor-pointer", currentPage === 1 && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                  {getPaginationRange(currentPage, totalPages).map((item, i) => (
-                    <PaginationItem key={`${item}-${i}`}>
-                      {typeof item === "number" ? (
-                        <PaginationLink isActive={item === currentPage} onClick={(event) => { event.preventDefault(); setPage(item); }} className="cursor-pointer">
-                          {item}
-                        </PaginationLink>
-                      ) : (
-                        <PaginationEllipsis />
-                      )}
-                    </PaginationItem>
-                  ))}
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={(event) => { event.preventDefault(); setPage(Math.min(totalPages, currentPage + 1)); }}
-                      className={cn("cursor-pointer", currentPage === totalPages && "pointer-events-none opacity-50")}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-            )}
-          </div>
-        </SectionCard>
       </FadeItem>
     </PageWrapper>
   );

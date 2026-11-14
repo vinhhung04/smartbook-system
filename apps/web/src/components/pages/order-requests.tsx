@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "motion/react";
 import {
-  ArrowRightLeft, Book, Check, CheckCircle2, Clock, Inbox, ListOrdered, Loader2,
-  Package, Plus, Search, Send, ShieldAlert, Truck, X,
+  ArrowLeft, Check, CheckCircle2, Clock, Inbox, ListOrdered, Loader2,
+  Package, Plus, Search, Send, ShieldAlert, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
@@ -18,7 +17,6 @@ import {
 } from "@/services/order-requests";
 import { userService, type WarehouseStaffOption } from "@/services/user";
 import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-state";
@@ -31,7 +29,6 @@ import {
   Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -171,12 +168,6 @@ function requestAgingPriority(requestedAt: string): Priority {
   if (hoursWaited >= 24) return "HIGH";
   if (hoursWaited >= 4) return "MEDIUM";
   return "LOW";
-}
-
-function priorityAccentClass(priority: Priority): string {
-  if (priority === "URGENT") return "border-l-2 border-l-red-500";
-  if (priority === "HIGH") return "border-l-2 border-l-amber-500";
-  return "border-l-2 border-l-transparent";
 }
 
 function statusBadgeVariant(status: string): "success" | "warning" | "danger" | "info" | "neutral" | "cyan" {
@@ -407,7 +398,7 @@ export function OrderRequestsPage() {
   const handleAddLine = (variant: OrderRequestVariant) => {
     const isbn13 = String(variant.isbn13 || "").trim();
     if (!isbn13 || !/^\d{13}$/.test(isbn13)) {
-      toast.error("Chi duoc them sach co ISBN13 hop le");
+      toast.error("Chỉ thêm được sách có ISBN-13 hợp lệ");
       return;
     }
 
@@ -572,563 +563,604 @@ export function OrderRequestsPage() {
     );
   }
 
+  // Plain counts (no hooks: this runs after the loading early return).
+  const statusCounts: Record<StatusFilter, number> = {
+    all: requests.length,
+    pending: requests.filter((row) => isPendingStatus(row.status)).length,
+    approved: requests.filter((row) => isApprovedStatus(row.status)).length,
+    rejected: requests.filter((row) => isRejectedStatus(row.status)).length,
+  };
+  const typeCounts: Record<TypeFilter, number> = {
+    all: requests.length,
+    outbound: requests.filter((row) => row.task_type === "outbound").length,
+    transfer: requests.filter((row) => row.task_type === "transfer").length,
+  };
+  const sourceWarehouse = warehouses.find((w) => w.id === selectedWarehouseId);
+  const targetWarehouse = warehouses.find((w) => w.id === targetWarehouseId);
+  const referenceLabel = OUTBOUND_REFERENCE_GROUPS.flatMap((group) => group.options).find((o) => o.value === referenceType)?.label;
+  const pickerName = warehouseStaff.find((s) => s.id === assignedPickerUserId)?.full_name;
+
+  const lede = requests.length === 0
+    ? "Chưa có yêu cầu nào trong danh sách này."
+    : `${requestStats.total} yêu cầu, ${requestStats.pending} chờ duyệt${requestStats.urgent > 0 ? `, ${requestStats.urgent} đã chờ quá 3 ngày` : ""}.`;
+
+  const railButton = (active: boolean, onClick: () => void, label: string, count: number, attention = false) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("text-[13px]", active ? "font-semibold" : "font-medium")}>{label}</span>
+      <span
+        className={cn(
+          "min-w-6 rounded-full px-1.5 text-center text-[12px] tabular-nums",
+          attention && count > 0 ? "bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300" : active ? "text-primary" : "text-muted-foreground",
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+
+  const chip = (active: boolean, onClick: () => void, label: string, count: number, attention = false) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "border-primary/30 bg-primary/[0.08] font-semibold text-primary" : "border-border bg-card font-medium hover:bg-muted/60",
+      )}
+    >
+      <span className="whitespace-nowrap">{label}</span>
+      <span className={cn("tabular-nums", attention && count > 0 ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground")}>{count}</span>
+    </button>
+  );
+
+  const STATUS_ITEMS: Array<{ value: StatusFilter; label: string; attention?: boolean }> = [
+    { value: "all", label: "Tất cả" },
+    { value: "pending", label: "Chờ duyệt", attention: true },
+    { value: "approved", label: "Đã duyệt" },
+    { value: "rejected", label: "Bị từ chối" },
+  ];
+  const TYPE_ITEMS: Array<{ value: TypeFilter; label: string }> = [
+    { value: "all", label: "Mọi loại" },
+    { value: "outbound", label: "Xuất kho" },
+    { value: "transfer", label: "Điều chuyển" },
+  ];
+
+  if (activeTab === "compose") {
+    return (
+      <PageWrapper className="space-y-6">
+        <FadeItem>
+          <Button variant="ghost" size="sm" onClick={() => setActiveTab("queue")} className="-ml-3 mb-2 text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" /> Danh sách yêu cầu
+          </Button>
+          <PageHeader
+            title="Tạo yêu cầu mới"
+            description="Chọn kho và sách cần xuất. Yêu cầu chờ quản lý duyệt rồi mới chuyển sang bước lấy hàng."
+          />
+        </FadeItem>
+
+        <FadeItem>
+          <div className="@container/page">
+            <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="min-w-0 space-y-4">
+                <section aria-labelledby="request-step-1" className="rounded-2xl border border-border bg-card p-5">
+                  <h2 id="request-step-1" className="flex items-center gap-2.5 font-serif text-[18px] font-semibold tracking-tight">
+                    <span className="flex size-6 items-center justify-center rounded-full bg-primary text-[12px] font-semibold text-primary-foreground" aria-hidden="true">1</span>
+                    Loại yêu cầu và kho
+                  </h2>
+
+                  <div className="mt-4 space-y-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <SegmentedControl
+                        options={[
+                          { value: "outbound", label: "Xuất kho" },
+                          { value: "transfer", label: "Điều chuyển kho" },
+                        ]}
+                        value={requestType}
+                        onChange={(v) => setRequestType(v as RequestType)}
+                        layoutId="order-request-type"
+                      />
+                      <span className="text-[13px] text-muted-foreground">
+                        {requestType === "transfer" ? "Chuyển hàng từ kho này sang kho khác." : "Xuất hàng ra khỏi kho theo một lý do cụ thể."}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 @xl/page:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label htmlFor="request-source" className="text-[13px] font-medium">Kho nguồn</label>
+                        <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
+                          <SelectTrigger id="request-source" className="w-full">
+                            <SelectValue placeholder="Chọn kho nguồn" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {warehouses.map((warehouse) => (
+                              <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {requestType === "transfer" ? (
+                        <div className="space-y-1.5">
+                          <label htmlFor="request-target" className="text-[13px] font-medium">Kho đích</label>
+                          <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
+                            <SelectTrigger id="request-target" className="w-full">
+                              <SelectValue placeholder="Chọn kho đích" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredWarehouses.map((warehouse) => (
+                                <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <label htmlFor="request-reason" className="text-[13px] font-medium">Lý do xuất</label>
+                          <Select value={referenceType} onValueChange={(v) => setReferenceType(v as OutboundReferenceType)}>
+                            <SelectTrigger id="request-reason" className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {OUTBOUND_REFERENCE_GROUPS.map((group) => (
+                                <SelectGroup key={group.label}>
+                                  <SelectLabel>{group.label}</SelectLabel>
+                                  {group.options.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    {canApprove && warehouseStaff.length > 0 && (
+                      <div className="space-y-1.5">
+                        <label htmlFor="request-picker" className="text-[13px] font-medium">Nhân viên lấy hàng <span className="font-normal text-muted-foreground">(không bắt buộc)</span></label>
+                        <Select value={assignedPickerUserId || "none"} onValueChange={(v) => setAssignedPickerUserId(v === "none" ? "" : v)}>
+                          <SelectTrigger id="request-picker" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Chưa giao, giao sau ở bước Lấy hàng</SelectItem>
+                            {warehouseStaff.map((staff) => (
+                              <SelectItem key={staff.id} value={staff.id}>
+                                {staff.full_name} ({staff.username})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <label htmlFor="request-note" className="text-[13px] font-medium">Ghi chú <span className="font-normal text-muted-foreground">(không bắt buộc)</span></label>
+                      <Textarea
+                        id="request-note"
+                        value={requestNote}
+                        onChange={(event) => setRequestNote(event.target.value)}
+                        rows={2}
+                        className="resize-y"
+                        placeholder="Lý do tạo yêu cầu, ghi chú cho người duyệt"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section aria-labelledby="request-step-2" className="rounded-2xl border border-border bg-card p-5">
+                  <h2 id="request-step-2" className="flex items-center gap-2.5 font-serif text-[18px] font-semibold tracking-tight">
+                    <span className="flex size-6 items-center justify-center rounded-full bg-primary text-[12px] font-semibold text-primary-foreground" aria-hidden="true">2</span>
+                    Sách cần {requestType === "transfer" ? "điều chuyển" : "xuất"}
+                  </h2>
+                  <p className="mt-1 text-[13px] text-muted-foreground">Tìm theo ISBN-13, SKU hoặc tên sách, rồi thêm vào yêu cầu.</p>
+
+                  <div className="mt-4 flex flex-col gap-2 @xl/page:flex-row">
+                    <div className="relative min-w-0 flex-1">
+                      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                      <Input
+                        value={variantQuery}
+                        onChange={(event) => setVariantQuery(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void handleSearchVariant();
+                          }
+                        }}
+                        aria-label="Tìm sách để thêm"
+                        placeholder="ISBN-13, SKU hoặc tên sách"
+                        className="rounded-full pl-9"
+                      />
+                    </div>
+                    <Button type="button" onClick={() => void handleSearchVariant()} disabled={searchingVariant} loading={searchingVariant} className="shrink-0">
+                      Tìm sách
+                    </Button>
+                  </div>
+
+                  {variantResults.length > 0 && (
+                    <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border" aria-label="Kết quả tìm sách">
+                      {variantResults.map((variant) => {
+                        const inDraft = draftLines.find((line) => line.isbn13 === String(variant.isbn13 || "").trim());
+                        return (
+                          <li key={variant.variant_id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                            <div className="min-w-0">
+                              <p className="truncate text-[13.5px] font-semibold text-foreground" title={variant.title}>{variant.title}</p>
+                              <p className="truncate text-[12px] text-muted-foreground">
+                                <span className="font-mono">{variant.isbn13 || "Không có ISBN"}</span>
+                                {variant.sku ? <span className="ml-2">SKU {variant.sku}</span> : null}
+                                {inDraft ? <span className="ml-2 text-primary">Đã có {inDraft.quantity} trong yêu cầu</span> : null}
+                              </p>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={() => handleAddLine(variant)} className="shrink-0">
+                              <Plus className="h-3.5 w-3.5" /> Thêm
+                            </Button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  <div className="mt-4">
+                    {draftLines.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-border px-5 py-8 text-center">
+                        <p className="text-[14px] font-semibold">Chưa có sách nào trong yêu cầu</p>
+                        <p className="mt-1 text-[13px] text-muted-foreground">Tìm một cuốn ở trên rồi bấm "Thêm".</p>
+                      </div>
+                    ) : (
+                      <table className="w-full table-fixed">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th scope="col" className="py-2 pr-3 text-left text-[12px] font-medium text-muted-foreground">Sách</th>
+                            <th scope="col" className="w-[112px] px-3 py-2 text-left text-[12px] font-medium text-muted-foreground">Số lượng</th>
+                            <th scope="col" className="w-12 py-2"><span className="sr-only">Xóa</span></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {draftLines.map((line) => (
+                            <tr key={line.isbn13} className="border-b border-border last:border-0">
+                              <td className="py-2.5 pr-3">
+                                <p className="truncate text-[13.5px] font-semibold text-foreground" title={line.title}>{line.title}</p>
+                                <p className="truncate text-[12px] text-muted-foreground">
+                                  <span className="font-mono">{line.isbn13}</span>
+                                  {line.sku ? <span className="ml-2">SKU {line.sku}</span> : null}
+                                </p>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={line.quantity}
+                                  onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
+                                  aria-label={`Số lượng cho ${line.title}`}
+                                  className="tabular-nums"
+                                />
+                              </td>
+                              <td className="py-2.5 text-right">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm-icon"
+                                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  onClick={() => handleRemoveLine(line.isbn13)}
+                                  aria-label={`Bỏ ${line.title} khỏi yêu cầu`}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </section>
+              </div>
+
+              {/* What will be sent, kept in view while the form scrolls. */}
+              <aside aria-label="Tóm tắt yêu cầu" className="rounded-2xl border border-border bg-card p-5 @4xl/page:sticky @4xl/page:top-4">
+                <h2 className="font-serif text-[18px] font-semibold tracking-tight">Tóm tắt</h2>
+                <dl className="mt-3 space-y-2.5 text-[13px]">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Loại</dt>
+                    <dd className="text-right font-medium">{requestType === "transfer" ? "Điều chuyển kho" : "Xuất kho"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Từ kho</dt>
+                    <dd className="text-right font-medium">{sourceWarehouse ? sourceWarehouse.code : "Chưa chọn"}</dd>
+                  </div>
+                  {requestType === "transfer" ? (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Đến kho</dt>
+                      <dd className="text-right font-medium">{targetWarehouse ? targetWarehouse.code : "Chưa chọn"}</dd>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-muted-foreground">Lý do</dt>
+                        <dd className="text-right font-medium">{referenceLabel}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-muted-foreground">Mã tham chiếu</dt>
+                        <dd className="flex items-center gap-1.5 text-right font-mono">
+                          {loadingReferenceCode && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" aria-hidden="true" />}
+                          {externalReference || (loadingReferenceCode ? "Đang tạo" : "Tự động")}
+                        </dd>
+                      </div>
+                    </>
+                  )}
+                  {canApprove && warehouseStaff.length > 0 && (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Người lấy hàng</dt>
+                      <dd className="text-right font-medium">{pickerName || "Giao sau"}</dd>
+                    </div>
+                  )}
+                </dl>
+                <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4">
+                  <div>
+                    <dt className="text-[12px] text-muted-foreground">Số dòng</dt>
+                    <dd className="mt-0.5 font-serif text-[24px] font-semibold leading-none tabular-nums">{draftLines.length}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[12px] text-muted-foreground">Số cuốn</dt>
+                    <dd className="mt-0.5 font-serif text-[24px] font-semibold leading-none tabular-nums">{draftTotalQuantity}</dd>
+                  </div>
+                </dl>
+                <div className="mt-5 space-y-2">
+                  <Button type="button" className="w-full" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
+                    <Send className="h-3.5 w-3.5" />
+                    Gửi yêu cầu
+                  </Button>
+                  <Button type="button" variant="ghost" className="w-full" onClick={resetForm}>
+                    Làm lại từ đầu
+                  </Button>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </FadeItem>
+      </PageWrapper>
+    );
+  }
+
   return (
     <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={ListOrdered}
-          title="Yêu cầu xuất kho & điều chuyển"
-          description="Tạo yêu cầu và duyệt trước khi chuyển sang lấy hàng"
-          iconBg="bg-gradient-to-br from-cyan-100 to-sky-50 border-cyan-200/50 dark:from-cyan-500/15 dark:to-sky-500/10 dark:border-cyan-500/20"
-          iconColor="text-cyan-700 dark:text-cyan-400"
-          actions={activeTab === "queue" ? (
-            <Button type="button" onClick={() => setActiveTab("compose")}>
+          title="Yêu cầu xuất kho và điều chuyển"
+          description={lede}
+          actions={
+            <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
               <Plus className="h-3.5 w-3.5" />
-              Tạo yêu cầu mới
+              Tạo yêu cầu
             </Button>
-          ) : null}
+          }
         />
       </FadeItem>
 
-      {requests.length > 0 && (
-        <FadeItem>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-            <span><span className="font-semibold text-foreground">{requestStats.total}</span> yêu cầu</span>
-            <span aria-hidden="true">·</span>
-            <span><span className="font-semibold text-foreground">{requestStats.approved}</span> đã duyệt</span>
-            <span aria-hidden="true">·</span>
-            <span><span className="font-semibold text-foreground">{requestStats.totalQuantity}</span> bản trong tất cả yêu cầu</span>
-            {requestStats.pending > 0 ? <StatusBadge label={`${requestStats.pending} chờ duyệt`} variant="warning" dot /> : null}
-            {requestStats.urgent > 0 ? <StatusBadge label={`${requestStats.urgent} khẩn cấp`} variant="danger" dot /> : null}
-          </p>
-        </FadeItem>
-      )}
-
       <FadeItem>
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as PageTab)}>
-          <TabsList className="w-full sm:w-fit">
-            <TabsTrigger value="queue">Danh sách & Duyệt</TabsTrigger>
-            <TabsTrigger value="compose">Tạo yêu cầu mới</TabsTrigger>
-          </TabsList>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[220px_minmax(0,1fr)]">
+            <nav aria-label="Lọc yêu cầu" className="hidden rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Trạng thái</p>
+              {STATUS_ITEMS.map((item) => (
+                <div key={item.value}>{railButton(statusFilter === item.value, () => setStatusFilter(item.value), item.label, statusCounts[item.value], item.attention)}</div>
+              ))}
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Loại yêu cầu</p>
+                {TYPE_ITEMS.map((item) => (
+                  <div key={item.value}>{railButton(typeFilter === item.value, () => setTypeFilter(item.value), item.label, typeCounts[item.value])}</div>
+                ))}
+              </div>
+            </nav>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl/page:hidden" role="group" aria-label="Lọc yêu cầu">
+              {STATUS_ITEMS.map((item) => <div key={item.value}>{chip(statusFilter === item.value, () => setStatusFilter(item.value), item.label, statusCounts[item.value], item.attention)}</div>)}
+              {TYPE_ITEMS.slice(1).map((item) => <div key={item.value}>{chip(typeFilter === item.value, () => setTypeFilter(typeFilter === item.value ? "all" : item.value), item.label, typeCounts[item.value])}</div>)}
+            </div>
 
-          <TabsContent value="queue" className="mt-4">
-            <SectionCard
-              title="Danh sách & Duyệt"
-              subtitle={listView === "my" ? "Các đơn bạn đã tạo theo kho nguồn." : "Hàng chờ duyệt (cần quyền phù hợp)."}
-              actions={canApprove ? (
-                <SegmentedControl
-                  options={[{ value: "my", label: "Đơn của tôi" }, { value: "approval", label: "Hàng chờ duyệt" }]}
-                  value={listView}
-                  onChange={(v) => setListView(v as "my" | "approval")}
-                  layoutId="order-requests-list-view"
-                  gradientClassName="from-cyan-600 to-sky-600"
-                />
-              ) : undefined}
-            >
-              <FilterBar
-                searchValue={search}
-                onSearchChange={setSearch}
-                searchPlaceholder="Tìm theo mã đơn hoặc mã kho..."
-                className="mb-4"
-                filters={(
-                  <>
-                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-                      <SelectTrigger className="w-[150px]" size="sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Mọi trạng thái</SelectItem>
-                        <SelectItem value="pending">Chờ duyệt</SelectItem>
-                        <SelectItem value="approved">Đã duyệt</SelectItem>
-                        <SelectItem value="rejected">Từ chối</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
-                      <SelectTrigger className="w-[150px]" size="sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Mọi loại</SelectItem>
-                        <SelectItem value="outbound">Xuất kho</SelectItem>
-                        <SelectItem value="transfer">Điều chuyển</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </>
+            <section aria-label="Danh sách yêu cầu" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-3 px-5 pb-1 pt-4">
+                <div className="min-w-0">
+                  <h2 className="font-serif text-[18px] font-semibold tracking-tight">{listView === "approval" ? "Hàng chờ duyệt" : "Yêu cầu của tôi"}</h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    {listView === "approval"
+                      ? "Yêu cầu từ mọi kho. Duyệt xong, yêu cầu chuyển sang bước lấy hàng."
+                      : `Yêu cầu bạn đã tạo tại kho ${sourceWarehouse?.code || "đang chọn"}.`}
+                  </p>
+                </div>
+                {canApprove && (
+                  <SegmentedControl
+                    options={[{ value: "approval", label: "Hàng chờ duyệt" }, { value: "my", label: "Của tôi" }]}
+                    value={listView}
+                    onChange={(v) => setListView(v as "my" | "approval")}
+                    layoutId="order-requests-list-view"
+                  />
                 )}
-              />
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Tìm mã yêu cầu hoặc mã kho" />
+              </div>
 
-              <div className="overflow-hidden rounded-xl border border-border">
-                <Table className="table-fixed">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      {[
-                        { label: "Yêu cầu", className: "" },
-                        { label: "Trạng thái", className: "hidden w-[190px] sm:table-cell" },
-                        { label: "Số lượng", className: "hidden w-[100px] md:table-cell" },
-                        { label: "Yêu cầu lúc", className: "hidden w-[150px] xl:table-cell" },
-                        { label: "Thao tác", className: "w-[150px] text-right" },
-                      ].map((head) => (
-                        <TableHead key={head.label} className={cn("px-4 text-[12px] text-muted-foreground", head.className)}>
-                          {head.label}
-                        </TableHead>
-                      ))}
+              <Table className="table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    {[
+                      { label: "Yêu cầu", className: "pl-5" },
+                      { label: "Trạng thái", className: "hidden w-[170px] @xl:table-cell" },
+                      { label: "Số cuốn", className: "hidden w-[88px] @2xl:table-cell" },
+                      { label: "Gửi lúc", className: "hidden w-[150px] @4xl:table-cell" },
+                      { label: "Thao tác", className: "w-[168px] pr-5 text-right" },
+                    ].map((head) => (
+                      <TableHead key={head.label} className={cn("px-3 text-[12px] font-medium text-muted-foreground", head.className)}>
+                        {head.label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedRequests.length === 0 ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={5} className="whitespace-normal py-12 text-center">
+                        <EmptyState
+                          variant={requests.length === 0 && listView === "approval" ? "inbox" : "no-data"}
+                          title={requests.length === 0 ? (listView === "approval" ? "Không có yêu cầu nào chờ duyệt" : "Bạn chưa tạo yêu cầu nào") : "Không tìm thấy yêu cầu phù hợp"}
+                          description={
+                            requests.length === 0
+                              ? (listView === "approval" ? "Yêu cầu mới từ các kho sẽ xuất hiện ở đây." : "Tạo yêu cầu đầu tiên để xuất hoặc điều chuyển sách.")
+                              : "Thử đổi trạng thái, loại hoặc từ khóa tìm kiếm."
+                          }
+                          action={requests.length === 0 && listView === "my" ? (
+                            <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
+                              <Plus className="h-3.5 w-3.5" />
+                              Tạo yêu cầu
+                            </Button>
+                          ) : undefined}
+                          className="py-0"
+                        />
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pagedRequests.length === 0 ? (
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={5} className="whitespace-normal py-10 text-center">
-                          <EmptyState
-                            variant={requests.length === 0 && listView === "approval" ? "inbox" : "no-data"}
-                            title={requests.length === 0 ? "Chưa có yêu cầu nào" : "Không tìm thấy yêu cầu phù hợp"}
-                            description={
-                              requests.length === 0
-                                ? (listView === "approval" ? "Không có đơn nào đang chờ duyệt." : "Tạo yêu cầu đầu tiên của bạn.")
-                                : "Thử điều chỉnh từ khóa tìm kiếm hoặc bộ lọc."
-                            }
-                            action={requests.length === 0 && listView === "my" ? (
-                              <Button type="button" size="sm" onClick={() => setActiveTab("compose")}>
-                                <Plus className="h-3.5 w-3.5" />
-                                Tạo yêu cầu mới
+                  ) : pagedRequests.map((row) => {
+                    const priority = requestAgingPriority(row.requested_at);
+                    const meta = orderTypeMeta(row.order_type);
+                    const canTakeAction = listView === "approval"
+                      && ((row.task_type === "outbound" && row.status === "PENDING_APPROVAL")
+                        || (row.task_type === "transfer" && row.status === "REQUESTED"));
+                    const pending = isPendingStatus(row.status);
+
+                    return (
+                      <TableRow key={`${row.task_type}-${row.task_id}`}>
+                        <TableCell className="py-3.5 pl-5 pr-3 align-top">
+                          <p className="truncate font-mono text-[13px] font-semibold text-foreground" title={row.order_number}>{row.order_number}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
+                            {meta.label}{" "}
+                            {row.source_warehouse_code ? `từ ${row.source_warehouse_code}` : ""}
+                            {row.target_warehouse_code ? ` đến ${row.target_warehouse_code}` : ""}
+                            {`, ${row.line_count} dòng`}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-1.5 @xl:hidden">
+                            <StatusBadge label={requestStatusLabel(row.status)} variant={statusBadgeVariant(row.status)} dot />
+                            {pending && <PriorityBadge priority={priority} />}
+                            <span className="text-[12px] tabular-nums text-muted-foreground">{row.total_quantity} cuốn</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 align-top @xl:table-cell">
+                          <div className="flex flex-col items-start gap-1.5">
+                            <StatusBadge label={requestStatusLabel(row.status)} variant={statusBadgeVariant(row.status)} dot />
+                            {pending && <PriorityBadge priority={priority} />}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 align-top text-[13px] font-semibold tabular-nums @2xl:table-cell">{row.total_quantity}</TableCell>
+                        <TableCell className="hidden px-3 py-3.5 align-top text-[13px] tabular-nums text-muted-foreground @4xl:table-cell">{formatDate(row.requested_at)}</TableCell>
+                        <TableCell className="py-3.5 pl-3 pr-5 align-top text-right">
+                          {canTakeAction ? (
+                            <div className="inline-flex flex-wrap items-center justify-end gap-1.5">
+                              <Button type="button" size="sm" onClick={() => openActionDialog(row, "approve")}>
+                                <Check className="h-3.5 w-3.5" />
+                                Duyệt
                               </Button>
-                            ) : undefined}
-                            className="py-0"
-                          />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => openActionDialog(row, "reject")}
+                              >
+                                Từ chối
+                              </Button>
+                            </div>
+                          ) : null}
                         </TableCell>
                       </TableRow>
-                    ) : pagedRequests.map((row) => {
-                      const priority = requestAgingPriority(row.requested_at);
-                      const meta = orderTypeMeta(row.order_type);
-                      const canTakeAction = listView === "approval"
-                        && ((row.task_type === "outbound" && row.status === "PENDING_APPROVAL")
-                          || (row.task_type === "transfer" && row.status === "REQUESTED"));
-                      const route = [row.source_warehouse_code, row.target_warehouse_code].filter(Boolean).join(" → ");
+                    );
+                  })}
+                </TableBody>
+              </Table>
 
-                      return (
-                        <TableRow
-                          key={`${row.task_type}-${row.task_id}`}
-                          className={cn("hover:bg-muted/30", priorityAccentClass(priority))}
-                        >
-                          <TableCell className="px-4 py-3 align-top">
-                            <p className="truncate text-[13px] font-semibold text-foreground" title={row.order_number}>{row.order_number}</p>
-                            <p className="truncate text-[12px] text-muted-foreground" title={route || undefined}>
-                              {[meta.label, route].filter(Boolean).join(" · ")} · {row.line_count} dòng
-                            </p>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 sm:hidden">
-                              <StatusBadge label={requestStatusLabel(row.status)} variant={statusBadgeVariant(row.status)} dot />
-                              <PriorityBadge priority={priority} />
-                            </div>
-                            <p className="mt-1 text-[12px] text-muted-foreground md:hidden">SL {row.total_quantity}</p>
-                          </TableCell>
-                          <TableCell className="hidden px-4 py-3 align-top sm:table-cell">
-                            <div className="flex flex-col items-start gap-1.5">
-                              <StatusBadge label={requestStatusLabel(row.status)} variant={statusBadgeVariant(row.status)} dot />
-                              <PriorityBadge priority={priority} />
-                            </div>
-                          </TableCell>
-                          <TableCell className="hidden px-4 py-3 align-top text-[13px] font-semibold tabular-nums md:table-cell">{row.total_quantity}</TableCell>
-                          <TableCell className="hidden px-4 py-3 align-top text-[12px] text-muted-foreground xl:table-cell">{formatDate(row.requested_at)}</TableCell>
-                          <TableCell className="px-4 py-3 align-top text-right">
-                            {canTakeAction ? (
-                              <div className="inline-flex items-center justify-end gap-1.5">
-                                <Button
-                                  type="button"
-                                  variant="success-outline"
-                                  size="sm"
-                                  onClick={() => openActionDialog(row, "approve")}
-                                >
-                                  <Check className="h-3 w-3" />
-                                  Duyệt
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="danger-outline"
-                                  size="sm"
-                                  onClick={() => openActionDialog(row, "reject")}
-                                >
-                                  Từ chối
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {filteredRequests.length > 0 && (
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[12px] text-muted-foreground">
-                    Hiển thị <span className="font-medium text-foreground">{pagedRequests.length}</span> / {filteredRequests.length} yêu cầu
-                  </p>
-                  {totalPages > 1 && (
-                    <Pagination className="mx-0 w-auto justify-end">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.max(1, current - 1));
-                            }}
-                            className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                        {getPaginationRange(page, totalPages).map((item) => (
-                          <PaginationItem key={item}>
-                            {typeof item === "number" ? (
-                              <PaginationLink
-                                isActive={item === page}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  setPage(item);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                {item}
-                              </PaginationLink>
-                            ) : (
-                              <PaginationEllipsis />
-                            )}
-                          </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.min(totalPages, current + 1));
-                            }}
-                            className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  )}
-                </div>
-              )}
-            </SectionCard>
-          </TabsContent>
-
-          <TabsContent value="compose" className="mt-4 space-y-6">
-            <SectionCard
-              title="Thông tin yêu cầu"
-              subtitle="Chọn loại, kho nguồn và ghi chú trước khi thêm dòng hàng."
-              icon={Send}
-            >
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="md:col-span-3">
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Loại yêu cầu</p>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <SegmentedControl
-                      options={[
-                        { value: "outbound", label: "Xuất kho" },
-                        { value: "transfer", label: "Điều chuyển kho" },
-                      ]}
-                      value={requestType}
-                      onChange={(v) => setRequestType(v as RequestType)}
-                      layoutId="order-request-type"
-                      gradientClassName={requestType === "transfer" ? "from-violet-600 to-purple-600" : "from-cyan-600 to-sky-600"}
-                    />
-                    <div
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                        requestType === "transfer"
-                          ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400"
-                          : "bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400"
-                      }`}
-                    >
-                      {requestType === "transfer" ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Truck className="w-3.5 h-3.5" />}
-                      {requestType === "transfer" ? "Chuyển hàng giữa 2 kho" : "Xuất hàng ra khỏi kho"}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Kho nguồn</p>
-                  <Select value={selectedWarehouseId} onValueChange={setSelectedWarehouseId}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Chọn kho nguồn" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map((warehouse) => (
-                        <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {requestType === "transfer" ? (
-                  <div>
-                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Kho đích</p>
-                    <Select value={targetWarehouseId} onValueChange={setTargetWarehouseId}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Chọn kho đích" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {filteredWarehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Lý do xuất</p>
-                      <Select value={referenceType} onValueChange={(v) => setReferenceType(v as OutboundReferenceType)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {OUTBOUND_REFERENCE_GROUPS.map((group) => (
-                            <SelectGroup key={group.label}>
-                              <SelectLabel>{group.label}</SelectLabel>
-                              {group.options.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Mã tham chiếu</p>
-                      <div className="relative">
-                        <Input
-                          value={externalReference}
-                          readOnly
-                          placeholder={loadingReferenceCode ? "Đang sinh mã..." : "Tự động tạo"}
-                          className="bg-muted/50 pr-8 text-muted-foreground"
+              <div className="flex flex-col gap-3 border-t border-border px-5 py-3 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span aria-live="polite">
+                  {filteredRequests.length > 0 ? `Hiển thị ${pagedRequests.length} / ${filteredRequests.length} yêu cầu` : "Không có yêu cầu"}
+                </span>
+                {totalPages > 1 && (
+                  <Pagination className="mx-0 w-auto justify-end">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setPage((current) => Math.max(1, current - 1));
+                          }}
+                          className={cn("cursor-pointer", page === 1 && "pointer-events-none opacity-50")}
                         />
-                        {loadingReferenceCode && (
-                          <Loader2 className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {canApprove && warehouseStaff.length > 0 && (
-                  <div className="md:col-span-3">
-                    <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Giao nhân viên phụ trách (tùy chọn)</p>
-                    <Select value={assignedPickerUserId || "none"} onValueChange={(v) => setAssignedPickerUserId(v === "none" ? "" : v)}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Chưa giao (giao sau ở bước Lấy hàng)</SelectItem>
-                        {warehouseStaff.map((staff) => (
-                          <SelectItem key={staff.id} value={staff.id}>
-                            {staff.full_name} ({staff.username})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="md:col-span-3">
-                  <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Ghi chú</p>
-                  <Textarea
-                    value={requestNote}
-                    onChange={(event) => setRequestNote(event.target.value)}
-                    rows={2}
-                    className="resize-y"
-                    placeholder="Lý do tạo yêu cầu…"
-                  />
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard
-              title="Thêm sách"
-              subtitle="Tìm theo ISBN13, SKU hoặc tên sách rồi thêm vào danh sách bên dưới."
-              icon={Plus}
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={variantQuery}
-                    onChange={(event) => setVariantQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleSearchVariant();
-                      }
-                    }}
-                    placeholder="Nhập ISBN13, SKU hoặc tên sách"
-                    className="pl-9"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => void handleSearchVariant()}
-                  disabled={searchingVariant}
-                  loading={searchingVariant}
-                  className="shrink-0 sm:w-auto"
-                >
-                  Tim
-                </Button>
-              </div>
-
-              {variantResults.length > 0 && (
-                <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
-                  {variantResults.map((variant, index) => (
-                    <motion.div
-                      key={variant.variant_id}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2, delay: Math.min(index * 0.03, 0.24) }}
-                      className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between hover:bg-muted/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
-                          <Book className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-[12px] font-semibold text-foreground">{variant.title}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            ISBN13: {variant.isbn13 || "-"} | SKU: {variant.sku || "-"}
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="info-outline"
-                        size="sm"
-                        onClick={() => handleAddLine(variant)}
-                        className="shrink-0"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Thêm
-                      </Button>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-5 overflow-hidden rounded-xl border border-border">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40">
-                      {["Sản phẩm", "Số lượng", "Thao tác"].map((head) => (
-                        <th
-                          key={head}
-                          className="px-4 py-3 text-left text-[12px] font-medium text-muted-foreground"
-                        >
-                          {head}
-                        </th>
+                      </PaginationItem>
+                      {getPaginationRange(page, totalPages).map((item) => (
+                        <PaginationItem key={item}>
+                          {typeof item === "number" ? (
+                            <PaginationLink
+                              isActive={item === page}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                setPage(item);
+                              }}
+                              className="cursor-pointer"
+                            >
+                              {item}
+                            </PaginationLink>
+                          ) : (
+                            <PaginationEllipsis />
+                          )}
+                        </PaginationItem>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draftLines.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="py-10 text-center">
-                          <EmptyState
-                            variant="no-data"
-                            title="Chưa có sách nào"
-                            description="Tìm sản phẩm và nhấn Thêm để bắt đầu."
-                            className="py-0"
-                          />
-                        </td>
-                      </tr>
-                    ) : draftLines.map((line) => (
-                      <tr key={line.isbn13} className="border-b border-border last:border-0 hover:bg-muted/30">
-                        <td className="px-4 py-3 text-[12px]">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center shrink-0">
-                              <Book className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-foreground">{line.title}</p>
-                              <p className="text-[11px] text-muted-foreground">
-                                ISBN13: {line.isbn13} | SKU: {line.sku || "-"}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-[12px]">
-                          <Input
-                            type="number"
-                            min={1}
-                            value={line.quantity}
-                            onChange={(event) => handleQuantityChange(line.isbn13, Number(event.target.value))}
-                            aria-label={`Số lượng cho ${line.title}`}
-                            className="max-w-[120px]"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm-icon"
-                            className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:text-rose-400 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"
-                            onClick={() => handleRemoveLine(line.isbn13)}
-                            aria-label="Xóa dòng"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={(event) => {
+                            event.preventDefault();
+                            setPage((current) => Math.min(totalPages, current + 1));
+                          }}
+                          className={cn("cursor-pointer", page === totalPages && "pointer-events-none opacity-50")}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                )}
               </div>
-
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
-                <div className="text-[12px] text-muted-foreground">
-                  {draftLines.length > 0 ? (
-                    <span>
-                      <span className="font-semibold text-foreground">{draftLines.length}</span> dòng ·{" "}
-                      <span className="font-semibold text-foreground">{draftTotalQuantity}</span> cuốn
-                    </span>
-                  ) : (
-                    <span>Chưa có dòng nào</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Reset
-                  </Button>
-                  <Button type="button" onClick={() => void handleSubmitRequest()} disabled={submitting} loading={submitting}>
-                    <Send className="h-3.5 w-3.5" />
-                    Tạo request
-                  </Button>
-                </div>
-              </div>
-            </SectionCard>
-          </TabsContent>
-        </Tabs>
+            </section>
+          </div>
+        </div>
       </FadeItem>
 
       <AlertDialog open={!!pendingAction} onOpenChange={(open) => { if (!open) closeActionDialog(); }}>
-        <AlertDialogContent className="max-w-[420px]">
+        <AlertDialogContent className="max-w-[440px]">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {pendingAction?.mode === "approve" ? "Duyệt yêu cầu?" : "Từ chối yêu cầu?"}
             </AlertDialogTitle>
             {pendingAction && (
               <AlertDialogDescription>
-                Request <span className="font-medium text-foreground">{pendingAction.orderNumber}</span> · {pendingAction.totalQuantity} cuốn.{" "}
+                Yêu cầu <span className="font-mono font-medium text-foreground">{pendingAction.orderNumber}</span>, {pendingAction.totalQuantity} cuốn.{" "}
                 {pendingAction.mode === "approve"
                   ? "Yêu cầu sẽ chuyển sang bước Lấy hàng."
-                  : "Người tạo yêu cầu sẽ được thông báo về việc từ chối."}
+                  : "Người tạo yêu cầu sẽ được báo về việc từ chối."}
               </AlertDialogDescription>
             )}
           </AlertDialogHeader>
 
           {pendingAction?.mode === "reject" && (
-            <div>
-              <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">Lý do từ chối (tùy chọn)</p>
+            <div className="space-y-1.5">
+              <label htmlFor="reject-reason" className="text-[13px] font-medium">Lý do từ chối <span className="font-normal text-muted-foreground">(không bắt buộc)</span></label>
               <Textarea
+                id="reject-reason"
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
                 rows={2}
-                placeholder="Cho người tạo biết vì sao yêu cầu bị từ chối…"
+                placeholder="Cho người tạo biết vì sao yêu cầu bị từ chối"
               />
             </div>
           )}
@@ -1150,7 +1182,7 @@ export function OrderRequestsPage() {
             >
               {actionSubmitting ? (
                 <span className="flex items-center gap-1.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                   Đang xử lý...
                 </span>
               ) : pendingAction?.mode === "approve" ? "Duyệt" : "Từ chối"}
