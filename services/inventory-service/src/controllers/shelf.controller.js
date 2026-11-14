@@ -1,4 +1,10 @@
 const { PrismaClient } = require('@prisma/client');
+const {
+  scopedWarehouseWhere,
+  requireWarehouseReadAccess,
+  WarehouseScopeUnavailableError,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
 
 const prisma = new PrismaClient();
 
@@ -48,10 +54,11 @@ async function getShelfOverview(req, res) {
   const query = String(req.query.query || '').trim();
 
   try {
+    const warehouseScope = await scopedWarehouseWhere(req.user, 'warehouse_id', warehouseId);
     const shelves = await prisma.locations.findMany({
       where: {
         location_type: 'SHELF',
-        ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+        ...warehouseScope,
         ...(query
           ? {
               OR: [
@@ -150,6 +157,9 @@ async function getShelfOverview(req, res) {
 
     return res.json({ shelves: rows });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while fetching shelf overview:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -189,6 +199,8 @@ async function getShelfDetail(req, res) {
     if (!shelf) {
       return res.status(404).json({ message: 'Không tìm thấy kệ' });
     }
+
+    if (!(await requireWarehouseReadAccess(req, res, shelf.warehouse_id))) return;
 
     const compartments = await prisma.locations.findMany({
       where: {
