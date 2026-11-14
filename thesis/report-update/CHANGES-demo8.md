@@ -2,7 +2,7 @@
 
 Yêu cầu: sơ đồ tuần tự vẽ trắng đen như các hình tuần tự PlantUML của demo6.
 
-- Tệp: `NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo8.docx` (gốc repo), PDF `thesis/report-update/…_demo8.pdf` (310 trang).
+- Tệp: `thesis/drafts/NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo8.docx`, PDF `thesis/report-update/…_demo8.pdf` (310 trang).
 - Dựng lại: `python thesis/report-update/tools/build8.py <demo7.docx> <demo8.docx> thesis/report-update/pages8.json`.
 
 ## Thay đổi

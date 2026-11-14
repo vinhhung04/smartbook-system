@@ -4,7 +4,7 @@
 
 | # | Sản phẩm | Đường dẫn |
 |---|---|---|
-| 1 | DOCX đã cập nhật (277 trang khi xuất PDF) | `NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo5.docx` (thư mục gốc repo) |
+| 1 | DOCX đã cập nhật (277 trang khi xuất PDF) | `thesis/drafts/NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo5.docx` |
 | 2 | PDF xuất bằng Microsoft Word | `thesis/report-update/NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo5.pdf` |
 | 3 | Bảng audit trước/sau | `thesis/report-update/AUDIT.md` |
 | 4 | Bản sao lưu nguyên trạng demo4 | `thesis/report-update/backup/` |

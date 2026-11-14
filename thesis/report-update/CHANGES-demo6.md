@@ -4,7 +4,7 @@
 
 | Sản phẩm | Đường dẫn |
 |---|---|
-| DOCX | `NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo6.docx` (thư mục gốc repo) |
+| DOCX | `thesis/drafts/NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo6.docx` |
 | PDF xuất bằng Microsoft Word (292 trang) | `thesis/report-update/NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo6.pdf` |
 | Công cụ dựng lại | `thesis/report-update/tools/build6.py` (dùng `sbdoc.py`, `post.py`, `topdf.py`, `pages.py` có sẵn) |
 

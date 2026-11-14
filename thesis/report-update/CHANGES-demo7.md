@@ -2,7 +2,7 @@
 
 Mục tiêu: **đồng bộ cách vẽ mọi sơ đồ trong báo cáo**. demo6 còn 46 hình ở dạng ảnh PlantUML/Mermaid (nền xám, font Times, đường chéo); demo7 thay toàn bộ bằng bản vẽ lại theo profile Diagram Design `smartbook` (màu navy/slate, Arial + Consolas, lưới 4px, đường vuông góc bo góc, cầu vượt tại điểm giao). Văn bản báo cáo và **số hình giữ nguyên**.
 
-- Tệp: `NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo7.docx` (gốc repo), PDF: `thesis/report-update/…_demo7.pdf` (310 trang; demo6: 292 trang).
+- Tệp: `thesis/drafts/NHD82_KLTN_2026_HeThongQuanLyKhoSachThongMinhTichHopAI_demo7.docx`, PDF: `thesis/report-update/…_demo7.pdf` (310 trang; demo6: 292 trang).
 - Dựng lại: `python thesis/report-update/tools/build7.py <demo6.docx> <demo7.docx> thesis/report-update/pages7.json` (hai lượt: lượt 1 lấy số trang qua `topdf.py` + `pages.py`, lượt 2 ghi số trang vào mục lục và danh mục hình).
 - Hình nguồn: `docs/diagrams/designed/` → `docs/diagrams/exports/{svg,png}/`; bảng ánh xạ và đối chiếu: `docs/diagrams/designed/README.md`, mục "Đợt 2".
 
