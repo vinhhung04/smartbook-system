@@ -96,7 +96,7 @@ export function SupplierOrderResponsePanel({ order, onChanged }: { order: Suppli
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-[13px]">
               <thead className="bg-slate-50 text-left text-[11px] uppercase text-slate-500">
-                <tr><th className="px-3 py-2">Sách</th><th className="px-3 py-2 text-right">SL đặt</th><th className="px-3 py-2">SL có thể giao</th><th className="px-3 py-2 text-right">Giá đặt</th><th className="px-3 py-2">Giá bán xác nhận</th></tr>
+                <tr><th className="px-3 py-2">Sách</th><th className="px-3 py-2 text-right">Số lượng đặt</th><th className="px-3 py-2">Số lượng có thể giao</th><th className="px-3 py-2 text-right">Giá đặt</th><th className="px-3 py-2">Giá bán xác nhận</th></tr>
               </thead>
               <tbody>
                 {po.items.map((item) => (
@@ -144,8 +144,8 @@ export function SupplierOrderResponsePanel({ order, onChanged }: { order: Suppli
 }
 
 const INVOICE_TYPES: { value: ProcurementDocumentType; label: string; hint: string }[] = [
-  { value: "VAT_INVOICE", label: "Hóa đơn GTGT điện tử", hint: "Bắt buộc ký hiệu, số, ngày lập và file PDF/XML của hóa đơn." },
-  { value: "SALES_INVOICE", label: "Hóa đơn bán hàng", hint: "Hóa đơn bán hàng (không phải hóa đơn GTGT)." },
+  { value: "VAT_INVOICE", label: "Hóa đơn giá trị gia tăng điện tử", hint: "Bắt buộc ký hiệu, số, ngày lập và file PDF/XML của hóa đơn." },
+  { value: "SALES_INVOICE", label: "Hóa đơn bán hàng", hint: "Hóa đơn bán hàng (không phải hóa đơn giá trị gia tăng)." },
   { value: "PROFORMA_INVOICE", label: "Hóa đơn chiếu lệ / báo giá", hint: "Chỉ để tham khảo trước khi phát hành hóa đơn chính thức; không tính vào đối soát." },
 ];
 
@@ -170,7 +170,7 @@ function SupplierInvoiceForm({ order, documents, onSaved }: { order: SupplierPor
 
   const submit = async (issue: boolean) => {
     if (!form.external_number.trim()) return toast.error("Nhập số hóa đơn");
-    if (form.document_type === "VAT_INVOICE" && !form.invoice_series.trim()) return toast.error("Hóa đơn GTGT cần ký hiệu hóa đơn");
+    if (form.document_type === "VAT_INVOICE" && !form.invoice_series.trim()) return toast.error("Hóa đơn giá trị gia tăng cần ký hiệu hóa đơn");
     if (issue && !file) return toast.error("Đính kèm file hóa đơn (PDF/XML) trước khi phát hành");
     const lines = po.items.filter((item) => (qty[item.id] || 0) > 0).map((item) => ({ purchase_order_item_id: item.id, quantity: qty[item.id], unit_price: price[item.id] || 0 }));
     if (lines.length === 0) return toast.error("Hóa đơn cần ít nhất một dòng");
@@ -219,9 +219,9 @@ function SupplierInvoiceForm({ order, documents, onSaved }: { order: SupplierPor
         {field("external_number", "Số hóa đơn")}
         {field("issue_date", "Ngày lập", { type: "date" })}
         {field("tax_rate", "Thuế suất (%)", { inputMode: "decimal" })}
-        {field("lookup_code", "Mã tra cứu HĐĐT")}
-        {field("seller_tax_code", "MST bên bán")}
-        {field("buyer_tax_code", "MST bên mua")}
+        {field("lookup_code", "Mã tra cứu hóa đơn điện tử")}
+        {field("seller_tax_code", "Mã số thuế bên bán")}
+        {field("buyer_tax_code", "Mã số thuế bên mua")}
         {field("payment_due_date", "Hạn thanh toán", { type: "date" })}
         {replaceable.length ? (
           <div className="space-y-1.5">
@@ -237,7 +237,7 @@ function SupplierInvoiceForm({ order, documents, onSaved }: { order: SupplierPor
       <div className="overflow-x-auto">
         <table className="w-full min-w-[620px] text-[13px]">
           <thead className="bg-slate-50 text-left text-[11px] uppercase text-slate-500">
-            <tr><th className="px-3 py-2">Sách</th><th className="px-3 py-2 text-right">SL đặt</th><th className="px-3 py-2">SL trên hóa đơn</th><th className="px-3 py-2">Đơn giá</th><th className="px-3 py-2 text-right">Thành tiền</th></tr>
+            <tr><th className="px-3 py-2">Sách</th><th className="px-3 py-2 text-right">Số lượng đặt</th><th className="px-3 py-2">Số lượng trên hóa đơn</th><th className="px-3 py-2">Đơn giá</th><th className="px-3 py-2 text-right">Thành tiền</th></tr>
           </thead>
           <tbody>
             {po.items.map((item) => (

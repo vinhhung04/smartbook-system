@@ -153,7 +153,7 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
     try {
       setSaving(true);
       await procurementDocumentService.issueReceiptConfirmation(grId);
-      toast.success("Đã phát hành xác nhận kết quả nhận hàng — chia sẻ để NCC thấy");
+      toast.success("Đã phát hành xác nhận kết quả nhận hàng — chia sẻ để nhà cung cấp thấy");
       await load();
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không phát hành được xác nhận"));
@@ -192,7 +192,7 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
     try {
       setSaving(true);
       await procurementDocumentService.reviewSupplierResponse(po.id, pendingResponse.id, { decision: review.decision, note: review.note.trim() || undefined });
-      toast.success(review.decision === "APPROVE" ? "Đã duyệt thay đổi của NCC" : "Đã từ chối thay đổi của NCC");
+      toast.success(review.decision === "APPROVE" ? "Đã duyệt thay đổi của nhà cung cấp" : "Đã từ chối thay đổi của nhà cung cấp");
       setReview(null);
       await refreshAll();
     } catch (error) {
@@ -213,11 +213,11 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
     <div id="po-procurement-documents" className="scroll-mt-20 space-y-5">
       {pendingResponse ? (
         <SectionCard title="Phản hồi của nhà cung cấp chờ duyệt" subtitle={`Gửi lúc ${formatDateTime(pendingResponse.created_at)} · ${supplierResponseMeta(pendingResponse.decision)?.label}`}>
-          {pendingResponse.reason ? <p className="mb-3 text-[13px]"><span className="text-muted-foreground">Lý do NCC: </span>{pendingResponse.reason}</p> : null}
+          {pendingResponse.reason ? <p className="mb-3 text-[13px]"><span className="text-muted-foreground">Lý do nhà cung cấp: </span>{pendingResponse.reason}</p> : null}
           {pendingResponse.proposed_delivery_date ? <p className="mb-3 text-[13px]"><span className="text-muted-foreground">Đề xuất ngày giao: </span>{formatDay(pendingResponse.proposed_delivery_date)}</p> : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-[13px]">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-1.5 pr-3">Sách</th><th className="py-1.5 pr-3 text-right">SL đặt → NCC xác nhận</th><th className="py-1.5 text-right">Đơn giá PO → NCC</th></tr></thead>
+              <thead><tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-1.5 pr-3">Sách</th><th className="py-1.5 pr-3 text-right">Số lượng đặt → nhà cung cấp xác nhận</th><th className="py-1.5 text-right">Đơn giá PO → nhà cung cấp</th></tr></thead>
               <tbody>
                 {pendingResponse.lines.map((line) => {
                   const qtyChanged = line.confirmed_qty !== line.ordered_qty;
@@ -233,7 +233,7 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-[12px] text-muted-foreground">Đơn gốc chưa bị thay đổi. Duyệt sẽ áp dụng số lượng/giá NCC xác nhận (lịch sử được lưu); từ chối giữ nguyên đơn và NCC phải phản hồi lại.</p>
+          <p className="mt-3 text-[12px] text-muted-foreground">Đơn gốc chưa bị thay đổi. Duyệt sẽ áp dụng số lượng/giá nhà cung cấp xác nhận (lịch sử được lưu); từ chối giữ nguyên đơn và nhà cung cấp phải phản hồi lại.</p>
           {canApprove ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => setReview({ decision: "REJECT", note: "" })} disabled={saving}><XCircle className="h-3.5 w-3.5" />Không chấp nhận</Button>
@@ -317,12 +317,12 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
                 )}
                 {form.document_type === "PAYMENT_EVIDENCE" || form.document_type === "OTHER" ? (
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="pdc-note" className="text-[12px]">Ghi chú (NCC xem được)</Label>
+                    <Label htmlFor="pdc-note" className="text-[12px]">Ghi chú (nhà cung cấp xem được)</Label>
                     <Textarea id="pdc-note" rows={2} value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} />
                   </div>
                 ) : null}
                 <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-                  <Label htmlFor="pdc-internal" className="text-[12px]">Ghi chú nội bộ (NCC không thấy)</Label>
+                  <Label htmlFor="pdc-internal" className="text-[12px]">Ghi chú nội bộ (nhà cung cấp không thấy)</Label>
                   <Input id="pdc-internal" value={form.internal_note} onChange={(event) => setForm((current) => ({ ...current, internal_note: event.target.value }))} className="h-9 text-[13px]" />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
@@ -353,7 +353,7 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
                 cancel: procurementDocumentService.cancel,
                 share: procurementDocumentService.share,
               }}
-              emptyDescription="Hóa đơn và phiếu giao do NCC phát hành, biên bản do kho tải lên sẽ hiện ở đây."
+              emptyDescription="Hóa đơn và phiếu giao do nhà cung cấp phát hành, biên bản do kho tải lên sẽ hiện ở đây."
             />
           </TabsContent>
 
@@ -510,7 +510,7 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
         open={Boolean(review)}
         onOpenChange={(open) => { if (!open) setReview(null); }}
         title={review?.decision === "APPROVE" ? "Duyệt thay đổi của nhà cung cấp" : "Không chấp nhận thay đổi"}
-        description={review?.decision === "APPROVE" ? "Số lượng/giá NCC xác nhận sẽ thay cho đơn gốc; giá trị cũ vẫn lưu trong lịch sử." : "Đơn giữ nguyên; NCC sẽ thấy lý do và cần phản hồi lại."}
+        description={review?.decision === "APPROVE" ? "Số lượng/giá nhà cung cấp xác nhận sẽ thay cho đơn gốc; giá trị cũ vẫn lưu trong lịch sử." : "Đơn giữ nguyên; nhà cung cấp sẽ thấy lý do và cần phản hồi lại."}
         confirmLabel={review?.decision === "APPROVE" ? "Duyệt" : "Không chấp nhận"}
         variant={review?.decision === "APPROVE" ? "default" : "destructive"}
         loading={saving}

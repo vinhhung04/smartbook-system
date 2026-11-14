@@ -138,7 +138,7 @@ export function GoodsReceiptProcurementPanel({ receiptId }: { receiptId: string 
       </div>
       {isDraft ? (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-5 py-3 text-[12px] text-muted-foreground">
-          <span>Hàng giao thừa so với phiếu giao phải ghi vào cột “Từ chối” (trả lại NCC).</span>
+          <span>Hàng giao thừa so với phiếu giao phải ghi vào cột “Từ chối” (trả lại nhà cung cấp).</span>
           <Button size="sm" variant="outline" onClick={() => void saveCounts()} disabled={saving}><Save className="h-3.5 w-3.5" />Lưu hỏng / từ chối</Button>
         </div>
       ) : null}

@@ -10,7 +10,7 @@ const crypto = require("crypto");
 const { inspectUpload, writeVersionFile, removeOrphanFile } = require("./procurement-document-storage.service");
 
 const DOCUMENT_TYPES = {
-  VAT_INVOICE: { prefix: "INV", issuer: "SUPPLIER", invoice: true, label: "Hóa đơn GTGT điện tử" },
+  VAT_INVOICE: { prefix: "INV", issuer: "SUPPLIER", invoice: true, label: "Hóa đơn giá trị gia tăng điện tử" },
   SALES_INVOICE: { prefix: "INV", issuer: "SUPPLIER", invoice: true, label: "Hóa đơn bán hàng" },
   PROFORMA_INVOICE: { prefix: "PINV", issuer: "SUPPLIER", invoice: true, label: "Hóa đơn chiếu lệ / báo giá" },
   DELIVERY_NOTE: { prefix: "DN", issuer: "SUPPLIER", label: "Phiếu giao hàng" },
@@ -318,7 +318,7 @@ async function createDocument(prisma, { actor, po, body = {}, file = null }) {
   if (isInvoiceType(type)) {
     if (!data.external_number) throw new DocumentError("Thiếu số hóa đơn");
     if (!data.issue_date) throw new DocumentError("Thiếu ngày lập hóa đơn");
-    if (type === "VAT_INVOICE" && !data.invoice_series) throw new DocumentError("Hóa đơn GTGT phải có ký hiệu hóa đơn");
+    if (type === "VAT_INVOICE" && !data.invoice_series) throw new DocumentError("Hóa đơn giá trị gia tăng phải có ký hiệu hóa đơn");
     lines = normalizeInvoiceLines(parseJsonField(body.lines, []), po.purchase_order_items || []);
     Object.assign(data, computeInvoiceAmounts({ ...body, lines }));
     data.metadata = {

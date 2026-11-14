@@ -58,15 +58,15 @@ function partyLabel(party: Party) {
 }
 
 const METADATA_LABEL: Record<string, string> = {
-  lookup_code: "Mã tra cứu HĐĐT",
+  lookup_code: "Mã tra cứu hóa đơn điện tử",
   lookup_url: "Trang tra cứu",
-  seller_tax_code: "MST bên bán",
-  buyer_tax_code: "MST bên mua",
+  seller_tax_code: "Mã số thuế bên bán",
+  buyer_tax_code: "Mã số thuế bên mua",
   payment_due_date: "Hạn thanh toán",
   carrier_name: "Đơn vị vận chuyển",
   deliverer_name: "Người giao",
   signed_date: "Ngày ký",
-  supplier_representative: "Đại diện NCC",
+  supplier_representative: "Đại diện nhà cung cấp",
   library_representative: "Đại diện thư viện",
   confirmed_qty: "Số lượng xác nhận",
   discrepancy_summary: "Chênh lệch",
@@ -198,8 +198,8 @@ export function ProcurementDocumentList({ documents, viewer, actions, onChanged,
                     ) : null}
                     {mayShare(doc) ? (
                       <>
-                        <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => void run(`sp-${doc.id}`, "Đã chia sẻ qua cổng NCC", () => actions.share!(doc.id, "PORTAL"))}>
-                          <Send className="h-3.5 w-3.5" />Chia sẻ cổng NCC
+                        <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => void run(`sp-${doc.id}`, "Đã chia sẻ qua cổng nhà cung cấp", () => actions.share!(doc.id, "PORTAL"))}>
+                          <Send className="h-3.5 w-3.5" />Chia sẻ cổng nhà cung cấp
                         </Button>
                         <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => void run(`se-${doc.id}`, "Đã ghi nhận lần gửi email (xem trạng thái)", () => actions.share!(doc.id, "EMAIL"))}>
                           <Mail className="h-3.5 w-3.5" />Gửi email
@@ -267,7 +267,7 @@ export function ProcurementDocumentList({ documents, viewer, actions, onChanged,
                             return (
                               <li key={row.id} className="flex flex-wrap items-center gap-2">
                                 <StatusBadge label={meta.label} variant={meta.tone} />
-                                <span>{row.channel === "EMAIL" ? `Email${row.recipient_email ? ` → ${row.recipient_email}` : ""}` : "Cổng"} → {row.recipient_party === "SUPPLIER" ? "NCC" : "SmartBook"}</span>
+                                <span>{row.channel === "EMAIL" ? `Email${row.recipient_email ? ` → ${row.recipient_email}` : ""}` : "Cổng"} → {row.recipient_party === "SUPPLIER" ? "Nhà cung cấp" : "SmartBook"}</span>
                                 <span className="text-muted-foreground">{formatDateTime(row.shared_at)}</span>
                                 {row.message_id ? <span className="break-all font-mono text-[11px] text-muted-foreground">msg {row.message_id}</span> : null}
                                 {row.error_message ? <span className="w-full text-red-700 dark:text-red-400">Lỗi: {row.error_message}</span> : null}
@@ -296,7 +296,7 @@ export function ProcurementDocumentList({ documents, viewer, actions, onChanged,
                     {doc.lines.length ? (
                       <div className="overflow-x-auto md:col-span-2">
                         <table className="w-full min-w-[480px]">
-                          <thead><tr className="text-left text-[11px] uppercase text-muted-foreground"><th className="py-1 pr-2">Sách</th><th className="py-1 pr-2 text-right">SL</th><th className="py-1 pr-2 text-right">Đơn giá</th><th className="py-1 text-right">Thành tiền</th></tr></thead>
+                          <thead><tr className="text-left text-[11px] uppercase text-muted-foreground"><th className="py-1 pr-2">Sách</th><th className="py-1 pr-2 text-right">Số lượng</th><th className="py-1 pr-2 text-right">Đơn giá</th><th className="py-1 text-right">Thành tiền</th></tr></thead>
                           <tbody>
                             {doc.lines.map((line) => (
                               <tr key={line.id} className="border-t border-border/60">
