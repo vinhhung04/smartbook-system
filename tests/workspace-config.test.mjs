@@ -142,7 +142,9 @@ test("web container serves the built single-page application", () => {
   const dockerfile = readFileSync(resolve(repositoryRoot, "apps/web/Dockerfile"), "utf8");
   const nginx = readFileSync(resolve(repositoryRoot, "apps/web/nginx.conf"), "utf8");
   assert.match(dockerfile, /FROM nginx:/);
-  assert.match(nginx, /try_files \$uri \$uri\/ \/index\.html/);
+  // App routes fall back to index.html; any other path gets index.html with a 404 status.
+  assert.match(nginx, /try_files \$uri \/index\.html/);
+  assert.match(nginx, /error_page 404 \/index\.html/);
   assert.match(nginx, /Content-Security-Policy/);
   assert.match(nginx, /Permissions-Policy/);
 });
