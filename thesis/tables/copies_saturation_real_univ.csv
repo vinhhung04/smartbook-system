@@ -1,0 +1,6 @@
+copies_per_title,titles,copies,utilization,empty_shelf_share,shortage_titles,borrowed_titles,idle_copies,extra_copies,extra_copy_share
+all,7563,8369,0.019721,0.016549,18,1659,6228,297,0.13872
+1,7046,7046,0.017242,0.017242,17,1428,5573,0,0
+2,355,710,0.02771,0.008435,1,135,432,95,0.341727
+3-5,148,515,0.035058,0.004572,0,84,211,155,0.509868
+6+,14,98,0.059435,0,0,12,12,47,0.546512

@@ -1,0 +1,883 @@
+{
+  "provenance": {
+    "file": "dataset_univLib.csv",
+    "sha256": "c26fe2cb68be9793080fbd221a045688e459e9272f9dd63c8a68c980144976a2",
+    "library": "Binus University library (Jakarta)",
+    "doi": "10.17632/6rd45bvxjy.1",
+    "license": "CC BY 4.0",
+    "use": "research and education only",
+    "skipped_rows": {
+      "no_borrow_date": 0,
+      "duplicate": 5,
+      "no_member_or_copy": 0
+    },
+    "loans": 52389
+  },
+  "protocol": {
+    "dataset": "real loans: Binus University library (Jakarta) (Mendeley 10.17632/6rd45bvxjy.1); title-level daily series",
+    "window_days": 180,
+    "window_end": "2025-04-09T13:09:17.570Z",
+    "min_train_days": 30,
+    "horizons_days": [
+      7,
+      14
+    ],
+    "backtest": "rollingBacktest(): expanding window, non-overlapping folds of horizon_days, forecast from the training slice only",
+    "models": [
+      "NAIVE_LAST_VALUE",
+      "MOVING_AVERAGE_7",
+      "MOVING_AVERAGE_30",
+      "CURRENT_EWMA_TREND",
+      "CROSTON",
+      "SBA",
+      "TSB"
+    ],
+    "intermittent_parameters": {
+      "alpha": 0.1,
+      "beta": 0.1,
+      "source": "literature defaults, not tuned"
+    }
+  },
+  "variants_with_demand": 957,
+  "mean_zero_demand_day_share": 0.990255,
+  "demand_class_counts": {
+    "INTERMITTENT": 954,
+    "LUMPY": 3
+  },
+  "horizons": [
+    {
+      "horizon_days": 7,
+      "variants_backtested": 957,
+      "overall": [
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 0.014636,
+          "rmse": 0.126439,
+          "wape": 1.639331,
+          "mape": 0.993383,
+          "mape_samples": 1209,
+          "bias": -0.003106,
+          "samples": 140679
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 0.018276,
+          "rmse": 0.106432,
+          "wape": 2.046975,
+          "mape": 0.987495,
+          "mape_samples": 1209,
+          "bias": 0.000661,
+          "samples": 140679
+        },
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 0.019134,
+          "rmse": 0.100751,
+          "wape": 2.143153,
+          "mape": 0.981112,
+          "mape_samples": 1209,
+          "bias": 0.001614,
+          "samples": 140679
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 0.018593,
+          "rmse": 0.107945,
+          "wape": 2.082516,
+          "mape": 0.985711,
+          "mape_samples": 1209,
+          "bias": 0.001001,
+          "samples": 140679
+        },
+        {
+          "model": "CROSTON",
+          "mae": 0.053499,
+          "rmse": 0.146748,
+          "wape": 5.992221,
+          "mape": 0.964813,
+          "mape_samples": 1209,
+          "bias": 0.036261,
+          "samples": 140679
+        },
+        {
+          "model": "SBA",
+          "mae": 0.051271,
+          "rmse": 0.142717,
+          "wape": 5.74261,
+          "mape": 0.966572,
+          "mape_samples": 1209,
+          "bias": 0.034001,
+          "samples": 140679
+        },
+        {
+          "model": "TSB",
+          "mae": 0.014815,
+          "rmse": 0.100581,
+          "wape": 1.659412,
+          "mape": 0.986071,
+          "mape_samples": 1209,
+          "bias": -0.002788,
+          "samples": 140679
+        }
+      ],
+      "best_model_votes": {
+        "NAIVE_LAST_VALUE": 862,
+        "MOVING_AVERAGE_7": 18,
+        "MOVING_AVERAGE_30": 2,
+        "CURRENT_EWMA_TREND": 2,
+        "CROSTON": 0,
+        "SBA": 32,
+        "TSB": 41
+      },
+      "by_demand_class": [
+        {
+          "demand_class": "INTERMITTENT",
+          "variants": 954,
+          "models": [
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 0.014497,
+              "rmse": 0.124479,
+              "wape": 1.652846,
+              "mape": 0.9933,
+              "mape_samples": 1194,
+              "bias": -0.002931,
+              "samples": 140238
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.017963,
+              "rmse": 0.103432,
+              "wape": 2.048084,
+              "mape": 0.988414,
+              "mape_samples": 1194,
+              "bias": 0.000628,
+              "samples": 140238
+            },
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.018829,
+              "rmse": 0.098042,
+              "wape": 2.146775,
+              "mape": 0.982493,
+              "mape_samples": 1194,
+              "bias": 0.001595,
+              "samples": 140238
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 0.01834,
+              "rmse": 0.105565,
+              "wape": 2.091036,
+              "mape": 0.987153,
+              "mape_samples": 1194,
+              "bias": 0.001025,
+              "samples": 140238
+            },
+            {
+              "model": "CROSTON",
+              "mae": 0.05327,
+              "rmse": 0.145103,
+              "wape": 6.07355,
+              "mape": 0.965163,
+              "mape_samples": 1194,
+              "bias": 0.036333,
+              "samples": 140238
+            },
+            {
+              "model": "SBA",
+              "mae": 0.051045,
+              "rmse": 0.141016,
+              "wape": 5.819872,
+              "mape": 0.966905,
+              "mape_samples": 1194,
+              "bias": 0.034078,
+              "samples": 140238
+            },
+            {
+              "model": "TSB",
+              "mae": 0.014467,
+              "rmse": 0.097893,
+              "wape": 1.649472,
+              "mape": 0.987405,
+              "mape_samples": 1194,
+              "bias": -0.002852,
+              "samples": 140238
+            }
+          ]
+        },
+        {
+          "demand_class": "LUMPY",
+          "variants": 3,
+          "models": [
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 0.058957,
+              "rmse": 0.415133,
+              "wape": 1,
+              "mape": 1,
+              "mape_samples": 15,
+              "bias": -0.058957,
+              "samples": 441
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.11759,
+              "rmse": 0.459926,
+              "wape": 1.994505,
+              "mape": 0.914286,
+              "mape_samples": 15,
+              "bias": 0.011338,
+              "samples": 441
+            },
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.116251,
+              "rmse": 0.4259,
+              "wape": 1.971795,
+              "mape": 0.871111,
+              "mape_samples": 15,
+              "bias": 0.00771,
+              "samples": 441
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 0.099013,
+              "rmse": 0.416197,
+              "wape": 1.679421,
+              "mape": 0.870916,
+              "mape_samples": 15,
+              "bias": -0.006697,
+              "samples": 441
+            },
+            {
+              "model": "CROSTON",
+              "mae": 0.126446,
+              "rmse": 0.417418,
+              "wape": 2.144719,
+              "mape": 0.9369,
+              "mape_samples": 15,
+              "bias": 0.013194,
+              "samples": 441
+            },
+            {
+              "model": "SBA",
+              "mae": 0.123072,
+              "rmse": 0.416847,
+              "wape": 2.087484,
+              "mape": 0.940055,
+              "mape_samples": 15,
+              "bias": 0.009586,
+              "samples": 441
+            },
+            {
+              "model": "TSB",
+              "mae": 0.125558,
+              "rmse": 0.424006,
+              "wape": 2.129665,
+              "mape": 0.879869,
+              "mape_samples": 15,
+              "bias": 0.017368,
+              "samples": 441
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "horizon_days": 14,
+      "variants_backtested": 957,
+      "overall": [
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 0.015749,
+          "rmse": 0.129417,
+          "wape": 1.679936,
+          "mape": 0.99421,
+          "mape_samples": 1209,
+          "bias": -0.002896,
+          "samples": 133980
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 0.018529,
+          "rmse": 0.108162,
+          "wape": 1.97657,
+          "mape": 0.985348,
+          "mape_samples": 1209,
+          "bias": 0.00006,
+          "samples": 133980
+        },
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 0.019918,
+          "rmse": 0.103282,
+          "wape": 2.124682,
+          "mape": 0.981328,
+          "mape_samples": 1209,
+          "bias": 0.001517,
+          "samples": 133980
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 0.020275,
+          "rmse": 0.111552,
+          "wape": 2.162814,
+          "mape": 0.983977,
+          "mape_samples": 1209,
+          "bias": 0.001832,
+          "samples": 133980
+        },
+        {
+          "model": "CROSTON",
+          "mae": 0.054027,
+          "rmse": 0.149171,
+          "wape": 5.763163,
+          "mape": 0.964587,
+          "mape_samples": 1209,
+          "bias": 0.035931,
+          "samples": 133980
+        },
+        {
+          "model": "SBA",
+          "mae": 0.051794,
+          "rmse": 0.145126,
+          "wape": 5.525004,
+          "mape": 0.966358,
+          "mape_samples": 1209,
+          "bias": 0.033665,
+          "samples": 133980
+        },
+        {
+          "model": "TSB",
+          "mae": 0.015389,
+          "rmse": 0.102936,
+          "wape": 1.641579,
+          "mape": 0.986177,
+          "mape_samples": 1209,
+          "bias": -0.003098,
+          "samples": 133980
+        }
+      ],
+      "best_model_votes": {
+        "NAIVE_LAST_VALUE": 900,
+        "MOVING_AVERAGE_7": 7,
+        "MOVING_AVERAGE_30": 5,
+        "CURRENT_EWMA_TREND": 1,
+        "CROSTON": 0,
+        "SBA": 21,
+        "TSB": 23
+      },
+      "by_demand_class": [
+        {
+          "demand_class": "INTERMITTENT",
+          "variants": 954,
+          "models": [
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 0.015603,
+              "rmse": 0.127406,
+              "wape": 1.694309,
+              "mape": 0.994137,
+              "mape_samples": 1194,
+              "bias": -0.00271,
+              "samples": 133560
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.018271,
+              "rmse": 0.105642,
+              "wape": 1.983972,
+              "mape": 0.986241,
+              "mape_samples": 1194,
+              "bias": 0.000105,
+              "samples": 133560
+            },
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.01959,
+              "rmse": 0.100468,
+              "wape": 2.127209,
+              "mape": 0.982349,
+              "mape_samples": 1194,
+              "bias": 0.001496,
+              "samples": 133560
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 0.02002,
+              "rmse": 0.109164,
+              "wape": 2.173883,
+              "mape": 0.984991,
+              "mape_samples": 1194,
+              "bias": 0.001875,
+              "samples": 133560
+            },
+            {
+              "model": "CROSTON",
+              "mae": 0.053795,
+              "rmse": 0.14747,
+              "wape": 5.841365,
+              "mape": 0.964885,
+              "mape_samples": 1194,
+              "bias": 0.036017,
+              "samples": 133560
+            },
+            {
+              "model": "SBA",
+              "mae": 0.051566,
+              "rmse": 0.143368,
+              "wape": 5.599296,
+              "mape": 0.966641,
+              "mape_samples": 1194,
+              "bias": 0.033755,
+              "samples": 133560
+            },
+            {
+              "model": "TSB",
+              "mae": 0.015049,
+              "rmse": 0.100262,
+              "wape": 1.634124,
+              "mape": 0.98724,
+              "mape_samples": 1194,
+              "bias": -0.003134,
+              "samples": 133560
+            }
+          ]
+        },
+        {
+          "demand_class": "LUMPY",
+          "variants": 3,
+          "models": [
+            {
+              "model": "NAIVE_LAST_VALUE",
+              "mae": 0.061905,
+              "rmse": 0.425385,
+              "wape": 1,
+              "mape": 1,
+              "mape_samples": 15,
+              "bias": -0.061905,
+              "samples": 420
+            },
+            {
+              "model": "MOVING_AVERAGE_7",
+              "mae": 0.10068,
+              "rmse": 0.427777,
+              "wape": 1.626374,
+              "mape": 0.914286,
+              "mape_samples": 15,
+              "bias": -0.014286,
+              "samples": 420
+            },
+            {
+              "model": "MOVING_AVERAGE_30",
+              "mae": 0.124127,
+              "rmse": 0.439282,
+              "wape": 2.005128,
+              "mape": 0.9,
+              "mape_samples": 15,
+              "bias": 0.008095,
+              "samples": 420
+            },
+            {
+              "model": "CURRENT_EWMA_TREND",
+              "mae": 0.101471,
+              "rmse": 0.424289,
+              "wape": 1.639155,
+              "mape": 0.9033,
+              "mape_samples": 15,
+              "bias": -0.011838,
+              "samples": 420
+            },
+            {
+              "model": "CROSTON",
+              "mae": 0.127747,
+              "rmse": 0.427511,
+              "wape": 2.0636,
+              "mape": 0.94089,
+              "mape_samples": 15,
+              "bias": 0.008547,
+              "samples": 420
+            },
+            {
+              "model": "SBA",
+              "mae": 0.124455,
+              "rmse": 0.426962,
+              "wape": 2.01042,
+              "mape": 0.943845,
+              "mape_samples": 15,
+              "bias": 0.005024,
+              "samples": 420
+            },
+            {
+              "model": "TSB",
+              "mae": 0.123454,
+              "rmse": 0.428232,
+              "wape": 1.994263,
+              "mape": 0.901573,
+              "mape_samples": 15,
+              "bias": 0.008304,
+              "samples": 420
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "horizon_totals": [
+    {
+      "horizon_days": 7,
+      "samples": 20097,
+      "zero_actual_share": 0.941932,
+      "mean_actual": 0.062497,
+      "models": [
+        {
+          "model": "ZERO",
+          "mae": 0.062497,
+          "wape": 1,
+          "bias": -0.062497,
+          "under_forecast_share": 0.058068,
+          "over_forecast_share": 0
+        },
+        {
+          "model": "PRODUCTION_EWMA_TREND_CEIL",
+          "mae": 0.366572,
+          "wape": 5.865446,
+          "bias": 0.276708,
+          "under_forecast_share": 0.042394,
+          "over_forecast_share": 0.287953
+        },
+        {
+          "model": "PRODUCTION_MOVING_AVERAGE_CEIL",
+          "mae": 0.673931,
+          "wape": 10.783439,
+          "bias": 0.60407,
+          "under_forecast_share": 0.03304,
+          "over_forecast_share": 0.637508
+        },
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 0.102453,
+          "wape": 1.639331,
+          "bias": -0.021745,
+          "under_forecast_share": 0.05767,
+          "over_forecast_share": 0.005672
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 0.121162,
+          "wape": 1.938694,
+          "bias": 0.004628,
+          "under_forecast_share": 0.057571,
+          "over_forecast_share": 0.058168
+        },
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 0.122386,
+          "wape": 1.95828,
+          "bias": 0.011299,
+          "under_forecast_share": 0.057571,
+          "over_forecast_share": 0.226551
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 0.124208,
+          "wape": 1.987423,
+          "bias": 0.007009,
+          "under_forecast_share": 0.056128,
+          "over_forecast_share": 0.287953
+        },
+        {
+          "model": "CROSTON",
+          "mae": 0.356084,
+          "wape": 5.697627,
+          "bias": 0.253826,
+          "under_forecast_share": 0.055033,
+          "over_forecast_share": 0.640145
+        },
+        {
+          "model": "SBA",
+          "mae": 0.34111,
+          "wape": 5.458039,
+          "bias": 0.23801,
+          "under_forecast_share": 0.055282,
+          "over_forecast_share": 0.639897
+        },
+        {
+          "model": "TSB",
+          "mae": 0.095688,
+          "wape": 1.531083,
+          "bias": -0.019518,
+          "under_forecast_share": 0.057372,
+          "over_forecast_share": 0.637807
+        }
+      ]
+    },
+    {
+      "horizon_days": 30,
+      "samples": 4785,
+      "zero_actual_share": 0.784744,
+      "mean_actual": 0.270428,
+      "models": [
+        {
+          "model": "ZERO",
+          "mae": 0.270428,
+          "wape": 1,
+          "bias": -0.270428,
+          "under_forecast_share": 0.215256,
+          "over_forecast_share": 0
+        },
+        {
+          "model": "PRODUCTION_EWMA_TREND_CEIL",
+          "mae": 0.794148,
+          "wape": 2.936631,
+          "bias": 0.377429,
+          "under_forecast_share": 0.174086,
+          "over_forecast_share": 0.248067
+        },
+        {
+          "model": "PRODUCTION_MOVING_AVERAGE_CEIL",
+          "mae": 0.780146,
+          "wape": 2.884853,
+          "bias": 0.430303,
+          "under_forecast_share": 0.147753,
+          "over_forecast_share": 0.54629
+        },
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 0.454754,
+          "wape": 1.681607,
+          "bias": -0.082341,
+          "under_forecast_share": 0.213793,
+          "over_forecast_share": 0.00627
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 0.605165,
+          "wape": 2.237801,
+          "bias": 0.136199,
+          "under_forecast_share": 0.191223,
+          "over_forecast_share": 0.084222
+        },
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 0.462278,
+          "wape": 1.709428,
+          "bias": 0.062696,
+          "under_forecast_share": 0.201045,
+          "over_forecast_share": 0.209195
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 0.624304,
+          "wape": 2.308575,
+          "bias": 0.166614,
+          "under_forecast_share": 0.192894,
+          "over_forecast_share": 0.248067
+        },
+        {
+          "model": "CROSTON",
+          "mae": 1.465591,
+          "wape": 5.419517,
+          "bias": 1.094301,
+          "under_forecast_share": 0.170115,
+          "over_forecast_share": 0.577429
+        },
+        {
+          "model": "SBA",
+          "mae": 1.40014,
+          "wape": 5.177489,
+          "bias": 1.026064,
+          "under_forecast_share": 0.170533,
+          "over_forecast_share": 0.577011
+        },
+        {
+          "model": "TSB",
+          "mae": 0.386556,
+          "wape": 1.429419,
+          "bias": -0.056107,
+          "under_forecast_share": 0.194566,
+          "over_forecast_share": 0.552978
+        }
+      ]
+    }
+  ],
+  "horizon_totals_by_category": [
+    {
+      "horizon_days": 7,
+      "samples": 1176,
+      "zero_actual_share": 0.678571,
+      "mean_actual": 1.068027,
+      "models": [
+        {
+          "model": "ZERO",
+          "mae": 1.068027,
+          "wape": 1,
+          "bias": -1.068027,
+          "under_forecast_share": 0.321429,
+          "over_forecast_share": 0
+        },
+        {
+          "model": "PRODUCTION_EWMA_TREND_CEIL",
+          "mae": 1.221088,
+          "wape": 1.143312,
+          "bias": 0.426871,
+          "under_forecast_share": 0.153061,
+          "over_forecast_share": 0.42602
+        },
+        {
+          "model": "PRODUCTION_MOVING_AVERAGE_CEIL",
+          "mae": 1.47534,
+          "wape": 1.381369,
+          "bias": 0.888605,
+          "under_forecast_share": 0.097789,
+          "over_forecast_share": 0.69898
+        },
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 1.293367,
+          "wape": 1.210987,
+          "bias": -0.371599,
+          "under_forecast_share": 0.277211,
+          "over_forecast_share": 0.056122
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 1.067177,
+          "wape": 0.999204,
+          "bias": 0.079082,
+          "under_forecast_share": 0.232143,
+          "over_forecast_share": 0.22534
+        },
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 1.037868,
+          "wape": 0.971762,
+          "bias": 0.193084,
+          "under_forecast_share": 0.217687,
+          "over_forecast_share": 0.461735
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 1.016509,
+          "wape": 0.951763,
+          "bias": 0.025374,
+          "under_forecast_share": 0.221088,
+          "over_forecast_share": 0.42602
+        },
+        {
+          "model": "CROSTON",
+          "mae": 1.192624,
+          "wape": 1.116661,
+          "bias": 0.454887,
+          "under_forecast_share": 0.181973,
+          "over_forecast_share": 0.710034
+        },
+        {
+          "model": "SBA",
+          "mae": 1.152554,
+          "wape": 1.079143,
+          "bias": 0.378741,
+          "under_forecast_share": 0.187925,
+          "over_forecast_share": 0.704082
+        },
+        {
+          "model": "TSB",
+          "mae": 1.029337,
+          "wape": 0.963774,
+          "bias": 0.196195,
+          "under_forecast_share": 0.206633,
+          "over_forecast_share": 0.685374
+        }
+      ]
+    },
+    {
+      "horizon_days": 30,
+      "samples": 280,
+      "zero_actual_share": 0.375,
+      "mean_actual": 4.621429,
+      "models": [
+        {
+          "model": "ZERO",
+          "mae": 4.621429,
+          "wape": 1,
+          "bias": -4.621429,
+          "under_forecast_share": 0.625,
+          "over_forecast_share": 0
+        },
+        {
+          "model": "PRODUCTION_EWMA_TREND_CEIL",
+          "mae": 5.807143,
+          "wape": 1.256569,
+          "bias": 1.485714,
+          "under_forecast_share": 0.378571,
+          "over_forecast_share": 0.342857
+        },
+        {
+          "model": "PRODUCTION_MOVING_AVERAGE_CEIL",
+          "mae": 3.878571,
+          "wape": 0.839258,
+          "bias": 2.057143,
+          "under_forecast_share": 0.164286,
+          "over_forecast_share": 0.632143
+        },
+        {
+          "model": "NAIVE_LAST_VALUE",
+          "mae": 5.085714,
+          "wape": 1.100464,
+          "bias": -1.407143,
+          "under_forecast_share": 0.567857,
+          "over_forecast_share": 0.064286
+        },
+        {
+          "model": "MOVING_AVERAGE_7",
+          "mae": 5.736735,
+          "wape": 1.241334,
+          "bias": 2.327551,
+          "under_forecast_share": 0.371429,
+          "over_forecast_share": 0.321429
+        },
+        {
+          "model": "MOVING_AVERAGE_30",
+          "mae": 3.785714,
+          "wape": 0.819165,
+          "bias": 1.071429,
+          "under_forecast_share": 0.335714,
+          "over_forecast_share": 0.435714
+        },
+        {
+          "model": "CURRENT_EWMA_TREND",
+          "mae": 5.7539,
+          "wape": 1.245048,
+          "bias": 1.135983,
+          "under_forecast_share": 0.432143,
+          "over_forecast_share": 0.342857
+        },
+        {
+          "model": "CROSTON",
+          "mae": 4.463703,
+          "wape": 0.965871,
+          "bias": 2.351128,
+          "under_forecast_share": 0.221429,
+          "over_forecast_share": 0.692857
+        },
+        {
+          "model": "SBA",
+          "mae": 4.218296,
+          "wape": 0.912769,
+          "bias": 2.0025,
+          "under_forecast_share": 0.235714,
+          "over_forecast_share": 0.678571
+        },
+        {
+          "model": "TSB",
+          "mae": 4.13603,
+          "wape": 0.894968,
+          "bias": 1.348742,
+          "under_forecast_share": 0.353571,
+          "over_forecast_share": 0.560714
+        }
+      ]
+    }
+  ]
+}
