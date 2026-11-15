@@ -205,6 +205,8 @@ export function AIAssistantPage() {
     if (storedId) {
       hydrateConversation(storedId);
     }
+    // Runs once on mount: the handover and stored conversation are read only at entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Mirror the run into the thread on screen, and react when it ends.

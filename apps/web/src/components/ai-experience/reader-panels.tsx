@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { customerBorrowService } from '@/services/customer-borrow';
+import type { ReaderSnapshot } from '@/hooks/use-reader-snapshot';
 import { getApiErrorMessage } from '@/services/api';
 import { getBorrowLabel } from '@/lib/status-registry';
 import {
@@ -14,30 +15,6 @@ import { BookDueIcon, BookFineIcon } from './smartbook-icons';
 // The reader's own loans and fines inside the floating chatbot: a short digest
 // on the welcome screen, and the loans or fines an answer is about, each with
 // the one action the portal already offers (request a renewal, pay by VNPay).
-
-export interface ReaderSnapshot {
-  status: 'idle' | 'loading' | 'ready' | 'error';
-  loans: ReaderLoan[];
-  fines: ReaderFine[];
-  refresh: () => void;
-}
-
-export function useReaderSnapshot(enabled: boolean): ReaderSnapshot {
-  const [state, setState] = useState<Omit<ReaderSnapshot, 'refresh'>>({ status: 'idle', loans: [], fines: [] });
-  const refresh = useCallback(() => {
-    if (!enabled) return;
-    setState((s) => ({ ...s, status: s.status === 'ready' ? 'ready' : 'loading' }));
-    Promise.all([customerBorrowService.getMyLoans({ pageSize: 100 }), customerBorrowService.getMyFines()])
-      .then(([loans, fines]) => setState({
-        status: 'ready',
-        loans: Array.isArray(loans?.data) ? loans.data : [],
-        fines: Array.isArray(fines?.data?.fines) ? fines.data.fines : [],
-      }))
-      .catch(() => setState((s) => ({ ...s, status: s.status === 'ready' ? 'ready' : 'error' })));
-  }, [enabled]);
-  useEffect(() => { refresh(); }, [refresh]);
-  return { ...state, refresh };
-}
 
 const TONE: Record<DigestCard['tone'], { box: string; icon: string; title: string }> = {
   alert: {
@@ -112,7 +89,8 @@ const primaryButton = 'inline-flex h-8 cursor-pointer items-center gap-1.5 round
 
 function LoanAction({ loan, onRenewed, onNavigate }: { loan: ReaderLoan; onRenewed: () => void; onNavigate: (href: string) => void }) {
   const [step, setStep] = useState<'idle' | 'confirm' | 'sending'>('idle');
-  const days = loan.due_date ? daysUntil(loan.due_date, Date.now()) : null;
+  const [now] = useState(Date.now);
+  const days = loan.due_date ? daysUntil(loan.due_date, now) : null;
   const due = days === null ? null : days < 0 ? `Quá hạn ${-days} ngày` : days === 0 ? 'Đến hạn hôm nay' : `Còn ${days} ngày`;
   const renew = async () => {
     setStep('sending');

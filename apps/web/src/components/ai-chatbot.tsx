@@ -24,7 +24,8 @@ import {
 import type { RecordKind } from '@/lib/chat-markdown';
 import { useSpeechInput } from '@/hooks/use-speech-input';
 import { ChatMarkdown, type RecordLinks } from './ai-experience/chat-markdown';
-import { ReaderActions, ReaderDigest, useReaderSnapshot } from './ai-experience/reader-panels';
+import { ReaderActions, ReaderDigest } from './ai-experience/reader-panels';
+import { useReaderSnapshot } from '@/hooks/use-reader-snapshot';
 import { followUpsFor } from '@/lib/chat-reader';
 import { toast } from 'sonner';
 import { ActionCard } from './ai-action-card';
@@ -476,6 +477,8 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
   const streamReply = async (trimmed: string, image?: TurnImage, addUser = true, historyOverride?: ChatMessage[]) => {
     setShowSuggestions(false);
     if (addUser) {
+      // streamReply only runs from send/retry handlers, never during render.
+      // eslint-disable-next-line react-hooks/purity
       const userMsg: UIMessage = { id: ++messageIdRef.current, role: 'user', text: trimmed, at: Date.now() };
       stickRef.current = true;
       setMessages((prev) => [...prev, userMsg]);

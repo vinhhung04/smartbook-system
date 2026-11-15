@@ -36,7 +36,7 @@ export function useSpeechInput({ lang = 'vi-VN', onText }: { lang?: string; onTe
   const [listening, setListening] = useState(false);
   const recRef = useRef<Recognition | null>(null);
   const onTextRef = useRef(onText);
-  onTextRef.current = onText;
+  useEffect(() => { onTextRef.current = onText; });
 
   useEffect(() => () => recRef.current?.abort(), []);
 

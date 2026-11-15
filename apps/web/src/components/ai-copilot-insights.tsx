@@ -127,7 +127,7 @@ const CONFIDENCE_TONE: Record<string, string> = {
 const PRIORITY_LABEL: Record<string, string> = { HIGH: 'Ưu tiên cao', MEDIUM: 'Ưu tiên vừa', LOW: 'Ưu tiên thấp' };
 
 /** The backend sends the confidence level in capitals ("TRUNG BÌNH", "QUY TẮC"). */
-export function confidenceLabel(level?: string | null): string {
+function confidenceLabel(level?: string | null): string {
   if (!level) return 'Độ tin cậy: chưa rõ';
   const words = level.toLocaleLowerCase('vi-VN');
   return words === 'quy tắc' ? 'Theo quy tắc cố định' : `Độ tin cậy ${words}`;
