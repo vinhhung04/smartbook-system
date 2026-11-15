@@ -53,7 +53,13 @@ fi
 
 # --- roll out ------------------------------------------------------------------------
 rollout() {
-  IMAGE_TAG="$1" dc up -d --remove-orphans --wait --wait-timeout 600
+  IMAGE_TAG="$1" dc up -d --remove-orphans --wait --wait-timeout 600 || return 1
+  # The upload's tar replaces deploy/Caddyfile with a new inode, which Caddy's single-file
+  # bind mount does not follow; a restart re-mounts it. Only when the content changed.
+  if ! dc exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - "$APP_DIR/deploy/Caddyfile"; then
+    log "Caddyfile changed, restarting caddy"
+    dc restart caddy
+  fi
 }
 
 smoke() {

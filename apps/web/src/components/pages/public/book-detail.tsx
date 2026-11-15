@@ -97,6 +97,7 @@ export function PublicBookDetailPage() {
     description: book ? (book.summary_vi || book.description || `${book.title} tại thư viện SmartBook.`) : undefined,
     image: book?.cover_image_url,
     type: 'book',
+    noindex: status === 'not-found',
   });
 
   const toggleWishlist = async () => {

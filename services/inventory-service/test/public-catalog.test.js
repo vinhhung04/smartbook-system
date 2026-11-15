@@ -6,6 +6,7 @@ const {
   PUBLIC_BRANCH_WHERE,
   branchHoldings,
   buildHome,
+  buildSitemapXml,
   createCachedLoader,
   createPublicCatalog,
   isPublicPickupWarehouse,
@@ -77,7 +78,7 @@ test('public router exposes GET handlers only', () => {
   const endpoints = publicCatalogRoutes.stack
     .filter((layer) => layer.route)
     .map((layer) => `${Object.keys(layer.route.methods).join(',').toUpperCase()} ${layer.route.path}`);
-  assert.deepEqual(endpoints, ['GET /home', 'GET /categories', 'GET /books', 'GET /books/:id', 'GET /branches', 'GET /branches/:id']);
+  assert.deepEqual(endpoints, ['GET /home', 'GET /categories', 'GET /books', 'GET /books/:id', 'GET /sitemap.xml', 'GET /branches', 'GET /branches/:id']);
 });
 
 test('Prisma select never asks the database for cost, SKU, barcode or location codes', () => {
@@ -564,4 +565,18 @@ test('availability by book (alert subscription check) uses the same pickup rule 
   assert.equal(none.calls.length, 0);
   assert.equal(await readPublicAvailabilityByBook(none, '99999999-9999-4999-8999-999999999999'), null);
   assert.equal(await readPublicAvailabilityByBook(availabilityPrisma(makeBook({ metadata: { is_incomplete: true } })), '11111111-1111-4111-8111-111111111111'), null);
+});
+
+test('sitemap lists publishable books and public branches only', async () => {
+  const draft = makeBook({ id: '22222222-2222-4222-8222-222222222222', metadata: { is_incomplete: true } });
+  const branch = { id: '33333333-3333-4333-8333-333333333333', name: 'Chi nhánh Q1', warehouse_type: 'BRANCH', is_active: true };
+  const warehouse = { ...branch, id: '44444444-4444-4444-8444-444444444444', warehouse_type: 'WAREHOUSE' };
+  const prisma = { books: { findMany: async () => [makeBook(), draft] }, warehouses: { findMany: async () => [branch, warehouse] } };
+  const catalog = createPublicCatalog(prisma, { fetchSignals: async () => null });
+  const paths = await catalog.sitemapPaths();
+  assert.deepEqual(paths, ['/books/11111111-1111-4111-8111-111111111111', '/branches/33333333-3333-4333-8333-333333333333']);
+  const xml = buildSitemapXml('https://smartbook.io.vn/', paths);
+  assert.match(xml, /^<\?xml version="1.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www.sitemaps.org\/schemas\/sitemap\/0.9">/);
+  assert.match(xml, /<loc>https:\/\/smartbook\.io\.vn\/books\/11111111-1111-4111-8111-111111111111<\/loc>/);
+  assert.equal((xml.match(/<url>/g) || []).length, 2);
 });

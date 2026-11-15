@@ -58,6 +58,7 @@ export function PublicBranchDetailPage() {
     description: branch
       ? `${branch.name}${branch.address ? ` — ${branch.address}` : ''}. Xem sách đang có sẵn để mượn và đặt trước để nhận tại chi nhánh này.`
       : undefined,
+    noindex: status === 'not-found',
   });
 
   if (status === 'not-found') {
