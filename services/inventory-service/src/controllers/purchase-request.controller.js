@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 const {
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
@@ -7,7 +6,7 @@ const {
 } = require('../utils/warehouse-scope.utils');
 const { pushToRooms } = require('../lib/socket-emitter');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const PR_STAFF_ROOMS = ['admin', 'warehouse_manager'];
 

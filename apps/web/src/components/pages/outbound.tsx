@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowRight, Boxes, CheckCircle2, Clock, ListChecks, PackageCheck, ScanLine, Truck, UserCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock, CornerDownRight, ListChecks, PackageCheck, ScanLine, Truck, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { NavLink } from 'react-router';
 import { FadeItem, PageWrapper } from '../motion-utils';
@@ -11,26 +11,19 @@ import { authService } from '@/services/auth';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { outboundService, type OutboundQueueItem, type OutboundOrderDetail } from '@/services/outbound';
 import { userService, type WarehouseStaffOption } from '@/services/user';
-import { canManageReceiving } from '@/lib/rbac';
+import { canAccess, canManageReceiving, ROUTE_ACCESS } from '@/lib/rbac';
 import { PageHeader } from '@/components/ui/page-header';
-import { SectionCard } from '@/components/ui/section-card';
 import { FilterBar } from '@/components/ui/filter-bar';
-import { StatusBadge } from '@/components/status-badge';
-import { StatCard } from '@/components/ui/stat-card';
-import { WorkflowStepper, type WorkflowStep } from '@/components/ui';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { StatusBadge } from '@/components/status-badge';
+import { type WorkflowStep } from '@/components/ui';
+import { ListFooter } from './borrow-shared/list-footer';
 import { Progress } from '@/components/ui/progress';
 import { Button, IconButton } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import {
-  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink,
-  PaginationNext, PaginationPrevious,
-} from '@/components/ui/pagination';
-import { getPaginationRange } from '@/lib/pagination';
 import { cn } from '@/components/ui/utils';
-import { getPickingTaskStatusVariant, getStatusVariant, TONE_CLASSNAME } from '@/lib/status-registry';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getPickingTaskStatusVariant, getStatusVariant, getWarehouseTaskStatusLabel } from '@/lib/status-registry';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 
@@ -45,7 +38,7 @@ const OUTBOUND_STATUS_LABEL: Record<string, string> = {
   APPROVED: 'Đã duyệt',
   PICKING: 'Đang lấy',
   PARTIAL_PICKED: 'Lấy một phần',
-  REPICKING: 'Đang re-pick',
+  REPICKING: 'Đang lấy bù',
   READY_FOR_OUTBOUND: 'Sẵn xuất kho',
   READY_TO_SHIP: 'Sẵn xuất kho',
   COMPLETED: 'Hoàn tất',
@@ -291,106 +284,424 @@ export function OutboundPage() {
     );
   }
 
-  const tableHeads = canManageQueue
-    ? ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tiến độ', 'Nhân viên xuất kho', 'Thao tác']
-    : ['Mã đơn', 'Loại', 'Kho nguồn', 'Kho đích', 'Trạng thái', 'Tiến độ', 'Thao tác'];
-
-  const detailAccentBorder = detail
-    ? (detail.status === 'CANCELLED'
-      ? 'border-l-red-500'
-      : detail.status === 'COMPLETED'
-        ? 'border-l-muted-foreground/30'
-        : READY_STATUSES.has(detail.status)
-          ? 'border-l-emerald-500'
-          : 'border-l-sky-500')
-    : '';
-
   const detailConfirmable = detail ? canConfirmOutbound(detail.status, detail.aggregate_remaining_qty) : false;
 
-  return (
-    <PageWrapper className="space-y-5">
-      <FadeItem>
-        <NavLink
-          to="/orders"
-          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600 dark:hover:text-blue-400"
-        >
-          <ArrowRight className="h-3.5 w-3.5 rotate-180" /> Quay lại danh sách
-        </NavLink>
-      </FadeItem>
+  const STATUS_ITEMS: Array<{ value: 'ALL' | 'READY' | 'PROCESSING'; label: string; count: number }> = [
+    { value: 'ALL', label: 'Tất cả đơn', count: queueStats.total },
+    { value: 'READY', label: 'Sẵn xuất kho', count: queueStats.ready },
+    { value: 'PROCESSING', label: 'Đang lấy hàng', count: queueStats.processing },
+  ];
 
+  const warehouseSelect = canManageQueue ? (
+    <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
+      <SelectTrigger size="sm" className="w-[220px]" aria-label="Kho xuất">
+        <SelectValue placeholder="Chọn kho" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">Chọn kho</SelectItem>
+        {warehouses.map((warehouse) => (
+          <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : null;
+
+  const assignControl = (task: OutboundQueueItem) => {
+    const key = `${task.task_type}:${task.task_id}`;
+    const selectedStaffId = assigningStaffByTask[key] || '';
+    const assignedName = getAssignedStaffName(task.outbound_assigned_user_id);
+    if (assignedName && !selectedStaffId) {
+      return (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] text-foreground">
+            <UserCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="truncate" title={assignedName}>{assignedName}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => setAssigningStaffByTask((prev) => ({ ...prev, [key]: 'PICK' }))}
+            className="rounded text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={`Đổi nhân viên xuất kho cho ${task.order_number}`}
+          >
+            Đổi
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <Select
+          // '' shows the placeholder; 'PICK' means "reassigning, nobody chosen yet".
+          value={selectedStaffId === 'PICK' ? '' : selectedStaffId}
+          onValueChange={(value) => setAssigningStaffByTask((prev) => ({ ...prev, [key]: value }))}
+        >
+          <SelectTrigger size="sm" className="h-8 min-w-0 flex-1 text-[12px]" aria-label={`Nhân viên xuất kho cho ${task.order_number}`}>
+            <SelectValue placeholder="Chọn nhân viên" />
+          </SelectTrigger>
+          <SelectContent>
+            {warehouseStaff.map((staff) => (
+              <SelectItem key={staff.id} value={staff.id}>{staff.full_name || staff.username}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => void handleAssignOutbound(task)}
+          disabled={!selectedStaffId || selectedStaffId === 'PICK'}
+          loading={assigningTaskKey === key}
+        >
+          Giao
+        </Button>
+      </div>
+    );
+  };
+
+  const statusBadge = (status: string) => {
+    const b = outboundStatusBadge(status);
+    return <StatusBadge label={b.label} variant={b.variant} dot />;
+  };
+
+  const routeText = (taskType: 'outbound' | 'transfer', from: string | null | undefined, to: string | null | undefined) =>
+    `${taskLabel(taskType)}${from ? ` từ ${from}` : ''}${to ? ` đến ${to}` : ''}`;
+
+  if (detail) {
+    const steps = outboundWorkflowSteps(detail.status);
+    const requested = detail.aggregate_requested_qty;
+    const picked = detail.aggregate_picked_qty ?? 0;
+    const remaining = detail.aggregate_remaining_qty ?? 0;
+    const pickedPct = requested ? Math.min(100, Math.round((picked / requested) * 100)) : 0;
+    const assignedName = getAssignedStaffName(detail.outbound_assigned_user_id);
+    const pickRuns = [
+      ...(detail.pick_task ? [{ kind: 'Lấy hàng', task: detail.pick_task }] : []),
+      ...(detail.repick_tasks || []).map((task) => ({ kind: 'Lấy bù', task })),
+    ];
+
+    return (
+      <PageWrapper className="space-y-6">
+        <FadeItem>
+          <Button variant="ghost" size="sm" onClick={handleBackToQueue} className="-ml-3 text-muted-foreground">
+            <ArrowLeft className="h-4 w-4" /> Hàng đợi xuất kho
+          </Button>
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+            <div className="min-w-0">
+              <h1 className="break-all font-mono text-[24px] font-semibold tracking-tight text-foreground">{detail.order_number}</h1>
+              <p className="mt-1 text-[14px] text-muted-foreground">
+                {routeText(detail.task_type, detail.source_warehouse_code, detail.target_warehouse_code)}, {detail.lines.length} dòng sách.
+              </p>
+            </div>
+            {statusBadge(detail.status)}
+          </div>
+        </FadeItem>
+
+        <FadeItem>
+          <ol aria-label="Tiến trình đơn" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {steps.map((step, index) => (
+              <li
+                key={step.id}
+                aria-current={step.status === 'active' ? 'step' : undefined}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-[13px]',
+                  step.status === 'active' && 'border-primary/40 bg-primary/[0.06] font-semibold text-primary',
+                  step.status === 'completed' && 'border-border text-foreground',
+                  step.status === 'pending' && 'border-border text-muted-foreground',
+                  step.status === 'error' && 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300',
+                )}
+              >
+                {step.status === 'completed' ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Xong" />
+                ) : (
+                  <span
+                    className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] tabular-nums',
+                      step.status === 'active' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                    )}
+                    aria-hidden="true"
+                  >
+                    {index + 1}
+                  </span>
+                )}
+                <span className="min-w-0">{step.label}</span>
+              </li>
+            ))}
+          </ol>
+        </FadeItem>
+
+        <FadeItem>
+          <div className="@container/page">
+            <div className="grid grid-cols-1 items-start gap-5 @4xl/page:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0 space-y-5">
+                <section aria-labelledby="outbound-lines-title" className="@container overflow-hidden rounded-2xl border border-border bg-card">
+                  <div className="px-5 pb-3 pt-4">
+                    <h2 id="outbound-lines-title" className="font-serif text-[17px] font-semibold tracking-tight">Sách trong đơn</h2>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">Dòng nền vàng là dòng chưa lấy đủ số lượng.</p>
+                  </div>
+                  <Table className="table-fixed">
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="pl-5 text-[12px] font-medium text-muted-foreground">Sách</TableHead>
+                        <TableHead className="hidden w-[220px] text-[12px] font-medium text-muted-foreground @xl:table-cell">SKU / mã vạch</TableHead>
+                        <TableHead className="w-[120px] pr-5 text-[12px] font-medium text-muted-foreground">Đã lấy</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detail.lines.length === 0 ? (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={3} className="whitespace-normal py-8 text-center text-[13px] text-muted-foreground">Đơn không có dòng sách nào.</TableCell>
+                        </TableRow>
+                      ) : detail.lines.map((line) => {
+                        const short = line.ready_qty < line.quantity;
+                        const linePct = line.quantity > 0 ? Math.min(100, Math.round((line.ready_qty / line.quantity) * 100)) : 0;
+                        return (
+                          <TableRow key={line.line_id} className={cn(short && 'bg-amber-50/60 hover:bg-amber-50/80 dark:bg-amber-500/[0.06] dark:hover:bg-amber-500/10')}>
+                            <TableCell className="whitespace-normal py-3.5 pl-5 align-top">
+                              <p className="line-clamp-2 text-[14px] font-medium text-foreground" title={line.book_title}>{line.book_title}</p>
+                              <p className="mt-0.5 truncate font-mono text-[12px] text-muted-foreground @xl:hidden">{line.sku || line.barcode || '-'}</p>
+                            </TableCell>
+                            <TableCell className="hidden py-3.5 align-top font-mono text-[12px] text-muted-foreground @xl:table-cell">
+                              <span className="block truncate" title={line.sku || line.barcode || undefined}>{line.sku || line.barcode || '-'}</span>
+                            </TableCell>
+                            <TableCell className="py-3.5 pr-5 align-top">
+                              <p className={cn('font-serif text-[17px] font-semibold leading-tight tabular-nums', short ? 'text-amber-800 dark:text-amber-300' : 'text-foreground')}>
+                                {line.ready_qty}<span className="font-sans text-[12px] font-normal text-muted-foreground"> / {line.quantity}</span>
+                              </p>
+                              <Progress value={linePct} className="mt-1.5 h-1.5" aria-label={`Đã lấy ${linePct}%`} />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </section>
+
+                {pickRuns.length > 0 && (
+                  <section aria-labelledby="outbound-runs-title" className="overflow-hidden rounded-2xl border border-border bg-card">
+                    <div className="border-b border-border px-5 pb-3 pt-4">
+                      <h2 id="outbound-runs-title" className="font-serif text-[17px] font-semibold tracking-tight">Lượt lấy hàng</h2>
+                      <p className="mt-0.5 text-[13px] text-muted-foreground">Lượt lấy chính và các lượt lấy bù khi kệ thiếu hàng.</p>
+                    </div>
+                    <ol>
+                      {pickRuns.map(({ kind, task }) => {
+                        const runRequested = task.items.reduce((s, i) => s + i.requested_qty, 0);
+                        const runPicked = task.items.reduce((s, i) => s + i.picked_qty, 0);
+                        const shortQty = task.items.reduce((s, i) => s + i.short_qty, 0);
+                        const repick = kind === 'Lấy bù';
+                        return (
+                          <li key={task.task_number} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 border-b border-border px-5 py-3 last:border-0">
+                            <div className={cn('flex min-w-0 items-start gap-2', repick && 'pl-5')}>
+                              {repick && <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                              <div className="min-w-0">
+                                <p className="text-[14px] font-medium text-foreground">
+                                  {kind} <span className="ml-1 font-mono text-[12px] font-normal text-muted-foreground">{task.task_number}</span>
+                                </p>
+                                {task.items.length > 0 && (
+                                  <p className="text-[12px] text-muted-foreground">
+                                    Đã lấy {runPicked}/{runRequested} cuốn
+                                    {shortQty > 0 && <span className="text-amber-800 dark:text-amber-300">, thiếu {shortQty}</span>}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <StatusBadge label={getWarehouseTaskStatusLabel(task.status)} variant={getPickingTaskStatusVariant(task.status)} />
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </section>
+                )}
+              </div>
+
+              <aside aria-labelledby="outbound-confirm-title" className="@4xl/page:sticky @4xl/page:top-4">
+                <section className="rounded-2xl border border-border bg-card p-5">
+                  <h2 id="outbound-confirm-title" className="font-serif text-[17px] font-semibold tracking-tight">Xác nhận xuất kho</h2>
+
+                  {requested !== undefined && (
+                    <div className="mt-4">
+                      <p className="text-[12px] text-muted-foreground">Đã lấy</p>
+                      <p className="font-serif text-[32px] font-semibold leading-none tabular-nums text-foreground">
+                        {picked}<span className="font-sans text-[14px] font-normal text-muted-foreground"> / {requested} cuốn</span>
+                      </p>
+                      <Progress value={pickedPct} className="mt-2.5 h-1.5" aria-label={`Đã lấy ${pickedPct}%`} />
+                      {remaining > 0 && <p className="mt-1.5 text-[12px] text-amber-800 dark:text-amber-300">Còn thiếu {remaining} cuốn.</p>}
+                    </div>
+                  )}
+
+                  {assignedName && (
+                    <p className="mt-4 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <UserCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      Nhân viên xuất kho: <span className="truncate font-medium text-foreground">{assignedName}</span>
+                    </p>
+                  )}
+
+                  <div className="mt-4 border-t border-border pt-4">
+                    {detailConfirmable ? (
+                      <p className="mb-3 flex items-start gap-1.5 text-[13px] font-medium text-emerald-700 dark:text-emerald-400">
+                        <ScanLine className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /> Đơn đã sẵn sàng. Quét hoặc nhập mã đơn để xác nhận.
+                      </p>
+                    ) : (
+                      <p className="mb-3 text-[13px] text-amber-800 dark:text-amber-300">
+                        Đơn đang ở trạng thái "{outboundStatusBadge(detail.status).label}", chưa thể xuất kho.
+                      </p>
+                    )}
+                    <label htmlFor="outbound-scan-code" className="mb-1.5 block text-[12px] font-medium text-foreground">Mã đơn hoặc mã quét</label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="outbound-scan-code"
+                        value={scanCode}
+                        onChange={(event) => setScanCode(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            void handleConfirm();
+                          }
+                        }}
+                        placeholder={detail.order_number}
+                        autoComplete="off"
+                        className="h-11 min-w-0 flex-1 font-mono"
+                      />
+                      <IconButton variant="outline" onClick={() => setShowScanModal(true)} disabled={confirming} label="Quét mã đơn" className="h-11 w-11 shrink-0">
+                        <ScanLine className="h-4 w-4" />
+                      </IconButton>
+                    </div>
+                    <Button onClick={() => void handleConfirm()} disabled={!detailConfirmable} loading={confirming} className="mt-3 h-11 w-full">
+                      <Truck className="h-4 w-4" /> Xác nhận xuất kho
+                    </Button>
+                    <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+                      {detail.task_type === 'transfer'
+                        ? 'Sau khi xác nhận, hàng chuyển sang trạng thái đang vận chuyển. Quản lý kho đích cần giao việc nhận hàng cho nhân viên.'
+                        : 'Sau khi xác nhận, đơn chuyển sang trạng thái hoàn tất.'}
+                    </p>
+                    {loadingDetail ? <p className="mt-3 text-[12px] text-muted-foreground">Đang tải chi tiết...</p> : null}
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+        </FadeItem>
+
+        <BarcodeScanModal
+          isOpen={showScanModal}
+          onClose={() => setShowScanModal(false)}
+          onDetected={(code) => {
+            setScanCode(code);
+            toast.success(`Đã quét mã đơn: ${code}`);
+          }}
+          title="Quét mã đơn xuất kho"
+        />
+      </PageWrapper>
+    );
+  }
+
+  const lede = queue.length === 0
+    ? 'Hàng đợi xuất kho đang trống.'
+    : `${queueStats.total} đơn trong hàng đợi, ${queueStats.ready} sẵn sàng xuất kho${canManageQueue && queueStats.unassigned > 0 ? `, ${queueStats.unassigned} chưa có nhân viên` : ''}.`;
+
+  const railButton = (active: boolean, onClick: () => void, label: string, count?: number) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        active ? 'bg-primary/[0.08] text-primary' : 'text-foreground hover:bg-muted/60',
+      )}
+    >
+      <span className={cn('min-w-0 truncate text-[13px]', active ? 'font-semibold' : 'font-medium')} title={label}>{label}</span>
+      {count !== undefined && <span className={cn('shrink-0 text-[12px] tabular-nums', active ? 'text-primary' : 'text-muted-foreground')}>{count}</span>}
+    </button>
+  );
+  const columnCount = canManageQueue ? 4 : 3;
+
+  return (
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={PackageCheck}
           title="Xuất kho"
-          description={canManageQueue ? 'Giao task và xác nhận xuất kho cho đơn đã lấy xong (READY_FOR_OUTBOUND)' : 'Xác nhận xuất kho cho task được giao'}
-          iconBg="bg-gradient-to-br from-sky-100 to-blue-50 dark:from-sky-500/20 dark:to-blue-500/10"
-          iconColor="text-sky-600 dark:text-sky-400"
+          description={(
+            <>
+              {lede}
+              {canAccess(currentUser, ROUTE_ACCESS.orderRequests) && (
+                <>
+                  {' '}Đơn mới đến từ{' '}
+                  <NavLink to="/order-requests" className="whitespace-nowrap rounded font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    Yêu cầu xuất kho
+                  </NavLink>
+                  .
+                </>
+              )}
+            </>
+          )}
         />
       </FadeItem>
 
-      {!detail ? (
-        <>
-          {canManageQueue && (
-            <FadeItem>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatCard label="Tổng đơn" value={queueStats.total} icon={Boxes} variant="primary" animateValue />
-                <StatCard label="Sẵn xuất kho" value={queueStats.ready} icon={PackageCheck} variant="success" animateValue />
-                <StatCard label="Đang xử lý" value={queueStats.processing} icon={ListChecks} variant="info" animateValue />
-                <StatCard
-                  label="Chưa giao"
-                  value={queueStats.unassigned}
-                  icon={Clock}
-                  variant={queueStats.unassigned > 0 ? 'danger' : 'default'}
-                  animateValue
-                />
-              </div>
-            </FadeItem>
-          )}
-
-          <FadeItem>
-            <FilterBar
-              searchValue={query}
-              onSearchChange={setQuery}
-              searchPlaceholder="Mã đơn / kho / loại đơn"
-              filters={(
-                <div className="flex items-center gap-2 flex-wrap">
-                  <SegmentedControl
-                    options={[
-                      { value: 'ALL', label: 'Tất cả' },
-                      { value: 'READY', label: 'Sẵn xuất kho' },
-                      { value: 'PROCESSING', label: 'Đang xử lý' },
-                    ]}
-                    value={statusFilter}
-                    onChange={(value) => setStatusFilter(value as 'ALL' | 'READY' | 'PROCESSING')}
-                    layoutId="outbound-status-filter"
-                    gradientClassName="from-blue-600 to-indigo-600"
-                  />
-                  {canManageQueue && (
-                    <Select value={selectedWarehouseId || 'all'} onValueChange={(value) => setSelectedWarehouseId(value === 'all' ? '' : value)}>
-                      <SelectTrigger className="w-[220px]">
-                        <SelectValue placeholder="Chọn kho" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Chọn kho</SelectItem>
-                        {warehouses.map((warehouse) => (
-                          <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+      <FadeItem>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[220px_minmax(0,1fr)]">
+            <nav aria-label="Lọc đơn xuất kho" className="hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Tình trạng</p>
+              {STATUS_ITEMS.map((item) => (
+                <div key={item.value}>{railButton(statusFilter === item.value, () => setStatusFilter(item.value), item.label, item.count)}</div>
+              ))}
+              {canManageQueue && warehouses.length > 0 && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Kho xuất</p>
+                  {warehouses.map((warehouse) => (
+                    <div key={warehouse.id}>{railButton(selectedWarehouseId === warehouse.id, () => setSelectedWarehouseId(warehouse.id), warehouse.name)}</div>
+                  ))}
                 </div>
               )}
-            />
-          </FadeItem>
+            </nav>
 
-          <FadeItem>
-            <SectionCard noPadding>
-              <Table>
+            <section aria-labelledby="outbound-queue-title" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="px-5 pb-1 pt-4">
+                <h2 id="outbound-queue-title" className="font-serif text-[18px] font-semibold tracking-tight">
+                  {statusFilter === 'READY' ? 'Đơn sẵn xuất kho' : statusFilter === 'PROCESSING' ? 'Đơn đang lấy hàng' : 'Hàng đợi xuất kho'}
+                </h2>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
+                  {canManageQueue ? 'Giao việc và xác nhận xuất kho cho các đơn đã lấy hàng xong.' : 'Xác nhận xuất kho cho các đơn được giao cho bạn.'}
+                </p>
+                {canManageQueue && queueStats.unassigned > 0 && (
+                  <p className="mt-2 flex items-start gap-2 text-[13px] text-amber-800 dark:text-amber-300">
+                    <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    {queueStats.unassigned} đơn chưa có nhân viên xuất kho. Chọn nhân viên cho từng đơn rồi bấm Giao.
+                  </p>
+                )}
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={query}
+                  onSearchChange={setQuery}
+                  searchPlaceholder="Mã đơn, mã kho hoặc loại đơn"
+                  showSearchClear
+                  filters={(
+                    <div className="flex flex-wrap items-center gap-2 @4xl/page:hidden">
+                      {warehouseSelect}
+                      <div className="max-w-full overflow-x-auto">
+                        <SegmentedControl
+                          options={STATUS_ITEMS.map((item) => ({ value: item.value, label: `${item.value === 'ALL' ? 'Tất cả' : item.label} (${item.count})` }))}
+                          value={statusFilter}
+                          onChange={(v) => setStatusFilter(v as 'ALL' | 'READY' | 'PROCESSING')}
+                          layoutId="outbound-status-filter"
+                          className="w-max"
+                        />
+                      </div>
+                    </div>
+                  )}
+                />
+              </div>
+
+              <Table className="table-fixed">
                 <TableHeader>
-                  <TableRow className="bg-gradient-to-r from-sky-50/30 to-transparent hover:bg-transparent dark:from-sky-500/5">
-                    {tableHeads.map((head) => (
-                      <TableHead key={head} className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                        {head}
+                  <TableRow className="hover:bg-transparent">
+                    {[
+                      { label: 'Đơn hàng', className: 'pl-5' },
+                      { label: 'Đã lấy', className: 'hidden w-[130px] @xl:table-cell' },
+                      ...(canManageQueue ? [{ label: 'Nhân viên xuất kho', className: 'hidden w-[250px] @2xl:table-cell' }] : []),
+                      { label: '', className: 'w-[130px] pr-5' },
+                    ].map((head, index) => (
+                      <TableHead key={index} className={cn('px-3 text-[12px] font-medium text-muted-foreground', head.className)}>
+                        {head.label || <span className="sr-only">Thao tác</span>}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -398,89 +709,55 @@ export function OutboundPage() {
                 <TableBody>
                   {pagedQueue.length === 0 ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={tableHeads.length} className="whitespace-normal">
-                        <EmptyState variant="no-data" title="Không có đơn nào cần xuất kho" className="py-10" />
+                      <TableCell colSpan={columnCount} className="whitespace-normal py-12 text-center">
+                        <EmptyState
+                          variant={query ? 'no-results' : 'inbox'}
+                          title={query ? 'Không tìm thấy đơn phù hợp' : 'Không có đơn nào cần xuất kho'}
+                          description={query ? 'Thử tìm theo mã đơn hoặc mã kho.' : 'Đơn xuất kho và chuyển kho đã duyệt sẽ hiện ở đây cùng tiến độ lấy hàng.'}
+                        />
                       </TableCell>
                     </TableRow>
                   ) : pagedQueue.map((task) => {
                     const key = `${task.task_type}:${task.task_id}`;
-                    const selectedStaffId = assigningStaffByTask[key] || '';
-                    const assignedName = getAssignedStaffName(task.outbound_assigned_user_id);
-                    const isAssigning = assigningTaskKey === key;
                     const progressPct = task.total_quantity > 0 ? Math.min(100, Math.round((task.ready_quantity / task.total_quantity) * 100)) : 0;
-
+                    const ready = READY_STATUSES.has(task.status);
                     return (
-                      <TableRow key={key}>
-                        <TableCell className="text-[12px] font-semibold">
-                          <div>{task.order_number}</div>
-                          {(task.repick_count ?? 0) > 0 && (
-                            <div className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
-                              {task.repick_count} repick{(task.active_repick_count ?? 0) > 0 ? ` · ${task.active_repick_count} chưa xong` : ''}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{taskLabel(task.task_type)}</TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{task.source_warehouse_code || '-'}</TableCell>
-                        <TableCell className="text-[12px] text-muted-foreground">{task.target_warehouse_code || '-'}</TableCell>
-                        <TableCell className="text-[12px]">
-                          {(() => { const b = outboundStatusBadge(task.status); return (
-                            <StatusBadge label={b.label} variant={b.variant} dot />
-                          ); })()}
-                        </TableCell>
-                        <TableCell className="text-[12px] w-[140px]">
-                          <div className="flex items-center gap-2">
-                            <Progress value={progressPct} className="h-1.5 w-16" />
-                            <span className="font-mono text-[11px] font-semibold tabular-nums text-foreground whitespace-nowrap">
-                              {task.ready_quantity}/{task.total_quantity}
-                            </span>
-                          </div>
-                        </TableCell>
-                        {canManageQueue ? (
-                          <TableCell>
-                            {assignedName && !selectedStaffId ? (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700 font-semibold dark:bg-emerald-500/10 dark:text-emerald-400">
-                                  <UserCheck className="w-3 h-3" /> {assignedName}
-                                </span>
-                                <button
-                                  onClick={() => setAssigningStaffByTask((prev) => ({ ...prev, [key]: 'PICK' }))}
-                                  className="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
-                                >
-                                  Đổi
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <Select
-                                  value={selectedStaffId === 'PICK' ? 'none' : (selectedStaffId || 'none')}
-                                  onValueChange={(value) => setAssigningStaffByTask((prev) => ({ ...prev, [key]: value === 'none' ? '' : value }))}
-                                >
-                                  <SelectTrigger className="h-8 min-w-[140px] text-[11px]">
-                                    <SelectValue placeholder="Chọn nhân viên" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {warehouseStaff.map((staff) => (
-                                      <SelectItem key={staff.id} value={staff.id}>
-                                        {staff.full_name || staff.username}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  size="sm"
-                                  onClick={() => void handleAssignOutbound(task)}
-                                  disabled={!selectedStaffId || selectedStaffId === 'PICK'}
-                                  loading={isAssigning}
-                                >
-                                  Giao
-                                </Button>
-                              </div>
+                      <TableRow key={key} className="hover:bg-muted/40">
+                        <TableCell className="whitespace-normal py-3.5 pl-5 pr-3 align-top">
+                          <button
+                            type="button"
+                            onClick={() => void handleOpen(task)}
+                            className="block max-w-full truncate rounded text-left font-mono text-[13px] font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            title={task.order_number}
+                          >
+                            {task.order_number}
+                          </button>
+                          <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
+                            {routeText(task.task_type, task.source_warehouse_code, task.target_warehouse_code)}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {statusBadge(task.status)}
+                            {(task.repick_count ?? 0) > 0 && (
+                              <span className="text-[12px] text-amber-800 dark:text-amber-300">
+                                {task.repick_count} lần lấy bù{(task.active_repick_count ?? 0) > 0 ? `, ${task.active_repick_count} chưa xong` : ''}
+                              </span>
                             )}
-                          </TableCell>
-                        ) : null}
-                        <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => void handleOpen(task)}>
-                            Xem & xuất <ArrowRight className="w-3 h-3" />
+                          </div>
+                          <p className="mt-1.5 text-[12px] text-muted-foreground @xl:hidden">
+                            Đã lấy <span className="font-semibold tabular-nums text-foreground">{task.ready_quantity}/{task.total_quantity}</span> cuốn
+                          </p>
+                          {canManageQueue && <div className="mt-2 @2xl:hidden">{assignControl(task)}</div>}
+                        </TableCell>
+                        <TableCell className="hidden px-3 py-3.5 align-top @xl:table-cell">
+                          <p className="font-serif text-[18px] font-semibold leading-tight tabular-nums">
+                            {task.ready_quantity}<span className="font-sans text-[12px] font-normal text-muted-foreground"> / {task.total_quantity} cuốn</span>
+                          </p>
+                          <Progress value={progressPct} className="mt-1.5 h-1.5" aria-label={`Đã lấy ${progressPct}%`} />
+                        </TableCell>
+                        {canManageQueue && <TableCell className="hidden px-3 py-3.5 align-top @2xl:table-cell">{assignControl(task)}</TableCell>}
+                        <TableCell className="py-3.5 pl-3 pr-5 text-right align-top">
+                          <Button size="sm" variant={ready ? 'default' : 'outline'} onClick={() => void handleOpen(task)}>
+                            {ready ? <>Xuất kho <ArrowRight className="h-3.5 w-3.5" /></> : 'Xem'}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -488,297 +765,19 @@ export function OutboundPage() {
                   })}
                 </TableBody>
               </Table>
-
-              {filteredQueue.length > 0 && (
-                <div className="flex flex-col gap-3 border-t border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[12px] text-muted-foreground">
-                    Hiển thị <span className="font-medium text-foreground">{pagedQueue.length}</span> / {filteredQueue.length} đơn
-                  </p>
-                  {totalPages > 1 && (
-                    <Pagination className="mx-0 w-auto justify-end">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.max(1, current - 1));
-                            }}
-                            className={cn('cursor-pointer', page === 1 && 'pointer-events-none opacity-50')}
-                          />
-                        </PaginationItem>
-                        {getPaginationRange(page, totalPages).map((item) => (
-                          <PaginationItem key={item}>
-                            {typeof item === 'number' ? (
-                              <PaginationLink
-                                isActive={item === page}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  setPage(item);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                {item}
-                              </PaginationLink>
-                            ) : (
-                              <PaginationEllipsis />
-                            )}
-                          </PaginationItem>
-                        ))}
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={(event) => {
-                              event.preventDefault();
-                              setPage((current) => Math.min(totalPages, current + 1));
-                            }}
-                            className={cn('cursor-pointer', page === totalPages && 'pointer-events-none opacity-50')}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  )}
-                </div>
-              )}
-            </SectionCard>
-          </FadeItem>
-        </>
-      ) : (
-        <>
-          <FadeItem>
-            <div className="relative">
-              <div className="pointer-events-none absolute -top-2 left-6 z-10 h-4 w-4 rounded-full border border-border bg-background" />
-              <div className="pointer-events-none absolute -top-2 right-6 z-10 h-4 w-4 rounded-full border border-border bg-background" />
-              <div className={cn('rounded-xl border bg-card p-5 pt-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none border-l-4', detailAccentBorder)}>
-                <p className="mb-3 border-b border-dashed border-border pb-3 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Phiếu xuất kho
-                </p>
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <p className="font-mono text-[20px] font-bold leading-tight text-foreground">#{detail.order_number}</p>
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span className="font-mono text-[11px] text-muted-foreground">{taskLabel(detail.task_type)}</span>
-                      {(() => { const b = outboundStatusBadge(detail.status); return (
-                        <StatusBadge label={b.label} variant={b.variant} dot />
-                      ); })()}
-                    </div>
-                    <p className="text-[12px] text-muted-foreground mt-2">
-                      Nguồn: {detail.source_warehouse_code || '-'}
-                      {detail.target_warehouse_code ? ` | Đích: ${detail.target_warehouse_code}` : ''}
-                      {` | Số dòng: ${detail.lines.length}`}
-                    </p>
-                    {detail.aggregate_requested_qty !== undefined && (
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Tổng: <span className="font-mono font-semibold tabular-nums">{detail.aggregate_picked_qty}</span>/{detail.aggregate_requested_qty} cuốn
-                        {(detail.aggregate_remaining_qty ?? 0) > 0 && (
-                          <span className="text-amber-600 dark:text-amber-400"> · Còn thiếu: {detail.aggregate_remaining_qty}</span>
-                        )}
-                      </p>
-                    )}
-                    {detail.outbound_assigned_user_id ? (
-                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-1 font-semibold">
-                        Nhân viên xuất kho: {getAssignedStaffName(detail.outbound_assigned_user_id)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <Button variant="outline" onClick={handleBackToQueue}>
-                    Quay lại hàng đợi
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </FadeItem>
-
-          <FadeItem>
-            <SectionCard title="Tiến trình xuất kho">
-              <WorkflowStepper steps={outboundWorkflowSteps(detail.status)} compact />
-            </SectionCard>
-          </FadeItem>
-
-          <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-5 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <h3 className="text-[14px] font-semibold">Quét mã và xác nhận xuất kho</h3>
-                {detailConfirmable ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                    <ScanLine className="h-3.5 w-3.5 animate-pulse" /> Sẵn sàng quét
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Chưa thể xuất kho
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground mb-3">Nhập tay hoặc quét mã đơn để xác nhận xuất kho.</p>
-              <div className="flex gap-2 flex-wrap">
-                <Input
-                  value={scanCode}
-                  onChange={(event) => setScanCode(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      void handleConfirm();
-                    }
-                  }}
-                  placeholder="Mã đơn / mã quét"
-                  className="flex-1 min-w-[200px] h-auto py-2.5 font-mono tracking-wide"
-                />
-                <IconButton
-                  variant="outline"
-                  onClick={() => setShowScanModal(true)}
-                  disabled={confirming}
-                  label="Quét mã đơn"
-                >
-                  <ScanLine className="w-4 h-4" />
-                </IconButton>
-                <Button
-                  onClick={() => void handleConfirm()}
-                  disabled={!detailConfirmable}
-                  loading={confirming}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90"
-                >
-                  Xác nhận xuất kho
-                </Button>
-              </div>
-
-              {scanCode && (
-                <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-                  Đã nhập mã: <span className="text-foreground font-semibold">{scanCode}</span>
-                </p>
-              )}
-
-              {!detailConfirmable && (
-                <p className="mt-2 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                  Đơn đang ở trạng thái "{outboundStatusBadge(detail.status).label}" — chưa thể xuất kho.
-                </p>
-              )}
-
-              {loadingDetail ? <p className="text-[12px] text-muted-foreground mt-3">Đang tải chi tiết...</p> : null}
-            </div>
-          </FadeItem>
-
-          <FadeItem>
-            <SectionCard noPadding>
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-gradient-to-r from-sky-50/30 to-transparent hover:bg-transparent dark:from-sky-500/5">
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Sản phẩm</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">SKU/Mã vạch</TableHead>
-                    <TableHead className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground w-[150px]">Tiến độ</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detail.lines.length === 0 ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={3} className="whitespace-normal py-6 text-center text-[12px] text-muted-foreground">Không có dòng nào</TableCell>
-                    </TableRow>
-                  ) : detail.lines.map((line) => {
-                    const short = line.ready_qty < line.quantity;
-                    const linePct = line.quantity > 0 ? Math.min(100, Math.round((line.ready_qty / line.quantity) * 100)) : 0;
-
-                    return (
-                      <TableRow key={line.line_id} className={cn('border-dashed', short && 'bg-amber-50/40 dark:bg-amber-500/5')}>
-                        <TableCell className="whitespace-normal text-[12px]">
-                          <p className="text-foreground font-medium">{line.book_title}</p>
-                        </TableCell>
-                        <TableCell className="font-mono text-[12px] text-muted-foreground">{line.sku || line.barcode || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={linePct} className="h-1.5 w-16" />
-                            <span className={cn(
-                              'font-mono text-[11px] font-semibold tabular-nums whitespace-nowrap',
-                              short ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
-                            )}>
-                              {line.ready_qty}/{line.quantity}
-                            </span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </SectionCard>
-          </FadeItem>
-
-          {/* Execution chain: PICK task + REPICK children */}
-          {(detail.pick_task || (detail.repick_tasks && detail.repick_tasks.length > 0)) && (
-            <FadeItem>
-              <div className="rounded-xl border border-border/80 bg-card p-4 shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">Execution Chain</p>
-                <div className="space-y-2">
-                  {/* PICK root task */}
-                  {detail.pick_task && (
-                    <div className="rounded-[10px] border border-sky-100 bg-sky-50/50 p-3 dark:border-sky-500/20 dark:bg-sky-500/10">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full bg-sky-100 text-sky-700 px-2 py-0.5 text-[10px] font-bold dark:bg-sky-500/15 dark:text-sky-400">PICK</span>
-                          <span className="text-[12px] font-semibold text-sky-900 dark:text-sky-300">{detail.pick_task.task_number}</span>
-                        </div>
-                        <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', TONE_CLASSNAME[getPickingTaskStatusVariant(detail.pick_task.status)])}>
-                          {detail.pick_task.status}
-                        </span>
-                      </div>
-                      {detail.pick_task.items.length > 0 && (
-                        <div className="mt-2 text-[11px] text-muted-foreground">
-                          Yêu cầu: {detail.pick_task.items.reduce((s, i) => s + i.requested_qty, 0)} ·
-                          Đã lấy: {detail.pick_task.items.reduce((s, i) => s + i.picked_qty, 0)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* REPICK children */}
-                  {(detail.repick_tasks || []).map((rt, idx) => (
-                    <div key={rt.picking_task_id} className="ml-4 rounded-[10px] border border-amber-100 bg-amber-50/40 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
-                      <div className="flex items-center gap-1 mb-1">
-                        <span className="text-muted-foreground text-[11px]">{idx === (detail.repick_tasks!.length - 1) ? '└─' : '├─'}</span>
-                        <div className="flex items-center justify-between flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-[10px] font-bold dark:bg-amber-500/15 dark:text-amber-400">REPICK</span>
-                            <span className="text-[12px] font-semibold text-amber-900 dark:text-amber-300">{rt.task_number}</span>
-                          </div>
-                          <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold', TONE_CLASSNAME[getPickingTaskStatusVariant(rt.status)])}>
-                            {rt.status}
-                          </span>
-                        </div>
-                      </div>
-                      {rt.items.length > 0 && (
-                        <div className="ml-5 text-[11px] text-muted-foreground">
-                          Yêu cầu: {rt.items.reduce((s, i) => s + i.requested_qty, 0)} ·
-                          Đã lấy: {rt.items.reduce((s, i) => s + i.picked_qty, 0)}
-                          {rt.items.reduce((s, i) => s + i.short_qty, 0) > 0 && (
-                            <span className="text-amber-600 dark:text-amber-400"> · Thiếu: {rt.items.reduce((s, i) => s + i.short_qty, 0)}</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </FadeItem>
-          )}
-
-          <FadeItem>
-            <Alert className="border-emerald-200/60 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-              <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" />
-              <AlertDescription className="text-emerald-800 dark:text-emerald-300">
-                {detail.task_type === 'transfer'
-                  ? 'Sau khi xác nhận xuất kho chuyển kho, hàng chuyển sang trạng thái IN_TRANSIT. Manager kho đích cần giao task nhận hàng cho nhân viên.'
-                  : 'Sau khi xác nhận xuất kho, đơn sẽ chuyển sang trạng thái COMPLETED.'}
-              </AlertDescription>
-            </Alert>
-          </FadeItem>
-
-          <BarcodeScanModal
-            isOpen={showScanModal}
-            onClose={() => setShowScanModal(false)}
-            onDetected={(code) => {
-              setScanCode(code);
-              toast.success(`Đã quét mã đơn: ${code}`);
-            }}
-            title="Quét mã đơn xuất kho"
-          />
-        </>
-      )}
+              <ListFooter
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={filteredQueue.length}
+                totalPages={totalPages}
+                shown={pagedQueue.length}
+                noun="đơn"
+                onPageChange={setPage}
+              />
+            </section>
+          </div>
+        </div>
+      </FadeItem>
     </PageWrapper>
   );
 }

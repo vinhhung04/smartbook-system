@@ -45,10 +45,10 @@ export function FilterBar({
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
             className={cn(
-              "w-full pl-9 pr-9 py-2.5 rounded-xl border border-input bg-background text-[13px]",
+              "w-full rounded-full border border-border bg-background py-2.5 pl-9 pr-9 text-[13px]",
               "outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40",
               "placeholder:text-muted-foreground",
-              "transition-all duration-150",
+              "transition-[border-color,box-shadow] duration-150",
             )}
           />
           {showSearchClear && searchValue && searchValue.length > 0 && (

@@ -1,0 +1,89 @@
+# asset_id|decision_override|image_condition|title_visible|note
+G-EN-0001||scan|yes|author not printed on cover
+G-EN-0002||scan|partial|library label covers part of title
+G-EN-0007||photo|yes|photograph of book on display stand
+G-EN-0008||scan|yes|lettering-only cover
+G-EN-0009||scan|yes|monthly serial part No.1 wrapper
+G-EN-0012||scan|yes|Book I part wrapper
+G-EN-0017|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|image is a title page
+G-EN-0025||photo|partial|small photo 210x277, title small on spine-like label
+G-EN-0026||scan|no|plain cloth cover, title not printed on front
+G-EN-0030||scan|no|cloth cover with blind-stamped otter, no title
+G-EN-0032|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|layout of a title page (imprint, publisher block); cannot confirm front cover
+G-EN-0036||scan|partial|small stamped title in shield
+G-EN-0039||scan|no|embossed seal only, no title
+G-EN-0040|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|title page
+G-EN-0041||photo|yes|photo incl. spine
+G-EN-0043||scan|partial|title partly cut at top edge, library labels
+G-EN-0044||scan|partial|library barcode label covers start of title
+G-EN-0045||scan|partial|small title plate on patterned cloth
+G-EN-0047||low_resolution|yes|200x304 image
+G-EN-0050||scan|partial|faint dark-on-dark title
+G-EN-0051||scan|partial|faint embossed title, library labels
+G-EN-0052||low_resolution|yes|238x350 image
+G-EN-0056|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|title page
+G-EN-0058||photo|yes|photo incl. spine
+G-EN-0060|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|title page
+G-EN-0061|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|title page
+G-EN-0069|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|title page
+G-EN-0070||low_resolution|yes|296x404 image
+G-EN-0078||photo_angled|partial|angled photo of the book on a table, 292x386
+G-EN-0081||scan|partial|tiny title label
+G-EN-0084|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|title page
+G-EN-0094||scan|partial|dark low-contrast title
+C-VN-0001|gallery|photo|yes|seed VN001; author printed without diacritics (VU TRONG-PHUNG); Edition Le-Cuong
+C-VN-0002|gallery|scan|yes|seed VN002
+C-VN-0003|gallery|photo|yes|seed VN003; 1920 printing, Han subtitle
+C-VN-0004|gallery|low_resolution|yes|seed VN004; 300x391; author not printed
+C-VN-0005|exclude:COMPOSITE_TWO_VOLUMES|scan|yes|seed VN005; two volume covers side by side (seed note)
+C-VN-0006|gallery|scan|no|seed VN006; illustration only, no title text
+C-VN-0007|gallery|scan|no|seed VN007; low-contrast emblem, title not legible
+C-VN-0008|gallery|photo|no|seed VN008; title in Han-Nom only (OCR accuracy excluded)
+C-VN-0009|gallery|scan|yes|booklet cover
+C-VN-0010|gallery|scan|yes|wiki-book style cover
+C-VN-0011|gallery|photo|partial|museum photo, glare; small title
+C-VN-0012|gallery|low_resolution|yes|300x450 photo
+C-VN-0013|exclude:DERIVATIVE_OF_OTHER_FILE_COLOURISED|scan|yes|colourised version of C-VN-0014 (same scan), not independent
+C-VN-0014|gallery|scan|yes|
+C-VN-0015|gallery|scan|no|title in Han characters only
+C-VN-0016|gallery|scan|yes|
+C-VN-0017|gallery|scan|yes|1957 Saigon edition
+C-VN-0018|query_independent:different_cover_same_work:C-VN-0017|photo|yes|1972 cover of the same work (different edition)
+C-VN-0019|gallery|scan|no|title in Han characters only
+C-VN-0020|gallery|scan|yes|
+C-VN-0021|gallery|scan|yes|1930 printing
+C-VN-0022|gallery|scan|no|title in Han characters only
+C-VN-0023|gallery|scan|no|title in Han characters only
+C-VN-0024|gallery|scan|yes|file name LVTT = "La vang tinh tho" (not Luc Van Tien)
+C-VN-0025|exclude:NOT_CLEARLY_FRONT_COVER|scan|no|woodblock leaf spread, cannot confirm it is the cover
+C-VN-0026|gallery|low_resolution|yes|214x283
+C-VN-0027|gallery|scan|yes|1963
+C-VN-0028|gallery|photo|yes|photo of a modern copy
+C-VN-0029|gallery|low_resolution|yes|152x237; same author as C-VN-0030
+C-VN-0030|gallery|scan|yes|same author as C-VN-0029
+C-VN-0031|gallery|scan|yes|
+C-VN-0032|exclude:NOT_A_BOOK_COVER|scan|yes|copyright registration certificate
+C-VN-0033|exclude:FULL_WRAP_FRONT_SPINE_BACK|scan|yes|wrap-around cover (front+spine+back) in one image
+C-VN-0034|exclude:FULL_WRAP_FRONT_SPINE_BACK|scan|yes|wrap-around cover
+C-VN-0035|exclude:FULL_WRAP_FRONT_SPINE_BACK|scan|yes|wrap-around cover
+C-VN-0036|gallery|photo|yes|1962, Nha xuat ban Giao duc (similar style to 0037/0038)
+C-VN-0037|gallery|photo|yes|1960, same publisher style
+C-VN-0038|gallery|photo|yes|1962, same publisher style
+C-VN-0039|gallery|scan|no|title in Han characters only
+C-VN-0040|gallery|scan|yes|
+C-VN-0041|gallery|scan|yes|
+C-VN-0042|gallery|photo|yes|
+C-VN-0043|gallery|photo|no|title in Han characters only
+C-VN-0044|gallery|photo|yes|
+C-VN-0045|gallery|scan|yes|1975 printing
+C-VN-0046|gallery|scan|yes|
+C-VN-0047|exclude:FULL_WRAP_FRONT_SPINE_BACK|scan|yes|wrap-around cover plus extra panels
+C-VN-0048|gallery|scan|partial|library barcode label covers author line
+C-VN-0049|exclude:COMPOSITE_SEVERAL_BOOKS|scan|yes|four covers in one image
+C-VN-0050|exclude:COMPOSITE_SEVERAL_BOOKS|scan|yes|four covers in one image
+C-VN-0051|exclude:COMPOSITE_SEVERAL_BOOKS|photo|partial|shelf of several books
+C-VN-0052|gallery|low_resolution|yes|250x350
+C-VN-0053|exclude:NOT_FRONT_COVER_TITLE_PAGE|scan|yes|1651 title page (Latin)
+C-VN-0054|gallery|scan|no|cover illustration only (volume 1)
+C-VN-0055|gallery|scan|no|cover illustration only (volume 2)
+C-VN-0056|gallery|scan|no|cover illustration only

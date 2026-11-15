@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ use case của tác nhân Quản lý kho – vận hành kho và mua hàng</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Use case · UML · SmartBook</p>
+    <h1>Sơ đồ use case của tác nhân Quản lý kho – vận hành kho và mua hàng</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 924" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="usecase-warehouse-manager-dd-title usecase-warehouse-manager-dd-desc">
+<title id="usecase-warehouse-manager-dd-title">Sơ đồ use case của tác nhân Quản lý kho – vận hành kho và mua hàng</title>
+<desc id="usecase-warehouse-manager-dd-desc">Quản lý kho duyệt yêu cầu mua, lập và gửi đơn, ghi sổ phiếu nhập, đối soát, nhập kho bằng OCR, quản lý nhà cung cấp, kho, kiểm kê, xuất chuyển kho, điều phối và danh mục.</desc>
+<defs>
+  <marker id="usecase-warehouse-manager-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1f3864"/></marker>
+  <marker id="usecase-warehouse-manager-dd-open" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polyline points="0 0, 8 3.5, 0 7" fill="none" stroke="#475569" stroke-width="1.2"/></marker>
+  <marker id="usecase-warehouse-manager-dd-gen" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto"><polygon points="0 0, 11 6, 0 12" fill="#ffffff" stroke="#475569" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="248" y="40" width="312" height="818" rx="8" fill="#f3f6fa" stroke="#475569" stroke-width="1.2"/>
+<text x="404.0" y="64" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">SmartBook – Vận hành kho và mua hàng</text>
+<path d="M 400 336 V 324" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#usecase-warehouse-manager-dd-open)"/>
+<path d="M 536.0 428.0 H 534 Q 542 428.0 542 420.0 V 304.0 Q 542 296.0 534 296.0 H 538.0" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#usecase-warehouse-manager-dd-open)"/>
+<path d="M 228 104.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 164.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 230.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 296.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 362.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 428.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 488.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 548.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 614.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 680.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 746.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 812.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<path d="M 228 104.0 V 812.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 142 458.0 H 228.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<circle cx="228" cy="458.0" r="2.5" fill="#1f3864"/>
+<path d="M 536.0 230.0 H 584.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 536.0 362.0 H 536.0 A 6 6 0 0 1 548.0 362.0 H 584.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 584 230.0 V 362.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 584 296.0 H 670.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<circle cx="584" cy="296.0" r="2.5" fill="#1f3864"/>
+<path d="M 536.0 428.0 H 670.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-warehouse-manager-dd-arrow)"/>
+<rect x="410" y="320.0" width="64" height="18" rx="2" fill="#f3f6fa"/>
+<text x="442.0" y="333.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">«extend»</text>
+<rect x="470" y="386.0" width="64" height="18" rx="2" fill="#f3f6fa"/>
+<text x="502.0" y="399.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">«extend»</text>
+<ellipse cx="400" cy="104.0" rx="136.0" ry="20.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="109.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC32. Duyệt yêu cầu mua hàng</text>
+<ellipse cx="400" cy="164.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="161.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC33. Lập và trình duyệt</text>
+<text x="400" y="177.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">đơn đặt hàng</text>
+<ellipse cx="400" cy="230.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="227.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC34. Duyệt và gửi đơn</text>
+<text x="400" y="243.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">cho nhà cung cấp</text>
+<ellipse cx="400" cy="296.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="293.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC35. Lập và ghi sổ</text>
+<text x="400" y="309.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">phiếu nhập kho</text>
+<ellipse cx="400" cy="362.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="359.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC37. Đối soát đơn hàng</text>
+<text x="400" y="375.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">và xử lý thiếu hàng</text>
+<ellipse cx="400" cy="428.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="425.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC36. Nhập kho thông minh</text>
+<text x="400" y="441.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">bằng OCR hóa đơn</text>
+<ellipse cx="400" cy="488.0" rx="136.0" ry="20.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="493.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC38. Quản lý nhà cung cấp</text>
+<ellipse cx="400" cy="548.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="545.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC39. Quản lý kho và</text>
+<text x="400" y="561.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">vị trí lưu trữ</text>
+<ellipse cx="400" cy="614.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="611.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC40. Lập và duyệt</text>
+<text x="400" y="627.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">phiếu kiểm kê</text>
+<ellipse cx="400" cy="680.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="677.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC41. Tạo và duyệt yêu cầu</text>
+<text x="400" y="693.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">xuất kho, chuyển kho</text>
+<ellipse cx="400" cy="746.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="743.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC42. Điều phối công việc</text>
+<text x="400" y="759.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">và xử lý sự cố kho</text>
+<ellipse cx="400" cy="812.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="809.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC43. Quản lý danh mục</text>
+<text x="400" y="825.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">sách và biến thể</text>
+<circle cx="120" cy="440.0" r="10" fill="#ffffff" stroke="#5b6b82" stroke-width="1.4"/>
+<path d="M 120 450.0 V 474.0 M 104 458.0 H 136 M 120 474.0 L 108 490.0 M 120 474.0 L 132 490.0" fill="none" stroke="#5b6b82" stroke-width="1.4"/>
+<text x="120" y="508.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Quản lý kho</text>
+<circle cx="692" cy="278.0" r="10" fill="#ffffff" stroke="#5b6b82" stroke-width="1.4"/>
+<path d="M 692 288.0 V 312.0 M 676 296.0 H 708 M 692 312.0 L 680 328.0 M 692 312.0 L 704 328.0" fill="none" stroke="#5b6b82" stroke-width="1.4"/>
+<text x="692" y="346.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Nhà cung cấp</text>
+<circle cx="692" cy="410.0" r="10" fill="#ffffff" stroke="#5b6b82" stroke-width="1.4"/>
+<path d="M 692 420.0 V 444.0 M 676 428.0 H 708 M 692 444.0 L 680 460.0 M 692 444.0 L 704 460.0" fill="none" stroke="#5b6b82" stroke-width="1.4"/>
+<text x="692" y="478.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Dịch vụ AI</text>
+<line x1="40" y1="880" x2="760" y2="880" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<line x1="44" y1="900" x2="64" y2="900" stroke="#1f3864" stroke-width="1.2"/>
+<text x="72" y="904" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">tác nhân – use case</text>
+<line x1="204" y1="900" x2="224" y2="900" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="232" y="904" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">«include» / «extend»</text>
+</svg>
+    </div>
+    <p class="note">Chép từ hình gốc của báo cáo (Hình 3.9); ký pháp UML, phong cách SmartBook.</p>
+  </div>
+</body>
+</html>

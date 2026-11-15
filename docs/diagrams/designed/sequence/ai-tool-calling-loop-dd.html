@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vòng lặp gọi công cụ của trợ lý AI và bước kiểm tra căn cứ số liệu</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Diagram Design · SmartBook</p>
+    <h1>Vòng lặp gọi công cụ của trợ lý AI và bước kiểm tra căn cứ số liệu</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 688" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-tool-calling-loop-dd-title ai-tool-calling-loop-dd-desc">
+<title id="ai-tool-calling-loop-dd-title">Vòng lặp gọi công cụ của trợ lý AI và bước kiểm tra căn cứ số liệu</title>
+<desc id="ai-tool-calling-loop-dd-desc">Trợ lý gửi câu hỏi và mô tả công cụ cho mô hình, lặp gọi công cụ phân tích bằng JWT người dùng, kiểm tra căn cứ các con số và yêu cầu sinh lại khi cần.</desc>
+<defs>
+  <marker id="ai-tool-calling-loop-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-tool-calling-loop-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-tool-calling-loop-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-tool-calling-loop-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="264" y="196" width="452" height="176" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<rect x="264" y="468" width="280" height="104" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<!-- lifelines -->
+<line x1="84" y1="104" x2="84" y2="648" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="284" y1="104" x2="284" y2="648" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="524" y1="104" x2="524" y2="648" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="696" y1="104" x2="696" y2="648" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="88" y1="148" x2="280" y2="148" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="288" y1="184" x2="520" y2="184" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="520" y1="252" x2="288" y2="252" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="288" y1="288" x2="692" y2="288" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="692" y1="324" x2="288" y2="324" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="288" y1="360" x2="520" y2="360" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="520" y1="408" x2="288" y2="408" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<path d="M 288 420 H 312 Q 320 420 320 428 V 448 Q 320 456 312 456 H 290" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="288" y1="524" x2="520" y2="524" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="520" y1="560" x2="288" y2="560" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<line x1="280" y1="624" x2="88" y2="624" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-tool-calling-loop-dd-arrow)"/>
+<!-- labels -->
+<rect x="160" y="122" width="48" height="18" rx="2" fill="#ffffff"/>
+<text x="184.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">câu hỏi</text>
+<rect x="338" y="158" width="132" height="18" rx="2" fill="#ffffff"/>
+<text x="404.0" y="171" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">câu hỏi + mô tả công cụ</text>
+<rect x="348" y="226" width="112" height="18" rx="2" fill="#f7f7f7"/>
+<text x="404.0" y="239" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">yêu cầu gọi công cụ</text>
+<rect x="418" y="262" width="144" height="18" rx="2" fill="#f7f7f7"/>
+<text x="490.0" y="275" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">thực thi (JWT người dùng)</text>
+<rect x="448" y="298" width="84" height="18" rx="2" fill="#f7f7f7"/>
+<text x="490.0" y="311" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">kết quả JSON</text>
+<rect x="334" y="334" width="140" height="18" rx="2" fill="#f7f7f7"/>
+<text x="404.0" y="347" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đưa kết quả vào ngữ cảnh</text>
+<path d="M 264 196 H 312 V 208 L 304 216 H 264 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="285.0" y="211" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">loop</text>
+<rect x="320" y="197" width="96" height="18" rx="2" fill="#f7f7f7"/>
+<text x="326" y="211" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[tối đa N vòng]</text>
+<rect x="370" y="382" width="68" height="18" rx="2" fill="#ffffff"/>
+<text x="404.0" y="395" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">câu trả lời</text>
+<rect x="328" y="421" width="92" height="34" rx="2" fill="#ffffff"/>
+<text x="334" y="434.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">kiểm tra căn cứ</text>
+<text x="334" y="450.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">các con số</text>
+<rect x="358" y="498" width="92" height="18" rx="2" fill="#f7f7f7"/>
+<text x="404.0" y="511" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">yêu cầu sinh lại</text>
+<rect x="360" y="534" width="88" height="18" rx="2" fill="#f7f7f7"/>
+<text x="404.0" y="547" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">câu trả lời mới</text>
+<path d="M 264 468 H 304 V 480 L 296 488 H 264 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="281.0" y="483" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="312" y="469" width="140" height="18" rx="2" fill="#f7f7f7"/>
+<text x="318" y="483" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[có số không có căn cứ]</text>
+<rect x="128" y="582" width="112" height="34" rx="2" fill="#ffffff"/>
+<text x="184.0" y="595" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trả lời + bằng chứng</text>
+<text x="184.0" y="611" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">+ công cụ đã gọi</text>
+<!-- nodes -->
+<circle cx="84" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 84 56 V 72 M 73 61 H 95 M 84 72 L 75 84 M 84 72 L 93 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="84" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Người dùng</text>
+<rect x="216" y="40" width="136" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="284" y="77" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Trợ lý AI (điều phối)</text>
+<rect x="464" y="40" width="120" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="524" y="77" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Mô hình ngôn ngữ</text>
+<rect x="632" y="40" width="128" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="696" y="77" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Công cụ phân tích</text>
+</svg>
+    </div>
+    <p class="note">Chép nguyên văn từ Hình 2.4 của báo cáo.</p>
+  </div>
+</body>
+</html>

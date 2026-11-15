@@ -1,6 +1,6 @@
 """Adapters for Vietnamese publisher/bookstore sites used by the two-round
 ISBN search (isbn_rounds.py). Verified live on 2026-11-12 - see
-BOOK_DATA_SOURCE_AUDIT.md for the evidence and the robots.txt review.
+docs/reports/BOOK_DATA_SOURCE_AUDIT.md for the evidence and the robots.txt review.
 
 - Đinh Tị Books (dinhtibooks.com.vn): server-rendered site, no robots.txt.
   Its own search (/search/<keyword>.html) matches the printed barcode, and the

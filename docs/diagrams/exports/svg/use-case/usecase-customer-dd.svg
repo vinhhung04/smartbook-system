@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 724" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="usecase-customer-dd-title usecase-customer-dd-desc" id="usecase-customer-dd-root">
+<title id="usecase-customer-dd-title">Sơ đồ use case của tác nhân Khách hàng</title>
+<desc id="usecase-customer-dd-desc">Khách hàng tra cứu, tìm bằng ảnh bìa, đặt giữ, theo dõi mượn, thanh toán phạt, quản lý yêu thích, đánh giá, xem gợi ý và thông báo.</desc>
+<defs>
+      <style>#usecase-customer-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #usecase-customer-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #usecase-customer-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #usecase-customer-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#usecase-customer-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="usecase-customer-dd-usecase-customer-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1f3864"/></marker>
+  <marker id="usecase-customer-dd-usecase-customer-dd-open" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto"><polyline points="0 0, 8 3.5, 0 7" fill="none" stroke="#475569" stroke-width="1.2"/></marker>
+  <marker id="usecase-customer-dd-usecase-customer-dd-gen" markerWidth="12" markerHeight="12" refX="11" refY="6" orient="auto"><polygon points="0 0, 11 6, 0 12" fill="#ffffff" stroke="#475569" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="248" y="40" width="312" height="620" rx="8" fill="#f3f6fa" stroke="#475569" stroke-width="1.2"/>
+<text x="404.0" y="64" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">SmartBook – Cổng bạn đọc</text>
+<path d="M 400 150 V 138" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#usecase-customer-dd-usecase-customer-dd-open)"/>
+<path d="M 536.0 428.0 H 534 Q 542 428.0 542 420.0 V 244.0 Q 542 236.0 534 236.0 H 538.0" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#usecase-customer-dd-usecase-customer-dd-open)"/>
+<path d="M 228 110.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 176.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 236.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 296.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 362.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 428.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 488.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 548.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 614.0 H 262.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<path d="M 228 110.0 V 614.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 142 362.0 H 228.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<circle cx="228" cy="362.0" r="2.5" fill="#1f3864"/>
+<path d="M 536.0 176.0 H 584.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 536.0 548.0 H 584.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 584 176.0 V 548.0" fill="none" stroke="#1f3864" stroke-width="1.2"/>
+<path d="M 584 266.0 H 670.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<circle cx="584" cy="266.0" r="2.5" fill="#1f3864"/>
+<path d="M 536.0 362.0 H 536.0 A 6 6 0 0 1 548.0 362.0 H 578.0 A 6 6 0 0 1 590.0 362.0 H 670.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#usecase-customer-dd-usecase-customer-dd-arrow)"/>
+<rect x="410" y="134.0" width="64" height="18" rx="2" fill="#f3f6fa"/>
+<text x="442.0" y="147.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">«extend»</text>
+<rect x="470" y="320.0" width="64" height="18" rx="2" fill="#f3f6fa"/>
+<text x="502.0" y="333.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">«extend»</text>
+<ellipse cx="400" cy="110.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="107.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC05. Tra cứu danh mục</text>
+<text x="400" y="123.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">và xem chi tiết sách</text>
+<ellipse cx="400" cy="176.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="173.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC06. Tìm sách</text>
+<text x="400" y="189.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">bằng ảnh bìa</text>
+<ellipse cx="400" cy="236.0" rx="136.0" ry="20.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="241.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC07. Đặt giữ sách</text>
+<ellipse cx="400" cy="296.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="293.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC08. Theo dõi phiếu mượn</text>
+<text x="400" y="309.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">và yêu cầu gia hạn</text>
+<ellipse cx="400" cy="362.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="359.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC09. Thanh toán phí phạt</text>
+<text x="400" y="375.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">trực tuyến</text>
+<ellipse cx="400" cy="428.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="425.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC10. Quản lý yêu thích và</text>
+<text x="400" y="441.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">đăng ký báo có sách</text>
+<ellipse cx="400" cy="488.0" rx="136.0" ry="20.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="493.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC11. Đánh giá sách</text>
+<ellipse cx="400" cy="548.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="545.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC12. Xem gợi ý đọc sách</text>
+<text x="400" y="561.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">cá nhân hóa</text>
+<ellipse cx="400" cy="614.0" rx="136.0" ry="26.0" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400" y="611.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">UC13. Xem thông báo và</text>
+<text x="400" y="627.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">thống kê đọc sách</text>
+<circle cx="120" cy="344.0" r="10" fill="#ffffff" stroke="#5b6b82" stroke-width="1.4"/>
+<path d="M 120 354.0 V 378.0 M 104 362.0 H 136 M 120 378.0 L 108 394.0 M 120 378.0 L 132 394.0" fill="none" stroke="#5b6b82" stroke-width="1.4"/>
+<text x="120" y="412.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Khách hàng</text>
+<circle cx="692" cy="248.0" r="10" fill="#ffffff" stroke="#5b6b82" stroke-width="1.4"/>
+<path d="M 692 258.0 V 282.0 M 676 266.0 H 708 M 692 282.0 L 680 298.0 M 692 282.0 L 704 298.0" fill="none" stroke="#5b6b82" stroke-width="1.4"/>
+<text x="692" y="316.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Dịch vụ AI</text>
+<circle cx="692" cy="344.0" r="10" fill="#ffffff" stroke="#5b6b82" stroke-width="1.4"/>
+<path d="M 692 354.0 V 378.0 M 676 362.0 H 708 M 692 378.0 L 680 394.0 M 692 378.0 L 704 394.0" fill="none" stroke="#5b6b82" stroke-width="1.4"/>
+<text x="692" y="412.0" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Cổng VNPay</text>
+<line x1="40" y1="680" x2="760" y2="680" stroke="#1f3864" stroke-width="1" stroke-opacity="0.14"/>
+<line x1="44" y1="700" x2="64" y2="700" stroke="#1f3864" stroke-width="1.2"/>
+<text x="72" y="704" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">tác nhân – use case</text>
+<line x1="204" y1="700" x2="224" y2="700" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="232" y="704" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">«include» / «extend»</text>
+</svg>

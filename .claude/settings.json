@@ -15,5 +15,23 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "diagram-design@diagram-design": true,
+    "ponytail@ponytail": true
+  },
+  "extraKnownMarketplaces": {
+    "diagram-design": {
+      "source": {
+        "source": "github",
+        "repo": "cathrynlavery/diagram-design"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    }
   }
 }

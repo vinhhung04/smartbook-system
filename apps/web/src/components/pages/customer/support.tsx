@@ -30,15 +30,15 @@ const FAQ_ITEMS = [
 
 export function CustomerSupportPage() {
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader title="Hỗ trợ & Liên hệ" subtitle="Các kênh liên hệ trực tiếp với thư viện và câu hỏi thường gặp" />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <a
           href={`tel:${SUPPORT_PHONE.replace(/\s+/g, '')}`}
-          className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-indigo-300 dark:hover:border-indigo-500/30"
+          className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/25 dark:hover:border-primary/25"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/[0.06] text-primary dark:bg-primary/15 dark:text-primary">
             <Phone className="h-5 w-5" />
           </div>
           <div className="min-w-0">
@@ -48,9 +48,9 @@ export function CustomerSupportPage() {
         </a>
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
-          className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-indigo-300 dark:hover:border-indigo-500/30"
+          className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/25 dark:hover:border-primary/25"
         >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/[0.06] text-primary dark:bg-primary/15 dark:text-primary">
             <Mail className="h-5 w-5" />
           </div>
           <div className="min-w-0">
@@ -59,7 +59,7 @@ export function CustomerSupportPage() {
           </div>
         </a>
         <div className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/[0.06] text-primary dark:bg-primary/15 dark:text-primary">
             <Clock className="h-5 w-5" />
           </div>
           <div className="min-w-0">

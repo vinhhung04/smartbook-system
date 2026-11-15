@@ -1,0 +1,16 @@
+{
+  "ACTUAL_provider_reported": {
+    "vision_calls_recorded": 1459,
+    "outcomes": {
+      "invalid_json": 1,
+      "ok": 1458
+    },
+    "calls_with_cost": 1459,
+    "total_cost_usd": 0.0675068,
+    "mean_cost_usd": 4.62692254969157e-05,
+    "min_cost_usd": 0,
+    "max_cost_usd": 8.548e-05,
+    "mean_prompt_tokens": 1430.8245373543523,
+    "mean_completion_tokens": 25.98423577793009
+  }
+}

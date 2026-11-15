@@ -81,7 +81,6 @@ export function PublicBranchDetailPage() {
       <>
         <PageHero
           top={<Breadcrumb />}
-          eyebrow="Chi nhánh"
           title={<><span className="sr-only">Đang tải chi nhánh</span><span className="inline-block h-10 w-72 max-w-full animate-pulse rounded bg-muted align-middle" aria-hidden="true" /></>}
         />
         <div className="mx-auto max-w-7xl px-4 pt-12 sm:px-6 lg:px-8" aria-busy="true"><BookRowSkeleton /></div>
@@ -103,7 +102,6 @@ export function PublicBranchDetailPage() {
     <>
       <PageHero
         top={<Breadcrumb name={branch.name} />}
-        eyebrow="Chi nhánh"
         title={branch.name}
         description={(
           <span className="block space-y-1.5">

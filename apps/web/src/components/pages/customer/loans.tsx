@@ -8,6 +8,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control';
 import { cn } from '@/components/ui/utils';
 import { CustomerPageHeader } from './_shared/customer-page-header';
 import { LoanCard } from './_shared/loan-card';
+import { visualEnhancementTokens } from './_shared/visual-enhancement-tokens';
 
 const FETCH_PAGE_SIZE = 100;
 const MAX_FETCH_PAGES = 5;
@@ -67,7 +68,7 @@ export function CustomerLoansPage() {
   const visible = shown.slice(0, visibleCount);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Phiếu mượn của tôi"
         subtitle="Theo dõi hạn trả và sách đang mượn"
@@ -84,7 +85,7 @@ export function CustomerLoansPage() {
       />
 
       {!loading && !error && overdueCount > 0 && (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>
             Bạn có <span className="font-semibold">{overdueCount} phiếu mượn quá hạn</span>. Hãy mang sách đến trả sớm để tránh phát sinh thêm tiền phạt.
@@ -103,7 +104,7 @@ export function CustomerLoansPage() {
               { value: 'history', label: `Lịch sử (${historyLoans.length})` },
               { value: 'all', label: `Tất cả (${rows.length})` },
             ]}
-            gradientClassName="from-emerald-600 to-teal-600"
+            gradientClassName=""
             className="w-max"
           />
         </div>
@@ -123,10 +124,11 @@ export function CustomerLoansPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           variant="no-data"
+          className={visualEnhancementTokens.emptyFrame}
           title="Chưa có phiếu mượn"
           description="Bắt đầu bằng cách khám phá danh mục và mượn cuốn sách đầu tiên."
           action={
-            <button onClick={() => navigate('/customer/books')} className="font-medium text-primary hover:underline">
+            <button onClick={() => navigate('/customer/books')} className={visualEnhancementTokens.primaryAction}>
               Xem danh mục
             </button>
           }
@@ -134,11 +136,19 @@ export function CustomerLoansPage() {
       ) : shown.length === 0 ? (
         <EmptyState
           variant="inbox"
+          className={visualEnhancementTokens.emptyFrame}
           title={view === 'open' ? 'Bạn không có sách nào đang mượn' : 'Chưa có lịch sử mượn'}
           description={view === 'open' ? 'Khám phá danh mục để tìm cuốn sách tiếp theo.' : 'Các phiếu đã trả sẽ hiển thị ở đây.'}
           action={
             view === 'open' ? (
-              <button onClick={() => navigate('/customer/books')} className="font-medium text-primary hover:underline">Xem danh mục</button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button onClick={() => navigate('/customer/books')} className={visualEnhancementTokens.primaryAction}>Xem danh mục</button>
+                {historyLoans.length > 0 && (
+                  <button onClick={() => setView('history')} className={visualEnhancementTokens.secondaryAction}>
+                    Xem lịch sử ({historyLoans.length})
+                  </button>
+                )}
+              </div>
             ) : undefined
           }
         />

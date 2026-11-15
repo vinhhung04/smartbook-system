@@ -1,0 +1,13 @@
+%% Biến thể cho bài báo (khổ một cột): cùng nội dung với cover-search-architecture.mmd, nhãn rút gọn
+%% Nguồn đối chiếu: services/ai-service/routes_cover_search.py (find_book_by_cover, _merge_candidates),
+%% cover_embeddings.py (embed_image), assistant_tools.py (_score_and_rank_books_with_confidence)
+%%{init: {"flowchart": {"wrappingWidth": 400}}}%%
+flowchart TB
+    Q["Ảnh bìa truy vấn"]
+    Q --> V1["Thị giác<br/>CLIP ViT-B/32, 512-d"]
+    Q --> O1["Chữ: Qwen vision<br/>đọc {title, author}"]
+    V1 --> V2["Cosine với gallery<br/>giữ nếu ≥ 0,80 → v"]
+    O1 --> O2["Ngữ nghĩa + toàn văn<br/>RRF chuẩn hóa → o"]
+    V2 --> F["Hợp nhất theo sách<br/>0,6·v + 0,4·o hoặc v / o"]
+    O2 --> F
+    F --> G["Giữ conf ≥ 0,5, tối đa 5<br/>rỗng → không tìm thấy"]

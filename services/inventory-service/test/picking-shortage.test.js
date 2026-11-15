@@ -48,6 +48,7 @@ function loadController({ outboundItems = [], transferItems = [] } = {}) {
   };
   const controllerPath = require.resolve('../src/controllers/picking.controller.js');
   delete require.cache[controllerPath];
+  delete require.cache[require.resolve('../src/lib/prisma.js')]; // shared client is built once per load
   return require('../src/controllers/picking.controller.js');
 }
 

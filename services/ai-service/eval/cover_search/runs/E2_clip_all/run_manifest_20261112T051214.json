@@ -1,0 +1,65 @@
+{
+  "run_id": "E2_clip_all",
+  "argv": [
+    "--run-id",
+    "E2_clip_all",
+    "--methods",
+    "clip_only",
+    "--split",
+    "all",
+    "--clip-diagnostic"
+  ],
+  "started_at_utc": "2026-11-11T22:03:05Z",
+  "git_head": "33c41c7ea8be2e6b9b71f3bdd0345c282164423c",
+  "git_branch": "hungg",
+  "production_files_dirty": "",
+  "python": "3.14.3 (tags/v3.14.3:323c59a, Feb  3 2026, 16:04:56) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "production_config": {
+    "clip_model": "openai/clip-vit-base-patch32",
+    "vision_model": "qwen/qwen3.7-flash",
+    "embed_identity": "qwen/qwen3-embedding-8b@768",
+    "visual_threshold": 0.8,
+    "min_confidence": 0.5,
+    "visual_weight": 0.6,
+    "result_limit": 5,
+    "ocr_max_tokens": 200,
+    "ocr_timeout_s": 20.0,
+    "ocr_prompt_sha256": "84a45f391803484589e59e045ad46a7dd1bbfa83ca044140259454aa214ff2a2",
+    "keyword_mode": "all",
+    "vector_store": "InMemoryVectorStore (research deviation, see PHASE_0 §5)"
+  },
+  "dataset_files_sha256": {
+    "metadata/catalog_books.csv": "eeed6fec02821321732a1632f04597d326236d7503f3516a6ce8f24337142eb1",
+    "manifest/dataset_manifest.csv": "2cbf9fc135e8eb730f5a53f306753da085048a6a4f1607f9b8796841f1758c70",
+    "ground_truth/ground_truth.csv": "5942c7b693a7991001684269f9f8214ae3929a573f149ec2b4f18ce6f35e7d32",
+    "rights/rights_audit.csv": "5a544d80a745c9c940c406cefda0649e93be234889a2633db5c53c7048cb13c6"
+  },
+  "catalog_books": 154,
+  "catalog_editions": 154,
+  "gallery": {
+    "gallery_rows": 154,
+    "embed_failures": [],
+    "new_embeddings": 154
+  },
+  "text_index": null,
+  "queries_selected": 1459,
+  "methods": [
+    "clip_only"
+  ],
+  "ocr_mode": "replay",
+  "max_live_ocr": 0,
+  "versions": {
+    "torch": "2.15.0+cpu",
+    "transformers": "5.17.0"
+  },
+  "api_usage_this_process": {
+    "live_vision_calls": 0,
+    "provider_reported_cost_usd": {},
+    "provider_reported_tokens": {}
+  },
+  "vision_cost_usd_cumulative_all_runs": 0,
+  "max_cost_usd": null,
+  "queries_skipped_ocr_not_recorded": 0,
+  "finished_at_utc": "2026-11-11T22:12:14Z"
+}

@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { PrismaClient } = require('@prisma/client');
 const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const {
   authenticateToken,
@@ -21,7 +20,7 @@ const {
   WarehouseScopeUnavailableError,
 } = require('./utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('./lib/prisma');
 const bookRoutes = require('./routes/book.routes');
 const warehouseRoutes = require('./routes/warehouse.routes');
 const locationRoutes = require('./routes/location.routes');

@@ -2697,7 +2697,7 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
 
 # ── Two-round search: registry and orchestration (isbn_rounds.py) ────────────
 
-# Sources that exist in the codebase but cannot be used - see BOOK_DATA_SOURCE_AUDIT.md.
+# Sources that exist in the codebase but cannot be used - see docs/reports/BOOK_DATA_SOURCE_AUDIT.md.
 UNUSABLE_BOOK_SOURCES = {
     "vinabook": "INACTIVE: vinabook.com trả 404 cho cả trang chủ và trang tìm kiếm",
     "worldCat": "INACTIVE: OCLC Classify API (classify.oclc.org) trả 404 - dịch vụ đã ngừng",

@@ -8,7 +8,6 @@ import {
   countByUrgency,
   formatCount,
   formatDateTime,
-  formatVnd,
   overFundedQty,
   sortByUrgency,
   totalLines,
@@ -123,10 +122,10 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
   return (
     <div className="space-y-4">
       {/* Analysis scope: what period the demand comes from and how many suggestions to load. */}
-      <Panel aria-label="Phạm vi phân tích" className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <Panel aria-label="Phạm vi phân tích" className="flex flex-col gap-3 border-0 bg-transparent lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
-            <span id="reorder-days-label" className="text-[12px] text-muted-foreground">Nhu cầu trong</span>
+            <span id="reorder-days-label" className="text-[13px] text-muted-foreground">Nhu cầu trong</span>
             <div role="group" aria-labelledby="reorder-days-label" className="max-w-full overflow-x-auto">
               <SegmentedControl
                 layoutId="reorder-days"
@@ -138,7 +137,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <span id="reorder-limit-label" className="text-[12px] text-muted-foreground">Hiển thị</span>
+            <span id="reorder-limit-label" className="text-[13px] text-muted-foreground">Hiển thị</span>
             <Select value={String(limit)} onValueChange={(value) => onLimitChange(Number(value))}>
               <SelectTrigger size="sm" className="w-[104px]" aria-labelledby="reorder-limit-label">
                 <SelectValue />
@@ -149,7 +148,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
             </Select>
           </div>
         </div>
-        <p className="flex items-center gap-2 text-[12px] text-muted-foreground" aria-live="polite">
+        <p className="flex items-center gap-2 text-[13px] text-muted-foreground" aria-live="polite">
           {loading ? (
             <>
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -157,7 +156,7 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
             </>
           ) : data ? (
             <span>
-              Dữ liệu {data.range.from} → {data.range.to} · Chờ hàng mặc định{' '}
+              Dữ liệu từ {data.range.from} đến {data.range.to}. Chờ hàng mặc định{' '}
               <span className="font-medium text-foreground">{data.range.leadTimeDays} ngày</span> (khi sách chưa có số liệu riêng)
               <span className="hidden xl:inline"> · cập nhật {formatDateTime(data.generated_at)}</span>
             </span>
@@ -185,7 +184,8 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
             <Figure label="Tổng số lượng đề xuất" value={formatCount(data.summary.estimated_total_reorder_qty)} unit="bản" hint={`cho toàn bộ ${formatCount(data.summary.total_candidates)} đầu sách, chưa áp ngân sách`} />
             <Figure
               label="Chi phí ước tính"
-              value={formatVnd(data.summary.estimated_total_cost)}
+              unit="đ"
+              value={formatCount(data.summary.estimated_total_cost)}
               hint={missingPriceCount ? `${missingPriceCount} dòng đã tải chưa có đơn giá (tính 0 đ)` : 'theo đơn giá trong danh mục'}
             />
           </Panel>
@@ -195,15 +195,15 @@ export function ReorderWorkspace(props: ReorderWorkspaceProps) {
           <Panel aria-labelledby="reorder-list-title" className="overflow-hidden">
             <div className="space-y-3 border-b border-border px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 id="reorder-list-title" className="text-[14px] font-semibold text-foreground">
+                <h2 id="reorder-list-title" className="font-display text-[17px] font-semibold tracking-tight text-foreground">
                   Đề xuất nhập thêm
-                  <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">
+                  <span className="ml-2 font-sans text-[13px] font-normal text-muted-foreground">
                     {visible.length === lines.length ? `${formatCount(lines.length)} dòng` : `${formatCount(visible.length)} / ${formatCount(lines.length)} dòng`}
                     {urgent ? ` · ${formatCount(urgent)} cần xem xét gấp` : ''}
                   </span>
                 </h2>
                 {canCreatePo ? (
-                  <p className="text-[11.5px] text-muted-foreground">Chọn sách và chỉnh số lượng để tạo đơn đặt hàng.</p>
+                  <p className="text-[13px] text-muted-foreground">Chọn sách và chỉnh số lượng để tạo đơn đặt hàng.</p>
                 ) : null}
               </div>
               <FilterPills

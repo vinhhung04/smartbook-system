@@ -1,0 +1,23 @@
+---
+title: Pipeline tìm sách bằng ảnh bìa (hungg @ 33c41c7)
+---
+%% Nguồn đối chiếu: services/ai-service/routes_cover_search.py (find_book_by_cover, _run_cover_ocr, _match_visual, _merge_candidates),
+%% cover_embeddings.py (embed_image), cover_gallery.py (get_gallery), assistant_tools.py (_score_and_rank_books_with_confidence),
+%% llm_provider.py (analyze_image), fusion.py (reciprocal_rank_fusion), vector_store.py / pg_vector_store.py (search_keyword)
+flowchart TB
+    Q["Ảnh bìa truy vấn<br/>POST /ai/find-book-by-cover"] --> V
+    Q --> O
+    subgraph V["Nhánh thị giác"]
+        V1["CLIP ViT-B/32<br/>resize 224 + center crop<br/>vector 512-d, chuẩn hóa L2"] --> V2["Cosine với gallery<br/>(1 ảnh / ấn bản)"]
+        V2 --> V3{"cos ≥ 0,80?"}
+    end
+    subgraph O["Nhánh đọc chữ"]
+        O1["Qwen vision qwen3.7-flash<br/>JSON {title, author}<br/>t = 0, timeout 20 s"] --> O2["Lọc cụm từ 'không đọc được'"]
+        O2 --> O3["Xếp hạng catalog:<br/>semantic (Qwen3-Embedding, cos ≥ 0,3)<br/>+ full-text (mọi từ phải khớp)<br/>→ RRF k = 60, chuẩn hóa 0..1"]
+    end
+    V3 -- "có" --> F
+    V3 -- "không" --> X1["bỏ ứng viên thị giác"]
+    O3 --> F["Hợp nhất theo sách<br/>cả hai: 0,6·v + 0,4·o<br/>một tín hiệu: v hoặc o"]
+    F --> G{"conf ≥ 0,5?"}
+    G -- "có" --> R["Top-5 ứng viên<br/>match_found = true"]
+    G -- "không" --> N["match_found = false"]

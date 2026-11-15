@@ -12,10 +12,9 @@
  * verified JWT claim) sees every active warehouse.
  */
 
-const { PrismaClient } = require('@prisma/client');
 const { createWarehouseScopeResolver, WarehouseScopeUnavailableError } = require('@smartbook/shared/warehouse-scope');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 let resolver = createWarehouseScopeResolver();
 

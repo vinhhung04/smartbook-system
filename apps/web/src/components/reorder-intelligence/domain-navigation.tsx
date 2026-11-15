@@ -40,11 +40,13 @@ export function DomainNavigation({ tabs, active, onChange }: {
     refs.current[id]?.focus();
   };
 
+  // A compact row: the workspaces below hold wide tables, so the domains sit above
+  // them rather than in a side rail. Captions show once there is room (@container/page).
   return (
     <div
       role="tablist"
       aria-label="Lĩnh vực phân tích"
-      className={cn('grid grid-cols-2 gap-2', tabs.length > 2 ? 'lg:grid-cols-4' : 'sm:grid-cols-2 lg:max-w-2xl')}
+      className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]"
     >
       {tabs.map((tab, index) => {
         const selected = tab.id === active;
@@ -62,26 +64,24 @@ export function DomainNavigation({ tabs, active, onChange }: {
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              'group relative flex min-h-[76px] cursor-pointer flex-col justify-between gap-2 rounded-xl border px-3.5 py-3 text-left transition-[background-color,border-color,box-shadow] duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-              selected
-                ? 'border-primary/45 bg-card shadow-sm ring-1 ring-primary/15 dark:shadow-none'
-                : 'border-border bg-card/60 hover:border-foreground/15 hover:bg-card',
+              'flex shrink-0 cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              '@4xl/page:min-w-[200px] @4xl/page:flex-1 @4xl/page:items-start @4xl/page:rounded-xl @4xl/page:px-3.5 @4xl/page:py-2.5',
+              selected ? 'border-primary/30 bg-primary/[0.08] text-primary' : 'border-border bg-card text-foreground hover:bg-muted/60',
             )}
           >
-            <span className={cn('absolute inset-x-3.5 bottom-0 h-0.5 rounded-full transition-colors', selected ? 'bg-primary' : 'bg-transparent')} aria-hidden="true" />
-            <span className="flex items-start gap-2">
-              <Icon className={cn('mt-px h-4 w-4 shrink-0', selected ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
-              <span className={cn('text-[13px] font-semibold leading-tight', selected ? 'text-foreground' : 'text-foreground/80')}>{tab.label}</span>
-            </span>
-            <span className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
-              <span className={cn(
-                'text-[20px] font-semibold leading-none tabular-nums',
-                tab.value === null ? 'text-muted-foreground/60' : tab.alert ? 'text-red-600 dark:text-red-400' : 'text-foreground',
-                tab.busy && 'animate-pulse',
-              )}>
-                {tab.value ?? '—'}
+            <Icon className={cn('h-4 w-4 shrink-0 @4xl/page:mt-0.5', selected ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline justify-between gap-3">
+                <span className={cn('whitespace-nowrap text-[13px]', selected ? 'font-semibold' : 'font-medium')}>{tab.label}</span>
+                <span className={cn(
+                  'min-w-6 rounded-full px-1.5 text-center text-[12px] tabular-nums',
+                  tab.value === null ? 'text-muted-foreground' : tab.alert ? 'bg-red-50 font-semibold text-red-700 dark:bg-red-500/10 dark:text-red-400' : selected ? 'text-primary' : 'text-muted-foreground',
+                  tab.busy && 'opacity-60',
+                )}>
+                  {tab.value ?? '–'}
+                </span>
               </span>
-              <span className="min-w-0 text-[11.5px] leading-snug text-muted-foreground sm:truncate">{tab.caption}</span>
+              <span className="hidden text-[12px] leading-snug text-muted-foreground @4xl/page:block">{tab.caption}</span>
             </span>
           </button>
         );

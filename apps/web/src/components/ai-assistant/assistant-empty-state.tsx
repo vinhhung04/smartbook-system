@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { ArrowUpRight, LibraryBig } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '@/lib/gsap';
 import type { SuggestionGroup } from './model';
 
@@ -29,9 +29,6 @@ export function AssistantEmptyState({ groups, onAsk, disabled }: {
   return (
     <div ref={rootRef} className="mx-auto flex w-full max-w-3xl flex-col justify-center py-6 sm:py-10">
       <div className="space-y-4">
-        <span data-intro className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/15">
-          <LibraryBig className="h-5 w-5" aria-hidden="true" />
-        </span>
         <div className="space-y-2">
           <p data-intro className="text-[13px] font-medium text-primary">SmartBook AI</p>
           <h2 data-intro className="max-w-[22ch] text-balance font-[family-name:var(--font-display)] text-[28px] font-medium leading-[1.15] tracking-[-0.01em] text-foreground sm:text-[34px]">
@@ -39,7 +36,7 @@ export function AssistantEmptyState({ groups, onAsk, disabled }: {
           </h2>
           <p data-intro className="max-w-[60ch] text-pretty text-[14px] leading-relaxed text-muted-foreground">
             Hỏi bằng tiếng Việt về tồn kho, nhu cầu mượn và nhập hàng. Trợ lý tra cứu dữ liệu thật của hệ thống,
-            trả lời kèm số liệu, nguồn và kết quả đối chiếu — mọi hành động đề xuất đều chờ bạn xác nhận.
+            trả lời kèm số liệu, nguồn và kết quả đối chiếu. Mọi hành động đề xuất đều chờ bạn xác nhận.
           </p>
         </div>
       </div>
@@ -55,7 +52,7 @@ export function AssistantEmptyState({ groups, onAsk, disabled }: {
               {questions.map((question) => (
                 <li key={question}>
                   <button type="button" onClick={() => onAsk(question)} disabled={disabled}
-                    className="group flex w-full cursor-pointer items-start justify-between gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left text-[13.5px] leading-snug text-foreground shadow-xs transition-[border-color,box-shadow,transform] duration-200 hover:border-primary/35 hover:shadow-sm active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50">
+                    className="group flex w-full cursor-pointer items-start justify-between gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left text-[13.5px] leading-snug text-foreground transition-[border-color,background-color,transform] duration-200 hover:border-primary/35 hover:bg-primary/[0.04] active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50">
                     <span>{question}</span>
                     <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" aria-hidden="true" />
                   </button>

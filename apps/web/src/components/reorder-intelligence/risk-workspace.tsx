@@ -215,9 +215,9 @@ export function RiskWorkspace({ config, data, rows, loading, error, onRetry }: {
       <Panel aria-labelledby={`${config.id}-list-title`} className="overflow-hidden">
         <div className="space-y-3 border-b border-border px-4 py-3">
           <div>
-            <h2 id={`${config.id}-list-title`} className="text-[14px] font-semibold text-foreground">
+            <h2 id={`${config.id}-list-title`} className="font-display text-[17px] font-semibold tracking-tight text-foreground">
               {config.title}
-              <span className="ml-2 text-[12.5px] font-normal text-muted-foreground">{formatCount(rows.length)} {config.subjectNoun} đã chấm điểm</span>
+              <span className="ml-2 font-sans text-[13px] font-normal text-muted-foreground">{formatCount(rows.length)} {config.subjectNoun} đã chấm điểm</span>
             </h2>
             <p className="mt-1 max-w-[95ch] text-[12.5px] leading-relaxed text-muted-foreground">
               {config.modelSummary} Điểm là xác suất ước tính, không phải sự kiện chắc chắn. Nhóm được chia theo ngưỡng của mô hình:
@@ -246,7 +246,7 @@ export function RiskWorkspace({ config, data, rows, loading, error, onRetry }: {
             <div role="region" aria-label={`Bảng ${config.title.toLowerCase()}`} tabIndex={0} className="max-h-[min(72vh,760px)] overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
               <table className="w-full min-w-[820px] border-separate border-spacing-0 text-left text-[13px]">
                 <caption className="sr-only">{config.title}, xếp theo điểm rủi ro giảm dần. Mở từng dòng để xem các yếu tố ảnh hưởng.</caption>
-                <thead className="sticky top-0 z-10 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                <thead className="sticky top-0 z-10 whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
                   <tr className="[&>th]:border-b [&>th]:border-border [&>th]:bg-muted/50 [&>th]:py-2.5">
                     <th scope="col" className="pl-4 pr-3">Bạn đọc · sách</th>
                     <th scope="col" className="w-[170px] px-3">{config.toLabel}</th>

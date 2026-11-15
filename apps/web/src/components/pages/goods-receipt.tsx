@@ -367,11 +367,11 @@ export function GoodsReceiptPage() {
           animate={{ opacity: 1, scale: 1 }}
           className="flex min-h-[60vh] flex-col items-center justify-center gap-5"
         >
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/[0.08] text-primary">
             <CheckCircle2 className="h-10 w-10" />
           </div>
           <div className="text-center">
-            <h2 className="mb-1 text-[28px] font-bold tracking-[-0.02em]">Đã tạo phiếu nhập thành công</h2>
+            <h2 className="mb-1 font-display text-[28px] font-semibold tracking-tight">Đã tạo phiếu nhập thành công</h2>
             <p className="text-[14px] text-muted-foreground">
               Phiếu {successReceiptNumber || "(chưa có mã)"} đang ở trạng thái nháp và chờ duyệt.
             </p>
@@ -379,7 +379,7 @@ export function GoodsReceiptPage() {
           <div className="flex items-center gap-3">
             <NavLink
               to={canManageReceiving ? "/orders" : "/my-warehouse-tasks"}
-              className="rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-[13px] font-semibold text-white"
+              className="rounded-full bg-primary hover:bg-primary/90 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground"
             >
               {canManageReceiving ? "Về danh sách phiếu" : "Về task của tôi"}
             </NavLink>
@@ -403,7 +403,7 @@ export function GoodsReceiptPage() {
     if (!invoice) {
       return (
         <PageWrapper>
-          <NavLink to="/purchase-orders" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400">
+          <NavLink to="/purchase-orders" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Quay lại
           </NavLink>
           <EmptyState variant="no-data" title="Không tìm thấy hóa đơn nhà cung cấp" />
@@ -414,7 +414,7 @@ export function GoodsReceiptPage() {
     return (
       <PageWrapper className="space-y-6">
         <FadeItem>
-          <NavLink to={`/purchase-orders/${invoice.purchase_order_id}`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-blue-600">
+          <NavLink to={`/purchase-orders/${invoice.purchase_order_id}`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-3.5 w-3.5" /> Quay lại đơn đặt hàng
           </NavLink>
         </FadeItem>
@@ -424,27 +424,25 @@ export function GoodsReceiptPage() {
             icon={Truck}
             title="Nhận hàng từ nhà cung cấp"
             description={`${invoice.po_number || "-"} - ${invoice.supplier_name || "-"} - Hóa đơn ${invoice.invoice_number}`}
-            iconBg="bg-emerald-100 dark:bg-emerald-500/15"
-            iconColor="text-emerald-600 dark:text-emerald-400"
           />
         </FadeItem>
 
         <FadeItem>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Kho nhận</p>
+              <p className="text-[12px] text-muted-foreground">Kho nhận</p>
               <p className="mt-1 text-[13px] font-semibold">{invoice.warehouse_code || "-"} - {invoice.warehouse_name || ""}</p>
             </div>
             <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Trạng thái hóa đơn</p>
+              <p className="text-[12px] text-muted-foreground">Trạng thái hóa đơn</p>
               <p className="mt-1 text-[13px] font-semibold">{invoice.status}</p>
             </div>
             <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Số lượng thực nhận</p>
+              <p className="text-[12px] text-muted-foreground">Số lượng thực nhận</p>
               <p className="mt-1 text-[18px] font-bold">{invoiceTotalQty}</p>
             </div>
             <div className="rounded-[12px] border border-border bg-card p-4">
-              <p className="text-[11px] font-semibold uppercase text-muted-foreground">Ngày giao dự kiến</p>
+              <p className="text-[12px] text-muted-foreground">Ngày giao dự kiến</p>
               <p className="mt-1 text-[13px] font-semibold">{invoice.expected_delivery_date ? new Date(invoice.expected_delivery_date).toLocaleDateString("vi-VN") : "-"}</p>
             </div>
           </div>
@@ -457,7 +455,7 @@ export function GoodsReceiptPage() {
               <thead>
                 <tr className="border-b border-border bg-muted">
                   {["Tên sách", "ISBN/SKU", "Đặt", "Đã nhận trước", "Còn lại", "Trên hóa đơn", "Thực đếm", "Thiếu", "Trạng thái"].map((heading) => (
-                    <th key={heading} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{heading}</th>
+                    <th key={heading} className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">{heading}</th>
                   ))}
                 </tr>
               </thead>
@@ -488,7 +486,7 @@ export function GoodsReceiptPage() {
                             const next = Math.min(max, Math.max(0, Number(numberInputValue(event)) || 0));
                             setCountedQty((current) => ({ ...current, [item.id]: next }));
                           }}
-                          className="w-24 rounded-[8px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-blue-400"
+                          className="w-24 rounded-[8px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-primary/40"
                         />
                       </td>
                       <td className="px-4 py-3 text-[13px]">{shortage}</td>
@@ -518,7 +516,7 @@ export function GoodsReceiptPage() {
             <button
               onClick={() => void createFromInvoice()}
               disabled={invoiceSaving || invoiceTotalQty <= 0}
-              className="rounded-[10px] bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+              className="rounded-full bg-primary px-5 hover:bg-primary/90 py-2.5 text-[13px] font-semibold text-primary-foreground disabled:opacity-60"
             >
               {invoiceSaving ? "Đang tạo..." : "Tạo phiếu nhập nháp"}
             </button>
@@ -539,7 +537,7 @@ export function GoodsReceiptPage() {
         type="button"
         aria-pressed={active === "supplier"}
         onClick={() => setReceivingMode("supplier")}
-        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${active === "supplier" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${active === "supplier" ? "bg-primary/[0.08] text-primary" : "text-muted-foreground hover:bg-muted"}`}
       >
         <Truck className="h-3.5 w-3.5" /> Theo hóa đơn NCC
       </button>
@@ -547,7 +545,7 @@ export function GoodsReceiptPage() {
         type="button"
         aria-pressed={active === "manual"}
         onClick={() => setReceivingMode("manual")}
-        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${active === "manual" ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted"}`}
+        className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${active === "manual" ? "bg-primary/[0.08] text-primary" : "text-muted-foreground hover:bg-muted"}`}
       >
         <ScanBarcode className="h-3.5 w-3.5" /> Quét ISBN thủ công
       </button>
@@ -570,16 +568,14 @@ export function GoodsReceiptPage() {
             description={isLoading
               ? "Đối chiếu hóa đơn NCC với PO rồi giao kiểm đếm cho nhân viên kho."
               : receivableDeliveries.length > 0
-                ? `${receivableDeliveries.length} hóa đơn đang chờ nhận hàng — chọn một hóa đơn để đối chiếu với PO.`
+                ? `${receivableDeliveries.length} hóa đơn đang chờ nhận hàng. Chọn một hóa đơn để đối chiếu với PO.`
                 : "Không có hóa đơn nào đang chờ nhận hàng."}
-            iconBg="bg-emerald-100 dark:bg-emerald-500/15"
-            iconColor="text-emerald-600 dark:text-emerald-400"
             actions={modeSwitch("supplier")}
           />
         </FadeItem>
 
         <FadeItem>
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
             {isLoading ? (
               <LoadingOverlay />
             ) : receivableDeliveries.length === 0 ? (
@@ -613,7 +609,7 @@ export function GoodsReceiptPage() {
                       return (
                         <tr key={delivery.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
                           <td className="px-4 py-3 align-top">
-                            <NavLink to={`/supplier-deliveries/${delivery.id}`} className="font-mono text-[13px] font-semibold text-foreground hover:text-emerald-700 hover:underline dark:hover:text-emerald-400">
+                            <NavLink to={`/supplier-deliveries/${delivery.id}`} className="font-mono text-[13px] font-semibold text-foreground hover:text-primary hover:underline">
                               {delivery.invoice_number}
                             </NavLink>
                             <p className="max-w-[340px] truncate text-[12px] text-muted-foreground" title={delivery.supplier_name || undefined}>{delivery.supplier_name || "-"}</p>
@@ -622,7 +618,7 @@ export function GoodsReceiptPage() {
                           <td className="px-4 py-3 align-top text-[13px]">{delivery.warehouse_code || delivery.warehouse_name || "-"}</td>
                           <td className="px-4 py-3 align-top text-[13px] tabular-nums">
                             {expected ? new Date(expected).toLocaleDateString("vi-VN") : "-"}
-                            {late ? <p className="text-[12px] font-medium text-rose-600 dark:text-rose-400">Đã quá hạn</p> : null}
+                            {late ? <p className="text-[12px] font-medium text-red-700 dark:text-red-400">Đã quá hạn</p> : null}
                           </td>
                           <td className="px-4 py-3 text-right align-top text-[13px] tabular-nums">
                             <span className="font-semibold">{bookCount}</span> cuốn
@@ -659,14 +655,14 @@ export function GoodsReceiptPage() {
         {canManageReceiving ? (
           <NavLink
             to="/orders"
-            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Quay lại danh sách phiếu
           </NavLink>
         ) : (
           <NavLink
             to="/my-warehouse-tasks"
-            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-blue-600"
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Quay lại task của tôi
           </NavLink>
@@ -693,10 +689,10 @@ export function GoodsReceiptPage() {
                 <button
                   key={warehouse.id}
                   onClick={() => void handleSelectWarehouse(warehouse.id)}
-                  className="rounded-[14px] border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-blue-300 dark:hover:border-blue-500/50"
+                  className="rounded-2xl border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/35"
                 >
                   <h3 className="text-[13px] font-semibold">{warehouse.name}</h3>
-                  <p className="mt-1 text-[11px] text-muted-foreground">{warehouse.code || warehouse.id}</p>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{warehouse.code || warehouse.id}</p>
                 </button>
               ))}
             </div>
@@ -707,11 +703,11 @@ export function GoodsReceiptPage() {
       {step === "scan" ? (
         <div className="space-y-5">
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+            <div className="rounded-2xl border border-border bg-card p-6">
               <h3 className="mb-4 text-[14px] font-semibold">Quét ISBN13 hoặc nhập thủ công</h3>
               <div className="mb-4 flex items-center gap-2">
                 <div className="relative flex-1">
-                  <ScanBarcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-blue-500 dark:text-blue-400" />
+                  <ScanBarcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
                     ref={scanInputRef}
                     value={isbn13Input}
@@ -723,28 +719,28 @@ export function GoodsReceiptPage() {
                       }
                     }}
                     placeholder="Nhập ISBN13..."
-                    className="w-full rounded-[12px] border-2 border-blue-300/30 dark:border-blue-500/20 bg-gradient-to-r from-blue-50/40 to-indigo-50/30 dark:from-blue-500/10 dark:to-indigo-500/10 py-3 pl-10 pr-4 text-[13px] text-foreground outline-none transition-all focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                    className="w-full rounded-full border border-input bg-background py-3 pl-10 pr-4 text-[14px] text-foreground outline-none transition-all focus:border-primary/40 focus:ring-[3px] focus:ring-primary/10"
                   />
                 </div>
                 <button
                   onClick={() => void handleAddBarcode()}
-                  className="inline-flex items-center gap-2 rounded-[12px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-[13px] font-semibold text-white"
+                  className="inline-flex items-center gap-2 rounded-full bg-primary hover:bg-primary/90 px-4 py-3 text-[13px] font-semibold text-primary-foreground"
                 >
                   <Plus className="h-3.5 w-3.5" /> Thêm
                 </button>
                 <button
                   onClick={() => setShowScannerModal(true)}
-                  className="rounded-[12px] border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 px-4 py-3 text-[13px] font-semibold text-indigo-700 dark:text-indigo-400"
+                  className="rounded-full border border-input bg-background px-4 py-3 text-[13px] font-semibold text-foreground hover:bg-muted"
                 >
                   Quét camera
                 </button>
               </div>
-              <p className="text-[11px] text-muted-foreground">Nếu ISBN13 chưa có, hệ thống sẽ tạo sách tạm để bổ sung metadata sau.</p>
+              <p className="text-[12px] text-muted-foreground">Nếu ISBN13 chưa có, hệ thống sẽ tạo sách tạm để bổ sung metadata sau.</p>
             </div>
           </FadeItem>
 
           <FadeItem>
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
               <div className="border-b border-border px-6 py-4">
                 <h3 className="text-[14px] font-semibold">Danh sách nhập ({items.length})</h3>
               </div>
@@ -760,7 +756,7 @@ export function GoodsReceiptPage() {
                         <p className="mb-0.5 font-mono text-[12px] text-muted-foreground">ISBN13: {item.isbn13}</p>
                         <p className="text-[13px] font-semibold">{item.title}</p>
                         {item.is_new_book ? (
-                          <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">Sách tạm (chưa hoàn chỉnh) — cần bổ sung metadata sau.</p>
+                          <p className="mt-1 text-[12px] text-amber-600 dark:text-amber-400">Sách tạm (chưa hoàn chỉnh), cần bổ sung thông tin sau.</p>
                         ) : null}
                       </div>
                       <button
@@ -774,26 +770,26 @@ export function GoodsReceiptPage() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="mb-1 block text-[10px] font-semibold text-muted-foreground">Số lượng</label>
+                        <label className="mb-1 block text-[12px] font-medium text-muted-foreground">Số lượng</label>
                         <input
                           value={item.qty}
                           onChange={(event) => updateItem(item.id, "qty", Number(event.target.value) || 0)}
                           type="number"
                           min={1}
-                          className="w-full rounded-[6px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-blue-300 focus:ring-[2px] focus:ring-blue-500/15"
+                          className="w-full rounded-[6px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-primary/40 focus:ring-[2px] focus:ring-primary/10"
                         />
                       </div>
 
                       {showUnitCost ? (
                         <div>
-                          <label className="mb-1 block text-[10px] font-semibold text-muted-foreground">Giá nhập</label>
+                          <label className="mb-1 block text-[12px] font-medium text-muted-foreground">Giá nhập</label>
                           <input
                             {...zeroFieldProps}
                             value={item.unit_cost}
                             onChange={(event) => updateItem(item.id, "unit_cost", Number(numberInputValue(event)) || 0)}
                             type="number"
                             min={0}
-                            className="w-full rounded-[6px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-blue-300 focus:ring-[2px] focus:ring-blue-500/15"
+                            className="w-full rounded-[6px] border border-border bg-background px-2 py-1.5 text-[12px] outline-none focus:border-primary/40 focus:ring-[2px] focus:ring-primary/10"
                           />
                         </div>
                       ) : null}
@@ -805,13 +801,13 @@ export function GoodsReceiptPage() {
           </FadeItem>
 
           <FadeItem>
-            <div className="rounded-xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+            <div className="rounded-2xl border border-border bg-card p-4">
               <label className="mb-1 block text-[12px] font-semibold text-muted-foreground">Ghi chú</label>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={3}
-                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px] outline-none transition-all focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                className="w-full rounded-[10px] border border-border bg-background px-3 py-2.5 text-[13px] outline-none transition-all focus:border-primary/40 focus:ring-[3px] focus:ring-primary/10"
                 placeholder="Ghi chú thêm cho phiếu nhập"
               />
             </div>
@@ -827,12 +823,12 @@ export function GoodsReceiptPage() {
               </button>
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <p className="text-[11px] text-muted-foreground">Tổng giá trị</p>
-                  <p className="text-[16px] font-bold text-blue-700 dark:text-blue-400">{formatCurrency(totalValue)}</p>
+                  <p className="text-[12px] text-muted-foreground">Tổng giá trị</p>
+                  <p className="font-display text-[20px] font-semibold tabular-nums text-foreground">{formatCurrency(totalValue)}</p>
                 </div>
                 <button
                   onClick={() => setStep("review")}
-                  className="rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-[13px] font-semibold text-white"
+                  className="rounded-full bg-primary hover:bg-primary/90 px-5 py-2.5 text-[13px] font-semibold text-primary-foreground"
                 >
                   Xem lại
                 </button>
@@ -849,21 +845,21 @@ export function GoodsReceiptPage() {
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
               <div>
                 <p className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">Thông báo</p>
-                <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">Vị trí kho sẽ được phân bổ tại bước Cất hàng sau khi phiếu được duyệt.</p>
+                <p className="mt-0.5 text-[12px] text-amber-700 dark:text-amber-400">Vị trí kho sẽ được phân bổ tại bước Cất hàng sau khi phiếu được duyệt.</p>
               </div>
             </div>
           </FadeItem>
 
           <FadeItem>
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:shadow-none">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border bg-gradient-to-r from-blue-50/30 to-transparent">
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Tên sách</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Vị trí</th>
-                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Số lượng</th>
-                    {showUnitCost ? <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Giá nhập</th> : null}
-                    {showUnitCost ? <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Thành tiền</th> : null}
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Tên sách</th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Vị trí</th>
+                    <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Số lượng</th>
+                    {showUnitCost ? <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Giá nhập</th> : null}
+                    {showUnitCost ? <th className="px-4 py-3 text-left text-[12px] font-semibold text-muted-foreground">Thành tiền</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -895,9 +891,9 @@ export function GoodsReceiptPage() {
               <button
                 onClick={() => setShowConfirmModal(true)}
                 disabled={items.length === 0 || isSaving}
-                className={`rounded-[10px] px-5 py-2.5 text-[13px] font-semibold text-white transition-all ${
+                className={`rounded-[10px] px-5 py-2.5 text-[13px] font-semibold text-primary-foreground transition-all ${
                   items.length > 0
-                    ? "bg-gradient-to-r from-emerald-600 to-teal-600"
+                    ? "bg-primary hover:bg-primary/90"
                     : "cursor-not-allowed bg-muted-foreground/40"
                 }`}
               >
@@ -911,7 +907,7 @@ export function GoodsReceiptPage() {
       <FadeItem>
         <div className="text-[12px] text-muted-foreground">
           Tổng SL: {totalQty}
-          {showUnitCost ? <> — Tổng giá trị: {formatCurrency(totalValue)}</> : null}
+          {showUnitCost ? <>, tổng giá trị {formatCurrency(totalValue)}</> : null}
         </div>
       </FadeItem>
 
@@ -922,7 +918,7 @@ export function GoodsReceiptPage() {
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
-            className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-2xl"
+            className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl"
           >
             <h3 id="confirm-receipt-modal-title" className="mb-2 text-[16px] font-semibold">Xác nhận tạo phiếu nhập</h3>
             <p className="mb-6 text-[13px] text-muted-foreground">
@@ -944,7 +940,7 @@ export function GoodsReceiptPage() {
                 onClick={() => void handleCreateDraftReceipt()}
                 disabled={isSaving}
                 data-testid="manual-receipt-confirm-button"
-                className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary hover:bg-primary/90 px-4 py-2.5 text-[13px] font-semibold text-primary-foreground disabled:opacity-60"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isSaving ? "Đang tạo" : "Xác nhận"}
@@ -961,7 +957,7 @@ export function GoodsReceiptPage() {
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
-            className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl"
           >
             <h3 id="new-book-modal-title" className="mb-2 text-[16px] font-semibold">Tạo sách tạm cho ISBN13 mới</h3>
             <p className="mb-4 text-[13px] text-muted-foreground">
@@ -974,7 +970,7 @@ export function GoodsReceiptPage() {
                 <input
                   value={pendingIsbn13}
                   onChange={(event) => setPendingIsbn13(event.target.value)}
-                  className="w-full rounded-[10px] border border-border bg-background px-3 py-2 text-[13px] font-mono outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  className="w-full rounded-[10px] border border-border bg-background px-3 py-2 text-[13px] font-mono outline-none focus:border-primary/40 focus:ring-[3px] focus:ring-primary/10"
                 />
               </div>
               <div>
@@ -989,7 +985,7 @@ export function GoodsReceiptPage() {
                       void handleCreateIncompleteBook();
                     }
                   }}
-                  className="w-full rounded-[10px] border border-border bg-background px-3 py-2 text-[13px] outline-none focus:border-blue-400/60 focus:ring-[3px] focus:ring-blue-500/10"
+                  className="w-full rounded-[10px] border border-border bg-background px-3 py-2 text-[13px] outline-none focus:border-primary/40 focus:ring-[3px] focus:ring-primary/10"
                 />
               </div>
             </div>
@@ -1008,7 +1004,7 @@ export function GoodsReceiptPage() {
               <button
                 onClick={() => void handleCreateIncompleteBook()}
                 disabled={isCreatingNewBook}
-                className="flex flex-1 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-[13px] font-semibold text-white disabled:opacity-60"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary hover:bg-primary/90 px-4 py-2.5 text-[13px] font-semibold text-primary-foreground disabled:opacity-60"
               >
                 {isCreatingNewBook ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 {isCreatingNewBook ? "Đang tạo" : "Tạo sách tạm"}

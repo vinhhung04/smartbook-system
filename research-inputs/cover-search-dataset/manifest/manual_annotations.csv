@@ -1,0 +1,181 @@
+asset_id,decision,book_key,edition_key,relation_to_gallery,parent,title,author,publisher,edition_year,work_year,language,script,isbn13,isbn_status,image_condition,title_visible,exclusion_reason,note
+G-EN-0001,,,,,,,,,,,,,,,scan,yes,,author not printed on cover
+G-EN-0002,,,,,,,,,,,,,,,scan,partial,,library label covers part of title
+G-EN-0007,,,,,,,,,,,,,,,photo,yes,,photograph of book on display stand
+G-EN-0008,,,,,,,,,,,,,,,scan,yes,,lettering-only cover
+G-EN-0009,,,,,,,,,,,,,,,scan,yes,,monthly serial part No.1 wrapper
+G-EN-0012,,,,,,,,,,,,,,,scan,yes,,Book I part wrapper
+G-EN-0017,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,image is a title page
+G-EN-0025,,,,,,,,,,,,,,,photo,partial,,"small photo 210x277, title small on spine-like label"
+G-EN-0026,,,,,,,,,,,,,,,scan,no,,"plain cloth cover, title not printed on front"
+G-EN-0030,,,,,,,,,,,,,,,scan,no,,"cloth cover with blind-stamped otter, no title"
+G-EN-0032,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,"layout of a title page (imprint, publisher block); cannot confirm front cover"
+G-EN-0036,,,,,,,,,,,,,,,scan,partial,,small stamped title in shield
+G-EN-0039,,,,,,,,,,,,,,,scan,no,,"embossed seal only, no title"
+G-EN-0040,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,title page
+G-EN-0041,,,,,,,,,,,,,,,photo,yes,,photo incl. spine
+G-EN-0043,,,,,,,,,,,,,,,scan,partial,,"title partly cut at top edge, library labels"
+G-EN-0044,,,,,,,,,,,,,,,scan,partial,,library barcode label covers start of title
+G-EN-0045,,,,,,,,,,,,,,,scan,partial,,small title plate on patterned cloth
+G-EN-0047,,,,,,,,,,,,,,,low_resolution,yes,,200x304 image
+G-EN-0050,,,,,,,,,,,,,,,scan,partial,,faint dark-on-dark title
+G-EN-0051,,,,,,,,,,,,,,,scan,partial,,"faint embossed title, library labels"
+G-EN-0052,,,,,,,,,,,,,,,low_resolution,yes,,238x350 image
+G-EN-0056,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,title page
+G-EN-0058,,,,,,,,,,,,,,,photo,yes,,photo incl. spine
+G-EN-0060,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,title page
+G-EN-0061,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,title page
+G-EN-0069,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,title page
+G-EN-0070,,,,,,,,,,,,,,,low_resolution,yes,,296x404 image
+G-EN-0078,,,,,,,,,,,,,,,photo_angled,partial,,"angled photo of the book on a table, 292x386"
+G-EN-0081,,,,,,,,,,,,,,,scan,partial,,tiny title label
+G-EN-0084,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,title page
+G-EN-0094,,,,,,,,,,,,,,,scan,partial,,dark low-contrast title
+C-VN-0001,gallery,,,,,Số đỏ,Vũ Trọng Phụng,Lê Cường,1938,,,Latin,,,photo,yes,,seed VN001; author printed without diacritics (VU TRONG-PHUNG); Edition Le-Cuong
+C-VN-0002,out_of_catalog,,,,,Gia Long tẩu quốc,Tân Dân Tử,Bảo Tồn,,,,Latin,,,scan,yes,,seed VN002 | assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))
+C-VN-0003,gallery,,,,,Việt Nam sử lược,Trần Trọng Kim,Trung Bắc Tân Văn,1920,,,Latin,,,photo,yes,,"seed VN003; 1920 printing, Han subtitle"
+C-VN-0004,gallery,,,,,Lịch sử nước ta,Hồ Chí Minh,Việt Minh Tuyên truyền Bộ,1942,,,Latin,,,low_resolution,yes,,seed VN004; 300x391; author not printed
+C-VN-0005,exclude,,,,,,,,,,,,,,scan,yes,COMPOSITE_TWO_VOLUMES,seed VN005; two volume covers side by side (seed note)
+C-VN-0006,gallery,,,,,Thề non nước,Tản Đà,Hương Sơn,1940,,,Latin,,,scan,no,,"seed VN006; illustration only, no title text"
+C-VN-0007,gallery,,,,,Nam ngạn chích cẩm,Phạm Quang Sán,,1918,,,Latin,,,scan,no,,"seed VN007; low-contrast emblem, title not legible"
+C-VN-0008,gallery,,,,,Phan Trần truyện,,,1902,,,Han-Nom,,,photo,no,,seed VN008; title in Han-Nom only (OCR accuracy excluded)
+C-VN-0009,gallery,,,,,"Biệt Động Quân, Quân lực Việt Nam Cộng hòa",,,,,,Latin,,,scan,yes,,booklet cover
+C-VN-0010,out_of_catalog,,,,,Bí ẩn của những điềm chiêm bao,Nguyễn Trí Hiếu,,,,,Latin,,,scan,yes,,wiki-book style cover | assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))
+C-VN-0011,gallery,,,,,Cách đánh B-52,,,,,,Latin,,,photo,partial,,"museum photo, glare; small title"
+C-VN-0012,gallery,,,,,Chí Phèo,Nam Cao,Văn Nghệ,1957,,,Latin,,,low_resolution,yes,,300x450 photo
+C-VN-0013,exclude,,,,,,,,,,,,,,scan,yes,DERIVATIVE_OF_OTHER_FILE_COLOURISED,"colourised version of C-VN-0014 (same scan), not independent"
+C-VN-0014,gallery,,,,,"Đảng Công-Nông Việt-Nam: Tuyên ngôn, chính cương và điều lệ",,,,,,Latin,,,scan,yes,,
+C-VN-0015,gallery,,,,,Quảng Thuận đạo sử tập,Nguyễn Huy Quýnh,,,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0016,gallery,,,,,Truyện Phan Xích Long – hoàng đế và binh tướng bị xử tại Tòa Đại hình Sài Gòn,Bùi Minh Đường,Imprimerie de l'Union,1913,,,Latin,,,scan,yes,,
+C-VN-0017,gallery,,,,,Lịch triều hiến chương loại chí,Phan Huy Chú,,1957,,,Latin,,,scan,yes,,1957 Saigon edition
+C-VN-0018,query_independent,C-VN-0017,OTHER-C-VN-0018,different_cover_same_work,C-VN-0017,Lịch triều hiến chương loại chí,Phan Huy Chú,,1972,,,Latin,,,photo,yes,,1972 cover of the same work (different edition)
+C-VN-0019,gallery,,,,,Nam Kỳ lục tỉnh địa dư chí,,,,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0020,out_of_catalog,,,,,Tiên Nguyên loát yếu phổ (tiền biên),Tôn Thất Hân,,,,,Latin,,,scan,yes,,assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))
+C-VN-0021,gallery,,,,,Trung tiết anh hùng – Lịch sử ông Võ Tánh,,Tín Đức Thư Xã,1930,,,Latin,,,scan,yes,,1930 printing
+C-VN-0022,gallery,,,,,Thiên hồ Đế hồ,Phan Bội Châu,,,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0023,gallery,,,,,Đại Nam quốc ngữ,,,,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0024,gallery,,,,,Lá vàng tình thơ,Hà Tôn Thanh Hằng,,,,,Latin,,,scan,yes,,"file name LVTT = ""La vang tinh tho"" (not Luc Van Tien)"
+C-VN-0025,exclude,,,,,,,,,,,,,,scan,no,NOT_CLEARLY_FRONT_COVER,"woodblock leaf spread, cannot confirm it is the cover"
+C-VN-0026,gallery,,,,,Sự thật về quan hệ Việt Nam – Trung Quốc trong 30 năm qua,,Sự Thật,,,,Latin,,,low_resolution,yes,,214x283
+C-VN-0027,gallery,,,,,Huỳnh Thúc Kháng tự truyện,Huỳnh Thúc Kháng,Anh Minh,1963,,,Latin,,,scan,yes,,1963
+C-VN-0028,out_of_catalog,,,,,Dagestan của tôi,Rasul Gamzatov,Kim Đồng,,,,Latin,,,photo,yes,,photo of a modern copy | assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))
+C-VN-0029,gallery,,,,,Công giáo trên bờ vực thẳm,Charlie Nguyễn,,,,,Latin,,,low_resolution,yes,,152x237; same author as C-VN-0030
+C-VN-0030,gallery,,,,,Công giáo huyền thoại và tội ác,Charlie Nguyễn,Giao Điểm,2001,,,Latin,,,scan,yes,,same author as C-VN-0029
+C-VN-0031,gallery,,,,,Cành hoa điểm tuyết,Đặng Trần Phất,,,,,Latin,,,scan,yes,,
+C-VN-0032,exclude,,,,,,,,,,,,,,scan,yes,NOT_A_BOOK_COVER,copyright registration certificate
+C-VN-0033,exclude,,,,,,,,,,,,,,scan,yes,FULL_WRAP_FRONT_SPINE_BACK,wrap-around cover (front+spine+back) in one image
+C-VN-0034,exclude,,,,,,,,,,,,,,scan,yes,FULL_WRAP_FRONT_SPINE_BACK,wrap-around cover
+C-VN-0035,exclude,,,,,,,,,,,,,,scan,yes,FULL_WRAP_FRONT_SPINE_BACK,wrap-around cover
+C-VN-0036,out_of_catalog,,,,,Những kinh nghiệm tiên tiến của nền giáo dục xã hội chủ nghĩa ở Cộng hòa Dân chủ Đức,Nguyễn Văn Huyên; Nguyễn Sĩ Tỷ,Giáo Dục,1962,,,Latin,,,photo,yes,,"1962, Nha xuat ban Giao duc (similar style to 0037/0038) | assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))"
+C-VN-0037,gallery,,,,,Tìm hiểu học thuyết Páp-lốp áp dụng vào giáo dục,Nguyễn Sĩ Tỷ,Giáo Dục,1960,,,Latin,,,photo,yes,,"1960, same publisher style"
+C-VN-0038,out_of_catalog,,,,,Vấn đề cải cách giáo dục ở Liên Xô,Nguyễn Văn Huyên; Nguyễn Sĩ Tỷ,Giáo Dục,1962,,,Latin,,,photo,yes,,"1962, same publisher style | assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))"
+C-VN-0039,gallery,,,,,Thi kinh giải âm,,,1714,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0040,gallery,,,,,Những tìm sâu triết học,Ludwig Wittgenstein,,,,,Latin,,,scan,yes,,
+C-VN-0041,gallery,,,,,Giải mã điện mặt trời,Nguyễn Hồng Phúc,Khoa học và Kỹ thuật,,,,Latin,,,scan,yes,,
+C-VN-0042,gallery,,,,,Nàng mèo,Colette,Phụ Nữ,2007,,,Latin,,,photo,yes,,
+C-VN-0043,gallery,,,,,Thiên Nam dư hạ tập,,,,,,Han-Nom,,,photo,no,,title in Han characters only
+C-VN-0044,out_of_catalog,,,,,Tôi là ai – và nếu vậy thì bao nhiêu?,Richard David Precht,,,,,Latin,,,photo,yes,,assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))
+C-VN-0045,gallery,,,,,Đất rừng phương Nam,Đoàn Giỏi,Kim Đồng,1975,,,Latin,,,scan,yes,,1975 printing
+C-VN-0046,gallery,,,,,Kinh tế phi nhân lực,Hồ Hữu Lực,,,,,Latin,,,scan,yes,,
+C-VN-0047,exclude,,,,,,,,,,,,,,scan,yes,FULL_WRAP_FRONT_SPINE_BACK,wrap-around cover plus extra panels
+C-VN-0048,gallery,,,,,Trước giờ tổng khởi nghĩa,Trần Quảng Vận,Hội Văn hóa Cứu quốc,1946,,,Latin,,,scan,partial,,library barcode label covers author line
+C-VN-0049,exclude,,,,,,,,,,,,,,scan,yes,COMPOSITE_SEVERAL_BOOKS,four covers in one image
+C-VN-0050,exclude,,,,,,,,,,,,,,scan,yes,COMPOSITE_SEVERAL_BOOKS,four covers in one image
+C-VN-0051,exclude,,,,,,,,,,,,,,photo,partial,COMPOSITE_SEVERAL_BOOKS,shelf of several books
+C-VN-0052,gallery,,,,,Người trong bóng tối,Paul Auster,,,,,Latin,,,low_resolution,yes,,250x350
+C-VN-0053,exclude,,,,,,,,,,,,,,scan,yes,NOT_FRONT_COVER_TITLE_PAGE,1651 title page (Latin)
+C-VN-0054,gallery,,,,,Hoàng tử Cảnh như Tây (Quyển 1),Tân Dân Tử,,,,,Latin,,,scan,no,,cover illustration only (volume 1)
+C-VN-0055,gallery,,,,,Hoàng tử Cảnh như Tây (Quyển 2),Tân Dân Tử,,,,,Latin,,,scan,no,,cover illustration only (volume 2)
+C-VN-0056,gallery,,,,,Gia Long phục quốc,Tân Dân Tử,,,,,Latin,,,scan,no,,cover illustration only
+G-EN-0077,,,,,,The Roly-Poly Pudding,,,,,,,,,,,,title as printed on the 1908 first edition; Wikidata label is the later title
+G-EN-0087,,,,,,"An Authentic Life of Billy the Kid, the Noted Desperado of the Southwest",Pat F. Garrett,,,,,,,,,,,printed title/author; Wikidata also lists a ghostwriter
+G-EN-0065,,,,,,Fil and Filippa,,,,,,,,,,,,
+G-EN-0062,,,,,,A Month in Honolulu,,,,,,,,,,,,"CONFLICT: printed ""A Month in Honolulu"" vs Wikidata ""Diary of One Month in Honolulu""; printed used"
+G-EN-0054,,,,,,,Šárka B. Hrbková,,,,,,,,,,,editor as printed; Wikidata lists 10 contributing authors
+G-EN-0031,,,,,,,Pierre Coalfleet; Frank Cyril Shaw Davison,,,,,,,,,,,printed pseudonym + Wikidata author
+G-EN-0099,,,,,,Afloat and Ashore,,,,,,,,,,no,,title only on the spine; front board is marbled
+G-EN-0100,exclude,,,,,,,,,,,,,,,,IDENTITY_MISMATCH,"image shows the binding of the annual 'The Gift' (1842), not a cover of 'The Pit and the Pendulum' (Wikidata item)"
+G-EN-0104,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TITLE_PAGE,
+G-EN-0106,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TITLE_PAGE,
+G-EN-0105,,,,,,,,,,,,,,,,partial,,small stamped title
+G-EN-0102,,,,,,,,,,,,,,,photo,,,
+O-EN-0004,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TITLE_PAGE,
+O-EN-0027,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TITLE_PAGE,
+Q-EN-0001,query_independent,Q883305,E1,same_edition_independent_image,G-EN-0009,,,,,,,,,,low_resolution,yes,,independent file of the same edition cover as G-EN-0009
+Q-EN-0002,query_independent,Q2531205,E1,same_edition_independent_image,G-EN-0049,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0049
+Q-EN-0005,query_independent,Q1405023,OTHER-Q-EN-0005,different_cover_same_work,G-EN-0083,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0083
+Q-EN-0006,query_independent,Q2582895,E1,same_edition_independent_image,G-EN-0038,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0038
+Q-EN-0007,query_independent,Q955910,E1,same_edition_independent_image,G-EN-0110,,,,,,,,,,low_resolution,partial,,independent file of the same edition cover as G-EN-0110
+Q-EN-0013,query_independent,Q5918393,OTHER-Q-EN-0013,different_cover_same_work,G-EN-0034,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0034
+Q-EN-0014,query_independent,Q7748655,E1,same_edition_independent_image,G-EN-0035,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0035
+Q-EN-0015,query_independent,Q1045464,OTHER-Q-EN-0015,different_cover_same_work,G-EN-0041,,,,,,,,,,low_resolution,yes,,independent file of a different cover of the same work as G-EN-0041
+Q-EN-0016,query_independent,Q13419109,E1,same_edition_independent_image,G-EN-0042,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0042
+Q-EN-0017,query_independent,Q13419109,E1,same_edition_independent_image,G-EN-0042,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0042
+Q-EN-0019,query_independent,Q122314394,E1,same_edition_independent_image,G-EN-0051,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0051
+Q-EN-0020,query_independent,Q7430452,OTHER-Q-EN-0020,different_cover_same_work,G-EN-0052,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0052
+Q-EN-0022,query_independent,Q4233781,E1,same_edition_independent_image,G-EN-0055,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0055
+Q-EN-0023,query_independent,Q7335058,E1,same_edition_independent_image,G-EN-0059,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0059
+Q-EN-0024,query_independent,Q7736859,E1,same_edition_independent_image,G-EN-0066,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0066
+Q-EN-0025,query_independent,Q1164998,OTHER-Q-EN-0025,different_cover_same_work,G-EN-0072,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0072
+Q-EN-0026,query_independent,Q7727811,E1,same_edition_independent_image,G-EN-0073,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0073
+Q-EN-0027,query_independent,Q6070722,E1,same_edition_independent_image,G-EN-0078,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0078
+Q-EN-0028,query_independent,Q6070722,E1,same_edition_independent_image,G-EN-0078,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0078
+Q-EN-0029,query_independent,Q501351,OTHER-Q-EN-0029,different_cover_same_work,G-EN-0080,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0080
+Q-EN-0032,query_independent,Q7989800,E1,same_edition_independent_image,G-EN-0091,,,,,,,,,,photo,yes,,independent file of the same edition cover as G-EN-0091
+Q-EN-0033,query_independent,Q7989800,OTHER-Q-EN-0033,different_cover_same_work,G-EN-0091,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0091
+Q-EN-0034,query_independent,Q7801858,E1,same_edition_independent_image,G-EN-0096,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0096
+Q-EN-0035,query_independent,Q41542,OTHER-Q-EN-0035,different_cover_same_work,G-EN-0102,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0102
+Q-EN-0036,query_independent,Q41542,E1,same_edition_independent_image,G-EN-0102,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0102
+Q-EN-0037,query_independent,Q41542,E1,same_edition_independent_image,G-EN-0102,,,,,,,,,,photo,yes,,independent file of the same edition cover as G-EN-0102
+Q-EN-0038,query_independent,Q41542,OTHER-Q-EN-0038,different_cover_same_work,G-EN-0102,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as G-EN-0102
+Q-EN-0039,query_independent,Q6652545,E1,same_edition_independent_image,G-EN-0109,,,,,,,,,,scan,yes,,independent file of the same edition cover as G-EN-0109
+Q-EN-0040,query_independent,C-EN-EN002,E1,same_edition_independent_image,C-EN-EN002,,,,,,,,,,scan,yes,,independent file of the same edition cover as C-EN-EN002
+Q-EN-0041,query_independent,C-EN-EN002,OTHER-Q-EN-0041,different_cover_same_work,C-EN-EN002,,,,,,,,,,photo,yes,,independent file of a different cover of the same work as C-EN-EN002
+Q-EN-0042,query_independent,C-EN-EN005,E1,same_edition_independent_image,C-EN-EN005,,,,,,,,,,photo,yes,,independent file of the same edition cover as C-EN-EN005
+Q-EN-0043,query_independent,C-EN-EN006,OTHER-Q-EN-0043,different_cover_same_work,C-EN-EN006,,,,,,,,,,scan,yes,,independent file of a different cover of the same work as C-EN-EN006
+Q-EN-0044,query_independent,C-EN-EN007,E1,same_edition_independent_image,C-EN-EN007,,,,,,,,,,scan,yes,,independent file of the same edition cover as C-EN-EN007
+C-EN-EN004,query_independent,Q41542,OTHER-C-EN-EN004,different_cover_same_work,G-EN-0102,Dracula,Bram Stoker,,,,,,,,scan,yes,,"seed EN004 is a grey cloth binding with a title label, not the 1897 yellow first edition; used as a different-cover query for G-EN-0102"
+C-MD-0004,query_independent,C-MD-0003,OTHER-C-MD-0004,different_cover_same_work,C-MD-0003,Jaws,Peter Benchley,,,,,,,,scan,no,,1975 paperback cover art without printed title
+C-VN-0064,query_independent,C-VN-0063,E1,same_edition_independent_image,C-VN-0063,Đường kách mệnh,Nguyễn Ái Quốc,,,,,Latin,,,photo_angled,partial,,independent file of the same edition cover as C-VN-0063
+Q-EN-0003,exclude,,,,,,,,,,,,,,,,NOT_INDEPENDENT_SAME_SCAN_AS_GALLERY (pHash 8; gallery file is a retouch of this scan),
+Q-EN-0004,exclude,,,,,,,,,,,,,,,,NOT_INDEPENDENT_SAME_SCAN_AS_GALLERY (pHash 4; gallery file is a retouch of this scan),
+Q-EN-0009,exclude,,,,,,,,,,,,,,,,NOT_INDEPENDENT_SAME_SCAN_AS_GALLERY (pHash 2),
+Q-EN-0008,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TITLE_PAGE,
+Q-EN-0021,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TITLE_PAGE,
+Q-EN-0010,exclude,,,,,,,,,,,,,,,,NOT_FULL_COVER_LETTERING_FRAGMENT,
+Q-EN-0011,exclude,,,,,,,,,,,,,,,,NOT_FULL_COVER_ILLUSTRATION_CUTOUT,
+Q-EN-0031,exclude,,,,,,,,,,,,,,,,NOT_FULL_COVER_ILLUSTRATION_CUTOUT,
+Q-EN-0012,exclude,,,,,,,,,,,,,,,,TRANSLATION_NOT_IN_CATALOG (German edition),
+Q-EN-0018,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+Q-EN-0030,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-MD-0002,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-MD-0006,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-EN-EN001,gallery,,,,,Alice's Adventures in Wonderland,Lewis Carroll,,1865,,,,,,scan,no,,"seed EN001; cloth cover shows a gilt medallion only, no title"
+C-EN-EN002,gallery,,,,,The Jungle Book,Rudyard Kipling,,1894,,,,,,scan,yes,,seed v0.1 record; title/author re-checked against the cover
+C-EN-EN003,gallery,,,,,The Wonderful Wizard of Oz,L. Frank Baum,,1900,,,,,,scan,yes,,seed v0.1 record; title/author re-checked against the cover
+C-EN-EN005,gallery,,,,,Pride and Prejudice,Jane Austen,,1894,,,,,,scan,yes,,seed v0.1 record; title/author re-checked against the cover
+C-EN-EN006,gallery,,,,,Little Women,Louisa May Alcott,,1869,,,,,,scan,yes,,seed v0.1 record; title/author re-checked against the cover
+C-EN-EN007,gallery,,,,,Anne of Green Gables,Lucy Maud Montgomery,,1908,,,,,,scan,yes,,seed v0.1 record; title/author re-checked against the cover
+C-EN-EN008,gallery,,,,,The Wind in the Willows,Kenneth Grahame,,1908,,,,,,scan,yes,,seed v0.1 record; title/author re-checked against the cover
+C-MD-0001,gallery,,,,,Carrie,Stephen King,,1974,1974,,,,UNKNOWN,scan,yes,,title/author as printed; year from the Commons file title
+C-MD-0003,gallery,,,,,Jaws,Peter Benchley,,1974,1974,,,,UNKNOWN,scan,yes,,title/author as printed; year from the Commons file title
+C-MD-0005,gallery,,,,,Midnight Cowboy,James Leo Herlihy,,1965,1965,,,,NOT_ASSIGNED_PRE_ISBN,scan,yes,,title/author as printed; year from the Commons file title
+C-MD-0007,gallery,,,,,Rosemary's Baby,Ira Levin,,1967,1967,,,,NOT_ASSIGNED_PRE_ISBN,scan,yes,,title/author as printed; year from the Commons file title
+C-MD-0010,gallery,,,,,Gone with the Wind,Margaret Mitchell,,1936,1936,,,,NOT_ASSIGNED_PRE_ISBN,scan,yes,,title/author as printed; year from the Commons file title
+C-MD-0011,gallery,,,,,To Kill a Mockingbird,Harper Lee,Lippincott,1960,1960,,,,NOT_ASSIGNED_PRE_ISBN,scan,yes,,title/author as printed; year from the Commons file title
+C-MD-0012,gallery,,,,,The Catcher in the Rye,J. D. Salinger,"Little, Brown",1951,1951,,,,NOT_ASSIGNED_PRE_ISBN,scan,yes,,title/author as printed; year from the Commons file title
+C-VN-0059,out_of_catalog,,,,,Chương trình quản lý kế toán MISA – Tài liệu hướng dẫn sử dụng,MISA Group,,1995,,,Latin,,,scan,yes,,assigned out-of-catalog by seeded hash (lowest 8 of sha256('ooc|'+asset_id))
+C-VN-0063,gallery,,,,,Đường kách mệnh,Nguyễn Ái Quốc,,,,,Latin,,,scan,yes,,cover of a copy with an owner inscription
+C-VN-0065,gallery,,,,,Le Procès de la Colonisation Française,Nguyễn Ái Quốc,Librairie du Travail,,,fr,Latin,,,photo,yes,,French-language book by a Vietnamese author; counted as INTERNATIONAL (title language)
+C-VN-0069,gallery,,,,,Ấu học ngũ ngôn thi,,,1863,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0070,gallery,,,,,Thực phổ bách thiên,Trương Thị Bích,,1915,,,Latin,,,low_resolution,yes,,
+C-VN-0071,gallery,,,,,Đại Nam thực lục chính biên đệ nhị kỷ,,,,,,Han-Nom,,,scan,no,,title in Han characters only
+C-VN-0057,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_INTERIOR_ILLUSTRATION,
+C-VN-0058,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-VN-0060,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-VN-0061,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-VN-0062,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-VN-0066,exclude,,,,,,,,,,,,,,,,FULL_WRAP_FRONT_SPINE_BACK,
+C-VN-0067,exclude,,,,,,,,,,,,,,,,COMPOSITE_SEVERAL_PRINTS,
+C-VN-0068,exclude,,,,,,,,,,,,,,,,NOT_FRONT_COVER_TEXT_PAGE,
+C-VN-0072,exclude,,,,,,,,,,,,,,,,NOT_A_BOOK_COVER_MAP,

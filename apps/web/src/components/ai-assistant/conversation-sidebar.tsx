@@ -44,7 +44,7 @@ function timeLabel(iso: string): string {
   const date = new Date(iso);
   return isToday(date)
     ? date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+    : `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}${date.getFullYear() === new Date().getFullYear() ? '' : `/${date.getFullYear()}`}`;
 }
 
 const UNTITLED = 'Hội thoại chưa đặt tên';
@@ -105,7 +105,7 @@ export function ConversationSidebar({
 
       {busy && conversations.length > 0 && (
         <p className="mx-3 mb-2 rounded-md bg-muted/70 px-2.5 py-1.5 text-[11.5px] leading-snug text-muted-foreground" role="status">
-          Đang xử lý — chờ hoàn tất để chuyển hội thoại.
+          Đang xử lý, chờ hoàn tất để chuyển hội thoại.
         </p>
       )}
 
@@ -114,8 +114,8 @@ export function ConversationSidebar({
           <ul className="space-y-1 px-1" aria-label="Đang tải lịch sử">
             {[72, 56, 64, 48].map((w) => (
               <li key={w} className="space-y-1.5 rounded-lg px-2 py-2.5">
-                <span className="block h-3 animate-pulse rounded bg-muted" style={{ width: `${w}%` }} />
-                <span className="block h-2.5 w-14 animate-pulse rounded bg-muted" />
+                <span className="block h-3 rounded bg-muted" style={{ width: `${w}%` }} />
+                <span className="block h-2.5 w-14 rounded bg-muted" />
               </li>
             ))}
           </ul>

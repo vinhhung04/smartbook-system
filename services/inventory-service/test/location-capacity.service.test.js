@@ -8,6 +8,7 @@ const {
   getLocationCapacityContextBatch,
   getEligibleLocationTypes,
   isLocationEligibleForMode,
+  rollUpOccupancy,
 } = require('../src/services/location-capacity.service');
 
 function fakeStockBalancesClient(rowsByLocation) {
@@ -114,4 +115,38 @@ test('isLocationEligibleForMode accepts an active SHELF_COMPARTMENT for RECEIVIN
 test('isLocationEligibleForMode rejects an inactive location regardless of type', () => {
   const inactive = { is_active: false, location_type: 'SHELF_COMPARTMENT' };
   assert.equal(isLocationEligibleForMode(inactive, 'RECEIVING'), false);
+});
+
+test('rollUpOccupancy sums on-hand copies up the tree: compartment, shelf, zone', () => {
+  const tree = [
+    {
+      id: 'zone-a',
+      children: [
+        { id: 'shelf-1', children: [{ id: 'bin-1', children: [] }, { id: 'bin-2', children: [] }] },
+        { id: 'shelf-2', children: [{ id: 'bin-3', children: [] }] },
+      ],
+    },
+    { id: 'receiving', children: [] },
+  ];
+  const occupancy = new Map([['bin-1', 10], ['bin-2', 9], ['receiving', 4]]);
+
+  const result = rollUpOccupancy(tree, occupancy);
+
+  assert.equal(result, tree, 'returns the same nodes it was given');
+  const [zone, receiving] = tree;
+  const [shelf1, shelf2] = zone.children;
+  assert.equal(shelf1.children[0].occupied_qty, 10);
+  assert.equal(shelf1.children[1].occupied_qty, 9);
+  assert.equal(shelf1.occupied_qty, 19);
+  assert.equal(shelf2.children[0].occupied_qty, 0, 'a location with no stock reads 0, not undefined');
+  assert.equal(shelf2.occupied_qty, 0);
+  assert.equal(zone.occupied_qty, 19);
+  assert.equal(receiving.occupied_qty, 4);
+});
+
+test('rollUpOccupancy tolerates an empty tree and nodes without children', () => {
+  assert.deepEqual(rollUpOccupancy([], new Map()), []);
+  const leaf = [{ id: 'x' }];
+  rollUpOccupancy(leaf, new Map([['x', 3]]));
+  assert.equal(leaf[0].occupied_qty, 3);
 });

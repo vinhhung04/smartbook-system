@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 1080" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="activity-ai-cataloging-dd-title activity-ai-cataloging-dd-desc" id="activity-ai-cataloging-dd-root">
+<title id="activity-ai-cataloging-dd-title">Sơ đồ hoạt động quy trình biên mục sách có hỗ trợ AI</title>
+<desc id="activity-ai-cataloging-dd-desc">Quản lý kho nhập ISBN, AI Service lấy và hợp nhất metadata từ các nguồn, Inventory Service tạo bản nháp đối soát, quản lý kho duyệt và áp dụng.</desc>
+<defs>
+      <style>#activity-ai-cataloging-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #activity-ai-cataloging-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #activity-ai-cataloging-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #activity-ai-cataloging-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#activity-ai-cataloging-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#1f3864"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<rect x="40" y="40" width="720" height="1000" fill="#ffffff" stroke="#475569" stroke-width="1"/>
+<rect x="40" y="40" width="720" height="40" fill="#f3f6fa" stroke="#475569" stroke-width="1"/>
+<line x1="202.9" y1="40" x2="202.9" y2="1040" stroke="#c5cedb" stroke-width="1"/>
+<line x1="417.1" y1="40" x2="417.1" y2="1040" stroke="#c5cedb" stroke-width="1"/>
+<line x1="571.4" y1="40" x2="571.4" y2="1040" stroke="#c5cedb" stroke-width="1"/>
+<text x="121.42857142857143" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Quản lý kho</text>
+<text x="310.0" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">AI Service</text>
+<text x="494.2857142857142" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Nguồn metadata</text>
+<text x="665.7142857142856" y="65.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Inventory Service</text>
+<path d="M 121.4 112.0 L 121.4 128.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 121.4 154.0 L 121.4 157.0 Q 121.4 160.0 124.4 160.0 L 302.0 160.0 Q 310.0 160.0 310.0 165.0 L 310.0 170.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 310.0 212.0 L 310.0 215.0 Q 310.0 218.0 313.0 218.0 L 486.3 218.0 Q 494.3 218.0 494.3 223.0 L 494.3 228.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 494.3 286.0 L 494.3 289.0 Q 494.3 292.0 491.3 292.0 L 318.0 292.0 Q 310.0 292.0 310.0 297.0 L 310.0 302.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 310.0 328.0 L 310.0 344.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 390.0 365.0 L 486.3 365.0 Q 494.3 365.0 494.3 373.0 L 494.3 402.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 230.0 365.0 L 222.0 365.0 Q 214.0 365.0 214.0 373.0 L 214.0 478.0 Q 214.0 486.0 222.0 486.0 L 300.0 486.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 494.3 460.0 L 494.3 463.0 Q 494.3 466.0 491.3 466.0 L 318.0 466.0 Q 310.0 466.0 310.0 471.0 L 310.0 476.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 310.0 496.0 L 310.0 512.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 310.0 570.0 L 310.0 586.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 310.0 612.0 L 310.0 615.0 Q 310.0 618.0 313.0 618.0 L 657.7 618.0 Q 665.7 618.0 665.7 623.0 L 665.7 628.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 665.7 670.0 L 665.7 686.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 665.7 744.0 L 665.7 747.0 Q 665.7 750.0 662.7 750.0 L 129.4 750.0 Q 121.4 750.0 121.4 755.0 L 121.4 760.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 121.4 818.0 L 121.4 834.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 121.4 876.0 L 121.4 892.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 121.4 918.0 L 121.4 921.0 Q 121.4 924.0 124.4 924.0 L 657.7 924.0 Q 665.7 924.0 665.7 929.0 L 665.7 934.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<path d="M 665.7 992.0 L 665.7 1008.0" fill="none" stroke="#1f3864" stroke-width="1.2" marker-end="url(#activity-ai-cataloging-dd-activity-ai-cataloging-dd-arrow)"/>
+<rect x="394.0" y="342.0" width="24" height="16" rx="2" fill="#ffffff"/>
+<text x="406.0" y="354.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">có</text>
+<rect x="220.0" y="387.0" width="44" height="16" rx="2" fill="#ffffff"/>
+<text x="242.0" y="399.0" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">không</text>
+<circle cx="121.42857142857143" cy="102.0" r="9" fill="#1f3864"/>
+<rect x="47.42857142857143" y="128.0" width="148" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="121.42857142857143" y="145.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Nhập hoặc quét ISBN</text>
+<rect x="238.0" y="170.0" width="144" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="310.0" y="187.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Chuẩn hóa, kiểm tra</text>
+<text x="310.0" y="203.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">tổng kiểm tra ISBN</text>
+<rect x="424.2857142857142" y="228.0" width="140" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="494.2857142857142" y="245.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Trả dữ liệu từ</text>
+<text x="494.2857142857142" y="261.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Google Books, Open</text>
+<text x="494.2857142857142" y="277.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Library</text>
+<rect x="224.0" y="302.0" width="172" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="310.0" y="319.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Đo độ đầy đủ từng trường</text>
+<polygon points="230.0,365.0 242.0,344.0 378.0,344.0 390.0,365.0 378.0,386.0 242.0,386.0" fill="#f3f6fa" stroke="#1f3864" stroke-width="1.2"/>
+<text x="310.0" y="361.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Thiếu trường quan</text>
+<text x="310.0" y="377.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">trọng hoặc xung đột?</text>
+<rect x="430.2857142857142" y="402.0" width="128" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="494.2857142857142" y="419.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Trả dữ liệu từ nhà</text>
+<text x="494.2857142857142" y="435.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">sách trong nước,</text>
+<text x="494.2857142857142" y="451.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">tìm kiếm web</text>
+<polygon points="310.0,476.0 320.0,486.0 310.0,496.0 300.0,486.0" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<rect x="222.0" y="512.0" width="176" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="310.0" y="529.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Hợp nhất bằng chứng theo</text>
+<text x="310.0" y="545.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">trường (giá trị, độ tin cậy,</text>
+<text x="310.0" y="561.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">nguồn gốc, xung đột)</text>
+<rect x="228.0" y="586.0" width="164" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="310.0" y="603.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Sinh tóm tắt tiếng Việt</text>
+<rect x="589.7142857142856" y="628.0" width="152" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="665.7142857142856" y="645.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Tạo bản nháp đối soát</text>
+<text x="665.7142857142856" y="661.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">metadata</text>
+<rect x="585.7142857142856" y="686.0" width="160" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="665.7142857142856" y="703.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Chuẩn hóa tác giả, nhà</text>
+<text x="665.7142857142856" y="719.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">xuất bản, thể loại; kiểm</text>
+<text x="665.7142857142856" y="735.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">tra trùng lặp</text>
+<rect x="53.42857142857143" y="760.0" width="136" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="121.42857142857143" y="777.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Duyệt từng trường</text>
+<text x="121.42857142857143" y="793.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(chấp nhận, từ chối,</text>
+<text x="121.42857142857143" y="809.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">sửa)</text>
+<rect x="47.42857142857143" y="834.0" width="148" height="42" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="121.42857142857143" y="851.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Chọn cách xử lý trùng</text>
+<text x="121.42857142857143" y="867.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">lặp</text>
+<rect x="85.42857142857143" y="892.0" width="72" height="26" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="121.42857142857143" y="909.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Áp dụng</text>
+<rect x="577.7142857142856" y="934.0" width="176" height="58" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1.2"/>
+<text x="665.7142857142856" y="951.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Ghi các trường được chấp</text>
+<text x="665.7142857142856" y="967.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">nhận trong một giao dịch,</text>
+<text x="665.7142857142856" y="983.5" fill="#1f3864" font-size="13" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">lưu nguồn gốc</text>
+<circle cx="665.7142857142856" cy="1018.0" r="10" fill="#ffffff" stroke="#1f3864" stroke-width="1.4"/><circle cx="665.7142857142856" cy="1018.0" r="6" fill="#1f3864"/>
+</svg>

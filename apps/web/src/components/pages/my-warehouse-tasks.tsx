@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent } from "react";
 import {
-  AlertTriangle, ArrowLeftRight, CheckCircle2, ClipboardCheck, ClipboardList, Hand, Hourglass,
+  AlertTriangle, ArrowLeftRight, ArrowRight, CheckCircle2, ClipboardCheck, ClipboardList, Hand, Hourglass,
   Inbox, Link2, MapPinned, PackageCheck, RefreshCw, Search, ShoppingCart, Truck,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BlockError } from "@/components/pages/dashboard/panel";
-import { ListFooter, QueueTabs, RowsSkeleton } from "@/components/ops/ops-kit";
+import { ListFooter, RowsSkeleton } from "@/components/ops/ops-kit";
 import { elapsedSince, formatDateTime, darkFieldClass } from "@/components/ops/ops-utils";
 import { cn } from "@/components/ui/utils";
 import { getApiErrorMessage } from "@/services/api";
@@ -282,16 +282,15 @@ export function MyWarehouseTasksPage() {
       <>
         <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-muted-foreground">
           <TypeIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          <span>{TASK_TYPE_LABELS[task.type] ?? task.type}</span>
-          <span aria-hidden="true">·</span>
-          <span className="truncate">{warehouseLabel(task)}</span>
-          {extra ? <><span aria-hidden="true">·</span><span className="font-medium text-foreground">{extra}</span></> : null}
+          <span>{TASK_TYPE_LABELS[task.type] ?? task.type},</span>
+          <span className="truncate">{warehouseLabel(task)}{extra ? "," : ""}</span>
+          {extra ? <span className="font-medium text-foreground">{extra}</span> : null}
         </p>
         {related ? (
           <p className="mt-1 flex min-w-0 items-center gap-1 text-[12px] text-muted-foreground">
             <Link2 className="h-3 w-3 shrink-0" aria-hidden="true" />
             <span className="font-mono text-foreground">{related.ref_number}</span>
-            {related.details ? <span className="truncate">· {related.details}</span> : null}
+            {related.details ? <span className="truncate">, {related.details}</span> : null}
           </p>
         ) : null}
       </>
@@ -424,98 +423,279 @@ export function MyWarehouseTasksPage() {
   const loadedLabel = loadedAt ? loadedAt.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : null;
   const activeTab = tabs.find((tab) => tab.key === view)!;
 
+  // The greeting names the person and today's one fact from the queue (taste sheet: editorial-greeting).
+  const firstName = (currentUser?.full_name || currentUser?.username || "").trim().split(/\s+/).pop() || "";
+  const nextTask = buckets.todo[0] ?? null;
+  const oldestAge = nextTask ? elapsedSince(nextTask.created_at) : null;
+  const todayFact = loading
+    ? "Đang tải công việc của bạn."
+    : loadError && tasks.length === 0
+      ? "Chưa tải được công việc kho của bạn."
+      : buckets.todo.length === 0
+        ? (availableTasks.length > 0 ? `Bạn đã làm hết việc được giao, còn ${availableTasks.length} task chưa ai nhận.` : "Bạn đã làm hết việc được giao.")
+        : `Còn ${buckets.todo.length} việc cần làm${oldestAge ? `, việc cũ nhất đã chờ ${oldestAge.text}` : ""}.`;
+  const todayLabel = new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
+  const todoByType = Object.entries(
+    buckets.todo.reduce<Record<string, number>>((acc, task) => ({ ...acc, [task.type]: (acc[task.type] ?? 0) + 1 }), {}),
+  ).sort((a, b) => b[1] - a[1]);
+  const lastDone = buckets.done[0]?.completed_at ?? null;
+  const tileCaption: Record<View, string> = {
+    todo: oldestAge ? `Cũ nhất chờ ${oldestAge.text}` : "Không còn việc tồn",
+    available: availableTasks.length > 0 ? "Chưa ai nhận" : "Không có task mới",
+    waiting: "Yêu cầu và báo cáo bạn gửi",
+    done: lastDone ? `Gần nhất ${formatDateTime(lastDone) ?? ""}` : "Chưa có",
+  };
+
+  const nextPath = nextTask ? getTaskActionPath(nextTask, putawayReady) : null;
+  const nextPutaway = nextTask?.type === "PUTAWAY" ? putawayReady?.get(nextTask.id) : undefined;
+  const NextIcon = nextTask ? (TASK_TYPE_ICON[nextTask.type] ?? ClipboardList) : ClipboardList;
+
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
-        <PageHeader
-          icon={ClipboardList}
-          title="Công việc kho của tôi"
-          description="Nhận hàng, cất hàng, lấy hàng và xuất kho được giao cho bạn"
-          iconBg="bg-emerald-100 dark:bg-emerald-500/15"
-          iconColor="text-emerald-700 dark:text-emerald-400"
-          actions={
-            <>
-              {loadedLabel ? <span className="hidden text-[12px] tabular-nums text-muted-foreground sm:inline">Cập nhật {loadedLabel}</span> : null}
-              <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || refreshing}>
-                <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin motion-reduce:animate-none")} />
-                Làm mới
-              </Button>
-            </>
-          }
-        />
+        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h1 className="font-display text-[24px] font-semibold leading-tight tracking-tight text-foreground sm:text-[30px]">
+              {firstName ? `Chào ${firstName}.` : "Công việc kho của tôi"}
+            </h1>
+            <p className="mt-1 text-[16px] text-foreground">{todayFact}</p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground first-letter:uppercase">
+              {todayLabel}{loadedLabel ? `, cập nhật lúc ${loadedLabel}` : ""}
+            </p>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadTasks()} disabled={loading || refreshing}>
+            <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin motion-reduce:animate-none")} />
+            Làm mới
+          </Button>
+        </div>
       </FadeItem>
 
       <FadeItem>
-        <section aria-label="Hàng đợi công việc" className="min-w-0 rounded-xl border border-border bg-card">
-          <QueueTabs label="Nhóm công việc" tabs={tabs} value={view} onChange={setView} panelId={PANEL_ID} loading={loading} />
+        <div className="@container/page">
+          <div className="grid grid-cols-1 gap-4 @4xl/page:grid-cols-12">
+            <TileTabs tabs={tabs} value={view} onChange={setView} captions={tileCaption} loading={loading} />
 
-          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
-            <div className="relative min-w-0 sm:w-72">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Tìm mã task, kho, chứng từ…"
-                aria-label="Tìm công việc"
-                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9 sm:text-[13px]"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Select value={activeType} onValueChange={setActiveType}>
-                <SelectTrigger className={cn("h-10 min-w-0 flex-1 sm:h-9 sm:w-52 sm:flex-none", darkFieldClass)} aria-label="Lọc theo loại công việc">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Mọi loại công việc ({viewTasks.length})</SelectItem>
-                  {Object.keys(TASK_TYPE_LABELS).filter((type) => typeCounts[type]).map((type) => (
-                    <SelectItem key={type} value={type}>{TASK_TYPE_LABELS[type]} ({typeCounts[type]})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {warehouseOptions.length > 1 ? (
-                <Select value={activeWarehouse} onValueChange={setActiveWarehouse}>
-                  <SelectTrigger className={cn("h-10 min-w-0 flex-1 sm:h-9 sm:w-44 sm:flex-none", darkFieldClass)} aria-label="Lọc theo kho">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={ALL}>Mọi kho</SelectItem>
-                    {warehouseOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            {/* The answer to "what do I do next?": the oldest open task, with its action. */}
+            <section aria-labelledby="next-task-title" className="@container min-w-0 rounded-2xl border border-border bg-card p-5 @4xl/page:col-span-9">
+              <h2 id="next-task-title" className="text-[16px] font-semibold text-foreground">Việc tiếp theo</h2>
+              {loading ? (
+                <div className="mt-3 space-y-2"><div className="h-4 w-48 rounded bg-muted" /><div className="h-6 w-64 max-w-full rounded bg-muted" /></div>
+              ) : nextTask ? (
+                <div className="mt-3 flex flex-col gap-4 @xl:flex-row @xl:items-start @xl:justify-between @xl:gap-6">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-muted-foreground">
+                      <NextIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="text-foreground">{TASK_TYPE_LABELS[nextTask.type] ?? nextTask.type}</span>
+                      <span>tại {warehouseLabel(nextTask)}</span>
+                      <StatusBadge label={getWarehouseTaskStatusLabel(nextTask.status)} variant={getWarehouseTaskStatusVariant(nextTask.status)} />
+                    </p>
+                    <p className="mt-1.5 break-all font-mono text-[20px] font-semibold text-foreground">{nextTask.title}</p>
+                    <p className={cn("mt-1 text-[14px]", oldestAge?.stale ? "font-medium text-amber-800 dark:text-amber-300" : "text-muted-foreground")}>
+                      {oldestAge ? `Đã chờ ${oldestAge.text}` : "Vừa giao"}, nhận lúc {formatDateTime(nextTask.created_at) ?? "-"}
+                    </p>
+                    {nextPutaway && (
+                      <div className="mt-3 max-w-md">
+                        <Progress
+                          value={nextPutaway.total_quantity > 0 ? Math.round((nextPutaway.putaway_quantity / nextPutaway.total_quantity) * 100) : 0}
+                          className="h-1.5"
+                          aria-label="Tiến độ cất hàng"
+                        />
+                        <p className="mt-1 text-[13px] tabular-nums text-muted-foreground">
+                          Đã cất {nextPutaway.putaway_quantity}/{nextPutaway.total_quantity} cuốn, còn <span className="font-semibold text-foreground">{nextPutaway.remaining_quantity}</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {nextPath ? (
+                      <NavLink to={nextPath} className={cn(primaryLinkClass, "h-10 sm:h-10")}>
+                        Bắt đầu <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </NavLink>
+                    ) : null}
+                    {REPORTABLE_TYPES.includes(nextTask.type) ? (
+                      <Button type="button" variant="outline" onClick={() => handleReportException(nextTask)} className="h-10">
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Báo sự cố
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-[14px] text-muted-foreground">
+                    {availableTasks.length > 0 ? `Không còn việc được giao. Có ${availableTasks.length} task đang chờ người nhận.` : "Không còn việc được giao. Task mới do quản lý giao sẽ xuất hiện ở đây."}
+                  </p>
+                  {availableTasks.length > 0 && (
+                    <Button size="sm" onClick={() => setView("available")}><Hand className="h-3.5 w-3.5" /> Xem task có thể nhận</Button>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <section aria-labelledby="todo-by-type-title" className="min-w-0 rounded-2xl border border-border bg-card p-5 @4xl/page:col-span-3">
+              <h2 id="todo-by-type-title" className="text-[16px] font-semibold text-foreground">Cần làm theo loại</h2>
+              {loading ? (
+                <div className="mt-3 space-y-2">{[0, 1, 2].map((i) => <div key={i} className="h-5 rounded bg-muted" />)}</div>
+              ) : todoByType.length === 0 ? (
+                <p className="mt-2 text-[14px] text-muted-foreground">Không có việc nào.</p>
+              ) : (
+                <ul className="mt-2">
+                  {todoByType.map(([type, count]) => {
+                    const Icon = TASK_TYPE_ICON[type] ?? ClipboardList;
+                    const active = view === "todo" && activeType === type;
+                    return (
+                      <li key={type}>
+                        <button
+                          type="button"
+                          onClick={() => { setView("todo"); setActiveType(active ? ALL : type); }}
+                          aria-pressed={active}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active ? "bg-muted font-semibold text-foreground" : "text-foreground hover:bg-muted/60",
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <span className="min-w-0 flex-1 truncate">{TASK_TYPE_LABELS[type] ?? type}</span>
+                          <span className="tabular-nums text-muted-foreground">{count}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            <section aria-labelledby="queue-title" className="min-w-0 rounded-2xl border border-border bg-card @4xl/page:col-span-12">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 pb-1 pt-4">
+                <h2 id="queue-title" className="text-[16px] font-semibold text-foreground">{activeTab.label}</h2>
+                <p className="text-[13px] text-muted-foreground">{VIEW_HINT[view]}</p>
+              </div>
+              <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+                <div className="relative min-w-0 sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Mã task, kho hoặc chứng từ"
+                    aria-label="Tìm công việc"
+                    className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Select value={activeType} onValueChange={setActiveType}>
+                    <SelectTrigger className={cn("h-10 min-w-0 flex-1 sm:h-9 sm:w-52 sm:flex-none", darkFieldClass)} aria-label="Lọc theo loại công việc">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL}>Mọi loại công việc ({viewTasks.length})</SelectItem>
+                      {Object.keys(TASK_TYPE_LABELS).filter((type) => typeCounts[type]).map((type) => (
+                        <SelectItem key={type} value={type}>{TASK_TYPE_LABELS[type]} ({typeCounts[type]})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {warehouseOptions.length > 1 ? (
+                    <Select value={activeWarehouse} onValueChange={setActiveWarehouse}>
+                      <SelectTrigger className={cn("h-10 min-w-0 flex-1 sm:h-9 sm:w-44 sm:flex-none", darkFieldClass)} aria-label="Lọc theo kho">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={ALL}>Mọi kho</SelectItem>
+                        {warehouseOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                </div>
+              </div>
+
+              {view === "waiting" && (canOpenPurchaseRequests || canOpenExceptionReports) ? (
+                <p className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border px-4 py-2.5 text-[13px] text-muted-foreground sm:px-5">
+                  <span>Xem đầy đủ phản hồi của quản lý:</span>
+                  {canOpenPurchaseRequests ? <NavLink to="/my-purchase-requests" className="font-medium text-primary underline-offset-4 hover:underline">Yêu cầu mua hàng</NavLink> : null}
+                  {canOpenExceptionReports ? <NavLink to="/my-exception-reports" className="font-medium text-primary underline-offset-4 hover:underline">Báo cáo sự cố</NavLink> : null}
+                </p>
               ) : null}
-            </div>
-            <p className="hidden text-[12px] text-muted-foreground lg:ml-auto lg:block">{VIEW_HINT[view]}</p>
+
+              <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${view}`} aria-busy={loading || refreshing}>
+                {loading ? (
+                  <RowsSkeleton rows={6} />
+                ) : loadError && tasks.length === 0 && availableTasks.length === 0 ? (
+                  <div className="p-4 sm:p-5"><BlockError what="công việc kho của bạn" onRetry={() => void loadTasks("initial")} /></div>
+                ) : paged.length === 0 ? (
+                  <div className="px-5 py-8">{emptyState()}</div>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {view === "available"
+                      ? (paged as AvailableWarehouseTask[]).map(renderAvailableRow)
+                      : (paged as MyWarehouseTask[]).map((task, i) => renderTaskRow(task, queueOffset + i + 1))}
+                  </ul>
+                )}
+              </div>
+
+              {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={filtered.length} noun="task" onPageChange={setPage} /> : null}
+            </section>
           </div>
-
-          {view === "waiting" && (canOpenPurchaseRequests || canOpenExceptionReports) ? (
-            <p className="flex flex-wrap gap-x-4 gap-y-1 border-b border-border px-4 py-2.5 text-[12px] text-muted-foreground sm:px-5">
-              <span>Xem đầy đủ phản hồi của quản lý:</span>
-              {canOpenPurchaseRequests ? <NavLink to="/my-purchase-requests" className="font-medium text-primary underline-offset-4 hover:underline">Yêu cầu mua hàng</NavLink> : null}
-              {canOpenExceptionReports ? <NavLink to="/my-exception-reports" className="font-medium text-primary underline-offset-4 hover:underline">Báo cáo sự cố</NavLink> : null}
-            </p>
-          ) : null}
-
-          <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${view}`} aria-busy={loading || refreshing}>
-            <h2 className="sr-only">{activeTab.label}</h2>
-            {loading ? (
-              <RowsSkeleton rows={6} />
-            ) : loadError && tasks.length === 0 && availableTasks.length === 0 ? (
-              <div className="p-4 sm:p-5"><BlockError what="công việc kho của bạn" onRetry={() => void loadTasks("initial")} /></div>
-            ) : paged.length === 0 ? (
-              <div className="px-5 py-8">{emptyState()}</div>
-            ) : (
-              <ul className="divide-y divide-border">
-                {view === "available"
-                  ? (paged as AvailableWarehouseTask[]).map(renderAvailableRow)
-                  : (paged as MyWarehouseTask[]).map((task, i) => renderTaskRow(task, queueOffset + i + 1))}
-              </ul>
-            )}
-          </div>
-
-          {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={filtered.length} noun="task" onPageChange={setPage} /> : null}
-        </section>
+        </div>
       </FadeItem>
     </PageWrapper>
+  );
+}
+
+/** The four counts are the queue's tabs: same ARIA and arrow-key behaviour as the old tab strip. */
+function TileTabs({
+  tabs,
+  value,
+  onChange,
+  captions,
+  loading,
+}: {
+  tabs: Array<{ key: View; label: string; count: number }>;
+  value: View;
+  onChange: (value: View) => void;
+  captions: Record<View, string>;
+  loading: boolean;
+}) {
+  const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const last = tabs.length - 1;
+    const next = event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+      : event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+        : event.key === "Home" ? 0
+          : event.key === "End" ? last
+            : null;
+    if (next === null) return;
+    event.preventDefault();
+    refs.current[next]?.focus();
+    onChange(tabs[next].key);
+  };
+
+  return (
+    <div role="tablist" aria-label="Nhóm công việc" className="grid grid-cols-2 gap-4 @4xl/page:col-span-12 @4xl/page:grid-cols-4">
+      {tabs.map((tab, index) => {
+        const active = tab.key === value;
+        return (
+          <button
+            key={tab.key}
+            ref={(node) => { refs.current[index] = node; }}
+            type="button"
+            role="tab"
+            id={`${PANEL_ID}-tab-${tab.key}`}
+            aria-selected={active}
+            aria-controls={PANEL_ID}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(tab.key)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+            className={cn(
+              "min-w-0 rounded-2xl bg-card text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              // A 2px border, not a ring: the selected tile is marked by an edge, never a shadow. Padding drops by 1px so nothing shifts.
+              active ? "border-2 border-foreground p-[15px]" : "border border-border p-4 hover:border-foreground/30",
+            )}
+          >
+            <span className={cn("block text-[14px]", active ? "font-semibold text-foreground" : "text-muted-foreground")}>{tab.label}</span>
+            <span className="mt-1 block font-serif text-[30px] leading-none tabular-nums text-foreground">{loading ? "–" : tab.count}</span>
+            <span className="mt-1.5 block truncate text-[13px] text-muted-foreground">{loading ? " " : captions[tab.key]}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

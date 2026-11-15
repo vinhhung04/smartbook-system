@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 988" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="borrow-pickup-convert-dd-title borrow-pickup-convert-dd-desc" id="borrow-pickup-convert-dd-root">
+<title id="borrow-pickup-convert-dd-title">Nhận sách bằng mã và chuyển thành phiếu mượn</title>
+<desc id="borrow-pickup-convert-dd-desc">Thủ thư quét mã nhận sách; Borrow Service khóa phiếu, kiểm tra trạng thái, nhờ Inventory chuyển tồn giữ thành tồn mượn và tạo phiếu mượn.</desc>
+<defs>
+      <style>#borrow-pickup-convert-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #borrow-pickup-convert-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #borrow-pickup-convert-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #borrow-pickup-convert-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#borrow-pickup-convert-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="172" y="460" width="564" height="464" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<line x1="180" y1="528" x2="728" y2="528" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- lifelines -->
+<line x1="84" y1="104" x2="84" y2="948" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="192" y1="104" x2="192" y2="948" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="308" y1="104" x2="308" y2="948" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="452" y1="104" x2="452" y2="948" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="588" y1="104" x2="588" y2="948" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="716" y1="104" x2="716" y2="948" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="88" y1="196" x2="188" y2="196" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<line x1="196" y1="328" x2="304" y2="328" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-link)"/>
+<line x1="312" y1="364" x2="448" y2="364" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-link)"/>
+<line x1="456" y1="400" x2="712" y2="400" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<path d="M 456 412 H 480 Q 488 412 488 420 V 440 Q 488 448 480 448 H 458" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<line x1="448" y1="516" x2="196" y2="516" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<line x1="456" y1="652" x2="584" y2="652" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-link)"/>
+<line x1="584" y1="704" x2="456" y2="704" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<line x1="456" y1="756" x2="712" y2="756" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<line x1="456" y1="808" x2="712" y2="808" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow)"/>
+<line x1="448" y1="876" x2="312" y2="876" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-link)"/>
+<line x1="448" y1="912" x2="196" y2="912" stroke="#000000" stroke-width="1.4" marker-end="url(#borrow-pickup-convert-dd-borrow-pickup-convert-dd-arrow-accent)"/>
+<!-- labels -->
+<rect x="98" y="122" width="80" height="66" rx="2" fill="#ffffff"/>
+<text x="138.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> quét QR</text>
+<text x="138.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">hoặc nhập mã</text>
+<text x="138.0" y="167" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PU-XXXX-</text>
+<text x="138.0" y="183" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">XXXX</text>
+<rect x="204" y="206" width="92" height="114" rx="2" fill="#ffffff"/>
+<text x="250.0" y="219" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST</text>
+<text x="250.0" y="235" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/borrow/</text>
+<text x="250.0" y="251" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">reservations</text>
+<text x="250.0" y="267" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/</text>
+<text x="250.0" y="283" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">pickup/</text>
+<text x="250.0" y="299" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">convert-to-</text>
+<text x="250.0" y="315" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">loan</text>
+<rect x="338" y="338" width="84" height="18" rx="2" fill="#ffffff"/>
+<text x="380.0" y="351" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> chuyển tiếp</text>
+<rect x="492" y="374" width="184" height="18" rx="2" fill="#ffffff"/>
+<text x="584.0" y="387" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> tìm phiếu theo mã, khóa bản ghi</text>
+<rect x="496" y="413" width="188" height="34" rx="2" fill="#ffffff"/>
+<text x="502" y="426.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">5. kiểm tra READY_FOR_PICKUP,</text>
+<text x="502" y="442.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">mã chưa dùng, chưa hết hạn</text>
+<rect x="212" y="490" width="220" height="18" rx="2" fill="#f7f7f7"/>
+<text x="322.0" y="503" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> trả về phiếu mượn đã tạo (idempotent)</text>
+<rect x="470" y="562" width="100" height="82" rx="2" fill="#f7f7f7"/>
+<text x="520.0" y="575" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> POST</text>
+<text x="520.0" y="591" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/borrow-</text>
+<text x="520.0" y="607" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">integration/</text>
+<text x="520.0" y="623" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">reservations/</text>
+<text x="520.0" y="639" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">consume</text>
+<rect x="468" y="662" width="104" height="34" rx="2" fill="#f7f7f7"/>
+<text x="520.0" y="675" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> reserved_qty →</text>
+<text x="520.0" y="691" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">borrowed_qty</text>
+<rect x="472" y="714" width="224" height="34" rx="2" fill="#f7f7f7"/>
+<text x="584.0" y="727" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> tạo loan_transactions, loan_items (hạn</text>
+<text x="584.0" y="743" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">trả theo gói)</text>
+<rect x="470" y="766" width="228" height="34" rx="2" fill="#f7f7f7"/>
+<text x="584.0" y="779" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> phiếu đặt giữ CONVERTED_TO_LOAN,</text>
+<text x="584.0" y="795" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">pickup_code_used_at</text>
+<rect x="320" y="818" width="120" height="50" rx="2" fill="#f7f7f7"/>
+<text x="380.0" y="831" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> POST /internal/</text>
+<text x="380.0" y="847" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">push-event (phòng</text>
+<text x="380.0" y="863" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">bạn đọc)</text>
+<rect x="278" y="886" width="88" height="18" rx="2" fill="#f7f7f7"/>
+<text x="322.0" y="899" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> phiếu mượn</text>
+<path d="M 172 460 H 212 V 472 L 204 480 H 172 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="189.0" y="475" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="220" y="461" width="160" height="18" rx="2" fill="#f7f7f7"/>
+<text x="226" y="475" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[mã đã dùng cho phiếu này]</text>
+<rect x="184" y="533" width="56" height="18" rx="2" fill="#f7f7f7"/>
+<text x="190" y="547" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[hợp lệ]</text>
+<!-- nodes -->
+<circle cx="84" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 84 56 V 72 M 73 61 H 95 M 84 72 L 75 84 M 84 72 L 93 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="84" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Thủ thư</text>
+<rect x="148" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="192" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web UI</text>
+<text x="192" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web</text>
+<rect x="258" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="308" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="308" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="404" y="40" width="96" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="452" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Borrow</text>
+<text x="452" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">borrow-service</text>
+<rect x="530" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="588" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="588" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<path d="M 676.0 48 V 79 A 40.0 6 0 0 0 756.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="716" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="716" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="716" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">borrow_db</text>
+</svg>

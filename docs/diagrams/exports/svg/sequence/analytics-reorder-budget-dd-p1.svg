@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 584" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="analytics-reorder-budget-dd-p1-title analytics-reorder-budget-dd-p1-desc" id="analytics-reorder-budget-dd-p1-root">
+<title id="analytics-reorder-budget-dd-p1-title">Đề xuất nhập hàng, phần 1: phạm vi kho</title>
+<desc id="analytics-reorder-budget-dd-p1-desc">Quản lý kho yêu cầu đề xuất nhập hàng qua API Gateway; Analytics Service đọc phạm vi kho của người dùng từ Auth Service và trả 503 nếu không đọc được, không bao giờ trả mọi kho.</desc>
+<defs>
+      <style>#analytics-reorder-budget-dd-p1-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #analytics-reorder-budget-dd-p1-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #analytics-reorder-budget-dd-p1-root .diagram-container { width: 100%; overflow-x: auto; }
+      #analytics-reorder-budget-dd-p1-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#analytics-reorder-budget-dd-p1-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="252" y="412" width="304" height="68" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="544" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="272" y1="104" x2="272" y2="544" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="408" y1="104" x2="408" y2="544" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="536" y1="104" x2="536" y2="544" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="544" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="100" y1="180" x2="268" y2="180" stroke="#222222" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow)"/>
+<line x1="276" y1="280" x2="404" y2="280" stroke="#000000" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow-link)"/>
+<line x1="412" y1="332" x2="532" y2="332" stroke="#000000" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow-link)"/>
+<line x1="540" y1="400" x2="704" y2="400" stroke="#000000" stroke-width="1.2" marker-end="url(#analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow-link)"/>
+<line x1="532" y1="468" x2="276" y2="468" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#analytics-reorder-budget-dd-p1-analytics-reorder-budget-dd-p1-arrow)"/>
+<!-- labels -->
+<rect x="112" y="122" width="144" height="50" rx="2" fill="#ffffff"/>
+<text x="184.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> Chọn kỳ nhu cầu (7/30/</text>
+<text x="184.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">90 ngày), nhập ngân sách</text>
+<text x="184.0" y="167" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">(tùy chọn)</text>
+<rect x="286" y="190" width="108" height="82" rx="2" fill="#ffffff"/>
+<text x="340.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> GET</text>
+<text x="340.0" y="219" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/analytics/</text>
+<text x="340.0" y="235" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">reorder-</text>
+<text x="340.0" y="251" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">suggestions</text>
+<text x="340.0" y="267" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">?budgetVnd=...</text>
+<rect x="428" y="290" width="88" height="34" rx="2" fill="#ffffff"/>
+<text x="472.0" y="303" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> Chuyển tiếp</text>
+<text x="472.0" y="319" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">kèm JWT</text>
+<rect x="554" y="342" width="136" height="50" rx="2" fill="#ffffff"/>
+<text x="622.0" y="355" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> Đọc phạm vi kho của</text>
+<text x="622.0" y="371" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">người dùng (nội bộ, có bộ</text>
+<text x="622.0" y="387" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">nhớ đệm)</text>
+<rect x="294" y="442" width="220" height="18" rx="2" fill="#f7f7f7"/>
+<text x="404.0" y="455" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">5.</tspan> 503 (fail-closed, không trả "mọi kho")</text>
+<path d="M 252 412 H 308 V 424 L 300 432 H 252 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="277.0" y="427" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">break</text>
+<rect x="316" y="413" width="172" height="18" rx="2" fill="#f7f7f7"/>
+<text x="322" y="427" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Không đọc được phạm vi kho]</text>
+<!-- notes -->
+<rect x="352" y="492" width="240" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="364" y="511" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Đọc được phạm vi kho → Phần 2 (bước 6–12)</text>
+<!-- nodes -->
+<circle cx="96" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 96 56 V 72 M 85 61 H 107 M 96 72 L 87 84 M 96 72 L 105 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="96" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Quản lý kho</text>
+<rect x="228" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="272" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web App</text>
+<text x="272" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">Đề xuất nhập</text>
+<rect x="358" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="408" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="408" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="478" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="536" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Analytics</text>
+<text x="536" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">analytics-service</text>
+<rect x="658" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="708" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Auth Service</text>
+<text x="708" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">auth-service</text>
+</svg>

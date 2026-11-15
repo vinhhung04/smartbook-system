@@ -43,7 +43,7 @@ export function ReservationItem({ item, onCancel }: ReservationItemProps) {
     <div
       className={`rounded-xl border p-3.5 transition-all duration-200 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] sm:p-4 ${
         isReady
-          ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+          ? 'border-primary/20 bg-primary/[0.05] dark:border-primary/20 dark:bg-primary/10'
           : expiry?.urgent
             ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
             : 'border-border bg-card'
@@ -57,7 +57,7 @@ export function ReservationItem({ item, onCancel }: ReservationItemProps) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-[14px] text-foreground" style={{ fontWeight: 700 }} title={bookTitle}>{bookTitle}</p>
           {item.book_author ? <p className="truncate text-[12px] text-muted-foreground">{item.book_author}</p> : null}
-          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{item.reservation_number || 'Phiếu đặt trước'}</p>
+          <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{item.reservation_number || 'Phiếu đặt trước'}</p>
           <p className="mt-1 text-[12px] text-muted-foreground">
             Đặt {formatDay(item.reserved_at)} · Hết hạn {formatDay(item.expires_at)}
           </p>
@@ -77,7 +77,7 @@ export function ReservationItem({ item, onCancel }: ReservationItemProps) {
             onClick={() => onCancel(item.id)}
             aria-label={`Hủy đặt trước ${bookTitle}`}
             title="Hủy đặt trước"
-            className="inline-flex shrink-0 items-center gap-1 rounded-[10px] border border-rose-200 bg-rose-50 px-2.5 py-2 text-[12px] text-rose-700 hover:bg-rose-100 dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-400 dark:hover:bg-rose-900/40 sm:px-3"
+            className="inline-flex shrink-0 items-center gap-1 rounded-[10px] border border-red-200 bg-red-50 px-2.5 py-2 text-[12px] text-red-700 hover:bg-red-100 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-900/40 sm:px-3"
             style={{ fontWeight: 600 }}
           >
             <X className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
@@ -87,12 +87,12 @@ export function ReservationItem({ item, onCancel }: ReservationItemProps) {
       </div>
 
       {isReady && pickupCode ? (
-        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-card p-3 dark:border-emerald-900/40 sm:flex-row sm:items-center">
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-primary/20 bg-card p-3 dark:border-primary/20 sm:flex-row sm:items-center">
           <div className="w-fit rounded-lg border border-border bg-white p-2">
             <QRCode value={`SMARTBOOK:PICKUP:${pickupCode}`} size={112} />
           </div>
           <div className="min-w-0">
-            <p className="text-[12px] font-bold text-emerald-700 dark:text-emerald-400">Sách đã sẵn sàng — đưa mã này cho nhân viên</p>
+            <p className="text-[12px] font-bold text-primary dark:text-primary">Sách đã sẵn sàng — đưa mã này cho nhân viên</p>
             <p className="mt-1 break-all font-mono text-xl font-extrabold text-foreground">{pickupCode}</p>
             <p className="mt-1 text-[12px] text-muted-foreground">Có giá trị đến {formatDateTime(item.pickup_code_expires_at || item.expires_at)}</p>
           </div>

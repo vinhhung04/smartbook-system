@@ -65,18 +65,17 @@ import {
 // sanitizeVisualizations before reaching here.
 
 // Categorical slots in fixed order (validated light + dark, dataviz validator):
-// indigo / cyan / amber / pink. Cyan and amber sit under 3:1 on the light
-// surface, so every chart keeps a legend and a table view (contrast relief).
+// indigo (brand) / slate / amber / green. No cyan or pink, so the brand keeps one hue.
+// Every chart keeps a legend and a table view.
 const SERIES_VARS =
-  '[--viz-1:#4f46e5] [--viz-2:#06b6d4] [--viz-3:#f59e0b] [--viz-4:#db2777] ' +
-  'dark:[--viz-1:#6366f1] dark:[--viz-2:#0891b2] dark:[--viz-3:#d97706] dark:[--viz-4:#ec4899] ' +
+  '[--viz-1:#4f46e5] [--viz-2:#64748b] [--viz-3:#b45309] [--viz-4:#047857] ' +
+  'dark:[--viz-1:#6366f1] dark:[--viz-2:#94a3b8] dark:[--viz-3:#f59e0b] dark:[--viz-4:#34d399] ' +
   // Pie slices: the reference 8-hue categorical order (validated adjacent pairs).
   '[--pie-1:#2a78d6] [--pie-2:#eb6834] [--pie-3:#1baf7a] [--pie-4:#eda100] [--pie-5:#e87ba4] [--pie-6:#008300] [--pie-7:#4a3aa7] [--pie-8:#e34948] ' +
   'dark:[--pie-1:#3987e5] dark:[--pie-2:#d95926] dark:[--pie-3:#199e70] dark:[--pie-4:#c98500] dark:[--pie-5:#d55181] dark:[--pie-6:#008300] dark:[--pie-7:#9085e9] dark:[--pie-8:#e66767]';
 const seriesColor = (i: number) => `var(--viz-${(i % 4) + 1})`;
 const pieColor = (i: number) => `var(--pie-${(i % 8) + 1})`;
-// Second series of a line/area chart is dashed: cyan vs indigo sits near the
-// tritan floor in dark mode, so identity is never carried by hue alone.
+// Second series of a line/area chart is dashed, so identity is never carried by hue alone.
 const DASHES = [undefined, '6 3', '2 3', '8 3 2 3'];
 
 const TYPE_ICONS: Record<VizType, typeof LineIcon> = {
@@ -214,7 +213,7 @@ export function CopilotBarChart({ spec, visible, height }: ChartProps) {
   // Long category names (book titles) read better as horizontal bars, whose
   // labels get the full row height instead of colliding under the axis.
   const horizontal = spec.x_kind === 'category' && (longLabels || spec.data.length > 6);
-  const chartHeight = horizontal ? Math.max(height, spec.data.length * (visible.length > 1 ? 34 : 26) + 40) : height;
+  const chartHeight = horizontal ? Math.max(height, spec.data.length * (visible.length > 1 ? 38 : 34) + 40) : height;
   return (
     <ResponsiveContainer width="100%" height={chartHeight}>
       <BarChart data={spec.data} layout={horizontal ? 'vertical' : 'horizontal'} barGap={2} barCategoryGap="22%"
@@ -224,7 +223,7 @@ export function CopilotBarChart({ spec, visible, height }: ChartProps) {
           <>
             <XAxis type="number" tick={AXIS_TICK} tickLine={false} axisLine={false} tickFormatter={(v: number) => formatAxisTick(v, field.kind)} />
             <YAxis type="category" dataKey={xKey} tick={AXIS_TICK} tickLine={false} axisLine={{ stroke: 'var(--border)' }} width={118}
-              tickFormatter={(v: string) => truncateLabel(String(v), 17)} interval={0} />
+              tickFormatter={(v: string) => truncateLabel(String(v), 34)} interval={0} />
           </>
         ) : (
           <>

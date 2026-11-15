@@ -21,7 +21,7 @@ export function StatFilterCard({ label, value, icon, variant, isActive, onClick,
       type="button"
       onClick={onClick}
       aria-pressed={isActive}
-      className="group relative w-full rounded-xl text-left transition-transform duration-150 active:scale-[0.97]"
+      className="group relative w-full rounded-2xl text-left transition-transform duration-150 active:scale-[0.97]"
     >
       <StatCard label={label} value={value} icon={icon} variant={variant} animateValue />
       {isActive && (

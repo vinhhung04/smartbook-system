@@ -1,8 +1,7 @@
-const { PrismaClient } = require('@prisma/client');
 const { parseId } = require('../utils/validation');
 const { readableWarehouseFilter, writableWarehouseFilter, scopeErrorStatus } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 async function getAvailableTasks(req, res) {
   // Warehouse scope comes from auth-service (resolver), never from the token

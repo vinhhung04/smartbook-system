@@ -178,7 +178,7 @@ export function ReorderTable(props: ReorderTableProps) {
           <caption className="sr-only">
             Đề xuất nhập thêm, sắp theo mức khẩn cấp rồi thời điểm hết hàng. Mở từng dòng để xem lý do và số liệu đầu vào.
           </caption>
-          <thead className="sticky top-0 z-10 whitespace-nowrap bg-card text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          <thead className="sticky top-0 z-10 whitespace-nowrap bg-card text-[12px] font-semibold text-muted-foreground">
             <tr className="[&>th]:border-b [&>th]:border-border [&>th]:bg-muted/50 [&>th]:py-2.5">
               {canEdit ? (
                 <th scope="col" className="w-10 pl-4 pr-2">

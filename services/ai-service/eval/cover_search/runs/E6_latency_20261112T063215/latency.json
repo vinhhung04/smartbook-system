@@ -1,0 +1,31 @@
+{
+  "device": "cpu",
+  "measured_at_utc": "2026-11-11T23:32:15Z",
+  "cold_runs": [
+    {
+      "import_ms": 82.37240000016754,
+      "first_embed_ms_incl_model_load": 18163.56630000155,
+      "ok": true
+    },
+    {
+      "import_ms": 82.12319999802276,
+      "first_embed_ms_incl_model_load": 15116.550999999163,
+      "ok": true
+    },
+    {
+      "import_ms": 89.4122999998217,
+      "first_embed_ms_incl_model_load": 15121.172099999967,
+      "ok": true
+    }
+  ],
+  "cold_first_embed_ms": {
+    "p50": 15121.172099999967,
+    "max": 18163.56630000155
+  },
+  "warm_embed_ms": {
+    "n": 40,
+    "p50": 79.2231499999616,
+    "p95": 160.06046500278896,
+    "mean": 95.10878249984671
+  }
+}

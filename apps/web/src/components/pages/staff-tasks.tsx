@@ -226,60 +226,48 @@ function WorkloadPanel({ warehouse, staffName, refreshKey, activeAssignee, onPic
   const loading = !current;
 
   const sorted = [...rows].sort((a, b) => (b.open + b.in_progress) - (a.open + a.in_progress));
-  const numberHead = "h-10 px-3 text-right text-[12px] font-normal text-muted-foreground";
 
   return (
-    <section aria-labelledby="workload-title" className="min-w-0 max-w-3xl rounded-xl border border-border bg-card">
-      <div className="px-5 pt-4">
-        <h2 id="workload-title" className="text-[15px] font-semibold text-foreground">Khối lượng việc tại {warehouse.code}</h2>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Mỗi task tính một lần theo trạng thái hiện tại; quá hạn nằm trong số Mới và Đang làm. Chọn tên để lọc danh sách.
-        </p>
-      </div>
-      <div className="px-2 pb-3 pt-2 sm:px-3">
-        {loading ? (
-          <RowsSkeleton rows={3} />
-        ) : error ? (
-          <BlockError what="khối lượng việc" onRetry={() => { setResult(null); setRetry((n) => n + 1); }} className="mx-2" />
-        ) : sorted.length === 0 ? (
-          <BlockEmpty className="mx-2">Không có task đang mở hay vừa hoàn thành ở kho này.</BlockEmpty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="h-10 px-3 text-[12px] font-normal text-muted-foreground">Nhân viên</TableHead>
-                <TableHead className={numberHead}>Mới</TableHead>
-                <TableHead className={numberHead}>Đang làm</TableHead>
-                <TableHead className={numberHead}>Quá hạn</TableHead>
-                <TableHead className={numberHead}>Xong 7 ngày</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sorted.map((row) => {
-                const active = activeAssignee === row.assignee_user_id;
-                return (
-                  <TableRow key={row.assignee_user_id} className={cn(active && "bg-primary/5")}>
-                    <TableCell className="px-3">
-                      <button
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => onPickAssignee(active ? null : row.assignee_user_id)}
-                        className="rounded text-left text-[13px] font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-                      >
-                        {staffName(row.assignee_user_id)}
-                      </button>
-                    </TableCell>
-                    <TableCell className="px-3 text-right text-[13px] tabular-nums">{row.open}</TableCell>
-                    <TableCell className="px-3 text-right text-[13px] tabular-nums">{row.in_progress}</TableCell>
-                    <TableCell className={cn("px-3 text-right text-[13px] tabular-nums", row.overdue > 0 ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground")}>{row.overdue}</TableCell>
-                    <TableCell className="px-3 text-right text-[13px] tabular-nums text-muted-foreground">{row.done_last_7_days}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </div>
+    <section aria-labelledby="workload-title">
+      <h2 id="workload-title" className="px-3 text-[12px] font-semibold text-muted-foreground">Nhân viên ở {warehouse.code}</h2>
+      <p className="px-3 pb-2 pt-0.5 text-[12px] text-muted-foreground">Quá hạn tính trong số mới và đang làm. Chọn tên để lọc danh sách.</p>
+      {loading ? (
+        <RowsSkeleton rows={3} />
+      ) : error ? (
+        <BlockError what="khối lượng việc" onRetry={() => { setResult(null); setRetry((n) => n + 1); }} />
+      ) : sorted.length === 0 ? (
+        <BlockEmpty>Không có task đang mở hay vừa hoàn thành ở kho này.</BlockEmpty>
+      ) : (
+        <ul className="space-y-0.5">
+          {sorted.map((row) => {
+            const active = activeAssignee === row.assignee_user_id;
+            const inHand = row.open + row.in_progress;
+            return (
+              <li key={row.assignee_user_id}>
+                <button
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onPickAssignee(active ? null : row.assignee_user_id)}
+                  className={cn(
+                    "w-full rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                    active ? "bg-primary/[0.08]" : "hover:bg-muted/60",
+                  )}
+                >
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className={cn("min-w-0 truncate text-[13px]", active ? "font-semibold text-primary" : "font-medium text-foreground")}>{staffName(row.assignee_user_id)}</span>
+                    <span className="shrink-0 font-serif text-[18px] leading-none tabular-nums text-foreground" title="Task chưa xong (mới và đang làm)">{inHand}</span>
+                  </span>
+                  <span className="mt-1 block text-[12px] tabular-nums text-muted-foreground">
+                    {row.open} mới, {row.in_progress} đang làm
+                    {row.overdue > 0 ? <>, <span className="font-semibold text-red-700 dark:text-red-400">{row.overdue} quá hạn</span></> : null}
+                  </span>
+                  <span className="block text-[12px] tabular-nums text-muted-foreground">{row.done_last_7_days} xong trong 7 ngày</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </section>
   );
 }
@@ -525,7 +513,7 @@ export function StaffTasksPage() {
         {route && canAccess(currentUser, route.access) ? (
           <NavLink to={route.path} className="shrink-0 rounded font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">{ref}</NavLink>
         ) : <span className="shrink-0 text-foreground">{ref}</span>}
-        {task.related_entity_display.details ? <span className="truncate" title={task.related_entity_display.details}>· {task.related_entity_display.details}</span> : null}
+        {task.related_entity_display.details ? <span className="truncate" title={task.related_entity_display.details}>{task.related_entity_display.details}</span> : null}
       </p>
     );
   };
@@ -538,7 +526,7 @@ export function StaffTasksPage() {
     if (!task.due_date) return <span className="text-muted-foreground">Không hạn</span>;
     return (
       <span className={cn(overdue ? "font-medium text-red-600 dark:text-red-400" : "text-foreground")}>
-        {overdue ? "Quá hạn · " : "Hạn "}{formatDateTime(task.due_date)}
+        {overdue ? "Quá hạn, " : "Hạn "}{formatDateTime(task.due_date)}
       </span>
     );
   };
@@ -599,15 +587,63 @@ export function StaffTasksPage() {
     />
   );
 
+  // The finding first: what is still open, what is late, and what needs a new owner.
+  const countOf = (status: string) => tasks.filter((t) => t.status === status).length;
+  const overdueCount = tasks.filter(isOverdue).length;
+  const reassignCount = isManager ? tasks.filter((t) => t.assignee_can_work === false && OPEN_STATUSES.includes(t.status)).length : 0;
+  const ledeParts = [
+    ...(statusFilter === "ALL"
+      ? [
+          countOf("IN_PROGRESS") ? `${countOf("IN_PROGRESS")} đang làm` : null,
+          countOf("OPEN") ? `${countOf("OPEN")} mới` : null,
+        ]
+      : []),
+    overdueCount ? `${overdueCount} quá hạn` : null,
+    reassignCount ? `${reassignCount} cần giao lại` : null,
+    ...(statusFilter === "ALL"
+      ? [
+          countOf("DONE") ? `${countOf("DONE")} hoàn thành` : null,
+          countOf("CANCELLED") ? `${countOf("CANCELLED")} đã hủy` : null,
+        ]
+      : []),
+  ].filter(Boolean);
+  const scopeText = `${statusFilter === "ALL" ? "" : ` ${STATUS_LABELS[statusFilter].toLowerCase()}`}${isManager && selectedWarehouse ? ` ở ${selectedWarehouse.code}` : ""}`;
+  const lede = loading
+    ? (isManager ? "Giao việc cho nhân viên kho, theo dõi tiến độ và giao lại khi cần." : "Việc quản lý giao cho bạn: bắt đầu khi nhận làm, đánh dấu hoàn thành khi xong.")
+    : tasks.length === 0
+      ? (isManager ? `Chưa có task${scopeText}. Bấm Giao việc để giao cho nhân viên kho.` : `Quản lý chưa giao task${scopeText} nào cho bạn.`)
+      : `${isManager ? "" : "Bạn có "}${tasks.length} task${scopeText}${ledeParts.length ? `: ${ledeParts.join(", ")}` : ""}.`;
+
+  const railButton = (active: boolean, onClick: () => void, label: string, sub?: string) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex w-full items-baseline gap-2 rounded-lg px-3 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+      title={sub}
+    >
+      <span className={cn("shrink-0 text-[13px]", active ? "font-semibold" : "font-medium")}>{label}</span>
+      {sub ? <span className={cn("min-w-0 truncate text-[12px]", active ? "text-primary/80" : "text-muted-foreground")}>{sub}</span> : null}
+    </button>
+  );
+
+  const dueText = (task: StaffTask) => (
+    <>
+      {renderDue(task)}
+      <span className="mt-0.5 block text-muted-foreground">Giao {formatDateTime(task.created_at)}</span>
+    </>
+  );
+
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={ClipboardList}
           title={isManager ? "Giao việc nhân viên" : "Task được giao"}
-          description={isManager ? "Giao việc cho nhân viên kho, theo dõi tiến độ và giao lại khi cần" : "Việc quản lý giao cho bạn: bắt đầu khi nhận làm, đánh dấu hoàn thành khi xong"}
-          iconBg="bg-violet-100 dark:bg-violet-500/15"
-          iconColor="text-violet-700 dark:text-violet-400"
+          description={lede}
           actions={
             <>
               <Button type="button" variant="outline" size="sm" onClick={reload} disabled={loading || refreshing}>
@@ -626,144 +662,139 @@ export function StaffTasksPage() {
       </FadeItem>
 
       <FadeItem>
-        <section aria-label={isManager ? "Task đã giao" : "Task của tôi"} className="min-w-0 rounded-xl border border-border bg-card">
-          <QueueTabs label="Lọc theo trạng thái" tabs={statusTabs} value={statusFilter} onChange={setStatusFilter} panelId={PANEL_ID} />
-
-          <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+        <div className="@container/page">
+          <div className={cn("grid grid-cols-1 items-start gap-4", isManager && "@4xl/page:grid-cols-[232px_minmax(0,1fr)]")}>
             {isManager ? (
-              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
-                <SelectTrigger className={cn("h-10 sm:h-9 sm:w-56", darkFieldClass)} aria-label="Lọc theo kho">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_WAREHOUSES}>Mọi kho tôi quản lý</SelectItem>
+              // One rail: warehouses on wide screens, then who carries the work there. Below the
+              // page breakpoint the warehouse picker moves into the toolbar and the rail follows the list.
+              <aside aria-label="Kho và nhân viên" className="order-last rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:order-none @4xl/page:max-h-[calc(100vh-7rem)] @4xl/page:overflow-y-auto">
+                <nav aria-label="Lọc theo kho" className="hidden border-b border-border pb-3 mb-3 @4xl/page:block">
+                  <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Kho</p>
+                  {railButton(warehouseFilter === ALL_WAREHOUSES, () => setWarehouseFilter(ALL_WAREHOUSES), "Mọi kho tôi quản lý")}
                   {warehouses.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>{w.code} · {w.name}</SelectItem>
+                    <div key={w.id}>{railButton(warehouseFilter === w.id, () => setWarehouseFilter(w.id), w.code, w.name)}</div>
                   ))}
-                </SelectContent>
-              </Select>
+                </nav>
+                {selectedWarehouse ? (
+                  <WorkloadPanel
+                    warehouse={selectedWarehouse}
+                    staffName={staffName}
+                    refreshKey={workloadKey}
+                    activeAssignee={assigneeFilter}
+                    onPickAssignee={setAssigneeFilter}
+                  />
+                ) : (
+                  <p className="px-3 py-1 text-[13px] text-muted-foreground">Chọn một kho để xem khối lượng việc của từng nhân viên.</p>
+                )}
+              </aside>
             ) : null}
-            <div className="relative min-w-0 sm:w-72">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={isManager ? "Tìm tiêu đề, nhân viên, chứng từ…" : "Tìm tiêu đề, chứng từ…"}
-                aria-label="Tìm task"
-                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9 sm:text-[13px]"
-              />
-            </div>
-            {assigneeFilter ? (
-              <span className="inline-flex h-9 w-fit items-center gap-1 rounded-md border border-primary/30 bg-primary/5 pl-3 pr-1 text-[13px] text-foreground">
-                Nhân viên: <span className="font-medium">{staffName(assigneeFilter)}</span>
-                <button type="button" onClick={() => setAssigneeFilter(null)} aria-label="Bỏ lọc nhân viên" className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-                  <X className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-              </span>
-            ) : null}
-          </div>
 
-          <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${statusFilter}`} aria-busy={loading || refreshing}>
-            {loading ? (
-              <RowsSkeleton rows={5} />
-            ) : loadError && tasks.length === 0 ? (
-              <div className="p-4 sm:p-5"><BlockError what="danh sách task" onRetry={() => void load(statusFilter, "initial")} /></div>
-            ) : pagedTasks.length === 0 ? (
-              <div className="px-5 py-8">{emptyState}</div>
-            ) : (
-              <>
-                {/* Desktop: a table that fits the canvas; secondary fields ride as sublines. */}
-                <div className="hidden lg:block">
+            <section aria-label={isManager ? "Task đã giao" : "Task của tôi"} className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <QueueTabs label="Lọc theo trạng thái" tabs={statusTabs} value={statusFilter} onChange={setStatusFilter} panelId={PANEL_ID} />
+
+              <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+                {isManager ? (
+                  <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                    <SelectTrigger className={cn("h-10 sm:h-9 sm:w-56 @4xl/page:hidden", darkFieldClass)} aria-label="Lọc theo kho">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ALL_WAREHOUSES}>Mọi kho tôi quản lý</SelectItem>
+                      {warehouses.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>{w.code}, {w.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : null}
+                <div className="relative min-w-0 sm:w-72">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={isManager ? "Tìm tiêu đề, nhân viên, chứng từ…" : "Tìm tiêu đề, chứng từ…"}
+                    aria-label="Tìm task"
+                    className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9"
+                  />
+                </div>
+                {assigneeFilter ? (
+                  <span className="inline-flex h-9 w-fit items-center gap-1 rounded-md border border-primary/30 bg-primary/5 pl-3 pr-1 text-[13px] text-foreground">
+                    Nhân viên: <span className="font-medium">{staffName(assigneeFilter)}</span>
+                    <button type="button" onClick={() => setAssigneeFilter(null)} aria-label="Bỏ lọc nhân viên" className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </span>
+                ) : null}
+                {!loading ? <p className="text-[13px] tabular-nums text-muted-foreground sm:ml-auto">{visibleTasks.length} task</p> : null}
+              </div>
+
+              <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${statusFilter}`} aria-busy={loading || refreshing}>
+                {loading ? (
+                  <RowsSkeleton rows={5} />
+                ) : loadError && tasks.length === 0 ? (
+                  <div className="p-4 sm:p-5"><BlockError what="danh sách task" onRetry={() => void load(statusFilter, "initial")} /></div>
+                ) : pagedTasks.length === 0 ? (
+                  <div className="px-5 py-8">{emptyState}</div>
+                ) : (
+                  // Columns the section's width cannot hold move into the first cell as sublines.
                   <Table className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead className="h-10 w-auto pl-5 text-[12px] font-normal text-muted-foreground">Công việc</TableHead>
-                        {isManager ? <TableHead className="h-10 w-[170px] text-[12px] font-normal text-muted-foreground">Nhân viên</TableHead> : null}
-                        <TableHead className="h-10 w-[112px] text-[12px] font-normal text-muted-foreground">Ưu tiên</TableHead>
-                        <TableHead className="h-10 w-[120px] text-[12px] font-normal text-muted-foreground">Trạng thái</TableHead>
-                        <TableHead className="h-10 w-[190px] text-[12px] font-normal text-muted-foreground">Hạn</TableHead>
-                        <TableHead className="h-10 w-[136px] pr-5 text-right text-[12px] font-normal text-muted-foreground"><span className="sr-only">Thao tác</span></TableHead>
+                        <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Công việc</TableHead>
+                        {isManager ? <TableHead className="hidden w-[168px] text-[12px] font-normal text-muted-foreground @3xl:table-cell">Nhân viên</TableHead> : null}
+                        <TableHead className="hidden w-[112px] text-[12px] font-normal text-muted-foreground @4xl:table-cell">Ưu tiên</TableHead>
+                        <TableHead className="hidden w-[176px] text-[12px] font-normal text-muted-foreground @2xl:table-cell">Hạn</TableHead>
+                        <TableHead className="w-[112px] pr-5 text-right @2xl:w-[140px] text-[12px] font-normal text-muted-foreground">Trạng thái</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pagedTasks.map((task) => (
-                        <TableRow key={task.id} className="align-top hover:bg-muted/30">
-                          <TableCell className="whitespace-normal py-3 pl-5">
-                            <p className="truncate text-[13px] font-semibold text-foreground" title={task.title}>{task.title}</p>
-                            <p className="mt-0.5 truncate text-[12px] text-muted-foreground" title={task.description ?? undefined}>
-                              {TASK_TYPE_LABELS[task.task_type] || task.task_type}
-                              {showWarehouseColumn && task.warehouses ? <> · <span title={task.warehouses.name}>{task.warehouses.code}</span></> : null}
-                              {task.description ? <> · {task.description}</> : null}
-                            </p>
+                        <TableRow key={task.id} className="hover:bg-muted/30">
+                          <TableCell className="whitespace-normal py-3.5 pl-5 pr-3 align-top">
+                            <p className="line-clamp-2 text-[14px] font-semibold text-foreground" title={task.title}>{task.title}</p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-muted-foreground">
+                              <span>
+                                {TASK_TYPE_LABELS[task.task_type] || task.task_type}
+                                {showWarehouseColumn && task.warehouses ? <>, <span title={task.warehouses.name}>{task.warehouses.code}</span></> : null}
+                              </span>
+                              <PriorityBadge priority={task.priority} className="@4xl:hidden" />
+                            </div>
+                            {task.description ? <p className="mt-1 line-clamp-2 max-w-prose text-[13px] text-muted-foreground" title={task.description}>{task.description}</p> : null}
                             {renderEntity(task)}
+                            {isManager ? (
+                              <div className="mt-1 @3xl:hidden">
+                                <p className="text-[13px] text-foreground">Giao cho {staffName(task.assignee_user_id)}</p>
+                                {reassignFlag(task)}
+                              </div>
+                            ) : null}
+                            <p className="mt-1 text-[12px] tabular-nums @2xl:hidden">{renderDue(task)}</p>
                           </TableCell>
                           {isManager ? (
-                            <TableCell className="whitespace-normal py-3 text-[13px]">
-                              <span className="block truncate text-foreground">{staffName(task.assignee_user_id)}</span>
+                            <TableCell className="hidden whitespace-normal py-3.5 align-top text-[13px] @3xl:table-cell">
+                              <span className="block truncate text-foreground" title={staffName(task.assignee_user_id)}>{staffName(task.assignee_user_id)}</span>
                               {reassignFlag(task)}
                             </TableCell>
                           ) : null}
-                          <TableCell className="py-3"><PriorityBadge priority={task.priority} /></TableCell>
-                          <TableCell className="py-3"><StatusBadge label={STATUS_LABELS[task.status] ?? task.status} variant={statusVariant(task.status)} dot /></TableCell>
-                          <TableCell className="whitespace-normal py-3 text-[12px] tabular-nums">
-                            {renderDue(task)}
-                            <span className="mt-0.5 block text-muted-foreground">Giao {formatDateTime(task.created_at)}</span>
+                          <TableCell className="hidden py-3.5 align-top @4xl:table-cell"><PriorityBadge priority={task.priority} /></TableCell>
+                          <TableCell className="hidden whitespace-normal py-3.5 align-top text-[12px] tabular-nums @2xl:table-cell">{dueText(task)}</TableCell>
+                          <TableCell className="py-3.5 pr-5 text-right align-top">
+                            <div className="flex flex-col items-end gap-2">
+                              <StatusBadge label={STATUS_LABELS[task.status] ?? task.status} variant={statusVariant(task.status)} dot />
+                              {renderAction(task, true)}
+                            </div>
                           </TableCell>
-                          <TableCell className="py-3 pr-5 text-right">{renderAction(task)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                </div>
+                )}
+              </div>
 
-                {/* Phone and tablet: two-line rows, every field kept, the one action on the right. */}
-                <ul className="divide-y divide-border lg:hidden">
-                  {pagedTasks.map((task) => (
-                    <li key={task.id} className="px-4 py-3.5 sm:px-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="min-w-0 text-[14px] font-semibold text-foreground">{task.title}</p>
-                        <PriorityBadge priority={task.priority} className="shrink-0" />
-                      </div>
-                      <p className="mt-1 text-[12px] text-muted-foreground">
-                        {TASK_TYPE_LABELS[task.task_type] || task.task_type}
-                        {isManager && task.warehouses ? <> · {task.warehouses.code}</> : null}
-                        {isManager ? <> · {staffName(task.assignee_user_id)}</> : null}
-                      </p>
-                      {task.description ? <p className="mt-1 line-clamp-2 text-[12px] text-muted-foreground">{task.description}</p> : null}
-                      {renderEntity(task)}
-                      {isManager ? reassignFlag(task) : null}
-                      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <StatusBadge label={STATUS_LABELS[task.status] ?? task.status} variant={statusVariant(task.status)} dot />
-                        <span className="text-[12px] tabular-nums">{renderDue(task)}</span>
-                        <span className="ml-auto">{renderAction(task, true)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+              {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={visibleTasks.length} noun="task" onPageChange={setPage} note={truncatedNote} /> : null}
+            </section>
           </div>
-
-          {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={visibleTasks.length} noun="task" onPageChange={setPage} note={truncatedNote} /> : null}
-        </section>
+        </div>
       </FadeItem>
-
-      {isManager ? (
-        <FadeItem>
-          {selectedWarehouse ? (
-            <WorkloadPanel
-              warehouse={selectedWarehouse}
-              staffName={staffName}
-              refreshKey={workloadKey}
-              activeAssignee={assigneeFilter}
-              onPickAssignee={setAssigneeFilter}
-            />
-          ) : (
-            <BlockEmpty className="max-w-3xl">Chọn một kho ở bộ lọc phía trên để xem khối lượng việc của từng nhân viên.</BlockEmpty>
-          )}
-        </FadeItem>
-      ) : null}
 
       {isManager ? (
         <ReassignDialog
@@ -801,7 +832,7 @@ export function StaffTasksPage() {
               >
                 <option value="">{warehouses.length ? "Chọn kho" : "Không có kho"}</option>
                 {warehouses.map((w) => (
-                  <option key={w.id} value={w.id}>{w.code} · {w.name}</option>
+                  <option key={w.id} value={w.id}>{w.code}, {w.name}</option>
                 ))}
               </select>
             </Field>

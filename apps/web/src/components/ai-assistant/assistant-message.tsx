@@ -1,6 +1,6 @@
 import { memo, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Check, Copy, FileSearch, LibraryBig, RotateCw } from 'lucide-react';
+import { AlertTriangle, Camera, Check, Copy, FileSearch, LibraryBig, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AiEvidenceItem } from '@/services/ai';
 import { verificationNotice } from '@/lib/copilot-verification';
@@ -99,7 +99,7 @@ function StreamProgress({ phase, elapsed }: { phase: StreamPhase; elapsed: numbe
             <span className={cn('inline-flex items-center gap-1', i === current ? 'font-medium text-foreground' : i < current ? 'text-foreground/70' : 'text-muted-foreground/70')}
               aria-current={i === current ? 'step' : undefined}>
               {i < current ? <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-                : <span className={cn('h-1.5 w-1.5 rounded-full', i === current ? 'bg-primary motion-safe:animate-pulse' : 'bg-border')} aria-hidden="true" />}
+                : <span className={cn('h-1.5 w-1.5 rounded-full', i === current ? 'bg-primary' : 'bg-border')} aria-hidden="true" />}
               {p.label}
             </span>
           </li>
@@ -165,7 +165,7 @@ function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry
         className="flex justify-end">
         <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-muted px-4 py-2.5 text-[14.5px] leading-relaxed text-foreground sm:max-w-[75%]">
           <span className="sr-only">Bạn hỏi: </span>
-          {message.hasPhoto && <span className="mb-0.5 block text-[12px] text-muted-foreground">📷 Kèm ảnh bìa sách</span>}
+          {message.hasPhoto && <span className="mb-0.5 flex items-center gap-1 text-[12px] text-muted-foreground"><Camera className="h-3.5 w-3.5" aria-hidden="true" />Kèm ảnh bìa sách</span>}
           {message.content}
         </p>
       </motion.div>
@@ -195,14 +195,14 @@ function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry
           <StreamProgress phase={phase} elapsed={elapsed} />
         </AnswerHeader>
         <div className="space-y-2 pl-8" aria-hidden="true">
-          <span className="block h-3 w-[78%] rounded bg-muted motion-safe:animate-pulse" />
-          <span className="block h-3 w-[62%] rounded bg-muted motion-safe:animate-pulse" />
-          <span className="block h-3 w-[40%] rounded bg-muted motion-safe:animate-pulse" />
+          <span className="block h-3 w-[78%] rounded bg-muted" />
+          <span className="block h-3 w-[62%] rounded bg-muted" />
+          <span className="block h-3 w-[40%] rounded bg-muted" />
         </div>
         <p className="mt-3 pl-8 text-[12.5px] text-muted-foreground">
           {elapsed < 45
             ? 'Trợ lý đang tra cứu dữ liệu và soạn câu trả lời.'
-            : 'Vẫn đang xử lý — câu hỏi phân tích nhiều bước có thể mất đến khoảng 2 phút.'}
+            : 'Vẫn đang xử lý. Câu hỏi phân tích nhiều bước có thể mất đến khoảng 2 phút.'}
         </p>
       </motion.article>
     );
@@ -271,7 +271,7 @@ function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry
               <span className="rounded border border-dashed border-border px-1.5 py-px text-[11px] font-medium">Nháp</span>
               {phase === 'verifying'
                 ? 'Đang đối chiếu với dữ liệu…'
-                : 'Bản nháp — sẽ được đối chiếu với dữ liệu trước khi hoàn tất'}
+                : 'Bản nháp, sẽ được đối chiếu với dữ liệu trước khi hoàn tất'}
             </p>
           )}
         </div>

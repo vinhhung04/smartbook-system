@@ -1,0 +1,55 @@
+---
+title: "Sơ đồ tuần tự: Thanh toán phí phạt qua VNPay (sandbox)"
+---
+%% Nguồn đối chiếu (nhánh feature/email-otp-auth, mã trùng origin/hungg):
+%%   apps/web/src/components/pages/customer/_shared/fine-item.tsx (window.location.href = payment_url)
+%%   apps/web/src/services/customer-borrow.ts (POST /my/fines/payments/vnpay/create)
+%%   apps/api-gateway/src/index.js (proxy "/my" -> /borrow/my, proxy "/webhooks" -> borrow-service)
+%%   services/borrow-service/src/index.js (/borrow/my + authorizeCustomerSelf, /webhooks/vnpay)
+%%   services/borrow-service/src/controllers/vnpay-payment.controller.js (createVnpayFinePayment)
+%%   services/borrow-service/src/services/vnpay.service.js (buildPaymentUrl, HMAC-SHA512, INTENT_TTL_MS = 15 phút, verifySignedParams)
+%%   services/borrow-service/src/controllers/vnpay-webhook.controller.js (handleVnpayReturn, handleVnpayIpn, RspCode)
+%%   services/borrow-service/src/services/vnpay-payment.service.js (finalizeVnpayPayment)
+sequenceDiagram
+    autonumber
+    actor U as Bạn đọc
+    participant W as Web App (trình duyệt)
+    participant G as API Gateway
+    participant B as Borrow Service
+    participant DB as PostgreSQL (borrow_db)
+    participant V as Cổng VNPay (sandbox)
+
+    U->>W: Bấm thanh toán VNPay cho một khoản phạt
+    W->>G: POST /my/fines/payments/vnpay/create {fine_id}
+    G->>B: Chuyển tiếp tới /borrow/my (JWT bạn đọc)
+    B->>DB: Đọc khoản phạt, các lần đã trả và giao dịch VNPay đang chờ
+    break fine_id sai, không phải của bạn đọc, đã trả/miễn, đang có giao dịch chờ, VNPay chưa cấu hình
+        B-->>G: 400 / 404 / 409 (PAYMENT_PENDING) / 503
+        G-->>W: Thông báo lỗi
+    end
+    Note right of B: Số còn nợ = amount − waived_amount − đã trả<br/>vnp_Amount = số tiền × 100, ký HMAC-SHA512 trên tham số đã sắp xếp,<br/>hết hạn sau 15 phút
+    B->>DB: Tạo fine_payment_intents (PENDING, txn_ref, expires_at)
+    B-->>G: 201 {payment_url, txn_ref, amount, expires_at}
+    G-->>W: 201
+    W->>V: Chuyển hướng trình duyệt tới payment_url
+    U->>V: Thanh toán trên cổng VNPay
+
+    par Return URL (trình duyệt)
+        V-->>W: Chuyển hướng về returnUrl kèm tham số vnp_*
+        W->>G: GET /webhooks/vnpay/return?vnp_...
+        G->>B: Chuyển tiếp
+        Note right of B: verifySignedParams, sai chữ ký → 400
+        B->>DB: finalizeVnpayPayment (một giao dịch)
+        B-->>G: Trang kết quả HTML, liên kết về /customer/fines
+        G-->>W: Trang kết quả
+    and IPN (máy chủ VNPay)
+        V->>G: GET /webhooks/vnpay/ipn?vnp_...
+        G->>B: Chuyển tiếp
+        Note right of B: Sai chữ ký → RspCode 97
+        B->>DB: finalizeVnpayPayment (một giao dịch)
+        B-->>G: RspCode 00 / 01 / 02 / 04 / 99
+        G-->>V: RspCode
+    end
+
+    Note over B,DB: finalizeVnpayPayment: giành intent PENDING → PROCESSING (UPDATE có điều kiện),<br/>nên Return URL và IPN không ghi trùng, kiểm tra số tiền và vnp_ResponseCode = 00,<br/>tạo fine_payments, cập nhật fines và total_fine_balance,<br/>thông báo FINE_PAYMENT_RECORDED, nhật ký CUSTOMER_PAY_FINE_VNPAY
+    W-->>U: Kết quả thanh toán

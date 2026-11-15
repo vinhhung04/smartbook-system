@@ -23,7 +23,7 @@ export function CustomerTabs({ items }: CustomerTabsProps) {
           className={({ isActive }) =>
             `inline-flex items-center gap-1.5 rounded-[10px] border px-3 py-2 text-[13px] transition-colors ${
               isActive
-                ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                ? 'border-primary/25 bg-primary/[0.06] text-primary'
                 : 'border-border bg-card text-slate-600 dark:text-slate-300 hover:bg-muted'
             }`
           }

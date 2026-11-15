@@ -1,0 +1,133 @@
+<mxfile host="app.diagrams.net"><diagram id="5l5bvw7s-pnfo" name="Deployment production">
+    <mxGraphModel dx="1226" dy="822" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" parent="1" style="text;align=center;verticalAlign=middle;fontFamily=Arial;fontSize=13;fontColor=#1F2937;whiteSpace=wrap;html=1;" value="&lt;b&gt;Kiến trúc triển khai production (compose.prod.yml, VPS)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="24" width="520" x="140" as="geometry"/>
+        </mxCell>
+        <mxCell id="u1" parent="1" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="Trình duyệt&lt;br&gt;smartbook.io.vn" vertex="1">
+          <mxGeometry height="40" width="120" x="20" y="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="u2" parent="1" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="Ứng dụng di động (APK EAS)&lt;br&gt;api.smartbook.io.vn" vertex="1">
+          <mxGeometry height="40" width="170" x="160" y="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="gh" parent="1" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br&gt;Actions (CI/CD) + GHCR&lt;br&gt;image gắn tag commit SHA" vertex="1">
+          <mxGeometry height="48" width="170" x="440" y="36" as="geometry"/>
+        </mxCell>
+        <mxCell id="eas" parent="1" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;Expo EAS&lt;/b&gt;&lt;br&gt;build APK/AAB, OTA" vertex="1">
+          <mxGeometry height="48" width="140" x="640" y="36" as="geometry"/>
+        </mxCell>
+        <mxCell id="vps" parent="1" style="rounded=0;fillColor=none;strokeColor=#2F5597;dashed=1;verticalAlign=top;align=right;spacingRight=8;fontStyle=1;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="VPS Ubuntu 24.04 (6 vCPU, ~12 GB RAM) · UFW chỉ mở 22/80/443 · fail2ban · Docker Compose · /opt/smartbook" vertex="1">
+          <mxGeometry height="420" width="760" x="20" y="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="nedge" parent="vps" style="rounded=0;fillColor=none;strokeColor=#2F5597;dashed=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="mạng edge" vertex="1">
+          <mxGeometry height="70" width="732" x="14" y="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="caddy" parent="nedge" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;caddy&lt;/b&gt; 2.8 · cổng 80/443&lt;br&gt;HTTPS tự động, HSTS" vertex="1">
+          <mxGeometry height="40" width="170" x="12" y="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="web" parent="nedge" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;web&lt;/b&gt; (nginx, bundle React, CSP)" vertex="1">
+          <mxGeometry height="40" width="190" x="250" y="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="gw" parent="nedge" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;api-gateway&lt;/b&gt;&lt;br&gt;(nối cả 3 mạng)" vertex="1">
+          <mxGeometry height="40" width="190" x="520" y="22" as="geometry"/>
+        </mxCell>
+        <mxCell id="napp" parent="vps" style="rounded=0;fillColor=none;strokeColor=#2F5597;dashed=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="mạng app (có đường ra Internet)" vertex="1">
+          <mxGeometry height="96" width="732" x="14" y="116" as="geometry"/>
+        </mxCell>
+        <mxCell id="a1" parent="napp" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;auth-service&lt;/b&gt;&lt;br&gt;512 MB" vertex="1">
+          <mxGeometry height="56" width="126" x="12" y="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="a2" parent="napp" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;inventory-service&lt;/b&gt;&lt;br&gt;768 MB" vertex="1">
+          <mxGeometry height="56" width="126" x="154" y="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="a3" parent="napp" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;borrow-service&lt;/b&gt;&lt;br&gt;768 MB" vertex="1">
+          <mxGeometry height="56" width="126" x="296" y="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="a4" parent="napp" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;analytics-service&lt;/b&gt;&lt;br&gt;512 MB" vertex="1">
+          <mxGeometry height="56" width="126" x="438" y="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="a5" parent="napp" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;ai-service&lt;/b&gt;&lt;br&gt;3 GB (CLIP CPU, Chromium)" vertex="1">
+          <mxGeometry height="56" width="140" x="580" y="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="ndata" parent="vps" style="rounded=0;fillColor=none;strokeColor=#2F5597;dashed=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="mạng data (internal: không ra Internet, Caddy không tới được)" vertex="1">
+          <mxGeometry height="96" width="470" x="14" y="228" as="geometry"/>
+        </mxCell>
+        <mxCell id="db" parent="ndata" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;shape=cylinder3;size=6;whiteSpace=wrap;html=1;" value="&lt;b&gt;db&lt;/b&gt; pgvector/pg15&lt;br&gt;2 GB · 4 CSDL" vertex="1">
+          <mxGeometry height="60" width="140" x="12" y="26" as="geometry"/>
+        </mxCell>
+        <mxCell id="redis" parent="ndata" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;redis&lt;/b&gt; 7 (AOF)&lt;br&gt;512 MB" vertex="1">
+          <mxGeometry height="50" width="130" x="166" y="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="mq" parent="ndata" style="rounded=1;fillColor=#E8F0FA;strokeColor=#2F5597;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="&lt;b&gt;rabbitmq&lt;/b&gt; 3.13&lt;br&gt;768 MB" vertex="1">
+          <mxGeometry height="50" width="146" x="310" y="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="ops" parent="vps" style="rounded=0;fillColor=#FFF8E1;strokeColor=#B7950B;fontColor=#1F2937;fontFamily=Arial;fontSize=9;align=left;verticalAlign=top;spacingLeft=6;whiteSpace=wrap;html=1;" value="Tác vụ trên máy chủ (cron, deploy/scripts)&lt;br&gt;• backup.sh 02:30: pg_dump 4 CSDL + ảnh đóng gói, giữ 14 ngày&lt;br&gt;• healthcheck.sh mỗi 5 phút, cảnh báo webhook tùy chọn&lt;br&gt;• deploy.sh: backup trước deploy, tự rollback&lt;br&gt;• restore.sh, verify-backup.sh" vertex="1">
+          <mxGeometry height="96" width="248" x="498" y="228" as="geometry"/>
+        </mxCell>
+        <mxCell id="vols" parent="vps" style="rounded=0;fillColor=none;strokeColor=#2F5597;dashed=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="Volume Docker" vertex="1">
+          <mxGeometry height="70" width="732" x="14" y="338" as="geometry"/>
+        </mxCell>
+        <mxCell id="v1" parent="vols" style="shape=cylinder3;size=5;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Arial;fontSize=9;whiteSpace=wrap;html=1;" value="postgres_data" vertex="1">
+          <mxGeometry height="38" width="96" x="12" y="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="v2" parent="vols" style="shape=cylinder3;size=5;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Arial;fontSize=9;whiteSpace=wrap;html=1;" value="redis_data" vertex="1">
+          <mxGeometry height="38" width="86" x="118" y="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="v3" parent="vols" style="shape=cylinder3;size=5;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Arial;fontSize=9;whiteSpace=wrap;html=1;" value="rabbitmq_data" vertex="1">
+          <mxGeometry height="38" width="96" x="214" y="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="v4" parent="vols" style="shape=cylinder3;size=5;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Arial;fontSize=9;whiteSpace=wrap;html=1;" value="packing_evidence_data" vertex="1">
+          <mxGeometry height="38" width="130" x="320" y="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="v5" parent="vols" style="shape=cylinder3;size=5;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Arial;fontSize=9;whiteSpace=wrap;html=1;" value="ai_model_cache, ai_cloakbrowser_cache" vertex="1">
+          <mxGeometry height="38" width="150" x="460" y="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="v6" parent="vols" style="shape=cylinder3;size=5;fillColor=#FFFFFF;strokeColor=#6B7280;fontColor=#1F2937;fontFamily=Arial;fontSize=9;whiteSpace=wrap;html=1;" value="caddy_data, caddy_config" vertex="1">
+          <mxGeometry height="38" width="100" x="620" y="24" as="geometry"/>
+        </mxCell>
+        <mxCell id="extg" parent="1" style="rounded=0;fillColor=none;strokeColor=#2F5597;dashed=1;verticalAlign=top;align=left;spacingLeft=6;fontStyle=1;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="Dịch vụ bên ngoài (đi ra từ mạng app)" vertex="1">
+          <mxGeometry height="50" width="760" x="20" y="545" as="geometry"/>
+        </mxCell>
+        <mxCell id="x1" parent="extg" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="OpenRouter (Qwen)" vertex="1">
+          <mxGeometry height="24" width="160" x="12" y="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="x2" parent="extg" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="Máy chủ SMTP" vertex="1">
+          <mxGeometry height="24" width="140" x="196" y="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="x3" parent="extg" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="Google Books, Open Library, nhà sách" vertex="1">
+          <mxGeometry height="24" width="220" x="360" y="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="x4" parent="extg" style="rounded=1;fillColor=#FFFFFF;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=10;whiteSpace=wrap;html=1;" value="VNPay sandbox" vertex="1">
+          <mxGeometry height="24" width="140" x="604" y="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="u1" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.3;entryY=0;html=1;" target="caddy" value="HTTPS">
+          <mxGeometry relative="1" x="-0.6" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="u2" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.8;entryY=0;html=1;" target="caddy" value="HTTPS / WSS">
+          <mxGeometry relative="1" x="-0.6" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="gh" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;html=1;" target="vps" value="SSH deploy, pull image">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="caddy" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;html=1;" target="web">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="caddy" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;exitX=0.75;exitY=0;entryX=0.5;entryY=0;html=1;" target="gw">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="174" y="150"/>
+              <mxPoint x="649" y="150"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="gw" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0.85;entryY=0;html=1;" target="napp" value="HTTP nội bộ">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="napp" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#374151;fontColor=#1F2937;fontFamily=Arial;fontSize=9;labelBackgroundColor=#ffffff;endArrow=block;endFill=1;exitX=0.35;exitY=1;entryX=0.5;entryY=0;html=1;" target="ndata" value="SQL, cache, sự kiện">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram></mxfile>

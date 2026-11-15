@@ -1,7 +1,6 @@
-const { PrismaClient } = require("@prisma/client");
 const { createPickingTask, createRepickTask } = require("../services/picking-task.service");
 
-const prisma = new PrismaClient();
+const { prisma } = require("../lib/prisma");
 
 const OUTBOUND_READY_STATUS = ["APPROVED", "PICKING"];
 const TRANSFER_READY_STATUS = ["APPROVED", "PICKING"];

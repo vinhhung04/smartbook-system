@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ tuần tự tìm sách bằng ảnh bìa</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Diagram Design · SmartBook</p>
+    <h1>Sơ đồ tuần tự tìm sách bằng ảnh bìa</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 832" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-find-book-by-cover-dd-title ai-find-book-by-cover-dd-desc">
+<title id="ai-find-book-by-cover-dd-title">Tìm sách bằng ảnh bìa</title>
+<desc id="ai-find-book-by-cover-dd-desc">AI Service lấy danh mục bằng JWT người dùng, so khớp song song tín hiệu hình ảnh CLIP và văn bản OCR, gộp có trọng số và trả ứng viên kèm độ tin cậy.</desc>
+<defs>
+  <marker id="ai-find-book-by-cover-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-find-book-by-cover-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-find-book-by-cover-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-find-book-by-cover-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="312" y="332" width="308" height="304" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<line x1="320" y1="480" x2="612" y2="480" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- lifelines -->
+<line x1="84" y1="104" x2="84" y2="792" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="200" y1="104" x2="200" y2="792" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="332" y1="104" x2="332" y2="792" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="476" y1="104" x2="476" y2="792" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="600" y1="104" x2="600" y2="792" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="792" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="88" y1="164" x2="196" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<line x1="204" y1="232" x2="328" y2="232" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow-link)"/>
+<line x1="336" y1="268" x2="704" y2="268" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow-link)"/>
+<line x1="336" y1="320" x2="472" y2="320" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<path d="M 336 364 H 360 Q 368 364 368 372 V 392 Q 368 400 360 400 H 338" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<line x1="336" y1="468" x2="472" y2="468" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<line x1="336" y1="540" x2="596" y2="540" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow-link)"/>
+<line x1="596" y1="576" x2="336" y2="576" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<path d="M 336 588 H 360 Q 368 588 368 596 V 616 Q 368 624 360 624 H 338" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<path d="M 336 648 H 360 Q 368 648 368 656 V 692 Q 368 700 360 700 H 338" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-find-book-by-cover-dd-arrow)"/>
+<line x1="328" y1="768" x2="204" y2="768" stroke="#000000" stroke-width="1.4" marker-end="url(#ai-find-book-by-cover-dd-arrow-accent)"/>
+<!-- labels -->
+<rect x="96" y="122" width="92" height="34" rx="2" fill="#ffffff"/>
+<text x="142.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> chụp hoặc tải</text>
+<text x="142.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ảnh bìa</text>
+<rect x="214" y="174" width="104" height="50" rx="2" fill="#ffffff"/>
+<text x="266.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST /ai/</text>
+<text x="266.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">find-book-by-cov</text>
+<text x="266.0" y="219" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">er</text>
+<rect x="416" y="242" width="208" height="18" rx="2" fill="#ffffff"/>
+<text x="520.0" y="255" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> lấy danh mục sách (JWT người dùng)</text>
+<rect x="346" y="278" width="116" height="34" rx="2" fill="#ffffff"/>
+<text x="404.0" y="291" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> kiểm tra/đồng bộ</text>
+<text x="404.0" y="307" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">bộ sưu tập ảnh bìa</text>
+<rect x="376" y="365" width="104" height="34" rx="2" fill="#f7f7f7"/>
+<text x="382" y="378.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">5. nhúng ảnh bằng</text>
+<text x="382" y="394.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">CLIP (CPU)</text>
+<rect x="346" y="410" width="116" height="50" rx="2" fill="#f7f7f7"/>
+<text x="404.0" y="423" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> so khớp cosine với</text>
+<text x="404.0" y="439" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ảnh bìa đã lập chỉ</text>
+<text x="404.0" y="455" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">mục</text>
+<rect x="382" y="514" width="168" height="18" rx="2" fill="#f7f7f7"/>
+<text x="466.0" y="527" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> đọc nhan đề, tác giả trên bìa</text>
+<rect x="422" y="550" width="88" height="18" rx="2" fill="#f7f7f7"/>
+<text x="466.0" y="563" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> văn bản OCR</text>
+<rect x="376" y="589" width="80" height="34" rx="2" fill="#f7f7f7"/>
+<text x="382" y="602.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">9. so khớp với</text>
+<text x="382" y="618.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">danh mục</text>
+<path d="M 312 332 H 352 V 344 L 344 352 H 312 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="329.0" y="347" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">par</text>
+<rect x="360" y="333" width="112" height="18" rx="2" fill="#f7f7f7"/>
+<text x="366" y="347" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[tín hiệu hình ảnh]</text>
+<rect x="324" y="485" width="108" height="18" rx="2" fill="#f7f7f7"/>
+<text x="330" y="499" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[tín hiệu văn bản]</text>
+<rect x="376" y="649" width="132" height="50" rx="2" fill="#ffffff"/>
+<text x="382" y="662.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">10. gộp: 0,6 × hình ảnh +</text>
+<text x="382" y="678.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">0,4 × văn bản,</text>
+<text x="382" y="694.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">lọc độ tin cậy ≥ 0,5</text>
+<rect x="218" y="710" width="96" height="50" rx="2" fill="#ffffff"/>
+<text x="266.0" y="723" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> ứng viên + độ</text>
+<text x="266.0" y="739" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">tin cậy + bằng</text>
+<text x="266.0" y="755" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">chứng</text>
+<!-- nodes -->
+<circle cx="84" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 84 56 V 72 M 73 61 H 95 M 84 72 L 75 84 M 84 72 L 93 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="84" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Khách hàng</text>
+<rect x="142" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="200" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web/Mobile</text>
+<text x="200" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web · mobile</text>
+<rect x="288" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="332" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">AI Service</text>
+<text x="332" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FastAPI</text>
+<path d="M 410.0 48 V 79 A 66.0 6 0 0 0 542.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="476" cy="48" rx="66.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="476" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">ai_cover_embeddings</text>
+<text x="476" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">ai_db</text>
+<rect x="546" y="40" width="108" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="600" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">OpenRouter</text>
+<text x="600" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">mô hình thị giác</text>
+<rect x="658" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="708" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="708" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+</svg>
+    </div>
+    <p class="note">Hình 4.17, bước 1–11 (chép từ hình gốc của báo cáo, giữ nguyên số bước).</p>
+  </div>
+</body>
+</html>

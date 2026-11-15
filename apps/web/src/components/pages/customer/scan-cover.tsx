@@ -23,9 +23,9 @@ function ChecklistRow({ label, done, hint }: { label: string; done: boolean; hin
   return (
     <div className="flex items-center gap-2.5 text-[13px]">
       {done ? (
-        <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
+        <CheckCircle className="h-4 w-4 shrink-0 text-primary" />
       ) : (
-        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-indigo-500" />
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
       )}
       <span className={done ? 'text-foreground' : 'text-muted-foreground'}>
         {label}
@@ -41,20 +41,20 @@ function ScanningState({ preview, elapsedMs, visualDone }: { preview: string | n
 
   return (
     <div className="flex flex-col items-center gap-5">
-      <div className="relative h-64 w-full max-w-sm overflow-hidden rounded-xl border border-indigo-200/60 bg-muted/30 dark:border-indigo-500/30">
+      <div className="relative h-64 w-full max-w-sm overflow-hidden rounded-xl border border-primary/25 bg-muted/30 dark:border-primary/25">
         {preview && <img src={preview} alt="Ảnh bìa đang xử lý" className="h-full w-full object-contain" />}
         {/* The one authored moment: a scan-line sweeping the user's own photo —
             names the actual thing the AI is doing to it, not a generic spinner. */}
         {!reducedMotion && (
           <motion.div
-            className="pointer-events-none absolute inset-x-0 h-10 bg-gradient-to-b from-transparent via-indigo-400/40 to-transparent"
+            className="pointer-events-none absolute inset-x-0 h-10 "
             style={{ top: -40 }}
             animate={{ y: [0, SCAN_LINE_TRAVEL_PX + 40, 0] }}
             transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
           />
         )}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-3 py-2">
-          <p className="text-[11px] text-white/90">Đã chờ {Math.round(elapsedMs / 1000)}s</p>
+        <div className="absolute inset-x-0 bottom-0 from-black/50 px-3 py-2">
+          <p className="text-[12px] text-white/90">Đã chờ {Math.round(elapsedMs / 1000)}s</p>
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export function CustomerScanCoverPage() {
   }, [handedOver, handleFileSelect, location.pathname, navigate]);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
         title="Tìm sách bằng ảnh bìa"
         subtitle="Chụp hoặc chọn ảnh bìa sách — hệ thống sẽ tìm sách khớp trong thư viện."
@@ -176,7 +176,7 @@ export function CustomerScanCoverPage() {
             <p className="text-center text-[12px] text-muted-foreground">Chụp thẳng, đủ sáng và thấy rõ toàn bộ bìa để kết quả chính xác hơn.</p>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-[13px] text-white hover:bg-indigo-700"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-[13px] text-white hover:bg-primary"
               style={{ fontWeight: 600 }}
             >
               <Camera className="h-4 w-4" />

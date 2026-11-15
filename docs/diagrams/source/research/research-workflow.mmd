@@ -1,0 +1,20 @@
+---
+title: Hình 2 – Quy trình nghiên cứu và thực nghiệm
+---
+%% Nguồn đối chiếu: services/ai-service/eval/cover_search/{collect,build_dataset,perturb,dataset_validator,run_experiment,generate_report}.py
+flowchart TB
+    A["Audit mã nguồn<br/>(PHASE_0)"] --> B["Thu thập ứng viên<br/>Wikidata SPARQL, Commons, seed v0.1"]
+    B --> C["Tải ảnh + bằng chứng giấy phép<br/>MIME, SHA-256, pHash"]
+    C --> D["Gán nhãn trực quan<br/>gallery / Track A / ngoài catalog / loại"]
+    D --> E["Catalog 154 sách<br/>split dev/test theo sách"]
+    E --> F["Track B: 9 biến đổi có kiểm soát<br/>seed cố định"]
+    E --> G["E0: kiểm định dataset"]
+    F --> G
+    G --> H["Pilot (dev, 5 lượt Qwen)"]
+    H -- "phát hiện lỗi harness<br/>→ protocol v1.2" --> I["Khóa protocol"]
+    I --> J["E2 CLIP-only<br/>(miễn phí)"]
+    I --> K["E1 OCR-only + E3 Hybrid<br/>(cùng phản hồi Qwen đã ghi)"]
+    J --> L["E4 độ bền · E5 ngoài catalog · E6 độ trễ/chi phí"]
+    K --> L
+    L --> M["Thống kê: bootstrap theo sách,<br/>McNemar, Cohen's h"]
+    M --> N["Bài báo + tài liệu tái lập"]

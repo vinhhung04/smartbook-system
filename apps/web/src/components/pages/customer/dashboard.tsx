@@ -5,6 +5,7 @@ import { AlertCircle, BookOpen, ChevronRight } from 'lucide-react';
 import { customerService, MembershipInfo } from '@/services/customer';
 import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
+import { authService } from '@/services/auth';
 import { SectionCard } from '@/components/ui/section-card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/components/ui/utils';
@@ -32,8 +33,8 @@ const TODO_TONE: Record<TodoItem['tone'], { row: string; dot: string; text: stri
     dot: 'bg-red-500', text: 'text-red-800 dark:text-red-300', chevron: 'text-red-400',
   },
   emerald: {
-    row: 'border-emerald-100 bg-emerald-50 hover:bg-emerald-100 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40',
-    dot: 'bg-emerald-500', text: 'text-emerald-800 dark:text-emerald-300', chevron: 'text-emerald-400',
+    row: 'border-primary/20 bg-primary/[0.05] hover:bg-primary/[0.05] dark:border-primary/20 dark:bg-primary/10 dark:hover:bg-primary/10',
+    dot: 'bg-primary', text: 'text-primary dark:text-primary', chevron: 'text-primary',
   },
   amber: {
     row: 'border-amber-100 bg-amber-50 hover:bg-amber-100 dark:border-amber-900/40 dark:bg-amber-950/30 dark:hover:bg-amber-900/40',
@@ -167,31 +168,31 @@ export function CustomerDashboardPage() {
       label: 'Đặt trước',
       value: String(activeReservations),
       hint: readyReservations.length > 0 ? `${readyReservations.length} cuốn sẵn sàng nhận` : 'đang chờ xử lý',
-      tone: readyReservations.length > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
+      tone: readyReservations.length > 0 ? 'text-primary dark:text-primary' : 'text-foreground',
     },
     {
       label: 'Tiền phạt',
       value: formatCurrencyVnd(fineBalance),
       hint: fineBalance > 0 ? 'chưa thanh toán' : 'không có nợ phạt',
-      tone: fineBalance > 500000 ? 'text-rose-600 dark:text-rose-400' : fineBalance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400',
+      tone: fineBalance > 500000 ? 'text-red-700 dark:text-red-400' : fineBalance > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground',
     },
     {
       label: 'Số dư ví',
       value: formatCurrencyVnd(walletBalance),
       hint: walletBalance < 100000 ? 'số dư thấp, nên nạp thêm' : 'sẵn sàng mượn sách',
-      tone: walletBalance < 100000 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground',
+      tone: walletBalance < 100000 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground',
     },
   ];
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <CustomerPageHeader
-        title={`Xin chào, ${membership.customer_name || 'bạn đọc'}`}
-        subtitle={`${today} · Gói ${membership.plan_name || 'Tiêu chuẩn'}${membership.plan_code ? ` (${membership.plan_code})` : ''}`}
+        title={`Xin chào, ${membership.customer_name || authService.getCurrentUser()?.full_name || 'bạn đọc'}`}
+        subtitle={`${today}, gói ${membership.plan_name || 'Tiêu chuẩn'}`}
         actions={
           <NavLink
             to="/customer/books"
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-indigo-700"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-primary"
           >
             <BookOpen className="h-4 w-4" /> Khám phá sách
           </NavLink>
@@ -209,7 +210,7 @@ export function CustomerDashboardPage() {
           <h2 className="mb-3 flex items-center gap-2 text-[14px] font-semibold">
             <AlertCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
             Việc bạn cần làm
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-400">{todos.length}</span>
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[12px] font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-400">{todos.length}</span>
           </h2>
           <ul className="space-y-2">
             {todos.map((todo) => {
@@ -241,13 +242,13 @@ export function CustomerDashboardPage() {
           {summary.map((item) => (
             <div key={item.label} className="min-w-0">
               <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
-              <dd className={cn('mt-1 truncate font-mono text-[22px] font-bold leading-none tabular-nums', item.tone)}>{item.value}</dd>
+              <dd className={cn('mt-1 truncate font-display text-[26px] font-semibold leading-none tabular-nums', item.tone)}>{item.value}</dd>
               {item.bar !== undefined ? (
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted" role="img" aria-label={`Đã dùng ${item.bar}% số suất mượn`}>
-                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${item.bar}%` }} />
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${item.bar}%` }} />
                 </div>
               ) : null}
-              <p className="mt-1.5 truncate text-[11px] text-muted-foreground">{item.hint}</p>
+              <p className="mt-1.5 truncate text-[12px] text-muted-foreground">{item.hint}</p>
             </div>
           ))}
         </dl>

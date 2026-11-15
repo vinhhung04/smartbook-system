@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import { motion } from "motion/react";
-import { Package, Save, X } from "lucide-react";
+import { Package, Plus, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/services/api.ts";
 import { warehouseService, type LocationNode, type Warehouse } from "@/services/warehouse";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { LoadingOverlay } from "@/components/ui/loading-state";
+import { cn } from "@/components/ui/utils";
 import { useDialogA11y } from "@/hooks/useDialogA11y";
 import { WarehouseDirectory } from "./warehouse-directory";
 import { LocationExplorer } from "./location-explorer";
@@ -69,9 +71,31 @@ const EMPTY_LOCATION_FORM: LocationFormState = {
   is_active: true,
 };
 
+/** A form field with a visible label: placeholders alone vanish once a value is typed. */
+function Field({ id, label, required, className, children }: { id: string; label: string; required?: boolean; className?: string; children: ReactNode }) {
+  return (
+    <div className={cn("space-y-1.5", className)}>
+      <label htmlFor={id} className="text-[13px] font-medium text-foreground">
+        {label}
+        {required ? <span className="text-destructive"> *</span> : null}
+      </label>
+      {children}
+    </div>
+  );
+}
+
 export function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
+  // The open warehouse lives in the URL (?kho=<id>), so a refresh or the browser's Back button keeps it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedWarehouseId = searchParams.get("kho") || "";
+  const setSelectedWarehouseId = useCallback((id: string) => {
+    if ((searchParams.get("kho") || "") === id) return;
+    const next = new URLSearchParams(searchParams);
+    if (id) next.set("kho", id);
+    else next.delete("kho");
+    setSearchParams(next);
+  }, [searchParams, setSearchParams]);
   const [locationTree, setLocationTree] = useState<LocationNode[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(true);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -133,7 +157,7 @@ export function WarehousesPage() {
     } finally {
       setLoadingWarehouses(false);
     }
-  }, [selectedWarehouseId]);
+  }, [selectedWarehouseId, setSelectedWarehouseId]);
 
   // Fetches (and caches) a warehouse's location tree, refreshing its directory-card summary as a side effect.
   const fetchLocationTree = useCallback(async (warehouseId: string, forceRefresh = false): Promise<LocationNode[]> => {
@@ -463,40 +487,45 @@ export function WarehousesPage() {
     }
   };
 
-  const warehouseFormMeta = warehouseTypeMeta(warehouseForm.warehouse_type);
-  const WarehouseFormIcon = warehouseFormMeta.icon;
-  const locationFormMeta = locationTypeMeta(locationForm.location_type);
-  const LocationFormIcon = locationFormMeta.icon;
+  const typeCounts = warehouses.reduce<Record<string, number>>((acc, item) => {
+    const label = warehouseTypeMeta(item.warehouse_type).label.toLowerCase();
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+  const directoryLede = loadingWarehouses && warehouses.length === 0
+    ? "Đang tải danh sách kho..."
+    : [`${warehouses.length} kho`, ...Object.entries(typeCounts).map(([label, count]) => `${count} ${label}`)].join(", ");
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-        <PageHeader
-          icon={Package}
-          title="Quản lý kho"
-          description={`${warehouses.length} kho · Quản lý cấu trúc vị trí phân cấp`}
-          iconBg="bg-gradient-to-br from-violet-100 to-purple-50 dark:from-violet-500/20 dark:to-purple-500/10"
-          iconColor="text-violet-600 dark:text-violet-400"
-        />
-      </motion.div>
-
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
       {pageError ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <SectionCard className="border-red-200 bg-red-50 dark:border-red-500/20 dark:bg-red-500/10">
-            <p className="text-[13px] text-red-700 dark:text-red-400">{pageError}</p>
-          </SectionCard>
-        </motion.div>
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-5 py-3 text-[13px] text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+          {pageError}
+        </div>
       ) : null}
 
       {!selectedWarehouseId ? (
-        <WarehouseDirectory
-          warehouses={warehouses}
-          loading={loadingWarehouses}
-          summaries={locationSummaries}
-          loadingSummaryIds={loadingSummaryIds}
-          onSelect={setSelectedWarehouseId}
-          onCreate={startCreateWarehouse}
-        />
+        <>
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+            <PageHeader
+              icon={Package}
+              title="Quản lý kho"
+              description={`${directoryLede}. Mở một kho để sắp xếp khu vực, kệ và ngăn kệ.`}
+              actions={
+                <Button size="sm" onClick={startCreateWarehouse}>
+                  <Plus className="h-3.5 w-3.5" /> Thêm kho
+                </Button>
+              }
+            />
+          </motion.div>
+          <WarehouseDirectory
+            warehouses={warehouses}
+            loading={loadingWarehouses}
+            summaries={locationSummaries}
+            loadingSummaryIds={loadingSummaryIds}
+            onSelect={setSelectedWarehouseId}
+          />
+        </>
       ) : selectedWarehouse ? (
         <LocationExplorer
           warehouse={selectedWarehouse}
@@ -514,66 +543,89 @@ export function WarehousesPage() {
           onDeleteLocation={() => setShowDeleteLocationConfirm(true)}
           deletingLocation={deletingLocation}
         />
+      ) : loadingWarehouses ? (
+        <LoadingOverlay className="py-24" />
       ) : null}
 
       {showWarehouseForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="warehouse-form-modal-title">
-          <motion.div ref={warehouseModalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl">
-            <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${warehouseFormMeta.swatch}`} />
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${warehouseFormMeta.chip}`}>
-                  <WarehouseFormIcon className={`w-4 h-4 ${warehouseFormMeta.ink}`} />
-                </div>
-                <h3 id="warehouse-form-modal-title" className="text-[16px] font-semibold">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="warehouse-form-modal-title">
+          <motion.div
+            ref={warehouseModalRef}
+            initial={{ scale: 0.97, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.5)]"
+          >
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id="warehouse-form-modal-title" className="font-serif text-[22px] font-semibold tracking-tight">
                   {warehouseMode === "create" ? "Thêm kho" : "Sửa kho"}
-                </h3>
+                </h2>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  {warehouseMode === "create" ? "Kho mới bắt đầu trống. Thêm khu vực và kệ sau khi tạo." : selectedWarehouse?.name}
+                </p>
               </div>
-              <button onClick={() => setShowWarehouseForm(false)} aria-label="Đóng" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+              <button onClick={() => setShowWarehouseForm(false)} aria-label="Đóng" className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <Input
-                value={warehouseForm.code}
-                onChange={(event) => setWarehouseForm((prev) => ({ ...prev, code: event.target.value }))}
-                placeholder="Mã kho *"
-                className="font-mono"
-              />
-              <Input value={warehouseForm.name} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Tên kho *" />
-              <Select value={warehouseForm.warehouse_type} onValueChange={(value) => setWarehouseForm((prev) => ({ ...prev, warehouse_type: value }))}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="WAREHOUSE">Kho tổng</SelectItem>
-                  <SelectItem value="STORE">Cửa hàng</SelectItem>
-                  <SelectItem value="BRANCH">Chi nhánh</SelectItem>
-                  <SelectItem value="LIBRARY">Thư viện</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Địa chỉ" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="warehouse-code" label="Mã kho" required>
+                <Input
+                  id="warehouse-code"
+                  value={warehouseForm.code}
+                  onChange={(event) => setWarehouseForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="VD: WH-HCM-01"
+                  className="font-mono"
+                />
+              </Field>
+              <Field id="warehouse-type" label="Loại kho">
+                <Select value={warehouseForm.warehouse_type} onValueChange={(value) => setWarehouseForm((prev) => ({ ...prev, warehouse_type: value }))}>
+                  <SelectTrigger id="warehouse-type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WAREHOUSE">Kho tổng</SelectItem>
+                    <SelectItem value="STORE">Cửa hàng</SelectItem>
+                    <SelectItem value="BRANCH">Chi nhánh</SelectItem>
+                    <SelectItem value="LIBRARY">Thư viện</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="warehouse-name" label="Tên kho" required className="sm:col-span-2">
+                <Input id="warehouse-name" value={warehouseForm.name} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="VD: Kho HCM Chính" />
+              </Field>
+              <Field id="warehouse-address" label="Địa chỉ" className="sm:col-span-2">
+                <Input id="warehouse-address" value={warehouseForm.address_line1} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, address_line1: event.target.value }))} placeholder="Số nhà, đường, quận" />
+              </Field>
               {["BRANCH", "LIBRARY"].includes(warehouseForm.warehouse_type) ? (
-                <fieldset className="space-y-2 rounded-lg border border-border p-3">
-                  <legend className="px-1 text-[11px] font-medium text-muted-foreground">Thông tin hiển thị cho bạn đọc</legend>
-                  <Input aria-label="Giờ mở cửa" value={warehouseForm.opening_hours} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, opening_hours: event.target.value }))} placeholder="Giờ mở cửa (vd: Thứ 2 – Thứ 6: 8:00 – 20:00)" maxLength={255} />
-                  <Input aria-label="Số điện thoại" value={warehouseForm.phone} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="Số điện thoại" maxLength={30} inputMode="tel" />
-                  <Input aria-label="Email chi nhánh" type="email" value={warehouseForm.email} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="Email chi nhánh" maxLength={255} />
-                  <Input aria-label="Mô tả ngắn" value={warehouseForm.description} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, description: event.target.value }))} placeholder="Mô tả ngắn" maxLength={2000} />
+                <fieldset className="grid gap-4 rounded-xl border border-border p-4 sm:col-span-2 sm:grid-cols-2">
+                  <legend className="px-1 text-[13px] font-medium text-muted-foreground">Hiển thị cho bạn đọc trên trang chi nhánh</legend>
+                  <Field id="warehouse-hours" label="Giờ mở cửa" className="sm:col-span-2">
+                    <Input id="warehouse-hours" value={warehouseForm.opening_hours} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, opening_hours: event.target.value }))} placeholder="VD: Thứ 2 – Thứ 6: 8:00 – 20:00" maxLength={255} />
+                  </Field>
+                  <Field id="warehouse-phone" label="Số điện thoại">
+                    <Input id="warehouse-phone" value={warehouseForm.phone} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, phone: event.target.value }))} maxLength={30} inputMode="tel" />
+                  </Field>
+                  <Field id="warehouse-email" label="Email chi nhánh">
+                    <Input id="warehouse-email" type="email" value={warehouseForm.email} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, email: event.target.value }))} maxLength={255} />
+                  </Field>
+                  <Field id="warehouse-description" label="Mô tả ngắn" className="sm:col-span-2">
+                    <Input id="warehouse-description" value={warehouseForm.description} onChange={(event) => setWarehouseForm((prev) => ({ ...prev, description: event.target.value }))} maxLength={2000} />
+                  </Field>
                 </fieldset>
               ) : null}
 
-              <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
+              <label className="inline-flex items-center gap-2 text-[13px] text-foreground sm:col-span-2">
                 <Checkbox checked={warehouseForm.is_active} onCheckedChange={(checked) => setWarehouseForm((prev) => ({ ...prev, is_active: checked === true }))} />
-                Hoạt động
+                Đang hoạt động
               </label>
             </div>
 
-            <div className="mt-5 flex items-center gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowWarehouseForm(false)}>Hủy</Button>
-              <Button className="flex-1" onClick={handleSaveWarehouse} disabled={savingWarehouse}>
-                <Save className="w-3.5 h-3.5" /> {savingWarehouse ? "Đang lưu..." : "Lưu"}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowWarehouseForm(false)}>Hủy</Button>
+              <Button onClick={handleSaveWarehouse} disabled={savingWarehouse}>
+                <Save className="h-3.5 w-3.5" /> {savingWarehouse ? "Đang lưu..." : warehouseMode === "create" ? "Tạo kho" : "Lưu thay đổi"}
               </Button>
             </div>
           </motion.div>
@@ -581,83 +633,94 @@ export function WarehousesPage() {
       ) : null}
 
       {showLocationForm ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-labelledby="location-form-modal-title">
-          <motion.div ref={locationModalRef} initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="relative w-full max-w-lg overflow-hidden rounded-xl bg-card p-6 shadow-2xl">
-            <div className={`absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r ${locationFormMeta.swatch}`} />
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${locationFormMeta.chip}`}>
-                  <LocationFormIcon className={`w-4 h-4 ${locationFormMeta.ink}`} />
-                </div>
-                <h3 id="location-form-modal-title" className="text-[16px] font-semibold">
-                  {locationMode === "edit" ? "Sửa vị trí" : "Thêm vị trí"}
-                </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="location-form-modal-title">
+          <motion.div
+            ref={locationModalRef}
+            initial={{ scale: 0.97, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-[0_24px_60px_-24px_rgba(15,23,42,0.5)]"
+          >
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id="location-form-modal-title" className="font-serif text-[22px] font-semibold tracking-tight">
+                  {locationMode === "edit" ? "Sửa vị trí" : `Thêm ${locationTypeMeta(locationForm.location_type).label.toLowerCase()}`}
+                </h2>
+                <p className="mt-1 text-[13px] text-muted-foreground">{selectedWarehouse?.name}</p>
               </div>
-              <button onClick={() => setShowLocationForm(false)} aria-label="Đóng" className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+              <button onClick={() => setShowLocationForm(false)} aria-label="Đóng" className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <Input
-                value={locationForm.code}
-                onChange={(event) => setLocationForm((prev) => ({ ...prev, code: event.target.value }))}
-                placeholder="Mã vị trí *"
-                className="font-mono"
-              />
-              <Input value={locationForm.name} onChange={(event) => setLocationForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="Tên vị trí *" />
-              <Select
-                value={locationForm.parent_location_id || "root"}
-                onValueChange={(value) => {
-                  const parentId = value === "root" ? "" : value;
-                  const parent = flatLocations.find((item) => item.id === parentId);
-                  const inferredType = parent
-                    ? (CHILD_TYPE_BY_PARENT[normalizeType(parent.location_type)] || "")
-                    : "ZONE";
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="location-code" label="Mã vị trí" required>
+                <Input
+                  id="location-code"
+                  value={locationForm.code}
+                  onChange={(event) => setLocationForm((prev) => ({ ...prev, code: event.target.value }))}
+                  placeholder="VD: SHELF-A-01"
+                  className="font-mono"
+                />
+              </Field>
+              <Field id="location-name" label="Tên vị trí" required>
+                <Input id="location-name" value={locationForm.name} onChange={(event) => setLocationForm((prev) => ({ ...prev, name: event.target.value }))} placeholder="VD: A / 01" />
+              </Field>
+              <Field id="location-parent" label="Nằm trong">
+                <Select
+                  value={locationForm.parent_location_id || "root"}
+                  onValueChange={(value) => {
+                    const parentId = value === "root" ? "" : value;
+                    const parent = flatLocations.find((item) => item.id === parentId);
+                    const inferredType = parent
+                      ? (CHILD_TYPE_BY_PARENT[normalizeType(parent.location_type)] || "")
+                      : "ZONE";
 
-                  setLocationForm((prev) => ({
-                    ...prev,
-                    parent_location_id: parentId,
-                    location_type: inferredType,
-                  }));
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="root">Root (thuộc kho)</SelectItem>
-                  {parentLocationOptions.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {locationTypeMeta(item.location_type).label} · {item.code}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={locationForm.location_type || "none"}
-                onValueChange={(value) => setLocationForm((prev) => ({ ...prev, location_type: value === "none" ? "" : value }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn loại vị trí" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(allowedLocationTypes.length > 0 ? allowedLocationTypes : LOCATION_TYPES).map((item) => (
-                    <SelectItem key={item} value={item}>{locationTypeMeta(item).label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    setLocationForm((prev) => ({
+                      ...prev,
+                      parent_location_id: parentId,
+                      location_type: inferredType,
+                    }));
+                  }}
+                >
+                  <SelectTrigger id="location-parent" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="root">Cấp gốc của kho</SelectItem>
+                    {parentLocationOptions.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {locationTypeMeta(item.location_type).label} {item.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field id="location-type" label="Loại vị trí">
+                <Select
+                  value={locationForm.location_type || "none"}
+                  onValueChange={(value) => setLocationForm((prev) => ({ ...prev, location_type: value === "none" ? "" : value }))}
+                >
+                  <SelectTrigger id="location-type" className="w-full">
+                    <SelectValue placeholder="Chọn loại vị trí" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(allowedLocationTypes.length > 0 ? allowedLocationTypes : LOCATION_TYPES).map((item) => (
+                      <SelectItem key={item} value={item}>{locationTypeMeta(item).label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
 
-              <label className="inline-flex items-center gap-2 text-[12px] text-muted-foreground">
+              <label className="inline-flex items-center gap-2 text-[13px] text-foreground sm:col-span-2">
                 <Checkbox checked={locationForm.is_active} onCheckedChange={(checked) => setLocationForm((prev) => ({ ...prev, is_active: checked === true }))} />
-                Hoạt động
+                Đang hoạt động
               </label>
             </div>
 
-            <div className="mt-5 flex items-center gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setShowLocationForm(false)}>Hủy</Button>
-              <Button className="flex-1" onClick={handleSaveLocation} disabled={savingLocation || !selectedWarehouseId}>
-                <Save className="w-3.5 h-3.5" /> {savingLocation ? "Đang lưu..." : "Lưu"}
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setShowLocationForm(false)}>Hủy</Button>
+              <Button onClick={handleSaveLocation} disabled={savingLocation || !selectedWarehouseId}>
+                <Save className="h-3.5 w-3.5" /> {savingLocation ? "Đang lưu..." : locationMode === "edit" ? "Lưu thay đổi" : "Tạo vị trí"}
               </Button>
             </div>
           </motion.div>

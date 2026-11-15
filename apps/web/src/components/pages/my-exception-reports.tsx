@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, useNavigate, useSearchParams } from "react-router";
-import { AlertTriangle, ArrowLeft, Camera, ImagePlus, Info, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ImagePlus, Info, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BlockError } from "@/components/pages/dashboard/panel";
 import { ChoiceChips, Field, FormGroup, FormSheet, ListFooter, QueueTabs, RefCode, RowsSkeleton } from "@/components/ops/ops-kit";
@@ -152,6 +151,148 @@ function ResolutionNote({ report }: { report: ExceptionReport }) {
     <p className="mt-1.5 max-w-prose rounded-md bg-muted/60 px-2.5 py-1.5 text-[12px] leading-5 text-foreground">
       <span className="font-medium">Quản lý{report.resolved_at ? ` (${formatDateTime(report.resolved_at)})` : ""}:</span> {report.resolution_notes}
     </p>
+  );
+}
+
+/** "17 ngày trước": an age as a phrase inside a sentence. */
+function ageText(value: string | null | undefined) {
+  return timeAgo(value) ?? "";
+}
+
+function bookTitle(report: ExceptionReport) {
+  return report.book_variants?.books?.title ?? null;
+}
+
+type TrailStep = { key: string; label: string; at?: string | null; state: "done" | "current" | "stopped" };
+
+/** Sent, (assigned), then where the manager has taken it. Built only from fields the API returns. */
+function reportTrail(r: ExceptionReport, currentUserId: string | null): TrailStep[] {
+  const steps: TrailStep[] = [{ key: "sent", label: "Bạn gửi báo cáo", at: r.created_at, state: "done" }];
+  if (r.assigned_to_user_id) {
+    steps.push({ key: "assigned", label: r.assigned_to_user_id === currentUserId ? "Quản lý giao bạn xử lý" : "Quản lý giao người xử lý", at: r.assigned_at, state: "done" });
+  }
+  if (r.status === "RESOLVED") steps.push({ key: "resolved", label: "Quản lý đã xử lý", at: r.resolved_at, state: "done" });
+  else if (r.status === "DISMISSED") steps.push({ key: "dismissed", label: "Báo cáo đã hủy", at: r.updated_at, state: "stopped" });
+  else if (r.status === "ACKNOWLEDGED") steps.push({ key: "ack", label: "Quản lý đã ghi nhận, đang xử lý", state: "current" });
+  else steps.push({ key: "waiting", label: "Chờ quản lý xem", state: "current" });
+  return steps;
+}
+
+function ReportDetail({ report: r, currentUserId, onBack, onPhoto }: {
+  report: ExceptionReport;
+  currentUserId: string | null;
+  onBack: () => void;
+  onPhoto: () => void;
+}) {
+  const book = r.book_variants;
+  const gap = r.expected_qty != null && r.actual_qty != null ? r.actual_qty - r.expected_qty : null;
+  const details: Array<{ label: string; value: ReactNode }> = [
+    { label: "Kho", value: r.warehouses ? `${r.warehouses.name} (${r.warehouses.code})` : "Chưa rõ kho" },
+    { label: "Công việc", value: <>{taskTypeLabel(r.task_type)} <span className="font-mono text-[12px] text-muted-foreground" title={r.task_id}>{r.task_id.slice(0, 8)}</span></> },
+    ...(book ? [{ label: "Sách", value: <>{book.books?.title ?? "-"}<span className="block font-mono text-[12px] text-muted-foreground">{[book.isbn13, book.sku].filter(Boolean).join(", ")}</span></> }] : []),
+    { label: "Gửi lúc", value: formatDateTime(r.created_at) ?? "-" },
+  ];
+
+  return (
+    <div>
+      <div className="border-b border-border p-5">
+        <Button variant="ghost" size="sm" onClick={onBack} className="-ml-3 mb-2 text-muted-foreground @4xl/page:hidden">
+          <ArrowLeft className="h-4 w-4" /> Danh sách báo cáo
+        </Button>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h2 id="my-exception-detail-title" className="text-[20px] font-semibold tracking-tight text-foreground">
+            {exceptionLabel(r.exception_type)}{book?.books?.title ? `: ${book.books.title}` : ""}
+          </h2>
+          <StatusBadge label={statusLabel(r.status)} variant={getStatusVariant("exceptionReport", r.status)} dot />
+        </div>
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[14px] text-muted-foreground">
+          <RefCode value={r.report_number} /> <span>gửi {ageText(r.created_at)}</span>
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 @3xl:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="min-w-0 space-y-5 p-5">
+          {r.expected_qty != null || r.actual_qty != null ? (
+            <dl className="flex flex-wrap gap-x-8 gap-y-3">
+              <div>
+                <dt className="text-[13px] text-muted-foreground">Theo chứng từ</dt>
+                <dd className="font-serif text-[24px] font-semibold leading-tight tabular-nums text-foreground">{r.expected_qty ?? "-"}<span className="font-sans text-[13px] font-normal text-muted-foreground"> cuốn</span></dd>
+              </div>
+              <div>
+                <dt className="text-[13px] text-muted-foreground">Bạn đếm được</dt>
+                <dd className="font-serif text-[24px] font-semibold leading-tight tabular-nums text-foreground">{r.actual_qty ?? "-"}<span className="font-sans text-[13px] font-normal text-muted-foreground"> cuốn</span></dd>
+              </div>
+              {gap !== null ? (
+                <div>
+                  <dt className="text-[13px] text-muted-foreground">Chênh lệch</dt>
+                  <dd className={cn("font-serif text-[24px] font-semibold leading-tight tabular-nums", gap < 0 ? "text-red-700 dark:text-red-400" : gap > 0 ? "text-amber-800 dark:text-amber-300" : "text-foreground")}>
+                    {gap > 0 ? "+" : gap < 0 ? "−" : ""}{Math.abs(gap)}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+
+          <div>
+            <h3 className="text-[13px] text-muted-foreground">Bạn mô tả</h3>
+            <p className="mt-1 whitespace-pre-line text-[15px] leading-relaxed text-foreground">{r.note || "-"}</p>
+          </div>
+          {r.evidence_notes ? (
+            <div>
+              <h3 className="text-[13px] text-muted-foreground">Ghi chú bằng chứng</h3>
+              <p className="mt-1 whitespace-pre-line text-[14px] text-foreground">{r.evidence_notes}</p>
+            </div>
+          ) : null}
+          {r.evidence_photo_url ? (
+            <div>
+              <h3 className="text-[13px] text-muted-foreground">Ảnh bằng chứng</h3>
+              <button
+                type="button"
+                onClick={onPhoto}
+                className="mt-1.5 block overflow-hidden rounded-xl border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={`Xem ảnh bằng chứng của ${r.report_number}`}
+              >
+                <img src={r.evidence_photo_url} alt="" className="h-32 w-44 bg-muted object-cover" />
+              </button>
+            </div>
+          ) : null}
+
+          <div className="border-t border-border pt-5">
+            <h3 className="text-[13px] text-muted-foreground">Tiến độ xử lý</h3>
+            <ol className="mt-2 space-y-2.5">
+              {reportTrail(r, currentUserId).map((step) => (
+                <li key={step.key} className="flex items-start gap-2.5">
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "mt-1.5 h-2 w-2 shrink-0 rounded-full",
+                      step.state === "done" && "bg-primary",
+                      step.state === "current" && "bg-primary/25 ring-2 ring-primary/40",
+                      step.state === "stopped" && "bg-muted-foreground/50",
+                    )}
+                  />
+                  <span className="text-[14px]">
+                    <span className={cn(step.state === "current" ? "font-medium text-foreground" : "text-foreground")}>{step.label}</span>
+                    {step.at ? <span className="ml-2 text-[12px] tabular-nums text-muted-foreground">{formatDateTime(step.at)}</span> : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <ResolutionNote report={r} />
+          </div>
+          <p className="text-[13px] text-muted-foreground">Báo cáo sự cố không tự điều chỉnh tồn kho. Quản lý xem xét và quyết định cách xử lý.</p>
+        </div>
+
+        <dl className="border-t border-border p-5 @3xl:border-l @3xl:border-t-0">
+          {details.map((item) => (
+            <div key={item.label} className="flex items-baseline justify-between gap-4 py-1.5 @3xl:block">
+              <dt className="shrink-0 text-[13px] text-muted-foreground">{item.label}</dt>
+              <dd className="min-w-0 text-right text-[14px] text-foreground @3xl:mt-0.5 @3xl:text-left">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
   );
 }
 
@@ -372,17 +513,6 @@ export function MyExceptionReportsPage() {
   const actualNumber = form.actual_qty.trim() && !quantityError(form.actual_qty) ? Number(form.actual_qty) : null;
   const gap = expectedNumber !== null && actualNumber !== null ? actualNumber - expectedNumber : null;
 
-  const photoButton = (report: ExceptionReport) => report.evidence_photo_url ? (
-    <button
-      type="button"
-      onClick={() => setPhotoReport(report)}
-      className="inline-flex items-center gap-1 rounded text-[12px] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      aria-label={`Xem ảnh bằng chứng của ${report.report_number}`}
-    >
-      <Camera className="h-3.5 w-3.5" aria-hidden="true" />Ảnh
-    </button>
-  ) : null;
-
   const emptyState = reports.length === 0 ? (
     <EmptyState
       icon={AlertTriangle}
@@ -395,15 +525,33 @@ export function MyExceptionReportsPage() {
     <EmptyState icon={Search} variant="no-results" title="Không có báo cáo phù hợp" description="Thử trạng thái khác hoặc từ khóa khác." className="py-0" />
   );
 
+  // Which report the right pane shows. On wide screens the first row opens by default;
+  // on a phone the list shows alone until a row is chosen (one region at a time).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = filteredReports.find((r) => r.id === selectedId) ?? pagedReports[0] ?? null;
+
+  // The finding first: what still waits on a manager, and since when.
+  const waiting = reports.filter((r) => r.status === "OPEN" || r.status === "ACKNOWLEDGED");
+  const oldestWaiting = waiting.reduce<string | null>((oldest, r) => (!oldest || r.created_at < oldest ? r.created_at : oldest), null);
+  const ledeParts = [
+    counts.OPEN ? `${counts.OPEN} chờ quản lý xem` : null,
+    counts.ACKNOWLEDGED ? `${counts.ACKNOWLEDGED} đang được xử lý` : null,
+    counts.RESOLVED ? `${counts.RESOLVED} đã xử lý` : null,
+    counts.DISMISSED ? `${counts.DISMISSED} đã hủy` : null,
+  ].filter(Boolean);
+  const lede = loading
+    ? "Báo thiếu, dư, hư hỏng hoặc sai hàng gặp khi làm việc và theo dõi quản lý xử lý."
+    : reports.length === 0
+      ? "Bạn chưa gửi báo cáo sự cố nào. Khi gặp hàng thiếu, dư, hư hỏng hay sai sản phẩm, báo cáo để quản lý xử lý."
+      : `${reports.length} báo cáo: ${ledeParts.join(", ")}.${oldestWaiting ? ` Báo cáo chờ lâu nhất gửi ${ageText(oldestWaiting)}.` : ""}`;
+
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={AlertTriangle}
           title="Báo cáo sự cố của tôi"
-          description="Báo thiếu, dư, hư hỏng hoặc sai hàng gặp khi làm việc và theo dõi quản lý xử lý"
-          iconBg="bg-red-100 dark:bg-red-500/15"
-          iconColor="text-red-700 dark:text-red-400"
+          description={lede}
           actions={
             <>
               <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading || refreshing}>
@@ -420,92 +568,102 @@ export function MyExceptionReportsPage() {
       </FadeItem>
 
       <FadeItem>
-        <section aria-label="Báo cáo của tôi" className="min-w-0 rounded-xl border border-border bg-card">
-          <QueueTabs label="Lọc theo trạng thái" tabs={statusTabs} value={statusFilter} onChange={setStatusFilter} panelId={PANEL_ID} loading={loading} />
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+            {/* The list */}
+            <section
+              aria-label="Báo cáo của tôi"
+              className={cn("min-w-0 overflow-hidden rounded-2xl border border-border bg-card", selectedId ? "hidden @4xl/page:block" : "block")}
+            >
+              <QueueTabs label="Lọc theo trạng thái" tabs={statusTabs} value={statusFilter} onChange={setStatusFilter} panelId={PANEL_ID} loading={loading} />
 
-          <div className="border-b border-border px-4 py-3 sm:px-5">
-            <div className="relative min-w-0 sm:w-80">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm mã báo cáo, mô tả, kho…"
-                aria-label="Tìm báo cáo"
-                className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9 sm:text-[13px]"
-              />
-            </div>
-          </div>
-
-          <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${statusFilter}`} aria-busy={loading || refreshing}>
-            {loading ? (
-              <RowsSkeleton rows={4} />
-            ) : loadError && reports.length === 0 ? (
-              <div className="p-4 sm:p-5"><BlockError what="báo cáo sự cố của bạn" onRetry={() => void load("initial")} /></div>
-            ) : pagedReports.length === 0 ? (
-              <div className="px-5 py-8">{emptyState}</div>
-            ) : (
-              <>
-                <div className="hidden lg:block">
-                  <Table className="table-fixed">
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="h-10 w-[200px] pl-5 text-[12px] font-normal text-muted-foreground">Mã báo cáo</TableHead>
-                        <TableHead className="h-10 w-auto text-[12px] font-normal text-muted-foreground">Sự cố</TableHead>
-                        <TableHead className="h-10 w-[170px] text-[12px] font-normal text-muted-foreground">Công việc</TableHead>
-                        <TableHead className="h-10 w-[130px] text-right text-[12px] font-normal text-muted-foreground">Dự kiến → thực tế</TableHead>
-                        <TableHead className="h-10 w-[130px] text-[12px] font-normal text-muted-foreground">Trạng thái</TableHead>
-                        <TableHead className="h-10 w-[120px] pr-5 text-right text-[12px] font-normal text-muted-foreground">Gửi lúc</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pagedReports.map((r) => (
-                        <TableRow key={r.id} className="align-top hover:bg-muted/30">
-                          <TableCell className="py-3 pl-5"><RefCode value={r.report_number} /></TableCell>
-                          <TableCell className="whitespace-normal py-3">
-                            <p className="flex items-center gap-2 text-[13px] font-semibold text-foreground">{exceptionLabel(r.exception_type)}{photoButton(r)}</p>
-                            <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground" title={r.note}>{r.note}</p>
-                            <ResolutionNote report={r} />
-                          </TableCell>
-                          <TableCell className="whitespace-normal py-3 text-[13px]">
-                            <span className="block text-foreground">{taskTypeLabel(r.task_type)}</span>
-                            <span className="block text-[12px] text-muted-foreground" title={r.warehouses?.name}>{r.warehouses?.code || "Chưa rõ kho"}</span>
-                          </TableCell>
-                          <TableCell className="py-3 text-right text-[13px]"><QuantityCell report={r} /></TableCell>
-                          <TableCell className="py-3"><StatusBadge label={statusLabel(r.status)} variant={getStatusVariant("exceptionReport", r.status)} dot /></TableCell>
-                          <TableCell className="py-3 pr-5 text-right text-[12px] tabular-nums text-muted-foreground" title={formatDateTime(r.created_at) ?? undefined}>{timeAgo(r.created_at)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+              <div className="border-b border-border px-4 py-3">
+                <div className="relative min-w-0">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Tìm mã báo cáo, mô tả, kho…"
+                    aria-label="Tìm báo cáo"
+                    className="h-10 w-full rounded-md border border-input bg-input-background pl-9 pr-3 text-[14px] outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-border dark:bg-muted/40 sm:h-9"
+                  />
                 </div>
+              </div>
 
-                <ul className="divide-y divide-border lg:hidden">
-                  {pagedReports.map((r) => (
-                    <li key={r.id} className="px-4 py-3.5 sm:px-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="min-w-0 text-[14px] font-semibold text-foreground">{exceptionLabel(r.exception_type)}</p>
-                        <StatusBadge label={statusLabel(r.status)} variant={getStatusVariant("exceptionReport", r.status)} dot />
-                      </div>
-                      <p className="mt-1 text-[12px] text-muted-foreground">
-                        {taskTypeLabel(r.task_type)} · {r.warehouses?.code || "Chưa rõ kho"} · {timeAgo(r.created_at)}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-[13px] text-foreground">{r.note}</p>
-                      <ResolutionNote report={r} />
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-                        <RefCode value={r.report_number} />
-                        {r.expected_qty != null || r.actual_qty != null ? <QuantityCell report={r} /> : null}
-                        <span className="ml-auto">{photoButton(r)}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+              <div id={PANEL_ID} role="tabpanel" aria-labelledby={`${PANEL_ID}-tab-${statusFilter}`} aria-busy={loading || refreshing}>
+                {loading ? (
+                  <RowsSkeleton rows={4} />
+                ) : loadError && reports.length === 0 ? (
+                  <div className="p-4"><BlockError what="báo cáo sự cố của bạn" onRetry={() => void load("initial")} /></div>
+                ) : pagedReports.length === 0 ? (
+                  <div className="px-5 py-8">{emptyState}</div>
+                ) : (
+                  <ul>
+                    {pagedReports.map((r) => {
+                      const active = selected?.id === r.id;
+                      const book = bookTitle(r);
+                      return (
+                        <li key={r.id} className="border-b border-border last:border-0">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedId(r.id)}
+                            aria-current={active ? "true" : undefined}
+                            className={cn(
+                              "w-full px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                              // Until a row is chosen, the first row is "open" only where the detail pane shows beside the list.
+                              active ? (selectedId ? "bg-primary/[0.07]" : "hover:bg-muted/50 @4xl/page:bg-primary/[0.07]") : "hover:bg-muted/50",
+                            )}
+                          >
+                            <span className="flex items-start justify-between gap-3">
+                              <span className="min-w-0 truncate text-[14px] font-semibold text-foreground">
+                                {exceptionLabel(r.exception_type)}{book ? `: ${book}` : ""}
+                              </span>
+                              <StatusBadge label={statusLabel(r.status)} variant={getStatusVariant("exceptionReport", r.status)} dot />
+                            </span>
+                            {/* On the selected row's tint, muted grey drops under 4.5:1, so meta takes a darker ink there. */}
+                            <span className={cn("mt-0.5 flex items-start gap-x-1 text-[13px]", active ? "text-foreground/75" : "text-muted-foreground")}>
+                              <span className="min-w-0">
+                                {r.warehouses?.code || "Chưa rõ kho"}, {taskTypeLabel(r.task_type)}
+                                {r.expected_qty != null || r.actual_qty != null ? <>, <QuantityCell report={r} /></> : null}
+                              </span>
+                              <span className="ml-auto shrink-0 pl-2 text-[12px] tabular-nums" title={formatDateTime(r.created_at) ?? undefined}>{timeAgo(r.created_at)}</span>
+                            </span>
+                            <span className="mt-0.5 block truncate text-[13px] text-foreground/80" title={r.note}>{r.note}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={filteredReports.length} noun="báo cáo" onPageChange={setPage} /> : null}
+            </section>
+
+            {/* The open report: read-only for staff, with how far the manager has taken it. */}
+            <section
+              aria-labelledby="my-exception-detail-title"
+              className={cn("@container min-w-0 rounded-2xl border border-border bg-card @4xl/page:sticky @4xl/page:top-4", selectedId ? "block" : "hidden @4xl/page:block")}
+            >
+              {loading ? (
+                <RowsSkeleton rows={3} />
+              ) : !selected ? (
+                <div className="p-5">
+                  <h2 id="my-exception-detail-title" className="text-[16px] font-semibold text-foreground">Chưa có báo cáo để xem</h2>
+                  <p className="mt-1 text-[14px] text-muted-foreground">Báo cáo bạn gửi sẽ hiện ở đây cùng tiến độ quản lý xử lý.</p>
+                </div>
+              ) : (
+                <ReportDetail
+                  report={selected}
+                  currentUserId={currentUser?.id ?? null}
+                  onBack={() => setSelectedId(null)}
+                  onPhoto={() => setPhotoReport(selected)}
+                />
+              )}
+            </section>
           </div>
-
-          {!loading ? <ListFooter page={page} pageSize={PAGE_SIZE} total={filteredReports.length} noun="báo cáo" onPageChange={setPage} /> : null}
-        </section>
+        </div>
       </FadeItem>
 
       <FormSheet
@@ -693,7 +851,7 @@ export function MyExceptionReportsPage() {
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Ảnh bằng chứng {photoReport?.report_number}</DialogTitle>
-            <DialogDescription>{photoReport ? `${exceptionLabel(photoReport.exception_type)} · ${photoReport.warehouses?.code ?? ""}` : null}</DialogDescription>
+            <DialogDescription>{photoReport ? `${exceptionLabel(photoReport.exception_type)}, ${photoReport.warehouses?.code ?? ""}` : null}</DialogDescription>
           </DialogHeader>
           {photoReport?.evidence_photo_url ? (
             <img src={photoReport.evidence_photo_url} alt={`Ảnh bằng chứng của ${photoReport.report_number}`} className="max-h-[70vh] w-full rounded-md object-contain" />

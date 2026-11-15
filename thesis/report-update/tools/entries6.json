@@ -1,0 +1,3578 @@
+[
+{
+"kind": "toc",
+"anchor": "_heading=h.qtylt51q0m14",
+"parts": [
+"DANH MỤC HÌNH ẢNH"
+],
+"search": "DANH MỤC HÌNH ẢNH"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.7dottl5dj65s",
+"parts": [
+"DANH MỤC BẢNG BIỂU"
+],
+"search": "DANH MỤC BẢNG BIỂU"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.uuufeo2tjjis",
+"parts": [
+"DANH MỤC CÁC THUẬT NGỮ VIẾT TẮT"
+],
+"search": "DANH MỤC CÁC THUẬT NGỮ VIẾT TẮT"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.q03na61pub1c",
+"parts": [
+"CHƯƠNG 1",
+"GIỚI THIỆU"
+],
+"search": "GIỚI THIỆU"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fzey2fvcjy6u",
+"parts": [
+"1.1",
+"Đặt vấn đề"
+],
+"search": "Đặt vấn đề"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rffn9vty2v9f",
+"parts": [
+"1.1.1",
+"Bối cảnh"
+],
+"search": "Bối cảnh"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.pfbk8h9dncct",
+"parts": [
+"1.1.2",
+"Thực trạng và các vấn đề cần giải quyết"
+],
+"search": "Thực trạng và các vấn đề cần giải quyết"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.tj25d7e430bd",
+"parts": [
+"1.2",
+"Các giải pháp hiện có và hạn chế"
+],
+"search": "Các giải pháp hiện có và hạn chế"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1figteopnvr9",
+"parts": [
+"1.2.1",
+"Hệ thống quản lý thư viện tích hợp"
+],
+"search": "Hệ thống quản lý thư viện tích hợp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1nkm2ogzypxq",
+"parts": [
+"1.2.2",
+"Hệ thống quản lý kho và các công cụ AI độc lập"
+],
+"search": "Hệ thống quản lý kho và các công cụ AI độc lập"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.e7b8wvhvwb6k",
+"parts": [
+"Bảng 1.1 So sánh các nhóm giải pháp hiện có với định hướng của đề tài"
+],
+"search": "Bảng 1.1 So sánh các nhóm giải pháp hiện có với định hướng của đề tài"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.n7zbp0hji8ht",
+"parts": [
+"1.3",
+"Mục tiêu đề tài"
+],
+"search": "Mục tiêu đề tài"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.dpazpstj1tw1",
+"parts": [
+"1.3.1",
+"Mục tiêu tổng quát"
+],
+"search": "Mục tiêu tổng quát"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.vzze8hn08ns1",
+"parts": [
+"1.3.2",
+"Mục tiêu cụ thể"
+],
+"search": "Mục tiêu cụ thể"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.extrdv7t2fix",
+"parts": [
+"1.4",
+"Đối tượng, phạm vi và giới hạn"
+],
+"search": "Đối tượng, phạm vi và giới hạn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.9qak7x7ov04k",
+"parts": [
+"1.4.1",
+"Đối tượng nghiên cứu"
+],
+"search": "Đối tượng nghiên cứu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rt2zaejnf9w2",
+"parts": [
+"1.4.2",
+"Phạm vi thực hiện"
+],
+"search": "Phạm vi thực hiện"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.89tiac0xnre",
+"parts": [
+"Hình 1.1 Tổng quan các phân hệ và nhóm người dùng của hệ thống SmartBook"
+],
+"search": "Hình 1.1 Tổng quan các phân hệ và nhóm người dùng của hệ thống SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.iyihl5qttupc",
+"parts": [
+"1.4.3",
+"Giới hạn của đề tài"
+],
+"search": "Giới hạn của đề tài"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ynqi51h91v4h",
+"parts": [
+"1.5",
+"Phương pháp thực hiện"
+],
+"search": "Phương pháp thực hiện"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ghfipdwu1zuo",
+"parts": [
+"1.5.1",
+"Phương pháp nghiên cứu và phân tích"
+],
+"search": "Phương pháp nghiên cứu và phân tích"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.909st8jc5229",
+"parts": [
+"1.5.2",
+"Phương pháp phát triển và đánh giá"
+],
+"search": "Phương pháp phát triển và đánh giá"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.q86oa1vhkven",
+"parts": [
+"1.6",
+"Kết quả đạt được"
+],
+"search": "Kết quả đạt được"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rhlv7drcaaq",
+"parts": [
+"1.6.1",
+"Về sản phẩm"
+],
+"search": "Về sản phẩm"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.zdowpmyj7kny",
+"parts": [
+"1.6.2",
+"Về đánh giá định lượng"
+],
+"search": "Về đánh giá định lượng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.swrk1c2cpov1",
+"parts": [
+"1.7",
+"Ý nghĩa khoa học và thực tiễn"
+],
+"search": "Ý nghĩa khoa học và thực tiễn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.abe372jw055s",
+"parts": [
+"1.7.1",
+"Ý nghĩa khoa học"
+],
+"search": "Ý nghĩa khoa học"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.8bl8e1khjkax",
+"parts": [
+"1.7.2",
+"Ý nghĩa thực tiễn"
+],
+"search": "Ý nghĩa thực tiễn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.e034g68j7nc1",
+"parts": [
+"1.8",
+"Bố cục báo cáo"
+],
+"search": "Bố cục báo cáo"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.pnnft8ay6prj",
+"parts": [
+"CHƯƠNG 2",
+"CƠ SỞ LÝ THUYẾT"
+],
+"search": "CƠ SỞ LÝ THUYẾT"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.o9gt4esu59ky",
+"parts": [
+"2.1",
+"Nghiệp vụ thư viện và kho vận sách"
+],
+"search": "Nghiệp vụ thư viện và kho vận sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.lb54gi7552ob",
+"parts": [
+"2.1.1",
+"Nghiệp vụ lưu thông thư viện"
+],
+"search": "Nghiệp vụ lưu thông thư viện"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.m3aklo1c0nb",
+"parts": [
+"2.1.2",
+"Nghiệp vụ quản lý kho"
+],
+"search": "Nghiệp vụ quản lý kho"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.3vg6u8yktsvm",
+"parts": [
+"2.1.3",
+"Nghiệp vụ mua hàng và làm việc với nhà cung cấp"
+],
+"search": "Nghiệp vụ mua hàng và làm việc với nhà cung cấp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ry3ugw729mki",
+"parts": [
+"2.1.4",
+"Biên mục và mã số ISBN"
+],
+"search": "Biên mục và mã số ISBN"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.gvfbog26cq4a",
+"parts": [
+"2.2",
+"Kiến trúc phần mềm phân tán"
+],
+"search": "Kiến trúc phần mềm phân tán"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.jy92zqmyvznw",
+"parts": [
+"2.2.1",
+"Kiến trúc microservices"
+],
+"search": "Kiến trúc microservices"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.gd5zu0ci95sh",
+"parts": [
+"Bảng 2.1 So sánh kiến trúc nguyên khối và kiến trúc microservices"
+],
+"search": "Bảng 2.1 So sánh kiến trúc nguyên khối và kiến trúc microservices"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.kwq40vpmohvj",
+"parts": [
+"Hình 2.1 Mô hình kiến trúc microservices với API Gateway và cơ sở dữ liệu riêng cho từng service"
+],
+"search": "Hình 2.1 Mô hình kiến trúc microservices với API Gateway và cơ sở dữ liệu riêng cho từng service"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.k91igb4945o4",
+"parts": [
+"2.2.2",
+"Mẫu API Gateway và cơ sở dữ liệu riêng cho từng service"
+],
+"search": "Mẫu API Gateway và cơ sở dữ liệu riêng cho từng service"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.pkuwe8kdcvrx",
+"parts": [
+"2.2.3",
+"Kiến trúc hướng sự kiện và mẫu Transactional Outbox"
+],
+"search": "Kiến trúc hướng sự kiện và mẫu Transactional Outbox"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.j6div6m1eg01",
+"parts": [
+"Hình 2.2 Mẫu Transactional Outbox bảo đảm sự kiện không bị mất khi phát bất đồng bộ"
+],
+"search": "Hình 2.2 Mẫu Transactional Outbox bảo đảm sự kiện không bị mất khi phát bất đồng bộ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.7xtef1jjm4ek",
+"parts": [
+"2.2.4",
+"Giao tiếp thời gian thực và khả năng quan sát"
+],
+"search": "Giao tiếp thời gian thực và khả năng quan sát"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.9e1jd0vnmp22",
+"parts": [
+"2.3",
+"Xác thực và phân quyền"
+],
+"search": "Xác thực và phân quyền"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.bduj14lxvym6",
+"parts": [
+"2.3.1",
+"Xác thực bằng JSON Web Token"
+],
+"search": "Xác thực bằng JSON Web Token"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900001",
+"parts": [
+"2.3.2",
+"Mã dùng một lần qua email và refresh token"
+],
+"search": "Mã dùng một lần qua email và refresh token"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ttxlw17fvc4g",
+"parts": [
+"2.3.3",
+"Kiểm soát truy cập dựa trên vai trò và phạm vi kho"
+],
+"search": "Kiểm soát truy cập dựa trên vai trò và phạm vi kho"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.8gqm854mkrm",
+"parts": [
+"2.4",
+"Hệ hỗ trợ ra quyết định"
+],
+"search": "Hệ hỗ trợ ra quyết định"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.z1jky3dgzlzm",
+"parts": [
+"2.4.1",
+"Khái niệm và cấu trúc hệ hỗ trợ ra quyết định"
+],
+"search": "Khái niệm và cấu trúc hệ hỗ trợ ra quyết định"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.geidgsklece",
+"parts": [
+"Hình 2.3 Ba thành phần của hệ hỗ trợ ra quyết định và cách ánh xạ vào SmartBook"
+],
+"search": "Hình 2.3 Ba thành phần của hệ hỗ trợ ra quyết định và cách ánh xạ vào SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.p38f7584fcy4",
+"parts": [
+"2.4.2",
+"Dự báo nhu cầu theo chuỗi thời gian"
+],
+"search": "Dự báo nhu cầu theo chuỗi thời gian"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.9yz6z6ghz2jh",
+"parts": [
+"2.4.3",
+"Tồn kho an toàn và thời gian chờ hàng"
+],
+"search": "Tồn kho an toàn và thời gian chờ hàng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.nuoj3piuc55p",
+"parts": [
+"2.4.4",
+"Hồi quy logistic trong dự đoán rủi ro"
+],
+"search": "Hồi quy logistic trong dự đoán rủi ro"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.t4fx0h70fswn",
+"parts": [
+"2.4.5",
+"Thanh lọc vốn tài liệu và phân bổ ngân sách"
+],
+"search": "Thanh lọc vốn tài liệu và phân bổ ngân sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.hv4ssbqwdj4y",
+"parts": [
+"2.5",
+"Mô hình ngôn ngữ lớn và tác tử AI"
+],
+"search": "Mô hình ngôn ngữ lớn và tác tử AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.n7gvmp7gwf8u",
+"parts": [
+"2.5.1",
+"Mô hình ngôn ngữ lớn"
+],
+"search": "Mô hình ngôn ngữ lớn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.s4uzaf8szw38",
+"parts": [
+"2.5.2",
+"Gọi công cụ và tác tử"
+],
+"search": "Gọi công cụ và tác tử"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.47yyrxdpawa6",
+"parts": [
+"Hình 2.4 Vòng lặp gọi công cụ của trợ lý AI và bước kiểm tra căn cứ số liệu"
+],
+"search": "Hình 2.4 Vòng lặp gọi công cụ của trợ lý AI và bước kiểm tra căn cứ số liệu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fzmr3nnc7cp7",
+"parts": [
+"2.5.3",
+"Con người trong vòng lặp và kiểm soát ảo giác"
+],
+"search": "Con người trong vòng lặp và kiểm soát ảo giác"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.f43rz2vy9c2t",
+"parts": [
+"2.6",
+"Truy xuất thông tin và RAG"
+],
+"search": "Truy xuất thông tin và RAG"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.pqqybdlnehnn",
+"parts": [
+"2.6.1",
+"Biểu diễn vector và tìm kiếm lân cận gần đúng"
+],
+"search": "Biểu diễn vector và tìm kiếm lân cận gần đúng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ut0he47pawmi",
+"parts": [
+"2.6.2",
+"Tìm kiếm lai và hợp nhất thứ hạng nghịch đảo"
+],
+"search": "Tìm kiếm lai và hợp nhất thứ hạng nghịch đảo"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.lplufnlfmry",
+"parts": [
+"Hình 2.5 Quy trình truy xuất lai có đánh giá độ tin cậy trước khi sinh câu trả lời"
+],
+"search": "Hình 2.5 Quy trình truy xuất lai có đánh giá độ tin cậy trước khi sinh câu trả lời"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1ixw4263ekt",
+"parts": [
+"2.6.3",
+"Cơ chế từ chối trả lời"
+],
+"search": "Cơ chế từ chối trả lời"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fyopnca1cwf",
+"parts": [
+"2.7",
+"Trích xuất và hợp nhất thông tin sách"
+],
+"search": "Trích xuất và hợp nhất thông tin sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.563u2kh27np7",
+"parts": [
+"2.7.1",
+"Thu thập metadata đa nguồn"
+],
+"search": "Thu thập metadata đa nguồn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.z9t40ll5123c",
+"parts": [
+"2.7.2",
+"Hợp nhất bằng chứng và độ tin cậy nguồn"
+],
+"search": "Hợp nhất bằng chứng và độ tin cậy nguồn"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.mbe0gjyszfph",
+"parts": [
+"Hình 2.6 Quy trình hợp nhất bằng chứng metadata theo từng trường"
+],
+"search": "Hình 2.6 Quy trình hợp nhất bằng chứng metadata theo từng trường"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.tt16e1p4hwhe",
+"parts": [
+"2.7.3",
+"Nhận dạng văn bản và hình ảnh bằng mô hình thị giác"
+],
+"search": "Nhận dạng văn bản và hình ảnh bằng mô hình thị giác"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.bju2bmt59sn1",
+"parts": [
+"2.8",
+"Công nghệ sử dụng"
+],
+"search": "Công nghệ sử dụng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.m3lhc7bd957l",
+"parts": [
+"2.8.1",
+"Nền tảng backend"
+],
+"search": "Nền tảng backend"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.enr00tewgr8w",
+"parts": [
+"2.8.2",
+"Lưu trữ dữ liệu và hạ tầng"
+],
+"search": "Lưu trữ dữ liệu và hạ tầng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1jlolke9et7u",
+"parts": [
+"2.8.3",
+"Giao diện người dùng"
+],
+"search": "Giao diện người dùng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fhnlrorm2vj0",
+"parts": [
+"2.8.4",
+"Dịch vụ AI"
+],
+"search": "Dịch vụ AI"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.f12c6p5blwv9",
+"parts": [
+"Bảng 2.2 Tổng hợp công nghệ sử dụng trong hệ thống SmartBook"
+],
+"search": "Bảng 2.2 Tổng hợp công nghệ sử dụng trong hệ thống SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.z5rvbtl5686h",
+"parts": [
+"2.9",
+"Các công trình liên quan"
+],
+"search": "Các công trình liên quan"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.phwawnz65z0z",
+"parts": [
+"2.9.1",
+"Hệ thống quản lý thư viện mã nguồn mở"
+],
+"search": "Hệ thống quản lý thư viện mã nguồn mở"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.jbn11xrl8hyj",
+"parts": [
+"2.9.2",
+"Ứng dụng AI trong quản lý thư viện và chuỗi cung ứng"
+],
+"search": "Ứng dụng AI trong quản lý thư viện và chuỗi cung ứng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.kle1h63o2b4n",
+"parts": [
+"2.9.3",
+"Nhận xét và định hướng của đề tài"
+],
+"search": "Nhận xét và định hướng của đề tài"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.bwj2zq2fu6i7",
+"parts": [
+"Bảng 2.3 So sánh SmartBook với các nhóm công trình liên quan"
+],
+"search": "Bảng 2.3 So sánh SmartBook với các nhóm công trình liên quan"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.3rjqqxgcqn3i",
+"parts": [
+"CHƯƠNG 3",
+"PHÂN TÍCH YÊU CẦU"
+],
+"search": "PHÂN TÍCH YÊU CẦU"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.7dguy5fkqrbc",
+"parts": [
+"3.1",
+"Khảo sát hiện trạng"
+],
+"search": "Khảo sát hiện trạng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.zj93rrbr4cq",
+"parts": [
+"3.1.1",
+"Quy trình nghiệp vụ hiện tại"
+],
+"search": "Quy trình nghiệp vụ hiện tại"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rnvvcasc3hea",
+"parts": [
+"3.1.2",
+"Các vấn đề cần giải quyết"
+],
+"search": "Các vấn đề cần giải quyết"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.806nk3sgnssr",
+"parts": [
+"3.2",
+"Xác định tác nhân"
+],
+"search": "Xác định tác nhân"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.bq88l3q56u5j",
+"parts": [
+"3.2.1",
+"Tác nhân người dùng"
+],
+"search": "Tác nhân người dùng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.lvwzk0jmdquc",
+"parts": [
+"Bảng 3.1 Các tác nhân của hệ thống SmartBook"
+],
+"search": "Bảng 3.1 Các tác nhân của hệ thống SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.dg5rkundqdup",
+"parts": [
+"3.2.2",
+"Tác nhân hệ thống"
+],
+"search": "Tác nhân hệ thống"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.njv3l0lypj4s",
+"parts": [
+"3.3",
+"Yêu cầu chức năng"
+],
+"search": "Yêu cầu chức năng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ykqso5fj80kx",
+"parts": [
+"3.3.1",
+"Phân hệ xác thực và quản trị"
+],
+"search": "Phân hệ xác thực và quản trị"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ymw1so1lqepo",
+"parts": [
+"Bảng 3.2 Yêu cầu chức năng phân hệ xác thực và quản trị"
+],
+"search": "Bảng 3.2 Yêu cầu chức năng phân hệ xác thực và quản trị"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.dfraj6w2j0zd",
+"parts": [
+"3.3.2",
+"Phân hệ lưu thông và cổng bạn đọc"
+],
+"search": "Phân hệ lưu thông và cổng bạn đọc"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.q2fq8a4n2p54",
+"parts": [
+"Bảng 3.3 Yêu cầu chức năng phân hệ lưu thông và cổng bạn đọc"
+],
+"search": "Bảng 3.3 Yêu cầu chức năng phân hệ lưu thông và cổng bạn đọc"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.xp1fxy3afkb1",
+"parts": [
+"3.3.3",
+"Phân hệ kho vận và mua hàng"
+],
+"search": "Phân hệ kho vận và mua hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.yawq7z4zylof",
+"parts": [
+"Bảng 3.4 Yêu cầu chức năng phân hệ kho vận và mua hàng"
+],
+"search": "Bảng 3.4 Yêu cầu chức năng phân hệ kho vận và mua hàng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.osa3573ck5lx",
+"parts": [
+"3.3.4",
+"Phân hệ trích xuất thông tin sách bằng AI"
+],
+"search": "Phân hệ trích xuất thông tin sách bằng AI"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.6q5f35bmejh",
+"parts": [
+"Bảng 3.5 Yêu cầu chức năng phân hệ trích xuất thông tin sách bằng AI"
+],
+"search": "Bảng 3.5 Yêu cầu chức năng phân hệ trích xuất thông tin sách bằng AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.8yemsu5ffd25",
+"parts": [
+"3.3.5",
+"Phân hệ hỗ trợ ra quyết định"
+],
+"search": "Phân hệ hỗ trợ ra quyết định"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ty9m0stqpq2k",
+"parts": [
+"Bảng 3.6 Yêu cầu chức năng phân hệ hỗ trợ ra quyết định"
+],
+"search": "Bảng 3.6 Yêu cầu chức năng phân hệ hỗ trợ ra quyết định"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.mvayvep7jku2",
+"parts": [
+"3.4",
+"Yêu cầu phi chức năng"
+],
+"search": "Yêu cầu phi chức năng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fptdvfovzmk5",
+"parts": [
+"3.4.1",
+"Hiệu năng và khả năng mở rộng"
+],
+"search": "Hiệu năng và khả năng mở rộng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.nhtju91bp39n",
+"parts": [
+"3.4.2",
+"Bảo mật và quyền riêng tư"
+],
+"search": "Bảo mật và quyền riêng tư"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.i5nyre7301pq",
+"parts": [
+"3.4.3",
+"Tính đúng đắn và nhất quán dữ liệu"
+],
+"search": "Tính đúng đắn và nhất quán dữ liệu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.a2evs9u2ljqq",
+"parts": [
+"3.4.4",
+"Khả năng sẵn sàng, quan sát và bảo trì"
+],
+"search": "Khả năng sẵn sàng, quan sát và bảo trì"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.o55xmmp5rl4v",
+"parts": [
+"3.4.5",
+"Yêu cầu riêng đối với thành phần AI"
+],
+"search": "Yêu cầu riêng đối với thành phần AI"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.244lwunvyjzv",
+"parts": [
+"Bảng 3.7 Yêu cầu phi chức năng đặc thù của thành phần AI"
+],
+"search": "Bảng 3.7 Yêu cầu phi chức năng đặc thù của thành phần AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.hm90phxivs8u",
+"parts": [
+"3.5",
+"Mô hình hóa quy trình nghiệp vụ"
+],
+"search": "Mô hình hóa quy trình nghiệp vụ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.62sp9wz58lr3",
+"parts": [
+"3.5.1",
+"Quy trình đặt giữ, nhận sách và trả sách"
+],
+"search": "Quy trình đặt giữ, nhận sách và trả sách"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.5ywr50b0z4uc",
+"parts": [
+"Hình 3.1 Sơ đồ hoạt động quy trình đặt giữ, nhận sách và trả sách"
+],
+"search": "Hình 3.1 Sơ đồ hoạt động quy trình đặt giữ, nhận sách và trả sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.aoddrtdox2o1",
+"parts": [
+"3.5.2",
+"Quy trình mua hàng, nhận hàng và nhập kho"
+],
+"search": "Quy trình mua hàng, nhận hàng và nhập kho"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.ii2c7aclzjc7",
+"parts": [
+"Hình 3.2 Sơ đồ hoạt động quy trình mua hàng, nhận hàng và nhập kho"
+],
+"search": "Hình 3.2 Sơ đồ hoạt động quy trình mua hàng, nhận hàng và nhập kho"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.d82ydyvpmzbr",
+"parts": [
+"3.5.3",
+"Quy trình biên mục sách có hỗ trợ AI"
+],
+"search": "Quy trình biên mục sách có hỗ trợ AI"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.7c4ksdrmv45h",
+"parts": [
+"Hình 3.3 Sơ đồ hoạt động quy trình biên mục sách có hỗ trợ AI"
+],
+"search": "Hình 3.3 Sơ đồ hoạt động quy trình biên mục sách có hỗ trợ AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.oflqknjpkart",
+"parts": [
+"3.5.4",
+"Quy trình hỗ trợ ra quyết định với trợ lý AI"
+],
+"search": "Quy trình hỗ trợ ra quyết định với trợ lý AI"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.soiq0uo4cv7p",
+"parts": [
+"Hình 3.4 Sơ đồ hoạt động quy trình hỗ trợ ra quyết định với trợ lý AI"
+],
+"search": "Hình 3.4 Sơ đồ hoạt động quy trình hỗ trợ ra quyết định với trợ lý AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.yk7l4irukeco",
+"parts": [
+"3.6",
+"Mô hình hóa use case"
+],
+"search": "Mô hình hóa use case"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.3wkbd8qj2zix",
+"parts": [
+"3.6.1",
+"Sơ đồ use case tổng quát"
+],
+"search": "Sơ đồ use case tổng quát"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.ddicq6ipeefk",
+"parts": [
+"Hình 3.5 Sơ đồ use case tổng quát của hệ thống SmartBook"
+],
+"search": "Hình 3.5 Sơ đồ use case tổng quát của hệ thống SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.h7zrwpvwmhtx",
+"parts": [
+"3.6.2",
+"Sơ đồ use case theo tác nhân"
+],
+"search": "Sơ đồ use case theo tác nhân"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.ieipop66azo0",
+"parts": [
+"Hình 3.6 Sơ đồ use case của tác nhân Khách hàng"
+],
+"search": "Hình 3.6 Sơ đồ use case của tác nhân Khách hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.k8oe682j8en",
+"parts": [
+"Hình 3.7 Sơ đồ use case của tác nhân Thủ thư"
+],
+"search": "Hình 3.7 Sơ đồ use case của tác nhân Thủ thư"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.9kgwqzawgzuh",
+"parts": [
+"Hình 3.8 Sơ đồ use case của tác nhân Nhân viên kho"
+],
+"search": "Hình 3.8 Sơ đồ use case của tác nhân Nhân viên kho"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.q2jng7c0ueg",
+"parts": [
+"Hình 3.9 Sơ đồ use case của tác nhân Quản lý kho – vận hành kho và mua hàng"
+],
+"search": "Hình 3.9 Sơ đồ use case của tác nhân Quản lý kho – vận hành kho và mua hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.2fwlxfudst8f",
+"parts": [
+"Hình 3.10 Sơ đồ use case phân hệ AI: trích xuất thông tin sách và hỗ trợ ra quyết định"
+],
+"search": "Hình 3.10 Sơ đồ use case phân hệ AI: trích xuất thông tin sách và hỗ trợ ra quyết định"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.32phxbwqkq3p",
+"parts": [
+"Hình 3.11 Sơ đồ use case của tác nhân Quản trị hệ thống và Bộ lập lịch"
+],
+"search": "Hình 3.11 Sơ đồ use case của tác nhân Quản trị hệ thống và Bộ lập lịch"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.7w3e9v38jfqn",
+"parts": [
+"Hình 3.12 Sơ đồ use case của tác nhân Nhà cung cấp"
+],
+"search": "Hình 3.12 Sơ đồ use case của tác nhân Nhà cung cấp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.jg8xpekcw86b",
+"parts": [
+"3.6.3",
+"Danh sách use case"
+],
+"search": "Danh sách use case"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.t6hnpinctyph",
+"parts": [
+"Bảng 3.8 Danh sách use case của hệ thống SmartBook"
+],
+"search": "Bảng 3.8 Danh sách use case của hệ thống SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.3v6p79s6t6zx",
+"parts": [
+"3.6.4",
+"Đặc tả use case"
+],
+"search": "Đặc tả use case"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.8aae31r1u9vd",
+"parts": [
+"Bảng 3.9 Đặc tả use case UC01 – Đăng nhập"
+],
+"search": "Bảng 3.9 Đặc tả use case UC01 – Đăng nhập"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.h2agfolzx9hh",
+"parts": [
+"Bảng 3.10 Đặc tả use case UC02 – Đăng ký tài khoản bạn đọc"
+],
+"search": "Bảng 3.10 Đặc tả use case UC02 – Đăng ký tài khoản bạn đọc"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.qgrptmoozaig",
+"parts": [
+"Bảng 3.11 Đặc tả use case UC03 – Khôi phục mật khẩu"
+],
+"search": "Bảng 3.11 Đặc tả use case UC03 – Khôi phục mật khẩu"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.nty543zaq2i4",
+"parts": [
+"Bảng 3.12 Đặc tả use case UC04 – Cập nhật hồ sơ và đổi mật khẩu"
+],
+"search": "Bảng 3.12 Đặc tả use case UC04 – Cập nhật hồ sơ và đổi mật khẩu"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.t5xfttb8pw59",
+"parts": [
+"Bảng 3.13 Đặc tả use case UC05 – Tra cứu danh mục và xem chi tiết sách"
+],
+"search": "Bảng 3.13 Đặc tả use case UC05 – Tra cứu danh mục và xem chi tiết sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.xfn0a5biix80",
+"parts": [
+"Bảng 3.14 Đặc tả use case UC06 – Tìm sách bằng ảnh bìa"
+],
+"search": "Bảng 3.14 Đặc tả use case UC06 – Tìm sách bằng ảnh bìa"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.vsbqm5g8oahz",
+"parts": [
+"Bảng 3.15 Đặc tả use case UC07 – Đặt giữ sách"
+],
+"search": "Bảng 3.15 Đặc tả use case UC07 – Đặt giữ sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ivq7kxkfibp6",
+"parts": [
+"Bảng 3.16 Đặc tả use case UC08 – Theo dõi phiếu mượn và yêu cầu gia hạn"
+],
+"search": "Bảng 3.16 Đặc tả use case UC08 – Theo dõi phiếu mượn và yêu cầu gia hạn"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.52de1m4z1q93",
+"parts": [
+"Bảng 3.17 Đặc tả use case UC09 – Thanh toán phí phạt trực tuyến"
+],
+"search": "Bảng 3.17 Đặc tả use case UC09 – Thanh toán phí phạt trực tuyến"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.8nmq6g9u5zhd",
+"parts": [
+"Bảng 3.18 Đặc tả use case UC10 – Quản lý danh sách yêu thích và đăng ký báo có sách"
+],
+"search": "Bảng 3.18 Đặc tả use case UC10 – Quản lý danh sách yêu thích và đăng ký báo có sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ree452jqucxq",
+"parts": [
+"Bảng 3.19 Đặc tả use case UC11 – Đánh giá sách"
+],
+"search": "Bảng 3.19 Đặc tả use case UC11 – Đánh giá sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.lf1dzp3drxge",
+"parts": [
+"Bảng 3.20 Đặc tả use case UC12 – Xem gợi ý đọc sách cá nhân hóa"
+],
+"search": "Bảng 3.20 Đặc tả use case UC12 – Xem gợi ý đọc sách cá nhân hóa"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.jbgnhi7wj5t0",
+"parts": [
+"Bảng 3.21 Đặc tả use case UC13 – Xem thông báo và thống kê đọc sách"
+],
+"search": "Bảng 3.21 Đặc tả use case UC13 – Xem thông báo và thống kê đọc sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.gj186xw97zvu",
+"parts": [
+"Bảng 3.22 Đặc tả use case UC14 – Quản lý hồ sơ bạn đọc và thẻ hội viên"
+],
+"search": "Bảng 3.22 Đặc tả use case UC14 – Quản lý hồ sơ bạn đọc và thẻ hội viên"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.8hdw0ne93b6v",
+"parts": [
+"Bảng 3.23 Đặc tả use case UC15 – Quản lý gói hội viên"
+],
+"search": "Bảng 3.23 Đặc tả use case UC15 – Quản lý gói hội viên"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.7tabqcgvgwur",
+"parts": [
+"Bảng 3.24 Đặc tả use case UC16 – Xác nhận đặt giữ và chuẩn bị sách"
+],
+"search": "Bảng 3.24 Đặc tả use case UC16 – Xác nhận đặt giữ và chuẩn bị sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.w66nmnar0si4",
+"parts": [
+"Bảng 3.25 Đặc tả use case UC17 – Phát sách bằng mã nhận sách"
+],
+"search": "Bảng 3.25 Đặc tả use case UC17 – Phát sách bằng mã nhận sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.19s8y9nx3tuk",
+"parts": [
+"Bảng 3.26 Đặc tả use case UC18 – Lập phiếu mượn trực tiếp tại quầy"
+],
+"search": "Bảng 3.26 Đặc tả use case UC18 – Lập phiếu mượn trực tiếp tại quầy"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.f0txi8yhbmgr",
+"parts": [
+"Bảng 3.27 Đặc tả use case UC19 – Tiếp nhận trả sách"
+],
+"search": "Bảng 3.27 Đặc tả use case UC19 – Tiếp nhận trả sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.7ov9dvn40hxi",
+"parts": [
+"Bảng 3.28 Đặc tả use case UC20 – Duyệt yêu cầu gia hạn"
+],
+"search": "Bảng 3.28 Đặc tả use case UC20 – Duyệt yêu cầu gia hạn"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.rnhz2a7h3mcl",
+"parts": [
+"Bảng 3.29 Đặc tả use case UC21 – Thu và miễn giảm phí phạt tại quầy"
+],
+"search": "Bảng 3.29 Đặc tả use case UC21 – Thu và miễn giảm phí phạt tại quầy"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.sscq5jjfxarc",
+"parts": [
+"Bảng 3.30 Đặc tả use case UC22 – Xem và nhận công việc kho"
+],
+"search": "Bảng 3.30 Đặc tả use case UC22 – Xem và nhận công việc kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.bxq80dw1zors",
+"parts": [
+"Bảng 3.31 Đặc tả use case UC23 – Tạo yêu cầu mua hàng"
+],
+"search": "Bảng 3.31 Đặc tả use case UC23 – Tạo yêu cầu mua hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.cdb19q2px5km",
+"parts": [
+"Bảng 3.32 Đặc tả use case UC24 – Kiểm đếm hàng nhập theo phiếu nhập"
+],
+"search": "Bảng 3.32 Đặc tả use case UC24 – Kiểm đếm hàng nhập theo phiếu nhập"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.pq0kt62iej4o",
+"parts": [
+"Bảng 3.33 Đặc tả use case UC25 – Xếp sách lên kệ theo gợi ý vị trí"
+],
+"search": "Bảng 3.33 Đặc tả use case UC25 – Xếp sách lên kệ theo gợi ý vị trí"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.1n7x5jmw1a97",
+"parts": [
+"Bảng 3.34 Đặc tả use case UC26 – Lấy hàng và xử lý lấy lại"
+],
+"search": "Bảng 3.34 Đặc tả use case UC26 – Lấy hàng và xử lý lấy lại"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.4uapggix1u70",
+"parts": [
+"Bảng 3.35 Đặc tả use case UC27 – Đóng gói kèm bằng chứng hình ảnh"
+],
+"search": "Bảng 3.35 Đặc tả use case UC27 – Đóng gói kèm bằng chứng hình ảnh"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.17gf2w2wy6m6",
+"parts": [
+"Bảng 3.36 Đặc tả use case UC28 – Xác nhận xuất kho"
+],
+"search": "Bảng 3.36 Đặc tả use case UC28 – Xác nhận xuất kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.qu32f2of1l1h",
+"parts": [
+"Bảng 3.37 Đặc tả use case UC29 – Nhận hàng chuyển kho"
+],
+"search": "Bảng 3.37 Đặc tả use case UC29 – Nhận hàng chuyển kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.uhf65zlk12cy",
+"parts": [
+"Bảng 3.38 Đặc tả use case UC30 – Kiểm đếm theo phiếu kiểm kê"
+],
+"search": "Bảng 3.38 Đặc tả use case UC30 – Kiểm đếm theo phiếu kiểm kê"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.7j4bkfpxjfze",
+"parts": [
+"Bảng 3.39 Đặc tả use case UC31 – Báo cáo sự cố kho"
+],
+"search": "Bảng 3.39 Đặc tả use case UC31 – Báo cáo sự cố kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.nlnu75ikgrqt",
+"parts": [
+"Bảng 3.40 Đặc tả use case UC32 – Duyệt yêu cầu mua hàng"
+],
+"search": "Bảng 3.40 Đặc tả use case UC32 – Duyệt yêu cầu mua hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.auhmzil00rqi",
+"parts": [
+"Bảng 3.41 Đặc tả use case UC33 – Lập và trình duyệt đơn đặt hàng"
+],
+"search": "Bảng 3.41 Đặc tả use case UC33 – Lập và trình duyệt đơn đặt hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.76zod041gn75",
+"parts": [
+"Bảng 3.42 Đặc tả use case UC34 – Duyệt và gửi đơn đặt hàng cho nhà cung cấp"
+],
+"search": "Bảng 3.42 Đặc tả use case UC34 – Duyệt và gửi đơn đặt hàng cho nhà cung cấp"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.udvmmobuhyxl",
+"parts": [
+"Bảng 3.43 Đặc tả use case UC35 – Lập và ghi sổ phiếu nhập kho"
+],
+"search": "Bảng 3.43 Đặc tả use case UC35 – Lập và ghi sổ phiếu nhập kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.p9uw023xsadv",
+"parts": [
+"Bảng 3.44 Đặc tả use case UC36 – Nhập kho thông minh bằng OCR hóa đơn"
+],
+"search": "Bảng 3.44 Đặc tả use case UC36 – Nhập kho thông minh bằng OCR hóa đơn"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.so9nbotbj53s",
+"parts": [
+"Bảng 3.45 Đặc tả use case UC37 – Đối soát đơn hàng và xử lý thiếu hàng"
+],
+"search": "Bảng 3.45 Đặc tả use case UC37 – Đối soát đơn hàng và xử lý thiếu hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.7nd103lcn7i6",
+"parts": [
+"Bảng 3.46 Đặc tả use case UC38 – Quản lý nhà cung cấp"
+],
+"search": "Bảng 3.46 Đặc tả use case UC38 – Quản lý nhà cung cấp"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.klozdtc3567u",
+"parts": [
+"Bảng 3.47 Đặc tả use case UC39 – Quản lý kho và vị trí lưu trữ"
+],
+"search": "Bảng 3.47 Đặc tả use case UC39 – Quản lý kho và vị trí lưu trữ"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.3rvmp7mki1vb",
+"parts": [
+"Bảng 3.48 Đặc tả use case UC40 – Lập và duyệt phiếu kiểm kê"
+],
+"search": "Bảng 3.48 Đặc tả use case UC40 – Lập và duyệt phiếu kiểm kê"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.tpzpe0hxibqc",
+"parts": [
+"Bảng 3.49 Đặc tả use case UC41 – Tạo và duyệt yêu cầu xuất kho, chuyển kho"
+],
+"search": "Bảng 3.49 Đặc tả use case UC41 – Tạo và duyệt yêu cầu xuất kho, chuyển kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.llbkemyssze8",
+"parts": [
+"Bảng 3.50 Đặc tả use case UC42 – Điều phối công việc và xử lý sự cố kho"
+],
+"search": "Bảng 3.50 Đặc tả use case UC42 – Điều phối công việc và xử lý sự cố kho"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.hzn599bizv5",
+"parts": [
+"Bảng 3.51 Đặc tả use case UC43 – Quản lý danh mục sách và biến thể"
+],
+"search": "Bảng 3.51 Đặc tả use case UC43 – Quản lý danh mục sách và biến thể"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.e9z46rspm2d5",
+"parts": [
+"Bảng 3.52 Đặc tả use case UC44 – Biên mục sách từ ISBN với AI"
+],
+"search": "Bảng 3.52 Đặc tả use case UC44 – Biên mục sách từ ISBN với AI"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.bbvf25e7ta4r",
+"parts": [
+"Bảng 3.53 Đặc tả use case UC45 – Kiểm tra trùng lặp ấn phẩm"
+],
+"search": "Bảng 3.53 Đặc tả use case UC45 – Kiểm tra trùng lặp ấn phẩm"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.3xiiejn3r55o",
+"parts": [
+"Bảng 3.54 Đặc tả use case UC46 – Xem bảng điều khiển và báo cáo vận hành"
+],
+"search": "Bảng 3.54 Đặc tả use case UC46 – Xem bảng điều khiển và báo cáo vận hành"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.osnxy3zc3vws",
+"parts": [
+"Bảng 3.55 Đặc tả use case UC47 – Xem đề xuất nhập hàng theo dự báo nhu cầu"
+],
+"search": "Bảng 3.55 Đặc tả use case UC47 – Xem đề xuất nhập hàng theo dự báo nhu cầu"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.6r7ker7t2q50",
+"parts": [
+"Bảng 3.56 Đặc tả use case UC48 – Xem gợi ý thanh lý sách tồn đọng"
+],
+"search": "Bảng 3.56 Đặc tả use case UC48 – Xem gợi ý thanh lý sách tồn đọng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.p8d98cslyjwu",
+"parts": [
+"Bảng 3.57 Đặc tả use case UC49 – Hỏi đáp với trợ lý AI hỗ trợ ra quyết định"
+],
+"search": "Bảng 3.57 Đặc tả use case UC49 – Hỏi đáp với trợ lý AI hỗ trợ ra quyết định"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.sabtjepbxopt",
+"parts": [
+"Bảng 3.58 Đặc tả use case UC50 – Xác nhận hành động do AI đề xuất"
+],
+"search": "Bảng 3.58 Đặc tả use case UC50 – Xác nhận hành động do AI đề xuất"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ju9o52y3tv55",
+"parts": [
+"Bảng 3.59 Đặc tả use case UC51 – Duyệt bản tin tổng hợp hằng đêm"
+],
+"search": "Bảng 3.59 Đặc tả use case UC51 – Duyệt bản tin tổng hợp hằng đêm"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ygvh3wtf6i50",
+"parts": [
+"Bảng 3.60 Đặc tả use case UC52 – Hỏi đáp nghiệp vụ với chatbot"
+],
+"search": "Bảng 3.60 Đặc tả use case UC52 – Hỏi đáp nghiệp vụ với chatbot"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.yn69qt82erpc",
+"parts": [
+"Bảng 3.61 Đặc tả use case UC53 – Quản lý người dùng"
+],
+"search": "Bảng 3.61 Đặc tả use case UC53 – Quản lý người dùng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ko96kjfb0etu",
+"parts": [
+"Bảng 3.62 Đặc tả use case UC54 – Quản lý vai trò và quyền"
+],
+"search": "Bảng 3.62 Đặc tả use case UC54 – Quản lý vai trò và quyền"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.xinkrdq1y08c",
+"parts": [
+"Bảng 3.63 Đặc tả use case UC55 – Xem dự báo rủi ro trả trễ và không đến nhận"
+],
+"search": "Bảng 3.63 Đặc tả use case UC55 – Xem dự báo rủi ro trả trễ và không đến nhận"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.mqlqogjniyt",
+"parts": [
+"Bảng 3.64 Đặc tả use case UC56 – Xem nhật ký kiểm toán"
+],
+"search": "Bảng 3.64 Đặc tả use case UC56 – Xem nhật ký kiểm toán"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.df3087bd348y",
+"parts": [
+"Bảng 3.65 Đặc tả use case UC57 – Giám sát tình trạng hệ thống"
+],
+"search": "Bảng 3.65 Đặc tả use case UC57 – Giám sát tình trạng hệ thống"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.d6uw43qmfohr",
+"parts": [
+"Bảng 3.66 Đặc tả use case UC58 – Xem và xác nhận đơn đặt hàng"
+],
+"search": "Bảng 3.66 Đặc tả use case UC58 – Xem và xác nhận đơn đặt hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.oglecyntyp10",
+"parts": [
+"Bảng 3.67 Đặc tả use case UC59 – Gửi hóa đơn giao hàng"
+],
+"search": "Bảng 3.67 Đặc tả use case UC59 – Gửi hóa đơn giao hàng"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.6wyd199n2v3p",
+"parts": [
+"Bảng 3.68 Đặc tả use case UC60 – Phản hồi báo cáo thiếu hàng và giao bù"
+],
+"search": "Bảng 3.68 Đặc tả use case UC60 – Phản hồi báo cáo thiếu hàng và giao bù"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.6t2gj11avjjm",
+"parts": [
+"Bảng 3.69 Đặc tả use case UC61 – Tự động xử lý quá hạn và hết hạn giữ chỗ"
+],
+"search": "Bảng 3.69 Đặc tả use case UC61 – Tự động xử lý quá hạn và hết hạn giữ chỗ"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.jdstsvc6sxnu",
+"parts": [
+"Bảng 3.70 Đặc tả use case UC62 – Nhắc hạn trả theo mức rủi ro"
+],
+"search": "Bảng 3.70 Đặc tả use case UC62 – Nhắc hạn trả theo mức rủi ro"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rhql3sn1muet",
+"parts": [
+"CHƯƠNG 4",
+"THIẾT KẾ HỆ THỐNG"
+],
+"search": "THIẾT KẾ HỆ THỐNG"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.mlqhw4v1r6ye",
+"parts": [
+"4.1",
+"Kiến trúc tổng thể"
+],
+"search": "Kiến trúc tổng thể"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.no6sq16mgomw",
+"parts": [
+"4.1.1",
+"Các lớp và thành phần"
+],
+"search": "Các lớp và thành phần"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.cflmfhzhqub5",
+"parts": [
+"Hình 4.1 Kiến trúc tổng thể của hệ thống SmartBook"
+],
+"search": "Hình 4.1 Kiến trúc tổng thể của hệ thống SmartBook"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.g4orzkgiw51l",
+"parts": [
+"4.1.2",
+"Định tuyến tại API Gateway"
+],
+"search": "Định tuyến tại API Gateway"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.tnvsqnsvyvzs",
+"parts": [
+"Bảng 4.1 Bảng định tuyến của API Gateway"
+],
+"search": "Bảng 4.1 Bảng định tuyến của API Gateway"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.wlegoud8lgeu",
+"parts": [
+"4.1.3",
+"Giao tiếp giữa các service"
+],
+"search": "Giao tiếp giữa các service"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.terkwp3zheh",
+"parts": [
+"Bảng 4.2 Các điểm tích hợp giữa các service"
+],
+"search": "Bảng 4.2 Các điểm tích hợp giữa các service"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.lbcpg6p4ghy4",
+"parts": [
+"4.1.4",
+"Kiến trúc triển khai"
+],
+"search": "Kiến trúc triển khai"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.s9k8xvyn1v0d",
+"parts": [
+"Hình 4.2 Sơ đồ triển khai production trên VPS bằng Docker Compose"
+],
+"search": "Hình 4.2 Sơ đồ triển khai production trên VPS bằng Docker Compose"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.jbbs2y2tw74x",
+"parts": [
+"4.2",
+"Thiết kế xác thực và phân quyền"
+],
+"search": "Thiết kế xác thực và phân quyền"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.a04h5s9ungny",
+"parts": [
+"4.2.1",
+"Xác thực"
+],
+"search": "Xác thực"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.5qemfph2gbrp",
+"parts": [
+"4.2.2",
+"Phân quyền theo vai trò và quyền"
+],
+"search": "Phân quyền theo vai trò và quyền"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.28mcpg3qpkkp",
+"parts": [
+"Bảng 4.3 Phạm vi quyền của các vai trò"
+],
+"search": "Bảng 4.3 Phạm vi quyền của các vai trò"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.qy2qc4wi11rq",
+"parts": [
+"4.2.3",
+"Phân quyền cho thành phần AI"
+],
+"search": "Phân quyền cho thành phần AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.x3xdkdxo90l9",
+"parts": [
+"4.3",
+"Mô hình miền"
+],
+"search": "Mô hình miền"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.b6m5dacgvo2u",
+"parts": [
+"Hình 4.3 Mô hình miền nhóm danh mục và kho vận"
+],
+"search": "Hình 4.3 Mô hình miền nhóm danh mục và kho vận"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.4qsjexypysvl",
+"parts": [
+"Hình 4.4 Mô hình miền nhóm người dùng, lưu thông và AI"
+],
+"search": "Hình 4.4 Mô hình miền nhóm người dùng, lưu thông và AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.qfexeen8bq49",
+"parts": [
+"4.4",
+"Thiết kế tương tác"
+],
+"search": "Thiết kế tương tác"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.qqmhdc9qyieg",
+"parts": [
+"4.4.1",
+"Đăng nhập và kiểm tra quyền"
+],
+"search": "Đăng nhập và kiểm tra quyền"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.enamlht374u",
+"parts": [
+"Hình 4.5 Sơ đồ tuần tự đăng nhập, OTP hai lớp và kiểm tra quyền: (a) kiểm tra mật khẩu; (b) gửi và nhập mã OTP; (c) cấp phiên"
+],
+"search": "Hình 4.5 Sơ đồ tuần tự đăng nhập, OTP hai lớp và kiểm tra quyền: (a) kiểm tra mật khẩu; (b) gửi và nhập mã OTP; (c) cấp phiên"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900002",
+"parts": [
+"4.4.2",
+"Đăng ký tài khoản và xác thực email bằng OTP"
+],
+"search": "Đăng ký tài khoản và xác thực email bằng OTP"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900003",
+"parts": [
+"Hình 4.6 Sơ đồ tuần tự đăng ký tài khoản và xác thực email bằng OTP: (a) đăng ký và gửi mã; (b) gửi lại mã; (c) xác minh mã"
+],
+"search": "Hình 4.6 Sơ đồ tuần tự đăng ký tài khoản và xác thực email bằng OTP: (a) đăng ký và gửi mã; (b) gửi lại mã; (c) xác minh mã"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.muac8o91zzso",
+"parts": [
+"4.4.3",
+"Đặt giữ sách"
+],
+"search": "Đặt giữ sách"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.5k908u56lcwg",
+"parts": [
+"Hình 4.7 Sơ đồ tuần tự đặt giữ sách"
+],
+"search": "Hình 4.7 Sơ đồ tuần tự đặt giữ sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.s4q5mmclgoga",
+"parts": [
+"4.4.4",
+"Nhận sách bằng mã và chuyển thành phiếu mượn"
+],
+"search": "Nhận sách bằng mã và chuyển thành phiếu mượn"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.hgmm9l1r501k",
+"parts": [
+"Hình 4.8 Sơ đồ tuần tự nhận sách bằng mã và chuyển thành phiếu mượn"
+],
+"search": "Hình 4.8 Sơ đồ tuần tự nhận sách bằng mã và chuyển thành phiếu mượn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.dvcgrcmw3wj2",
+"parts": [
+"4.4.5",
+"Trả sách và tính phí phạt"
+],
+"search": "Trả sách và tính phí phạt"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.yu9bk0hch1cj",
+"parts": [
+"Hình 4.9 Sơ đồ tuần tự trả sách và tính phí phạt"
+],
+"search": "Hình 4.9 Sơ đồ tuần tự trả sách và tính phí phạt"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.8mt4s6qhapsg",
+"parts": [
+"4.4.6",
+"Thanh toán phí phạt qua VNPay"
+],
+"search": "Thanh toán phí phạt qua VNPay"
+},
+{
+"kind": "fig",
+"anchor": "_sb_950018",
+"parts": [
+"Hình 4.10 Sơ đồ tuần tự thanh toán phí phạt qua VNPay: (a) tạo liên kết thanh toán; (b) xác nhận qua Return URL và IPN"
+],
+"search": "Hình 4.10 Sơ đồ tuần tự thanh toán phí phạt qua VNPay: (a) tạo liên kết thanh toán; (b) xác nhận qua Return URL và IPN"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.33fkwq56g1is",
+"parts": [
+"4.4.7",
+"Lập, duyệt và gửi đơn đặt hàng"
+],
+"search": "Lập, duyệt và gửi đơn đặt hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.kjk0a9b6nvk2",
+"parts": [
+"Hình 4.11 Sơ đồ tuần tự lập, duyệt và gửi đơn đặt hàng"
+],
+"search": "Hình 4.11 Sơ đồ tuần tự lập, duyệt và gửi đơn đặt hàng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.630q80p3y1d6",
+"parts": [
+"4.4.8",
+"Nhận hàng và ghi sổ phiếu nhập"
+],
+"search": "Nhận hàng và ghi sổ phiếu nhập"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.r3mc13mjoxst",
+"parts": [
+"Hình 4.12 Sơ đồ tuần tự nhận hàng và ghi sổ phiếu nhập"
+],
+"search": "Hình 4.12 Sơ đồ tuần tự nhận hàng và ghi sổ phiếu nhập"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.v1k883v0ihit",
+"parts": [
+"4.4.9",
+"Xếp kệ với gợi ý vị trí"
+],
+"search": "Xếp kệ với gợi ý vị trí"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.vxfsqz78oery",
+"parts": [
+"Hình 4.13 Sơ đồ tuần tự xếp kệ với gợi ý vị trí"
+],
+"search": "Hình 4.13 Sơ đồ tuần tự xếp kệ với gợi ý vị trí"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rdoaikaq0oxq",
+"parts": [
+"4.4.10",
+"Đóng gói có bằng chứng hình ảnh"
+],
+"search": "Đóng gói có bằng chứng hình ảnh"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.s92j6qvgnws6",
+"parts": [
+"Hình 4.14 Sơ đồ tuần tự đóng gói có bằng chứng hình ảnh"
+],
+"search": "Hình 4.14 Sơ đồ tuần tự đóng gói có bằng chứng hình ảnh"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.zcf143s9wab",
+"parts": [
+"4.4.11",
+"Biên mục sách với trích xuất thông tin bằng AI"
+],
+"search": "Biên mục sách với trích xuất thông tin bằng AI"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.c86jy05fw0w7",
+"parts": [
+"Hình 4.15 Sơ đồ tuần tự biên mục sách với trích xuất thông tin bằng AI"
+],
+"search": "Hình 4.15 Sơ đồ tuần tự biên mục sách với trích xuất thông tin bằng AI"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900004",
+"parts": [
+"4.4.12",
+"Nhập sách bằng OCR nhiều ảnh"
+],
+"search": "Nhập sách bằng OCR nhiều ảnh"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900005",
+"parts": [
+"Hình 4.16 Sơ đồ tuần tự nhập sách bằng OCR nhiều ảnh: (a) kiểm tra quyền và đọc ảnh; (b) đối chiếu, duyệt và lưu"
+],
+"search": "Hình 4.16 Sơ đồ tuần tự nhập sách bằng OCR nhiều ảnh: (a) kiểm tra quyền và đọc ảnh; (b) đối chiếu, duyệt và lưu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.g3dswdumt4z7",
+"parts": [
+"4.4.13",
+"Tìm sách bằng ảnh bìa"
+],
+"search": "Tìm sách bằng ảnh bìa"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.vys8ty2msv8w",
+"parts": [
+"Hình 4.17 Sơ đồ tuần tự tìm sách bằng ảnh bìa"
+],
+"search": "Hình 4.17 Sơ đồ tuần tự tìm sách bằng ảnh bìa"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.pgg6xuu36m22",
+"parts": [
+"4.4.14",
+"Đề xuất nhập hàng"
+],
+"search": "Đề xuất nhập hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.uv71v73ve372",
+"parts": [
+"Hình 4.18 Sơ đồ tuần tự đề xuất nhập hàng và phân bổ ngân sách: (a) yêu cầu và phạm vi kho; (b) dự báo và phân bổ ngân sách"
+],
+"search": "Hình 4.18 Sơ đồ tuần tự đề xuất nhập hàng và phân bổ ngân sách: (a) yêu cầu và phạm vi kho; (b) dự báo và phân bổ ngân sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.nx8ddmx5c44w",
+"parts": [
+"4.4.15",
+"Trợ lý phân tích gọi công cụ"
+],
+"search": "Trợ lý phân tích gọi công cụ"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.c7q44l9rvikv",
+"parts": [
+"Hình 4.19 Sơ đồ tuần tự Trợ lý AI: (a) kiểm tra vai trò và lập kế hoạch; (b) bằng chứng, câu trả lời và kiểm chứng; (c) lưu hội thoại và trả kết quả"
+],
+"search": "Hình 4.19 Sơ đồ tuần tự Trợ lý AI: (a) kiểm tra vai trò và lập kế hoạch; (b) bằng chứng, câu trả lời và kiểm chứng; (c) lưu hội thoại và trả kết quả"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.j2he0x1zksnd",
+"parts": [
+"4.4.16",
+"Xác nhận hành động do AI đề xuất"
+],
+"search": "Xác nhận hành động do AI đề xuất"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.a669cap0xss9",
+"parts": [
+"Hình 4.20 Sơ đồ tuần tự xác nhận hành động do AI đề xuất"
+],
+"search": "Hình 4.20 Sơ đồ tuần tự xác nhận hành động do AI đề xuất"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.v3x57hxbmiqy",
+"parts": [
+"4.4.17",
+"Bản tin tổng hợp hằng đêm"
+],
+"search": "Bản tin tổng hợp hằng đêm"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.g9i01ccjfyzl",
+"parts": [
+"Hình 4.21 Sơ đồ tuần tự bản tin tổng hợp hằng đêm"
+],
+"search": "Hình 4.21 Sơ đồ tuần tự bản tin tổng hợp hằng đêm"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.wdeqlq4t6p4d",
+"parts": [
+"4.4.18",
+"Nhắc hạn trả theo mức rủi ro"
+],
+"search": "Nhắc hạn trả theo mức rủi ro"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.tnf2wl3pq6m",
+"parts": [
+"Hình 4.22 Sơ đồ tuần tự nhắc hạn trả theo mức rủi ro"
+],
+"search": "Hình 4.22 Sơ đồ tuần tự nhắc hạn trả theo mức rủi ro"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fpgtn1pjn3mc",
+"parts": [
+"4.5",
+"Thiết kế cơ sở dữ liệu"
+],
+"search": "Thiết kế cơ sở dữ liệu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.i6x6khjaikco",
+"parts": [
+"4.5.1",
+"Tổng quan"
+],
+"search": "Tổng quan"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.epugrthgmgy8",
+"parts": [
+"Bảng 4.4 Các cơ sở dữ liệu của hệ thống"
+],
+"search": "Bảng 4.4 Các cơ sở dữ liệu của hệ thống"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.lw7mmt471ss",
+"parts": [
+"4.5.2",
+"Sơ đồ thực thể – quan hệ"
+],
+"search": "Sơ đồ thực thể – quan hệ"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.bpktbrl6axu0",
+"parts": [
+"Hình 4.23 ERD auth_db: (a) tài khoản, vai trò, quyền và phạm vi kho; (b) token và mã OTP"
+],
+"search": "Hình 4.23 ERD auth_db: (a) tài khoản, vai trò, quyền và phạm vi kho; (b) token và mã OTP"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.42lusotmh4g6",
+"parts": [
+"Hình 4.24 ERD auth_db – token và nhật ký"
+],
+"search": "Hình 4.24 ERD auth_db – token và nhật ký"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.e541572ggmdp",
+"parts": [
+"Hình 4.25 ERD inventory_db – danh mục sách"
+],
+"search": "Hình 4.25 ERD inventory_db – danh mục sách"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.2rinov3vo0di",
+"parts": [
+"Hình 4.26 ERD inventory_db – đối soát metadata và trùng lặp"
+],
+"search": "Hình 4.26 ERD inventory_db – đối soát metadata và trùng lặp"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.kr5xwq5rtnrj",
+"parts": [
+"Hình 4.27 ERD inventory_db – kho, vị trí và tồn kho"
+],
+"search": "Hình 4.27 ERD inventory_db – kho, vị trí và tồn kho"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.dpsidijn6lu6",
+"parts": [
+"Hình 4.28 ERD inventory_db – kiểm kê, công việc và sự cố"
+],
+"search": "Hình 4.28 ERD inventory_db – kiểm kê, công việc và sự cố"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.gr5u7v8weyeu",
+"parts": [
+"Hình 4.29 ERD inventory_db – yêu cầu mua và đơn đặt hàng"
+],
+"search": "Hình 4.29 ERD inventory_db – yêu cầu mua và đơn đặt hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.hydeskk1bov0",
+"parts": [
+"Hình 4.30 ERD inventory_db – hóa đơn, nhận hàng và thiếu hàng"
+],
+"search": "Hình 4.30 ERD inventory_db – hóa đơn, nhận hàng và thiếu hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.66pyja7h5yte",
+"parts": [
+"Hình 4.31 ERD inventory_db – xuất kho, lấy hàng và đóng gói"
+],
+"search": "Hình 4.31 ERD inventory_db – xuất kho, lấy hàng và đóng gói"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.etew0dhn109e",
+"parts": [
+"Hình 4.32 ERD inventory_db – chuyển kho"
+],
+"search": "Hình 4.32 ERD inventory_db – chuyển kho"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.cu0hpa44oi54",
+"parts": [
+"Hình 4.33 ERD borrow_db – bạn đọc, hội viên và lưu thông"
+],
+"search": "Hình 4.33 ERD borrow_db – bạn đọc, hội viên và lưu thông"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.kd4qtj1ffkzy",
+"parts": [
+"Hình 4.34 ERD borrow_db – phí phạt, thanh toán và ví"
+],
+"search": "Hình 4.34 ERD borrow_db – phí phạt, thanh toán và ví"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.tk3xuyumpzc0",
+"parts": [
+"Hình 4.35 ERD borrow_db – thông báo và tương tác"
+],
+"search": "Hình 4.35 ERD borrow_db – thông báo và tương tác"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.qxhn2p63il7o",
+"parts": [
+"Hình 4.36 ERD ai_db"
+],
+"search": "Hình 4.36 ERD ai_db"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.yi0yc6e02t6u",
+"parts": [
+"4.5.3",
+"Đặc tả các bảng chính"
+],
+"search": "Đặc tả các bảng chính"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.rinns9l69v0a",
+"parts": [
+"Bảng 4.5 Đặc tả bảng users (auth_db)"
+],
+"search": "Bảng 4.5 Đặc tả bảng users (auth_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.u9287zeq4i1r",
+"parts": [
+"Bảng 4.6 Đặc tả bảng books (inventory_db)"
+],
+"search": "Bảng 4.6 Đặc tả bảng books (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.xqk4fwiiq1c3",
+"parts": [
+"Bảng 4.7 Đặc tả bảng book_variants (inventory_db)"
+],
+"search": "Bảng 4.7 Đặc tả bảng book_variants (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.p9q25fotd3c2",
+"parts": [
+"Bảng 4.8 Đặc tả bảng stock_balances (inventory_db)"
+],
+"search": "Bảng 4.8 Đặc tả bảng stock_balances (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.jkxlt5eztqku",
+"parts": [
+"Bảng 4.9 Đặc tả bảng stock_movements (inventory_db)"
+],
+"search": "Bảng 4.9 Đặc tả bảng stock_movements (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.usjmqyuj7c7",
+"parts": [
+"Bảng 4.10 Đặc tả bảng purchase_orders (inventory_db)"
+],
+"search": "Bảng 4.10 Đặc tả bảng purchase_orders (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.c8tdw9bo1nm8",
+"parts": [
+"Bảng 4.11 Đặc tả bảng goods_receipts (inventory_db)"
+],
+"search": "Bảng 4.11 Đặc tả bảng goods_receipts (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.eex9jcxhd101",
+"parts": [
+"Bảng 4.12 Đặc tả bảng integration_outbox (inventory_db)"
+],
+"search": "Bảng 4.12 Đặc tả bảng integration_outbox (inventory_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ob1jgbf7n6o",
+"parts": [
+"Bảng 4.13 Đặc tả bảng loan_reservations (borrow_db)"
+],
+"search": "Bảng 4.13 Đặc tả bảng loan_reservations (borrow_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.5q6wycbs5wgh",
+"parts": [
+"Bảng 4.14 Đặc tả bảng loan_items (borrow_db)"
+],
+"search": "Bảng 4.14 Đặc tả bảng loan_items (borrow_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ps43sgugrlhj",
+"parts": [
+"Bảng 4.15 Đặc tả bảng fines (borrow_db)"
+],
+"search": "Bảng 4.15 Đặc tả bảng fines (borrow_db)"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.chwr7fq58co2",
+"parts": [
+"Bảng 4.16 Đặc tả bảng ai_pending_actions (ai_db)"
+],
+"search": "Bảng 4.16 Đặc tả bảng ai_pending_actions (ai_db)"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.kkgs5nfh1mnf",
+"parts": [
+"4.6",
+"Thiết kế giao diện"
+],
+"search": "Thiết kế giao diện"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.vs1ei042ykzi",
+"parts": [
+"4.6.1",
+"Nguyên tắc thiết kế"
+],
+"search": "Nguyên tắc thiết kế"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900006",
+"parts": [
+"4.6.2",
+"Đăng nhập, đăng ký và xác thực OTP"
+],
+"search": "Đăng nhập, đăng ký và xác thực OTP"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900007",
+"parts": [
+"Hình 4.37 Trang đăng nhập dành cho nhân viên"
+],
+"search": "Hình 4.37 Trang đăng nhập dành cho nhân viên"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900008",
+"parts": [
+"Hình 4.38 Bước xác thực email bằng mã OTP sau khi đăng ký"
+],
+"search": "Hình 4.38 Bước xác thực email bằng mã OTP sau khi đăng ký"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.gwlzdxkkdpt4",
+"parts": [
+"4.6.3",
+"Website công khai và cổng bạn đọc"
+],
+"search": "Website công khai và cổng bạn đọc"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.c80qyxa1m6h6",
+"parts": [
+"Hình 4.39 Trang chủ website công khai"
+],
+"search": "Hình 4.39 Trang chủ website công khai"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.bcg7jza3z8ma",
+"parts": [
+"Hình 4.40 Trang chi tiết sách trên website công khai"
+],
+"search": "Hình 4.40 Trang chi tiết sách trên website công khai"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.ojw0qbc04nnv",
+"parts": [
+"Hình 4.41 Trang tổng quan của cổng bạn đọc"
+],
+"search": "Hình 4.41 Trang tổng quan của cổng bạn đọc"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.ao6y7sizbp8z",
+"parts": [
+"Hình 4.42 Tìm sách bằng ảnh bìa"
+],
+"search": "Hình 4.42 Tìm sách bằng ảnh bìa"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.pxghcp77yl0c",
+"parts": [
+"Hình 4.43 Gợi ý sách cá nhân hóa kèm lý do"
+],
+"search": "Hình 4.43 Gợi ý sách cá nhân hóa kèm lý do"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.m4cwm0vz2ao0",
+"parts": [
+"4.6.4",
+"Giao diện thủ thư"
+],
+"search": "Giao diện thủ thư"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.9uoqxy22werw",
+"parts": [
+"Hình 4.44 Màn hình tổng quan mượn trả của thủ thư"
+],
+"search": "Hình 4.44 Màn hình tổng quan mượn trả của thủ thư"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.qy6fhi9sm02g",
+"parts": [
+"Hình 4.45 Danh sách phiếu đặt giữ"
+],
+"search": "Hình 4.45 Danh sách phiếu đặt giữ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.swmbtem24y39",
+"parts": [
+"4.6.5",
+"Giao diện kho vận và mua hàng"
+],
+"search": "Giao diện kho vận và mua hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.2mwjzwurwhk4",
+"parts": [
+"Hình 4.46 Bảng điều khiển tổng quan của quản lý"
+],
+"search": "Hình 4.46 Bảng điều khiển tổng quan của quản lý"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.wh0j3wrrrwf",
+"parts": [
+"Hình 4.47 Danh sách đơn đặt hàng"
+],
+"search": "Hình 4.47 Danh sách đơn đặt hàng"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.3u0pfpnxw422",
+"parts": [
+"Hình 4.48 Màn hình cất hàng lên kệ"
+],
+"search": "Hình 4.48 Màn hình cất hàng lên kệ"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.67xr6u60v36p",
+"parts": [
+"Hình 4.49 Màn hình đóng gói có quay video bằng chứng"
+],
+"search": "Hình 4.49 Màn hình đóng gói có quay video bằng chứng"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900009",
+"parts": [
+"Hình 4.50 Màn hình Công việc kho của tôi"
+],
+"search": "Hình 4.50 Màn hình Công việc kho của tôi"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900010",
+"parts": [
+"Hình 4.51 Màn hình giao việc cho nhân viên kho"
+],
+"search": "Hình 4.51 Màn hình giao việc cho nhân viên kho"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.9hx5ma36wm90",
+"parts": [
+"4.6.6",
+"Giao diện các chức năng AI"
+],
+"search": "Giao diện các chức năng AI"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.7m3c1oj72850",
+"parts": [
+"Hình 4.52 Màn hình nhập sách qua AI với kết quả đọc ảnh"
+],
+"search": "Hình 4.52 Màn hình nhập sách qua AI với kết quả đọc ảnh"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.7itdr4dazp1s",
+"parts": [
+"Hình 4.53 Màn hình đề xuất nhập hàng và cảnh báo rủi ro"
+],
+"search": "Hình 4.53 Màn hình đề xuất nhập hàng và cảnh báo rủi ro"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.picliz1ctyt8",
+"parts": [
+"Hình 4.54 Màn hình Trợ lý AI trả lời bằng biểu đồ và bằng chứng"
+],
+"search": "Hình 4.54 Màn hình Trợ lý AI trả lời bằng biểu đồ và bằng chứng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.q1tuv11ni3pj",
+"parts": [
+"4.6.7",
+"Giao diện quản trị"
+],
+"search": "Giao diện quản trị"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.fmyrtn7gnol6",
+"parts": [
+"Hình 4.55 Quản lý vai trò và quyền"
+],
+"search": "Hình 4.55 Quản lý vai trò và quyền"
+},
+{
+"kind": "fig",
+"anchor": "_heading=h.ihi6ys5piy5e",
+"parts": [
+"Hình 4.56 Giám sát tình trạng các service"
+],
+"search": "Hình 4.56 Giám sát tình trạng các service"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900011",
+"parts": [
+"4.6.8",
+"Ứng dụng di động"
+],
+"search": "Ứng dụng di động"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900012",
+"parts": [
+"Hình 4.57 Ứng dụng di động – các màn hình của bạn đọc"
+],
+"search": "Hình 4.57 Ứng dụng di động – các màn hình của bạn đọc"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900013",
+"parts": [
+"Hình 4.58 Ứng dụng di động – các màn hình của nhân viên kho"
+],
+"search": "Hình 4.58 Ứng dụng di động – các màn hình của nhân viên kho"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.igby4fdidhat",
+"parts": [
+"CHƯƠNG 5",
+"GIẢI PHÁP CÔNG NGHỆ"
+],
+"search": "GIẢI PHÁP CÔNG NGHỆ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rv2oxse971vj",
+"parts": [
+"5.1",
+"Nguyên tắc tích hợp AI có kiểm soát"
+],
+"search": "Nguyên tắc tích hợp AI có kiểm soát"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.h0gi6pwusbi3",
+"parts": [
+"5.2",
+"Giải pháp hỗ trợ ra quyết định"
+],
+"search": "Giải pháp hỗ trợ ra quyết định"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.d9hj6avpt4pf",
+"parts": [
+"5.2.1",
+"Dự báo nhu cầu có mùa vụ"
+],
+"search": "Dự báo nhu cầu có mùa vụ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.rzoszak69eg0",
+"parts": [
+"5.2.2",
+"Thời gian chờ hàng học từ dữ liệu"
+],
+"search": "Thời gian chờ hàng học từ dữ liệu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.n5jajpdt6qpu",
+"parts": [
+"5.2.3",
+"Tồn kho an toàn, số lượng đề xuất và mức ưu tiên"
+],
+"search": "Tồn kho an toàn, số lượng đề xuất và mức ưu tiên"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.x2eb09eyil27",
+"parts": [
+"Bảng 5.1 Quy tắc gán mức ưu tiên nhập hàng"
+],
+"search": "Bảng 5.1 Quy tắc gán mức ưu tiên nhập hàng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.4me7bfrzfvrq",
+"parts": [
+"5.2.4",
+"Gợi ý thanh lý và điều chuyển"
+],
+"search": "Gợi ý thanh lý và điều chuyển"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.hzubtcvg807z",
+"parts": [
+"5.2.5",
+"Mô hình rủi ro trả trễ và bỏ lỡ đặt giữ"
+],
+"search": "Mô hình rủi ro trả trễ và bỏ lỡ đặt giữ"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.jgvtw7noy7w3",
+"parts": [
+"Bảng 5.2 Đặc trưng của hai mô hình rủi ro"
+],
+"search": "Bảng 5.2 Đặc trưng của hai mô hình rủi ro"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.9b78wqe51rj",
+"parts": [
+"5.2.6",
+"Trợ lý phân tích gọi công cụ"
+],
+"search": "Trợ lý phân tích gọi công cụ"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.vcd7jmqtjuaw",
+"parts": [
+"Bảng 5.3 Các công cụ của trợ lý phân tích"
+],
+"search": "Bảng 5.3 Các công cụ của trợ lý phân tích"
+},
+{
+"kind": "tab",
+"anchor": "_sb_900014",
+"parts": [
+"Bảng 5.4 Các công cụ tổng hợp của Trợ lý AI"
+],
+"search": "Bảng 5.4 Các công cụ tổng hợp của Trợ lý AI"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900015",
+"parts": [
+"Hình 5.1 Kiến trúc xử lý của Trợ lý AI: kế hoạch, bằng chứng, giải thích, kiểm chứng và trực quan hóa"
+],
+"search": "Hình 5.1 Kiến trúc xử lý của Trợ lý AI: kế hoạch, bằng chứng, giải thích, kiểm chứng và trực quan hóa"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900016",
+"parts": [
+"5.2.7",
+"Kiểm chứng câu trả lời của trợ lý"
+],
+"search": "Kiểm chứng câu trả lời của trợ lý"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900017",
+"parts": [
+"5.2.8",
+"Trực quan hóa dữ liệu trong hội thoại"
+],
+"search": "Trực quan hóa dữ liệu trong hội thoại"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.k83tv9t6vzel",
+"parts": [
+"5.2.9",
+"Hành động chờ xác nhận"
+],
+"search": "Hành động chờ xác nhận"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.iuql1cptntd9",
+"parts": [
+"Bảng 5.5 Các loại hành động AI được phép đề xuất"
+],
+"search": "Bảng 5.5 Các loại hành động AI được phép đề xuất"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.66tb158ol52t",
+"parts": [
+"5.3",
+"Giải pháp trích xuất thông tin sách"
+],
+"search": "Giải pháp trích xuất thông tin sách"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.qqpbfax7ts34",
+"parts": [
+"5.3.1",
+"Chuẩn hóa và kiểm tra ISBN"
+],
+"search": "Chuẩn hóa và kiểm tra ISBN"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.h5elnslmqdwn",
+"parts": [
+"5.3.2",
+"Thu thập đa nguồn có ngân sách thời gian"
+],
+"search": "Thu thập đa nguồn có ngân sách thời gian"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.akve8lwuisht",
+"parts": [
+"5.3.3",
+"Hợp nhất bằng chứng theo trường"
+],
+"search": "Hợp nhất bằng chứng theo trường"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.q9hoxls3fnsu",
+"parts": [
+"Bảng 5.6 Độ tin cậy theo phương pháp trích xuất và nhóm phụ thuộc"
+],
+"search": "Bảng 5.6 Độ tin cậy theo phương pháp trích xuất và nhóm phụ thuộc"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.147issamsdho",
+"parts": [
+"5.3.4",
+"Chuẩn hóa thực thể theo danh mục chuẩn"
+],
+"search": "Chuẩn hóa thực thể theo danh mục chuẩn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.xl7hl74o1q90",
+"parts": [
+"5.3.5",
+"Phát hiện trùng lặp và phân biệt ấn bản"
+],
+"search": "Phát hiện trùng lặp và phân biệt ấn bản"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.aehc39b44vmn",
+"parts": [
+"5.3.6",
+"Duyệt từng trường và áp dụng"
+],
+"search": "Duyệt từng trường và áp dụng"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900018",
+"parts": [
+"5.3.7",
+"Nhập sách bằng OCR nhiều ảnh"
+],
+"search": "Nhập sách bằng OCR nhiều ảnh"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.t200z3gn7cfz",
+"parts": [
+"5.3.8",
+"Tìm sách bằng ảnh bìa"
+],
+"search": "Tìm sách bằng ảnh bìa"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.nb5th0dglljf",
+"parts": [
+"5.3.9",
+"Trích xuất hóa đơn nhà cung cấp"
+],
+"search": "Trích xuất hóa đơn nhà cung cấp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.v36figmj5z3x",
+"parts": [
+"5.4",
+"Truy xuất lai và cơ chế từ chối trả lời"
+],
+"search": "Truy xuất lai và cơ chế từ chối trả lời"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.qmdt5eahipct",
+"parts": [
+"5.5",
+"Gợi ý sách cá nhân hóa"
+],
+"search": "Gợi ý sách cá nhân hóa"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.d85omxivpaq2",
+"parts": [
+"CHƯƠNG 6",
+"HIỆN THỰC VÀ TRIỂN KHAI"
+],
+"search": "HIỆN THỰC VÀ TRIỂN KHAI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.s4t3bbpefflx",
+"parts": [
+"6.1",
+"Tổ chức mã nguồn"
+],
+"search": "Tổ chức mã nguồn"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ophupfqcd2d0",
+"parts": [
+"Bảng 6.1 Cấu trúc thư mục chính của mã nguồn"
+],
+"search": "Bảng 6.1 Cấu trúc thư mục chính của mã nguồn"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.joffh1u3ec8y",
+"parts": [
+"6.2",
+"Công nghệ hiện thực"
+],
+"search": "Công nghệ hiện thực"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.9fnej3lrc8ca",
+"parts": [
+"Bảng 6.2 Công nghệ và phiên bản sử dụng"
+],
+"search": "Bảng 6.2 Công nghệ và phiên bản sử dụng"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.i2adgl15ppi1",
+"parts": [
+"6.3",
+"Hiện thực các service"
+],
+"search": "Hiện thực các service"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.xwm5gxo9fjr3",
+"parts": [
+"6.3.1",
+"API Gateway"
+],
+"search": "API Gateway"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1x62rpozpnow",
+"parts": [
+"6.3.2",
+"Các service nghiệp vụ Node.js"
+],
+"search": "Các service nghiệp vụ Node.js"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.iijikdjaw51i",
+"parts": [
+"6.3.3",
+"AI Service"
+],
+"search": "AI Service"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.sxlr6dizcwin",
+"parts": [
+"6.3.4",
+"Ứng dụng web và di động"
+],
+"search": "Ứng dụng web và di động"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.kt8xqx660tl2",
+"parts": [
+"6.4",
+"Các cơ chế bảo đảm tính đúng đắn dữ liệu"
+],
+"search": "Các cơ chế bảo đảm tính đúng đắn dữ liệu"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.6vs8e5cocc6y",
+"parts": [
+"6.4.1",
+"Idempotency"
+],
+"search": "Idempotency"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.85lvqqi1948z",
+"parts": [
+"6.4.2",
+"Giao dịch, khóa và bù trừ"
+],
+"search": "Giao dịch, khóa và bù trừ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.jl4wbvt34838",
+"parts": [
+"6.4.3",
+"Transactional Outbox"
+],
+"search": "Transactional Outbox"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.dliqdcuz01l",
+"parts": [
+"6.4.4",
+"Tác vụ nền"
+],
+"search": "Tác vụ nền"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.lfgyfvrzhn5q",
+"parts": [
+"Bảng 6.3 Các tác vụ nền của hệ thống"
+],
+"search": "Bảng 6.3 Các tác vụ nền của hệ thống"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.s51n40qvpnx8",
+"parts": [
+"6.5",
+"Bảo mật khi hiện thực"
+],
+"search": "Bảo mật khi hiện thực"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.vwm71tbemwih",
+"parts": [
+"6.6",
+"Khả năng quan sát"
+],
+"search": "Khả năng quan sát"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.hqgdih3otsdx",
+"parts": [
+"6.7",
+"Thanh toán phí phạt qua VNPay"
+],
+"search": "Thanh toán phí phạt qua VNPay"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ijowjoy4dz8x",
+"parts": [
+"6.8",
+"Kiểm thử tự động và tích hợp liên tục"
+],
+"search": "Kiểm thử tự động và tích hợp liên tục"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.fvzh71hzamc1",
+"parts": [
+"6.9",
+"Triển khai trên máy cá nhân"
+],
+"search": "Triển khai trên máy cá nhân"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.hl3wxz90lsyt",
+"parts": [
+"Bảng 6.4 Môi trường triển khai và đánh giá"
+],
+"search": "Bảng 6.4 Môi trường triển khai và đánh giá"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900019",
+"parts": [
+"6.10",
+"Triển khai production và phát hành ứng dụng di động"
+],
+"search": "Triển khai production và phát hành ứng dụng di động"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900020",
+"parts": [
+"6.10.1",
+"Hạ tầng và cấu hình"
+],
+"search": "Hạ tầng và cấu hình"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900021",
+"parts": [
+"6.10.2",
+"Quy trình triển khai và quay lui"
+],
+"search": "Quy trình triển khai và quay lui"
+},
+{
+"kind": "fig",
+"anchor": "_sb_900022",
+"parts": [
+"Hình 6.1 Quy trình CI/CD từ mã nguồn đến VPS production"
+],
+"search": "Hình 6.1 Quy trình CI/CD từ mã nguồn đến VPS production"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900023",
+"parts": [
+"6.10.3",
+"Sao lưu, khôi phục và giám sát"
+],
+"search": "Sao lưu, khôi phục và giám sát"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900024",
+"parts": [
+"6.10.4",
+"Phát hành ứng dụng di động"
+],
+"search": "Phát hành ứng dụng di động"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1n4vrrhdkslz",
+"parts": [
+"CHƯƠNG 7",
+"ĐÁNH GIÁ VÀ THẢO LUẬN"
+],
+"search": "ĐÁNH GIÁ VÀ THẢO LUẬN"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.oazn47ok358g",
+"parts": [
+"7.1",
+"Phương pháp và môi trường đánh giá"
+],
+"search": "Phương pháp và môi trường đánh giá"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.9en000gm57n1",
+"parts": [
+"7.2",
+"Kiểm tra chất lượng mã và kiểm thử đơn vị"
+],
+"search": "Kiểm tra chất lượng mã và kiểm thử đơn vị"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.fh6ngdqqzwcj",
+"parts": [
+"Bảng 7.1 Kết quả kiểm thử đơn vị"
+],
+"search": "Bảng 7.1 Kết quả kiểm thử đơn vị"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.3gnd1zsvgx3m",
+"parts": [
+"7.3",
+"Kiểm thử tích hợp"
+],
+"search": "Kiểm thử tích hợp"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.jdhdyw2cexuw",
+"parts": [
+"Bảng 7.2 Kết quả kiểm thử tích hợp"
+],
+"search": "Bảng 7.2 Kết quả kiểm thử tích hợp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.1z7pu1f1nry4",
+"parts": [
+"7.4",
+"Kiểm thử giao diện đầu – cuối"
+],
+"search": "Kiểm thử giao diện đầu – cuối"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ml0dhkm69sbi",
+"parts": [
+"Bảng 7.3 Kết quả kiểm thử giao diện bằng Playwright"
+],
+"search": "Bảng 7.3 Kết quả kiểm thử giao diện bằng Playwright"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.nxf9v2za7hln",
+"parts": [
+"7.5",
+"Kiểm thử tải"
+],
+"search": "Kiểm thử tải"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.h24r53npwmq",
+"parts": [
+"Bảng 7.4 Kết quả kiểm thử tải bằng k6"
+],
+"search": "Bảng 7.4 Kết quả kiểm thử tải bằng k6"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.vei30rqe30jf",
+"parts": [
+"7.6",
+"Đánh giá thành phần AI"
+],
+"search": "Đánh giá thành phần AI"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.box8ekub03a6",
+"parts": [
+"7.6.1",
+"Khả năng chọn công cụ của trợ lý"
+],
+"search": "Khả năng chọn công cụ của trợ lý"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.ig8son4whuy1",
+"parts": [
+"Bảng 7.5 Kết quả đánh giá khả năng chọn công cụ"
+],
+"search": "Bảng 7.5 Kết quả đánh giá khả năng chọn công cụ"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.tfijxbqfdomm",
+"parts": [
+"7.6.2",
+"Chất lượng câu trả lời đầu – cuối"
+],
+"search": "Chất lượng câu trả lời đầu – cuối"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.4hfaasssdsj3",
+"parts": [
+"Bảng 7.6 Kết quả đánh giá chất lượng câu trả lời của trợ lý"
+],
+"search": "Bảng 7.6 Kết quả đánh giá chất lượng câu trả lời của trợ lý"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900025",
+"parts": [
+"7.6.3",
+"Kiểm chứng câu trả lời của Copilot"
+],
+"search": "Kiểm chứng câu trả lời của Copilot"
+},
+{
+"kind": "tab",
+"anchor": "_sb_900026",
+"parts": [
+"Bảng 7.7 Khả năng phát hiện lỗi của bộ kiểm chứng trên tập kiểm thử (44 lượt, 19 lượt có lỗi)"
+],
+"search": "Bảng 7.7 Khả năng phát hiện lỗi của bộ kiểm chứng trên tập kiểm thử (44 lượt, 19 lượt có lỗi)"
+},
+{
+"kind": "tab",
+"anchor": "_sb_900027",
+"parts": [
+"Bảng 7.8 Câu trả lời cuối của trợ lý trên tập kiểm thử qua ba lần chạy thật"
+],
+"search": "Bảng 7.8 Câu trả lời cuối của trợ lý trên tập kiểm thử qua ba lần chạy thật"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900028",
+"parts": [
+"7.6.4",
+"Hiểu ngôn ngữ tự nhiên của bộ lập kế hoạch"
+],
+"search": "Hiểu ngôn ngữ tự nhiên của bộ lập kế hoạch"
+},
+{
+"kind": "tab",
+"anchor": "_sb_900029",
+"parts": [
+"Bảng 7.9 Kết quả của bộ lập kế hoạch trên tập kiểm thử đóng băng"
+],
+"search": "Bảng 7.9 Kết quả của bộ lập kế hoạch trên tập kiểm thử đóng băng"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900030",
+"parts": [
+"7.6.5",
+"Trực quan hóa dữ liệu trong trợ lý"
+],
+"search": "Trực quan hóa dữ liệu trong trợ lý"
+},
+{
+"kind": "tab",
+"anchor": "_sb_900031",
+"parts": [
+"Bảng 7.10 Kết quả đánh giá trực quan hóa trong trợ lý"
+],
+"search": "Bảng 7.10 Kết quả đánh giá trực quan hóa trong trợ lý"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.oqdtshhjr9dk",
+"parts": [
+"7.6.6",
+"Truy xuất lai và cơ chế từ chối trả lời"
+],
+"search": "Truy xuất lai và cơ chế từ chối trả lời"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.qadx4gqs5vza",
+"parts": [
+"Bảng 7.11 Kết quả đánh giá truy xuất lai và từ chối trả lời"
+],
+"search": "Bảng 7.11 Kết quả đánh giá truy xuất lai và từ chối trả lời"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.wol239kjzcgr",
+"parts": [
+"7.6.7",
+"Trích xuất thông tin sách"
+],
+"search": "Trích xuất thông tin sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.9dyex51vtnbo",
+"parts": [
+"Bảng 7.12 Kết quả đánh giá tra cứu ISBN theo hai chế độ"
+],
+"search": "Bảng 7.12 Kết quả đánh giá tra cứu ISBN theo hai chế độ"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.v8xjivf02lp4",
+"parts": [
+"Bảng 7.13 Kết quả đánh giá hợp nhất bằng chứng metadata"
+],
+"search": "Bảng 7.13 Kết quả đánh giá hợp nhất bằng chứng metadata"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900032",
+"parts": [
+"7.6.8",
+"Nhập sách bằng OCR nhiều ảnh"
+],
+"search": "Nhập sách bằng OCR nhiều ảnh"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.lurg191imn3j",
+"parts": [
+"7.6.9",
+"Tìm sách bằng ảnh bìa"
+],
+"search": "Tìm sách bằng ảnh bìa"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.g6z2pd1hksmq",
+"parts": [
+"7.7",
+"Đánh giá các mô hình hỗ trợ ra quyết định"
+],
+"search": "Đánh giá các mô hình hỗ trợ ra quyết định"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ukj74o6hw5bc",
+"parts": [
+"7.7.1",
+"Dữ liệu đánh giá"
+],
+"search": "Dữ liệu đánh giá"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.vkn2x076917",
+"parts": [
+"7.7.2",
+"Mô hình rủi ro"
+],
+"search": "Mô hình rủi ro"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.5i0vk0f5qrke",
+"parts": [
+"Bảng 7.14 Kết quả mô hình rủi ro trên dữ liệu tổng hợp"
+],
+"search": "Bảng 7.14 Kết quả mô hình rủi ro trên dữ liệu tổng hợp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.v3a264chc6vy",
+"parts": [
+"7.7.3",
+"Dự báo nhu cầu"
+],
+"search": "Dự báo nhu cầu"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.e8f43442ybx1",
+"parts": [
+"Bảng 7.15 Kết quả kiểm tra ngược các phương pháp dự báo"
+],
+"search": "Bảng 7.15 Kết quả kiểm tra ngược các phương pháp dự báo"
+},
+{
+"kind": "toc",
+"anchor": "_sb_900033",
+"parts": [
+"7.7.4",
+"Chính sách nhập hàng và phân bổ ngân sách"
+],
+"search": "Chính sách nhập hàng và phân bổ ngân sách"
+},
+{
+"kind": "tab",
+"anchor": "_sb_900034",
+"parts": [
+"Bảng 7.16 Mức đáp ứng nhu cầu (%) trung bình trên 8 hạt giống kiểm định khi cùng ngân sách (dữ liệu tổng hợp)"
+],
+"search": "Bảng 7.16 Mức đáp ứng nhu cầu (%) trung bình trên 8 hạt giống kiểm định khi cùng ngân sách (dữ liệu tổng hợp)"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.5bbpiwfn6i5p",
+"parts": [
+"7.7.5",
+"Gợi ý sách"
+],
+"search": "Gợi ý sách"
+},
+{
+"kind": "tab",
+"anchor": "_heading=h.7lwh0h9r0mbl",
+"parts": [
+"Bảng 7.17 Kết quả đánh giá gợi ý sách V2 trên dữ liệu tổng hợp"
+],
+"search": "Bảng 7.17 Kết quả đánh giá gợi ý sách V2 trên dữ liệu tổng hợp"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.kx5ewm9s7zgs",
+"parts": [
+"7.8",
+"Kiểm thử thanh toán VNPay"
+],
+"search": "Kiểm thử thanh toán VNPay"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.xm7p3auepveu",
+"parts": [
+"7.9",
+"Thảo luận"
+],
+"search": "Thảo luận"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.owh82w3z2zvg",
+"parts": [
+"7.9.1",
+"Ưu điểm"
+],
+"search": "Ưu điểm"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.8co0q4mzqm5k",
+"parts": [
+"7.9.2",
+"Hạn chế của kết quả"
+],
+"search": "Hạn chế của kết quả"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.78woniiqb7g1",
+"parts": [
+"7.9.3",
+"Các vấn đề phát hiện trong quá trình đánh giá"
+],
+"search": "Các vấn đề phát hiện trong quá trình đánh giá"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.s6vptyo5dhsd",
+"parts": [
+"CHƯƠNG 8",
+"KẾT LUẬN"
+],
+"search": "KẾT LUẬN"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.ai930s5mdx1k",
+"parts": [
+"8.1",
+"Kết quả đạt được"
+],
+"search": "Kết quả đạt được"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.wz62qn246x7u",
+"parts": [
+"8.2",
+"Hạn chế"
+],
+"search": "Hạn chế"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.4d4i40v7hhs3",
+"parts": [
+"8.3",
+"Hướng phát triển"
+],
+"search": "Hướng phát triển"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.kbkxqmqtpjqn",
+"parts": [
+"TÀI LIỆU THAM KHẢO"
+],
+"search": "TÀI LIỆU THAM KHẢO"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.w3n5azstdk7e",
+"parts": [
+"PHỤ LỤC A. HƯỚNG DẪN CÀI ĐẶT"
+],
+"search": "PHỤ LỤC A. HƯỚNG DẪN CÀI ĐẶT"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.gixwi4pksl5h",
+"parts": [
+"PHỤ LỤC B. DANH SÁCH API"
+],
+"search": "PHỤ LỤC B. DANH SÁCH API"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.539sv7s50dey",
+"parts": [
+"PHỤ LỤC C. PHÂN CÔNG CÔNG VIỆC"
+],
+"search": "PHỤ LỤC C. PHÂN CÔNG CÔNG VIỆC"
+},
+{
+"kind": "toc",
+"anchor": "_heading=h.b98r2ijul4nq",
+"parts": [
+"NHẬT KÍ LÀM VIỆC"
+],
+"search": "NHẬT KÍ LÀM VIỆC"
+}
+]

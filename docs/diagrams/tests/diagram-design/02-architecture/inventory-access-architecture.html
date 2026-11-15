@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiến trúc kiểm soát truy cập kho</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · Diagram Design · SmartBook · kiểm thử</p>
+    <h1>Kiến trúc kiểm soát truy cập kho</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 784" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="inventory-access-architecture-title inventory-access-architecture-desc">
+<title id="inventory-access-architecture-title">Kiến trúc kiểm soát truy cập kho</title>
+<desc id="inventory-access-architecture-desc">Web App gọi API Gateway; Gateway chuyển /auth, /iam tới Auth Service và /api/* tới Inventory Service; Inventory kiểm tra phạm vi kho qua Auth Service, hai dịch vụ dùng Redis cho token thu hồi và cơ sở dữ liệu riêng trong cùng container PostgreSQL.</desc>
+<defs>
+  <marker id="inventory-access-architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker>
+  <marker id="inventory-access-architecture-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#b45309"/></marker>
+  <marker id="inventory-access-architecture-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2f5597"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- arrows -->
+<path d="M 400 112 V 175" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow-link)"/>
+<path d="M 340 248 V 284 Q 340 292 332 292 H 244 Q 236 292 236 300 V 335" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow-link)"/>
+<path d="M 460 248 V 284 Q 460 292 468 292 H 556 Q 564 292 564 300 V 335" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow-link)"/>
+<path d="M 464 372 H 337" fill="none" stroke="#b45309" stroke-width="1.4" marker-end="url(#inventory-access-architecture-arrow-accent)"/>
+<path d="M 236 408 V 519" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow)"/>
+<path d="M 564 408 V 519" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow)"/>
+<path d="M 296 408 V 444 Q 296 452 304 452 H 380 Q 388 452 388 460 V 519" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow)"/>
+<path d="M 504 408 V 444 Q 504 452 496 452 H 420 Q 412 452 412 460 V 519" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#inventory-access-architecture-arrow)"/>
+<!-- labels -->
+<rect x="412" y="135" width="128" height="18" rx="2" fill="#ffffff"/>
+<text x="476.0" y="148" fill="#2f5597" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">REST · Bearer JWT</text>
+<rect x="242" y="266" width="92" height="18" rx="2" fill="#ffffff"/>
+<text x="288" y="279" fill="#2f5597" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/auth · /iam</text>
+<rect x="486" y="266" width="52" height="18" rx="2" fill="#ffffff"/>
+<text x="512" y="279" fill="#2f5597" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/*</text>
+<rect x="350" y="346" width="100" height="18" rx="2" fill="#ffffff"/>
+<text x="400" y="359" fill="#b45309" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">① phạm vi kho</text>
+<rect x="192" y="463" width="32" height="18" rx="2" fill="#ffffff"/>
+<text x="208.0" y="476" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">SQL</text>
+<rect x="576" y="463" width="32" height="18" rx="2" fill="#ffffff"/>
+<text x="592.0" y="476" fill="#1f3864" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">SQL</text>
+<rect x="296" y="426" width="88" height="18" rx="2" fill="#ffffff"/>
+<text x="340" y="439" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">ghi thu hồi</text>
+<rect x="416" y="426" width="88" height="18" rx="2" fill="#ffffff"/>
+<text x="460" y="439" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">đọc thu hồi</text>
+<!-- nodes -->
+<rect x="300" y="40" width="200" height="72" rx="6" fill="#ffffff"/>
+<rect x="300" y="40" width="200" height="72" rx="6" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<rect x="308" y="48" width="48" height="16" rx="2" fill="none" stroke="#5b6b82" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="332.0" y="60" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">CLIENT</text>
+<text x="400.0" y="84" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Web App</text>
+<text x="400.0" y="102" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web · React</text>
+<rect x="300" y="176" width="200" height="72" rx="6" fill="#ffffff"/>
+<rect x="300" y="176" width="200" height="72" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<rect x="308" y="184" width="36" height="16" rx="2" fill="none" stroke="#1f3864" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="326.0" y="196" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">EDGE</text>
+<text x="400.0" y="220" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">API Gateway</text>
+<text x="400.0" y="238" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">600 req / 15 phút</text>
+<rect x="136" y="336" width="200" height="72" rx="6" fill="#ffffff"/>
+<rect x="136" y="336" width="200" height="72" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<rect x="144" y="344" width="56" height="16" rx="2" fill="none" stroke="#1f3864" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="172.0" y="356" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">SERVICE</text>
+<text x="236.0" y="380" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Auth Service</text>
+<text x="236.0" y="398" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">auth-service :3002</text>
+<rect x="464" y="336" width="200" height="72" rx="6" fill="#ffffff"/>
+<rect x="464" y="336" width="200" height="72" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<rect x="472" y="344" width="56" height="16" rx="2" fill="none" stroke="#1f3864" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="500.0" y="356" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">SERVICE</text>
+<text x="564.0" y="380" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Inventory Service</text>
+<text x="564.0" y="398" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service :3001</text>
+<rect x="152" y="520" width="168" height="72" rx="6" fill="#ffffff"/>
+<rect x="152" y="520" width="168" height="72" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<rect x="160" y="528" width="44" height="16" rx="2" fill="none" stroke="#475569" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="182.0" y="540" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">STORE</text>
+<text x="236.0" y="564" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">auth_db</text>
+<text x="236.0" y="582" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL 15 · db</text>
+<rect x="340" y="520" width="120" height="72" rx="6" fill="#ffffff"/>
+<rect x="340" y="520" width="120" height="72" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<rect x="348" y="528" width="44" height="16" rx="2" fill="none" stroke="#475569" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="370.0" y="540" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">STORE</text>
+<text x="400.0" y="564" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Redis</text>
+<text x="400.0" y="582" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">redis:7-alpine</text>
+<rect x="480" y="520" width="168" height="72" rx="6" fill="#ffffff"/>
+<rect x="480" y="520" width="168" height="72" rx="6" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<rect x="488" y="528" width="44" height="16" rx="2" fill="none" stroke="#475569" stroke-opacity="0.45" stroke-width="0.8"/>
+<text x="510.0" y="540" fill="#5b6b82" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">STORE</text>
+<text x="564.0" y="564" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">inventory_db</text>
+<text x="564.0" y="582" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL 15 · db</text>
+<!-- callout -->
+<text x="40" y="636" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-style="italic">① Inventory hỏi Auth Service phạm vi kho của người dùng trước mọi thao tác ghi theo kho:</text>
+<text x="40" y="656" fill="#475569" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="start">GET /internal/users/:id/warehouse-scopes · x-internal-service-key · cache 30 s</text>
+<text x="40" y="676" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-style="italic">Không lấy được phạm vi → từ chối yêu cầu (fail-closed), không bao giờ mở toàn bộ kho.</text>
+<!-- legend -->
+<line x1="40" y1="704" x2="760" y2="704" stroke="rgba(31,56,100,0.14)" stroke-width="1"/>
+<line x1="40" y1="724" x2="60" y2="724" stroke="#2f5597" stroke-width="1.4"/>
+<text x="68" y="728" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">HTTP qua Gateway</text>
+<line x1="196" y1="724" x2="216" y2="724" stroke="#475569" stroke-width="1.4"/>
+<text x="224" y="728" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Truy cập dữ liệu</text>
+<line x1="352" y1="724" x2="372" y2="724" stroke="#b45309" stroke-width="1.4"/>
+<text x="380" y="728" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Kiểm tra phạm vi kho</text>
+<rect x="40" y="746" width="20" height="12" rx="2" fill="rgba(71,85,105,0.10)" stroke="#5b6b82" stroke-width="1"/>
+<text x="68" y="756" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Máy khách</text>
+<rect x="152" y="746" width="20" height="12" rx="2" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="180" y="756" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Dịch vụ</text>
+<rect x="248" y="746" width="20" height="12" rx="2" fill="rgba(31,56,100,0.05)" stroke="#475569" stroke-width="1"/>
+<text x="276" y="756" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Lưu trữ</text>
+</svg>
+    </div>
+    <p class="note">Phạm vi: đường đi của một yêu cầu nghiệp vụ kho từ Web App tới dữ liệu. Không gồm borrow/analytics/AI service, RabbitMQ, mobile.</p>
+  </div>
+</body>
+</html>

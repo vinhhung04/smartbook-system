@@ -312,39 +312,39 @@ export function ReorderSuggestionsPage() {
   }, { dependencies: [activeTab], revertOnUpdate: true });
 
   return (
-    <div ref={rootRef} className="mx-auto max-w-[1440px] space-y-5 p-4 pb-10 sm:p-6 lg:p-8">
+    <div ref={rootRef} className="mx-auto max-w-[1440px] space-y-5 p-5 pb-10 sm:p-6 lg:p-8">
       <header data-reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-1.5">
-          <p className="text-[12px] font-medium text-primary">Trung tâm hỗ trợ quyết định</p>
-          <h1 className="font-[family-name:var(--font-display)] text-[26px] font-medium leading-tight tracking-[-0.01em] text-foreground sm:text-[30px]">
-            Đề xuất & cảnh báo rủi ro
+          <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-foreground sm:text-[32px]">
+            Đề xuất và cảnh báo rủi ro
           </h1>
-          <p className="max-w-[72ch] text-[13.5px] leading-relaxed text-muted-foreground">
-            Xem sách nào cần nhập, vì sao, trong ngân sách nào — cùng tồn kho tồn đọng và các khoản mượn, đặt chỗ có nguy cơ.
+          <p className="max-w-[72ch] text-[14px] leading-relaxed text-muted-foreground">
+            Sách nào cần nhập, vì sao và trong ngân sách nào. Cùng với đó là tồn kho tồn đọng và các khoản mượn, đặt chỗ có nguy cơ.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => void handleAskAi()} title="Mở trợ lý AI với câu hỏi về mục đang xem — bạn vẫn quyết định có gửi hay không">
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleAskAi()} title="Mở trợ lý AI với câu hỏi về mục đang xem, bạn vẫn quyết định có gửi hay không">
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               Hỏi AI về mục này
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={handleRefreshActiveTab} disabled={activeLoading}>
-              <RefreshCw className={`h-3.5 w-3.5 ${activeLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              <RefreshCw className={`h-3.5 w-3.5 motion-reduce:animate-none ${activeLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
               Làm mới
             </Button>
           </div>
-          <p className="text-[11.5px] text-muted-foreground" aria-live="polite">
+          <p className="text-[12px] text-muted-foreground" aria-live="polite">
             {activeLoading ? 'Đang cập nhật…' : activeGeneratedAt ? `Cập nhật ${formatDateTime(activeGeneratedAt)}` : ' '}
           </p>
         </div>
       </header>
 
-      <div data-reveal>
-        <DomainNavigation tabs={tabs} active={activeTab} onChange={setActiveTab} />
-      </div>
+      <div data-reveal className="@container/page space-y-5">
+        <nav aria-label="Lĩnh vực phân tích">
+          <DomainNavigation tabs={tabs} active={activeTab} onChange={setActiveTab} />
+        </nav>
 
-      <div ref={panelRef} id={panelId(activeTab)} role="tabpanel" aria-labelledby={tabId(activeTab)} tabIndex={-1} className="outline-none">
+          <div ref={panelRef} id={panelId(activeTab)} role="tabpanel" aria-labelledby={tabId(activeTab)} tabIndex={-1} className="min-w-0 outline-none">
         {activeTab === 'reorder' && (
           <ReorderWorkspace
             data={data}
@@ -404,6 +404,7 @@ export function ReorderSuggestionsPage() {
             }))}
           />
         )}
+          </div>
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, RefreshCw, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw, XCircle } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { PageWrapper, FadeItem } from '@/components/motion-utils';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { SectionCard } from '@/components/ui/section-card';
@@ -18,16 +19,16 @@ const HISTORY_LENGTH = 30;
 type Check = { status: MonitorStatus; latencyMs: number | null; checkedAt: string };
 
 const STATUS_META: Record<MonitorStatus, { label: string; icon: typeof CheckCircle2; text: string; fill: string; description: string }> = {
-  ok: { label: 'Hoạt động', icon: CheckCircle2, text: 'text-emerald-600 dark:text-emerald-400', fill: 'bg-emerald-500', description: 'Phản hồi bình thường' },
-  degraded: { label: 'Suy giảm', icon: AlertTriangle, text: 'text-amber-600 dark:text-amber-400', fill: 'bg-amber-500', description: 'Có phản hồi nhưng một dependency bất thường' },
-  down: { label: 'Ngừng', icon: XCircle, text: 'text-rose-600 dark:text-rose-400', fill: 'bg-rose-500', description: 'Không lấy được health check' },
+  ok: { label: 'Hoạt động', icon: CheckCircle2, text: 'text-primary', fill: 'bg-primary', description: 'Phản hồi bình thường' },
+  degraded: { label: 'Suy giảm', icon: AlertTriangle, text: 'text-amber-700 dark:text-amber-300', fill: 'bg-amber-500', description: 'Có phản hồi nhưng một thành phần phụ thuộc bất thường' },
+  down: { label: 'Ngừng', icon: XCircle, text: 'text-red-700 dark:text-red-400', fill: 'bg-red-600', description: 'Không lấy được kết quả kiểm tra sức khỏe' },
 };
 
 function latencyTone(ms: number | null) {
   if (ms == null) return 'text-muted-foreground';
   if (ms < 200) return 'text-foreground';
-  if (ms < 800) return 'text-amber-600 dark:text-amber-400';
-  return 'text-rose-600 dark:text-rose-400';
+  if (ms < 800) return 'text-amber-700 dark:text-amber-300';
+  return 'text-red-700 dark:text-red-400';
 }
 
 function formatTime(value?: string | null) {
@@ -169,17 +170,17 @@ function ServiceRow({ service, checks, expanded, onToggle }: {
                 {dependencies.map((row) => (
                   <div key={row.label} className="flex justify-between gap-4">
                     <dt className="text-muted-foreground">{row.label}</dt>
-                    <dd className={cn('truncate', row.healthy === false ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-foreground')} title={row.value}>{row.value}</dd>
+                    <dd className={cn('truncate', row.healthy === false ? 'font-medium text-red-700 dark:text-red-400' : 'text-foreground')} title={row.value}>{row.value}</dd>
                   </div>
                 ))}
                 {service.error ? (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">{service.error}</p>
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">{service.error}</p>
                 ) : dependencies.length === 0 ? (
                   <p className="text-[12px] text-muted-foreground">{meta.description}</p>
                 ) : null}
               </dl>
               <div className="min-w-0">
-                <p className="mb-1.5 text-[12px] text-muted-foreground">Response gốc</p>
+                <p className="mb-1.5 text-[12px] text-muted-foreground">Phản hồi gốc</p>
                 <pre className="max-h-56 overflow-auto rounded-lg bg-muted/60 px-3 py-2.5 font-mono text-[12px] leading-5 text-foreground">
                   {service.response ? JSON.stringify(service.response, null, 2) : 'Không có nội dung'}
                 </pre>
@@ -250,51 +251,32 @@ export function AdminMonitorPage() {
   }, [autoRefresh, loadSnapshot]);
 
   const overall = snapshot ? getOverallStatus(snapshot) : null;
-  const OverallIcon = overall ? STATUS_META[overall].icon : CheckCircle2;
   const checksSoFar = Math.max(0, ...Object.values(history).map((checks) => checks.length));
 
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
-        <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-3">
-            <span
-              className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border',
-                overall === 'down' ? 'border-rose-200 bg-rose-50 dark:border-rose-500/25 dark:bg-rose-500/10'
-                  : overall === 'degraded' ? 'border-amber-200 bg-amber-50 dark:border-amber-500/25 dark:bg-amber-500/10'
-                    : 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/25 dark:bg-emerald-500/10',
-              )}
-              aria-hidden="true"
-            >
-              <OverallIcon className={cn('h-5 w-5', overall ? STATUS_META[overall].text : 'text-muted-foreground')} />
+        <PageHeader
+          icon={Activity}
+          title="Giám sát hệ thống"
+          description={
+            <span aria-live="polite">
+              <span className={cn('font-medium', overall && overall !== 'ok' ? STATUS_META[overall].text : 'text-foreground')}>{snapshot ? overallHeadline(snapshot) : 'Đang kiểm tra các dịch vụ'}</span>. Kiểm tra lúc <span className="tabular-nums text-foreground">{formatTime(snapshot?.checkedAt)}</span>, cập nhật trực tiếp {connected ? 'đang kết nối' : 'mất kết nối'}.
             </span>
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight text-foreground" aria-live="polite">
-                {snapshot ? overallHeadline(snapshot) : 'Giám sát hệ thống'}
-              </h1>
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted-foreground">
-                <span>Kiểm tra lúc <span className="tabular-nums text-foreground">{formatTime(snapshot?.checkedAt)}</span></span>
-                <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className={cn('h-1.5 w-1.5 rounded-full', connected ? 'bg-emerald-500' : 'bg-amber-500')} aria-hidden="true" />
-                  Realtime {connected ? 'đã kết nối' : 'mất kết nối'}
-                </span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
-              <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label="Tự động kiểm tra mỗi 30 giây" />
-              Tự động mỗi 30 giây
-            </label>
-            <Button type="button" variant="outline" onClick={() => void loadSnapshot(true)} loading={refreshing} loadingLabel="Đang kiểm tra lại">
-              <RefreshCw className="h-4 w-4" />
-              Kiểm tra ngay
-            </Button>
-          </div>
-        </header>
+          }
+          actions={
+            <>
+              <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-foreground">
+                <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label="Tự động kiểm tra mỗi 30 giây" />
+                Tự động mỗi 30 giây
+              </label>
+              <Button type="button" variant="outline" size="sm" onClick={() => void loadSnapshot(true)} loading={refreshing} loadingLabel="Đang kiểm tra lại" className="gap-2">
+                <RefreshCw className="h-4 w-4" />
+                Kiểm tra ngay
+              </Button>
+            </>
+          }
+        />
       </FadeItem>
 
       {loading ? (
@@ -317,15 +299,24 @@ export function AdminMonitorPage() {
         </SectionCard>
       ) : snapshot ? (
         <FadeItem>
-          <section aria-labelledby="services-title" className="overflow-hidden rounded-xl border border-border bg-card">
+          <dl aria-label="Tóm tắt sức khỏe hệ thống" className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4 [&>*]:bg-card">
+            {[
+              { label: 'Đang hoạt động', value: `${snapshot.summary.ok}/${snapshot.summary.total}`, tone: 'text-foreground' },
+              { label: 'Suy giảm', value: String(snapshot.summary.degraded), tone: snapshot.summary.degraded ? STATUS_META.degraded.text : 'text-foreground' },
+              { label: 'Ngừng', value: String(snapshot.summary.down), tone: snapshot.summary.down ? STATUS_META.down.text : 'text-foreground' },
+              { label: 'Độ trễ trung bình, ms', value: typeof snapshot.summary.averageLatencyMs === 'number' ? snapshot.summary.averageLatencyMs.toLocaleString('vi-VN') : '–', tone: latencyTone(snapshot.summary.averageLatencyMs) },
+            ].map((cell) => (
+              <div key={cell.label} className="px-5 py-4">
+                <dt className="text-[13px] text-muted-foreground">{cell.label}</dt>
+                <dd className={cn('mt-1 font-display text-[28px] font-semibold leading-tight tabular-nums', cell.tone)}>{cell.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <section aria-labelledby="services-title" className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-border px-5 py-3.5">
-              <h2 id="services-title" className="text-[14px] font-semibold text-foreground">
-                Dịch vụ <span className="font-normal text-muted-foreground">· {snapshot.summary.ok}/{snapshot.summary.total} hoạt động</span>
-              </h2>
+              <h2 id="services-title" className="font-display text-[18px] font-semibold tracking-tight text-foreground">Dịch vụ</h2>
               <p className="text-[12px] text-muted-foreground">
-                Độ trễ trung bình <span className="font-semibold tabular-nums text-foreground">{formatLatency(snapshot.summary.averageLatencyMs)}</span>
-                <span aria-hidden="true"> · </span>
-                {checksSoFar} / {HISTORY_LENGTH} lần kiểm tra gần nhất trong phiên này
+                Dải màu là {checksSoFar} trên {HISTORY_LENGTH} lần kiểm tra gần nhất trong phiên này. Bấm một dịch vụ để xem chi tiết.
               </p>
             </div>
             <ul>
@@ -354,8 +345,8 @@ export function AdminMonitorPage() {
             </div>
             {!snapshot.detailed ? (
               <p className="flex items-start gap-2 border-t border-border bg-muted/30 px-5 py-3 text-[12px] text-muted-foreground">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
-                Không lấy được chi tiết từng dịch vụ (cần quyền quản trị) — đang hiển thị kiểm tra công khai gộp.
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+                Không lấy được chi tiết từng dịch vụ (cần quyền quản trị), nên đang hiển thị kiểm tra công khai gộp.
               </p>
             ) : null}
           </section>

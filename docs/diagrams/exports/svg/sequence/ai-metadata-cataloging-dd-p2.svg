@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 536" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="ai-metadata-cataloging-dd-p2-title ai-metadata-cataloging-dd-p2-desc" id="ai-metadata-cataloging-dd-p2-root">
+<title id="ai-metadata-cataloging-dd-p2-title">Biên mục sách với trích xuất thông tin bằng AI, phần 2</title>
+<desc id="ai-metadata-cataloging-dd-p2-desc">Kết quả được lưu thành bản nháp đối soát; quản lý duyệt từng trường, kiểm tra trùng lặp và áp dụng, Inventory ghi các trường được chấp nhận trong một giao dịch.</desc>
+<defs>
+      <style>#ai-metadata-cataloging-dd-p2-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #ai-metadata-cataloging-dd-p2-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #ai-metadata-cataloging-dd-p2-root .diagram-container { width: 100%; overflow-x: auto; }
+      #ai-metadata-cataloging-dd-p2-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#ai-metadata-cataloging-dd-p2-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="496" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="404" y1="104" x2="404" y2="496" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="700" y1="104" x2="700" y2="496" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="408" y1="164" x2="696" y2="164" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-link)"/>
+<line x1="100" y1="200" x2="400" y2="200" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow)"/>
+<line x1="408" y1="268" x2="696" y2="268" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-link)"/>
+<line x1="408" y1="320" x2="696" y2="320" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-link)"/>
+<line x1="100" y1="356" x2="400" y2="356" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow)"/>
+<line x1="408" y1="424" x2="696" y2="424" stroke="#000000" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow-link)"/>
+<path d="M 696 436 H 672 Q 664 436 664 444 V 464 Q 664 472 672 472 H 694" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#ai-metadata-cataloging-dd-p2-ai-metadata-cataloging-dd-p2-arrow)"/>
+<!-- labels -->
+<rect x="440" y="122" width="224" height="34" rx="2" fill="#ffffff"/>
+<text x="552.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> POST /api/metadata-reconciliations</text>
+<text x="552.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">(bản nháp)</text>
+<rect x="138" y="174" width="224" height="18" rx="2" fill="#ffffff"/>
+<text x="250.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> chấp nhận / từ chối / sửa từng trường</text>
+<rect x="446" y="210" width="212" height="50" rx="2" fill="#ffffff"/>
+<text x="552.0" y="223" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> PATCH</text>
+<text x="552.0" y="239" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/metadata-reconciliations/</text>
+<text x="552.0" y="255" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">{id}/fields/{field}</text>
+<rect x="436" y="278" width="232" height="34" rx="2" fill="#ffffff"/>
+<text x="552.0" y="291" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">14.</tspan> POST</text>
+<text x="552.0" y="307" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/duplicate-intelligence/check</text>
+<rect x="128" y="330" width="244" height="18" rx="2" fill="#ffffff"/>
+<text x="250.0" y="343" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">15.</tspan> chọn quyết định trùng lặp, nhấn "Áp dụng"</text>
+<rect x="446" y="366" width="212" height="50" rx="2" fill="#ffffff"/>
+<text x="552.0" y="379" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">16.</tspan> POST</text>
+<text x="552.0" y="395" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/metadata-reconciliations/</text>
+<text x="552.0" y="411" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">{id}/apply</text>
+<rect x="488" y="437" width="168" height="34" rx="2" fill="#ffffff"/>
+<text x="494" y="450.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">17. ghi các trường ACCEPTED</text>
+<text x="494" y="466.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">trong một giao dịch</text>
+<!-- nodes -->
+<circle cx="96" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 96 56 V 72 M 85 61 H 107 M 96 72 L 87 84 M 96 72 L 105 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="96" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Quản lý kho</text>
+<rect x="360" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="404" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web UI</text>
+<text x="404" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web</text>
+<rect x="642" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="700" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="700" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+</svg>

@@ -199,6 +199,7 @@ function withFreshController(seedOverride, transactionOverride, options = {}) {
   installFakePrisma(client);
 
   delete require.cache[controllerPath];
+  delete require.cache[require.resolve('../src/lib/prisma.js')]; // shared client is built once per load
   delete require.cache[capacityServicePath];
   delete require.cache[suggestionServicePath];
   if (options.stubCache) {

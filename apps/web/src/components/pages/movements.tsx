@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ElementType } from "react";
+import { useEffect, useMemo, useState, type ElementType } from "react";
 import {
   ArrowDown, ArrowRightLeft, ArrowUp, BookOpen, Bookmark, ChevronDown, Download, History, Minus, RefreshCw, RotateCcw, X,
 } from "lucide-react";
@@ -9,7 +9,6 @@ import { stockMovementService, type StockMovement } from "@/services/stock-movem
 import { userService } from "@/services/user";
 import { authService } from "@/services/auth";
 import { getApiErrorMessage } from "@/services/api";
-import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/loading-state";
@@ -25,14 +24,14 @@ import { exportToCsv } from "@/lib/export-utils";
 // splits them out and keeps them out of every net figure.
 type Kind = "inbound" | "outbound" | "borrow" | "return" | "adjustment" | "move" | "reserve";
 
-const KINDS: Record<Kind, { label: string; icon: ElementType; color: string; changesStock: boolean }> = {
-  inbound: { label: "Nhập kho", icon: ArrowDown, color: "emerald", changesStock: true },
-  outbound: { label: "Xuất kho", icon: ArrowUp, color: "rose", changesStock: true },
-  borrow: { label: "Cho mượn", icon: BookOpen, color: "violet", changesStock: true },
-  return: { label: "Trả sách", icon: RotateCcw, color: "sky", changesStock: true },
-  adjustment: { label: "Điều chỉnh", icon: Minus, color: "amber", changesStock: true },
-  move: { label: "Di chuyển trong kho", icon: ArrowRightLeft, color: "blue", changesStock: false },
-  reserve: { label: "Giữ chỗ cho mượn", icon: Bookmark, color: "slate", changesStock: false },
+const KINDS: Record<Kind, { label: string; icon: ElementType; changesStock: boolean }> = {
+  inbound: { label: "Nhập kho", icon: ArrowDown, changesStock: true },
+  outbound: { label: "Xuất kho", icon: ArrowUp, changesStock: true },
+  borrow: { label: "Cho mượn", icon: BookOpen, changesStock: true },
+  return: { label: "Trả sách", icon: RotateCcw, changesStock: true },
+  adjustment: { label: "Điều chỉnh", icon: Minus, changesStock: true },
+  move: { label: "Di chuyển trong kho", icon: ArrowRightLeft, changesStock: false },
+  reserve: { label: "Giữ chỗ cho mượn", icon: Bookmark, changesStock: false },
 };
 const KIND_ORDER: Kind[] = ["inbound", "outbound", "borrow", "return", "adjustment", "move", "reserve"];
 
@@ -43,28 +42,6 @@ function kindOf(m: StockMovement): Kind {
   if (t === "transfer") return "move";
   if (t === "outbound" || t === "borrow" || t === "return" || t === "adjustment") return t;
   return "inbound";
-}
-
-// Ink-stamp badge per movement — a nod to the library due-date stamp SmartBook is built around.
-const STAMP_STYLE: Record<string, { ring: string; text: string; bg: string; badge: string }> = {
-  emerald: { ring: "border-emerald-500 dark:border-emerald-400", text: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10", badge: "success" },
-  rose: { ring: "border-rose-500 dark:border-rose-400", text: "text-rose-600 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-500/10", badge: "rose" },
-  blue: { ring: "border-blue-500 dark:border-blue-400", text: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10", badge: "info" },
-  amber: { ring: "border-amber-500 dark:border-amber-400", text: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10", badge: "warning" },
-  violet: { ring: "border-violet-500 dark:border-violet-400", text: "text-violet-600 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-500/10", badge: "violet" },
-  sky: { ring: "border-sky-500 dark:border-sky-400", text: "text-sky-600 dark:text-sky-400", bg: "bg-sky-50 dark:bg-sky-500/10", badge: "info" },
-  slate: { ring: "border-slate-400 dark:border-slate-500", text: "text-slate-500 dark:text-slate-400", bg: "bg-slate-50 dark:bg-slate-500/10", badge: "neutral" },
-};
-
-const KIND_CHIP: Record<string, string> = {
-  emerald: "bg-emerald-500", rose: "bg-rose-500", blue: "bg-blue-500", amber: "bg-amber-500", violet: "bg-violet-500", sky: "bg-sky-500", slate: "bg-slate-400",
-};
-
-// Deterministic -4..+4deg tilt per movement id so each stamp reads as hand-pressed.
-function stampRotation(id: string): number {
-  let hash = 0;
-  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return (Math.abs(hash) % 9) - 4;
 }
 
 const REASON_LABEL: Record<string, string> = {
@@ -78,8 +55,8 @@ const REASON_LABEL: Record<string, string> = {
 };
 const REASON_TONE: Record<string, string> = {
   LOST: "text-red-600 dark:text-red-400",
-  DAMAGED_RETURN: "text-orange-600 dark:text-orange-400",
-  DAMAGE: "text-orange-600 dark:text-orange-400",
+  DAMAGED_RETURN: "text-amber-800 dark:text-amber-300",
+  DAMAGE: "text-amber-800 dark:text-amber-300",
 };
 
 function moveLabel(m: StockMovement) {
@@ -299,24 +276,46 @@ export function MovementsPage() {
 
   const quantityCell = ({ m, kind }: Row) => {
     if (!KINDS[kind].changesStock) {
-      return <span className="text-muted-foreground">{m.quantity} cuốn</span>;
+      return <span className="text-[13px] font-normal text-muted-foreground">{m.quantity} cuốn</span>;
     }
     return (
-      <span className={m.delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
+      <span className={m.delta >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}>
         {signed(m.delta)}
       </span>
     );
   };
 
+  const warehouseName = warehouses.find((w) => w.id === warehouseFilter)?.label;
+  const lede = loading
+    ? "Sổ ghi mọi lần sách vào, ra và di chuyển trong kho."
+    : movements.length === 0
+      ? "Chưa có biến động nào được ghi."
+      : `${scoped.length.toLocaleString("vi-VN")} biến động${rangeFilter === "ALL" ? "" : ` trong ${RANGE_OPTIONS.find((r) => r.value === rangeFilter)?.label.toLowerCase()}`}${warehouseName ? ` ở ${warehouseName}` : ""}. ${summary.internal.toLocaleString("vi-VN")} lượt di chuyển và giữ chỗ không làm đổi tồn kho.`;
+
+  const railButton = (active: boolean, onClick: () => void, label: string, count?: number) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        active ? "bg-primary/[0.08] text-primary" : "text-foreground hover:bg-muted/60",
+      )}
+    >
+      <span className={cn("min-w-0 line-clamp-2 text-[13px]", active ? "font-semibold" : "font-medium")} title={label}>{label}</span>
+      {count !== undefined && <span className={cn("shrink-0 text-[12px] tabular-nums", active ? "text-primary" : "text-muted-foreground")}>{count.toLocaleString("vi-VN")}</span>}
+    </button>
+  );
+  // Kinds with nothing in scope are hidden, unless they are the active filter.
+  const railKinds = (changesStock: boolean) => KIND_ORDER.filter((kind) => KINDS[kind].changesStock === changesStock && ((kindCounts[kind] ?? 0) > 0 || kindFilter === kind));
+
   return (
-    <PageWrapper className="space-y-5">
+    <PageWrapper className="space-y-6">
       <FadeItem>
         <PageHeader
           icon={History}
           title="Lịch sử kho"
-          description="Sổ ghi mọi lần sách vào, ra và di chuyển trong kho"
-          iconBg="bg-gradient-to-br from-cyan-100 to-blue-50 dark:from-cyan-500/20 dark:to-blue-500/10"
-          iconColor="text-cyan-600 dark:text-cyan-400"
+          description={lede}
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => void loadMovements()} disabled={loading} aria-label="Làm mới">
@@ -332,238 +331,237 @@ export function MovementsPage() {
       </FadeItem>
 
       <FadeItem>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03),0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none">
-          <dl className="grid grid-cols-2 divide-border sm:grid-cols-4 sm:divide-x">
-            {[
-              { label: "Sách vào kho", value: loading ? "–" : signed(summary.inQty), tone: "text-emerald-600 dark:text-emerald-400" },
-              { label: "Sách ra khỏi kho", value: loading ? "–" : signed(-summary.outQty), tone: "text-rose-600 dark:text-rose-400" },
-              { label: "Thay đổi ròng", value: loading ? "–" : signed(summary.net), tone: summary.net >= 0 ? "text-foreground" : "text-rose-600 dark:text-rose-400" },
-              { label: "Di chuyển & giữ chỗ", value: loading ? "–" : summary.internal.toLocaleString("vi-VN"), unit: "lượt", tone: "text-muted-foreground", hint: "Không làm đổi tồn kho" },
-            ].map((item) => (
-              <div key={item.label} className="px-4 py-3">
-                <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
-                <dd className={cn("mt-0.5 font-mono text-[22px] font-semibold leading-tight tabular-nums", item.tone)}>
-                  {item.value}
-                  {"unit" in item && item.unit ? <span className="ml-1 font-sans text-[12px] font-normal">{item.unit}</span> : null}
-                </dd>
-                {item.hint ? <p className="text-[10px] text-muted-foreground">{item.hint}</p> : null}
-              </div>
-            ))}
-          </dl>
-
-          <div className="flex items-center gap-1 overflow-x-auto border-t border-border p-2 [scrollbar-width:thin]" role="group" aria-label="Lọc theo loại biến động">
-            <button
-              type="button"
-              aria-pressed={kindFilter === "all"}
-              onClick={() => setKindFilter("all")}
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                kindFilter === "all" ? "border-foreground/20 bg-foreground text-background" : "border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}
-            >
-              Tất cả <span className="font-mono text-[11px] opacity-70">{scoped.length}</span>
-            </button>
-            {KIND_ORDER.map((kind, i) => {
-              const cfg = KINDS[kind];
-              const active = kindFilter === kind;
-              const count = kindCounts[kind] ?? 0;
-              if (!count && !active) return null;
-              return (
-                <Fragment key={kind}>
-                  {i === KIND_ORDER.indexOf("move") && <span className="mx-1 h-5 w-px shrink-0 bg-border" aria-hidden="true" />}
-                  <button
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setKindFilter(kind)}
-                    className={cn(
-                      "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      active ? "border-foreground/20 bg-foreground text-background" : "border-border text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                    )}
-                  >
-                    <span className={cn("h-2 w-2 rounded-full", KIND_CHIP[cfg.color])} aria-hidden="true" />
-                    {cfg.label}
-                    <span className="font-mono text-[11px] opacity-70">{count}</span>
-                  </button>
-                </Fragment>
-              );
-            })}
-          </div>
-
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
-              searchPlaceholder="Tìm tên sách, ISBN, mã biến động, vị trí..."
-              showSearchClear
-              filters={
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[220px_minmax(0,1fr)]">
+            <nav aria-label="Lọc lịch sử kho" className="hidden max-h-[calc(100vh-7rem)] overflow-y-auto rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              {railButton(kindFilter === "all", () => setKindFilter("all"), "Tất cả biến động", scoped.length)}
+              <p className="mt-3 px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Làm đổi tồn kho</p>
+              {railKinds(true).map((kind) => (
+                <div key={kind}>{railButton(kindFilter === kind, () => setKindFilter(kind), KINDS[kind].label, kindCounts[kind] ?? 0)}</div>
+              ))}
+              {railKinds(false).length > 0 && (
                 <>
-                  <div className="max-w-full overflow-x-auto">
-                    <SegmentedControl options={RANGE_OPTIONS} value={rangeFilter} onChange={setRangeFilter} layoutId="move-range-filter" gradientClassName="from-cyan-600 to-blue-600" className="w-max whitespace-nowrap" />
-                  </div>
-                  {warehouses.length > 1 && (
-                    <Select value={warehouseFilter || "__all__"} onValueChange={(v) => setWarehouseFilter(v === "__all__" ? "" : v)}>
-                      <SelectTrigger size="sm" className="w-[190px]" aria-label="Kho">
-                        <SelectValue placeholder="Tất cả kho" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">Tất cả kho</SelectItem>
-                        {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {hasFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
-                      <X className="h-3.5 w-3.5" />Xóa lọc
-                    </Button>
-                  )}
+                  <p className="mt-3 px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Không đổi tồn kho</p>
+                  {railKinds(false).map((kind) => (
+                    <div key={kind}>{railButton(kindFilter === kind, () => setKindFilter(kind), KINDS[kind].label, kindCounts[kind] ?? 0)}</div>
+                  ))}
                 </>
-              }
-            />
-          </div>
-          {capped ? (
-            <p className="border-t border-border bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground">
-              Đang hiển thị {API_LIMIT} biến động gần nhất. Biến động cũ hơn không có trong danh sách và các con số ở trên.
-            </p>
-          ) : null}
-        </div>
-      </FadeItem>
-
-      <FadeItem>
-        {loading ? (
-          <SectionCard noPadding>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-b-0">
-                <Skeleton className="h-7 w-7 rounded-full" />
-                <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-64" /><Skeleton className="h-3 w-40" /></div>
-                <Skeleton className="h-4 w-12" />
-              </div>
-            ))}
-          </SectionCard>
-        ) : filtered.length === 0 ? (
-          <SectionCard>
-            <EmptyState
-              variant="no-results"
-              title={movements.length === 0 ? "Chưa có biến động nào" : "Không có biến động phù hợp"}
-              description={movements.length === 0 ? "Biến động được ghi khi nhập, xuất, mượn, trả hoặc điều chỉnh tồn kho." : "Thử đổi khoảng thời gian, loại biến động hoặc từ khóa."}
-              action={hasFilters ? <Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button> : undefined}
-              className="py-12"
-            />
-          </SectionCard>
-        ) : (
-          <div className="space-y-6">
-            {visibleDayGroups.map((group) => (
-              <section key={group.key} aria-label={group.label}>
-                <div className="mb-2 flex min-w-0 items-baseline gap-3 px-1">
-                  <h3 className="whitespace-nowrap text-[13px] font-semibold text-foreground first-letter:uppercase">{group.label}</h3>
-                  <span className="hidden whitespace-nowrap text-[11px] text-muted-foreground sm:inline">{group.items.length} biến động</span>
-                  <div className="h-px flex-1 bg-border" />
-                  <span
-                    className={cn(
-                      "whitespace-nowrap font-mono text-[11px] font-semibold tabular-nums",
-                      group.net > 0 ? "text-emerald-600 dark:text-emerald-400" : group.net < 0 ? "text-rose-600 dark:text-rose-400" : "text-muted-foreground",
-                    )}
-                    title="Thay đổi tồn kho trong ngày, không tính di chuyển và giữ chỗ"
-                  >
-                    Tồn kho {signed(group.net)}
-                  </span>
+              )}
+              {warehouses.length > 1 && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Kho</p>
+                  {railButton(!warehouseFilter, () => setWarehouseFilter(""), "Tất cả kho")}
+                  {warehouses.map((w) => (
+                    <div key={w.id}>{railButton(warehouseFilter === w.id, () => setWarehouseFilter(w.id), w.label)}</div>
+                  ))}
                 </div>
+              )}
+            </nav>
 
-                <SectionCard noPadding>
-                  <ul className="divide-y divide-border">
-                    {group.items.map((row) => {
-                      const { m, kind } = row;
-                      const cfg = KINDS[kind];
-                      const Icon = cfg.icon;
-                      const stamp = STAMP_STYLE[cfg.color];
-                      const rotation = stampRotation(m.id);
-                      const expanded = expandedId === m.id;
-                      const reasonCode = String(m.reason_code || "").toUpperCase();
-                      const reason = kind === "return" ? null : REASON_LABEL[reasonCode];
-                      const subLabel = moveLabel(m);
-                      const where = kind === "move" && (m.from_location_code || m.to_location_code)
-                        ? `${m.from_location_code || "?"} → ${m.to_location_code || "?"}`
-                        : m.to_location_code || m.from_location_code;
-                      const refPath = referencePath(m);
-                      const detailsId = `movement-${m.id}`;
-                      return (
-                        <li key={m.id}>
-                          <button
-                            type="button"
-                            onClick={() => setExpandedId(expanded ? null : m.id)}
-                            aria-expanded={expanded}
-                            aria-controls={detailsId}
-                            className={cn("flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none", !cfg.changesStock && "opacity-80")}
-                          >
-                            <span className="hidden w-10 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground sm:block">{formatTime(m.created_at)}</span>
-                            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center" aria-hidden="true">
-                              <span className={cn("flex h-7 w-7 items-center justify-center rounded-full border-2", stamp.ring, stamp.bg)} style={{ transform: `rotate(${rotation}deg)` }}>
-                                <Icon className={cn("h-3.5 w-3.5", stamp.text)} />
-                              </span>
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-medium text-foreground" title={m.book_title}>{m.book_title}</span>
-                              <span className="block truncate text-[11px] text-muted-foreground">
-                                <span className={cn("font-medium", stamp.text)}>{subLabel || cfg.label}</span>
-                                {reason ? <span className={cn("font-medium", REASON_TONE[reasonCode])}> · {reason}</span> : null}
-                                {m.warehouse_code ? ` · ${m.warehouse_code}` : ""}
-                                {where ? <span className="font-mono"> · {where}</span> : null}
-                                <span className="sm:hidden"> · {formatTime(m.created_at)}</span>
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-right font-mono text-[14px] font-semibold tabular-nums">{quantityCell(row)}</span>
-                            <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
-                          </button>
-
-                          {expanded && (
-                            <div id={detailsId} className="border-t border-dashed border-border bg-muted/20 px-4 py-3 sm:pl-[100px]">
-                              <dl className="grid grid-cols-2 gap-x-6 gap-y-2.5 text-[12px] md:grid-cols-3">
-                                {[
-                                  { label: "Thời gian", value: formatDateTime(m.created_at) },
-                                  { label: "Mã biến động", value: m.movement_number || m.id, mono: true },
-                                  { label: "Mã vạch / ISBN", value: m.barcode || m.sku || "-", mono: true },
-                                  { label: "Kho", value: [m.warehouse_code, m.warehouse_name].filter(Boolean).join(" · ") || "-" },
-                                  { label: "Từ → đến", value: m.from_location_code || m.to_location_code ? `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` : "-", mono: true },
-                                  { label: "Người thực hiện", value: personName(m.created_by_user_id) },
-                                  { label: "Ảnh hưởng tồn kho", value: cfg.changesStock ? `${signed(m.delta)} cuốn` : "Không đổi tồn kho" },
-                                  ...(m.unit_cost ? [{ label: "Đơn giá", value: `${m.unit_cost.toLocaleString("vi-VN")} VND`, mono: true }] : []),
-                                ].map((field) => (
-                                  <div key={field.label} className="min-w-0">
-                                    <dt className="text-[11px] text-muted-foreground">{field.label}</dt>
-                                    <dd className={cn("break-words text-foreground", "mono" in field && field.mono && "font-mono text-[11px]")}>{field.value}</dd>
-                                  </div>
-                                ))}
-                                <div className="min-w-0">
-                                  <dt className="text-[11px] text-muted-foreground">Chứng từ</dt>
-                                  <dd className="text-foreground">
-                                    {refPath ? (
-                                      <NavLink to={refPath} className="rounded text-indigo-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-indigo-400">
-                                        Mở {REFERENCE_LABEL[String(m.reference_type).toUpperCase()]?.toLowerCase()}
-                                      </NavLink>
-                                    ) : (
-                                      REFERENCE_LABEL[String(m.reference_type || "").toUpperCase()] || m.reference_type || "-"
-                                    )}
-                                  </dd>
-                                </div>
-                              </dl>
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </SectionCard>
-              </section>
-            ))}
-
-            {hasMoreDays && (
-              <div className="flex justify-center pt-1">
-                <Button variant="outline" size="sm" onClick={() => setVisibleDayCount((count) => count + DAY_GROUP_PAGE_SIZE)}>
-                  Xem thêm các ngày trước ({dayGroups.length - visibleDayCount} ngày)
-                </Button>
+            <section aria-labelledby="ledger-title" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 px-5 pb-3 pt-4">
+                <div className="min-w-0">
+                  <h2 id="ledger-title" className="font-serif text-[18px] font-semibold tracking-tight">
+                    {kindFilter === "all" ? "Sổ biến động" : KINDS[kindFilter].label}
+                  </h2>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground">Mới nhất ở trên. Bấm một dòng để xem chi tiết.</p>
+                </div>
+                {!loading && (
+                  <dl className="flex gap-5" title="Tính trên khoảng thời gian, kho và từ khóa đang chọn; không tính di chuyển và giữ chỗ">
+                    {[
+                      { label: "Vào kho", value: signed(summary.inQty), tone: "text-emerald-700 dark:text-emerald-400" },
+                      { label: "Ra khỏi kho", value: signed(-summary.outQty), tone: "text-rose-700 dark:text-rose-400" },
+                      { label: "Thay đổi ròng", value: signed(summary.net), tone: "text-foreground" },
+                    ].map((item) => (
+                      <div key={item.label}>
+                        <dt className="text-[12px] text-muted-foreground">{item.label}</dt>
+                        <dd className={cn("font-serif text-[20px] font-semibold leading-tight tabular-nums", item.tone)}>{item.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
               </div>
-            )}
+
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  searchPlaceholder="Tên sách, ISBN, mã biến động hoặc vị trí"
+                  showSearchClear
+                  filters={
+                    <>
+                      <div className="max-w-full overflow-x-auto">
+                        <SegmentedControl options={RANGE_OPTIONS} value={rangeFilter} onChange={setRangeFilter} layoutId="move-range-filter" className="w-max whitespace-nowrap" />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 @4xl/page:hidden">
+                        <Select value={kindFilter} onValueChange={(v) => setKindFilter(v as Kind | "all")}>
+                          <SelectTrigger size="sm" className="w-[190px]" aria-label="Loại biến động">
+                            <SelectValue placeholder="Tất cả loại" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Tất cả loại ({scoped.length})</SelectItem>
+                            {KIND_ORDER.map((kind) => (
+                              <SelectItem key={kind} value={kind}>{KINDS[kind].label} ({kindCounts[kind] ?? 0})</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {warehouses.length > 1 && (
+                          <Select value={warehouseFilter || "__all__"} onValueChange={(v) => setWarehouseFilter(v === "__all__" ? "" : v)}>
+                            <SelectTrigger size="sm" className="w-[190px]" aria-label="Kho">
+                              <SelectValue placeholder="Tất cả kho" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__all__">Tất cả kho</SelectItem>
+                              {warehouses.map((w) => <SelectItem key={w.id} value={w.id}>{w.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                      {hasFilters && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+                          <X className="h-3.5 w-3.5" />Xóa lọc
+                        </Button>
+                      )}
+                    </>
+                  }
+                />
+              </div>
+              {capped ? (
+                <p className="border-b border-border bg-muted/30 px-5 py-2 text-[12px] text-muted-foreground">
+                  Đang hiển thị {API_LIMIT} biến động gần nhất. Biến động cũ hơn không có trong danh sách và các con số ở trên.
+                </p>
+              ) : null}
+
+              {loading ? (
+                <div>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 border-b border-border px-5 py-3 last:border-b-0">
+                      <Skeleton className="h-7 w-7 rounded-full" />
+                      <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-64 max-w-full" /><Skeleton className="h-3 w-40 max-w-full" /></div>
+                      <Skeleton className="h-4 w-12" />
+                    </div>
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
+                <EmptyState
+                  variant="no-results"
+                  title={movements.length === 0 ? "Chưa có biến động nào" : "Không có biến động phù hợp"}
+                  description={movements.length === 0 ? "Biến động được ghi khi nhập, xuất, mượn, trả hoặc điều chỉnh tồn kho." : "Thử đổi khoảng thời gian, loại biến động hoặc từ khóa."}
+                  action={hasFilters ? <Button variant="outline" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" />Xóa lọc</Button> : undefined}
+                  className="py-12"
+                />
+              ) : (
+                <div>
+                  {visibleDayGroups.map((group) => (
+                    <section key={group.key} aria-label={group.label}>
+                      <div className="flex min-w-0 items-baseline gap-3 border-b border-border bg-muted/40 px-5 py-2">
+                        <h3 className="whitespace-nowrap text-[13px] font-semibold text-foreground first-letter:uppercase">{group.label}</h3>
+                        <span className="whitespace-nowrap text-[12px] text-muted-foreground">{group.items.length} biến động</span>
+                        <span
+                          className={cn(
+                            "ml-auto whitespace-nowrap text-[12px] font-semibold tabular-nums",
+                            group.net > 0 ? "text-emerald-700 dark:text-emerald-400" : group.net < 0 ? "text-rose-700 dark:text-rose-400" : "text-muted-foreground",
+                          )}
+                          title="Thay đổi tồn kho trong ngày, không tính di chuyển và giữ chỗ"
+                        >
+                          Tồn kho {signed(group.net)}
+                        </span>
+                      </div>
+
+                      <ul className="divide-y divide-border border-b border-border">
+                        {group.items.map((row) => {
+                          const { m, kind } = row;
+                          const cfg = KINDS[kind];
+                          const Icon = cfg.icon;
+                          const expanded = expandedId === m.id;
+                          const reasonCode = String(m.reason_code || "").toUpperCase();
+                          const reason = kind === "return" ? null : REASON_LABEL[reasonCode];
+                          const subLabel = moveLabel(m);
+                          const where = kind === "move" && (m.from_location_code || m.to_location_code)
+                            ? `${m.from_location_code || "?"} → ${m.to_location_code || "?"}`
+                            : m.to_location_code || m.from_location_code;
+                          const refPath = referencePath(m);
+                          const detailsId = `movement-${m.id}`;
+                          return (
+                            <li key={m.id}>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedId(expanded ? null : m.id)}
+                                aria-expanded={expanded}
+                                aria-controls={detailsId}
+                                className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none"
+                              >
+                                <span className="hidden w-11 shrink-0 text-[12px] tabular-nums text-muted-foreground @xl:block">{formatTime(m.created_at)}</span>
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" aria-hidden="true">
+                                  <Icon className="h-4 w-4" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-[14px] font-medium text-foreground" title={m.book_title}>{m.book_title}</span>
+                                  <span className="block truncate text-[12px] text-muted-foreground">
+                                    <span className="font-medium text-foreground/80">{subLabel || cfg.label}</span>
+                                    {reason ? <span className={cn("font-medium", REASON_TONE[reasonCode])}>, {reason}</span> : null}
+                                    {m.warehouse_code ? `, ${m.warehouse_code}` : ""}
+                                    {where ? <>, <span className="font-mono">{where}</span></> : null}
+                                    <span className="@xl:hidden">, {formatTime(m.created_at)}</span>
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-right text-[15px] font-semibold tabular-nums">{quantityCell(row)}</span>
+                                <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform", expanded && "rotate-180")} aria-hidden="true" />
+                              </button>
+
+                              {expanded && (
+                                <div id={detailsId} className="border-t border-dashed border-border bg-muted/20 px-5 py-3 @xl:pl-[104px]">
+                                  <dl className="grid grid-cols-1 gap-x-6 gap-y-2.5 text-[13px] @md:grid-cols-2 @3xl:grid-cols-3">
+                                    {[
+                                      { label: "Thời gian", value: formatDateTime(m.created_at) },
+                                      { label: "Mã biến động", value: m.movement_number || m.id, mono: true },
+                                      { label: "Mã vạch / ISBN", value: m.barcode || m.sku || "-", mono: true },
+                                      { label: "Kho", value: [m.warehouse_code, m.warehouse_name].filter(Boolean).join(", ") || "-" },
+                                      { label: "Từ → đến", value: m.from_location_code || m.to_location_code ? `${m.from_location_code || "-"} → ${m.to_location_code || "-"}` : "-", mono: true },
+                                      { label: "Người thực hiện", value: personName(m.created_by_user_id) },
+                                      { label: "Ảnh hưởng tồn kho", value: cfg.changesStock ? `${signed(m.delta)} cuốn` : "Không đổi tồn kho" },
+                                      ...(m.unit_cost ? [{ label: "Đơn giá", value: `${m.unit_cost.toLocaleString("vi-VN")} VND` }] : []),
+                                    ].map((field) => (
+                                      <div key={field.label} className="min-w-0">
+                                        <dt className="text-[12px] text-muted-foreground">{field.label}</dt>
+                                        <dd className={cn("break-words text-foreground", "mono" in field && field.mono && "font-mono text-[12px]")}>{field.value}</dd>
+                                      </div>
+                                    ))}
+                                    <div className="min-w-0">
+                                      <dt className="text-[12px] text-muted-foreground">Chứng từ</dt>
+                                      <dd className="text-foreground">
+                                        {refPath ? (
+                                          <NavLink to={refPath} className="rounded font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                            Mở {REFERENCE_LABEL[String(m.reference_type).toUpperCase()]?.toLowerCase()}
+                                          </NavLink>
+                                        ) : (
+                                          REFERENCE_LABEL[String(m.reference_type || "").toUpperCase()] || m.reference_type || "-"
+                                        )}
+                                      </dd>
+                                    </div>
+                                  </dl>
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ))}
+
+                  <div className="flex flex-col items-center gap-2 px-5 py-4 text-[12.5px] text-muted-foreground" aria-live="polite">
+                    <span>Hiển thị {visibleDayGroups.length} / {dayGroups.length} ngày, {filtered.length.toLocaleString("vi-VN")} biến động</span>
+                    {hasMoreDays && (
+                      <Button variant="outline" size="sm" onClick={() => setVisibleDayCount((count) => count + DAY_GROUP_PAGE_SIZE)}>
+                        Xem thêm các ngày trước ({dayGroups.length - visibleDayCount} ngày)
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
-        )}
+        </div>
       </FadeItem>
     </PageWrapper>
   );

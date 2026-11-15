@@ -315,13 +315,13 @@ export function OcrReviewPanel({
 
       {needsDecision.length ? (
         <div className="space-y-2">
-          <h4 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-amber-800 dark:text-amber-300">Cần bạn quyết định</h4>
+          <h4 className="text-[12px] font-semibold text-amber-800 dark:text-amber-300">Cần bạn quyết định</h4>
           <ul className="space-y-2">{needsDecision.map(renderRow)}</ul>
         </div>
       ) : null}
       {settled.length ? (
         <div className="space-y-2">
-          <h4 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Các trường còn lại</h4>
+          <h4 className="text-[12px] font-semibold text-muted-foreground">Các trường còn lại</h4>
           <ul className="space-y-2">{settled.map(renderRow)}</ul>
         </div>
       ) : null}

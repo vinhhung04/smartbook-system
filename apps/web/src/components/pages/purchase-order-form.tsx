@@ -1,19 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router";
-import { ArrowLeft, ClipboardList, Plus, Save, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Save, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { purchaseOrderService, type PurchaseOrderLinePayload, type VariantSearchItem } from "@/services/purchase-order";
 import { supplierService, type Supplier } from "@/services/supplier";
 import { warehouseService, type Warehouse } from "@/services/warehouse";
 import { getApiErrorMessage } from "@/services/api";
-import { SectionCard } from "@/components/ui/section-card";
-import { Button } from "@/components/ui/button";
+import { Button, IconButton } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
-import { PageHeader } from "@/components/ui/page-header";
 import { cn } from "@/components/ui/utils";
 import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
@@ -198,146 +196,195 @@ export function PurchaseOrderFormPage() {
   };
 
   if (loading) {
-    return <div className="p-6 lg:p-8 max-w-7xl mx-auto"><LoadingOverlay /></div>;
+    return <div className="mx-auto max-w-7xl p-5 sm:p-6 lg:p-8"><LoadingOverlay /></div>;
   }
 
+  const totalQty = lines.reduce((sum, line) => sum + (Number(line.ordered_qty) || 0), 0);
+  const pickedLines = lines.filter((line) => line.variant_id).length;
+  const supplierName = suppliers.find((supplier) => supplier.id === supplierId)?.name;
+  const warehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId);
+  const fieldLabel = "mb-1.5 block text-[13px] font-medium text-foreground";
+
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <NavLink to={id ? `/purchase-orders/${id}` : "/purchase-orders"} className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Quay lại
-      </NavLink>
+    <div className="mx-auto max-w-7xl space-y-5 p-5 sm:p-6 lg:p-8">
+      <div>
+        <NavLink to={id ? `/purchase-orders/${id}` : "/purchase-orders"} className="inline-flex items-center gap-1.5 rounded-md text-[13px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          {id ? "Chi tiết đơn" : "Đơn đặt hàng"}
+        </NavLink>
+        <h1 className="mt-2 font-display text-[28px] font-semibold leading-tight tracking-tight text-foreground sm:text-[32px]">
+          {isEdit ? "Sửa đơn mua hàng" : "Tạo đơn mua hàng"}
+        </h1>
+        <p className="mt-1 max-w-2xl text-[14px] text-muted-foreground">
+          Chọn nhà cung cấp và kho nhận, thêm sách cần đặt. Lưu xong đơn ở trạng thái Nháp, gửi duyệt ở trang chi tiết.
+        </p>
+      </div>
 
-      <PageHeader
-        icon={ClipboardList}
-        title={isEdit ? "Sửa đơn mua hàng" : "Tạo đơn mua hàng"}
-        description="Tạo đơn mua hàng nội bộ và gửi duyệt trước khi nhận hàng."
-        iconBg="bg-indigo-100 dark:bg-indigo-500/15"
-        iconColor="text-indigo-700 dark:text-indigo-400"
-        actions={
-          <Button onClick={() => void save()} loading={saving}>
-            <Save className="h-3.5 w-3.5" />
-            {saving ? "Đang lưu..." : "Lưu đơn mua hàng"}
-          </Button>
-        }
-      />
-
-      <SectionCard title="Thông tin đơn mua hàng">
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Nhà cung cấp</Label>
-            <Select value={supplierId} onValueChange={setSupplierId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn nhà cung cấp..." />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((supplier) => (
-                  <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Kho nhận hàng</Label>
-            <Select value={warehouseId} onValueChange={setWarehouseId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn kho..." />
-              </SelectTrigger>
-              <SelectContent>
-                {warehouses.map((warehouse) => (
-                  <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Ngày dự kiến nhận</Label>
-            <Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Ghi chú</Label>
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú (không bắt buộc)" />
-          </div>
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Danh sách sách" subtitle={`Tạm tính: ${formatCurrency(totalAmount)}`}>
-        <div className="mb-4 rounded-xl border border-dashed border-input bg-muted/20 p-3">
-          <div className="flex flex-col gap-2 md:flex-row">
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void searchVariants(); }}
-              placeholder="Tìm theo tên sách, SKU hoặc ISBN..."
-              className="flex-1"
-            />
-            <Button type="button" variant="outline" loading={searching} onClick={() => void searchVariants()}>
-              <Search className="h-3.5 w-3.5" />
-              Tìm biến thể
-            </Button>
-          </div>
-          {results.length > 0 && (
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              {results.map((variant) => (
-                <button
-                  key={variant.variant_id}
-                  type="button"
-                  onClick={() => selectVariant(variant)}
-                  disabled={!activeLineKey}
-                  className="rounded-lg border border-input bg-card p-3 text-left text-[13px] hover:border-indigo-200 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:border-indigo-500/30 dark:hover:bg-indigo-500/10"
-                >
-                  <div className="font-medium">{variant.title}</div>
-                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">{variant.isbn13 || variant.sku || variant.barcode || variant.variant_id}</div>
-                </button>
-              ))}
-            </div>
-          )}
-          {results.length > 0 && !activeLineKey && (
-            <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">Chọn một dòng sách bên dưới trước khi gán biến thể.</p>
-          )}
-        </div>
-
-        {lines.length === 0 ? (
-          <EmptyState variant="no-data" title="Chưa có dòng sách nào" description="Thêm ít nhất một dòng sách" />
-        ) : (
-          <div className="space-y-3">
-            {lines.map((line, index) => (
-              <div key={line.key} className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1.5fr_110px_130px_1fr_40px]">
-                <button
-                  type="button"
-                  onClick={() => setActiveLineKey(line.key)}
-                  className={cn(
-                    "rounded-lg border px-3 py-2 text-left text-[13px]",
-                    activeLineKey === line.key ? "border-indigo-300 bg-indigo-50 dark:border-indigo-500/30 dark:bg-indigo-500/10" : "border-input bg-background",
-                  )}
-                >
-                  <div className="font-medium">{line.title || `Dòng ${index + 1}: chọn biến thể sách`}</div>
-                  <div className="mt-1 font-mono text-[11px] text-muted-foreground">{line.isbn13 || line.sku || line.variant_id || "Bấm rồi tìm ở trên"}</div>
-                </button>
-                <Input type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="font-mono" placeholder="SL" />
-                <Input type="number" min={0} {...zeroFieldProps} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(numberInputValue(e)) })} className="font-mono" placeholder="Đơn giá" />
-                <Input value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} placeholder="Ghi chú dòng" />
-                <Button
-                  type="button"
-                  variant="danger-outline"
-                  size="icon"
-                  onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}
-                  aria-label="Xóa dòng"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+      <div className="@container/page">
+        <div className="grid grid-cols-1 items-start gap-5 @4xl/page:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0 space-y-5">
+            <section aria-labelledby="po-info-title" className="rounded-2xl border border-border bg-card p-5">
+              <h2 id="po-info-title" className="font-display text-[18px] font-semibold tracking-tight">Thông tin đơn</h2>
+              <div className="mt-4 grid gap-4 @2xl/page:grid-cols-2">
+                <div>
+                  <Label htmlFor="po-supplier" className={fieldLabel}>Nhà cung cấp</Label>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger id="po-supplier" className="w-full">
+                      <SelectValue placeholder="Chọn nhà cung cấp..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="po-warehouse" className={fieldLabel}>Kho nhận hàng</Label>
+                  <Select value={warehouseId} onValueChange={setWarehouseId}>
+                    <SelectTrigger id="po-warehouse" className="w-full">
+                      <SelectValue placeholder="Chọn kho..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map((warehouse) => (
+                        <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="po-expected-date" className={fieldLabel}>Ngày dự kiến nhận</Label>
+                  <Input id="po-expected-date" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} />
+                </div>
+                <div>
+                  <Label htmlFor="po-note" className={fieldLabel}>Ghi chú</Label>
+                  <Input id="po-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Không bắt buộc" />
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            </section>
 
-        <div className="mt-4">
-          <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine()])}>
-            <Plus className="h-3.5 w-3.5" />
-            Thêm dòng
-          </Button>
+            <section aria-labelledby="po-lines-title" className="rounded-2xl border border-border bg-card p-5">
+              <h2 id="po-lines-title" className="font-display text-[18px] font-semibold tracking-tight">Sách cần đặt</h2>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">Bấm vào một dòng để chọn nó, rồi tìm sách và bấm vào kết quả để gán sách cho dòng đó.</p>
+
+              <div className="mt-4 rounded-xl border border-border bg-muted/30 p-3">
+                <div className="flex flex-col gap-2 @2xl/page:flex-row">
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") void searchVariants(); }}
+                    placeholder="Tìm theo tên sách, SKU hoặc ISBN..."
+                    aria-label="Tìm sách để gán cho dòng đang chọn"
+                    className="flex-1 bg-card"
+                  />
+                  <Button type="button" variant="outline" loading={searching} onClick={() => void searchVariants()} className="gap-2">
+                    <Search className="h-3.5 w-3.5" />
+                    Tìm sách
+                  </Button>
+                </div>
+                {results.length > 0 && (
+                  <div className="mt-3 grid gap-2 @2xl/page:grid-cols-2">
+                    {results.map((variant) => (
+                      <button
+                        key={variant.variant_id}
+                        type="button"
+                        onClick={() => selectVariant(variant)}
+                        disabled={!activeLineKey}
+                        className="rounded-lg border border-border bg-card p-3 text-left text-[13px] transition-colors hover:border-primary/35 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <div className="font-medium text-foreground">{variant.title}</div>
+                        <div className="mt-0.5 font-mono text-[12px] text-muted-foreground">{variant.isbn13 || variant.sku || variant.barcode || variant.variant_id}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {results.length > 0 && !activeLineKey && (
+                  <p className="mt-2 text-[12px] text-amber-700 dark:text-amber-300">Chọn một dòng sách bên dưới trước khi gán.</p>
+                )}
+              </div>
+
+              {lines.length === 0 ? (
+                <EmptyState variant="no-data" title="Chưa có dòng sách nào" description="Thêm ít nhất một dòng sách" className="py-8" />
+              ) : (
+                <ol className="mt-4 space-y-3">
+                  {lines.map((line, index) => {
+                    const active = activeLineKey === line.key;
+                    const lineTotal = (Number(line.ordered_qty) || 0) * (Number(line.unit_cost) || 0);
+                    return (
+                      <li key={line.key} className={cn("rounded-xl border p-3 transition-colors", active ? "border-primary/40 bg-primary/[0.04]" : "border-border")}>
+                        <div className="flex items-start gap-3">
+                          <span className="mt-2 w-5 shrink-0 text-[13px] font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setActiveLineKey(line.key)}
+                            aria-pressed={active}
+                            className="min-w-0 flex-1 rounded-lg px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                          >
+                            <span className={cn("block text-[14px] font-medium", line.title ? "text-foreground" : "text-muted-foreground")}>
+                              {line.title || "Chưa chọn sách"}
+                            </span>
+                            <span className={cn("block text-[12px] text-muted-foreground", (line.isbn13 || line.sku || line.variant_id) && "font-mono")}>
+                              {line.isbn13 || line.sku || line.variant_id || (active ? "Đang chọn dòng này, tìm sách ở trên" : "Bấm để chọn dòng này")}
+                            </span>
+                          </button>
+                          <IconButton
+                            variant="ghost"
+                            size="sm-icon"
+                            onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}
+                            label={`Xóa dòng ${index + 1}`}
+                            title="Xóa dòng"
+                            className="text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </IconButton>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-3 pl-8 @2xl/page:grid-cols-[110px_150px_minmax(0,1fr)]">
+                          <div>
+                            <label htmlFor={`po-qty-${line.key}`} className="mb-1 block text-[12px] text-muted-foreground">Số lượng, cuốn</label>
+                            <Input id={`po-qty-${line.key}`} type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="tabular-nums" />
+                          </div>
+                          <div>
+                            <label htmlFor={`po-cost-${line.key}`} className="mb-1 block text-[12px] text-muted-foreground">Đơn giá, VND</label>
+                            <Input id={`po-cost-${line.key}`} type="number" min={0} {...zeroFieldProps} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(numberInputValue(e)) })} className="tabular-nums" />
+                          </div>
+                          <div className="col-span-2 @2xl/page:col-span-1">
+                            <label htmlFor={`po-line-note-${line.key}`} className="mb-1 block text-[12px] text-muted-foreground">Ghi chú dòng</label>
+                            <Input id={`po-line-note-${line.key}`} value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} placeholder="Không bắt buộc" />
+                          </div>
+                        </div>
+                        <p className="mt-2 pl-8 text-[12px] tabular-nums text-muted-foreground">Thành tiền {formatCurrency(lineTotal)}</p>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+
+              <Button type="button" variant="outline" className="mt-4 gap-2" onClick={() => setLines((current) => [...current, newLine()])}>
+                <Plus className="h-3.5 w-3.5" />
+                Thêm dòng
+              </Button>
+            </section>
+          </div>
+
+          <aside aria-labelledby="po-summary-title" className="rounded-2xl border border-border bg-card p-5 @4xl/page:sticky @4xl/page:top-4">
+            <h2 id="po-summary-title" className="font-display text-[18px] font-semibold tracking-tight">Tóm tắt đơn</h2>
+            <dl className="mt-3 space-y-2.5 text-[13px]">
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Nhà cung cấp</dt><dd className="text-right text-foreground">{supplierName || "Chưa chọn"}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Kho nhận</dt><dd className="text-right text-foreground">{warehouseName ? warehouseName.code : "Chưa chọn"}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Dòng đã chọn sách</dt><dd className="text-right tabular-nums text-foreground">{pickedLines} / {lines.length}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Tổng số cuốn</dt><dd className="text-right tabular-nums text-foreground">{totalQty.toLocaleString("vi-VN")}</dd></div>
+            </dl>
+            <div className="mt-4 border-t border-border pt-4">
+              <p className="text-[13px] text-muted-foreground">Tạm tính, VND</p>
+              <p className="font-display text-[28px] font-semibold leading-tight tabular-nums text-foreground">{Number(totalAmount || 0).toLocaleString("vi-VN")}</p>
+            </div>
+            <Button onClick={() => void save()} loading={saving} className="mt-4 w-full gap-2">
+              <Save className="h-3.5 w-3.5" />
+              {saving ? "Đang lưu..." : isEdit ? "Lưu thay đổi" : "Lưu đơn mua hàng"}
+            </Button>
+          </aside>
         </div>
-      </SectionCard>
+      </div>
     </div>
   );
 }

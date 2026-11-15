@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
 const { normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear } = require('../services/catalog-metadata.validation');
 const {
@@ -7,7 +6,7 @@ const {
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 /** null (superuser, no filter) or the Prisma `where` to scope a stock_balances include/query
  * to warehouses the caller may READ — never write-scope here, catalog browsing is read-only. */

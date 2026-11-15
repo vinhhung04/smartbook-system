@@ -4,6 +4,7 @@ import { customerBorrowService } from '@/services/customer-borrow';
 import { getApiErrorMessage } from '@/services/api';
 import { formatCurrencyVnd, formatDateTime } from './customer-format';
 import { StatusBadge } from './status-badge';
+import { getBorrowLabel } from '@/lib/status-registry';
 
 interface FineItemProps {
   fine: any;
@@ -28,24 +29,24 @@ export function FineItem({ fine }: FineItemProps) {
   }
 
   const toneClassName = status === 'UNPAID'
-    ? 'border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20'
+    ? 'border-red-200 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/20'
     : status === 'PARTIALLY_PAID'
       ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
       : status === 'PAID' || status === 'WAIVED'
-        ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/40 dark:bg-emerald-950/20'
+        ? 'border-primary/20 bg-primary/[0.05] dark:border-primary/20 dark:bg-primary/10'
         : 'border-border bg-card';
 
   return (
     <div className={`rounded-xl border p-4 transition-shadow duration-200 hover:shadow-[0_8px_20px_rgba(15,23,42,0.06)] ${toneClassName}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[14px] text-foreground" style={{ fontWeight: 700 }}>{fine.fine_type}</div>
+          <div className="text-[14px] text-foreground" style={{ fontWeight: 700 }}>{getBorrowLabel('fineType', fine.fine_type)}</div>
           <div className="mt-1 text-[12px] text-muted-foreground">Phát sinh ngày {formatDateTime(fine.issued_at)}</div>
           <div className="mt-1.5"><StatusBadge status={fine.status} /></div>
         </div>
         <div className="text-right">
           <div className="text-[12px] text-muted-foreground">Tổng {formatCurrencyVnd(fine.amount)}</div>
-          <div className={`mt-0.5 font-mono text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-rose-700 dark:text-rose-400' : 'text-foreground') : 'text-emerald-600 dark:text-emerald-400'}`} style={{ fontWeight: 700 }}>
+          <div className={`mt-0.5 text-[16px] tabular-nums ${remaining > 0 ? (isHighRemaining ? 'text-red-700 dark:text-red-400' : 'text-foreground') : 'text-primary dark:text-primary'}`} style={{ fontWeight: 700 }}>
             {remaining > 0 ? `Còn ${formatCurrencyVnd(remaining)}` : 'Đã xong'}
           </div>
         </div>
@@ -60,7 +61,7 @@ export function FineItem({ fine }: FineItemProps) {
           >
             {isStartingPayment ? 'Đang khởi tạo...' : 'Thanh toán online qua VNPay'}
           </button>
-          <p className="text-center text-[11px] text-muted-foreground">
+          <p className="text-center text-[12px] text-muted-foreground">
             Hoặc thanh toán trực tiếp tại quầy thư viện — nhân viên sẽ ghi nhận vào hệ thống.
           </p>
         </div>

@@ -240,7 +240,6 @@ export function PublicCatalogPage() {
     query.year ? { key: 'year', label: `Năm ${query.year}` } : null,
   ].filter((chip): chip is { key: string; label: string } => Boolean(chip)) : [];
 
-  const eyebrow = slug ? 'Thể loại' : isSearchPage ? 'Tìm kiếm' : branchPage ? 'Chi nhánh' : query.sort === 'newest' ? 'Mới cập nhật' : 'Danh mục';
   const description = slug
     ? (result ? `${result.meta.total} đầu sách trong thể loại này.` : 'Sách trong thể loại này.')
     : branchPage && result
@@ -252,7 +251,6 @@ export function PublicCatalogPage() {
   return (
     <>
       <PageHero
-        eyebrow={eyebrow}
         title={heading}
         description={description}
         top={slug ? (

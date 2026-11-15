@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/pagination';
 import { getPaginationRange } from '@/lib/pagination';
 import { cn } from '@/components/ui/utils';
-import { getStatusVariant } from '@/lib/status-registry';
+import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
 import { borrowService, type Loan, type Fine } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { stockMovementService } from '@/services/stock-movement';
@@ -63,18 +63,18 @@ const FINE_STATUS_LABELS: Record<string, string> = {
   WAIVED: 'Đã miễn',
 };
 
-// Same emerald/amber/rose/slate vocabulary StatusBadge uses for fine statuses (status-registry 'fine').
+// Owed money in red/amber, settled in the brand hue, waived in slate.
 const FINE_STATUS_COLORS: Record<string, string> = {
-  UNPAID: '#f43f5e',
-  PARTIALLY_PAID: '#f59e0b',
-  PAID: '#10b981',
+  UNPAID: '#b91c1c',
+  PARTIALLY_PAID: '#b45309',
+  PAID: 'var(--primary)',
   WAIVED: '#94a3b8',
 };
 const FINE_STATUS_ORDER = ['UNPAID', 'PARTIALLY_PAID', 'PAID', 'WAIVED'];
 
-const LOAN_COLOR = '#6366f1';
-const INBOUND_COLOR = '#10b981';
-const OUTBOUND_COLOR = '#f43f5e';
+const LOAN_COLOR = 'var(--primary)';
+const INBOUND_COLOR = 'var(--primary)';
+const OUTBOUND_COLOR = '#94a3b8';
 const GRID_STROKE = 'rgba(148, 163, 184, 0.22)';
 
 const TABLE_PAGE_SIZE = 10;
@@ -192,12 +192,12 @@ function Metric({ label, value, detail, delta, compareLabel }: {
   return (
     <div className="min-w-0 px-5 py-4">
       <dt className="text-[13px] text-muted-foreground">{label}</dt>
-      <dd className="mt-1.5 text-[28px] font-semibold leading-none tracking-tight text-foreground">{value}</dd>
+      <dd className="mt-1.5 font-display text-[30px] font-semibold leading-none tracking-tight text-foreground">{value}</dd>
       {delta ? (
         <p className="mt-2 flex items-center gap-1 text-[12px]">
           <span className={cn(
             'inline-flex items-center gap-0.5 font-semibold',
-            delta.good === null ? 'text-muted-foreground' : delta.good ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
+            delta.good === null ? 'text-muted-foreground' : delta.good ? 'text-primary' : 'text-red-700 dark:text-red-400',
           )}>
             <Icon className="h-3.5 w-3.5" aria-hidden="true" />
             {delta.text}
@@ -218,10 +218,10 @@ function Panel({ title, summary, legend, className, children }: {
   children: ReactNode;
 }) {
   return (
-    <section className={cn('rounded-xl border border-border bg-card p-5', className)}>
+    <section className={cn('min-w-0 rounded-2xl border border-border bg-card p-5', className)}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <h3 className="text-[14px] font-semibold text-foreground">{title}</h3>
+          <h3 className="font-display text-[17px] font-semibold tracking-tight text-foreground">{title}</h3>
           {summary ? <p className="mt-1 text-[13px] text-muted-foreground">{summary}</p> : null}
         </div>
         {legend}
@@ -425,11 +425,12 @@ export function ReportsPage() {
 
   // Resolves the top variant_ids to real book titles — nothing else in the loan payload carries a title.
   useEffect(() => {
-    const ids = topBooksCounts.filter((b) => b.isVariant && !variantTitles[b.key]).map((b) => b.key);
+    const ids = topBooksCounts.filter((b) => b.isVariant && !(b.key in variantTitles)).map((b) => b.key);
     if (ids.length === 0) return;
     borrowService.getVariantDetails({ ids: ids.join(',') })
       .then((res) => {
-        const map: Record<string, string> = {};
+        // Ids the catalog does not know are kept as '' so they show as unknown instead of loading forever.
+        const map: Record<string, string> = Object.fromEntries(ids.map((id) => [id, '']));
         for (const v of res.data || []) map[v.id] = v.title;
         setVariantTitles((prev) => ({ ...prev, ...map }));
       })
@@ -593,356 +594,413 @@ export function ReportsPage() {
   const topMax = topBooks[0]?.count || 1;
   const outstanding = fineBreakdown.rows.filter((r) => r.status === 'UNPAID' || r.status === 'PARTIALLY_PAID').reduce((s, r) => s + r.amount, 0);
   const truncatedNote = truncated.loans || truncated.fines
-    ? `Chỉ tải được ${(FETCH_PAGE_SIZE * FETCH_MAX_PAGES).toLocaleString('vi-VN')} ${truncated.loans ? 'phiếu mượn' : 'khoản phạt'} mới nhất — số liệu có thể thấp hơn thực tế và không so sánh được với kỳ trước.`
+    ? `Chỉ tải được ${(FETCH_PAGE_SIZE * FETCH_MAX_PAGES).toLocaleString('vi-VN')} ${truncated.loans ? 'phiếu mượn' : 'khoản phạt'} mới nhất, nên số liệu có thể thấp hơn thực tế và không so sánh được với kỳ trước.`
     : null;
 
+  const lede = loading
+    ? 'Đang tổng hợp số liệu mượn trả, tiền phạt và luồng kho.'
+    : borrowDenied
+      ? `${periodLabel}. Vai trò của bạn xem được luồng kho và danh mục sách.`
+      : `${periodLabel}: ${current.total.toLocaleString('vi-VN')} lượt mượn, ${Math.round(current.returnRate)}% đã trả, ${current.overdue.toLocaleString('vi-VN')} phiếu quá hạn, ${formatCurrency(current.fineAmount)} tiền phạt phát sinh.`;
+  const sections = [
+    { id: 'summary-heading', label: 'Tóm tắt kỳ' },
+    { id: 'activity-heading', label: `Hoạt động theo ${unitLabel}` },
+    ...(borrowDenied ? [] : [
+      { id: 'books-fines-heading', label: 'Sách và tiền phạt' },
+      { id: 'detail-heading', label: 'Chi tiết và xuất file' },
+    ]),
+  ];
+  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   return (
-    <PageWrapper className="space-y-8">
+    <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={BarChart3}
-          title="Báo cáo & thống kê"
-          description={period ? `${periodLabel} · ${compareLabel}` : periodLabel}
-          iconBg="bg-indigo-100 dark:bg-indigo-500/15"
-          iconColor="text-indigo-600 dark:text-indigo-400"
-          className="sm:flex-col lg:flex-row"
+          title="Báo cáo và thống kê"
+          description={lede}
           actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="max-w-full overflow-x-auto">
-                <SegmentedControl options={DATE_RANGE_OPTIONS} value={range} onChange={setRange} layoutId="reports-range" className="w-max" />
-              </div>
-              <Button size="sm" onClick={handleExportSummaryReport} disabled={loading}>
+            <>
+              <Button size="sm" onClick={handleExportSummaryReport} disabled={loading} className="gap-2">
                 <FileText className="h-3.5 w-3.5" />
                 Báo cáo tổng hợp
               </Button>
-              <Button size="sm" variant="outline" onClick={() => void loadData()} disabled={loading} aria-label="Tải lại dữ liệu">
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <Button size="sm" variant="outline" onClick={() => void loadData()} disabled={loading} className="gap-2">
+                <RefreshCw className={cn('h-3.5 w-3.5 motion-reduce:animate-none', loading && 'animate-spin')} />
+                Làm mới
               </Button>
-            </div>
+            </>
           }
         />
       </FadeItem>
 
-      <FadeItem>
-        <section aria-labelledby="summary-heading">
-          <h2 id="summary-heading" className="sr-only">Tóm tắt kỳ báo cáo</h2>
-          {truncatedNote ? (
-            <p className="mb-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3.5 py-2.5 text-[13px] text-foreground">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
-              {truncatedNote}
-            </p>
-          ) : null}
-          <div className="rounded-xl border border-border bg-card">
-            {loading ? (
-              <div className="p-5"><Skeleton className="h-[76px] w-full" /></div>
-            ) : borrowDenied ? (
-              <dl className="grid grid-cols-1">
-                <Metric label="Đầu sách trong catalog" value={books.length.toLocaleString('vi-VN')} detail="Số liệu mượn/trả và phạt không khả dụng với vai trò của bạn." />
-              </dl>
-            ) : (
-              <dl className="grid grid-cols-2 lg:grid-cols-4 [&>*]:border-border [&>*:nth-child(even)]:border-l [&>*:nth-child(n+3)]:border-t lg:[&>*:nth-child(3)]:border-l lg:[&>*:nth-child(n+3)]:border-t-0">
-                <Metric
-                  label="Lượt mượn"
-                  value={current.total.toLocaleString('vi-VN')}
-                  delta={canCompare ? percentDelta(current.total, previous.total, true) : null}
-                  compareLabel={compareLabel}
-                  detail={`Trung bình ${borrowTrend.average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} lượt/${unitLabel}`}
-                />
-                <Metric
-                  label="Tỷ lệ đã trả"
-                  value={`${Math.round(current.returnRate)}%`}
-                  delta={canCompare && previous.total > 0 ? pointDelta(current.returnRate, previous.returnRate, true) : null}
-                  compareLabel={compareLabel}
-                  detail={`${current.returned.toLocaleString('vi-VN')} / ${current.total.toLocaleString('vi-VN')} phiếu mượn trong kỳ`}
-                />
-                <Metric
-                  label="Phiếu quá hạn"
-                  value={current.overdue.toLocaleString('vi-VN')}
-                  delta={canCompare ? percentDelta(current.overdue, previous.overdue, false) : null}
-                  compareLabel={compareLabel}
-                  detail={current.total ? `${((current.overdue / current.total) * 100).toFixed(1)}% số phiếu mượn trong kỳ` : undefined}
-                />
-                <Metric
-                  label="Tiền phạt phát sinh"
-                  value={formatCompactCurrency(current.fineAmount)}
-                  delta={canCompare ? percentDelta(current.fineAmount, previous.fineAmount, false) : null}
-                  compareLabel={compareLabel}
-                  detail={current.fineAmount ? `Đã tất toán ${formatShare(current.settledAmount, current.fineAmount)} · ${formatCurrency(current.fineAmount)}` : undefined}
-                />
-              </dl>
-            )}
-          </div>
-        </section>
-      </FadeItem>
-
-      <FadeItem>
-        <section aria-labelledby="activity-heading" className="space-y-3">
-          <h2 id="activity-heading" className="text-[16px] font-semibold text-foreground">Hoạt động theo {unitLabel}</h2>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            {!borrowDenied && (
-              <Panel
-                title="Lượt mượn"
-                summary={loading ? undefined : borrowTrend.peak.count > 0
-                  ? <>Cao nhất <span className="font-semibold text-foreground">{borrowTrend.peak.count.toLocaleString('vi-VN')}</span> lượt {buckets.unit === 'week' ? 'tuần từ' : 'ngày'} {formatAxisDate(borrowTrend.peak.date)} · trung bình {borrowTrend.average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}/{unitLabel}</>
-                  : 'Chưa có lượt mượn trong kỳ'}
-              >
-                {loading ? (
-                  <Skeleton className="h-[240px] w-full" />
-                ) : filteredLoans.length === 0 ? (
-                  <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có lượt mượn trong khoảng thời gian này." />
-                ) : (
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={borrowTrend.data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap={2}>
-                      <CartesianGrid stroke={GRID_STROKE} vertical={false} />
-                      <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
-                      <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
-                      <Tooltip cursor={{ fill: 'rgba(148,163,184,0.12)' }} content={<ChartTooltip unit={buckets.unit} />} />
-                      <Bar dataKey="count" name="Lượt mượn" fill={LOAN_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </Panel>
-            )}
-
-            <Panel
-              title="Luồng kho"
-              summary={loading ? undefined : movementTrend.hasAny
-                ? <>Nhập <span className="font-semibold text-foreground">{movementTrend.totalIn.toLocaleString('vi-VN')}</span> · Xuất <span className="font-semibold text-foreground">{movementTrend.totalOut.toLocaleString('vi-VN')}</span> · Chênh lệch <span className="font-semibold text-foreground">{(movementTrend.totalIn - movementTrend.totalOut).toLocaleString('vi-VN', { signDisplay: 'exceptZero' })}</span> cuốn</>
-                : `${books.length.toLocaleString('vi-VN')} đầu sách trong catalog`}
-              legend={<div className="flex items-center gap-4"><LegendItem color={INBOUND_COLOR} label="Nhập" /><LegendItem color={OUTBOUND_COLOR} label="Xuất" /></div>}
-            >
-              {loading ? (
-                <Skeleton className="h-[240px] w-full" />
-              ) : !movementTrend.hasAny ? (
-                <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có biến động kho trong khoảng thời gian này." />
-              ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={movementTrend.data} stackOffset="sign" margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap={2}>
-                    <CartesianGrid stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
-                    <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} tickFormatter={(v: number) => Math.abs(v).toLocaleString('vi-VN')} />
-                    <Tooltip cursor={{ fill: 'rgba(148,163,184,0.12)' }} content={<ChartTooltip unit={buckets.unit} />} />
-                    <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1} />
-                    <Bar dataKey="inbound" name="Nhập" stackId="flow" fill={INBOUND_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    <Bar dataKey="outbound" name="Xuất" stackId="flow" fill={OUTBOUND_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </Panel>
-          </div>
-        </section>
-      </FadeItem>
-
-      {!borrowDenied && (
+      {truncatedNote ? (
         <FadeItem>
-          <section aria-labelledby="books-fines-heading" className="space-y-3">
-            <h2 id="books-fines-heading" className="text-[16px] font-semibold text-foreground">Sách & tiền phạt</h2>
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-5">
-              <Panel title="Sách được mượn nhiều nhất" summary="Xếp hạng theo lượt mượn trong kỳ" className="xl:col-span-3">
-                {loading ? (
-                  <Skeleton className="h-[260px] w-full" />
-                ) : topBooks.length === 0 ? (
-                  <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Chưa có lượt mượn để thống kê." />
-                ) : (
-                  <ol className="space-y-3">
-                    {topBooks.map((book, index) => (
-                      <li key={book.key} className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
-                        <span className="text-[12px] font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
-                        <span className="truncate text-[13px] font-medium text-foreground" title={book.title}>
-                          {book.title ?? <span className="text-muted-foreground">Đang tải tên sách…</span>}
-                        </span>
-                        <span className="text-[13px] font-semibold tabular-nums text-foreground">{book.count.toLocaleString('vi-VN')}</span>
-                        <span className="col-start-2 col-end-4 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                          <span className="block h-full rounded-full" style={{ width: `${(book.count / topMax) * 100}%`, background: LOAN_COLOR }} />
-                        </span>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </Panel>
-
-              <Panel
-                title="Tiền phạt theo trạng thái"
-                summary={loading || fineBreakdown.total === 0 ? undefined : <>Còn phải thu <span className="font-semibold text-foreground">{formatCurrency(outstanding)}</span></>}
-                className="xl:col-span-2"
-              >
-                {loading ? (
-                  <Skeleton className="h-[260px] w-full" />
-                ) : fineBreakdown.rows.length === 0 ? (
-                  <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có khoản phạt trong khoảng thời gian này." />
-                ) : (
-                  <>
-                    <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label="Tỷ trọng tiền phạt theo trạng thái">
-                      {fineBreakdown.rows.map((row) => (
-                        <span
-                          key={row.status}
-                          className="h-full first:rounded-l-full last:rounded-r-full"
-                          style={{ width: `${(row.amount / fineBreakdown.total) * 100}%`, minWidth: row.amount > 0 ? 4 : 0, background: FINE_STATUS_COLORS[row.status] }}
-                          title={`${FINE_STATUS_LABELS[row.status]}: ${formatCurrency(row.amount)}`}
-                        />
-                      ))}
-                    </div>
-                    <table className="mt-5 w-full text-[13px]">
-                      <thead className="sr-only">
-                        <tr><th>Trạng thái</th><th>Số khoản</th><th>Số tiền</th><th>Tỷ trọng</th></tr>
-                      </thead>
-                      <tbody>
-                        {fineBreakdown.rows.map((row) => (
-                          <tr key={row.status} className="border-b border-border last:border-0">
-                            <td className="py-2.5">
-                              <span className="inline-flex items-center gap-2 text-foreground">
-                                <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: FINE_STATUS_COLORS[row.status] }} aria-hidden="true" />
-                                {FINE_STATUS_LABELS[row.status] || row.status}
-                              </span>
-                            </td>
-                            <td className="py-2.5 text-right tabular-nums text-muted-foreground">{row.count.toLocaleString('vi-VN')} khoản</td>
-                            <td className="py-2.5 pl-4 text-right font-semibold tabular-nums text-foreground">{formatCompactCurrency(row.amount)}</td>
-                            <td className="w-12 py-2.5 text-right tabular-nums text-muted-foreground">{formatShare(row.amount, fineBreakdown.total)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
-                )}
-              </Panel>
-            </div>
-          </section>
+          <p className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-[13px] text-foreground dark:border-amber-500/25 dark:bg-amber-500/[0.06]">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />
+            {truncatedNote}
+          </p>
         </FadeItem>
-      )}
+      ) : null}
 
-      {!borrowDenied && (
-        <FadeItem>
-          <section aria-labelledby="detail-heading" className="space-y-3">
-            <h2 id="detail-heading" className="text-[16px] font-semibold text-foreground">Chi tiết</h2>
-            <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'loans' | 'fines')} className="gap-0 overflow-hidden rounded-xl border border-border bg-card">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
-                <TabsList className="h-9">
-                  <TabsTrigger value="loans" className="px-3 text-[13px]">
-                    Phiếu mượn <span className="ml-1 tabular-nums text-muted-foreground">{searchedLoans.length.toLocaleString('vi-VN')}</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="fines" className="px-3 text-[13px]">
-                    Khoản phạt <span className="ml-1 tabular-nums text-muted-foreground">{searchedFines.length.toLocaleString('vi-VN')}</span>
-                  </TabsTrigger>
-                </TabsList>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={loading}>
-                    <FileSpreadsheet className="h-3.5 w-3.5" /> Xuất CSV
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={loading}>
-                    <FileText className="h-3.5 w-3.5" /> Xuất PDF
-                  </Button>
-                </div>
+      <FadeItem>
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-5 @4xl/page:grid-cols-[232px_minmax(0,1fr)]">
+            <nav aria-label="Kỳ báo cáo và mục lục" className="hidden rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              <p id="range-rail-label" className="px-3 pb-1.5 text-[12px] font-medium text-muted-foreground">Kỳ báo cáo</p>
+              <div role="group" aria-labelledby="range-rail-label">
+                {DATE_RANGE_OPTIONS.map((option) => {
+                  const active = range === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setRange(option.value)}
+                      className={cn(
+                        'flex w-full items-center rounded-lg px-3 py-2 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                        active ? 'bg-primary/[0.08] font-semibold text-primary' : 'font-medium text-foreground hover:bg-muted/60',
+                      )}
+                    >
+                      {option.value === 'all' ? 'Toàn bộ dữ liệu' : `${option.label} gần nhất`}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="px-3 pt-1.5 text-[12px] leading-relaxed text-muted-foreground">{period ? `${periodLabel}, ${compareLabel}` : periodLabel}</p>
 
-              <TabsContent value="loans" className="mt-0">
-                {loading ? (
-                  <div className="p-5"><Skeleton className="h-[200px] w-full" /></div>
-                ) : filteredLoans.length === 0 ? (
-                  <div className="p-5"><EmptyState variant="no-data" title="Không có phiếu mượn" description="Chưa có dữ liệu mượn/trả trong khoảng thời gian này." /></div>
-                ) : (
-                  <>
-                    <div className="border-b border-border px-5 py-3">
-                      <FilterBar searchValue={loanQuery} onSearchChange={setLoanQuery} searchPlaceholder="Tìm theo mã phiếu hoặc tên khách hàng..." />
-                    </div>
-                    {searchedLoans.length === 0 ? (
-                      <EmptyState variant="no-results" title="Không tìm thấy phiếu mượn" description="Thử một mã phiếu hoặc tên khách hàng khác." />
+              <p className="mt-3 border-t border-border px-3 pb-1.5 pt-3 text-[12px] font-medium text-muted-foreground">Trong báo cáo</p>
+              <ol className="space-y-0.5">
+                {sections.map((section, index) => (
+                  <li key={section.id}>
+                    <button
+                      type="button"
+                      onClick={() => jumpTo(section.id)}
+                      className="flex w-full items-baseline gap-2.5 rounded-lg px-3 py-1.5 text-left text-[13px] text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                      <span className="w-3 shrink-0 tabular-nums text-muted-foreground">{index + 1}</span>
+                      {section.label}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 @4xl/page:hidden">
+              <div className="max-w-full overflow-x-auto">
+                <SegmentedControl options={DATE_RANGE_OPTIONS} value={range} onChange={setRange} layoutId="reports-range" className="w-max" />
+              </div>
+              <p className="text-[13px] text-muted-foreground">{period ? compareLabel : periodLabel}</p>
+            </div>
+
+            <div className="@container min-w-0 space-y-8">
+              <section aria-labelledby="summary-heading" className="scroll-mt-4 space-y-3">
+                <h2 id="summary-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Tóm tắt kỳ</h2>
+                <div className="overflow-hidden rounded-2xl border border-border bg-card">
+                  {loading ? (
+                    <div className="p-5"><Skeleton className="h-[76px] w-full" /></div>
+                  ) : borrowDenied ? (
+                    <dl className="grid grid-cols-1">
+                      <Metric label="Đầu sách trong catalog" value={books.length.toLocaleString('vi-VN')} detail="Số liệu mượn/trả và phạt không khả dụng với vai trò của bạn." />
+                    </dl>
+                  ) : (
+                    <dl className="grid grid-cols-1 divide-y divide-border @xl:grid-cols-2 @xl:divide-y-0 @4xl:grid-cols-4 [&>*]:border-border @xl:[&>*:nth-child(even)]:border-l @xl:[&>*:nth-child(n+3)]:border-t @4xl:[&>*:nth-child(3)]:border-l @4xl:[&>*:nth-child(n+3)]:border-t-0">
+                      <Metric
+                        label="Lượt mượn"
+                        value={current.total.toLocaleString('vi-VN')}
+                        delta={canCompare ? percentDelta(current.total, previous.total, true) : null}
+                        compareLabel={compareLabel}
+                        detail={`Trung bình ${borrowTrend.average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} lượt mỗi ${unitLabel}`}
+                      />
+                      <Metric
+                        label="Tỷ lệ đã trả"
+                        value={`${Math.round(current.returnRate)}%`}
+                        delta={canCompare && previous.total > 0 ? pointDelta(current.returnRate, previous.returnRate, true) : null}
+                        compareLabel={compareLabel}
+                        detail={`${current.returned.toLocaleString('vi-VN')} trên ${current.total.toLocaleString('vi-VN')} phiếu mượn trong kỳ`}
+                      />
+                      <Metric
+                        label="Phiếu quá hạn"
+                        value={current.overdue.toLocaleString('vi-VN')}
+                        delta={canCompare ? percentDelta(current.overdue, previous.overdue, false) : null}
+                        compareLabel={compareLabel}
+                        detail={current.total ? `${((current.overdue / current.total) * 100).toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% số phiếu mượn trong kỳ` : undefined}
+                      />
+                      <Metric
+                        label="Tiền phạt phát sinh"
+                        value={formatCompactCurrency(current.fineAmount)}
+                        delta={canCompare ? percentDelta(current.fineAmount, previous.fineAmount, false) : null}
+                        compareLabel={compareLabel}
+                        detail={current.fineAmount ? `${formatCurrency(current.fineAmount)}, đã tất toán ${formatShare(current.settledAmount, current.fineAmount)}` : undefined}
+                      />
+                    </dl>
+                  )}
+                </div>
+              </section>
+
+              <section aria-labelledby="activity-heading" className="scroll-mt-4 space-y-3">
+                <h2 id="activity-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Hoạt động theo {unitLabel}</h2>
+                <div className="grid grid-cols-1 gap-5 @4xl:grid-cols-2">
+                  {!borrowDenied && (
+                    <Panel
+                      title="Lượt mượn"
+                      summary={loading ? undefined : borrowTrend.peak.count > 0
+                        ? <>Cao nhất <span className="font-semibold text-foreground">{borrowTrend.peak.count.toLocaleString('vi-VN')}</span> lượt {buckets.unit === 'week' ? 'tuần từ' : 'ngày'} {formatAxisDate(borrowTrend.peak.date)}, trung bình {borrowTrend.average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} mỗi {unitLabel}</>
+                        : 'Chưa có lượt mượn trong kỳ'}
+                    >
+                      {loading ? (
+                        <Skeleton className="h-[240px] w-full" />
+                      ) : filteredLoans.length === 0 ? (
+                        <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có lượt mượn trong khoảng thời gian này." />
+                      ) : (
+                        <ResponsiveContainer width="100%" height={240}>
+                          <BarChart data={borrowTrend.data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap={2}>
+                            <CartesianGrid stroke={GRID_STROKE} vertical={false} />
+                            <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
+                            <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+                            <Tooltip cursor={{ fill: 'rgba(148,163,184,0.12)' }} content={<ChartTooltip unit={buckets.unit} />} />
+                            <Bar dataKey="count" name="Lượt mượn" fill={LOAN_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </Panel>
+                  )}
+
+                  <Panel
+                    title="Luồng kho"
+                    summary={loading ? undefined : movementTrend.hasAny
+                      ? <>Nhập <span className="font-semibold text-foreground">{movementTrend.totalIn.toLocaleString('vi-VN')}</span>, xuất <span className="font-semibold text-foreground">{movementTrend.totalOut.toLocaleString('vi-VN')}</span>, chênh lệch <span className="font-semibold text-foreground">{(movementTrend.totalIn - movementTrend.totalOut).toLocaleString('vi-VN', { signDisplay: 'exceptZero' })}</span> cuốn</>
+                      : `${books.length.toLocaleString('vi-VN')} đầu sách trong catalog`}
+                    legend={<div className="flex items-center gap-4"><LegendItem color={INBOUND_COLOR} label="Nhập" /><LegendItem color={OUTBOUND_COLOR} label="Xuất" /></div>}
+                  >
+                    {loading ? (
+                      <Skeleton className="h-[240px] w-full" />
+                    ) : !movementTrend.hasAny ? (
+                      <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có biến động kho trong khoảng thời gian này." />
                     ) : (
-                      <>
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b border-border bg-muted/30">
-                                {[
-                                  { label: 'Phiếu mượn', className: '' },
-                                  { label: 'Ngày mượn', className: 'hidden md:table-cell' },
-                                  { label: 'Hạn trả', className: 'hidden sm:table-cell' },
-                                  { label: 'Trạng thái', className: '' },
-                                  { label: 'Số cuốn', className: 'hidden sm:table-cell text-right' },
-                                ].map((h) => (
-                                  <th key={h.label} className={cn('px-5 py-2.5 text-left text-[12px] font-medium text-muted-foreground', h.className)}>{h.label}</th>
-                                ))}
-                              </tr>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <BarChart data={movementTrend.data} stackOffset="sign" margin={{ top: 8, right: 4, left: 0, bottom: 0 }} barCategoryGap={2}>
+                          <CartesianGrid stroke={GRID_STROKE} vertical={false} />
+                          <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={axisTick} axisLine={false} tickLine={false} minTickGap={24} />
+                          <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} tickFormatter={(v: number) => Math.abs(v).toLocaleString('vi-VN')} />
+                          <Tooltip cursor={{ fill: 'rgba(148,163,184,0.12)' }} content={<ChartTooltip unit={buckets.unit} />} />
+                          <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1} />
+                          <Bar dataKey="inbound" name="Nhập" stackId="flow" fill={INBOUND_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                          <Bar dataKey="outbound" name="Xuất" stackId="flow" fill={OUTBOUND_COLOR} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </Panel>
+                </div>
+              </section>
+
+              {!borrowDenied && (
+                <section aria-labelledby="books-fines-heading" className="scroll-mt-4 space-y-3">
+                  <h2 id="books-fines-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Sách và tiền phạt</h2>
+                  <div className="grid grid-cols-1 gap-5 @4xl:grid-cols-5">
+                    <Panel title="Sách được mượn nhiều nhất" summary="Xếp hạng theo lượt mượn trong kỳ" className="@4xl:col-span-3">
+                      {loading ? (
+                        <Skeleton className="h-[260px] w-full" />
+                      ) : topBooks.length === 0 ? (
+                        <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Chưa có lượt mượn để thống kê." />
+                      ) : (
+                        <ol className="space-y-3">
+                          {topBooks.map((book, index) => (
+                            <li key={book.key} className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
+                              <span className="text-[12px] font-semibold tabular-nums text-muted-foreground">{index + 1}</span>
+                              <span className="truncate text-[13px] font-medium text-foreground" title={book.title}>
+                                {book.title || <span className="text-muted-foreground">{book.title === '' ? 'Không tìm thấy tên sách' : 'Đang tải tên sách…'}</span>}
+                              </span>
+                              <span className="text-[13px] font-semibold tabular-nums text-foreground">{book.count.toLocaleString('vi-VN')}</span>
+                              <span className="col-start-2 col-end-4 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                                <span className="block h-full rounded-full" style={{ width: `${(book.count / topMax) * 100}%`, background: LOAN_COLOR }} />
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </Panel>
+
+                    <Panel
+                      title="Tiền phạt theo trạng thái"
+                      summary={loading || fineBreakdown.total === 0 ? undefined : <>Còn phải thu <span className="font-semibold text-foreground">{formatCurrency(outstanding)}</span></>}
+                      className="@4xl:col-span-2"
+                    >
+                      {loading ? (
+                        <Skeleton className="h-[260px] w-full" />
+                      ) : fineBreakdown.rows.length === 0 ? (
+                        <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có khoản phạt trong khoảng thời gian này." />
+                      ) : (
+                        <>
+                          <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label="Tỷ trọng tiền phạt theo trạng thái">
+                            {fineBreakdown.rows.map((row) => (
+                              <span
+                                key={row.status}
+                                className="h-full first:rounded-l-full last:rounded-r-full"
+                                style={{ width: `${(row.amount / fineBreakdown.total) * 100}%`, minWidth: row.amount > 0 ? 4 : 0, background: FINE_STATUS_COLORS[row.status] }}
+                                title={`${FINE_STATUS_LABELS[row.status]}: ${formatCurrency(row.amount)}`}
+                              />
+                            ))}
+                          </div>
+                          <table className="mt-5 w-full text-[13px]">
+                            <thead className="sr-only">
+                              <tr><th>Trạng thái</th><th>Số khoản</th><th>Số tiền</th><th>Tỷ trọng</th></tr>
                             </thead>
                             <tbody>
-                              {pagedLoans.map((loan) => (
-                                <tr key={loan.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
-                                  <td className="px-5 py-3">
-                                    <p className="font-mono text-[13px] font-medium">{loan.loan_number}</p>
-                                    <p className="max-w-[240px] truncate text-[12px] text-muted-foreground">{loan.customers?.full_name || loan.customer_id?.slice(0, 8)}</p>
+                              {fineBreakdown.rows.map((row) => (
+                                <tr key={row.status} className="border-b border-border last:border-0">
+                                  <td className="py-2.5">
+                                    <span className="inline-flex items-center gap-2 text-foreground">
+                                      <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: FINE_STATUS_COLORS[row.status] }} aria-hidden="true" />
+                                      {FINE_STATUS_LABELS[row.status] || row.status}
+                                    </span>
                                   </td>
-                                  <td className="hidden px-5 py-3 text-[13px] tabular-nums text-muted-foreground md:table-cell">{formatCellDate(loan.borrow_date)}</td>
-                                  <td className={cn('hidden px-5 py-3 text-[13px] tabular-nums sm:table-cell', loan.status === 'OVERDUE' ? 'font-medium text-rose-600 dark:text-rose-400' : 'text-muted-foreground')}>{formatCellDate(loan.due_date)}</td>
-                                  <td className="px-5 py-3">
-                                    <StatusBadge label={LOAN_STATUS_LABELS[loan.status] || loan.status} variant={getStatusVariant('loan', loan.status)} dot />
-                                  </td>
-                                  <td className="hidden px-5 py-3 text-right text-[13px] font-medium tabular-nums sm:table-cell">{loan.total_items}</td>
+                                  <td className="py-2.5 text-right tabular-nums text-muted-foreground">{row.count.toLocaleString('vi-VN')} khoản</td>
+                                  <td className="py-2.5 pl-4 text-right font-semibold tabular-nums text-foreground">{formatCompactCurrency(row.amount)}</td>
+                                  <td className="w-12 py-2.5 text-right tabular-nums text-muted-foreground">{formatShare(row.amount, fineBreakdown.total)}</td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
-                        </div>
-                        {renderTablePagination(loansCurrentPage, loansTotalPages, setLoansPage)}
-                      </>
-                    )}
-                  </>
-                )}
-              </TabsContent>
+                        </>
+                      )}
+                    </Panel>
+                  </div>
+                </section>
+              )}
 
-              <TabsContent value="fines" className="mt-0">
-                {loading ? (
-                  <div className="p-5"><Skeleton className="h-[200px] w-full" /></div>
-                ) : filteredFines.length === 0 ? (
-                  <div className="p-5"><EmptyState variant="no-data" title="Không có khoản phạt" description="Chưa có dữ liệu phạt trong khoảng thời gian này." /></div>
-                ) : (
-                  <>
-                    <div className="border-b border-border px-5 py-3">
-                      <FilterBar searchValue={fineQuery} onSearchChange={setFineQuery} searchPlaceholder="Tìm theo tên khách hàng..." />
+              {!borrowDenied && (
+                <section aria-labelledby="detail-heading" className="scroll-mt-4 space-y-3">
+                  <h2 id="detail-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Chi tiết và xuất file</h2>
+                  <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'loans' | 'fines')} className="@container gap-0 overflow-hidden rounded-2xl border border-border bg-card">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
+                      <TabsList className="h-9">
+                        <TabsTrigger value="loans" className="px-3 text-[13px]">
+                          Phiếu mượn <span className="ml-1 tabular-nums text-muted-foreground">{searchedLoans.length.toLocaleString('vi-VN')}</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="fines" className="px-3 text-[13px]">
+                          Khoản phạt <span className="ml-1 tabular-nums text-muted-foreground">{searchedFines.length.toLocaleString('vi-VN')}</span>
+                        </TabsTrigger>
+                      </TabsList>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={handleExportCsv} disabled={loading}>
+                          <FileSpreadsheet className="h-3.5 w-3.5" /> Xuất CSV
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={loading}>
+                          <FileText className="h-3.5 w-3.5" /> Xuất PDF
+                        </Button>
+                      </div>
                     </div>
-                    {searchedFines.length === 0 ? (
-                      <EmptyState variant="no-results" title="Không tìm thấy khoản phạt" description="Thử một tên khách hàng khác." />
-                    ) : (
-                      <>
-                        <div className="overflow-x-auto">
-                          <table className="w-full">
-                            <thead>
-                              <tr className="border-b border-border bg-muted/30">
-                                {[
-                                  { label: 'Khách hàng', className: '' },
-                                  { label: 'Số tiền', className: 'text-right' },
-                                  { label: 'Trạng thái', className: '' },
-                                  { label: 'Ngày phạt', className: 'hidden sm:table-cell' },
-                                ].map((h) => (
-                                  <th key={h.label} className={cn('px-5 py-2.5 text-left text-[12px] font-medium text-muted-foreground', h.className)}>{h.label}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {pagedFines.map((fine) => (
-                                <tr key={fine.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/40">
-                                  <td className="px-5 py-3">
-                                    <p className="max-w-[260px] truncate text-[13px]">{fine.customers?.full_name || fine.customer_id?.slice(0, 8)}</p>
-                                    <p className="text-[12px] text-muted-foreground">{fine.fine_type}</p>
-                                  </td>
-                                  <td className="px-5 py-3 text-right text-[13px] font-medium tabular-nums">{formatCurrency(Number(fine.amount))}</td>
-                                  <td className="px-5 py-3">
-                                    <StatusBadge label={FINE_STATUS_LABELS[fine.status] || fine.status} variant={getStatusVariant('fine', fine.status)} dot />
-                                  </td>
-                                  <td className="hidden px-5 py-3 text-[13px] tabular-nums text-muted-foreground sm:table-cell">{formatCellDate(fine.issued_at)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        {renderTablePagination(finesCurrentPage, finesTotalPages, setFinesPage)}
-                      </>
-                    )}
-                  </>
-                )}
-              </TabsContent>
-            </Tabs>
-          </section>
-        </FadeItem>
-      )}
+                    <p className="border-b border-border px-5 py-2.5 text-[12px] text-muted-foreground">
+                      Xuất file lấy đúng danh sách đang lọc của tab đang mở, trong kỳ {period ? periodLabel : 'toàn bộ dữ liệu'}.
+                    </p>
+
+                    <TabsContent value="loans" className="mt-0">
+                      {loading ? (
+                        <div className="p-5"><Skeleton className="h-[200px] w-full" /></div>
+                      ) : filteredLoans.length === 0 ? (
+                        <div className="p-5"><EmptyState variant="no-data" title="Không có phiếu mượn" description="Chưa có dữ liệu mượn/trả trong khoảng thời gian này." /></div>
+                      ) : (
+                        <>
+                          <div className="border-b border-border px-5 py-3">
+                            <FilterBar searchValue={loanQuery} onSearchChange={setLoanQuery} searchPlaceholder="Tìm theo mã phiếu hoặc tên khách hàng..." />
+                          </div>
+                          {searchedLoans.length === 0 ? (
+                            <EmptyState variant="no-results" title="Không tìm thấy phiếu mượn" description="Thử một mã phiếu hoặc tên khách hàng khác." />
+                          ) : (
+                            <>
+                              <table className="w-full table-fixed">
+                                <thead>
+                                  <tr className="border-b border-border">
+                                    <th className="px-5 py-2.5 text-left text-[12px] font-normal text-muted-foreground">Phiếu mượn</th>
+                                    <th className="hidden w-[132px] px-3 py-2.5 text-left text-[12px] font-normal text-muted-foreground @2xl:table-cell">Ngày mượn</th>
+                                    <th className="hidden w-[132px] px-3 py-2.5 text-left text-[12px] font-normal text-muted-foreground @2xl:table-cell">Hạn trả</th>
+                                    <th className="hidden w-[88px] px-3 py-2.5 text-right text-[12px] font-normal text-muted-foreground @2xl:table-cell">Số cuốn</th>
+                                    <th className="w-[132px] px-5 py-2.5 text-right text-[12px] font-normal text-muted-foreground">Trạng thái</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {pagedLoans.map((loan) => (
+                                    <tr key={loan.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/30">
+                                      <td className="px-5 py-3 align-top">
+                                        <p className="truncate text-[14px] font-medium text-foreground">{loan.customers?.full_name || loan.customer_id?.slice(0, 8)}</p>
+                                        <p className="truncate font-mono text-[12px] text-muted-foreground">{loan.loan_number}</p>
+                                        {/* Columns the container hides move here, so no field is dropped. */}
+                                        <p className="text-[12px] tabular-nums text-muted-foreground @2xl:hidden">
+                                          Mượn {formatCellDate(loan.borrow_date)}, hạn{' '}
+                                          <span className={loan.status === 'OVERDUE' ? 'font-medium text-red-700 dark:text-red-400' : undefined}>{formatCellDate(loan.due_date)}</span>, {loan.total_items} cuốn
+                                        </p>
+                                      </td>
+                                      <td className="hidden px-3 py-3 align-top text-[13px] tabular-nums text-muted-foreground @2xl:table-cell">{formatCellDate(loan.borrow_date)}</td>
+                                      <td className={cn('hidden px-3 py-3 align-top text-[13px] tabular-nums @2xl:table-cell', loan.status === 'OVERDUE' ? 'font-medium text-red-700 dark:text-red-400' : 'text-muted-foreground')}>{formatCellDate(loan.due_date)}</td>
+                                      <td className="hidden px-3 py-3 text-right align-top text-[13px] tabular-nums @2xl:table-cell">{loan.total_items}</td>
+                                      <td className="px-5 py-3 text-right align-top">
+                                        <StatusBadge label={LOAN_STATUS_LABELS[loan.status] || loan.status} variant={getStatusVariant('loan', loan.status)} dot />
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {renderTablePagination(loansCurrentPage, loansTotalPages, setLoansPage)}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="fines" className="mt-0">
+                      {loading ? (
+                        <div className="p-5"><Skeleton className="h-[200px] w-full" /></div>
+                      ) : filteredFines.length === 0 ? (
+                        <div className="p-5"><EmptyState variant="no-data" title="Không có khoản phạt" description="Chưa có dữ liệu phạt trong khoảng thời gian này." /></div>
+                      ) : (
+                        <>
+                          <div className="border-b border-border px-5 py-3">
+                            <FilterBar searchValue={fineQuery} onSearchChange={setFineQuery} searchPlaceholder="Tìm theo tên khách hàng..." />
+                          </div>
+                          {searchedFines.length === 0 ? (
+                            <EmptyState variant="no-results" title="Không tìm thấy khoản phạt" description="Thử một tên khách hàng khác." />
+                          ) : (
+                            <>
+                              <table className="w-full table-fixed">
+                                <thead>
+                                  <tr className="border-b border-border">
+                                    <th className="px-5 py-2.5 text-left text-[12px] font-normal text-muted-foreground">Khách hàng</th>
+                                    <th className="hidden w-[132px] px-3 py-2.5 text-left text-[12px] font-normal text-muted-foreground @2xl:table-cell">Ngày phạt</th>
+                                    <th className="w-[132px] px-3 py-2.5 text-right text-[12px] font-normal text-muted-foreground">Số tiền, đ</th>
+                                    <th className="w-[132px] px-5 py-2.5 text-right text-[12px] font-normal text-muted-foreground">Trạng thái</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {pagedFines.map((fine) => (
+                                    <tr key={fine.id} className="border-b border-border transition-colors last:border-0 hover:bg-muted/30">
+                                      <td className="px-5 py-3 align-top">
+                                        <p className="truncate text-[14px] font-medium text-foreground">{fine.customers?.full_name || fine.customer_id?.slice(0, 8)}</p>
+                                        <p className="text-[12px] text-muted-foreground">{getBorrowLabel('fineType', fine.fine_type)}</p>
+                                        <p className="text-[12px] tabular-nums text-muted-foreground @2xl:hidden">Phạt ngày {formatCellDate(fine.issued_at)}</p>
+                                      </td>
+                                      <td className="hidden px-3 py-3 align-top text-[13px] tabular-nums text-muted-foreground @2xl:table-cell">{formatCellDate(fine.issued_at)}</td>
+                                      <td className="px-3 py-3 text-right align-top text-[13px] font-medium tabular-nums">{Math.round(Number(fine.amount)).toLocaleString('vi-VN')}</td>
+                                      <td className="px-5 py-3 text-right align-top">
+                                        <StatusBadge label={FINE_STATUS_LABELS[fine.status] || fine.status} variant={getStatusVariant('fine', fine.status)} dot />
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {renderTablePagination(finesCurrentPage, finesTotalPages, setFinesPage)}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </section>
+              )}
+            </div>
+          </div>
+        </div>
+      </FadeItem>
     </PageWrapper>
   );
 }

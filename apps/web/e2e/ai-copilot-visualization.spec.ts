@@ -299,9 +299,7 @@ test.describe('AI copilot visualizations', () => {
     expect(await seriesColor()).toBe('#6366f1');
 
     await page.setViewportSize({ width: 375, height: 812 });
-    // The staff shell keeps its sidebar open on phones (a known layout gap outside
-    // this feature); collapse it the way a user would before measuring the card.
-    await page.getByRole('button', { name: 'Toggle sidebar' }).click();
+    // On phones the staff sidebar is an off-canvas drawer, closed by default.
     await expect(chart).toBeVisible();
     const overflow = await chart.evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);

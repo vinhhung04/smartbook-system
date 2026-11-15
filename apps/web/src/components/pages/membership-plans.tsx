@@ -3,19 +3,16 @@ import { withoutLeadingZeros, zeroFieldProps } from '@/lib/number-input';
 import { borrowService } from '@/services/borrow';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
+import { PageWrapper, FadeItem } from '../motion-utils';
 import {
   Crown,
   Plus,
   Edit,
   RefreshCw,
-  Shield,
   ToggleLeft,
   ToggleRight,
   Loader2,
-  Users,
 } from 'lucide-react';
-import { StatCard } from '@/components/ui/stat-card';
-import { SectionCard } from '@/components/ui/section-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
@@ -109,67 +106,129 @@ function formatVnd(value: unknown): string {
   return `${toNum(value).toLocaleString('vi-VN')} VND`;
 }
 
-function PlanCard({ plan, onEdit }: { plan: MembershipPlan; onEdit: (plan: MembershipPlan) => void }) {
+type PlanRule = { label: string; hint?: string; value: (plan: MembershipPlan) => string };
+
+// Rows of the comparison table, grouped the way a librarian reads a plan: what a reader may borrow, then what it costs.
+const PLAN_RULE_GROUPS: Array<{ title: string; rules: PlanRule[] }> = [
+  {
+    title: 'Quyền mượn',
+    rules: [
+      { label: 'Mượn cùng lúc', value: (p) => `${p.max_active_loans} cuốn` },
+      { label: 'Thời hạn mỗi lượt', value: (p) => `${p.max_loan_days} ngày` },
+      { label: 'Gia hạn tối đa', value: (p) => `${p.max_renewal_count} lần` },
+      { label: 'Giữ chỗ đặt trước', value: (p) => `${p.reservation_hold_hours} giờ` },
+    ],
+  },
+  {
+    title: 'Phí và tiền phạt',
+    rules: [
+      { label: 'Phí gói', value: (p) => (toNum(p.price) > 0 ? formatVnd(p.price) : 'Miễn phí') },
+      { label: 'Thời hạn thẻ', value: (p) => `${p.duration_days} ngày` },
+      { label: 'Phạt mỗi ngày trễ', value: (p) => (toNum(p.fine_per_day) > 0 ? formatVnd(p.fine_per_day) : 'Không phạt') },
+      { label: 'Phí mất sách', hint: 'hệ số nhân phí mất sách cơ bản', value: (p) => `×${toNum(p.lost_item_fee_multiplier)}` },
+      { label: 'Tiền cọc mỗi cuốn', value: (p) => (toNum(p.deposit_per_item) > 0 ? formatVnd(p.deposit_per_item) : 'Không cọc') },
+    ],
+  },
+];
+
+function PlanHead({ plan, totalMembers, onEdit }: { plan: MembershipPlan; totalMembers: number; onEdit: (plan: MembershipPlan) => void }) {
   const members = plan._count?.customer_memberships ?? 0;
-  const rules: Array<{ label: string; value: string }> = [
-    { label: 'Phí gói', value: toNum(plan.price) > 0 ? formatVnd(plan.price) : 'Miễn phí' },
-    { label: 'Thời hạn thẻ', value: `${plan.duration_days} ngày` },
-    { label: 'Gia hạn tối đa', value: `${plan.max_renewal_count} lần` },
-    { label: 'Giữ chỗ đặt trước', value: `${plan.reservation_hold_hours} giờ` },
-    { label: 'Phạt mỗi ngày trễ', value: toNum(plan.fine_per_day) > 0 ? formatVnd(plan.fine_per_day) : 'Không phạt' },
-    { label: 'Hệ số phí mất sách', value: `×${toNum(plan.lost_item_fee_multiplier)}` },
-    { label: 'Tiền cọc mỗi cuốn', value: toNum(plan.deposit_per_item) > 0 ? formatVnd(plan.deposit_per_item) : 'Không cọc' },
-  ];
+  const share = totalMembers > 0 ? Math.round((members / totalMembers) * 100) : 0;
   return (
-    <article className={cn('flex flex-col rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-md', !plan.is_active && 'opacity-70')}>
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold text-foreground" title={plan.name}>{plan.name}</h3>
-          <p className="font-mono text-[11px] text-muted-foreground">{plan.code}</p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {plan.is_active ? (
-            <StatusBadge label="Hoạt động" variant="success" dot />
-          ) : (
-            <StatusBadge label="Không hoạt động" variant="neutral" dot />
-          )}
-          {plan.is_default ? <StatusBadge label="Mặc định khi đăng ký" variant="info" /> : null}
-        </div>
-      </header>
-
-      {plan.description ? <p className="mt-2 line-clamp-2 text-[12px] text-muted-foreground">{plan.description}</p> : null}
-
-      <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-muted/40 p-3">
-        <div>
-          <p className="font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">{plan.max_active_loans}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">cuốn mượn cùng lúc</p>
-        </div>
-        <div>
-          <p className="font-mono text-[24px] font-bold leading-none tabular-nums text-foreground">{plan.max_loan_days}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">ngày mỗi lượt mượn</p>
+    <>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={cn('font-display text-[18px] font-semibold leading-tight tracking-tight', plan.is_active ? 'text-foreground' : 'text-muted-foreground')}>{plan.name}</span>
+        {!plan.is_active && <StatusBadge label="Ngừng" variant="neutral" />}
+      </div>
+      <p className="font-mono text-[12px] text-muted-foreground">{plan.code}</p>
+      {plan.is_default && <p className="mt-1.5"><StatusBadge label="Mặc định khi đăng ký" variant="info" /></p>}
+      {plan.description && <p className="mt-2 line-clamp-3 text-[13px] font-normal text-muted-foreground" title={plan.description}>{plan.description}</p>}
+      <div className="mt-3">
+        <p className="text-[13px] font-normal text-muted-foreground">
+          <span className="font-semibold tabular-nums text-foreground">{members.toLocaleString('vi-VN')}</span> bạn đọc
+          {totalMembers > 0 && <span>, {share}%</span>}
+        </p>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
         </div>
       </div>
+      <Button type="button" variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => onEdit(plan)} aria-label={`Sửa gói ${plan.name}`}>
+        <Edit className="h-3.5 w-3.5" /> Sửa
+      </Button>
+    </>
+  );
+}
 
-      <dl className="mt-4 space-y-2 text-[12px]">
-        {rules.map((rule) => (
-          <div key={rule.label} className="flex items-center justify-between gap-3">
-            <dt className="text-muted-foreground">{rule.label}</dt>
-            <dd className="text-right font-medium text-foreground">{rule.value}</dd>
-          </div>
+function PlanComparison({ plans, onEdit }: { plans: MembershipPlan[]; onEdit: (plan: MembershipPlan) => void }) {
+  const totalMembers = plans.reduce((sum, p) => sum + (p._count?.customer_memberships ?? 0), 0);
+  return (
+    <div className="@container">
+      {/* Narrow screens: one card per plan, the same rules listed down the card. */}
+      <ul className="divide-y divide-border @2xl:hidden">
+        {plans.map((plan) => (
+          <li key={plan.id} className="px-5 py-4">
+            <PlanHead plan={plan} totalMembers={totalMembers} onEdit={onEdit} />
+            {PLAN_RULE_GROUPS.map((group) => (
+              <div key={group.title} className="mt-4">
+                <h3 className="text-[13px] font-semibold text-foreground">{group.title}</h3>
+                <dl className="mt-1 divide-y divide-border/70">
+                  {group.rules.map((rule) => (
+                    <div key={rule.label} className="flex items-baseline justify-between gap-4 py-1.5 text-[13px]">
+                      <dt className="text-muted-foreground">
+                        {rule.label}
+                        {rule.hint && <span className="block text-[12px]">{rule.hint}</span>}
+                      </dt>
+                      <dd className={cn('shrink-0 text-right tabular-nums', plan.is_active ? 'font-medium text-foreground' : 'text-muted-foreground')}>{rule.value(plan)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </li>
         ))}
-      </dl>
+      </ul>
 
-      <footer className="mt-5 flex items-center justify-between gap-3 border-t border-border pt-3">
-        <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <Users className="h-3.5 w-3.5" aria-hidden="true" />
-          {members} thành viên
-        </span>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => onEdit(plan)} aria-label={`Sửa gói ${plan.name}`}>
-          <Edit className="h-3.5 w-3.5" />
-          Sửa
-        </Button>
-      </footer>
-    </article>
+      <div className="hidden overflow-x-auto @2xl:block">
+        <table className="w-full min-w-[600px] table-fixed border-collapse text-[13px]">
+          <colgroup>
+            <col className="w-[200px]" />
+            {plans.map((plan) => <col key={plan.id} />)}
+          </colgroup>
+          <thead>
+            <tr className="border-b border-border align-top">
+              <th scope="col" className="sticky left-0 z-10 bg-card px-5 py-4 text-left text-[12px] font-normal text-muted-foreground">Gói</th>
+              {plans.map((plan) => (
+                <th key={plan.id} scope="col" className="px-4 py-4 text-left font-normal">
+                  <PlanHead plan={plan} totalMembers={totalMembers} onEdit={onEdit} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          {PLAN_RULE_GROUPS.map((group) => (
+            <tbody key={group.title}>
+              <tr className="bg-muted/40">
+                <th scope="rowgroup" colSpan={plans.length + 1} className="sticky left-0 px-5 py-2 text-left text-[13px] font-semibold text-foreground">
+                  {group.title}
+                </th>
+              </tr>
+              {group.rules.map((rule) => (
+                <tr key={rule.label} className="border-b border-border/70 last:border-0 hover:bg-muted/20">
+                  <th scope="row" className="sticky left-0 bg-card px-5 py-2.5 text-left font-normal text-muted-foreground">
+                    {rule.label}
+                    {rule.hint && <span className="block text-[12px]">{rule.hint}</span>}
+                  </th>
+                  {plans.map((plan) => (
+                    <td key={plan.id} className={cn('px-4 py-2.5 tabular-nums', plan.is_active ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                      {rule.value(plan)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -322,73 +381,83 @@ export function MembershipPlansPage() {
   const inputClass =
     'w-full h-9 px-3 rounded-lg border border-input bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40';
 
+  // Cheapest tier first, so the columns read as a ladder from basic to VIP.
+  const orderedPlans = [...plans].sort(
+    (a, b) => Number(b.is_active) - Number(a.is_active) || a.max_active_loans - b.max_active_loans || toNum(a.price) - toNum(b.price),
+  );
+
+  const defaultPlan = plans.find((p) => p.is_default);
+  const numberField = (key: PlanNumberKey, id: string, label: string, min: number, step?: string) => (
+    <div key={key}>
+      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-foreground">{label}</label>
+      <input
+        id={id}
+        type="number"
+        min={min}
+        step={step}
+        className={inputClass}
+        value={form[key]}
+        {...zeroFieldProps}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: withoutLeadingZeros(e.target.value) }))}
+      />
+    </div>
+  );
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+    <PageWrapper className="space-y-5">
+      <FadeItem>
         <PageHeader
           icon={Crown}
           title="Gói hội viên"
-          description="Quản lý các gói hội viên"
-          iconBg="bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg"
-          iconColor="text-white"
-          iconSize="sm"
+          description={
+            loading
+              ? 'Quy tắc mượn và phí của từng gói'
+              : `${stats.total} gói, ${stats.activePlans} đang mở đăng ký, ${stats.totalMembers.toLocaleString('vi-VN')} bạn đọc đang dùng`
+          }
           actions={
             <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                disabled={loading}
-                onClick={() => void loadPlans()}
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Làm mới
+              <Button type="button" variant="outline" size="sm" className="gap-2" disabled={loading} onClick={() => void loadPlans()}>
+                <RefreshCw className={cn('h-4 w-4 motion-reduce:animate-none', loading && 'animate-spin')} /> Làm mới
               </Button>
               <Button type="button" size="sm" className="gap-2" onClick={openCreate}>
-                <Plus className="w-4 h-4" />
-                Gói mới
+                <Plus className="h-4 w-4" /> Gói mới
               </Button>
             </>
           }
         />
-      </motion.div>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-      >
-        <StatCard
-          label="Tổng số gói"
-          value={stats.total}
-          icon={Crown}
-          variant="warning"
-        />
-        <StatCard
-          label="Gói đang hoạt động"
-          value={stats.activePlans}
-          icon={Shield}
-          variant="success"
-        />
-        <StatCard
-          label="Tổng thành viên"
-          value={stats.totalMembers}
-          icon={ToggleRight}
-          variant="primary"
-        />
-      </motion.div>
+      <FadeItem>
+        <section aria-label="Tổng quan gói hội viên" className="grid grid-cols-1 divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="px-5 py-4">
+            <p className="text-[13px] text-muted-foreground">Gói đang mở đăng ký</p>
+            <p className="mt-1 font-display text-[28px] font-semibold leading-tight tabular-nums text-foreground">
+              {loading ? '–' : stats.activePlans}
+            </p>
+            {!loading && <p className="text-[12px] text-muted-foreground">trên tổng {stats.total} gói</p>}
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-[13px] text-muted-foreground">Bạn đọc đang dùng gói</p>
+            <p className="mt-1 font-display text-[28px] font-semibold leading-tight tabular-nums text-foreground">
+              {loading ? '–' : stats.totalMembers.toLocaleString('vi-VN')}
+            </p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-[13px] text-muted-foreground">Gói cấp cho bạn đọc mới</p>
+            <p className="mt-1 truncate font-display text-[22px] font-semibold leading-tight text-foreground" title={defaultPlan?.name}>
+              {loading ? '–' : defaultPlan?.name ?? 'Chưa chọn'}
+            </p>
+            {!loading && defaultPlan && <p className="font-mono text-[12px] text-muted-foreground">{defaultPlan.code}</p>}
+          </div>
+        </section>
+      </FadeItem>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <SectionCard noPadding>
+      <FadeItem>
+        <section aria-labelledby="plan-compare-title" className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="border-b border-border px-5 pb-3 pt-4">
+            <h2 id="plan-compare-title" className="font-display text-[18px] font-semibold tracking-tight">So sánh các gói</h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Xếp từ gói cơ bản đến gói cao nhất, gói ngừng nằm cuối với chữ nhạt.</p>
+          </div>
           {loading ? (
             <LoadingSpinner message="Đang tải gói hội viên..." className="justify-center py-16" />
           ) : plans.length === 0 ? (
@@ -399,20 +468,15 @@ export function MembershipPlansPage() {
               icon={Crown}
               action={
                 <Button size="sm" className="gap-2" onClick={openCreate}>
-                  <Plus className="w-4 h-4" />
-                  Gói mới
+                  <Plus className="h-4 w-4" /> Gói mới
                 </Button>
               }
             />
           ) : (
-            <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3">
-              {plans.map((plan) => (
-                <PlanCard key={plan.id} plan={plan} onEdit={openEdit} />
-              ))}
-            </div>
+            <PlanComparison plans={orderedPlans} onEdit={openEdit} />
           )}
-        </SectionCard>
-      </motion.div>
+        </section>
+      </FadeItem>
 
       {showModal && (
         <div
@@ -428,185 +492,79 @@ export function MembershipPlansPage() {
             ref={modalRef}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-card rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto p-6"
+            className="mx-4 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="membership-plan-modal-title" className="text-[16px] font-semibold text-foreground mb-1">
+            <h2 id="membership-plan-modal-title" className="mb-1 font-display text-[20px] font-semibold tracking-tight text-foreground">
               {isEdit ? 'Sửa gói hội viên' : 'Gói hội viên mới'}
             </h2>
-            <p className="text-[12px] text-muted-foreground mb-5">
+            <p className="mb-5 text-[13px] text-muted-foreground">
               {isEdit ? 'Cập nhật quy tắc mượn cho gói này.' : 'Định nghĩa cấp hội viên mới.'}
             </p>
 
-            <div className="space-y-4">
-              {!isEdit && (
+            <div className="space-y-5">
+              <div className="space-y-4">
+                {!isEdit && (
+                  <div>
+                    <label htmlFor="plan-code" className="mb-1.5 block text-[13px] font-medium text-foreground">Mã gói</label>
+                    <input
+                      id="plan-code"
+                      className={cn(inputClass, 'font-mono uppercase')}
+                      value={form.code}
+                      onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                      placeholder="VD: GOLD"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Mã gói
-                  </label>
+                  <label htmlFor="plan-name" className="mb-1.5 block text-[13px] font-medium text-foreground">Tên gói</label>
                   <input
+                    id="plan-name"
                     className={inputClass}
-                    value={form.code}
-                    onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                    placeholder="e.g. GOLD"
-                    autoComplete="off"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Tên gói
-                </label>
-                <input
-                  className={inputClass}
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="Tên hiển thị gói"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Mô tả
-                </label>
-                <textarea
-                  className={`${inputClass} min-h-[72px] py-2 resize-y`}
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  placeholder="Ghi chú (không bắt buộc)"
-                  rows={3}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Tối đa mượn đồng thời
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={inputClass}
-                    value={form.max_active_loans}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, max_active_loans: withoutLeadingZeros(e.target.value) }))}
+                    value={form.name}
+                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Tên hiển thị gói"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Tối đa số ngày mượn
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={inputClass}
-                    value={form.max_loan_days}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, max_loan_days: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Tối đa lần gia hạn
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    className={inputClass}
-                    value={form.max_renewal_count}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, max_renewal_count: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Giữ đặt trước (giờ)
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    className={inputClass}
-                    value={form.reservation_hold_hours}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, reservation_hold_hours: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Phạt/ngày
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className={inputClass}
-                    value={form.fine_per_day}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, fine_per_day: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="plan-price" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Phí gói (VND)
-                  </label>
-                  <input
-                    id="plan-price"
-                    type="number"
-                    min={0}
-                    step="1000"
-                    className={inputClass}
-                    value={form.price}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, price: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="plan-duration" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Thời hạn thẻ (ngày)
-                  </label>
-                  <input
-                    id="plan-duration"
-                    type="number"
-                    min={1}
-                    className={inputClass}
-                    value={form.duration_days}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, duration_days: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Hệ số phí mất sách
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className={inputClass}
-                    value={form.lost_item_fee_multiplier}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, lost_item_fee_multiplier: withoutLeadingZeros(e.target.value) }))}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="plan-deposit" className="block text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
-                    Tiền cọc mỗi cuốn (VND)
-                  </label>
-                  <input
-                    id="plan-deposit"
-                    type="number"
-                    min={0}
-                    step="1000"
-                    className={inputClass}
-                    value={form.deposit_per_item}
-                    {...zeroFieldProps}
-                    onChange={(e) => setForm((f) => ({ ...f, deposit_per_item: withoutLeadingZeros(e.target.value) }))}
+                  <label htmlFor="plan-description" className="mb-1.5 block text-[13px] font-medium text-foreground">Mô tả</label>
+                  <textarea
+                    id="plan-description"
+                    className={`${inputClass} min-h-[72px] resize-y py-2`}
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    placeholder="Ghi chú (không bắt buộc)"
+                    rows={3}
                   />
                 </div>
               </div>
+
+              <fieldset className="border-t border-border pt-4">
+                <legend className="pr-2 text-[13px] font-semibold text-foreground">Quyền mượn</legend>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  {numberField('max_active_loans', 'plan-max-active-loans', 'Mượn cùng lúc, cuốn', 1)}
+                  {numberField('max_loan_days', 'plan-max-loan-days', 'Thời hạn mỗi lượt, ngày', 1)}
+                  {numberField('max_renewal_count', 'plan-max-renewals', 'Gia hạn tối đa, lần', 0)}
+                  {numberField('reservation_hold_hours', 'plan-hold-hours', 'Giữ đặt trước, giờ', 1)}
+                </div>
+              </fieldset>
+
+              <fieldset className="border-t border-border pt-4">
+                <legend className="pr-2 text-[13px] font-semibold text-foreground">Phí và tiền phạt</legend>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  {numberField('price', 'plan-price', 'Phí gói, VND', 0, '1000')}
+                  {numberField('duration_days', 'plan-duration', 'Thời hạn thẻ, ngày', 1)}
+                  {numberField('fine_per_day', 'plan-fine-per-day', 'Phạt mỗi ngày trễ, VND', 0, '0.01')}
+                  {numberField('lost_item_fee_multiplier', 'plan-lost-multiplier', 'Hệ số phí mất sách', 0, '0.01')}
+                  {numberField('deposit_per_item', 'plan-deposit', 'Tiền cọc mỗi cuốn, VND', 0, '1000')}
+                </div>
+              </fieldset>
 
               <label className="flex items-start gap-3 rounded-xl border border-border px-4 py-3">
                 <input
                   type="checkbox"
-                  className="mt-0.5 h-4 w-4"
+                  className="mt-0.5 h-4 w-4 accent-primary"
                   checked={form.is_default}
                   // The current default can only be replaced by choosing another plan.
                   disabled={Boolean(form.id && plans.find((p) => p.id === form.id)?.is_default)}
@@ -614,39 +572,39 @@ export function MembershipPlansPage() {
                 />
                 <span>
                   <span className="block text-[13px] font-medium text-foreground">Gói mặc định khi đăng ký</span>
-                  <span className="block text-[11px] text-muted-foreground">Tài khoản bạn đọc mới được cấp gói này; chỉ một gói là mặc định.</span>
+                  <span className="block text-[12px] text-muted-foreground">Tài khoản bạn đọc mới được cấp gói này; chỉ một gói là mặc định.</span>
                 </span>
               </label>
 
               <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3">
                 <div>
                   <p className="text-[13px] font-medium text-foreground">Hoạt động</p>
-                  <p className="text-[11px] text-muted-foreground">Gói có thể được đăng ký mới</p>
+                  <p className="text-[12px] text-muted-foreground">Gói có thể được đăng ký mới</p>
                 </div>
                 <button
                   type="button"
                   aria-label={form.is_active ? 'Tắt hoạt động' : 'Bật hoạt động'}
-                  className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                  className="shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   onClick={() => setForm((f) => ({ ...f, is_active: !f.is_active }))}
                   aria-pressed={form.is_active}
                 >
                   {form.is_active ? (
-                    <ToggleRight className="w-9 h-9 text-emerald-600 dark:text-emerald-400" />
+                    <ToggleRight className="h-9 w-9 text-primary" />
                   ) : (
-                    <ToggleLeft className="w-9 h-9 text-muted-foreground" />
+                    <ToggleLeft className="h-9 w-9 text-muted-foreground" />
                   )}
                 </button>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-border">
+            <div className="mt-6 flex justify-end gap-2 border-t border-border pt-4">
               <Button type="button" variant="outline" size="sm" disabled={saving} onClick={closeModal}>
                 Hủy
               </Button>
               <Button type="button" size="sm" disabled={saving} onClick={() => void onSubmit()}>
                 {saving ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Đang lưu...
                   </>
                 ) : isEdit ? (
@@ -659,6 +617,6 @@ export function MembershipPlansPage() {
           </motion.div>
         </div>
       )}
-    </div>
+    </PageWrapper>
   );
 }

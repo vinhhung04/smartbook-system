@@ -1,10 +1,9 @@
-const { PrismaClient } = require('@prisma/client');
 const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
 const { reservationCreatedCounter, reservationConflictCounter, recordStockMutation } = require('../lib/metrics');
 const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
 const { readPublicAvailabilityByBook, readPublicAvailabilityByVariant } = require('../services/public-catalog.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 // Borrow-service marks reservations a reader makes for themselves (/my/reservations)
 // with this channel: those may only be picked up at a reader-facing location. Staff

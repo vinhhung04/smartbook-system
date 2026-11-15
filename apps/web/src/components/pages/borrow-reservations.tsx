@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { CalendarClock, CheckCircle2, Keyboard, Loader2, Plus, RefreshCw, ScanLine, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
-import { SectionCard, FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
-import { Button } from '@/components/ui/button';
+import { FilterBar, EmptyState, ConfirmDialog } from '@/components/ui';
+import { Button, IconButton } from '@/components/ui/button';
+import { RowsSkeleton } from '@/components/ops/ops-kit';
+import { warehouseService } from '@/services/warehouse';
 import { PageHeader } from '@/components/ui/page-header';
-import { SkeletonTableRow } from '@/components/ui/loading-state';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/components/ui/utils';
 import { StatusBadge } from '@/components/status-badge';
@@ -14,7 +15,7 @@ import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
 import { BarcodeScanModal } from '@/components/barcode-scan-modal';
 import { borrowService, type Reservation, type ReservationStatus } from '@/services/borrow';
 import { getApiErrorMessage } from '@/services/api';
-import { StageTabs, type StageTab } from './borrow-shared/stage-tabs';
+import { type StageTab } from './borrow-shared/stage-tabs';
 import { ListFooter } from './borrow-shared/list-footer';
 import { BorrowFormDialog, type BorrowFormMode } from './borrow-shared/borrow-form-dialog';
 import { sumCounts, useServerList } from './borrow-shared/use-server-list';
@@ -56,8 +57,8 @@ function expiryInfo(reservation: Reservation): { text: string; tone: 'danger' | 
 }
 
 const EXPIRY_TONE_CLASS = {
-  danger: 'font-semibold text-rose-600 dark:text-rose-400',
-  warning: 'font-semibold text-amber-600 dark:text-amber-400',
+  danger: 'font-semibold text-red-700 dark:text-red-400',
+  warning: 'font-semibold text-amber-700 dark:text-amber-300',
   muted: 'text-foreground',
 } as const;
 
@@ -161,18 +162,65 @@ export function BorrowReservationsPage() {
     }
   };
 
+  // Where the customer collects the book: a read-only lookup, the same list the warehouse pages load.
+  const [branchNames, setBranchNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let active = true;
+    warehouseService.getAll()
+      .then((rows) => { if (active) setBranchNames(new Map((Array.isArray(rows) ? rows : []).map((w) => [w.id, w.name || w.code]))); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const vn = (value: number) => value.toLocaleString('vi-VN');
+  const working = [
+    counts?.PENDING ? `${vn(counts.PENDING)} cần xác nhận` : null,
+    counts?.CONFIRMED ? `${vn(counts.CONFIRMED)} đang chuẩn bị sách` : null,
+    counts?.READY_FOR_PICKUP ? `${vn(counts.READY_FOR_PICKUP)} chờ khách lấy` : null,
+  ].filter(Boolean);
+  const lede = !counts
+    ? 'Xác nhận, chuẩn bị sách và giao cho khách tại quầy.'
+    : `${working.length ? `${working.join(', ')}.` : 'Không có đặt trước nào đang chờ xử lý.'} ${vn(counts.CONVERTED_TO_LOAN ?? 0)} đã thành phiếu mượn, ${vn(counts.EXPIRED ?? 0)} hết hạn, ${vn(counts.CANCELLED ?? 0)} đã hủy.`;
+  const railButton = (item: StageTab<TabKey>, index: number | null) => {
+    const active = tab === item.key;
+    return (
+      <button
+        key={item.key}
+        type="button"
+        onClick={() => selectTab(item.key)}
+        aria-pressed={active}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+          active ? 'bg-primary/[0.08] text-primary' : 'text-foreground hover:bg-muted/60',
+        )}
+      >
+        {index !== null ? (
+          <span className={cn('flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums', active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground')} aria-hidden="true">{index}</span>
+        ) : null}
+        <span className={cn('min-w-0 flex-1 truncate text-[13px]', active ? 'font-semibold' : 'font-medium')}>{item.label}</span>
+        <span
+          className={cn(
+            'min-w-6 shrink-0 rounded-full px-1.5 text-center text-[12px] tabular-nums',
+            item.attention && item.count > 0 ? 'bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300' : active ? 'text-primary' : 'text-muted-foreground',
+          )}
+        >
+          {!counts ? '–' : vn(item.count)}
+        </span>
+      </button>
+    );
+  };
+  const stepTabs = tabs.filter((item) => item.step);
+
   return (
     <PageWrapper className="space-y-5">
       <FadeItem>
         <PageHeader
           icon={CalendarClock}
           title="Đặt trước sách"
-          description="Xác nhận, chuẩn bị sách và giao cho khách tại quầy"
-          iconBg="bg-gradient-to-br from-indigo-100 to-purple-50 border border-indigo-200/40 shadow-sm dark:from-indigo-500/15 dark:to-purple-500/10 dark:border-indigo-500/20"
-          iconColor="text-indigo-600 dark:text-indigo-400"
+          description={lede}
           actions={
             <>
-              <Button size="sm" variant="outline" onClick={() => void releaseExpiredReservations()} className="gap-2" title="Chuyển các đặt trước quá hạn nhận sang Hết hạn và trả sách về kho">
+              <Button size="sm" variant="ghost" onClick={() => void releaseExpiredReservations()} className="gap-2" title="Chuyển các đặt trước quá hạn nhận sang Hết hạn và trả sách về kho">
                 <RefreshCw className="h-4 w-4" />
                 Giải phóng hết hạn
               </Button>
@@ -189,185 +237,218 @@ export function BorrowReservationsPage() {
         />
       </FadeItem>
 
+      {/* The counter: the one thing staff do with a customer standing in front of them. */}
       <FadeItem>
-        <SectionCard title="Quầy nhận sách" subtitle="Khách đưa mã nhận sách hoặc mã QR — hệ thống lập phiếu mượn ngay">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-primary/20">
-              <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="sr-only">Mã nhận sách / Kết quả QR</span>
-              <input
-                value={pickupCode}
-                onChange={(event) => setPickupCode(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    void convertPickupCode();
-                  }
-                }}
-                placeholder="PU-ABCD-1234 hoặc SMARTBOOK:PICKUP:..."
-                data-testid="pickup-code-input"
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </label>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => setPickupScannerOpen(true)} className="gap-2">
-                <ScanLine className="h-4 w-4" />
-                Quét QR
-              </Button>
-              <Button type="button" disabled={pickupConverting} onClick={() => void convertPickupCode()} data-testid="convert-pickup-submit" className="flex-1 gap-2 sm:flex-none">
-                {pickupConverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Chuyển thành phiếu mượn
-              </Button>
+        <section aria-labelledby="pickup-counter-title" className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-6">
+            <div className="lg:w-72 lg:shrink-0">
+              <h2 id="pickup-counter-title" className="font-display text-[18px] font-semibold tracking-tight">Quầy nhận sách</h2>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">Khách đưa mã nhận sách hoặc mã QR, hệ thống lập phiếu mượn ngay.</p>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-card px-3 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+                <Keyboard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="sr-only">Mã nhận sách / Kết quả QR</span>
+                <input
+                  value={pickupCode}
+                  onChange={(event) => setPickupCode(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void convertPickupCode();
+                    }
+                  }}
+                  placeholder="PU-ABCD-1234 hoặc SMARTBOOK:PICKUP:..."
+                  data-testid="pickup-code-input"
+                  className="h-10 min-w-0 flex-1 bg-transparent font-mono text-[14px] text-foreground outline-none placeholder:font-sans placeholder:text-muted-foreground"
+                />
+              </label>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => setPickupScannerOpen(true)} className="gap-2">
+                  <ScanLine className="h-4 w-4" />
+                  Quét QR
+                </Button>
+                <Button type="button" disabled={pickupConverting} onClick={() => void convertPickupCode()} data-testid="convert-pickup-submit" className="flex-1 gap-2 sm:flex-none">
+                  {pickupConverting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  Chuyển thành phiếu mượn
+                </Button>
+              </div>
             </div>
           </div>
-        </SectionCard>
+        </section>
       </FadeItem>
 
       <FadeItem>
-        <div className="rounded-xl border border-border bg-card">
-          <StageTabs label="Lọc theo giai đoạn" tabs={tabs} value={tab} onChange={selectTab} loading={list.loading && !counts} />
-          <div className="border-t border-border px-4 py-3">
-            <FilterBar
-              searchValue={list.search}
-              onSearchChange={list.setSearch}
-              searchPlaceholder="Tìm đặt trước..."
-              showSearchClear
-            />
+        {/* Named so the toolbar inside the list (its own container) can still ask whether the rail is showing. */}
+        <div className="@container/page">
+          <div className="grid grid-cols-1 items-start gap-4 @4xl/page:grid-cols-[232px_minmax(0,1fr)]">
+            <nav aria-label="Lọc theo giai đoạn" className="hidden rounded-2xl border border-border bg-card p-3 @4xl/page:sticky @4xl/page:top-4 @4xl/page:block">
+              {railButton(tabs[0], null)}
+              <p className="mt-3 px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Quy trình tại quầy</p>
+              {stepTabs.map((item, index) => railButton(item, index + 1))}
+              <div className="mt-3 border-t border-border pt-3">
+                {tabs.filter((item) => item.separated).map((item) => railButton(item, null))}
+              </div>
+            </nav>
+            <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin] @4xl/page:hidden" role="group" aria-label="Lọc theo giai đoạn">
+              {tabs.map((item) => {
+                const active = tab === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => selectTab(item.key)}
+                    aria-pressed={active}
+                    className={cn(
+                      'flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                      active ? 'border-primary/30 bg-primary/[0.08] font-semibold text-primary' : 'border-border bg-card font-medium hover:bg-muted/60',
+                    )}
+                  >
+                    <span className="whitespace-nowrap">{item.label}</span>
+                    <span className="tabular-nums text-muted-foreground">{!counts ? '–' : vn(item.count)}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <section aria-label="Danh sách đặt trước" className="@container min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="px-5 pb-1 pt-4">
+                <h2 className="font-display text-[18px] font-semibold tracking-tight">{activeTab.key === 'all' ? 'Tất cả đặt trước' : activeTab.label}</h2>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
+                  {activeTab.key === 'all' || activeTab.key === 'done' ? 'Mới nhất ở trên.' : 'Sắp hết hạn giữ sách ở trên.'}
+                  {activeTab.key === 'pending' || activeTab.key === 'confirmed' || activeTab.key === 'ready' ? ` ${NEXT_STEP_HINT[activeTab.statuses[0]] ?? ''}.` : ''}
+                </p>
+              </div>
+              <div className="border-b border-border px-4 py-3">
+                <FilterBar
+                  searchValue={list.search}
+                  onSearchChange={list.setSearch}
+                  searchPlaceholder="Tìm đặt trước..."
+                  showSearchClear
+                />
+              </div>
+
+              {list.loading && list.rows.length === 0 ? (
+                <RowsSkeleton rows={6} />
+              ) : list.rows.length === 0 ? (
+                <div className="px-5 py-10">
+                  <EmptyState
+                    variant={list.search ? 'no-results' : 'no-data'}
+                    title={list.search ? 'Không tìm thấy đặt trước' : `Không có đặt trước nào ở mục "${activeTab.label}"`}
+                    description={list.search ? 'Thử từ khóa khác hoặc chọn mục khác.' : 'Đặt trước mới của khách sẽ xuất hiện ở đây.'}
+                    className="py-0"
+                  />
+                </div>
+              ) : (
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="pl-5 text-[12px] font-normal text-muted-foreground">Đặt trước</TableHead>
+                      <TableHead className="hidden w-[30%] text-[12px] font-normal text-muted-foreground @3xl:table-cell">Sách</TableHead>
+                      <TableHead className="hidden w-[150px] text-[12px] font-normal text-muted-foreground @2xl:table-cell">Hạn giữ sách</TableHead>
+                      <TableHead className="w-[164px] pr-5 text-right text-[12px] font-normal text-muted-foreground">Trạng thái</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {list.rows.map((reservation) => {
+                      const expiry = expiryInfo(reservation);
+                      const isLive = ACTIVE_RESERVATION_STATUSES.includes(reservation.status);
+                      const code = reservation.status === 'READY_FOR_PICKUP' ? reservation.pickup_code || '-' : null;
+                      const busy = busyId === reservation.id;
+                      const branch = branchNames.get(reservation.warehouse_id);
+                      const book = (
+                        <>
+                          <span className="line-clamp-2 text-[13px] text-foreground">{bookTitle(reservation.variant_id)}</span>
+                          <span className="block text-[12px] text-muted-foreground">
+                            {reservation.quantity} cuốn, {getBorrowLabel('sourceChannel', reservation.source_channel)}{branch ? `, nhận tại ${branch}` : ''}
+                          </span>
+                        </>
+                      );
+                      const expiryBlock = (
+                        <>
+                          {expiry ? <span className={cn('block text-[13px]', EXPIRY_TONE_CLASS[expiry.tone])}>{expiry.text}</span> : null}
+                          <span className="block text-[12px] tabular-nums text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</span>
+                        </>
+                      );
+                      return (
+                        <TableRow key={reservation.id} className={cn('hover:bg-muted/30', list.loading && 'opacity-60')}>
+                          <TableCell className="whitespace-normal py-3.5 pl-5 pr-3 align-top">
+                            <span className="block text-[14px] font-semibold text-foreground">{reservation.customers?.full_name || 'Khách hàng'}</span>
+                            <span className="block font-mono text-[12px] text-muted-foreground">{reservation.reservation_number}</span>
+                            <span className="block text-[12px] tabular-nums text-muted-foreground">Đặt lúc {new Date(reservation.reserved_at).toLocaleString('vi-VN')}</span>
+                            {/* Columns the container hides move here, so no field is dropped. */}
+                            <span className="mt-1.5 block @3xl:hidden">{book}</span>
+                            <span className="mt-1 block @2xl:hidden">{expiryBlock}</span>
+                            {reservation.notes ? <span className="mt-1 line-clamp-2 block max-w-prose text-[12px] text-muted-foreground" title={reservation.notes}>Ghi chú: {reservation.notes}</span> : null}
+                          </TableCell>
+                          <TableCell className="hidden whitespace-normal py-3.5 align-top @3xl:table-cell">{book}</TableCell>
+                          <TableCell className="hidden whitespace-normal py-3.5 align-top @2xl:table-cell">{expiryBlock}</TableCell>
+                          <TableCell className="whitespace-normal py-3.5 pr-5 text-right align-top">
+                            <div className="flex flex-col items-end gap-1.5">
+                              <StatusBadge
+                                label={getBorrowLabel('reservation', reservation.status)}
+                                variant={getStatusVariant('reservation', reservation.status)}
+                                dot
+                              />
+                              {code ? (
+                                <p className="w-fit rounded-md bg-primary/[0.08] px-2 py-0.5 font-mono text-[13px] font-semibold text-primary" title="Mã nhận sách">
+                                  {code}
+                                </p>
+                              ) : null}
+                              {NEXT_STEP_HINT[reservation.status] ? (
+                                <span className="text-[12px] leading-snug text-muted-foreground">{NEXT_STEP_HINT[reservation.status]}</span>
+                              ) : null}
+                              {isLive ? (
+                                <div className="flex items-center justify-end gap-1.5">
+                                  {reservation.status === 'PENDING' ? (
+                                    <Button size="sm" disabled={busy}
+                                      onClick={() => void confirmReservation(reservation.id)}
+                                      data-testid="confirm-reservation-button"
+                                    >
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                      Xác nhận
+                                    </Button>
+                                  ) : null}
+                                  {reservation.status === 'CONFIRMED' ? (
+                                    <Button size="sm" disabled={busy}
+                                      onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
+                                      data-testid="mark-ready-button"
+                                    >
+                                      Sẵn sàng
+                                    </Button>
+                                  ) : null}
+                                  <IconButton
+                                    variant="ghost"
+                                    size="sm-icon"
+                                    label={`Hủy đặt trước ${reservation.reservation_number}`}
+                                    title="Hủy đặt trước"
+                                    onClick={() => setCancelTarget(reservation)}
+                                    className="text-muted-foreground hover:text-red-700 dark:hover:text-red-400"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </IconButton>
+                                </div>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+              <ListFooter
+                page={list.page}
+                pageSize={PAGE_SIZE}
+                total={list.meta.total}
+                totalPages={list.meta.totalPages}
+                shown={list.rows.length}
+                noun="đặt trước"
+                onPageChange={list.setPage}
+              />
+            </section>
           </div>
         </div>
-      </FadeItem>
-
-      <FadeItem>
-        <SectionCard noPadding>
-          <Table className="table-fixed">
-            <TableHeader>
-              <TableRow className="bg-muted/50 hover:bg-muted/50">
-                {[
-                  { label: 'Đặt trước', className: '' },
-                  { label: 'Sách', className: 'hidden w-[26%] xl:table-cell' },
-                  { label: 'Hạn nhận', className: 'hidden w-[150px] lg:table-cell' },
-                  { label: 'Trạng thái', className: 'hidden w-[190px] md:table-cell' },
-                  { label: 'Thao tác', className: 'w-[150px] text-right' },
-                ].map((header) => (
-                  <TableHead key={header.label} className={cn('px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground', header.className)}>
-                    {header.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {list.loading && list.rows.length === 0 ? (
-                <SkeletonTableRow columns={5} rows={5} />
-              ) : list.rows.length === 0 ? (
-                <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="whitespace-normal">
-                    <EmptyState
-                      variant={list.search ? 'no-results' : 'no-data'}
-                      title={list.search ? 'Không tìm thấy đặt trước' : `Không có đặt trước nào ở mục "${activeTab.label}"`}
-                      description={list.search ? 'Thử từ khóa khác hoặc chọn mục khác.' : 'Đặt trước mới của khách sẽ xuất hiện ở đây.'}
-                      className="py-12"
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                list.rows.map((reservation) => {
-                  const expiry = expiryInfo(reservation);
-                  const isLive = ACTIVE_RESERVATION_STATUSES.includes(reservation.status);
-                  const code = reservation.status === 'READY_FOR_PICKUP' ? reservation.pickup_code || '-' : null;
-                  const badge = (
-                    <StatusBadge
-                      label={getBorrowLabel('reservation', reservation.status)}
-                      variant={getStatusVariant('reservation', reservation.status)}
-                      dot
-                    />
-                  );
-                  const busy = busyId === reservation.id;
-                  return (
-                    <TableRow key={reservation.id} className={cn('hover:bg-muted/30', list.loading && 'opacity-60')}>
-                      <TableCell className="px-4 py-3">
-                        <p className="truncate text-sm font-semibold">{reservation.reservation_number}</p>
-                        <p className="truncate text-xs text-muted-foreground">{reservation.customers?.full_name || 'Khách hàng'}</p>
-                        <p className="truncate text-xs text-muted-foreground xl:hidden">{bookTitle(reservation.variant_id)}</p>
-                        <div className="mt-1.5 space-y-1 md:hidden">
-                          {badge}
-                          {code ? <span className="block font-mono text-xs font-semibold text-cyan-700 dark:text-cyan-300">{code}</span> : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden px-4 py-3 xl:table-cell">
-                        <p className="line-clamp-2 whitespace-normal text-sm">{bookTitle(reservation.variant_id)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {reservation.quantity} cuốn · {getBorrowLabel('sourceChannel', reservation.source_channel)}
-                        </p>
-                      </TableCell>
-                      <TableCell className="hidden px-4 py-3 text-sm lg:table-cell">
-                        {expiry ? <p className={cn('text-sm', EXPIRY_TONE_CLASS[expiry.tone])}>{expiry.text}</p> : null}
-                        <p className="text-xs text-muted-foreground">{new Date(reservation.expires_at).toLocaleString('vi-VN')}</p>
-                      </TableCell>
-                      <TableCell className="hidden px-4 py-3 md:table-cell">
-                        <div className="flex flex-col items-start gap-1.5">
-                          {badge}
-                          {code ? (
-                            <p className="w-fit rounded-md border border-cyan-200 bg-cyan-50 px-2 py-0.5 font-mono text-xs font-semibold text-cyan-800 dark:border-cyan-500/20 dark:bg-cyan-500/10 dark:text-cyan-300" title="Mã nhận sách">
-                              {code}
-                            </p>
-                          ) : null}
-                          {NEXT_STEP_HINT[reservation.status] ? (
-                            <span className="whitespace-normal text-[11px] leading-snug text-muted-foreground">{NEXT_STEP_HINT[reservation.status]}</span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-4 py-3">
-                        {isLive ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            {reservation.status === 'PENDING' ? (
-                              <Button size="sm" variant="outline" disabled={busy}
-                                className="border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-500/20 dark:text-sky-400 dark:hover:bg-sky-500/10"
-                                onClick={() => void confirmReservation(reservation.id)}
-                                data-testid="confirm-reservation-button"
-                              >
-                                <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                Xác nhận
-                              </Button>
-                            ) : null}
-                            {reservation.status === 'CONFIRMED' ? (
-                              <Button size="sm" variant="outline" disabled={busy}
-                                className="border-cyan-200 text-cyan-700 hover:bg-cyan-50 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/10"
-                                onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
-                                data-testid="mark-ready-button"
-                              >
-                                Sẵn sàng
-                              </Button>
-                            ) : null}
-                            <button
-                              type="button"
-                              aria-label={`Hủy đặt trước ${reservation.reservation_number}`}
-                              title="Hủy đặt trước"
-                              onClick={() => setCancelTarget(reservation)}
-                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="block text-right text-xs text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-          <ListFooter
-            page={list.page}
-            pageSize={PAGE_SIZE}
-            total={list.meta.total}
-            totalPages={list.meta.totalPages}
-            shown={list.rows.length}
-            noun="đặt trước"
-            onPageChange={list.setPage}
-          />
-        </SectionCard>
       </FadeItem>
 
       <BorrowFormDialog

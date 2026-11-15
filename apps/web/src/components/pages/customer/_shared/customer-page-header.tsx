@@ -11,8 +11,8 @@ export function CustomerPageHeader({ title, subtitle, actions }: CustomerPageHea
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="text-[24px] font-bold leading-tight tracking-tight text-foreground sm:text-[26px]">{title}</h1>
-        {subtitle ? <p className="mt-1 text-[13px] text-muted-foreground">{subtitle}</p> : null}
+        <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-foreground sm:text-[32px]">{title}</h1>
+        {subtitle ? <p className="mt-1 max-w-2xl text-[14px] text-muted-foreground">{subtitle}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

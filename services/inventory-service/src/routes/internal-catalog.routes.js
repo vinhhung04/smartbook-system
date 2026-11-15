@@ -1,8 +1,7 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
 const { isValidInternalKey, mapCoverGalleryItem } = require('../services/internal-catalog.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 // Used by ai-service to build/refresh its cover-image embedding gallery. No
 // live user JWT exists for that background job, so this follows the same

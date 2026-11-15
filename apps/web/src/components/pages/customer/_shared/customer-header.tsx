@@ -33,7 +33,7 @@ function CustomerThemeToggle() {
 const linkClass = (active: boolean) =>
   cn(
     'inline-flex h-9 items-center rounded-lg px-3 text-[13px] transition-colors',
-    active ? 'bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : 'font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
+    active ? 'bg-primary/[0.06] font-semibold text-primary dark:bg-primary/15 dark:text-primary' : 'font-medium text-muted-foreground hover:bg-muted hover:text-foreground',
   );
 
 export function CustomerHeader() {

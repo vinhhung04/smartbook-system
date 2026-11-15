@@ -132,7 +132,6 @@ export function PublicMembershipPage() {
   return (
     <>
       <PageHero
-        eyebrow="Thẻ bạn đọc"
         title="Đọc nhiều hơn với tài khoản SmartBook"
         description="Tạo tài khoản để đặt trước sách, theo dõi sách đang mượn, lưu yêu thích và nhận gợi ý phù hợp với bạn. Xem sách và chi nhánh thì không cần đăng nhập."
       >

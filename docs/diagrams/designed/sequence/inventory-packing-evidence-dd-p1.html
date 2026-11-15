@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ tuần tự đóng gói có bằng chứng hình ảnh (1/2)</title>
+  <!-- Diagram Design · profile: smartbook (Font source: system — không tải Google Fonts) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      line-height: 1.25;
+      color: var(--color-ink);
+      margin-bottom: 1.5rem;
+    }
+    .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+    svg { width: 100%; min-width: 800px; max-width: 800px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · Diagram Design · SmartBook</p>
+    <h1>Sơ đồ tuần tự đóng gói có bằng chứng hình ảnh (1/2)</h1>
+    <div class="diagram-container">
+<svg viewBox="0 0 800 956" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="inventory-packing-evidence-dd-p1-title inventory-packing-evidence-dd-p1-desc">
+<title id="inventory-packing-evidence-dd-p1-title">Đóng gói có bằng chứng hình ảnh, phần 1</title>
+<desc id="inventory-packing-evidence-dd-p1-desc">Nhân viên quét phiếu xuất và từng sản phẩm, tải ảnh và video kiện hàng; AI Service đối chiếu ảnh với danh sách sách bằng mô hình thị giác và Inventory lưu bằng chứng.</desc>
+<defs>
+  <marker id="inventory-packing-evidence-dd-p1-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-packing-evidence-dd-p1-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-packing-evidence-dd-p1-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-packing-evidence-dd-p1-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="72" y="260" width="656" height="188" rx="4" fill="rgba(0,0,0,0.035)" stroke="#333333" stroke-width="1"/>
+<!-- lifelines -->
+<line x1="92" y1="104" x2="92" y2="916" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="216" y1="104" x2="216" y2="916" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="356" y1="104" x2="356" y2="916" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="480" y1="104" x2="480" y2="916" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="600" y1="104" x2="600" y2="916" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="916" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="96" y1="164" x2="212" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<line x1="220" y1="248" x2="352" y2="248" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow-link)"/>
+<line x1="96" y1="316" x2="212" y2="316" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<line x1="220" y1="400" x2="352" y2="400" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow-link)"/>
+<line x1="360" y1="436" x2="704" y2="436" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<line x1="96" y1="500" x2="212" y2="500" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<line x1="220" y1="584" x2="352" y2="584" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow-link)"/>
+<line x1="360" y1="684" x2="476" y2="684" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow-link)"/>
+<line x1="484" y1="752" x2="596" y2="752" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow-link)"/>
+<line x1="596" y1="788" x2="484" y2="788" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<line x1="476" y1="856" x2="360" y2="856" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<line x1="360" y1="892" x2="704" y2="892" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-packing-evidence-dd-p1-arrow)"/>
+<!-- labels -->
+<rect x="114" y="122" width="80" height="34" rx="2" fill="#ffffff"/>
+<text x="154.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> quét phiếu</text>
+<text x="154.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">xuất</text>
+<rect x="232" y="174" width="108" height="66" rx="2" fill="#ffffff"/>
+<text x="286.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST /api/</text>
+<text x="286.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">packing/</text>
+<text x="286.0" y="219" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">scan-invoice, nhận</text>
+<text x="286.0" y="235" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">việc</text>
+<rect x="108" y="290" width="92" height="18" rx="2" fill="#f7f7f7"/>
+<text x="154.0" y="303" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> quét mã sách</text>
+<rect x="236" y="326" width="100" height="66" rx="2" fill="#f7f7f7"/>
+<text x="286.0" y="339" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> POST</text>
+<text x="286.0" y="355" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/packing/</text>
+<text x="286.0" y="371" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">tasks/{id}/</text>
+<text x="286.0" y="387" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">items/scan</text>
+<rect x="464" y="410" width="136" height="18" rx="2" fill="#f7f7f7"/>
+<text x="532.0" y="423" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">5.</tspan> packing_scan_events</text>
+<path d="M 72 260 H 120 V 272 L 112 280 H 72 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="93.0" y="275" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">loop</text>
+<rect x="128" y="261" width="104" height="18" rx="2" fill="#f7f7f7"/>
+<text x="134" y="275" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[từng sản phẩm]</text>
+<rect x="112" y="458" width="84" height="34" rx="2" fill="#ffffff"/>
+<text x="154.0" y="471" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> tải ảnh kiện</text>
+<text x="154.0" y="487" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">hàng và video</text>
+<rect x="236" y="510" width="100" height="66" rx="2" fill="#ffffff"/>
+<text x="286.0" y="523" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> POST</text>
+<text x="286.0" y="539" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/packing/</text>
+<text x="286.0" y="555" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">tasks/{id}/</text>
+<text x="286.0" y="571" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">evidence</text>
+<rect x="368" y="594" width="100" height="82" rx="2" fill="#ffffff"/>
+<text x="418.0" y="607" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> POST /</text>
+<text x="418.0" y="623" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">verify-packing-p</text>
+<text x="418.0" y="639" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">hoto</text>
+<text x="418.0" y="655" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">(ảnh + danh sách</text>
+<text x="418.0" y="671" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">sách)</text>
+<rect x="494" y="694" width="92" height="50" rx="2" fill="#ffffff"/>
+<text x="540.0" y="707" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> đọc ảnh, đếm</text>
+<text x="540.0" y="723" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">và nhận diện</text>
+<text x="540.0" y="739" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">nhan đề</text>
+<rect x="504" y="762" width="72" height="18" rx="2" fill="#ffffff"/>
+<text x="540.0" y="775" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> kết quả</text>
+<rect x="368" y="798" width="100" height="50" rx="2" fill="#ffffff"/>
+<text x="418.0" y="811" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> MATCH /</text>
+<text x="418.0" y="827" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">MISMATCH + chi</text>
+<text x="418.0" y="843" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">tiết</text>
+<rect x="450" y="866" width="164" height="18" rx="2" fill="#ffffff"/>
+<text x="532.0" y="879" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> packing_camera_evidence</text>
+<!-- nodes -->
+<circle cx="92" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 92 56 V 72 M 81 61 H 103 M 92 72 L 83 84 M 92 72 L 101 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="92" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Nhân viên kho</text>
+<rect x="158" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="216" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web/Mobile</text>
+<text x="216" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web · mobile</text>
+<rect x="298" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="356" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="356" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<rect x="436" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="480" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">AI Service</text>
+<text x="480" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FastAPI</text>
+<rect x="546" y="40" width="108" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="600" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">OpenRouter</text>
+<text x="600" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">mô hình thị giác</text>
+<path d="M 668.0 48 V 79 A 40.0 6 0 0 0 748.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="708" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="708" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="708" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">inventory_db</text>
+</svg>
+    </div>
+    <p class="note">Hình 4.14, bước 1–12 (chép từ hình gốc của báo cáo, giữ nguyên số bước).</p>
+  </div>
+</body>
+</html>

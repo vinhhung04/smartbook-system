@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 1144" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-system-overview-dd-title architecture-system-overview-dd-desc" id="architecture-system-overview-dd-root">
+<title id="architecture-system-overview-dd-title">Kiến trúc tổng thể của hệ thống SmartBook</title>
+<desc id="architecture-system-overview-dd-desc">Ba ứng dụng khách đi qua Caddy và API Gateway tới năm dịch vụ, mỗi dịch vụ một cơ sở dữ liệu trong PostgreSQL; Redis, RabbitMQ và các dịch vụ bên ngoài hỗ trợ, sự kiện outbox quay về Gateway qua Socket.IO.</desc>
+<defs>
+      <style>#architecture-system-overview-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #architecture-system-overview-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #architecture-system-overview-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #architecture-system-overview-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#architecture-system-overview-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="architecture-system-overview-dd-architecture-system-overview-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#475569"/></marker>
+  <marker id="architecture-system-overview-dd-architecture-system-overview-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#b45309"/></marker>
+  <marker id="architecture-system-overview-dd-architecture-system-overview-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2f5597"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- zones -->
+<rect x="64" y="40" width="672" height="128" rx="8" fill="#f3f6fa" stroke="#1f3864" stroke-width="1" stroke-opacity="0.14"/>
+<text x="80" y="62" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">Lớp trình bày</text>
+<rect x="64" y="436" width="672" height="212" rx="8" fill="#f3f6fa" stroke="#1f3864" stroke-width="1" stroke-opacity="0.14"/>
+<text x="80" y="458" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">Lớp dịch vụ (mỗi service một cơ sở dữ liệu)</text>
+<rect x="304" y="704" width="432" height="196" rx="8" fill="#f3f6fa" stroke="#1f3864" stroke-width="1" stroke-opacity="0.14"/>
+<text x="320" y="726" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">Lớp dữ liệu (mạng nội bộ)</text>
+<rect x="64" y="704" width="216" height="340" rx="8" fill="#f3f6fa" stroke="#1f3864" stroke-width="1" stroke-opacity="0.14"/>
+<text x="80" y="726" fill="#475569" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start" font-weight="700">Dịch vụ bên ngoài</text>
+<!-- arrows -->
+<path d="M 400 168 V 215" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#architecture-system-overview-dd-architecture-system-overview-dd-arrow-link)"/>
+<path d="M 400 272 V 315" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#architecture-system-overview-dd-architecture-system-overview-dd-arrow)"/>
+<path d="M 400 380 V 435" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#architecture-system-overview-dd-architecture-system-overview-dd-arrow-link)"/>
+<path d="M 520 648 V 703" fill="none" stroke="#475569" stroke-width="1.2" marker-end="url(#architecture-system-overview-dd-architecture-system-overview-dd-arrow)"/>
+<path d="M 172 648 V 703" fill="none" stroke="#2f5597" stroke-width="1.2" marker-end="url(#architecture-system-overview-dd-architecture-system-overview-dd-arrow-link)"/>
+<path d="M 720 846 H 744 Q 752 846 752 838 V 356 Q 752 348 744 348 H 625" fill="none" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-system-overview-dd-architecture-system-overview-dd-arrow)"/>
+<!-- labels -->
+<rect x="412" y="182" width="88" height="18" rx="2" fill="#ffffff"/>
+<text x="456.0" y="195" fill="#2f5597" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">HTTPS / WSS</text>
+<rect x="412" y="284" width="96" height="18" rx="2" fill="#ffffff"/>
+<text x="460.0" y="297" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">reverse proxy</text>
+<rect x="412" y="398" width="240" height="18" rx="2" fill="#ffffff"/>
+<text x="532.0" y="411" fill="#2f5597" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">HTTP theo tiền tố đường dẫn, kèm JWT</text>
+<rect x="532" y="664" width="140" height="18" rx="2" fill="#ffffff"/>
+<text x="602.0" y="677" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Prisma / pg / asyncpg</text>
+<rect x="184" y="664" width="104" height="18" rx="2" fill="#ffffff"/>
+<text x="236.0" y="677" fill="#2f5597" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">HTTPS ra ngoài</text>
+<rect x="636" y="306" width="96" height="34" rx="2" fill="#ffffff"/>
+<text x="684.0" y="319" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">sự kiện outbox</text>
+<text x="684.0" y="335" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">→ Socket.IO</text>
+<!-- nodes -->
+<rect x="80" y="72" width="204" height="80" rx="6" fill="#ffffff"/>
+<rect x="80" y="72" width="204" height="80" rx="6" fill="#475569" stroke="#5b6b82" stroke-width="1" fill-opacity="0.10"/>
+<text x="182.0" y="101.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Website công khai</text>
+<text x="182.0" y="119.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(tra cứu không cần</text>
+<text x="182.0" y="135.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">đăng nhập)</text>
+<rect x="298" y="72" width="204" height="80" rx="6" fill="#ffffff"/>
+<rect x="298" y="72" width="204" height="80" rx="6" fill="#475569" stroke="#5b6b82" stroke-width="1" fill-opacity="0.10"/>
+<text x="400.0" y="101.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Ứng dụng web React</text>
+<text x="400.0" y="119.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">nhân viên · cổng bạn đọc ·</text>
+<text x="400.0" y="135.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">cổng NCC</text>
+<rect x="516" y="72" width="204" height="80" rx="6" fill="#ffffff"/>
+<rect x="516" y="72" width="204" height="80" rx="6" fill="#475569" stroke="#5b6b82" stroke-width="1" fill-opacity="0.10"/>
+<text x="618.0" y="109.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Ứng dụng di động Expo</text>
+<text x="618.0" y="127.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">bạn đọc · nhân viên kho</text>
+<rect x="244" y="216" width="312" height="56" rx="6" fill="#ffffff"/>
+<rect x="244" y="216" width="312" height="56" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400.0" y="241.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Caddy 2 – HTTPS, Let's Encrypt</text>
+<text x="400.0" y="259.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(chỉ ở production)</text>
+<rect x="176" y="316" width="448" height="64" rx="6" fill="#ffffff"/>
+<rect x="176" y="316" width="448" height="64" rx="6" fill="#b45309" stroke="#b45309" stroke-width="1.2" fill-opacity="0.08"/>
+<text x="400.0" y="345.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">API Gateway (Express, http-proxy-middleware)</text>
+<text x="400.0" y="363.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">giới hạn tần suất · Socket.IO · tiêu thụ sự kiện RabbitMQ</text>
+<rect x="80" y="468" width="204" height="76" rx="6" fill="#ffffff"/>
+<rect x="80" y="468" width="204" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="182.0" y="495.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Auth Service</text>
+<text x="182.0" y="513.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">JWT, RBAC, OTP email,</text>
+<text x="182.0" y="529.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">phạm vi kho</text>
+<rect x="298" y="468" width="204" height="76" rx="6" fill="#ffffff"/>
+<rect x="298" y="468" width="204" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="400.0" y="495.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Inventory Service</text>
+<text x="400.0" y="513.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">danh mục, kho vận,</text>
+<text x="400.0" y="529.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">mua hàng, outbox</text>
+<rect x="516" y="468" width="204" height="76" rx="6" fill="#ffffff"/>
+<rect x="516" y="468" width="204" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="618.0" y="495.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Borrow Service</text>
+<text x="618.0" y="513.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">lưu thông, phí phạt,</text>
+<text x="618.0" y="529.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">VNPay, thông báo</text>
+<rect x="189" y="556" width="204" height="76" rx="6" fill="#ffffff"/>
+<rect x="189" y="556" width="204" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="291.0" y="583.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Analytics Service</text>
+<text x="291.0" y="601.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">dự báo, đề xuất nhập,</text>
+<text x="291.0" y="617.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">rủi ro (đọc chỉ-đọc)</text>
+<rect x="407" y="556" width="204" height="76" rx="6" fill="#ffffff"/>
+<rect x="407" y="556" width="204" height="76" rx="6" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="509.0" y="583.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">AI Service (FastAPI)</text>
+<text x="509.0" y="601.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Copilot, OCR, ISBN,</text>
+<text x="509.0" y="617.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">RAG, gợi ý sách</text>
+<rect x="320" y="736" width="400" height="60" rx="6" fill="#ffffff"/>
+<rect x="320" y="736" width="400" height="60" rx="6" fill="#1f3864" stroke="#475569" stroke-width="1" fill-opacity="0.05"/>
+<text x="520.0" y="763.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">PostgreSQL 15 + pgvector</text>
+<text x="520.0" y="781.0" fill="#5b6b82" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">auth_db · inventory_db · borrow_db · ai_db</text>
+<rect x="320" y="808" width="192" height="76" rx="6" fill="#ffffff"/>
+<rect x="320" y="808" width="192" height="76" rx="6" fill="#1f3864" stroke="#475569" stroke-width="1" fill-opacity="0.05"/>
+<text x="416.0" y="835.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Redis 7</text>
+<text x="416.0" y="853.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">thu hồi token,</text>
+<text x="416.0" y="869.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">refresh token, bộ nhớ đệm</text>
+<rect x="528" y="808" width="192" height="76" rx="6" fill="#ffffff"/>
+<rect x="528" y="808" width="192" height="76" rx="6" fill="#1f3864" stroke="#475569" stroke-width="1" fill-opacity="0.05"/>
+<text x="624.0" y="835.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">RabbitMQ 3.13</text>
+<text x="624.0" y="853.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">sự kiện tích hợp</text>
+<text x="624.0" y="869.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(Transactional Outbox)</text>
+<rect x="80" y="736" width="184" height="76" rx="6" fill="#ffffff"/>
+<rect x="80" y="736" width="184" height="76" rx="6" fill="#1f3864" stroke="#1f3864" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.03" stroke-opacity="0.40"/>
+<text x="172.0" y="763.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">OpenRouter (Qwen):</text>
+<text x="172.0" y="781.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">hội thoại, công cụ,</text>
+<text x="172.0" y="797.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">thị giác, nhúng</text>
+<rect x="80" y="824" width="184" height="60" rx="6" fill="#ffffff"/>
+<rect x="80" y="824" width="184" height="60" rx="6" fill="#1f3864" stroke="#1f3864" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.03" stroke-opacity="0.40"/>
+<text x="172.0" y="851.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Google Books,</text>
+<text x="172.0" y="869.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">Open Library, nhà sách</text>
+<rect x="80" y="896" width="184" height="60" rx="6" fill="#ffffff"/>
+<rect x="80" y="896" width="184" height="60" rx="6" fill="#1f3864" stroke="#1f3864" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.03" stroke-opacity="0.40"/>
+<text x="172.0" y="923.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">Máy chủ SMTP</text>
+<text x="172.0" y="941.0" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle">(OTP, đặt lại mật khẩu)</text>
+<rect x="80" y="968" width="184" height="44" rx="6" fill="#ffffff"/>
+<rect x="80" y="968" width="184" height="44" rx="6" fill="#1f3864" stroke="#1f3864" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.03" stroke-opacity="0.40"/>
+<text x="172.0" y="995.0" fill="#1f3864" font-size="14" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="middle" font-weight="700">VNPay (sandbox)</text>
+<rect x="304" y="916" width="432" height="72" rx="4" fill="#f3f6fa" stroke="#c5cedb" stroke-width="1"/>
+<text x="316" y="937" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Prometheus + Grafana: profile monitoring tùy chọn</text>
+<text x="316" y="955" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">ở môi trường phát triển; production dùng</text>
+<text x="316" y="973" fill="#1f3864" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">healthcheck, healthcheck.sh và log Docker.</text>
+<!-- legend -->
+<line x1="40" y1="1068" x2="760" y2="1068" stroke="#1f3864" stroke-width="1" stroke-opacity="0.14"/>
+<rect x="44" y="1082" width="20" height="12" rx="2" fill="#475569" stroke="#5b6b82" stroke-width="1" fill-opacity="0.10"/>
+<text x="72" y="1092" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Máy khách</text>
+<rect x="148" y="1082" width="20" height="12" rx="2" fill="#ffffff" stroke="#1f3864" stroke-width="1"/>
+<text x="176" y="1092" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Dịch vụ</text>
+<rect x="236" y="1082" width="20" height="12" rx="2" fill="#b45309" stroke="#b45309" stroke-width="1" fill-opacity="0.08"/>
+<text x="264" y="1092" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Điểm vào duy nhất</text>
+<rect x="384" y="1082" width="20" height="12" rx="2" fill="#1f3864" stroke="#475569" stroke-width="1" fill-opacity="0.05"/>
+<text x="412" y="1092" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Lưu trữ</text>
+<rect x="476" y="1082" width="20" height="12" rx="2" fill="#1f3864" stroke="#1f3864" stroke-width="1" stroke-dasharray="4,3" fill-opacity="0.03" stroke-opacity="0.40"/>
+<text x="504" y="1092" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Dịch vụ ngoài</text>
+<line x1="44" y1="1116" x2="64" y2="1116" stroke="#2f5597" stroke-width="1.2"/>
+<text x="72" y="1120" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">HTTP(S)</text>
+<line x1="140" y1="1116" x2="160" y2="1116" stroke="#475569" stroke-width="1.2"/>
+<text x="168" y="1120" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Truy cập dữ liệu, proxy</text>
+<line x1="316" y1="1116" x2="336" y2="1116" stroke="#475569" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="344" y="1120" fill="#475569" font-size="12" font-family="Arial, 'Helvetica Neue', Helvetica, sans-serif" text-anchor="start">Sự kiện bất đồng bộ</text>
+</svg>

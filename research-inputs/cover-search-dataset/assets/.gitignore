@@ -1,0 +1,4 @@
+# Image binaries are NOT committed: rights for redistribution are not cleared for every file
+# (see rights/rights_audit.csv). Re-create them with services/ai-service/eval/cover_search/collect.py + perturb.py.
+*
+!.gitignore

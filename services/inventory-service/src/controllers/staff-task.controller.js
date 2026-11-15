@@ -1,4 +1,3 @@
-const { PrismaClient } = require('@prisma/client');
 const { pushEvents, pushToRooms } = require('../lib/socket-emitter');
 
 const {
@@ -11,7 +10,7 @@ const {
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 // Phase 5 warehouse scope: a task's warehouse comes from the stored task; a
 // manager sees and changes only tasks of warehouses in their scope (tasks

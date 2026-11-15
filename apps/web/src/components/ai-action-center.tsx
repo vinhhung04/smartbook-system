@@ -28,15 +28,17 @@ import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
 // proposes it, this is for browsing what happened across the whole history.
 // Wide screens get list + detail side by side; narrower ones open the detail in a sheet.
 
+// What needs someone first, then outcomes; "Tất cả" sits apart at the end of the rail.
 const STATUS_FILTERS: { value: string; label: string }[] = [
-  { value: '', label: 'Tất cả' },
   { value: 'PENDING_CONFIRMATION', label: 'Chờ xác nhận' },
+  { value: 'RECONCILE_REQUIRED', label: 'Chờ đối chiếu' },
   { value: 'EXECUTED', label: 'Đã thực thi' },
-  { value: 'CANCELLED', label: 'Đã hủy' },
   { value: 'FAILED', label: 'Thất bại' },
   { value: 'EXPIRED', label: 'Hết hạn' },
-  { value: 'RECONCILE_REQUIRED', label: 'Chờ đối chiếu' },
+  { value: 'CANCELLED', label: 'Đã hủy' },
+  { value: '', label: 'Tất cả' },
 ];
+const ATTENTION_STATUSES = new Set(['PENDING_CONFIRMATION', 'RECONCILE_REQUIRED']);
 
 // UI gate only — ai-service re-checks ADMIN (from auth-service, not the token) on every call.
 function currentUserIsAdmin(): boolean {
@@ -78,7 +80,7 @@ function relative(iso: string | null | undefined): string {
 function TypeTile({ type, className }: { type: string; className?: string }) {
   const Icon = TYPE_ICON[type] ?? Sparkles;
   return (
-    <span className={cn('grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground', className)} aria-hidden="true">
+    <span className={cn('mt-0.5 grid shrink-0 place-items-center text-muted-foreground', className)} aria-hidden="true">
       <Icon className="h-4 w-4" />
     </span>
   );
@@ -109,7 +111,7 @@ function AuditTimeline({ logs }: { logs: AiAuditLogEntry[] }) {
       {logs.map((log, idx) => (
         <li key={idx} className="relative">
           <span className={cn('absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-card',
-            log.event_type === 'FAILED' ? 'bg-rose-500' : log.event_type === 'EXECUTED' ? 'bg-emerald-500' : 'bg-muted-foreground/50')}
+            log.event_type === 'FAILED' ? 'bg-red-600' : log.event_type === 'EXECUTED' ? 'bg-primary' : 'bg-muted-foreground/50')}
             aria-hidden="true" />
           <p className="text-[13px] font-medium text-foreground">{AI_AUDIT_EVENT_LABEL[log.event_type] ?? log.event_type}</p>
           <p className="text-[12px] text-muted-foreground">
@@ -172,11 +174,11 @@ function ReconcilePanel({ actionId, onDone }: { actionId: string; onDone: () => 
       <RadioGroup value={outcome} onValueChange={(v) => setOutcome(v as 'EXECUTED' | 'FAILED')} aria-label="Kết quả đối chiếu">
         <div className="flex items-center gap-2">
           <RadioGroupItem value="EXECUTED" id={`reconcile-executed-${actionId}`} className="border-muted-foreground/60" />
-          <Label htmlFor={`reconcile-executed-${actionId}`} className="text-[13px]">Đã thực hiện — tìm thấy bản ghi ở nghiệp vụ đích</Label>
+          <Label htmlFor={`reconcile-executed-${actionId}`} className="text-[13px]">Đã thực hiện, tìm thấy bản ghi ở nghiệp vụ đích</Label>
         </div>
         <div className="flex items-center gap-2">
           <RadioGroupItem value="FAILED" id={`reconcile-failed-${actionId}`} className="border-muted-foreground/60" />
-          <Label htmlFor={`reconcile-failed-${actionId}`} className="text-[13px]">Chưa thực hiện — không có bản ghi nào</Label>
+          <Label htmlFor={`reconcile-failed-${actionId}`} className="text-[13px]">Chưa thực hiện, không có bản ghi nào</Label>
         </div>
       </RadioGroup>
       <div className="space-y-1">
@@ -240,9 +242,9 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
   if (loading && !detail) {
     return (
       <div className="space-y-3 p-5" aria-label="Đang tải chi tiết">
-        <span className="block h-4 w-1/3 animate-pulse rounded bg-muted" />
-        <span className="block h-6 w-2/3 animate-pulse rounded bg-muted" />
-        <span className="block h-24 w-full animate-pulse rounded-lg bg-muted" />
+        <span className="block h-4 w-1/3 rounded bg-muted" />
+        <span className="block h-6 w-2/3 rounded bg-muted" />
+        <span className="block h-24 w-full rounded-lg bg-muted" />
       </div>
     );
   }
@@ -262,10 +264,10 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
     <div className="space-y-5 p-4 sm:p-5">
       <header className="space-y-2">
         <p className="flex items-center gap-2 text-[12.5px] font-medium text-muted-foreground">
-          <TypeTile type={action.type} className="h-6 w-6 rounded-md [&_svg]:h-3.5 [&_svg]:w-3.5" />
+          <TypeTile type={action.type} className="mt-0 [&_svg]:h-3.5 [&_svg]:w-3.5" />
           {AI_ACTION_TYPE_LABEL[action.type] ?? action.type}
         </p>
-        <h3 className="text-[16px] font-semibold leading-snug text-foreground">{action.summary}</h3>
+        <h3 className="font-display text-[19px] font-semibold leading-snug tracking-tight text-foreground">{action.summary}</h3>
         <div className="flex flex-wrap items-center gap-1.5">
           <StatusBadge label={AI_ACTION_STATUS_LABEL[action.status] ?? action.status} variant={getStatusVariant('aiAction', action.status)} dot />
           <StatusBadge label={AI_ACTION_RISK_LABEL[action.risk] ?? action.risk} variant={getStatusVariant('pendingActionRisk', action.risk)} />
@@ -334,6 +336,9 @@ export function AIActionCenter() {
   const { connected } = useSocket();
   const wide = useMediaQuery(WIDE_QUERY);
   const reloadTimerRef = useRef<number | null>(null);
+  // Per-status totals for the filter rail: read-only `total` of a one-row page per status.
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const filterTouchedRef = useRef(false);
 
   const load = () => {
     setLoading(true);
@@ -350,16 +355,37 @@ export function AIActionCenter() {
       .finally(() => setLoading(false));
   };
 
+  const loadCounts = () => {
+    Promise.all(STATUS_FILTERS.map((f) =>
+      aiService.listActions({ status: f.value || undefined, limit: 1, mine: false }).then((res) => [f.value, res.total ?? 0] as const)))
+      .then((entries) => {
+        const next = Object.fromEntries(entries);
+        setCounts(next);
+        // Open on what needs a decision, unless the user already picked a filter.
+        if (!filterTouchedRef.current && (next.PENDING_CONFIRMATION ?? 0) > 0) {
+          filterTouchedRef.current = true;
+          setStatusFilter('PENDING_CONFIRMATION');
+        }
+      })
+      .catch(() => {
+        // Non-critical: the rail just shows no numbers.
+      });
+  };
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
+  useEffect(() => {
+    loadCounts();
+  }, []);
+
   // Action lifecycle events (created/confirmed/executed/failed/cancelled) can arrive as a
   // quick burst from one confirm click — debounce so that only triggers one refetch, not N.
   useAIActionRealtime(() => {
     if (reloadTimerRef.current) window.clearTimeout(reloadTimerRef.current);
-    reloadTimerRef.current = window.setTimeout(load, 300);
+    reloadTimerRef.current = window.setTimeout(() => { load(); loadCounts(); }, 300);
   });
 
   useEffect(() => {
@@ -369,65 +395,108 @@ export function AIActionCenter() {
   }, []);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
-  const pendingShown = items.filter((item) => item.status === 'PENDING_CONFIRMATION').length;
+  const chooseFilter = (value: string) => {
+    filterTouchedRef.current = true;
+    setStatusFilter(value);
+    setSelectedId(null);
+  };
+  const refresh = () => { load(); loadCounts(); };
+
+  const pending = counts?.PENDING_CONFIRMATION ?? 0;
+  const reconcile = counts?.RECONCILE_REQUIRED ?? 0;
+  const lede = !counts
+    ? 'Đề xuất do trợ lý soạn chỉ chạy khi có người xác nhận.'
+    : pending + reconcile === 0
+      ? 'Không có đề xuất nào đang chờ bạn. Lịch sử thực thi nằm ở các mục bên dưới.'
+      : [pending ? `${pending} đề xuất chờ bạn xác nhận` : '', reconcile ? `${reconcile} cần đối chiếu kết quả` : ''].filter(Boolean).join(', ') + '.';
+  const activeLabel = STATUS_FILTERS.find((f) => f.value === statusFilter)?.label ?? 'Tất cả';
+
+  const filterButton = (f: (typeof STATUS_FILTERS)[number], chip: boolean) => {
+    const active = statusFilter === f.value;
+    const count = counts?.[f.value];
+    const attention = ATTENTION_STATUSES.has(f.value) && (count ?? 0) > 0;
+    return (
+      <button
+        key={f.value}
+        type="button"
+        aria-pressed={active}
+        onClick={() => chooseFilter(f.value)}
+        className={cn(
+          'flex cursor-pointer items-center justify-between gap-3 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-ring',
+          chip ? 'shrink-0 rounded-full border px-3.5 py-1.5' : 'w-full rounded-lg px-3 py-2',
+          active
+            ? cn('font-semibold text-primary', chip ? 'border-primary/30 bg-primary/[0.08]' : 'bg-primary/[0.08]')
+            : cn('font-medium text-foreground', chip ? 'border-border bg-card hover:bg-muted/60' : 'hover:bg-muted/60'),
+        )}
+      >
+        <span className="whitespace-nowrap">{f.label}</span>
+        <span className={cn('min-w-6 rounded-full px-1.5 text-center text-[12px] tabular-nums',
+          attention ? 'bg-amber-100 font-semibold text-amber-800 dark:bg-amber-500/15 dark:text-amber-300' : active ? 'text-primary' : 'text-muted-foreground')}>
+          {count === undefined ? '–' : count.toLocaleString('vi-VN')}
+        </span>
+      </button>
+    );
+  };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3 sm:px-5">
-        <div className="order-last -mx-1 flex w-full min-w-0 gap-1 overflow-x-auto px-1 pb-0.5 sm:order-none sm:w-auto sm:flex-1" role="group" aria-label="Lọc theo trạng thái">
-          {STATUS_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              aria-pressed={statusFilter === f.value}
-              onClick={() => { setStatusFilter(f.value); setSelectedId(null); }}
-              className={cn('h-8 shrink-0 cursor-pointer rounded-lg px-3 text-[12.5px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring',
-                statusFilter === f.value ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+    <div className="@container/ac flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-3 sm:px-5">
+        <p className="min-w-0 flex-1 text-[13px] text-foreground">{lede}</p>
         <span
-          className="mr-auto flex items-center gap-1.5 text-[12px] text-muted-foreground sm:mr-0"
-          title={connected ? 'Đang nhận cập nhật trực tiếp' : 'Mất kết nối trực tiếp — danh sách chỉ cập nhật khi bấm Làm mới'}
+          className="flex items-center gap-1.5 text-[12px] text-muted-foreground"
+          title={connected ? 'Đang nhận cập nhật trực tiếp' : 'Mất kết nối trực tiếp, danh sách chỉ cập nhật khi bấm Làm mới'}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} aria-hidden="true" />
-          {connected ? 'Trực tiếp' : 'Ngoại tuyến'}
+          {connected ? 'Cập nhật trực tiếp' : 'Ngoại tuyến'}
         </span>
-        <Button type="button" variant="outline" size="sm" onClick={load} disabled={loading} className="h-8">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+        <Button type="button" variant="outline" size="sm" onClick={refresh} disabled={loading} className="h-8">
+          <RefreshCw className={`h-3.5 w-3.5 motion-reduce:animate-none ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           Làm mới
         </Button>
+        <div className="-mx-1 flex w-full gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:thin] @5xl/ac:hidden" role="group" aria-label="Lọc theo trạng thái">
+          {STATUS_FILTERS.map((f) => filterButton(f, true))}
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className={cn('min-h-0 overflow-y-auto', wide ? 'w-[400px] shrink-0 border-r border-border' : 'flex-1')}>
-          {!statusFilter && pendingShown > 0 && (
-            <p className="flex items-center gap-1.5 border-b border-border bg-amber-50/70 px-4 py-2 text-[12.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200 sm:px-5">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {pendingShown} đề xuất đang chờ xác nhận trong danh sách
-            </p>
-          )}
+        <nav aria-label="Bộ lọc hành động AI" className="hidden w-[220px] shrink-0 overflow-y-auto border-r border-border p-3 @5xl/ac:block">
+          <div role="group" aria-label="Lọc theo trạng thái">
+            {STATUS_FILTERS.filter((f) => f.value).map((f) => filterButton(f, false))}
+            <div className="mt-3 border-t border-border pt-3">
+              {STATUS_FILTERS.filter((f) => !f.value).map((f) => filterButton(f, false))}
+            </div>
+          </div>
+          <dl className="mt-4 space-y-2 border-t border-border px-3 pt-3 text-[12px] leading-relaxed text-muted-foreground">
+            <div><dt className="font-medium text-foreground">Chờ xác nhận</dt><dd>Trợ lý đã soạn xong, chỉ chạy khi bạn bấm xác nhận.</dd></div>
+            <div><dt className="font-medium text-foreground">Chờ đối chiếu</dt><dd>Không chắc đề xuất đã chạy xong. Quản trị viên kiểm tra ở nghiệp vụ đích rồi ghi nhận.</dd></div>
+            <div><dt className="font-medium text-foreground">Mức rủi ro</dt><dd>Ảnh hưởng nếu thực thi: thấp, vừa hoặc cao.</dd></div>
+          </dl>
+        </nav>
+
+        <section aria-label={`Hành động: ${activeLabel}`} className={cn('min-h-0 overflow-y-auto', wide ? 'w-[380px] shrink-0 border-r border-border' : 'flex-1')}>
+          <h2 className="px-4 pb-2 pt-4 font-display text-[16px] font-semibold tracking-tight text-foreground sm:px-5">
+            {activeLabel}
+            {counts?.[statusFilter] !== undefined && <span className="ml-2 font-sans text-[13px] font-normal text-muted-foreground">{counts[statusFilter].toLocaleString('vi-VN')}</span>}
+          </h2>
           {loading && items.length === 0 ? (
-            <ul className="divide-y divide-border" aria-label="Đang tải">
+            <ul className="divide-y divide-border border-t border-border" aria-label="Đang tải">
               {[0, 1, 2, 3].map((i) => (
-                <li key={i} className="flex gap-3 px-4 py-3.5 sm:px-5">
-                  <span className="h-8 w-8 animate-pulse rounded-lg bg-muted" />
-                  <span className="flex-1 space-y-2"><span className="block h-3.5 w-3/4 animate-pulse rounded bg-muted" /><span className="block h-3 w-1/3 animate-pulse rounded bg-muted" /></span>
+                <li key={i} className="space-y-2 px-4 py-3.5 sm:px-5">
+                  <span className="block h-3.5 w-3/4 rounded bg-muted" />
+                  <span className="block h-3 w-1/3 rounded bg-muted" />
                 </li>
               ))}
             </ul>
           ) : items.length === 0 ? (
-            <div className="flex flex-col items-center px-6 py-16 text-center">
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-muted text-muted-foreground"><Inbox className="h-5 w-5" aria-hidden="true" /></span>
+            <div className="flex flex-col items-center border-t border-border px-6 py-16 text-center">
+              <Inbox className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
               <p className="mt-3 text-[14px] font-medium text-foreground">Chưa có hành động nào</p>
-              <p className="mt-1 max-w-xs text-[12.5px] text-muted-foreground">
+              <p className="mt-1 max-w-xs text-[13px] text-muted-foreground">
                 {statusFilter ? 'Không có hành động nào ở trạng thái này.' : 'Các hành động AI đề xuất sẽ xuất hiện ở đây để bạn xác nhận và theo dõi.'}
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border border-t border-border">
               {items.map((item) => {
                 const active = item.id === selectedId;
                 return (
@@ -438,9 +507,10 @@ export function AIActionCenter() {
                         active ? 'bg-primary/[0.07]' : 'hover:bg-muted/50')}>
                       <TypeTile type={item.type} />
                       <span className="min-w-0 flex-1">
-                        <span className="line-clamp-2 text-[13.5px] font-medium leading-snug text-foreground">{item.summary}</span>
+                        <span className="line-clamp-2 text-[14px] font-medium leading-snug text-foreground">{item.summary}</span>
                         <span className="mt-0.5 block text-[12px] text-muted-foreground">
-                          {AI_ACTION_TYPE_LABEL[item.type] ?? item.type} · <time dateTime={item.created_at} title={formatDate(item.created_at)}>{relative(item.created_at)}</time>
+                          {AI_ACTION_TYPE_LABEL[item.type] ?? item.type}, <time dateTime={item.created_at} title={formatDate(item.created_at)}>{relative(item.created_at)}</time>
+                          , {(AI_ACTION_RISK_LABEL[item.risk] ?? item.risk).toLocaleLowerCase('vi')}
                         </span>
                         {item.status === 'RECONCILE_REQUIRED' && (
                           <span className="mt-0.5 block text-[12px] text-muted-foreground">
@@ -450,28 +520,32 @@ export function AIActionCenter() {
                         )}
                         <span className="mt-1.5 flex flex-wrap gap-1.5">
                           <StatusBadge label={AI_ACTION_STATUS_LABEL[item.status] ?? item.status} variant={getStatusVariant('aiAction', item.status)} dot />
-                          <StatusBadge label={AI_ACTION_RISK_LABEL[item.risk] ?? item.risk} variant={getStatusVariant('pendingActionRisk', item.risk)} />
                         </span>
                       </span>
-                      <ChevronRight className={cn('mt-2 h-4 w-4 shrink-0 text-muted-foreground', active && 'text-primary')} aria-hidden="true" />
+                      <ChevronRight className={cn('mt-1 h-4 w-4 shrink-0 text-muted-foreground', active && 'text-primary')} aria-hidden="true" />
                     </button>
                   </li>
                 );
               })}
             </ul>
           )}
-        </div>
+        </section>
 
         {wide && (
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {selected ? (
               <ActionDetailPanel key={selected.id} actionId={selected.id} />
             ) : (
-              <div className="grid h-full place-items-center p-8 text-center">
-                <div>
-                  <p className="text-[14px] font-medium text-foreground">Chọn một hành động</p>
-                  <p className="mt-1 max-w-xs text-[12.5px] text-muted-foreground">Xem chi tiết, xác nhận đề xuất đang chờ và lịch sử audit đầy đủ.</p>
-                </div>
+              <div className="mx-auto max-w-md px-8 py-16">
+                <h3 className="font-display text-[18px] font-semibold tracking-tight text-foreground">Chọn một hành động ở danh sách</h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                  Khung này hiện nội dung đề xuất, nút xác nhận hoặc từ chối khi đề xuất đang chờ, lỗi nếu có, lịch sử audit và dữ liệu kỹ thuật.
+                </p>
+                {pending > 0 && statusFilter !== 'PENDING_CONFIRMATION' && (
+                  <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => chooseFilter('PENDING_CONFIRMATION')}>
+                    Xem {pending} đề xuất chờ xác nhận
+                  </Button>
+                )}
               </div>
             )}
           </div>

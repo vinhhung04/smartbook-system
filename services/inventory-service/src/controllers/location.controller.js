@@ -1,8 +1,8 @@
-const { PrismaClient } = require('@prisma/client');
 
 const { requireWarehouseReadAccess } = require('../utils/warehouse-scope.utils');
+const { getOccupancyByLocationIds, rollUpOccupancy } = require('../services/location-capacity.service');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const LOCATION_TYPES = ['ZONE', 'SHELF', 'SHELF_COMPARTMENT', 'BIN'];
 const ROOT_TYPES = ['ZONE'];
@@ -310,10 +310,13 @@ async function getLocationTreeByWarehouse(req, res) {
       orderBy: [{ location_type: 'asc' }, { location_code: 'asc' }],
     });
 
+    // One grouped query for the whole warehouse; each tree node then carries its real fill.
+    const occupancy = await getOccupancyByLocationIds(prisma, locations.map((location) => location.id));
+
     return res.json({
       warehouse,
       locations: locations.map(locationPayload),
-      tree: buildLocationTree(locations),
+      tree: rollUpOccupancy(buildLocationTree(locations), occupancy),
     });
   } catch (error) {
     console.error('Error while fetching location tree:', error);

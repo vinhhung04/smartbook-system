@@ -72,7 +72,6 @@ export function PublicDiscoverPage() {
   return (
     <>
       <PageHero
-        eyebrow="Không biết nên đọc gì? · Gợi ý bằng AI"
         title={`“${q}”`}
         description={(
           <span aria-live="polite">

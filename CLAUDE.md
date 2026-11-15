@@ -91,6 +91,8 @@ For straightforward, well-understood changes, keep the research lightweight. Thi
 
 ### 6.1. Lựa chọn công cụ (Claude tự chọn, không hỏi người dùng)
 
+Công cụ thứ ba — **Diagram Design** (plugin, thiết kế lại và xuất hình cuối cho báo cáo) — và quy tắc phối hợp ba công cụ: xem **mục 7**.
+
 | Mermaid | Next AI Draw.io |
 |---|---|
 | Sequence Diagram, Activity Diagram, Flowchart | Use Case Diagram tổng quát |
@@ -156,6 +158,79 @@ docs/diagrams/
     └── pdf/<loại>/    # chỉ khi thực sự cần
 ```
 
+- Thư mục bổ sung cho Diagram Design: `designed/<loại>/` (HTML nguồn), `design-profile/` (bản sao profile), `tests/` (sơ đồ kiểm thử) — xem mục 7.5.
 - Tên file kebab-case tiếng Anh theo module: `<module>-<luồng>.mmd`, ví dụ `auth-login-email-otp.mmd`; file xuất cùng tên, cùng thư mục con.
 - Ưu tiên SVG; PNG khi cần chèn vào Word; PDF chỉ khi được yêu cầu.
 - Luôn giữ file nguồn (`.mmd`, `.drawio`) cạnh bản xuất. Khi cập nhật, sửa file nguồn rồi render lại; không xóa hoặc thay thế bản nguồn cũ khi chưa được đồng ý — nếu nội dung thay đổi lớn, tạo file mới (ví dụ hậu tố `-v2`).
+
+---
+
+## 7. QUY TẮC THIẾT KẾ VÀ KIỂM TRA SƠ ĐỒ KỸ THUẬT
+
+Bổ sung cho mục 6. Ba công cụ phối hợp, không thay thế nhau: **Mermaid** và **Next AI Draw.io** là nơi mô hình hóa và lưu nguồn chỉnh sửa được; **Diagram Design** là lớp trình bày, thiết kế lại sơ đồ đã đúng nội dung thành hình chuyên nghiệp cho báo cáo.
+
+**Diagram Design** là plugin Claude Code `diagram-design@diagram-design` (repo `cathrynlavery/diagram-design`, MIT), khai báo ở scope project trong `.claude/settings.json` (`extraKnownMarketplaces` + `enabledPlugins`). Đây không phải trình render Mermaid/Draw.io: nó vẽ lại sơ đồ thành một file HTML tự chứa (SVG inline) theo hệ thẩm mỹ riêng, rồi xuất SVG/PNG. Skill tự kích hoạt khi được yêu cầu vẽ/thiết kế lại sơ đồ; lệnh trực tiếp: `/diagram-design:import-mermaid`, `/diagram-design:import-drawio`, `/diagram-design:export-diagram`, `/diagram-design:profile`, `/diagram-design:doctor`.
+
+### 7.1. Lựa chọn công cụ
+
+| Công cụ | Dùng cho |
+|---|---|
+| Mermaid | Sequence, Activity/Flowchart, sơ đồ dạng code cần cập nhật thường xuyên theo mã nguồn — **nguồn sự thật** của luồng tương tác |
+| Next AI Draw.io | Use Case, ERD phức tạp, Architecture, Component, Deployment, sơ đồ cần chỉnh tay trực quan |
+| Diagram Design | Thiết kế lại sơ đồ Mermaid/Draw.io đã đúng nội dung; tạo mới sơ đồ trực quan (architecture, flowchart, sequence nhỏ, state, ER nhỏ, data flow, layer, deployment…); chuẩn hóa bố cục, khoảng cách, màu, typography; xuất SVG/PNG cuối cho báo cáo |
+
+Giới hạn của Diagram Design (kiểm chứng ngày 2026-11-06, v2.6.141) — vượt giới hạn thì **giữ công cụ UML phù hợp** hoặc tách sơ đồ, không ép dùng Diagram Design:
+
+- Không có kiểu **Use Case** → luôn dùng Draw.io.
+- Sequence: tối đa 5 lifeline, 12 thông điệp, 1 combined fragment (2 chỉ khi đều là `opt`/`loop` một vùng), `alt` tối đa 2 nhánh, không lồng, không hỗ trợ `break`/`par`/`critical`/`ref`. Sequence đầy đủ (ví dụ 7 participant, `alt` lồng) giữ Mermaid làm hình chính thức, hoặc tách thành các phần theo 7.3.
+- ER tối đa 8 thực thể; DB schema 5 bảng / 8 cột hiển thị / 6 FK; UML class 7 lớp / 8 quan hệ; architecture 9 nút / 12 cạnh (faithful: ≤ 24 nút, bắt buộc chia zone).
+- ER ghi cardinality bằng chữ (`1`, `N`, `0..1`, `1..*`) ở hai đầu quan hệ, không dùng ký hiệu chân quạ; nếu báo cáo cần ký pháp khác thì giữ Mermaid/Draw.io. Luôn đọc `type-*.md` tương ứng để kiểm tra ký pháp trước khi dùng.
+
+### 7.2. Nguồn thông tin bắt buộc
+
+Áp dụng toàn bộ mục 6.2. Trước khi vẽ sơ đồ chính thức phải đọc phần mã liên quan: frontend routes/components, gateway, controllers/services, API endpoints, Prisma models/migrations, xác thực/phân quyền (seed quyền), quy trình nghiệp vụ, tích hợp AI, cấu hình triển khai khi liên quan. Không dùng dữ liệu tự tưởng tượng; báo cáo cũ hoặc sơ đồ cũ mâu thuẫn với mã thì mã thắng. Khi thiết kế lại một sơ đồ có sẵn, coi file nguồn là đầu vào nhưng vẫn đối chiếu lại với mã nếu sơ đồ dùng cho báo cáo.
+
+### 7.3. Bảo toàn nội dung (bắt buộc)
+
+- Mức chi tiết mặc định cho báo cáo: **`faithful`**. Không tự chuyển sang `balanced`/`simplified`; chỉ dùng khi người dùng yêu cầu rõ.
+- Không âm thầm lược bỏ actor, use case, bảng, cột, khóa, API, thông điệp, nhánh điều kiện, mã lỗi. Không gộp thành phần có nghĩa nghiệp vụ khác nhau. Không đổi thứ tự thông điệp, hướng dữ liệu, quan hệ phụ thuộc, cardinality.
+- Vượt giới hạn → tách thành tổng quan + chi tiết (hoặc các phần nối tiếp), đặt tên `<base>-overview`, `<base>-<phần>`; tập các phần phải chứa toàn bộ thông tin của nguồn, đánh số thông điệp giữ nguyên số của nguồn.
+- Nội dung kỹ thuật quá dài cho nhãn mũi tên được chuyển vào ghi chú cạnh đó, giữ nguyên văn.
+- Mỗi lần import/thiết kế lại phải có **bảng đối chiếu trước/sau** (nguồn → sau thiết kế → thay đổi → lý do), đặt cạnh sơ đồ hoặc trong README của thư mục, và chạy `python scripts/diagrams/check-fidelity.py <nguồn.mmd> <file.svg>...` — mọi mục báo "MISSING" phải được sửa hoặc giải thích trong bảng đối chiếu.
+- Với nguồn Draw.io: trích IR bằng `drawio_extract.py` của skill, đối chiếu thủ công từng nút/cạnh vào bảng (script fidelity chỉ hỗ trợ Mermaid).
+
+### 7.4. Phong cách SmartBook (profile `smartbook`)
+
+- Profile lưu tại `~/.diagram-design/profiles/smartbook.md` (bản sao theo dõi bằng Git: `docs/diagrams/design-profile/smartbook.md`); file marker `.diagram-design` ở gốc repo (`profile: smartbook`) chọn profile, nên không sửa `style-guide.md` trong thư mục plugin. Máy mới: chép bản sao vào `~/.diagram-design/profiles/`.
+- Màu: nền trắng `#ffffff`, chữ/nét chính navy `#1f3864`, phụ slate `#475569`, liên kết HTTP `#2f5597` (trùng viền Mermaid), nhấn hổ phách `#b45309` cho tối đa 2 phần tử. Đã qua `verify-contrast.py` (WCAG) ở cả hai skin.
+- Font hệ thống, không tải Google Fonts: Arial (tên, tiếng Việt), Consolas (endpoint, bảng, mã), Times New Roman (tiêu đề, callout). Không đặt chữ tiếng Việt trong font mono, không viết hoa toàn bộ chữ tiếng Việt.
+- Thang chữ khóa luận: `viewBox` rộng ≤ 800, tên nút 14px, nhãn/ghi chú 12px (sàn), tag Latin 11px; cao ≤ ~1200 cho một trang A4. Chi tiết trong mục *SmartBook thesis output* của profile.
+- Bố cục: lưới 4px, đường nối vuông góc bo `r=8`, không chéo, không chồng, nhãn trên plate mờ đục cách đường 8px, mũi tên vẽ trước node, chú giải là dải ngang dưới cùng.
+
+### 7.5. Lưu trữ
+
+```
+docs/diagrams/
+├── source/            # .mmd (Mermaid) — nguồn
+├── drawio/            # .drawio — nguồn
+├── designed/<loại>/   # .html Diagram Design — nguồn của hình đã thiết kế
+├── design-profile/    # bản sao profile smartbook
+├── exports/{svg,png}/<loại>/   # hình chính thức chèn báo cáo (cùng tên với nguồn)
+└── tests/             # sơ đồ kiểm thử, không dùng cho báo cáo
+```
+
+Hình chính thức thiết kế bằng Diagram Design: `designed/<loại>/<tên>.html` → `exports/svg/<loại>/<tên>.svg` + `exports/png/<loại>/<tên>.png`. Không ghi đè bản xuất Mermaid/Draw.io cũ khi chưa được đồng ý — dùng hậu tố `-dd` hoặc `-v2`. Giữ file `.mmd`/`.drawio` gốc làm nguồn nội dung.
+
+### 7.6. Kiểm tra đầu ra (không tuyên bố hoàn thành nếu chưa chạy)
+
+Trên máy này dùng `python` (Python 3.14 có Playwright + Chromium); `python3` là bản khác không có Playwright. `<skill>` = `~/.claude/plugins/cache/diagram-design/diagram-design/<phiên bản>/skills/diagram-design`.
+
+1. Cấu trúc/cú pháp: `python <skill>/scripts/self_check.py --offline <file.html>` (hợp đồng SVG truy cập được, an toàn một file, không Google Fonts, nội dung trong viewBox).
+2. Chữ bị cắt, plate chồng nhau, lề 40px, font thực dùng: `python scripts/diagrams/check-text-fit.py <file.html> --word-png <ảnh-16cm.png>`.
+3. Đường nối (nếu có bản clone repo diagram-design): `python <repo>/scripts/verify-geometry.py <file.html>` — chéo, chồng, điểm gắn, đi sau node.
+4. Xuất: `python <skill>/scripts/export_svg.py <file.html> <out.svg> --system-fonts` và `python <skill>/scripts/export_png.py <file.html> <out.png> 3`.
+5. Mở PNG xuất và PNG cỡ 16cm, kiểm tra trực quan: chữ cắt, phần tử chạm/chồng, đường cắt qua chữ hoặc node, khả năng đọc khi thu nhỏ.
+6. Nội dung: `python scripts/diagrams/check-fidelity.py` (nguồn Mermaid) + bảng đối chiếu; đối chiếu lại với mã nguồn.
+7. Sửa và chạy lại đến khi đạt. Báo cáo rõ bước nào đã chạy, bước nào chưa chạy được.
+
+Quy trình mẫu đã kiểm chứng: `docs/diagrams/tests/diagram-design/README.md`.

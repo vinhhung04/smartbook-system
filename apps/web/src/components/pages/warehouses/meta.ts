@@ -9,59 +9,28 @@ import {
   Package,
 } from "lucide-react";
 import type { LocationNode } from "@/services/warehouse";
-import { occupancyBand } from "@/lib/occupancy";
 
 export interface TypeMeta {
   icon: LucideIcon;
   label: string;
-  /** text color for icons/labels on soft chip backgrounds */
-  ink: string;
-  /** soft gradient background for small icon tiles (header, data plate, tag cards) */
-  chip: string;
-  /** gradient color stops (e.g. "from-indigo-500 to-blue-500") for large icon tiles / top accent bars — direction utility added at the call site */
-  swatch: string;
-  /** solid flat color for small tree indicator dots */
-  dot: string;
-  /** border/ring color for selected states */
-  border: string;
 }
 
 export const WAREHOUSE_TYPE_META: Record<string, TypeMeta> = {
   WAREHOUSE: {
     icon: WarehouseIcon,
     label: "Kho tổng",
-    ink: "text-indigo-600 dark:text-indigo-400",
-    chip: "bg-gradient-to-br from-indigo-100 to-blue-50 dark:from-indigo-500/20 dark:to-blue-500/10",
-    swatch: "from-indigo-500 to-blue-500",
-    dot: "bg-indigo-500",
-    border: "border-indigo-300 dark:border-indigo-500/40",
   },
   STORE: {
     icon: Store,
     label: "Cửa hàng",
-    ink: "text-emerald-600 dark:text-emerald-400",
-    chip: "bg-gradient-to-br from-emerald-100 to-teal-50 dark:from-emerald-500/20 dark:to-teal-500/10",
-    swatch: "from-emerald-500 to-teal-500",
-    dot: "bg-emerald-500",
-    border: "border-emerald-300 dark:border-emerald-500/40",
   },
   BRANCH: {
     icon: Building2,
     label: "Chi nhánh",
-    ink: "text-amber-600 dark:text-amber-400",
-    chip: "bg-gradient-to-br from-amber-100 to-orange-50 dark:from-amber-500/20 dark:to-orange-500/10",
-    swatch: "from-amber-500 to-orange-500",
-    dot: "bg-amber-500",
-    border: "border-amber-300 dark:border-amber-500/40",
   },
   LIBRARY: {
     icon: Library,
     label: "Thư viện",
-    ink: "text-violet-600 dark:text-violet-400",
-    chip: "bg-gradient-to-br from-violet-100 to-purple-50 dark:from-violet-500/20 dark:to-purple-500/10",
-    swatch: "from-violet-500 to-purple-500",
-    dot: "bg-violet-500",
-    border: "border-violet-300 dark:border-violet-500/40",
   },
 };
 
@@ -73,29 +42,14 @@ export const LOCATION_TYPE_META: Record<string, TypeMeta> = {
   ZONE: {
     icon: LayoutGrid,
     label: "Khu vực",
-    ink: "text-violet-600 dark:text-violet-400",
-    chip: "bg-violet-100 dark:bg-violet-500/15",
-    swatch: "from-violet-500 to-purple-500",
-    dot: "bg-violet-500",
-    border: "border-violet-300 dark:border-violet-500/40",
   },
   SHELF: {
     icon: BookOpen,
     label: "Kệ",
-    ink: "text-cyan-600 dark:text-cyan-400",
-    chip: "bg-cyan-100 dark:bg-cyan-500/15",
-    swatch: "from-cyan-500 to-blue-500",
-    dot: "bg-cyan-500",
-    border: "border-cyan-300 dark:border-cyan-500/40",
   },
   SHELF_COMPARTMENT: {
     icon: Package,
     label: "Ngăn kệ",
-    ink: "text-emerald-600 dark:text-emerald-400",
-    chip: "bg-emerald-100 dark:bg-emerald-500/15",
-    swatch: "from-emerald-500 to-teal-500",
-    dot: "bg-emerald-500",
-    border: "border-emerald-300 dark:border-emerald-500/40",
   },
 };
 
@@ -160,23 +114,26 @@ export function ancestorIds(nodeId: string, flat: LocationNode[]): string[] {
 }
 
 export type { OccupancyBand } from "@/lib/occupancy";
-export { occupancyBandFromRatio, occupancyBand } from "@/lib/occupancy";
+export { occupancyBand } from "@/lib/occupancy";
 
 export interface WarehouseLocationSummary {
   zoneCount: number;
   shelfCount: number;
   compartmentCount: number;
-  avgOccupancy: number | null;
+  /** Sum of compartment capacity_qty; null when no compartment has a capacity set. */
+  capacityTotal: number | null;
+  /** Copies on hand in those same compartments (the ones with a capacity), from `occupied_qty`. */
+  occupiedTotal: number;
 }
 
-/** Aggregates a location tree into per-type counts and average compartment occupancy, for a glanceable card summary. */
+/** Aggregates a location tree into per-type counts plus compartment capacity and fill, for a glanceable summary. */
 export function summarizeLocationTree(tree: LocationNode[]): WarehouseLocationSummary {
   const flat = flattenNodes(tree);
   let zoneCount = 0;
   let shelfCount = 0;
   let compartmentCount = 0;
-  let ratioSum = 0;
-  let measured = 0;
+  let capacityTotal: number | null = null;
+  let occupiedTotal = 0;
 
   flat.forEach((node) => {
     const type = normalizeType(node.location_type);
@@ -184,18 +141,19 @@ export function summarizeLocationTree(tree: LocationNode[]): WarehouseLocationSu
     else if (type === "SHELF") shelfCount += 1;
     else if (type === "SHELF_COMPARTMENT") {
       compartmentCount += 1;
-      const band = occupancyBand(node.available, node.capacity_qty);
-      if (band) {
-        ratioSum += band.ratio;
-        measured += 1;
+      if (typeof node.capacity_qty === "number" && node.capacity_qty > 0) {
+        capacityTotal = (capacityTotal ?? 0) + node.capacity_qty;
+        occupiedTotal += node.occupied_qty ?? 0;
       }
     }
   });
 
-  return {
-    zoneCount,
-    shelfCount,
-    compartmentCount,
-    avgOccupancy: measured > 0 ? ratioSum / measured : null,
-  };
+  return { zoneCount, shelfCount, compartmentCount, capacityTotal, occupiedTotal };
+}
+
+/** Capacity of a location: its own capacity_qty, else the sum of what is below it (null if none is set). */
+export function capacityOf(node: LocationNode): number | null {
+  if (typeof node.capacity_qty === "number" && node.capacity_qty > 0) return node.capacity_qty;
+  const below = (node.children || []).map(capacityOf).filter((value): value is number => value !== null);
+  return below.length > 0 ? below.reduce((sum, value) => sum + value, 0) : null;
 }

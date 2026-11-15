@@ -38,7 +38,7 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
         aria-label="Điều hướng nhanh"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
       >
-        <ul className="mx-auto grid max-w-xl grid-cols-5">
+        <ul className="mx-auto grid max-w-xl grid-cols-5 px-2">
           {TAB_ITEMS.map((item) => (
             <li key={item.to}>
               <NavLink
@@ -46,8 +46,8 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
                 end={item.end}
                 className={({ isActive }) =>
                   cn(
-                    'flex flex-col items-center gap-0.5 py-2 text-[11px] transition-colors',
-                    isActive ? 'font-semibold text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground',
+                    'flex flex-col items-center gap-0.5 py-2 text-[12px] transition-colors',
+                    isActive ? 'font-semibold text-primary dark:text-primary' : 'text-muted-foreground',
                   )
                 }
               >
@@ -62,8 +62,8 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
               onClick={() => setMoreOpen(true)}
               aria-expanded={moreOpen}
               className={cn(
-                'flex w-full flex-col items-center gap-0.5 py-2 text-[11px] transition-colors',
-                moreActive ? 'font-semibold text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground',
+                'flex w-full flex-col items-center gap-0.5 py-2 text-[12px] transition-colors',
+                moreActive ? 'font-semibold text-primary dark:text-primary' : 'text-muted-foreground',
               )}
             >
               <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
@@ -96,7 +96,7 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
             <div className="space-y-4">
               {SHEET_GROUPS.map((group) => (
                 <section key={group.title}>
-                  <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.title}</h3>
+                  <h3 className="mb-1.5 text-[12px] font-semibold text-muted-foreground">{group.title}</h3>
                   <ul className="grid grid-cols-2 gap-2">
                     {group.items.map((item) => (
                       <li key={item.to}>
@@ -107,7 +107,7 @@ export function CustomerAppShell({ children }: CustomerAppShellProps) {
                             cn(
                               'flex items-center gap-2.5 rounded-xl border px-3 py-3 text-[13px] transition-colors',
                               isActive
-                                ? 'border-indigo-200 bg-indigo-50 font-semibold text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-500/15 dark:text-indigo-300'
+                                ? 'border-primary/25 bg-primary/[0.06] font-semibold text-primary dark:border-primary/25 dark:bg-primary/15 dark:text-primary'
                                 : 'border-border text-foreground hover:bg-muted',
                             )
                           }

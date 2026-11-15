@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 1056" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="borrow-vnpay-fine-payment-dd-p2-title borrow-vnpay-fine-payment-dd-p2-desc" id="borrow-vnpay-fine-payment-dd-p2-root">
+<title id="borrow-vnpay-fine-payment-dd-p2-title">Thanh toán phí phạt qua VNPay, phần 2: xác nhận kết quả</title>
+<desc id="borrow-vnpay-fine-payment-dd-p2-desc">VNPay báo kết quả song song qua Return URL của trình duyệt và IPN máy chủ; cả hai đi qua API Gateway tới Borrow Service, kiểm tra chữ ký và gọi cùng hàm ghi nhận có khóa để không ghi trùng thanh toán.</desc>
+<defs>
+      <style>#borrow-vnpay-fine-payment-dd-p2-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #borrow-vnpay-fine-payment-dd-p2-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #borrow-vnpay-fine-payment-dd-p2-root .diagram-container { width: 100%; overflow-x: auto; }
+      #borrow-vnpay-fine-payment-dd-p2-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#borrow-vnpay-fine-payment-dd-p2-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="116" y="124" width="616" height="728" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<line x1="124" y1="548" x2="724" y2="548" stroke="#333333" stroke-width="1" stroke-dasharray="4,3"/>
+<!-- lifelines -->
+<line x1="84" y1="104" x2="84" y2="1016" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="192" y1="104" x2="192" y2="1016" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="300" y1="104" x2="300" y2="1016" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="468" y1="104" x2="468" y2="1016" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="612" y1="104" x2="612" y2="1016" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="712" y1="104" x2="712" y2="1016" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="708" y1="180" x2="196" y2="180" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="196" y1="232" x2="296" y2="232" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-link)"/>
+<line x1="304" y1="308" x2="464" y2="308" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-link)"/>
+<line x1="472" y1="416" x2="608" y2="416" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="464" y1="484" x2="304" y2="484" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="296" y1="536" x2="196" y2="536" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="708" y1="608" x2="304" y2="608" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-link)"/>
+<line x1="304" y1="644" x2="464" y2="644" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-link)"/>
+<line x1="472" y1="752" x2="608" y2="752" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="464" y1="804" x2="304" y2="804" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="304" y1="840" x2="708" y2="840" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow)"/>
+<line x1="188" y1="992" x2="88" y2="992" stroke="#000000" stroke-width="1.4" marker-end="url(#borrow-vnpay-fine-payment-dd-p2-borrow-vnpay-fine-payment-dd-p2-arrow-accent)"/>
+<!-- labels -->
+<rect x="316" y="154" width="272" height="18" rx="2" fill="#f7f7f7"/>
+<text x="452.0" y="167" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> Chuyển hướng về returnUrl kèm tham số vnp_*</text>
+<rect x="214" y="190" width="64" height="34" rx="2" fill="#f7f7f7"/>
+<text x="246.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> Gọi</text>
+<text x="246.0" y="219" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">returnUrl</text>
+<rect x="338" y="282" width="92" height="18" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="295" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">14.</tspan> Chuyển tiếp</text>
+<rect x="482" y="358" width="116" height="50" rx="2" fill="#f7f7f7"/>
+<text x="540.0" y="371" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">15.</text>
+<text x="540.0" y="387" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">finalizeVnpayPayme</text>
+<text x="540.0" y="403" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">nt (một giao dịch)</text>
+<rect x="312" y="426" width="144" height="50" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="439" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">16.</tspan> Trang kết quả HTML,</text>
+<text x="384.0" y="455" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">liên kết về /customer/</text>
+<text x="384.0" y="471" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">fines</text>
+<rect x="204" y="494" width="84" height="34" rx="2" fill="#f7f7f7"/>
+<text x="246.0" y="507" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">17.</tspan> Trang kết</text>
+<text x="246.0" y="523" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">quả</text>
+<rect x="402" y="582" width="208" height="18" rx="2" fill="#f7f7f7"/>
+<text x="506.0" y="595" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">18.</tspan> GET /webhooks/vnpay/ipn?vnp_...</text>
+<rect x="338" y="618" width="92" height="18" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="631" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">19.</tspan> Chuyển tiếp</text>
+<rect x="482" y="694" width="116" height="50" rx="2" fill="#f7f7f7"/>
+<text x="540.0" y="707" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">20.</text>
+<text x="540.0" y="723" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">finalizeVnpayPayme</text>
+<text x="540.0" y="739" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">nt (một giao dịch)</text>
+<rect x="314" y="762" width="140" height="34" rx="2" fill="#f7f7f7"/>
+<text x="384.0" y="775" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">21.</tspan> RspCode 00 / 01 / 02</text>
+<text x="384.0" y="791" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">/ 04 / 99</text>
+<rect x="468" y="814" width="76" height="18" rx="2" fill="#f7f7f7"/>
+<text x="506.0" y="827" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">22.</tspan> RspCode</text>
+<path d="M 116 124 H 156 V 136 L 148 144 H 116 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="133.0" y="139" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">par</text>
+<rect x="164" y="125" width="164" height="18" rx="2" fill="#f7f7f7"/>
+<text x="170" y="139" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Return URL (trình duyệt)]</text>
+<rect x="128" y="553" width="136" height="18" rx="2" fill="#f7f7f7"/>
+<text x="134" y="567" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[IPN (máy chủ VNPay)]</text>
+<rect x="102" y="950" width="72" height="34" rx="2" fill="#ffffff"/>
+<text x="138.0" y="963" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">23.</tspan> Kết quả</text>
+<text x="138.0" y="979" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">thanh toán</text>
+<!-- notes -->
+<rect x="136" y="244" width="220" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="148" y="263" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">GET /webhooks/vnpay/return?vnp_...</text>
+<rect x="356" y="320" width="220" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="368" y="339" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">verifySignedParams, sai chữ ký → 400</text>
+<rect x="392" y="656" width="148" height="28" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="404" y="675" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">Sai chữ ký → RspCode 97</text>
+<rect x="168" y="864" width="568" height="76" rx="4" fill="#fafafa" stroke="#555555" stroke-width="1"/>
+<text x="180" y="883" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">finalizeVnpayPayment: giành intent PENDING → PROCESSING (UPDATE có điều kiện),</text>
+<text x="180" y="899" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">nên Return URL và IPN không ghi trùng, kiểm tra số tiền và vnp_ResponseCode = 00,</text>
+<text x="180" y="915" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">tạo fine_payments, cập nhật fines và total_fine_balance,</text>
+<text x="180" y="931" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">thông báo FINE_PAYMENT_RECORDED, nhật ký CUSTOMER_PAY_FINE_VNPAY</text>
+<!-- nodes -->
+<circle cx="84" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 84 56 V 72 M 73 61 H 95 M 84 72 L 75 84 M 84 72 L 93 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="84" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Bạn đọc</text>
+<rect x="148" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="192" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web App</text>
+<text x="192" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">trình duyệt</text>
+<rect x="250" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="300" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="300" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="420" y="40" width="96" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="468" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Borrow</text>
+<text x="468" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">borrow-service</text>
+<path d="M 576.0 48 V 79 A 36.0 6 0 0 0 648.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="612" cy="48" rx="36.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="612" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">borrow_db</text>
+<text x="612" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">PostgreSQL</text>
+<rect x="666" y="40" width="92" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="712" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Cổng VNPay</text>
+<text x="712" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">sandbox</text>
+</svg>

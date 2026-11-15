@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 592" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="borrow-due-reminder-dd-title borrow-due-reminder-dd-desc" id="borrow-due-reminder-dd-root">
+<title id="borrow-due-reminder-dd-title">Nhắc hạn trả theo mức rủi ro</title>
+<desc id="borrow-due-reminder-dd-desc">Tác vụ nhắc hạn lấy danh sách cuốn sắp đến hạn xếp theo điểm rủi ro trả trễ từ Analytics, dự phòng theo hạn trả khi Analytics lỗi, rồi tạo và gửi nhắc nhở.</desc>
+<defs>
+      <style>#borrow-due-reminder-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #borrow-due-reminder-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #borrow-due-reminder-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #borrow-due-reminder-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#borrow-due-reminder-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="borrow-due-reminder-dd-borrow-due-reminder-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-due-reminder-dd-borrow-due-reminder-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-due-reminder-dd-borrow-due-reminder-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="borrow-due-reminder-dd-borrow-due-reminder-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="76" y="344" width="508" height="68" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<rect x="76" y="424" width="632" height="104" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="552" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="324" y1="104" x2="324" y2="552" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="564" y1="104" x2="564" y2="552" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="688" y1="104" x2="688" y2="552" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="100" y1="196" x2="320" y2="196" stroke="#000000" stroke-width="1.2" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow-link)"/>
+<path d="M 328 208 H 352 Q 360 208 360 216 V 252 Q 360 260 352 260 H 330" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow)"/>
+<line x1="328" y1="296" x2="560" y2="296" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow)"/>
+<line x1="320" y1="332" x2="100" y2="332" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow)"/>
+<line x1="100" y1="400" x2="560" y2="400" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow)"/>
+<line x1="100" y1="480" x2="560" y2="480" stroke="#222222" stroke-width="1.2" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow)"/>
+<line x1="100" y1="516" x2="684" y2="516" stroke="#000000" stroke-width="1.4" marker-end="url(#borrow-due-reminder-dd-borrow-due-reminder-dd-arrow-accent)"/>
+<!-- labels -->
+<rect x="114" y="122" width="192" height="66" rx="2" fill="#ffffff"/>
+<text x="210.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> GET</text>
+<text x="210.0" y="151" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/analytics/late-return-risk</text>
+<text x="210.0" y="167" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">?dueWithinDays=3</text>
+<text x="210.0" y="183" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">(khóa nội bộ)</text>
+<rect x="368" y="209" width="172" height="50" rx="2" fill="#ffffff"/>
+<text x="374" y="222.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">2. lấy mô hình trong bộ nhớ đệm</text>
+<text x="374" y="238.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">hoặc huấn luyện lại</text>
+<text x="374" y="254.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">(chia theo thời gian)</text>
+<rect x="344" y="270" width="200" height="18" rx="2" fill="#ffffff"/>
+<text x="444.0" y="283" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> các cuốn sắp đến hạn và đặc trưng</text>
+<rect x="118" y="306" width="184" height="18" rx="2" fill="#ffffff"/>
+<text x="210.0" y="319" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> danh sách xếp theo điểm rủi ro</text>
+<rect x="194" y="374" width="272" height="18" rx="2" fill="#f7f7f7"/>
+<text x="330.0" y="387" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">5.</tspan> lấy danh sách theo hạn trả (không có điểm rủi ro)</text>
+<path d="M 76 344 H 116 V 356 L 108 364 H 76 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="93.0" y="359" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="124" y="345" width="92" height="18" rx="2" fill="#f7f7f7"/>
+<text x="130" y="359" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[Analytics lỗi]</text>
+<rect x="192" y="454" width="276" height="18" rx="2" fill="#f7f7f7"/>
+<text x="330.0" y="467" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> tạo LOAN_DUE_REMINDER (bỏ qua cuốn đã nhắc)</text>
+<rect x="304" y="490" width="176" height="18" rx="2" fill="#f7f7f7"/>
+<text x="392.0" y="503" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> gửi theo tùy chọn của bạn đọc</text>
+<path d="M 76 424 H 124 V 436 L 116 444 H 76 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="97.0" y="439" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">loop</text>
+<rect x="132" y="425" width="172" height="18" rx="2" fill="#f7f7f7"/>
+<text x="138" y="439" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[theo thứ tự rủi ro giảm dần]</text>
+<!-- nodes -->
+<rect x="38" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="96" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Tác vụ nhắc hạn</text>
+<text x="96" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">Borrow Service</text>
+<rect x="266" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="324" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Analytics</text>
+<text x="324" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">analytics-service</text>
+<path d="M 524.0 48 V 79 A 40.0 6 0 0 0 604.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="564" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="564" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="564" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">borrow_db</text>
+<rect x="618" y="40" width="140" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1" stroke-dasharray="4,3"/>
+<text x="688" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Kênh thông báo</text>
+<text x="688" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">email, trong ứng dụng</text>
+</svg>

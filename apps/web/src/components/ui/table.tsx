@@ -37,21 +37,14 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
           {...props}
         />
       </div>
-      {/* Edge fades: the only signal a wide table gives that there's more to scroll to. */}
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-card to-transparent transition-opacity duration-150",
-          edges.left ? "opacity-100" : "opacity-0",
-        )}
-      />
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent transition-opacity duration-150",
-          edges.right ? "opacity-100" : "opacity-0",
-        )}
-      />
+      {/* Edge fades: the only signal a wide table gives that there's more to scroll to.
+          Mounted only while the table really overflows, so a table that fits carries no fade at all. */}
+      {edges.left && (
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-card to-transparent" />
+      )}
+      {edges.right && (
+        <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-card to-transparent" />
+      )}
     </div>
   );
 }

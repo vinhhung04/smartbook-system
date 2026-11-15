@@ -73,7 +73,7 @@ export function WeedingWorkspace({ data, loading, error, onRetry }: {
       ) : null}
 
       <Panel aria-label="Tóm tắt tồn kho lâu ngày" className={SUMMARY_GRID}>
-        <Figure label="Vốn đang tồn đọng" value={formatVnd(summary.total_tied_up_value)} hint="số lượng tồn × đơn giá, trên toàn bộ dòng" />
+        <Figure label="Vốn đang tồn đọng" unit="đ" value={formatCount(summary.total_tied_up_value)} hint="số lượng tồn × đơn giá, trên toàn bộ dòng" />
         <Figure label="Dòng sách · kho" value={formatCount(summary.total_items)} hint={`không hoạt động ≥ ${threshold} ngày`} />
         <Figure label="Tồn rất lâu" value={formatCount(summary.critical_count)} tone={summary.critical_count ? 'warning' : 'muted'} hint={`≥ ${threshold * 2} ngày hoặc chưa từng hoạt động`} />
         <Figure label="Đề xuất chuyển kho" value={formatCount(summary.redistribute_count)} hint="nơi khác vẫn có nhu cầu" />
@@ -83,7 +83,7 @@ export function WeedingWorkspace({ data, loading, error, onRetry }: {
       <Panel aria-labelledby="weeding-list-title" className="overflow-hidden">
         <div className="space-y-3 border-b border-border px-4 py-3">
           <div>
-            <h2 id="weeding-list-title" className="text-[14px] font-semibold text-foreground">Tồn kho lâu ngày & hướng xử lý</h2>
+            <h2 id="weeding-list-title" className="font-display text-[17px] font-semibold tracking-tight text-foreground">Tồn kho lâu ngày & hướng xử lý</h2>
             <p className="mt-1 max-w-[90ch] text-[12.5px] leading-relaxed text-muted-foreground">
               Sách còn tồn nhưng không có lượt mượn hoặc di chuyển kho từ {data.cutoff ? formatDate(data.cutoff) : `${threshold} ngày trước`}.
               Đây là danh sách để xem xét — trang này không thực hiện chuyển kho hay thanh lý, và giá trị tồn đọng không phải số tiền chắc chắn thu hồi được.
@@ -114,7 +114,7 @@ export function WeedingWorkspace({ data, loading, error, onRetry }: {
             <div role="region" aria-label="Bảng tồn kho lâu ngày" tabIndex={0} className="max-h-[min(72vh,760px)] overflow-auto focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
               <table className="w-full min-w-[760px] border-separate border-spacing-0 text-left text-[13px]">
                 <caption className="sr-only">Sách tồn lâu theo kho, xếp theo giá trị tồn đọng</caption>
-                <thead className="sticky top-0 z-10 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                <thead className="sticky top-0 z-10 whitespace-nowrap text-[12px] font-semibold text-muted-foreground">
                   <tr className="[&>th]:border-b [&>th]:border-border [&>th]:bg-muted/50 [&>th]:py-2.5">
                     <th scope="col" className="pl-4 pr-3">Sách · kho</th>
                     <th scope="col" className="w-[90px] px-3 text-right">Tồn</th>

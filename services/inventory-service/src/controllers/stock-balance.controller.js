@@ -1,4 +1,4 @@
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { Prisma } = require('@prisma/client');
 const { UUID_RE } = require('../middlewares/uuid-params.middleware');
 const {
   readableWarehouseFilter,
@@ -6,7 +6,7 @@ const {
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
 
-const prisma = new PrismaClient();
+const { prisma } = require('../lib/prisma');
 
 const DEFAULT_LOW_STOCK_THRESHOLD = Number(process.env.LOW_STOCK_THRESHOLD || 5);
 

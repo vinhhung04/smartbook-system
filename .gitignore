@@ -35,3 +35,13 @@ services/ai-service/eval/.cache/
 # Scratch scripts in the web app
 apps/web/*.tmp.*
 .env.production
+
+# Design/browser tool output (screenshots can show signed-in accounts)
+**/.taste-skill/
+.playwright-mcp/
+# Local plugin cache copy
+frontend-design/
+# Thesis drafts: new docx/pdf versions stay local; the ones already tracked stay tracked
+/*.docx
+thesis/drafts/*.docx
+thesis/report-update/*.pdf

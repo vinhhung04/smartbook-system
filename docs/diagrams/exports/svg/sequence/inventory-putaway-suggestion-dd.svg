@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 860" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="inventory-putaway-suggestion-dd-title inventory-putaway-suggestion-dd-desc" id="inventory-putaway-suggestion-dd-root">
+<title id="inventory-putaway-suggestion-dd-title">Xếp kệ với gợi ý vị trí</title>
+<desc id="inventory-putaway-suggestion-dd-desc">Inventory Service gợi ý vị trí bằng luật chấm điểm, nhờ AI giải thích, lưu bộ nhớ đệm; nhân viên quét vị trí và sách để xác nhận cất hàng.</desc>
+<defs>
+      <style>#inventory-putaway-suggestion-dd-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #inventory-putaway-suggestion-dd-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #inventory-putaway-suggestion-dd-root .diagram-container { width: 100%; overflow-x: auto; }
+      #inventory-putaway-suggestion-dd-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#inventory-putaway-suggestion-dd-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- frames -->
+<rect x="356" y="280" width="372" height="256" rx="4" fill="#000000" stroke="#333333" stroke-width="1" fill-opacity="0.035"/>
+<!-- lifelines -->
+<line x1="92" y1="104" x2="92" y2="820" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="228" y1="104" x2="228" y2="820" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="376" y1="104" x2="376" y2="820" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="496" y1="104" x2="496" y2="820" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="600" y1="104" x2="600" y2="820" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="820" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="96" y1="164" x2="224" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="232" y1="216" x2="372" y2="216" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-link)"/>
+<line x1="380" y1="268" x2="492" y2="268" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="380" y1="352" x2="704" y2="352" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<path d="M 380 364 H 404 Q 412 364 412 372 V 392 Q 412 400 404 400 H 382" fill="none" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="380" y1="452" x2="596" y2="452" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-link)"/>
+<line x1="596" y1="488" x2="380" y2="488" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="380" y1="524" x2="492" y2="524" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="372" y1="588" x2="232" y2="588" stroke="#222222" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="96" y1="640" x2="224" y2="640" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="232" y1="724" x2="372" y2="724" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-link)"/>
+<line x1="380" y1="760" x2="704" y2="760" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow)"/>
+<line x1="372" y1="796" x2="232" y2="796" stroke="#000000" stroke-width="1.4" marker-end="url(#inventory-putaway-suggestion-dd-inventory-putaway-suggestion-dd-arrow-accent)"/>
+<!-- labels -->
+<rect x="104" y="122" width="112" height="34" rx="2" fill="#ffffff"/>
+<text x="160.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> mở công việc xếp</text>
+<text x="160.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">kệ của phiếu nhập</text>
+<rect x="242" y="174" width="120" height="34" rx="2" fill="#ffffff"/>
+<text x="302.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST /api/</text>
+<text x="302.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">storage-suggestions</text>
+<rect x="396" y="226" width="80" height="34" rx="2" fill="#ffffff"/>
+<text x="436.0" y="239" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> đọc bộ nhớ</text>
+<text x="436.0" y="255" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">đệm gợi ý</text>
+<rect x="390" y="310" width="304" height="34" rx="2" fill="#f7f7f7"/>
+<text x="542.0" y="323" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> vị trí trống, sức chứa, cùng biến thể/đầu sách/thể loại,</text>
+<text x="542.0" y="339" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">lịch sử di chuyển</text>
+<rect x="420" y="365" width="124" height="34" rx="2" fill="#f7f7f7"/>
+<text x="426" y="378.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">5. chấm điểm quy tắc,</text>
+<text x="426" y="394.0" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start">xếp hạng, mức tin cậy</text>
+<rect x="392" y="410" width="192" height="34" rx="2" fill="#f7f7f7"/>
+<text x="488.0" y="423" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> POST</text>
+<text x="488.0" y="439" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/explain-storage-suggestion</text>
+<rect x="392" y="462" width="192" height="18" rx="2" fill="#f7f7f7"/>
+<text x="488.0" y="475" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> giải thích bằng ngôn ngữ tự nhiên</text>
+<rect x="396" y="498" width="80" height="18" rx="2" fill="#f7f7f7"/>
+<text x="436.0" y="511" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> lưu kết quả</text>
+<path d="M 356 280 H 396 V 292 L 388 300 H 356 Z" fill="#eeeeee" stroke="#333333" stroke-width="1"/>
+<text x="373.0" y="295" fill="#000000" font-size="13" font-family="'Times New Roman', Times, serif" text-anchor="middle" font-weight="700">alt</text>
+<rect x="404" y="281" width="164" height="18" rx="2" fill="#f7f7f7"/>
+<text x="410" y="295" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="start" font-weight="700">[chưa có trong bộ nhớ đệm]</text>
+<rect x="240" y="546" width="124" height="34" rx="2" fill="#ffffff"/>
+<text x="302.0" y="559" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> danh sách vị trí gợi</text>
+<text x="302.0" y="575" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">ý + giải thích</text>
+<rect x="108" y="598" width="104" height="34" rx="2" fill="#ffffff"/>
+<text x="160.0" y="611" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> quét mã vị trí</text>
+<text x="160.0" y="627" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">và mã sách</text>
+<rect x="248" y="650" width="108" height="66" rx="2" fill="#ffffff"/>
+<text x="302.0" y="663" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> POST</text>
+<text x="302.0" y="679" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/putaway/</text>
+<text x="302.0" y="695" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">receipts/{id}/</text>
+<text x="302.0" y="711" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">confirm</text>
+<rect x="394" y="734" width="296" height="18" rx="2" fill="#ffffff"/>
+<text x="542.0" y="747" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">12.</tspan> tồn theo vị trí, stock_movements, tiến độ công việc</text>
+<rect x="264" y="770" width="76" height="18" rx="2" fill="#ffffff"/>
+<text x="302.0" y="783" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">13.</tspan> xác nhận</text>
+<!-- nodes -->
+<circle cx="92" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 92 56 V 72 M 81 61 H 103 M 92 72 L 83 84 M 92 72 L 101 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="92" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Nhân viên kho</text>
+<rect x="170" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="228" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web/Mobile</text>
+<text x="228" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web · mobile</text>
+<rect x="318" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="376" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="376" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<path d="M 466.0 48 V 79 A 30.0 6 0 0 0 526.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="496" cy="48" rx="30.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="496" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">redis:7</text>
+<text x="496" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Redis</text>
+<rect x="556" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="600" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">AI Service</text>
+<text x="600" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">FastAPI</text>
+<path d="M 668.0 48 V 79 A 40.0 6 0 0 0 748.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="708" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="708" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="708" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">inventory_db</text>
+</svg>

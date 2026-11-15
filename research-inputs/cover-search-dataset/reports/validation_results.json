@@ -1,0 +1,1128 @@
+{
+  "summary": {
+    "generated_at_utc": "2026-11-11T22:04:34Z",
+    "catalog_books_included": 154,
+    "catalog_editions_included": 154,
+    "language_groups": {
+      "INTERNATIONAL": 114,
+      "VIETNAMESE": 40
+    },
+    "original_assets_total": 274,
+    "original_assets_included": 227,
+    "original_assets_excluded": 47,
+    "exclusion_reasons": {
+      "COMPOSITE_TWO_VOLUMES": 1,
+      "DERIVATIVE_OF_OTHER_FILE_COLOURISED": 1,
+      "NOT_CLEARLY_FRONT_COVER": 1,
+      "NOT_A_BOOK_COVER": 1,
+      "FULL_WRAP_FRONT_SPINE_BACK": 13,
+      "COMPOSITE_SEVERAL_BOOKS": 3,
+      "NOT_FRONT_COVER_TITLE_PAGE": 15,
+      "NOT_FRONT_COVER_INTERIOR_ILLUSTRATION": 1,
+      "COMPOSITE_SEVERAL_PRINTS": 1,
+      "NOT_FRONT_COVER_TEXT_PAGE": 1,
+      "NOT_A_BOOK_COVER_MAP": 1,
+      "NOT_INDEPENDENT_SAME_SCAN_AS_GALLERY (pHash 8; gallery file is a retouch of this scan)": 1,
+      "NOT_INDEPENDENT_SAME_SCAN_AS_GALLERY (pHash 4; gallery file is a retouch of this scan)": 1,
+      "NOT_INDEPENDENT_SAME_SCAN_AS_GALLERY (pHash 2)": 1,
+      "NOT_FULL_COVER_LETTERING_FRAGMENT": 1,
+      "NOT_FULL_COVER_ILLUSTRATION_CUTOUT": 2,
+      "TRANSLATION_NOT_IN_CATALOG (German edition)": 1,
+      "IDENTITY_MISMATCH": 1
+    },
+    "derived_assets": 1386,
+    "queries_by_track": {
+      "OOC": 36,
+      "A": 37,
+      "B": 1386
+    },
+    "isbn_status": {
+      "NOT_ASSIGNED_PRE_ISBN": 152,
+      "UNKNOWN": 2
+    },
+    "valid_isbn13": 0,
+    "rights_permission_status": {
+      "SOURCE_CLAIM_ONLY": 236,
+      "VERIFIED_PUBLIC_DOMAIN": 12,
+      "VERIFIED_OPEN_LICENSE": 26
+    },
+    "near_duplicate_pairs": [
+      [
+        "Q-EN-0027",
+        "Q-EN-0028",
+        6,
+        true
+      ]
+    ],
+    "issues_by_severity": {
+      "WARNING": 2,
+      "INFO": 172
+    },
+    "checks_run": [
+      "duplicate_record",
+      "invalid_image_file",
+      "hash_mismatch",
+      "low_resolution",
+      "duplicate_image_exact",
+      "near_duplicate (pHash<=6)",
+      "missing_title",
+      "isbn_status",
+      "invalid_isbn_checksum",
+      "catalog_without_gallery_image",
+      "edition_conflict",
+      "missing_ground_truth",
+      "ooc_leak",
+      "unreadable_cover",
+      "missing_rights",
+      "missing_rights_field",
+      "broken_source_url"
+    ],
+    "hash_lines": 1617
+  },
+  "issues": [
+    {
+      "check": "low_resolution",
+      "severity": "WARNING",
+      "item": "C-VN-0029",
+      "detail": "152x237 (< 200px short side)"
+    },
+    {
+      "check": "low_resolution",
+      "severity": "WARNING",
+      "item": "Q-EN-0007",
+      "detail": "144x230 (< 200px short side)"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-MD-0004",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0006__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0007__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0008__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0015__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0019__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0022__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0023__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0039__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0043__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0054__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0055__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0056__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0069__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-VN-0071__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-C-EN-EN001__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0026__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0030__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0039__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__rot_p4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__rot_m4",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__perspective",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__gaussian_blur",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__low_light",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__low_contrast",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__jpeg_q20",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__occlusion",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    },
+    {
+      "check": "unreadable_cover",
+      "severity": "INFO",
+      "item": "q-G-EN-0099__mild_crop",
+      "detail": "title not visible; excluded from OCR-accuracy metrics"
+    }
+  ]
+}

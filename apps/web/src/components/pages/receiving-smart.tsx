@@ -4,20 +4,26 @@ import {
   AlertCircle,
   ArrowLeft,
   Camera,
-  Check,
   CheckCircle2,
-  ChevronRight,
   FileText,
   Image,
   Loader2,
+  ScanText,
   Search,
   Upload,
   X,
-  AlertTriangle,
   Edit3,
+  FileCheck2,
+  ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageWrapper, FadeItem } from "../motion-utils";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { SectionCard } from "@/components/ui/section-card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { WorkflowStepper, type WorkflowStep } from "@/components/ui/workflow-stepper";
+import { cn } from "@/components/ui/utils";
 import { warehouseService } from "@/services/warehouse";
 import { aiService } from "@/services/ai";
 import { authService } from "@/services/auth";
@@ -35,11 +41,18 @@ interface WarehouseOption {
 
 type MatchStatus = "MATCHED" | "LOW_CONFIDENCE" | "UNMATCHED" | "MANUAL_CORRECTED";
 
-const statusConfig: Record<MatchStatus, { label: string; color: string; bg: string }> = {
-  MATCHED: { label: "Khớp", color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
-  LOW_CONFIDENCE: { label: "Khớp thấp", color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-500/10" },
-  UNMATCHED: { label: "Không khớp", color: "text-red-600 dark:text-red-400", bg: "bg-red-50 dark:bg-red-500/10" },
-  MANUAL_CORRECTED: { label: "Đã sửa", color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-500/10" },
+const MATCH_STATUS: Record<MatchStatus, { label: string; variant: string }> = {
+  MATCHED: { label: "Khớp", variant: "success" },
+  LOW_CONFIDENCE: { label: "Khớp thấp", variant: "warning" },
+  UNMATCHED: { label: "Không khớp", variant: "danger" },
+  MANUAL_CORRECTED: { label: "Đã kiểm tra", variant: "info" },
+};
+
+const STEP_ORDER = ["upload", "review", "draft"] as const;
+const STEP_META: Record<(typeof STEP_ORDER)[number], { label: string; icon: WorkflowStep["icon"] }> = {
+  upload: { label: "Tải hóa đơn", icon: Upload },
+  review: { label: "Đối chiếu danh mục", icon: ListChecks },
+  draft: { label: "Phiếu nháp", icon: FileCheck2 },
 };
 
 function formatCurrency(value: number): string {
@@ -68,6 +81,7 @@ export function SmartReceivingPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Extraction result
   const [extractedData, setExtractedData] = useState<{
@@ -122,7 +136,9 @@ export function SmartReceivingPage() {
       }
     };
     void loadWarehouses();
-  }, [selectedWarehouse]);
+    // Load once: re-running on every warehouse pick refetched the whole list each time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle file selection
   const handleFileSelect = useCallback((file: File) => {
@@ -194,7 +210,7 @@ export function SmartReceivingPage() {
         setMatchSummary(matchResponse.summary);
         setStep("review");
       } catch (error) {
-        toast.error(getApiErrorMessage(error, "Lỗi khi khớp items với catalog"));
+        toast.error(getApiErrorMessage(error, "Lỗi khi khớp với danh mục sách"));
       }
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Lỗi khi quét hóa đơn"));
@@ -215,7 +231,7 @@ export function SmartReceivingPage() {
     try {
       const user_id = authService.getCurrentUser()?.id;
       if (!user_id) {
-        toast.error("Khong tim thay nguoi dung dang nhap");
+        toast.error("Không tìm thấy người dùng đăng nhập");
         return;
       }
 
@@ -295,289 +311,287 @@ export function SmartReceivingPage() {
     });
 
     setEditingItem(null);
-    toast.success("Đã cập nhật item");
+    toast.success("Đã xác nhận dòng sách");
   };
+
+  const resetToUpload = () => {
+    setStep("upload");
+    setMatchResults([]);
+    setMatchSummary(null);
+    setExtractedData(null);
+  };
+
+  const stepIndex = STEP_ORDER.indexOf(step);
+  const workflowSteps: WorkflowStep[] = STEP_ORDER.map((id, i) => ({
+    id,
+    ...STEP_META[id],
+    status: i < stepIndex || step === "draft" ? "completed" : i === stepIndex ? "active" : "pending",
+  }));
+  const selectedWarehouseLabel = (() => {
+    const w = warehouses.find((item) => item.id === selectedWarehouse);
+    return w ? `${w.code ? `${w.code} - ` : ""}${w.name}` : "-";
+  })();
 
   // Render upload step
   const renderUploadStep = () => (
-    <div className="space-y-6">
-      {/* Warehouse selection */}
-      <div className="bg-card rounded-lg border border-border p-4">
-        <label className="block text-sm font-medium text-foreground mb-2">Kho nhập hàng</label>
-        <select
-          value={selectedWarehouse}
-          onChange={(e) => setSelectedWarehouse(e.target.value)}
-          className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          disabled={isLoading}
-        >
-          <option value="">-- Chọn kho --</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.code ? `${w.code} - ` : ""}
-              {w.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Upload area */}
-      <div
-        className="border-2 border-dashed border-border rounded-xl p-8 text-center transition-colors hover:border-blue-400 dark:hover:border-blue-500 bg-muted/40"
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-      >
-        {selectedFile ? (
-          <div className="space-y-4">
-            {filePreview ? (
-              <img
-                src={filePreview}
-                alt="Preview"
-                className="max-h-64 mx-auto rounded-lg shadow-md"
-              />
-            ) : (
-              <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-500/15 rounded-full">
-                <FileText className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-              </div>
-            )}
-            <div>
-              <p className="font-medium text-foreground">{selectedFile.name}</p>
-              <p className="text-sm text-muted-foreground">
-                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setSelectedFile(null);
-                setFilePreview(null);
-              }}
-              className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-400 text-sm"
-            >
-              Xóa file
-            </button>
+    <SectionCard
+      title="Hóa đơn nhà cung cấp"
+      subtitle="AI đọc tên sách, ISBN, số lượng và đơn giá, rồi khớp từng dòng với danh mục sách."
+    >
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="smart-receiving-warehouse" className="text-[13px] font-medium text-foreground">
+              Kho nhập hàng
+            </label>
+            <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse} disabled={isLoading}>
+              <SelectTrigger id="smart-receiving-warehouse" className="w-full">
+                <SelectValue placeholder={isLoading ? "Đang tải danh sách kho..." : "Chọn kho"} />
+              </SelectTrigger>
+              <SelectContent>
+                {warehouses.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.code ? `${w.code} - ` : ""}
+                    {w.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-center w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-500/15 rounded-full mb-4">
-              <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+          <p className="text-[12px] leading-relaxed text-muted-foreground">
+            Ảnh chụp thẳng, đủ sáng, thấy rõ cột tên sách và số lượng cho kết quả khớp tốt nhất. Phiếu chỉ được
+            tạo ở trạng thái nháp, bạn vẫn kiểm đếm trước khi nhập kho.
+          </p>
+        </div>
+
+        <div
+          className={cn(
+            "flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition-colors",
+            isDragging ? "border-primary bg-primary/5" : "border-border bg-muted/30",
+          )}
+          onDrop={(e) => {
+            setIsDragging(false);
+            handleDrop(e);
+          }}
+          onDragOver={(e) => {
+            handleDragOver(e);
+            if (!isDragging) setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+        >
+          {selectedFile ? (
+            <div className="flex w-full flex-col items-center gap-4">
+              {filePreview ? (
+                <img src={filePreview} alt={`Xem trước ${selectedFile.name}`} className="max-h-56 rounded-lg border border-border object-contain" />
+              ) : (
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                  <FileText className="size-5 text-muted-foreground" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-medium text-foreground">{selectedFile.name}</p>
+                <p className="text-[12px] text-muted-foreground tabular-nums">
+                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  Đổi file
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => {
+                    setSelectedFile(null);
+                    setFilePreview(null);
+                  }}
+                >
+                  <X /> Bỏ file
+                </Button>
+              </div>
             </div>
-            <p className="text-lg font-medium text-foreground mb-2">
-              Tải lên hình ảnh hóa đơn / phiếu giao hàng
-            </p>
-            <p className="text-sm text-muted-foreground mb-4">
-              Hỗ trợ JPG, PNG, WebP, PDF (tối đa 10MB)
-            </p>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Chọn file
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileSelect(file);
-              }}
-            />
-          </>
-        )}
+          ) : (
+            <>
+              <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-primary/10">
+                <Upload className="size-5 text-primary" />
+              </div>
+              <p className="text-[14px] font-medium text-foreground">Kéo thả ảnh hóa đơn hoặc phiếu giao hàng vào đây</p>
+              <p className="mt-1 text-[12px] text-muted-foreground">JPG, PNG, WebP hoặc PDF, tối đa 10 MB</p>
+              <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => fileInputRef.current?.click()}>
+                <Image /> Chọn file
+              </Button>
+            </>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFileSelect(file);
+              e.target.value = "";
+            }}
+          />
+        </div>
       </div>
 
-      {/* Scan button */}
-      <button
-        onClick={handleScanReceipt}
-        disabled={!selectedFile || !selectedWarehouse || isExtracting}
-        className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-      >
-        {isExtracting ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            {isMatching ? "Đang quét và khớp dữ liệu..." : "Đang quét hình ảnh..."}
-          </>
-        ) : (
-          <>
-            <Camera className="w-5 h-5" />
-            Quét hóa đơn bằng AI
-          </>
-        )}
-      </button>
-    </div>
+      <div className="mt-5 flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[12px] text-muted-foreground" aria-live="polite">
+          {!selectedWarehouse
+            ? "Chọn kho nhập hàng để tiếp tục."
+            : !selectedFile
+              ? "Chưa có file hóa đơn."
+              : isExtracting
+                ? "AI đang đọc hóa đơn, thường mất 10 đến 30 giây."
+                : "Sẵn sàng quét."}
+        </p>
+        <Button
+          type="button"
+          onClick={handleScanReceipt}
+          disabled={!selectedFile || !selectedWarehouse || isExtracting}
+        >
+          {isExtracting ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Camera />}
+          {isExtracting ? (isMatching ? "Đang khớp với danh mục..." : "Đang quét hóa đơn...") : "Quét hóa đơn bằng AI"}
+        </Button>
+      </div>
+    </SectionCard>
   );
 
   // Render review step
   const renderReviewStep = () => (
-    <div className="space-y-6">
-      {/* Invoice info */}
-      {extractedData && (
-        <div className="bg-card rounded-lg border border-border p-4">
-          <h3 className="font-medium text-foreground mb-3">Thông tin hóa đơn</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="text-muted-foreground">Nhà cung cấp:</span>
-              <p className="font-medium text-foreground">{extractedData.supplier_name || "-"}</p>
+    <div className="space-y-4">
+      <SectionCard
+        title="Kết quả đối chiếu"
+        subtitle="Kiểm tra các dòng khớp thấp hoặc không khớp trước khi tạo phiếu nháp."
+        actions={
+          matchSummary ? (
+            <div className="flex flex-wrap justify-end gap-1.5">
+              <StatusBadge label={`${matchSummary.matched} khớp`} variant="success" />
+              {matchSummary.low_confidence > 0 && (
+                <StatusBadge label={`${matchSummary.low_confidence} khớp thấp`} variant="warning" />
+              )}
+              {matchSummary.unmatched > 0 && (
+                <StatusBadge label={`${matchSummary.unmatched} không khớp`} variant="danger" />
+              )}
             </div>
-            <div>
-              <span className="text-muted-foreground">Số hóa đơn:</span>
-              <p className="font-medium text-foreground">{extractedData.invoice_number || "-"}</p>
+          ) : null
+        }
+        noPadding
+      >
+        {extractedData && (
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-y border-border bg-muted/30 px-5 py-3 text-[13px] lg:grid-cols-4">
+            <div className="min-w-0">
+              <dt className="text-[12px] text-muted-foreground">Nhà cung cấp</dt>
+              <dd className="truncate font-medium text-foreground">{extractedData.supplier_name || "-"}</dd>
             </div>
-            <div>
-              <span className="text-muted-foreground">Ngày:</span>
-              <p className="font-medium text-foreground">{formatDate(extractedData.invoice_date)}</p>
+            <div className="min-w-0">
+              <dt className="text-[12px] text-muted-foreground">Số hóa đơn</dt>
+              <dd className="truncate font-medium text-foreground">{extractedData.invoice_number || "-"}</dd>
             </div>
-          </div>
-        </div>
-      )}
+            <div className="min-w-0">
+              <dt className="text-[12px] text-muted-foreground">Ngày hóa đơn</dt>
+              <dd className="font-medium text-foreground tabular-nums">{formatDate(extractedData.invoice_date)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-[12px] text-muted-foreground">Kho nhập</dt>
+              <dd className="truncate font-medium text-foreground">{selectedWarehouseLabel}</dd>
+            </div>
+          </dl>
+        )}
 
-      {/* Summary badges */}
-      {matchSummary && (
-        <div className="flex gap-3 flex-wrap">
-          <StatusBadge label={`${matchSummary.matched} khớp chính xác`} variant="success" />
-          {matchSummary.low_confidence > 0 && (
-            <StatusBadge label={`${matchSummary.low_confidence} khớp thấp`} variant="warning" />
-          )}
-          {matchSummary.unmatched > 0 && (
-            <StatusBadge label={`${matchSummary.unmatched} không khớp`} variant="danger" />
-          )}
-        </div>
-      )}
-
-      {/* Items table */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">#</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tên sách</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">ISBN</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">SL</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Đơn giá</th>
-                <th className="px-4 py-3 text-center font-medium text-muted-foreground">Trạng thái</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Khớp với</th>
-                <th className="px-4 py-3 text-center font-medium text-muted-foreground"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+          <Table className="min-w-[760px]">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-10 px-5 text-[12px] text-muted-foreground">#</TableHead>
+                <TableHead className="text-[12px] text-muted-foreground">Sách trên hóa đơn</TableHead>
+                <TableHead className="text-right text-[12px] text-muted-foreground">Số lượng</TableHead>
+                <TableHead className="text-right text-[12px] text-muted-foreground">Đơn giá</TableHead>
+                <TableHead className="text-[12px] text-muted-foreground">Kết quả</TableHead>
+                <TableHead className="text-[12px] text-muted-foreground">Khớp với</TableHead>
+                <TableHead className="w-12 px-5"><span className="sr-only">Thao tác</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {matchResults.map((result, index) => {
-                const status = statusConfig[result.match_status as MatchStatus] || statusConfig.UNMATCHED;
+                const status = MATCH_STATUS[result.match_status as MatchStatus] || MATCH_STATUS.UNMATCHED;
+                const confidence = result.match_confidence > 0 ? ` ${Math.round(result.match_confidence * 100)}%` : "";
                 return (
-                  <tr key={index} className="hover:bg-muted/50">
-                    <td className="px-4 py-3 text-muted-foreground">{index + 1}</td>
-                    <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
-                      {result.title || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{result.isbn || "-"}</td>
-                    <td className="px-4 py-3 text-right">{result.quantity}</td>
-                    <td className="px-4 py-3 text-right text-muted-foreground">
+                  <TableRow key={index}>
+                    <TableCell className="px-5 text-[12px] text-muted-foreground tabular-nums">{index + 1}</TableCell>
+                    <TableCell className="max-w-[260px]">
+                      <p className="truncate text-[13px] font-medium text-foreground">{result.title || "-"}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">{result.isbn || "Không có ISBN"}</p>
+                    </TableCell>
+                    <TableCell className="text-right text-[13px] tabular-nums">{result.quantity}</TableCell>
+                    <TableCell className="text-right text-[13px] text-muted-foreground tabular-nums">
                       {result.unit_price > 0 ? formatCurrency(result.unit_price) : "-"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${status.bg} ${status.color}`}
-                      >
-                        {result.match_status === "MATCHED" && <Check className="w-3 h-3" />}
-                        {result.match_status === "LOW_CONFIDENCE" && <AlertTriangle className="w-3 h-3" />}
-                        {result.match_status === "UNMATCHED" && <X className="w-3 h-3" />}
-                        {result.match_status === "MANUAL_CORRECTED" && <Edit3 className="w-3 h-3" />}
-                        {status.label}
-                        {result.match_confidence > 0 && (
-                          <span className="text-xs opacity-75">
-                            ({Math.round(result.match_confidence * 100)}%)
-                          </span>
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground max-w-[150px] truncate">
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge label={`${status.label}${confidence}`} variant={status.variant} dot />
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate text-[13px] text-muted-foreground">
                       {result.matched_variant ? result.matched_variant.book_title || result.matched_variant.sku : "-"}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
+                    </TableCell>
+                    <TableCell className="px-5 text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm-icon"
                         onClick={() => handleEditItem(index, result)}
                         disabled={!result.matched_variant_id}
-                        aria-label={result.matched_variant_id ? "Sửa" : "Chưa có biến thể khớp"}
-                        className="p-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
-                        title={result.matched_variant_id ? "Sửa" : "Chưa có biến thể khớp"}
+                        aria-label={result.matched_variant_id ? `Xác nhận dòng ${index + 1}` : "Chưa có biến thể khớp"}
+                        title={result.matched_variant_id ? "Xác nhận đã kiểm tra" : "Chưa có biến thể khớp"}
                       >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
+                        <Edit3 />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
-      </div>
 
-      {/* Actions */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => {
-            setStep("upload");
-            setMatchResults([]);
-            setMatchSummary(null);
-            setExtractedData(null);
-          }}
-          className="flex-1 py-3 px-4 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors flex items-center justify-center gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Quay lại
-        </button>
-        <button
-          onClick={handleCreateDraft}
-          disabled={isCreatingDraft || matchSummary?.matched === 0}
-          className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-        >
-          {isCreatingDraft ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Đang tạo phiếu...
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="w-5 h-5" />
-              Tạo phiếu nhập ({matchSummary?.matched || 0} items)
-            </>
-          )}
-        </button>
-      </div>
+        <div className="flex flex-col-reverse gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <Button type="button" variant="outline" onClick={resetToUpload}>
+            <ArrowLeft /> Quét lại
+          </Button>
+          <Button type="button" onClick={handleCreateDraft} disabled={isCreatingDraft || matchSummary?.matched === 0}>
+            {isCreatingDraft ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <CheckCircle2 />}
+            {isCreatingDraft ? "Đang tạo phiếu..." : `Tạo phiếu nháp (${matchSummary?.matched || 0} dòng khớp)`}
+          </Button>
+        </div>
+      </SectionCard>
 
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="edit-item-modal-title">
-          <div ref={editingItemModalRef} className="w-full max-w-md rounded-xl bg-card border border-border p-5 shadow-xl">
-            <h3 id="edit-item-modal-title" className="text-base font-semibold text-foreground">Xác nhận item đã sửa</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Đánh dấu dòng "{editingItem.result.title || "-"}" là đã được kiểm tra thủ công.
-              Dòng này sẽ được tính là hợp lệ khi tạo phiếu nháp.
+          <div ref={editingItemModalRef} className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-xl">
+            <h3 id="edit-item-modal-title" className="text-[15px] font-semibold text-foreground">Xác nhận dòng đã kiểm tra</h3>
+            <p className="mt-2 text-[13px] text-muted-foreground">
+              Đánh dấu dòng "{editingItem.result.title || "-"}" là đã được kiểm tra thủ công. Dòng này sẽ được tính là
+              hợp lệ khi tạo phiếu nháp.
             </p>
-            <div className="mt-4 rounded-lg bg-muted p-3 text-sm">
+            <dl className="mt-4 space-y-1 rounded-lg bg-muted p-3 text-[13px]">
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">ISBN</span>
-                <span className="font-mono">{editingItem.result.isbn || "-"}</span>
+                <dt className="text-muted-foreground">ISBN</dt>
+                <dd className="font-mono">{editingItem.result.isbn || "-"}</dd>
               </div>
-              <div className="mt-1 flex justify-between gap-3">
-                <span className="text-muted-foreground">Số lượng</span>
-                <span>{editingItem.result.quantity}</span>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Số lượng</dt>
+                <dd className="tabular-nums">{editingItem.result.quantity}</dd>
               </div>
-            </div>
+            </dl>
             <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted"
-              >
+              <Button type="button" variant="outline" onClick={() => setEditingItem(null)}>
                 Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveItemEdit}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                Xác nhận đã sửa
-              </button>
+              </Button>
+              <Button type="button" onClick={handleSaveItemEdit}>
+                Xác nhận
+              </Button>
             </div>
           </div>
         </div>
@@ -587,94 +601,62 @@ export function SmartReceivingPage() {
 
   // Render draft step
   const renderDraftStep = () => (
-    <div className="space-y-6">
-      <div className="bg-card rounded-lg border border-border p-6 text-center">
-        <div className="w-16 h-16 mx-auto mb-4 bg-emerald-100 dark:bg-emerald-500/15 rounded-full flex items-center justify-center">
-          <CheckCircle2 className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+    <SectionCard>
+      <div className="mx-auto max-w-md py-6 text-center">
+        <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/15">
+          <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" />
         </div>
-        <h2 className="text-xl font-bold text-foreground mb-2">
-          Đã tạo phiếu nhập thông minh!
-        </h2>
-        <p className="text-muted-foreground mb-4">
-          Phiếu đang ở trạng thái <span className="font-medium text-blue-600 dark:text-blue-400">DRAFT</span>. Vui lòng
-          xem lại và xác nhận để hoàn tất.
+        <h2 className="text-[18px] font-semibold text-foreground">Đã tạo phiếu nhập nháp</h2>
+        <p className="mt-1.5 text-[13px] text-muted-foreground">
+          Phiếu đang ở trạng thái nháp. Kiểm đếm hàng thực nhận rồi xác nhận để hoàn tất nhập kho.
         </p>
         {createdDraft && (
-          <div className="bg-muted rounded-lg p-4 text-left space-y-2 mb-4">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Mã phiếu:</span>
-              <span className="font-mono font-medium">{createdDraft.id.slice(0, 8)}...</span>
+          <dl className="mt-5 space-y-2 rounded-lg bg-muted/60 p-4 text-left text-[13px]">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Mã phiếu</dt>
+              <dd className="font-mono font-medium">{createdDraft.id.slice(0, 8)}</dd>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Số items:</span>
-              <span className="font-medium">{createdDraft.smart_receiving_items?.length || 0}</span>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Số dòng sách</dt>
+              <dd className="font-medium tabular-nums">{createdDraft.smart_receiving_items?.length || 0}</dd>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Ngày tạo:</span>
-              <span className="font-medium">{formatDate(createdDraft.created_at)}</span>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Ngày tạo</dt>
+              <dd className="font-medium tabular-nums">{formatDate(createdDraft.created_at)}</dd>
             </div>
-          </div>
+          </dl>
         )}
+        <div className="mt-6 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+          <NavLink to="/orders" className={buttonVariants({ variant: "outline" })}>
+            Xem phiếu nhập kho
+          </NavLink>
+          <Button
+            type="button"
+            onClick={() => {
+              resetToUpload();
+              setCreatedDraft(null);
+              setSelectedFile(null);
+              setFilePreview(null);
+            }}
+          >
+            <Image /> Quét hóa đơn khác
+          </Button>
+        </div>
       </div>
-
-      <div className="flex gap-3">
-        <NavLink
-          to="/goods-receipt"
-          className="flex-1 py-3 px-4 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors text-center"
-        >
-          Xem danh sách phiếu nhập
-        </NavLink>
-        <button
-          onClick={() => {
-            setStep("upload");
-            setMatchResults([]);
-            setMatchSummary(null);
-            setExtractedData(null);
-            setCreatedDraft(null);
-            setSelectedFile(null);
-            setFilePreview(null);
-          }}
-          className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-700 transition-all flex items-center justify-center gap-2"
-        >
-          <Image className="w-4 h-4" />
-          Tạo phiếu mới
-        </button>
-      </div>
-    </div>
+    </SectionCard>
   );
 
   return (
-    <PageWrapper>
+    <PageWrapper className="space-y-5">
       <PageHeader
         title="Nhập hàng thông minh (AI)"
-        description="Quét hóa đơn và tự động khớp với danh mục sách"
+        description="Quét hóa đơn nhà cung cấp và tự động khớp với danh mục sách"
+        icon={ScanText}
       />
 
-      {/* Step indicators */}
-      <div className="flex items-center justify-center gap-2 mb-6">
-        {["upload", "review", "draft"].map((s, i) => (
-          <div key={s} className="flex items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                step === s
-                  ? "bg-blue-600 text-white"
-                  : ["upload", "review", "draft"].indexOf(step) > i
-                    ? "bg-emerald-600 text-white"
-                    : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {["upload", "review", "draft"].indexOf(step) > i ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                i + 1
-              )}
-            </div>
-            {i < 2 && (
-              <ChevronRight className="w-4 h-4 mx-2 text-muted-foreground" />
-            )}
-          </div>
-        ))}
-      </div>
+      <SectionCard className="px-2 py-4">
+        <WorkflowStepper steps={workflowSteps} />
+      </SectionCard>
 
       <FadeItem>
         {step === "upload" && renderUploadStep()}

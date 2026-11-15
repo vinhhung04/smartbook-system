@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 800 684" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="inventory-purchase-order-dd-p1-title inventory-purchase-order-dd-p1-desc" id="inventory-purchase-order-dd-p1-root">
+<title id="inventory-purchase-order-dd-p1-title">Lập, duyệt và gửi đơn đặt hàng, phần 1</title>
+<desc id="inventory-purchase-order-dd-p1-desc">Quản lý kho lập đơn nháp, trình duyệt và duyệt; Inventory Service ghi trạng thái và sự kiện outbox trong cùng giao dịch.</desc>
+<defs>
+      <style>#inventory-purchase-order-dd-p1-root { --color-paper:  #ffffff;
+      --color-ink:    #1f3864;
+      --color-muted:  #475569;
+      --color-accent: #b45309;
+      --font-sans:    Arial, 'Helvetica Neue', Helvetica, sans-serif;
+      --font-serif:   'Times New Roman', Times, serif;
+      --font-mono:    Consolas, 'Courier New', ui-monospace, monospace; }
+      #inventory-purchase-order-dd-p1-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #inventory-purchase-order-dd-p1-root .diagram-container { width: 100%; overflow-x: auto; }
+      #inventory-purchase-order-dd-p1-root .note { font-size: 0.85rem; color: var(--color-muted); margin-top: 1rem; max-width: 800px; line-height: 1.5; }
+      @media print {
+#inventory-purchase-order-dd-p1-root .diagram-container { overflow-x: visible; }
+}</style>
+  <marker id="inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#000000"/></marker>
+  <marker id="inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#000000" stroke-width="1.2"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<!-- lifelines -->
+<line x1="96" y1="104" x2="96" y2="644" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="216" y1="104" x2="216" y2="644" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="360" y1="104" x2="360" y2="644" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="480" y1="104" x2="480" y2="644" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<line x1="708" y1="104" x2="708" y2="644" stroke="#8a8a8a" stroke-width="1" stroke-dasharray="4,4"/>
+<!-- arrows -->
+<line x1="100" y1="164" x2="212" y2="164" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<line x1="220" y1="216" x2="356" y2="216" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-link)"/>
+<line x1="364" y1="252" x2="476" y2="252" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-link)"/>
+<line x1="484" y1="304" x2="704" y2="304" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<line x1="100" y1="340" x2="212" y2="340" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<line x1="220" y1="392" x2="476" y2="392" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-link)"/>
+<line x1="484" y1="428" x2="704" y2="428" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<line x1="100" y1="464" x2="212" y2="464" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<line x1="220" y1="516" x2="476" y2="516" stroke="#000000" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow-link)"/>
+<line x1="484" y1="568" x2="704" y2="568" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<line x1="100" y1="620" x2="212" y2="620" stroke="#222222" stroke-width="1.2" marker-end="url(#inventory-purchase-order-dd-p1-inventory-purchase-order-dd-p1-arrow)"/>
+<!-- labels -->
+<rect x="116" y="122" width="80" height="34" rx="2" fill="#ffffff"/>
+<text x="156.0" y="135" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">1.</tspan> lập đơn đặt</text>
+<text x="156.0" y="151" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">hàng</text>
+<rect x="238" y="174" width="100" height="34" rx="2" fill="#ffffff"/>
+<text x="288.0" y="187" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">2.</tspan> POST /api/</text>
+<text x="288.0" y="203" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">purchase-orders</text>
+<rect x="378" y="226" width="84" height="18" rx="2" fill="#ffffff"/>
+<text x="420.0" y="239" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">3.</tspan> chuyển tiếp</text>
+<rect x="512" y="262" width="164" height="34" rx="2" fill="#ffffff"/>
+<text x="594.0" y="275" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">4.</tspan> purchase_orders DRAFT +</text>
+<text x="594.0" y="291" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">purchase_order_items</text>
+<rect x="114" y="314" width="84" height="18" rx="2" fill="#ffffff"/>
+<text x="156.0" y="327" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">5.</tspan> trình duyệt</text>
+<rect x="236" y="350" width="224" height="34" rx="2" fill="#ffffff"/>
+<text x="348.0" y="363" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">6.</tspan> POST</text>
+<text x="348.0" y="379" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/purchase-orders/{id}/submit</text>
+<rect x="524" y="402" width="140" height="18" rx="2" fill="#ffffff"/>
+<text x="594.0" y="415" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">7.</tspan> PENDING_APPROVAL</text>
+<rect x="118" y="438" width="76" height="18" rx="2" fill="#ffffff"/>
+<text x="156.0" y="451" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">8.</tspan> duyệt đơn</text>
+<rect x="232" y="474" width="232" height="34" rx="2" fill="#ffffff"/>
+<text x="348.0" y="487" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">9.</tspan> POST</text>
+<text x="348.0" y="503" fill="#000000" font-size="12" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">/api/purchase-orders/{id}/approve</text>
+<rect x="496" y="526" width="196" height="34" rx="2" fill="#ffffff"/>
+<text x="594.0" y="539" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">10.</tspan> APPROVED + outbox purchase_</text>
+<text x="594.0" y="555" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">order.approved (cùng giao dịch)</text>
+<rect x="110" y="578" width="92" height="34" rx="2" fill="#ffffff"/>
+<text x="156.0" y="591" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle"><tspan font-weight="700">11.</tspan> gửi nhà cung</text>
+<text x="156.0" y="607" fill="#000000" font-size="12" font-family="'Times New Roman', Times, serif" text-anchor="middle">cấp</text>
+<!-- nodes -->
+<circle cx="96" cy="49" r="7" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+<path d="M 96 56 V 72 M 85 61 H 107 M 96 72 L 87 84 M 96 72 L 105 84" fill="none" stroke="#000000" stroke-width="1"/>
+<text x="96" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Quản lý kho</text>
+<rect x="172" y="40" width="88" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="216" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Web UI</text>
+<text x="216" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">apps/web</text>
+<rect x="310" y="40" width="100" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="360" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">API Gateway</text>
+<text x="360" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">api-gateway</text>
+<rect x="422" y="40" width="116" height="64" rx="4" fill="#ffffff" stroke="#555555" stroke-width="1"/>
+<text x="480" y="70" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">Inventory</text>
+<text x="480" y="90" fill="#444444" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">inventory-service</text>
+<path d="M 668.0 48 V 79 A 40.0 6 0 0 0 748.0 79 V 48" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<ellipse cx="708" cy="48" rx="40.0" ry="6" fill="#f5f5f5" stroke="#000000" stroke-width="1"/>
+<text x="708" y="71.5" fill="#333333" font-size="11" font-family="Consolas, 'Courier New', ui-monospace, monospace" text-anchor="middle">PostgreSQL</text>
+<text x="708" y="99" fill="#000000" font-size="14" font-family="'Times New Roman', Times, serif" text-anchor="middle">inventory_db</text>
+</svg>

@@ -1,0 +1,48 @@
+---
+title: "Sơ đồ tuần tự: Nhập sách bằng OCR nhiều ảnh (AI Import)"
+---
+%% Nguồn đối chiếu (nhánh hungg):
+%%   docs/ANALYSIS/BOOK_OCR_IMPORT.md (pipeline OCR 2.0)
+%%   services/ai-service/routes_book_ocr.py (GET /book-metadata/capabilities, POST /book-metadata/scan-images)
+%%   services/ai-service/book_ocr/ (images.py, extractor.py, validation.py, reconcile.py, normalization.py)
+%%   apps/web/src/components/pages/ai-import.tsx (tải 1–3 ảnh, panel "Kết quả đọc ảnh", nút Lưu)
+%%   services/inventory-service: /api/metadata-reconciliations (capabilities/import, bản nháp đối soát, kiểm tra trùng)
+%% OCR chỉ đề xuất giá trị vào biểu mẫu; việc ghi sách luôn đi qua bản nháp đối soát, kiểm tra trùng và nút Lưu.
+sequenceDiagram
+    autonumber
+    actor Q as Quản lý kho
+    participant W as Web App (AI Import)
+    participant G as API Gateway
+    participant AI as AI Service
+    participant I as Inventory Service
+    participant OR as OpenRouter (Qwen VL)
+    participant LK as Nguồn tra cứu ISBN
+
+    Q->>W: Chọn 1–3 ảnh: bìa trước, bìa sau, trang thông tin xuất bản
+    Note right of W: Thu nhỏ ≤ 2048 px, băm SHA-256 nội dung ảnh,<br/>giải mã mã vạch EAN-13 ở bìa sau (trên trình duyệt)
+    W->>G: POST /ai/book-metadata/scan-images (multipart)
+    G->>AI: Chuyển tiếp kèm JWT người dùng
+    AI->>I: GET /api/metadata-reconciliations/capabilities/import
+    break Không có quyền inventory.catalog.write
+        I-->>AI: 403
+        AI-->>W: 403 (chưa tốn chi phí suy luận)
+    end
+    Note right of AI: images.py: kiểm tra magic bytes, chống ảnh bom,<br/>xoay theo EXIF, thu nhỏ ≤ 1600 px, xóa EXIF/GPS
+    AI->>OR: Một lời gọi đa phương thức chứa cả 3 ảnh có nhãn
+    OR-->>AI: JSON trường đọc được + đoạn chữ chép lại
+    Note right of AI: validation.py: chuẩn hóa, kiểm tra checksum ISBN,<br/>giá trị phải nằm trong đoạn chữ đã chép (grounding),<br/>đúng vai trò (dịch giả ≠ tác giả, NXB ≠ nhà phát hành)
+    opt Có đúng một ISBN hợp lệ
+        AI->>LK: lookup_book_by_isbn (Google Books, Open Library, nhà sách)
+        LK-->>AI: Bản ghi metadata
+    end
+    Note right of AI: reconcile.py: đối chiếu ảnh ↔ tra cứu theo khóa strict (giữ dấu),<br/>gán EXTRACTED / CORROBORATED / LOOKUP_ONLY / REVIEW_REQUIRED /<br/>CONFLICTED / INVALID, autofill_policy() quyết định safeToApply
+    AI-->>W: proposals theo từng ô của biểu mẫu + bằng chứng
+    W-->>Q: Panel "Kết quả đọc ảnh": giá trị, trạng thái, bằng chứng
+    Q->>W: Áp dụng từng trường hoặc các trường an toàn
+    W->>G: Tạo bản nháp đối soát và kiểm tra trùng
+    G->>I: POST /api/metadata-reconciliations, kiểm tra trùng lặp
+    I-->>W: Bản nháp + ứng viên trùng (EXACT_DUPLICATE, SAME_EDITION...)
+    Q->>W: Xử lý trùng lặp, chuẩn hóa thực thể, bấm Lưu
+    W->>G: Áp dụng bản nháp đã duyệt
+    G->>I: Ghi các trường đã chấp nhận trong một giao dịch
+    I-->>W: Sách đã lưu

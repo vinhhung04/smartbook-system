@@ -1,0 +1,35 @@
+---
+title: "Quy trình CI/CD: từ mã nguồn đến VPS production"
+---
+%% Nguồn đối chiếu (nhánh hungg):
+%%   .github/workflows/ci.yml (mọi nhánh và pull request)
+%%   .github/workflows/deploy-production.yml (chỉ nhánh production hoặc chạy tay)
+%%   .github/workflows/mobile-release.yml (EAS, chạy tay hoặc theo tag)
+%%   deploy/scripts/deploy.sh, rollback.sh, backup.sh, healthcheck.sh
+%%   docs/DEPLOYMENT.md mục 7, 12, 13
+flowchart LR
+    subgraph ci["1. ci.yml – mọi nhánh, pull request"]
+        direction TB
+        c0["Push mã / mở pull request"] --> c1["Kiểm tra toàn workspace<br/>lint, typecheck, build, unit test"]
+        c1 --> c2["Prisma schema 3 service"]
+        c2 --> c3["Kiểm tra cấu hình<br/>Docker Compose"]
+        c3 --> c4["Kiểm thử tích hợp trên Docker"]
+        c4 --> c5["Kiểm thử E2E Playwright"]
+    end
+    subgraph cd["2. deploy-production.yml – nhánh production"]
+        direction TB
+        t["Job test (cổng chặn): lint, typecheck,<br/>build, test Node/Web/AI,<br/>kiểm tra compose.prod.yml"] --> b["Job build: ma trận 7 image<br/>web, api-gateway, auth, inventory,<br/>borrow, analytics, ai"]
+        b --> push["Đẩy lên GHCR<br/>tag = commit SHA và production"]
+        push --> d["Job deploy (môi trường production)<br/>SSH với host key được ghim"]
+    end
+    subgraph vps["3. VPS – deploy/scripts/deploy.sh"]
+        direction TB
+        v1["pg_dump trước khi deploy<br/>(giữ 5 bản predeploy)"] --> v2["docker compose pull<br/>IMAGE_TAG = SHA"]
+        v2 --> v3["up -d --wait<br/>prisma migrate deploy"]
+        v3 --> v4{"Healthcheck và<br/>smoke test đạt?"}
+        v4 -- "Có" --> ok["Ghi state/releases.log,<br/>giữ image 3 release gần nhất,<br/>kiểm tra từ Internet"]
+        v4 -- "Không" --> rb["Tự rollback về release trước<br/>(chỉ image, không đổi schema)"]
+        cron["Cron: backup.sh 02:30 hằng ngày<br/>(giữ 14 ngày), healthcheck.sh 5 phút"]
+    end
+    ci -- "hợp nhất vào production" --> cd
+    cd --> vps

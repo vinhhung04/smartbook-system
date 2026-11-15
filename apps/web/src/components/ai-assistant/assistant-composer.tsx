@@ -62,7 +62,7 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
     <div ref={rootRef} className="mx-auto w-full max-w-3xl">
       <form data-composer
         onSubmit={(event) => { event.preventDefault(); submit(); }}
-        className="rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.14)] transition-[border-color,box-shadow] focus-within:border-primary/45 focus-within:shadow-[0_0_0_4px_color-mix(in_oklab,var(--primary)_12%,transparent),0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-none">
+        className="rounded-2xl border border-border bg-card transition-[border-color,box-shadow] focus-within:border-primary/45 focus-within:shadow-[0_0_0_4px_color-mix(in_oklab,var(--primary)_12%,transparent)]">
         {previewSlot}
         <textarea
           ref={textareaRef}
@@ -110,7 +110,7 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
               </Popover>
             )}
             <span id="assistant-composer-hint" className="hidden truncate px-1.5 text-[11.5px] text-muted-foreground sm:inline">
-              {sending ? 'Đang trả lời — bạn có thể soạn câu tiếp theo hoặc bấm Dừng' : 'Enter để gửi · Shift + Enter để xuống dòng'}
+              {sending ? 'Đang trả lời. Bạn có thể soạn câu tiếp theo hoặc bấm Dừng' : 'Enter để gửi · Shift + Enter để xuống dòng'}
             </span>
           </div>
           {sending && onStop ? (

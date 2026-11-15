@@ -1,12 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
+const { prisma } = require('../lib/prisma');
 const {
   scopedWarehouseWhere,
   requireWarehouseReadAccess,
   WarehouseScopeUnavailableError,
   scopeErrorStatus,
 } = require('../utils/warehouse-scope.utils');
-
-const prisma = new PrismaClient();
 
 const COMPARTMENT_TYPES = ['SHELF_COMPARTMENT', 'BIN'];
 
