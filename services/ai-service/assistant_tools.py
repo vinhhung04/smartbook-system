@@ -194,6 +194,78 @@ def _author_hits(books: list[dict], normalized_query: str) -> list[dict]:
             if any(re.search(rf"\b{re.escape(name)}\b", normalized_query) for name in _author_names(book))]
 
 
+# ── Phase 2 (2026-11-15): metadata-aware routes, same pattern as the author route ──
+# Both only fire on an unambiguous identifier. (A category soft filter was tried and
+# dropped: the category books were not among the fused candidates to move - see
+# docs/AI/RAG_QUALITY_ROADMAP.md, Phase 2.)
+_TITLE_CUE_HEAD = frozenset("thu vien cho toi muon tim kiem co cuon quyen sach ten doc mua".split())
+_TITLE_CUE_TAIL = frozenset("khong ko a nhe vay nhi".split())
+_ISBN_TOKEN = re.compile(r"(?<!\d)(?:\d{13}|\d{9}[\dx])(?!\d)")
+_ISBN_CUE_WORDS = frozenset("tim sach isbn ma so vach barcode ean co la gi cuon quyen nao khong ko thu vien cho toi "
+                            "nay o dau".split())
+
+
+def _words(normalized: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", normalized)
+
+
+def _title_key(value: Any) -> str:
+    """Edition-free title: 'Mắt Biếc (Tái Bản 2022)' -> 'mat biec'."""
+    return " ".join(_words(normalize_text(re.sub(r"\([^)]*\)", " ", str(value or "")))))
+
+
+def _title_query_keys(normalized_query: str) -> set[str]:
+    """The query with 0..n leading and trailing lookup cue words removed ("tim sach mat biec",
+    "co cuon nha gia kim khong"); every intermediate form is kept so a title that itself starts
+    with a cue word ("Cố Nhân Tình") still matches."""
+    words = _words(normalized_query)
+    keys: set[str] = set()
+    start = 0
+    while start < len(words):
+        end = len(words)
+        while end > start:
+            keys.add(" ".join(words[start:end]))
+            if words[end - 1] not in _TITLE_CUE_TAIL:
+                break
+            end -= 1
+        if words[start] not in _TITLE_CUE_HEAD:
+            break
+        start += 1
+    return keys
+
+
+def _title_hits(books: list[dict], normalized_query: str) -> list[dict]:
+    keys = _title_query_keys(normalized_query)
+    return [book for book in books if (key := _title_key(book.get("title"))) and key in keys]
+
+
+def _isbn13_of_isbn10s(normalized_query: str) -> list[str]:
+    """ISBN-13 (978 prefix) of every valid ISBN-10 in the query - the catalog stores ISBN-13 only."""
+    from metadata_intelligence.verification import canonical_isbn  # None on a bad check digit
+
+    joined = re.sub(r"(?<=\d)[\s-]+(?=[\dx])", "", normalized_query)
+    return [isbn for token in re.findall(r"(?<!\d)\d{9}[\dx](?!\d)", joined) if (isbn := canonical_isbn(token))]
+
+
+def _isbn_only_query(normalized_query: str) -> bool:
+    """An identifier lookup ("Tìm sách ISBN 978...") - nothing but an ISBN-shaped number and cue words."""
+    joined = re.sub(r"(?<=\d)[\s-]+(?=\d)", "", normalized_query)
+    if not _ISBN_TOKEN.search(joined):
+        return False
+    rest = _ISBN_TOKEN.sub(" ", " ".join(_words(joined)))
+    return all(word in _ISBN_CUE_WORDS for word in rest.split())
+
+
+def _route_first(results: list[dict], routed: list[dict]) -> list[dict]:
+    """`routed` books first (those the hybrid ranking found keep its order), then the rest."""
+    routed_ids = {str(book["id"]) for book in routed}
+    ranked = [r for r in results if r["id"] in routed_ids]
+    ranked_ids = {r["id"] for r in ranked}
+    unranked = [{**_compact_book_with_content(book), "score": 1.0}
+                for book in routed if str(book["id"]) not in ranked_ids]
+    return [*ranked, *unranked, *[r for r in results if r["id"] not in routed_ids]]
+
+
 # ISBN-10/13 (digits only, sau khi chuan hoa) luon >= 10 ky tu. Nguong nay
 # chan false-positive tu isbn rong/qua ngan bi coi la substring cua bat ky
 # query nao (vd "" luon la substring cua moi chuoi).
@@ -266,7 +338,9 @@ async def _score_and_rank_books_with_confidence(
     source_ids = list(by_id.keys())
     store = vector_store.get_store()
 
-    query_isbn = _isbn_key(query)
+    normalized_query = normalize_text(query)
+    # space-separated so a catalog isbn cannot match across two of the joined forms
+    query_isbn = " ".join([_isbn_key(query), *_isbn13_of_isbn10s(normalized_query)])
     isbn_hit = next(
         (
             book for book in valid_books
@@ -275,14 +349,17 @@ async def _score_and_rank_books_with_confidence(
         ),
         None,
     )
-    # A query that IS a book's title, word for word, is as strong a signal as
-    # an isbn match — no need to wait on semantic/keyword agreement for it.
-    normalized_query = normalize_text(query)
-    title_hit = None if isbn_hit is not None else next(
-        (book for book in valid_books if normalize_text(str(book.get("title") or "")) == normalized_query),
-        None,
-    )
-    author_hits = [] if (isbn_hit is not None or title_hit is not None) else _author_hits(valid_books, normalized_query)
+    # A query that IS a book's title (edition suffix and lookup cue words aside) is as strong
+    # a signal as an isbn match — no need to wait on semantic/keyword agreement for it.
+    if isbn_hit is None and _isbn_only_query(normalized_query):
+        # An ISBN lookup with no catalog match: a semantic look-alike must not stand in for it.
+        signals = retrieval_confidence.extract_signals(vector_store.CORPUS_BOOK, [], [], [], semantic_available=False)
+        confidence = retrieval_confidence.RetrievalConfidence(
+            retrieval_confidence.NO_EVIDENCE, 0.0, ["ISBN_NOT_FOUND"], signals)
+        retrieval_confidence.log_decision(confidence)
+        return [], confidence
+    title_hits = [] if isbn_hit is not None else _title_hits(valid_books, normalized_query)
+    author_hits = [] if (isbn_hit is not None or title_hits) else _author_hits(valid_books, normalized_query)
 
     embed_result = await asyncio.to_thread(embeddings.embed_text, query)
     semantic = (
@@ -307,7 +384,7 @@ async def _score_and_rank_books_with_confidence(
         if hit.source_id in by_id
     ]
 
-    hard_match = ("ISBN_EXACT" if isbn_hit is not None else "TITLE_EXACT" if title_hit is not None
+    hard_match = ("ISBN_EXACT" if isbn_hit is not None else "TITLE_EXACT" if title_hits
                   else "AUTHOR_EXACT" if author_hits else None)
     signals = retrieval_confidence.extract_signals(
         vector_store.CORPUS_BOOK, semantic, keyword, fused,
@@ -322,15 +399,11 @@ async def _score_and_rank_books_with_confidence(
         # 1.0 la ngoai thang diem RRF thong thuong (luon < 1/RRF_K), de ro rang day la
         # thang do identity chu khong phai xep hang.
         results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}, *results]
+    elif title_hits:
+        results = _route_first(results, title_hits)
     elif author_hits:
-        # The author's books first - those the hybrid ranking also found keep its
-        # order - then the rest of the ranking.
-        author_ids = {str(book["id"]) for book in author_hits}
-        ranked = [r for r in results if r["id"] in author_ids]
-        ranked_ids = {r["id"] for r in ranked}
-        unranked = [{**_compact_book_with_content(book), "score": 1.0}
-                    for book in author_hits if str(book["id"]) not in ranked_ids]
-        results = [*ranked, *unranked, *[r for r in results if r["id"] not in author_ids]]
+        # The author's books first - those the hybrid ranking also found keep its order.
+        results = _route_first(results, author_hits)
 
     return results[:limit], confidence
 

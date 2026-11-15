@@ -121,6 +121,7 @@ async def _find_relevant_async(
         fused = fusion.reciprocal_rank_fusion([semantic, keyword], limit=top_k)
         signals = confidence.extract_signals(
             vector_store.CORPUS_DOC, semantic, keyword, fused, semantic_available=embed_result is not None,
+            query=query,
         )
         result = confidence.evaluate(signals, confidence.DOC_CONFIDENCE)
         confidence.log_decision(result)

@@ -1,0 +1,590 @@
+{
+ "version": "s2-2026-11-15",
+ "catalog_snapshot": "rag_catalog_snapshot_20261115.json",
+ "note": "Supplement to rag_dataset.json, built against the committed 2026-11-15 catalog snapshot so every case is reachable. 'mechanical' labels follow from a catalog field (isbn/title/author/category) and can be re-derived; 'needs_human' cases are excluded from trusted metrics until a person confirms them.",
+ "cases": [
+  {
+   "id": "sp-001",
+   "corpus": "BOOK_METADATA",
+   "question": "Tìm sách ISBN 9780735211292",
+   "expected_ids": [
+    "56d3541c-b609-5d62-80de-91acaaff0606"
+   ],
+   "expected_facts": [],
+   "group": "isbn_exact",
+   "label_source": "isbn field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-002",
+   "corpus": "BOOK_METADATA",
+   "question": "ISBN 978-0-13-235088-4 là sách gì?",
+   "expected_ids": [
+    "3e341be8-df3f-5190-98a9-6b0d9b9c7d21"
+   ],
+   "expected_facts": [],
+   "group": "isbn_exact",
+   "label_source": "isbn field",
+   "verification": "mechanical",
+   "note": "hyphenated ISBN-13"
+  },
+  {
+   "id": "sp-003",
+   "corpus": "BOOK_METADATA",
+   "question": "8934974163442",
+   "expected_ids": [
+    "cb780777-916e-4d15-a3d7-a321436d9ea9"
+   ],
+   "expected_facts": [],
+   "group": "isbn_exact",
+   "label_source": "isbn field",
+   "verification": "mechanical",
+   "note": "bare EAN-13"
+  },
+  {
+   "id": "sp-004",
+   "corpus": "BOOK_METADATA",
+   "question": "Thư viện có sách mã 8935212341554 không?",
+   "expected_ids": [
+    "1b06c832-2f82-53d5-bd3a-e6293baf38a9"
+   ],
+   "expected_facts": [],
+   "group": "isbn_exact",
+   "label_source": "isbn field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-005",
+   "corpus": "BOOK_METADATA",
+   "question": "sach co isbn 9786044834108",
+   "expected_ids": [
+    "10c718ff-e5d8-4b12-b56a-5f40afe9bb12"
+   ],
+   "expected_facts": [],
+   "group": "isbn_exact",
+   "label_source": "isbn field",
+   "verification": "mechanical",
+   "note": "no diacritics"
+  },
+  {
+   "id": "sp-006",
+   "corpus": "BOOK_METADATA",
+   "question": "Tìm sách ISBN 9780735211293",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "isbn_near_miss",
+   "label_source": "no catalog isbn equals it",
+   "verification": "mechanical",
+   "note": "one digit off Atomic Habits; must not hard-match"
+  },
+  {
+   "id": "sp-007",
+   "corpus": "BOOK_METADATA",
+   "question": "Mắt Biếc",
+   "expected_ids": [
+    "cb780777-916e-4d15-a3d7-a321436d9ea9"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field (edition suffix dropped)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-008",
+   "corpus": "BOOK_METADATA",
+   "question": "tim sach mat biec",
+   "expected_ids": [
+    "cb780777-916e-4d15-a3d7-a321436d9ea9"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field",
+   "verification": "mechanical",
+   "note": "no diacritics"
+  },
+  {
+   "id": "sp-009",
+   "corpus": "BOOK_METADATA",
+   "question": "Chí Phèo",
+   "expected_ids": [
+    "1b06c832-2f82-53d5-bd3a-e6293baf38a9"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field (edition suffix dropped)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-010",
+   "corpus": "BOOK_METADATA",
+   "question": "Có cuốn Nhà Giả Kim không?",
+   "expected_ids": [
+    "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field (edition suffix dropped)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-011",
+   "corpus": "BOOK_METADATA",
+   "question": "nha gia kim",
+   "expected_ids": [
+    "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field",
+   "verification": "mechanical",
+   "note": "no diacritics"
+  },
+  {
+   "id": "sp-012",
+   "corpus": "BOOK_METADATA",
+   "question": "Tìm sách Atomic Habits",
+   "expected_ids": [
+    "56d3541c-b609-5d62-80de-91acaaff0606"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-013",
+   "corpus": "BOOK_METADATA",
+   "question": "Project Hail Mary",
+   "expected_ids": [
+    "b4079b3f-3308-41a1-8ca3-a78e3294c41d",
+    "4bebe16a-05d9-4c18-9819-93694a604acc"
+   ],
+   "expected_facts": [],
+   "group": "title_multi_edition",
+   "label_source": "title field (two editions)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-014",
+   "corpus": "BOOK_METADATA",
+   "question": "Cánh Đồng Bất Tận",
+   "expected_ids": [
+    "ea1cd72d-e95a-577b-a888-0b08551bbecc"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field (exact)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-015",
+   "corpus": "BOOK_METADATA",
+   "question": "Tìm sách Đi Qua Hoa Cúc",
+   "expected_ids": [
+    "d736b4be-0e40-4157-ae69-8322c83a2c39"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field",
+   "verification": "mechanical",
+   "note": "starts with đ"
+  },
+  {
+   "id": "sp-016",
+   "corpus": "BOOK_METADATA",
+   "question": "Dế Mèn Phiêu Lưu Ký",
+   "expected_ids": [
+    "ea72ef14-a4bf-5b88-9ea7-a717757f6595"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field (edition suffix dropped)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-017",
+   "corpus": "BOOK_METADATA",
+   "question": "Tuổi Thơ Dữ Dội",
+   "expected_ids": [
+    "534d52b3-cb9a-5859-95de-6e988cbee729"
+   ],
+   "expected_facts": [],
+   "group": "title",
+   "label_source": "title field (volume/edition suffix dropped)",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-018",
+   "corpus": "BOOK_METADATA",
+   "question": "Có cuốn Harry Potter và Phòng Chứa Bí Mật không?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "title_near_miss",
+   "label_source": "catalog has only Philosopher's Stone",
+   "verification": "needs_human",
+   "note": "needs a person to confirm no Chamber of Secrets edition under another title"
+  },
+  {
+   "id": "sp-019",
+   "corpus": "BOOK_METADATA",
+   "question": "Có sách Children of Dune không?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "title_near_miss",
+   "label_source": "catalog has Dune and Dune Messiah only",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-020",
+   "corpus": "BOOK_METADATA",
+   "question": "Có Tuổi Thơ Dữ Dội tập 2 không?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "title_near_miss",
+   "label_source": "catalog has Tập 1 only",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-021",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách nào của Nam Cao?",
+   "expected_ids": [
+    "1b06c832-2f82-53d5-bd3a-e6293baf38a9",
+    "4fb66846-c1a5-5531-8cdf-48aa4c70b243"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-022",
+   "corpus": "BOOK_METADATA",
+   "question": "sach cua nguyen ngoc tu",
+   "expected_ids": [
+    "83367391-53ab-458c-9bd1-61ebe6df49d5",
+    "844f2cf6-2455-4700-9821-555a53a4b1f9",
+    "ea1cd72d-e95a-577b-a888-0b08551bbecc"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": "no diacritics"
+  },
+  {
+   "id": "sp-023",
+   "corpus": "BOOK_METADATA",
+   "question": "Tác phẩm nào của George Orwell?",
+   "expected_ids": [
+    "4f7d054e-d031-5a7c-8b79-57885b32d249",
+    "fa3ab34a-41b8-59e8-9694-1181247f35d6"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-024",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách nào của Gabriel Garcia Marquez?",
+   "expected_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": "query without accents"
+  },
+  {
+   "id": "sp-025",
+   "corpus": "BOOK_METADATA",
+   "question": "Robert Greene viết những sách nào?",
+   "expected_ids": [
+    "7ee6fb92-841b-4a09-a32d-11b58a12c4ae",
+    "e16c5805-e27e-4d8c-bf90-136b1892e474"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": "no author cue word"
+  },
+  {
+   "id": "sp-026",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách của tác giả Phùng Quán",
+   "expected_ids": [
+    "10c718ff-e5d8-4b12-b56a-5f40afe9bb12",
+    "534d52b3-cb9a-5859-95de-6e988cbee729"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-027",
+   "corpus": "BOOK_METADATA",
+   "question": "Có sách nào của Haruki Murakami không",
+   "expected_ids": [
+    "44d1360d-1974-4e8e-8ce9-04e35facedec",
+    "5b1493c9-fc87-4fb9-b29d-e71242f0243e",
+    "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-028",
+   "corpus": "BOOK_METADATA",
+   "question": "Tác phẩm của Andy Weir",
+   "expected_ids": [
+    "4bebe16a-05d9-4c18-9819-93694a604acc",
+    "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-029",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách nào của Frank Herbert?",
+   "expected_ids": [
+    "2f7a6bba-a705-41af-bc76-3297f8f3551a",
+    "8702650d-2a96-42fc-8e5c-9872ad55400e"
+   ],
+   "expected_facts": [],
+   "group": "author",
+   "label_source": "author field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-030",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách nào của tác giả Stephen King?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "author_near_miss",
+   "label_source": "no catalog author named Stephen King",
+   "verification": "mechanical",
+   "note": "Stephen Hawking / Stephen R Covey exist"
+  },
+  {
+   "id": "sp-031",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách nào của nhà văn Nguyễn Huy Thiệp?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "author_near_miss",
+   "label_source": "no catalog author named Nguyễn Huy Thiệp",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-032",
+   "corpus": "BOOK_METADATA",
+   "question": "Có sách lịch sử chính trị nào không?",
+   "expected_ids": [
+    "052f4e10-c2c4-5003-af54-058821070b61",
+    "07585d3e-6990-5570-b371-8e26cd159405"
+   ],
+   "expected_facts": [],
+   "group": "category",
+   "label_source": "category field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-033",
+   "corpus": "BOOK_METADATA",
+   "question": "Có sách thiếu nhi nào không?",
+   "expected_ids": [
+    "de549bfe-8ce9-53b5-93e1-04ac9c8c798d",
+    "ea72ef14-a4bf-5b88-9ea7-a717757f6595"
+   ],
+   "expected_facts": [],
+   "group": "category",
+   "label_source": "category field",
+   "verification": "mechanical",
+   "note": "books with no category may also be for children; recall uses the labelled two only"
+  },
+  {
+   "id": "sp-034",
+   "corpus": "BOOK_METADATA",
+   "question": "Thư viện có sách nào về lập trình phần mềm không?",
+   "expected_ids": [
+    "3e341be8-df3f-5190-98a9-6b0d9b9c7d21",
+    "fa33ebc6-f95b-5f56-9c8a-5ec43860b0d4"
+   ],
+   "expected_facts": [],
+   "group": "category_semantic",
+   "label_source": "category Kỹ thuật - CNTT",
+   "verification": "needs_human",
+   "note": "lập trình phần mềm -> CNTT is an inference"
+  },
+  {
+   "id": "sp-035",
+   "corpus": "BOOK_METADATA",
+   "question": "Tiểu thuyết châm biếm chính trị về các con vật nổi dậy chiếm trang trại",
+   "expected_ids": [
+    "4f7d054e-d031-5a7c-8b79-57885b32d249"
+   ],
+   "expected_facts": [],
+   "group": "description",
+   "label_source": "description paraphrase",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-036",
+   "corpus": "BOOK_METADATA",
+   "question": "Truyện phiêu lưu về một hobbit cùng nhóm người lùn đi tìm kho vàng do rồng canh giữ",
+   "expected_ids": [
+    "93f99f2a-c970-569e-9382-4d595be5ec5a"
+   ],
+   "expected_facts": [],
+   "group": "description",
+   "label_source": "description paraphrase",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-037",
+   "corpus": "BOOK_METADATA",
+   "question": "Tiểu thuyết về một gia đình mafia ở New York",
+   "expected_ids": [
+    "6046b4ff-d0fd-591d-a458-c2cebf1a4036"
+   ],
+   "expected_facts": [],
+   "group": "description",
+   "label_source": "description paraphrase",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-038",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách kể về cuộc sống khốn khổ của chị Dậu và nông dân dưới thời Pháp thuộc",
+   "expected_ids": [
+    "ebdc4714-1060-51d7-a3e8-d9dda087aa95"
+   ],
+   "expected_facts": [],
+   "group": "description",
+   "label_source": "description paraphrase",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-039",
+   "corpus": "BOOK_METADATA",
+   "question": "Cuốn sách kể chuyện cậu bé An lưu lạc khắp miền Tây sông nước",
+   "expected_ids": [
+    "de549bfe-8ce9-53b5-93e1-04ac9c8c798d"
+   ],
+   "expected_facts": [],
+   "group": "description",
+   "label_source": "description paraphrase",
+   "verification": "needs_human",
+   "note": ""
+  },
+  {
+   "id": "sp-040",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách kinh tế nào có trong thư viện?",
+   "expected_ids": [
+    "17c13184-689f-4ff8-a917-a626c6fcd1a9",
+    "205ec491-f420-4209-b811-e78d509ef66b",
+    "2782b784-e025-5946-b8ac-435e8c11246e",
+    "294273f6-53b9-49a7-b00b-995a6a1445e2",
+    "410c75e1-54bc-4bc7-be64-9015364f992e",
+    "56e789b9-d356-4c4f-910d-6751d4b98c31",
+    "716f456e-08ba-4ca9-975c-41f56e5db716",
+    "7ee6fb92-841b-4a09-a32d-11b58a12c4ae",
+    "831b7fc9-a6bb-4918-8770-b29b77217c9a",
+    "8b5e9927-eb24-431c-8fee-40c03fd3e538",
+    "9b7ad6ec-fad1-4e20-9ea7-0b25f821aaa6",
+    "9c7dce89-5f60-43ae-a0dc-e7e12aef6d6f",
+    "a65444e4-b725-411b-9886-b8b6837e53b7",
+    "bd4f36f9-6298-49b3-b903-12c89835d8c3",
+    "c6e20cc1-5761-4263-a7d4-734dd6ec436c",
+    "d3546ae9-af20-4463-ba95-eb210ca8cb9c",
+    "d561495e-986e-5f00-b22e-077a87ae7d64",
+    "e719763b-540e-4005-98fd-d5f9f49543cd",
+    "e905160b-2972-4555-b6b3-9ba0e083e349",
+    "ebf13c21-d612-42b9-a269-fdafd73ceaae",
+    "f3699258-5ed4-409b-8f5b-c7809b77ef00"
+   ],
+   "expected_facts": [],
+   "group": "category",
+   "label_source": "category field",
+   "verification": "mechanical",
+   "note": "21 books: recall@5 is capped, read P@5"
+  },
+  {
+   "id": "sp-041",
+   "corpus": "BOOK_METADATA",
+   "question": "Có truyện ngắn nào của Nguyễn Ngọc Tư không?",
+   "expected_ids": [
+    "83367391-53ab-458c-9bd1-61ebe6df49d5",
+    "844f2cf6-2455-4700-9821-555a53a4b1f9",
+    "ea1cd72d-e95a-577b-a888-0b08551bbecc"
+   ],
+   "expected_facts": [],
+   "group": "author_category",
+   "label_source": "author field AND category field",
+   "verification": "mechanical",
+   "note": ""
+  },
+  {
+   "id": "sp-042",
+   "corpus": "BOOK_METADATA",
+   "question": "Sách kỹ thuật CNTT nào dạy lập trình Python?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "category_near_miss",
+   "label_source": "CNTT books exist, none mentions Python",
+   "verification": "mechanical",
+   "note": "checked: no catalog title/description mentions python"
+  },
+  {
+   "id": "sp-043",
+   "corpus": "BOOK_METADATA",
+   "question": "Có sách kinh tế nào về bitcoin và tiền điện tử không?",
+   "expected_ids": [],
+   "expected_facts": [],
+   "group": "category_near_miss",
+   "label_source": "Kinh tế books exist, none mentions bitcoin/crypto",
+   "verification": "mechanical",
+   "note": "checked: no catalog title/description mentions bitcoin, tien dien tu, crypto, blockchain"
+  }
+ ],
+ "changelog": [
+  "s1 (39 cases): initial; baseline report rag_20261114_232421_p0-supplement-baseline.md",
+  "s2: +sp-040..043 (category, author+category, two category near-miss no-answer cases), added before the Phase 2 category filter was written; s1 cases unchanged"
+ ]
+}

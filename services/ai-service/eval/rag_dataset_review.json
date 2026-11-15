@@ -1,0 +1,40 @@
+{
+  "version": "2026-11-15",
+  "purpose": "Human-review queue for rag_dataset.json. Labels are NOT changed here; a flagged case is only moved out of the trusted subset in eval_rag.py reports. Clear an entry (or update rag_dataset.json with a changelog line) once a person has verified it.",
+  "reviewed_by": null,
+  "cases": {
+    "bm-093": {
+      "flag": "STALE_NO_ANSWER_MANUAL",
+      "needs_human": true,
+      "reason": "Labelled no-answer against the 2026-10-08 catalog; the catalog now has 3d1c247f 'Harry Potter and the Philosopher's Stone' (added 2026-10-19). 'Hòn đá Phù thủy' is the Vietnamese title of that book.",
+      "proposed_expected_ids": ["3d1c247f-1103-520d-91ee-f748f6cfeaa4"]
+    },
+    "bm-094": {
+      "flag": "STALE_NO_ANSWER_MANUAL",
+      "needs_human": true,
+      "reason": "Labelled no-answer against the 2026-10-08 catalog; the catalog now has dd94f886 'How to Win Friends and Influence People' by Dale Carnegie (added 2026-10-19). 'Đắc Nhân Tâm' is the Vietnamese title of that book.",
+      "proposed_expected_ids": ["dd94f886-e05c-5b06-8e8b-db203317072c"]
+    },
+    "bm-096": {
+      "flag": "STALE_NO_ANSWER_MANUAL",
+      "needs_human": true,
+      "reason": "Labelled no-answer against the 2026-10-08 catalog; the catalog now has 56d3541c 'Atomic Habits' by James Clear (added 2026-10-19). Also detected automatically (STALE_NO_ANSWER).",
+      "proposed_expected_ids": ["56d3541c-b609-5d62-80de-91acaaff0606"]
+    },
+    "bm-036": {
+      "flag": "QUESTIONABLE_LABEL",
+      "needs_human": true,
+      "reason": "Author fan-out built on the 2026-09 seed catalog, whose author field was wrong: it expects 'Chiec la cuoi cung' (O. Henry), 'Dế Mèn Phiêu Lưu Ký' (Tô Hoài) and 'Dac trung tam ly hoc cua nguoi Viet' as Nam Cao's. All four expected books are also gone from the catalog."
+    },
+    "bm-037": {
+      "flag": "QUESTIONABLE_LABEL",
+      "needs_human": true,
+      "reason": "Expects 'Tư Duy Phản Biện' as a work of Xuân Diệu (seed-catalog author error). Both expected books are gone from the catalog."
+    },
+    "bm-038": {
+      "flag": "QUESTIONABLE_LABEL",
+      "needs_human": true,
+      "reason": "Expects 'Project Hail Mary' as a work of Tô Hoài (seed-catalog author error; the live catalog now says Andy Weir) and folk tale 'Tam Cam' (gone). Also detected automatically (LABEL_AUTHOR_MISMATCH)."
+    }
+  }
+}
