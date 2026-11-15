@@ -1,13 +1,31 @@
 ﻿import { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Send, Sparkles, RotateCcw, Database, Zap } from 'lucide-react';
-import { Bot as BotData, X as XData } from 'lucide'; // icon data (not components) — MorphIcon needs this, not lucide-react
-import { MorphIcon } from 'morphicons/react';
+import {
+  X, ArrowUp, ArrowDown, ArrowRight, Square, Database, Camera, AlertTriangle, Copy, Check, Maximize2, Minimize2,
+  History, MessageSquarePlus, Mic, Trash2, RotateCcw,
+} from 'lucide-react';
+import { useNavigate } from 'react-router';
+import {
+  SmartBookAiMark, BookDueIcon, BookFineIcon, BookReserveIcon, BookRulesIcon, BookStackIcon, BookPileIcon,
+  BookTaskIcon, SparkIcon,
+} from './ai-experience/smartbook-icons';
+import { cn } from '@/components/ui/utils';
 import { aiService, type ChatMessage, type SystemContext, type PendingAction } from '@/services/ai';
 import { bookService } from '@/services/book';
 import { borrowService } from '@/services/borrow';
 import { stockMovementService } from '@/services/stock-movement';
 import { authService, type AuthUser } from '@/services/auth';
-import { getPrimaryRole } from '@/lib/rbac';
+import { getPrimaryRole, canAccess, ROUTE_ACCESS } from '@/lib/rbac';
+import { customerBorrowService } from '@/services/customer-borrow';
+import { timeAgo } from '@/lib/time-ago';
+import {
+  loadStore, saveStore, upsertActive, startConversation, removeConversation, restoreConversation,
+  type ConversationStore,
+} from '@/lib/chat-history';
+import type { RecordKind } from '@/lib/chat-markdown';
+import { useSpeechInput } from '@/hooks/use-speech-input';
+import { ChatMarkdown, type RecordLinks } from './ai-experience/chat-markdown';
+import { ReaderActions, ReaderDigest, useReaderSnapshot } from './ai-experience/reader-panels';
+import { followUpsFor } from '@/lib/chat-reader';
 import { toast } from 'sonner';
 import { ActionCard } from './ai-action-card';
 import { onChatbotAsk } from '@/lib/chatbot-bus';
@@ -37,6 +55,11 @@ interface UIMessage {
   pendingQuestion?: string;
   chosenBookId?: string | null;
   explainability?: AiExplainability | null;
+  stopped?: boolean;
+  /** The request failed; the reader can send the same question again. */
+  failed?: boolean;
+  /** When the message was written (ms); older saved messages have none. */
+  at?: number;
 }
 
 const DEFAULT_PHOTO_QUESTION = 'Đây là sách gì? Thư viện còn không?';
@@ -45,30 +68,27 @@ const EXPERIENCE_LABEL: Record<string, string> = {
   supplier: 'Trợ lý nhà cung cấp', decision_assistant: 'Trợ lý quản lý', general: 'Trợ lý', anonymous: 'Trợ lý',
 };
 
-// ── Chat history persistence (localStorage, per-user, survives page reload) ───
-
-const CHAT_HISTORY_KEY_PREFIX = 'smartbook_ai_chat_history:';
-const CHAT_HISTORY_MAX_MESSAGES = 40;
-
-function loadStoredMessages(userId: string): UIMessage[] {
+// Saved conversations live in src/lib/chat-history.ts (this browser only, per account).
+function browserStorage(): Storage | null {
   try {
-    const raw = localStorage.getItem(`${CHAT_HISTORY_KEY_PREFIX}${userId}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return window.localStorage;
   } catch {
-    return [];
+    return null;
   }
 }
 
-function saveStoredMessages(userId: string, messages: UIMessage[]): void {
-  try {
-    localStorage.setItem(
-      `${CHAT_HISTORY_KEY_PREFIX}${userId}`,
-      JSON.stringify(messages.slice(-CHAT_HISTORY_MAX_MESSAGES)),
-    );
-  } catch {
-    // localStorage full/unavailable — chat still works, just without persistence.
-  }
+function messageTime(at?: number): string | null {
+  if (!at) return null;
+  const d = new Date(at);
+  const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString()
+    ? time
+    : `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} ${time}`;
+}
+
+function updatedLabel(at: number): string {
+  const ago = timeAgo(new Date(at).toISOString());
+  return /^\d+ (phút|giờ|ngày)$/.test(ago) ? `${ago} trước` : ago;
 }
 
 function getRoleSuggestions(user: AuthUser | null): string[] {
@@ -175,21 +195,47 @@ function getPageSuggestions(pathname: string, user: AuthUser | null, starters?: 
 }
 
 function getWelcomeGreeting(user: AuthUser | null): string {
-  if (!user) return 'Xin chào! Tôi là SmartBook AI 👋';
-  const name = user.full_name || user.username;
-  const roleLabel: Record<string, string> = {
-    ADMIN: 'Admin',
-    WAREHOUSE_MANAGER: 'Quản lý kho',
-    LIBRARIAN: 'Thủ thư',
-    WAREHOUSE_STAFF: 'Nhân viên kho',
-    CUSTOMER: '',
-    SUPPLIER: 'Nhà cung cấp',
-  };
-  const role = getPrimaryRole(user);
-  const label = roleLabel[role] ?? '';
-  return label
-    ? `Xin chào ${label} **${name}**! 👋`
-    : `Xin chào **${name}**! 👋`;
+  return user ? `Chào ${user.full_name || user.username}` : 'Chào bạn';
+}
+
+function getWelcomeIntro(role: string | null, photo: boolean): string {
+  if (role === 'CUSTOMER') {
+    return `Hỏi về sách bạn đang mượn, hạn trả, phí phạt, đặt trước hoặc quy định thư viện.${photo ? ' Gửi ảnh bìa để tìm một cuốn sách.' : ''}`;
+  }
+  if (role === 'SUPPLIER') return 'Hỏi về đơn đặt mua, hóa đơn giao hàng và các khoản giao thiếu.';
+  if (!role) return 'Hỏi về SmartBook và cách mượn sách tại thư viện.';
+  return 'Hỏi về tồn kho, mượn trả và công việc. Mọi hành động AI soạn đều chờ bạn xác nhận trước khi thực hiện.';
+}
+
+/** A topic icon for a suggested question, matched on its words. */
+function suggestionIcon(text: string) {
+  const t = text.toLowerCase();
+  if (/phạt|thanh toán|tiền/.test(t)) return BookFineIcon;
+  if (/hạn/.test(t)) return BookDueIcon;
+  if (/đặt|reservation/.test(t)) return BookReserveIcon;
+  if (/quy định|hướng dẫn|quy trình|tính năng/.test(t)) return BookRulesIcon;
+  if (/kho|nhập|xuất|putaway|picking|po\b/.test(t)) return BookPileIcon;
+  if (/task|công việc|báo cáo|ngoại lệ/.test(t)) return BookTaskIcon;
+  if (/sách/.test(t)) return BookStackIcon;
+  return SparkIcon;
+}
+
+function CopyAnswer({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => navigator.clipboard?.writeText(text).then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 1600);
+      }, () => toast.error('Không sao chép được câu trả lời.'))}
+      aria-label="Sao chép câu trả lời"
+      className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md px-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+    >
+      {copied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Copy className="h-3.5 w-3.5" aria-hidden="true" />}
+      {copied ? 'Đã sao chép' : 'Sao chép'}
+    </button>
+  );
 }
 
 // Risk/status badges, PayloadPreview, and ActionCard now live in ./ai-action-card.tsx
@@ -198,112 +244,10 @@ function getWelcomeGreeting(user: AuthUser | null): string {
 
 function ReportResult({ markdown }: { markdown: string }) {
   return (
-    <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-2 max-h-48 overflow-y-auto">
-      <MessageText text={markdown} />
+    <div className="mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-muted/40 p-3">
+      <ChatMarkdown text={markdown} />
     </div>
   );
-}
-
-// ── MessageText ───────────────────────────────────────────────────────────────
-
-function MessageText({ text }: { text: string }) {
-  const lines = text.split('\n');
-
-  function renderInline(line: string) {
-    const parts = line.split(/\*\*(.*?)\*\*/g);
-    return parts.map((part, i) =>
-      i % 2 === 1 ? (
-        <strong key={i} className="font-semibold">
-          {part}
-        </strong>
-      ) : (
-        part
-      ),
-    );
-  }
-
-  const elements: React.ReactNode[] = [];
-  let listBuffer: { type: 'ul' | 'ol'; items: React.ReactNode[] } | null = null;
-
-  function flushList() {
-    if (!listBuffer) return;
-    const { type, items } = listBuffer;
-    const Tag = type;
-    elements.push(
-      <Tag key={`list-${elements.length}`} className={type === 'ul' ? 'list-disc ml-4 space-y-0.5' : 'list-decimal ml-4 space-y-0.5'}>
-        {items}
-      </Tag>,
-    );
-    listBuffer = null;
-  }
-
-  lines.forEach((line, idx) => {
-    // Heading level 1: # Text
-    if (/^#\s+/.test(line)) {
-      flushList();
-      elements.push(
-        <p key={idx} className="font-semibold text-[12px] mt-2 mb-0.5">
-          {renderInline(line.replace(/^#+\s+/, ''))}
-        </p>,
-      );
-      return;
-    }
-    // Heading level 2: ## Text
-    if (/^##\s+/.test(line)) {
-      flushList();
-      elements.push(
-        <p key={idx} className="font-semibold text-[11px] mt-1.5 mb-0.5 text-gray-600">
-          {renderInline(line.replace(/^#+\s+/, ''))}
-        </p>,
-      );
-      return;
-    }
-    // Unordered list: - item or * item
-    const ulMatch = line.match(/^[-*]\s+(.*)/);
-    if (ulMatch) {
-      if (!listBuffer || listBuffer.type !== 'ul') {
-        flushList();
-        listBuffer = { type: 'ul', items: [] };
-      }
-      listBuffer.items.push(
-        <li key={idx} className="text-[11px] leading-snug">
-          {renderInline(ulMatch[1])}
-        </li>,
-      );
-      return;
-    }
-    // Ordered list: 1. item
-    const olMatch = line.match(/^\d+\.\s+(.*)/);
-    if (olMatch) {
-      if (!listBuffer || listBuffer.type !== 'ol') {
-        flushList();
-        listBuffer = { type: 'ol', items: [] };
-      }
-      listBuffer.items.push(
-        <li key={idx} className="text-[11px] leading-snug">
-          {renderInline(olMatch[1])}
-        </li>,
-      );
-      return;
-    }
-    // Blank line — flush list, add spacer
-    if (line.trim() === '') {
-      flushList();
-      elements.push(<br key={idx} />);
-      return;
-    }
-    // Normal text line
-    flushList();
-    elements.push(
-      <span key={idx} className="block text-[11px] leading-snug">
-        {renderInline(line)}
-      </span>,
-    );
-  });
-
-  flushList();
-
-  return <div className="text-sm leading-relaxed space-y-0.5">{elements}</div>;
 }
 
 // ── System context gathering ──────────────────────────────────────────────────
@@ -418,14 +362,35 @@ async function gatherSystemContext(user: AuthUser | null): Promise<SystemContext
 export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean }) {
   const [currentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<UIMessage[]>(() => loadStoredMessages(currentUser?.id || 'anon'));
+  const [expanded, setExpanded] = useState(false);
+  const userKey = currentUser?.id || 'anon';
+  const [store, setStore] = useState<ConversationStore<UIMessage>>(() => loadStore<UIMessage>(browserStorage(), userKey));
+  const [messages, setMessages] = useState<UIMessage[]>(
+    () => store.conversations.find((c) => c.id === store.activeId)?.messages ?? [],
+  );
+  const [view, setView] = useState<'chat' | 'history'>('chat');
+  const [unread, setUnread] = useState(false);
+  const openRef = useRef(open);
+  openRef.current = open;
+  const navigate = useNavigate();
+  const readerAccount = !!currentUser && getPrimaryRole(currentUser) === 'CUSTOMER';
+  // A reader's loans and fines, fetched each time the chatbox opens.
+  const snapshot = useReaderSnapshot(readerAccount && open);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  // True for the whole /chat/stream request, also after the first token has
+  // replaced the typing indicator (`loading`), so the send button can stop it.
+  const [streaming, setStreaming] = useState(false);
+  const streamingMsgId = useRef<number | null>(null);
   const [contextReady, setContextReady] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(() => messages.length === 0);
   const [systemContext, setSystemContext] = useState<SystemContext | undefined>();
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Follow new text only while the reader is at the bottom; scrolling up stops it.
+  const stickRef = useRef(true);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const messageIdRef = useRef(messages.reduce((highest, message) => Math.max(highest, message.id), 0));
   // The in-flight /chat/stream request: aborted on reset and on unmount so a
   // late reply never lands in a cleared chat and the server stops generating.
@@ -445,8 +410,16 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
   }, [open, caps]);
 
   useEffect(() => {
-    saveStoredMessages(currentUser?.id || 'anon', messages);
-  }, [messages, currentUser?.id]);
+    setStore((s) => upsertActive(s, messages));
+  }, [messages]);
+
+  useEffect(() => {
+    saveStore(browserStorage(), userKey, store);
+  }, [store, userKey]);
+
+  useEffect(() => {
+    if (open) setUnread(false);
+  }, [open]);
 
   const refreshContext = useCallback(async () => {
     try {
@@ -460,16 +433,39 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
   }, [currentUser]);
 
   useEffect(() => {
-    if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, open, loading]);
+    if (open && view === 'chat' && stickRef.current) bottomRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, open, loading, view]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickRef.current = gap < 80;
+    setAwayFromBottom(gap > 160);
+  };
+
+  const scrollToLatest = () => {
+    stickRef.current = true;
+    setAwayFromBottom(false);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  };
 
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  useEffect(() => onChatbotAsk((prompt) => {
-    setInput(prompt);
+  // A page hands over a question (chatbot-bus): asked at once when the page says so
+  // and nothing is in flight, otherwise left in the composer for the user to send.
+  const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
+  const busyRef = useRef(false);
+  useEffect(() => onChatbotAsk((prompt, { send }) => {
     setOpen(true);
+    setView('chat');
+    if (send && !busyRef.current) {
+      void sendRef.current(prompt);
+      return;
+    }
+    setInput(prompt);
     setTimeout(() => inputRef.current?.focus(), 0);
   }), []);
 
@@ -477,16 +473,17 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     return messages.map((m) => ({ role: m.role, content: m.text }));
   }, [messages]);
 
-  const streamReply = async (trimmed: string, image?: TurnImage, addUser = true) => {
+  const streamReply = async (trimmed: string, image?: TurnImage, addUser = true, historyOverride?: ChatMessage[]) => {
     setShowSuggestions(false);
     if (addUser) {
-      const userMsg: UIMessage = { id: ++messageIdRef.current, role: 'user', text: trimmed };
+      const userMsg: UIMessage = { id: ++messageIdRef.current, role: 'user', text: trimmed, at: Date.now() };
+      stickRef.current = true;
       setMessages((prev) => [...prev, userMsg]);
       setInput('');
     }
     setLoading(true);
 
-    const history = buildHistory();
+    const history = historyOverride ?? buildHistory();
     const botMsgId = ++messageIdRef.current;
     // The assistant bubble is only added to `messages` once the first chunk
     // arrives, so the typing indicator (shown while `loading`) isn't doubled
@@ -494,6 +491,8 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     let started = false;
     const controller = new AbortController();
     streamRef.current = controller;
+    streamingMsgId.current = botMsgId;
+    setStreaming(true);
 
     await aiService.chatStream(trimmed, history, systemContext, {
       signal: controller.signal,
@@ -502,7 +501,7 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
         if (!started) {
           started = true;
           setLoading(false);
-          setMessages((prev) => [...prev, { id: botMsgId, role: 'assistant', text: chunk }]);
+          setMessages((prev) => [...prev, { id: botMsgId, role: 'assistant', text: chunk, at: Date.now() }]);
         } else {
           setMessages((prev) =>
             prev.map((m) => (m.id === botMsgId ? { ...m, text: m.text + chunk } : m)),
@@ -525,8 +524,9 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
         setMessages((prev) =>
           started
             ? prev.map((m) => (m.id === botMsgId ? { ...m, ...finalFields } : m))
-            : [...prev, { id: botMsgId, role: 'assistant', ...finalFields }],
+            : [...prev, { id: botMsgId, role: 'assistant', at: Date.now(), ...finalFields }],
         );
+        if (!openRef.current) setUnread(true);
       },
       onError: (err) => {
         setLoading(false);
@@ -537,13 +537,29 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
           : 'AI tạm thời không khả dụng. Các nghiệp vụ thư viện và kho vẫn hoạt động bình thường.';
         setMessages((prev) =>
           started
-            ? prev.map((m) => (m.id === botMsgId ? { ...m, text: errorText } : m))
-            : [...prev, { id: botMsgId, role: 'assistant', text: errorText }],
+            ? prev.map((m) => (m.id === botMsgId ? { ...m, text: errorText, failed: true } : m))
+            : [...prev, { id: botMsgId, role: 'assistant', text: errorText, at: Date.now(), failed: true }],
         );
         toast.error('AI tạm thời không khả dụng');
       },
     });
-    if (streamRef.current === controller) streamRef.current = null;
+    if (streamRef.current === controller) {
+      streamRef.current = null;
+      setStreaming(false);
+    }
+  };
+
+  // Abort is quiet (no onDone), so the partial answer stays and is marked stopped.
+  const stopReply = () => {
+    streamRef.current?.abort();
+    streamRef.current = null;
+    setLoading(false);
+    setStreaming(false);
+    const id = streamingMsgId.current;
+    if (id === null) return;
+    setMessages((prev) => (prev.some((m) => m.id === id)
+      ? prev.map((m) => (m.id === id ? { ...m, stopped: true } : m))
+      : [...prev, { id, role: 'assistant', text: 'Đã dừng trả lời.', stopped: true }]));
   };
 
   const runPhoto = async (question: string) => {
@@ -555,7 +571,7 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     photo.clear();
     const top = rec.candidates[0];
     setMessages((prev) => [...prev, {
-      id: ++messageIdRef.current, role: 'assistant', text: rec.explanation.summary, recognition: rec,
+      id: ++messageIdRef.current, role: 'assistant', text: rec.explanation.summary, recognition: rec, at: Date.now(),
       pendingQuestion: question, chosenBookId: rec.status === 'IDENTIFIED' ? top?.book_id : null,
     }]);
     if (rec.status === 'IDENTIFIED' && top) {
@@ -568,17 +584,33 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
-    if (loading) return;
+    if (loading || streaming) return;
     if (photo.file) {
       const question = trimmed || DEFAULT_PHOTO_QUESTION;
       setShowSuggestions(false);
-      setMessages((prev) => [...prev, { id: ++messageIdRef.current, role: 'user', text: question, hasPhoto: true }]);
+      stickRef.current = true;
+      setMessages((prev) => [...prev, { id: ++messageIdRef.current, role: 'user', text: question, hasPhoto: true, at: Date.now() }]);
       setInput('');
       await runPhoto(question);
       return;
     }
     if (!trimmed) return;
     await streamReply(trimmed, activeImage ? { attachment_id: activeImage.attachment_id, book_id: activeImage.book_id } : undefined);
+  };
+
+  sendRef.current = sendMessage;
+  busyRef.current = loading || streaming;
+
+  const retryAnswer = (assistantId: number) => {
+    if (loading || streaming) return;
+    const at = messages.findIndex((m) => m.id === assistantId);
+    let q = at - 1;
+    while (q >= 0 && messages[q].role !== 'user') q -= 1;
+    if (at < 0 || q < 0) return;
+    const prior = messages.slice(0, q).map((m) => ({ role: m.role, content: m.text }));
+    setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+    stickRef.current = true;
+    void streamReply(messages[q].text, activeImage ? { attachment_id: activeImage.attachment_id, book_id: activeImage.book_id } : undefined, false, prior);
   };
 
   const chooseCandidate = (msgId: number, rec: BookRecognition, candidate: RecognitionCandidate) => {
@@ -617,7 +649,7 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
         {
           id: ++messageIdRef.current,
           role: 'assistant',
-          text: '✅ Hành động đã xác nhận. Xem báo cáo bên dưới.',
+          text: 'Hành động đã được xác nhận. Báo cáo ở bên dưới.',
           action_result: result,
           suggestions: followUpSuggestions,
         },
@@ -626,10 +658,10 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     }
 
     const modeLabelGeneral: Record<string, string> = {
-      real_api: '✅ Đã tạo thật trong hệ thống.',
-      partial: '⚠️ Một phần tạo thành công, một phần thất bại hoặc bị bỏ qua.',
-      draft_only: '📋 Chỉ tạo bản nháp — chưa có bản ghi thật trong hệ thống.',
-      generated: '✅ Hành động đã hoàn thành.',
+      real_api: 'Đã tạo thật trong hệ thống.',
+      partial: 'Một phần tạo thành công, một phần thất bại hoặc bị bỏ qua.',
+      draft_only: 'Chỉ tạo bản nháp, chưa có bản ghi thật trong hệ thống.',
+      generated: 'Hành động đã hoàn thành.',
     };
 
     const modeText = result?.mode ? (modeLabelGeneral[result.mode] ?? '') : '';
@@ -707,301 +739,534 @@ export function AIChatbot({ aboveBottomNav = false }: { aboveBottomNav?: boolean
     ]);
   }, []);
 
-  const handleReset = () => {
+  // Speech fills the composer; it never sends on its own, so the reader can check the words first.
+  const speechBase = useRef('');
+  const speech = useSpeechInput({
+    onText: (text) => setInput(speechBase.current ? `${speechBase.current} ${text}` : text),
+  });
+  const toggleSpeech = () => {
+    if (speech.listening) {
+      speech.stop();
+      return;
+    }
+    speechBase.current = input.trim();
+    speech.start();
+  };
+
+  // Leaving the open conversation: stop the reply in flight and drop what belongs to it.
+  const leaveConversation = () => {
     streamRef.current?.abort();
+    speech.stop();
     setLoading(false);
-    setMessages([]);
+    setStreaming(false);
     setInput('');
-    setShowSuggestions(true);
     setSystemContext(undefined);
     setContextReady(true);
     setActiveImage(null);
     photo.clear();
+    stickRef.current = true;
+    setAwayFromBottom(false);
+  };
+
+  // The current conversation stays in the history; a new one starts.
+  const handleReset = () => {
+    leaveConversation();
+    setMessages([]);
+    setShowSuggestions(true);
+    setStore((s) => startConversation(s));
+    setView('chat');
+  };
+
+  const openConversation = (id: string) => {
+    const conversation = store.conversations.find((c) => c.id === id);
+    if (!conversation) return;
+    leaveConversation();
+    setStore((s) => ({ ...s, activeId: id }));
+    setMessages(conversation.messages);
+    messageIdRef.current = conversation.messages.reduce((highest, m) => Math.max(highest, m.id), 0);
+    setShowSuggestions(conversation.messages.length === 0);
+    setView('chat');
+  };
+
+  const deleteConversation = (id: string) => {
+    const removed = store.conversations.find((c) => c.id === id);
+    if (!removed) return;
+    if (id === store.activeId) {
+      leaveConversation();
+      setMessages([]);
+      setShowSuggestions(true);
+    }
+    setStore((s) => removeConversation(s, id));
+    toast('Đã xóa cuộc trò chuyện', {
+      action: { label: 'Hoàn tác', onClick: () => setStore((s) => restoreConversation(s, removed)) },
+    });
   };
 
   const welcomeVisible = messages.length === 0 && !loading;
+  const role = currentUser ? getPrimaryRole(currentUser) : null;
+  const isReader = role === 'CUSTOMER';
+
+  // Record codes in answers link to the record; staff need the borrow pages to follow them.
+  const recordList = (kind: RecordKind) => (kind === 'loan'
+    ? (isReader ? '/customer/loans' : '/borrow/loans')
+    : (isReader ? '/customer/reservations' : '/borrow/reservations'));
+  const records: RecordLinks | undefined = isReader || canAccess(currentUser, ROUTE_ACCESS.borrowRead)
+    ? {
+        href: recordList,
+        open: (kind, code) => {
+          const list = recordList(kind);
+          if (kind !== 'loan') {
+            navigate(list);
+            return;
+          }
+          const lookup: Promise<Array<{ id: string; loan_number?: string }> | undefined> = isReader
+            ? customerBorrowService.getMyLoans({ pageSize: 100 }).then((r) => r?.data)
+            : borrowService.getLoans({ q: code, pageSize: 5 }).then((r) => r?.data);
+          lookup
+            .then((rows) => {
+              const hit = rows?.find((loan) => loan.loan_number === code);
+              navigate(hit ? `${list}/${hit.id}` : list);
+            })
+            .catch(() => navigate(list));
+        },
+      }
+    : undefined;
+  // Readers get the answer only: the evidence trail and source names are for staff.
+  const showEvidence = role !== null && role !== 'CUSTOMER';
+  // gatherSystemContext is a no-op for these roles (the backend reads their own data).
+  const usesFallbackContext = !role || !['CUSTOMER', 'WAREHOUSE_STAFF', 'SUPPLIER'].includes(role);
+  const assistantLabel = caps
+    ? EXPERIENCE_LABEL[caps.experience] ?? 'Trợ lý'
+    : role === 'CUSTOMER' ? EXPERIENCE_LABEL.reader : 'Trợ lý';
+  const busy = loading || streaming;
+
+  // The composer grows with its text up to about six lines, then scrolls.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input, open, expanded]);
+
+  const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id;
+  const askedQuestions = messages.filter((m) => m.role === 'user').map((m) => m.text);
+  const questionBefore = (index: number) => {
+    for (let i = index - 1; i >= 0; i -= 1) if (messages[i].role === 'user') return messages[i].text;
+    return '';
+  };
+
+  const iconButton = 'grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:bg-muted/80 focus-visible:outline-2 focus-visible:outline-ring';
+  const column = expanded ? 'mx-auto w-full max-w-[640px]' : 'w-full';
+  const panelSize = expanded
+    ? 'h-[min(820px,calc(100dvh-10rem))] w-[min(720px,calc(100vw-2rem))] max-sm:fixed max-sm:inset-0 max-sm:z-[60] max-sm:h-dvh max-sm:w-full max-sm:rounded-none'
+    : 'h-[620px] max-h-[calc(100dvh-10rem)] w-[400px] max-w-[calc(100vw-2rem)]';
 
   return (
     <div className={`fixed right-4 z-50 flex flex-col items-end gap-3 ${aboveBottomNav ? 'bottom-20 lg:bottom-4' : 'bottom-4'}`}>
       {open && (
-        <div className="w-[400px] max-w-[calc(100vw-2rem)] h-[580px] max-h-[calc(100dvh-10rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <section
+          aria-label="Trợ lý SmartBook AI"
+          className={cn(
+            'flex flex-col overflow-hidden rounded-[22px] bg-card text-card-foreground shadow-2xl shadow-foreground/15 ring-1 ring-foreground/[0.07] selection:bg-primary/15 animate-in fade-in slide-in-from-bottom-3 duration-200 motion-reduce:animate-none dark:ring-foreground/10',
+            panelSize,
+          )}
+        >
           {/* Header */}
-          <div className="bg-indigo-600 px-4 py-3 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                <Bot size={16} className="text-white" />
-              </div>
-              <div>
-                <p className="text-white text-sm font-semibold leading-none">
-                  {caps ? `SmartBook AI · ${EXPERIENCE_LABEL[caps.experience] ?? 'Trợ lý'}` : 'SmartBook AI Agent'}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  {contextReady ? (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      <span className="text-emerald-200 text-[10px]">
-                        AI sẽ truy xuất dữ liệu khi bạn đặt câu hỏi
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                      <span className="text-amber-200 text-[10px]">
-                        Đang nạp fallback context...
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
+          <header className="flex shrink-0 items-center gap-2.5 border-b border-border/70 py-2.5 pl-3.5 pr-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-brand-ink dark:ring-1 dark:ring-brand-mist/20">
+              <SmartBookAiMark tone="tile" busy={busy} className="h-7 w-7" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-[16px] font-semibold leading-5 text-foreground">SmartBook AI</h2>
+              <p className="truncate text-[12px] leading-4 text-muted-foreground" aria-live="polite">
+                {busy ? 'Đang tra cứu…' : contextReady ? assistantLabel : 'Đang nạp dữ liệu tổng quan…'}
+              </p>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => void refreshContext()}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                title="Nạp fallback context"
-              >
-                <Database size={13} />
+            {usesFallbackContext && (
+              <button type="button" onClick={() => void refreshContext()} className={iconButton}
+                title="Nạp fallback context" aria-label="Nạp dữ liệu tổng quan cho AI">
+                <Database className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button
-                onClick={handleReset}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-                title="Làm mới phiên chat"
-              >
-                <RotateCcw size={13} />
+            )}
+            <button type="button" onClick={() => setView((v) => (v === 'history' ? 'chat' : 'history'))}
+              className={cn(iconButton, view === 'history' && 'bg-muted text-foreground')}
+              aria-pressed={view === 'history'} aria-label="Lịch sử trò chuyện" title="Lịch sử trò chuyện">
+              <History className="h-4 w-4" aria-hidden="true" />
+            </button>
+            {(messages.length > 0 || view === 'history') && (
+              <button type="button" onClick={handleReset} className={iconButton}
+                title="Làm mới phiên chat" aria-label="Bắt đầu cuộc trò chuyện mới">
+                <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button
-                onClick={() => setOpen(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
+            )}
+            <button type="button" onClick={() => setExpanded((v) => !v)} className={iconButton}
+              aria-pressed={expanded} aria-label={expanded ? 'Thu nhỏ khung chat' : 'Phóng to khung chat'}
+              title={expanded ? 'Thu nhỏ' : 'Phóng to'}>
+              {expanded ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
+            </button>
+            <button type="button" onClick={() => setOpen(false)} className={iconButton} aria-label="Đóng trợ lý">
+              <X className="h-[18px] w-[18px]" aria-hidden="true" />
+            </button>
+          </header>
 
-          {/* Messages area */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-slate-50">
-            {/* Welcome state */}
-            {welcomeVisible && (
-              <div className="flex flex-col items-center justify-center h-full gap-4 px-2">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center">
-                  <Sparkles size={22} className="text-indigo-600" />
-                </div>
-                <div className="text-center">
-                  <div className="text-[14px] font-semibold text-foreground">
-                    <MessageText text={getWelcomeGreeting(currentUser)} />
-                  </div>
-                  <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed max-w-[300px]">
-                    Tôi có thể truy xuất dữ liệu thời gian thực và tạo các hành động cần xác nhận của bạn.
+          {/* Conversation, or the saved conversations */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div ref={scrollRef} onScroll={handleScroll}
+            className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-5 [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin]">
+            {view === 'history' ? (
+              <div className={column}>
+                <div className="px-1">
+                  <h3 className="font-display text-[20px] font-medium leading-7 text-foreground">Lịch sử trò chuyện</h3>
+                  <p className="mt-0.5 text-[12.5px] leading-5 text-muted-foreground">
+                    Lưu trên trình duyệt này cho tài khoản của bạn, tối đa 20 cuộc gần nhất.
                   </p>
                 </div>
-                {showSuggestions && (() => {
-                  const starters = caps?.starter_questions;
-                  const suggestions = getPageSuggestions(window.location.pathname, currentUser, starters);
-                  const isPageSpecific = suggestions !== starters && suggestions !== getRoleSuggestions(currentUser);
-                  return (
-                    <div className="w-full space-y-1.5">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-1">
-                        {isPageSpecific ? 'Gợi ý cho trang này' : 'Gợi ý nhanh'}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(suggestions || []).map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => void sendMessage(s)}
-                            disabled={loading}
-                            className="px-2.5 py-1.5 rounded-lg bg-white border border-indigo-100 text-[11px] text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {s}
+                {store.conversations.length === 0 ? (
+                  <p className="mt-4 rounded-2xl border border-dashed border-border px-4 py-6 text-center text-[13.5px] leading-6 text-muted-foreground">
+                    Chưa có cuộc trò chuyện nào. Câu hỏi bạn gửi sẽ được lưu ở đây.
+                  </p>
+                ) : (
+                  <ul className="mt-4 overflow-hidden rounded-2xl border border-border">
+                    {store.conversations.map((c) => {
+                      const current = c.id === store.activeId;
+                      return (
+                        <li key={c.id} className="group/row flex items-stretch border-b border-border last:border-b-0">
+                          <button type="button" onClick={() => openConversation(c.id)} aria-current={current ? 'true' : undefined}
+                            className={cn('min-w-0 flex-1 cursor-pointer px-4 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring',
+                              current && 'bg-primary/[0.06]')}>
+                            <span className="line-clamp-2 text-[14px] leading-5 text-foreground">{c.title}</span>
+                            <span className="mt-1 flex items-center gap-2 text-[12px] leading-4 text-muted-foreground">
+                              <span>{updatedLabel(c.updatedAt)}</span>
+                              <span aria-hidden="true">/</span>
+                              <span>{c.messages.length} tin nhắn</span>
+                              {current && <span className="font-medium text-primary">Đang mở</span>}
+                            </span>
                           </button>
+                          <button type="button" onClick={() => deleteConversation(c.id)}
+                            aria-label={`Xóa cuộc trò chuyện: ${c.title}`} title="Xóa"
+                            className="grid w-11 shrink-0 cursor-pointer place-items-center text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring">
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : (
+            <div className={column}>
+              {welcomeVisible && (
+                <div className="flex flex-col gap-6">
+                  <div className="px-1">
+                    <p className="text-balance font-display text-[26px] font-medium leading-[1.15] tracking-[-0.015em] text-foreground">
+                      {getWelcomeGreeting(currentUser)},<br />hôm nay bạn cần tìm gì?
+                    </p>
+                    <p className="mt-2.5 text-[14px] leading-6 text-muted-foreground">
+                      {getWelcomeIntro(role, !!caps?.multimodal.enabled)}
+                    </p>
+                  </div>
+                  {readerAccount && (
+                    <ReaderDigest snapshot={snapshot} onAsk={(q) => void sendMessage(q)} disabled={loading} />
+                  )}
+                  {showSuggestions && (() => {
+                    const starters = caps?.starter_questions;
+                    const suggestions = getPageSuggestions(window.location.pathname, currentUser, starters) ?? [];
+                    const fallback = starters && starters.length > 0 ? starters : getRoleSuggestions(currentUser);
+                    const isPageSpecific = suggestions[0] !== fallback[0];
+                    return (
+                      <div>
+                        <p className="mb-2 px-1 text-[12.5px] font-medium text-muted-foreground">
+                          {isPageSpecific ? 'Gợi ý cho trang này' : 'Bạn có thể hỏi'}
+                        </p>
+                        <ul className="overflow-hidden rounded-2xl border border-border">
+                          {suggestions.map((s) => {
+                            const Icon = suggestionIcon(s);
+                            return (
+                              <li key={s} className="border-b border-border last:border-b-0">
+                                <button
+                                  type="button"
+                                  onClick={() => void sendMessage(s)}
+                                  disabled={loading}
+                                  className="group flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left text-[14px] leading-5 text-foreground transition-colors hover:bg-muted/60 active:bg-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                                  <span className="flex-1">{s}</span>
+                                  <ArrowRight className="h-4 w-4 shrink-0 -translate-x-1 text-primary opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none" aria-hidden="true" />
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              <div className="space-y-6">
+                {messages.map((msg, index) => msg.role === 'user' ? (
+                  <div key={msg.id} className="ml-auto w-fit max-w-[85%] animate-in fade-in slide-in-from-bottom-1 duration-200 motion-reduce:animate-none">
+                    <div className="rounded-[18px] rounded-br-md bg-muted px-3.5 py-2 text-foreground">
+                      {msg.hasPhoto && (
+                        <span className="mb-1 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                          <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                          Kèm ảnh bìa sách
+                        </span>
+                      )}
+                      <ChatMarkdown text={msg.text} />
+                    </div>
+                    {messageTime(msg.at) && (
+                      <time dateTime={new Date(msg.at!).toISOString()} className="mt-1 block pr-1 text-right text-[11px] leading-4 text-muted-foreground">
+                        {messageTime(msg.at)}
+                      </time>
+                    )}
+                  </div>
+                ) : (
+                  <div key={msg.id} className="flex gap-3 animate-in fade-in duration-300 motion-reduce:animate-none">
+                    <SmartBookAiMark className="-mt-1 h-7 w-7 shrink-0" />
+                    <div className="flex min-w-0 flex-1 flex-col items-start gap-2.5">
+                      <div className={cn('flex w-full gap-2', msg.failed ? 'text-muted-foreground' : 'text-foreground')}>
+                        {msg.failed && <AlertTriangle className="mt-[5px] h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" aria-hidden="true" />}
+                        <div className="min-w-0 flex-1">
+                        <ChatMarkdown text={msg.text} records={records} onNavigate={navigate}
+                          caret={streaming && streamingMsgId.current === msg.id} />
+                        </div>
+                      </div>
+                      {msg.stopped && msg.text !== 'Đã dừng trả lời.' && <p className="text-[12px] text-muted-foreground">Đã dừng trả lời.</p>}
+
+                      {msg.recognition && (
+                        <BookRecognitionCard recognition={msg.recognition} chosenBookId={msg.chosenBookId}
+                          onChoose={(c) => chooseCandidate(msg.id, msg.recognition!, c)}
+                          onRetake={() => attachButtonRef.current?.click()} />
+                      )}
+
+                      {showEvidence && !msg.recognition && <EvidencePanel explainability={msg.explainability} />}
+
+                      {msg.pending_action && (
+                        <div className="w-full">
+                          <ActionCard
+                            action={msg.pending_action}
+                            onConfirmed={handleActionConfirmed}
+                            onCancelled={handleActionCancelled}
+                          />
+                        </div>
+                      )}
+
+                      {msg.action_result?.report_markdown && <ReportResult markdown={msg.action_result.report_markdown} />}
+
+                      {msg.retrieval_warnings && msg.retrieval_warnings.length > 0 && (
+                        <ul className="w-full space-y-1">
+                          {msg.retrieval_warnings.slice(0, 2).map((w, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
+                              <AlertTriangle className="mt-[3px] h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                              {w}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {showEvidence && msg.context_sources && msg.context_sources.length > 0 && (() => {
+                        const okSources = msg.context_sources
+                          .filter((s: any) => s.status === 'ok')
+                          .map((s: any) => s.name as string);
+                        return okSources.length > 0 ? (
+                          <p className="text-[12px] text-muted-foreground">Nguồn: {okSources.join(', ')}</p>
+                        ) : null;
+                      })()}
+
+                      {(() => {
+                        // Only the latest answer offers actions and follow-ups: older ones may be out of date.
+                        if (msg.id !== lastAssistantId || busy || msg.failed || msg.stopped) return null;
+                        const question = questionBefore(index);
+                        return (
+                          <>
+                            {readerAccount && (
+                              <ReaderActions snapshot={snapshot} text={msg.text} onNavigate={navigate}
+                                aboutFines={msg.intent === 'FINE_SUMMARY_QUERY' || /phạt/i.test(question)} />
+                            )}
+                            {!msg.pending_action && !msg.recognition && !(msg.suggestions?.length) && (() => {
+                              const next = followUpsFor({ reader: readerAccount, intent: msg.intent, question, asked: askedQuestions });
+                              return next.length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5" aria-label="Hỏi tiếp">
+                                  {next.map((s) => (
+                                    <button key={s} type="button" onClick={() => void sendMessage(s)}
+                                      className="cursor-pointer rounded-full border border-border px-3 py-1.5 text-left text-[13px] leading-5 text-foreground transition-colors hover:border-primary/40 hover:text-primary active:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+                                      {s}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()}
+                          </>
+                        );
+                      })()}
+
+                      {!(streaming && streamingMsgId.current === msg.id) && (
+                        <div className="-ml-1.5 flex items-center gap-1">
+                          {(msg.failed || msg.stopped) && msg.id === lastAssistantId && !busy && !messages[index - 1]?.hasPhoto && (
+                            <button type="button" onClick={() => retryAnswer(msg.id)}
+                              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md px-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/10 active:bg-primary/15 focus-visible:outline-2 focus-visible:outline-ring">
+                              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                              Thử lại
+                            </button>
+                          )}
+                          {!msg.recognition && !msg.stopped && !msg.failed && <CopyAnswer text={msg.text} />}
+                          {messageTime(msg.at) && (
+                            <time dateTime={new Date(msg.at!).toISOString()} className="px-1.5 text-[11px] leading-4 text-muted-foreground">
+                              {messageTime(msg.at)}
+                            </time>
+                          )}
+                        </div>
+                      )}
+
+                      {msg.suggestions && msg.suggestions.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.suggestions.map((s) => (
+                            <button key={s} type="button" onClick={() => void sendMessage(s)} disabled={busy}
+                              className="cursor-pointer rounded-full border border-border px-3 py-1.5 text-left text-[13px] leading-5 text-foreground transition-colors hover:border-primary/40 hover:text-primary active:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50">
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Looking things up: the shape of the answer that is coming */}
+                {loading && (
+                  <div className="flex gap-3" role="status">
+                    <SmartBookAiMark busy className="-mt-1 h-7 w-7 shrink-0" />
+                    <div className="flex-1 pt-0.5">
+                      <p className="text-[13px] leading-5 text-muted-foreground">
+                        {photo.phase === 'working' && photo.stage ? STAGE_LABEL[photo.stage] : 'Đang tra cứu dữ liệu…'}
+                      </p>
+                      <div className="mt-2.5 space-y-2" aria-hidden="true">
+                        {['w-[92%]', 'w-[76%]', 'w-[54%]'].map((w) => (
+                          <div key={w} className={cn('h-2.5 animate-pulse rounded-full bg-muted motion-reduce:animate-none', w)} />
                         ))}
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* Messages */}
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                    <Sparkles size={12} className="text-indigo-600" />
                   </div>
                 )}
-                <div className={`max-w-[88%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div
-                    className={`px-3 py-2 rounded-2xl ${
-                      msg.role === 'user'
-                        ? 'bg-indigo-600 text-white rounded-br-sm'
-                        : 'bg-white text-gray-700 shadow-sm border border-gray-100 rounded-bl-sm'
-                    }`}
-                  >
-                    {msg.hasPhoto && <span className="mb-0.5 block text-[10px] opacity-80">📷 Kèm ảnh bìa sách</span>}
-                    <MessageText text={msg.text} />
-                  </div>
-
-                  {msg.role === 'assistant' && msg.recognition && (
-                    <BookRecognitionCard recognition={msg.recognition} chosenBookId={msg.chosenBookId}
-                      onChoose={(c) => chooseCandidate(msg.id, msg.recognition!, c)}
-                      onRetake={() => attachButtonRef.current?.click()} />
-                  )}
-
-                  {msg.role === 'assistant' && !msg.recognition && <EvidencePanel explainability={msg.explainability} />}
-
-                  {/* Action card — only on assistant messages */}
-                  {msg.role === 'assistant' && msg.pending_action && (
-                    <div className="w-full">
-                      <ActionCard
-                        action={msg.pending_action}
-                        onConfirmed={handleActionConfirmed}
-                        onCancelled={handleActionCancelled}
-                      />
-                    </div>
-                  )}
-
-                  {/* Report result */}
-                  {msg.role === 'assistant' && msg.action_result?.report_markdown && (
-                    <div className="w-full">
-                      <ReportResult markdown={msg.action_result.report_markdown} />
-                    </div>
-                  )}
-
-                  {/* Retrieval warnings */}
-                  {msg.role === 'assistant' && msg.retrieval_warnings && msg.retrieval_warnings.length > 0 && (
-                    <div className="mt-1 space-y-0.5 w-full">
-                      {msg.retrieval_warnings.slice(0, 2).map((w, i) => (
-                        <p key={i} className="text-[10px] text-amber-500">⚠ {w}</p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Data sources */}
-                  {msg.role === 'assistant' && msg.context_sources && msg.context_sources.length > 0 && (() => {
-                    const okSources = msg.context_sources
-                      .filter((s: any) => s.status === 'ok')
-                      .map((s: any) => s.name as string);
-                    return okSources.length > 0 ? (
-                      <p className="text-[9px] text-gray-400 mt-0.5">
-                        Nguồn: {okSources.join(', ')}
-                      </p>
-                    ) : null;
-                  })()}
-
-                  {/* Follow-up suggestion chips */}
-                  {msg.role === 'assistant' && msg.suggestions && msg.suggestions.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {msg.suggestions.map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => void sendMessage(s)}
-                          disabled={loading}
-                          className="px-2.5 py-1 rounded-lg bg-white border border-indigo-100 text-[11px] text-indigo-700 font-medium hover:bg-indigo-50 hover:border-indigo-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
-            ))}
-
-            {/* Typing indicator */}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center mr-2 shrink-0">
-                  <Sparkles size={12} className="text-indigo-600" />
-                </div>
-                <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-1.5">
-                  <Zap size={12} className="text-indigo-400 animate-pulse" />
-                  <span className="text-[11px] text-muted-foreground" aria-live="polite">
-                    {photo.phase === 'working' && photo.stage ? STAGE_LABEL[photo.stage] : 'Đang phân tích...'}
-                  </span>
-                  {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    />
-                  ))}
-                </div>
-              </div>
+              <div ref={bottomRef} />
+            </div>
             )}
-            <div ref={bottomRef} />
+          </div>
+          {view === 'chat' && awayFromBottom && (
+            <button type="button" onClick={scrollToLatest}
+              className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background shadow-md shadow-foreground/20 transition-opacity hover:opacity-90 active:opacity-80 animate-in fade-in slide-in-from-bottom-1 duration-150 motion-reduce:animate-none focus-visible:outline-2 focus-visible:outline-ring">
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+              Tin mới nhất
+            </button>
+          )}
           </div>
 
-          {/* Context status bar */}
+          {/* Fallback context summary (staff only: the only roles that load it) */}
           {contextReady && systemContext?.summary && (
-            <div className="px-3 py-1.5 bg-indigo-50/60 border-t border-indigo-100/50 flex items-center gap-3 text-[10px] text-indigo-600 shrink-0">
-              <span>📚 {systemContext.summary.totalBooks} sách</span>
-              <span>📖 {systemContext.summary.activeLoans} đang mượn</span>
+            <p className="shrink-0 border-t border-border bg-muted/40 px-4 py-1.5 text-[12px] tabular-nums text-muted-foreground">
+              {systemContext.summary.totalBooks} đầu sách, {systemContext.summary.activeLoans} đang mượn
               {systemContext.summary.overdueLoans > 0 && (
-                <span className="text-rose-600">
-                  ⚠️ {systemContext.summary.overdueLoans} quá hạn
-                </span>
+                <>, <span className="font-medium text-destructive">{systemContext.summary.overdueLoans} quá hạn</span></>
               )}
-            </div>
+            </p>
           )}
 
           {activeImage?.title && !photo.file && (
-            <div className="mx-3 mb-0 mt-2 flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] text-indigo-800">
-              <span className="truncate">Đang hỏi về sách trong ảnh: <strong>{activeImage.title}</strong></span>
+            <div className={cn('mt-2 flex items-center gap-2 self-center rounded-xl bg-muted px-2.5 py-1 text-[12px] text-foreground', expanded ? 'w-[calc(100%-1.5rem)] max-w-[640px]' : 'mx-3 self-stretch')}>
+              <Camera className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+              <span className="truncate">Đang hỏi về: <strong className="font-semibold">{activeImage.title}</strong></span>
               <button type="button" onClick={() => setActiveImage(null)} aria-label="Ngừng hỏi về sách trong ảnh"
-                className="ml-auto grid h-6 w-6 shrink-0 cursor-pointer place-items-center rounded hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-indigo-500">
-                <X size={12} aria-hidden="true" />
+                className="ml-auto grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
           )}
           <PhotoPreview photo={photo} onReplace={() => attachButtonRef.current?.click()}
             onRetry={() => void runPhoto(lastPhotoQuestion.current || DEFAULT_PHOTO_QUESTION)} />
 
-          {/* Footer Input */}
-          <div className="px-3 py-3 border-t border-gray-100 bg-white flex items-center gap-2 shrink-0">
-            {caps?.multimodal.enabled && (
-              <PhotoAttachButton photo={photo} maxBytes={caps.multimodal.max_bytes} notice={caps.multimodal.notice}
-                disabled={loading} buttonRef={attachButtonRef} />
-            )}
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  void sendMessage(input);
-                }
-              }}
-              placeholder={photo.file ? 'Hỏi về sách trong ảnh (để trống để nhận diện)…' : 'Hỏi về sách, tồn kho, hoặc tạo hành động...'}
-              aria-label="Câu hỏi cho trợ lý AI"
-              disabled={loading}
-              className="flex-1 text-sm bg-slate-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-            />
-            <button
-              onClick={() => void sendMessage(input)}
-              disabled={(!input.trim() && !photo.file) || loading}
-              aria-label="Gửi"
-              className="w-9 h-9 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg transition-colors shrink-0"
-            >
-              <Send size={15} />
-            </button>
+          {/* Composer */}
+          <div className={cn('shrink-0 px-3 pb-2.5 pt-2', view === 'history' && 'hidden')}>
+            <div className={column}>
+              <div className="rounded-2xl border border-input bg-background transition-[border-color,box-shadow] duration-200 focus-within:border-primary/50 focus-within:shadow-md focus-within:shadow-primary/10">
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    // isComposing: Enter that commits a Vietnamese IME syllable must not send.
+                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      void sendMessage(input);
+                    }
+                  }}
+                  placeholder={photo.file ? 'Hỏi về sách trong ảnh, hoặc để trống để nhận diện…' : speech.listening ? 'Hãy nói câu hỏi của bạn…' : 'Hỏi SmartBook AI…'}
+                  aria-label="Câu hỏi cho trợ lý AI"
+                  disabled={loading}
+                  className="block max-h-[160px] min-h-[44px] w-full resize-none bg-transparent px-3.5 pb-1 pt-3 text-[14px] leading-6 text-foreground caret-primary placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
+                />
+                <div className="flex items-center justify-between gap-2 px-1.5 pb-1.5">
+                  <div className="flex items-center gap-0.5">
+                    {caps?.multimodal.enabled && (
+                      <PhotoAttachButton photo={photo} maxBytes={caps.multimodal.max_bytes} notice={caps.multimodal.notice}
+                        disabled={busy} buttonRef={attachButtonRef} className="h-8 w-8" />
+                    )}
+                    {speech.supported && (
+                      <button type="button" onClick={toggleSpeech} disabled={loading}
+                        aria-pressed={speech.listening}
+                        aria-label={speech.listening ? 'Dừng nói' : 'Nói câu hỏi'}
+                        title={speech.listening ? 'Dừng nói' : 'Nói câu hỏi (trình duyệt chuyển giọng nói thành chữ)'}
+                        className={cn('relative grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40',
+                          speech.listening ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+                        {speech.listening && (
+                          <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-lg bg-primary/15 motion-reduce:animate-none" />
+                        )}
+                        <Mic className="relative h-[18px] w-[18px]" aria-hidden="true" />
+                      </button>
+                    )}
+                    {speech.listening && (
+                      <span className="pl-1 text-[12px] text-primary" aria-live="polite">Đang nghe…</span>
+                    )}
+                  </div>
+                  {streaming ? (
+                    <button type="button" onClick={stopReply} aria-label="Dừng trả lời" title="Dừng trả lời"
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-foreground text-background transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none">
+                      <Square className="h-3 w-3 fill-current" aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => void sendMessage(input)}
+                      disabled={(!input.trim() && !photo.file) || loading} aria-label="Gửi"
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full bg-primary text-primary-foreground transition-[transform,opacity] hover:bg-primary/90 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground motion-reduce:transition-none">
+                      <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="mt-2 text-center text-[11px] leading-4 text-muted-foreground">
+                SmartBook AI có thể nhầm. Hãy kiểm tra lại thông tin quan trọng.
+              </p>
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Floating Toggle Button */}
+      {/* Floating toggle; hidden on phones while the expanded panel fills the screen */}
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 flex items-center justify-center text-white transition-all active:scale-95"
-        aria-label="Mở chatbot AI"
+        aria-label={open ? 'Đóng chatbot AI' : unread ? 'Mở chatbot AI, có câu trả lời mới' : 'Mở chatbot AI'}
+        aria-expanded={open}
+        className={cn(
+          'relative grid h-14 w-14 cursor-pointer place-items-center rounded-full bg-brand-ink text-brand-lamp shadow-lg shadow-brand-ink/35 transition-transform dark:ring-1 dark:ring-brand-mist/25 duration-200 hover:-translate-y-0.5 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none',
+          open && expanded && 'max-sm:hidden',
+        )}
       >
-        <MorphIcon icon={open ? XData : BotData} size={open ? 22 : 24} />
-        {!open && (
-          <span className="absolute inset-0 rounded-full bg-indigo-500 animate-ping opacity-20" />
+        <SmartBookAiMark tone="tile" className={cn('absolute h-10 w-10 transition-[opacity,transform] duration-200 motion-reduce:transition-none', open ? 'rotate-[-30deg] scale-75 opacity-0' : 'opacity-100')} />
+        <X className={cn('absolute h-[22px] w-[22px] transition-[opacity,transform] duration-200 motion-reduce:transition-none', open ? 'opacity-100' : 'rotate-[30deg] scale-75 opacity-0')} aria-hidden="true" />
+        {unread && !open && (
+          <span aria-hidden="true" className="absolute right-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-brand-lamp ring-[3px] ring-background animate-in zoom-in duration-200 motion-reduce:animate-none" />
         )}
       </button>
     </div>

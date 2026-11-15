@@ -124,6 +124,15 @@ const CONFIDENCE_TONE: Record<string, string> = {
   THẤP: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-400',
 };
 
+const PRIORITY_LABEL: Record<string, string> = { HIGH: 'Ưu tiên cao', MEDIUM: 'Ưu tiên vừa', LOW: 'Ưu tiên thấp' };
+
+/** The backend sends the confidence level in capitals ("TRUNG BÌNH", "QUY TẮC"). */
+export function confidenceLabel(level?: string | null): string {
+  if (!level) return 'Độ tin cậy: chưa rõ';
+  const words = level.toLocaleLowerCase('vi-VN');
+  return words === 'quy tắc' ? 'Theo quy tắc cố định' : `Độ tin cậy ${words}`;
+}
+
 function RecommendationCard({ rec }: { rec: AiRecommendation }) {
   const [open, setOpen] = useState(false);
   const tone = CONFIDENCE_TONE[rec.confidence?.level] ?? 'border-border bg-muted/40 text-muted-foreground';
@@ -140,11 +149,11 @@ function RecommendationCard({ rec }: { rec: AiRecommendation }) {
         <div className="flex shrink-0 flex-wrap items-center gap-1.5">
           {rec.priority && (
             <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-              Ưu tiên: {rec.priority}
+              {PRIORITY_LABEL[String(rec.priority).toUpperCase()] ?? `Ưu tiên: ${rec.priority}`}
             </span>
           )}
           <span className={`rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${tone}`} title={rec.confidence?.basis}>
-            Độ tin cậy dữ liệu: {rec.confidence?.level ?? '—'}
+            {confidenceLabel(rec.confidence?.level)}
           </span>
         </div>
       </div>
@@ -164,7 +173,7 @@ function RecommendationCard({ rec }: { rec: AiRecommendation }) {
         aria-expanded={open}
         className="mt-2.5 flex cursor-pointer items-center gap-1 rounded text-[12px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
       >
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
         Lý do, rủi ro và nguồn dữ liệu
       </button>
       {open && (
@@ -341,7 +350,7 @@ export function CopilotExplanation({ explanation }: { explanation?: AiExplanatio
                 {explanation.alternatives.map((alt) => (
                   <li key={alt.option} className="text-[12.5px] leading-relaxed">
                     <span className="font-medium text-foreground">{alt.option}</span>
-                    <span className="text-foreground"> — {alt.outcome}</span>
+                    <span className="text-foreground">: {alt.outcome}</span>
                     <span className="block text-muted-foreground">{alt.tradeoff}</span>
                   </li>
                 ))}

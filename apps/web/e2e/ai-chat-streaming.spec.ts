@@ -94,6 +94,7 @@ test.describe('AI chat streaming and cancellation', () => {
     await expect(page.getByText(/Kho HN/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Gửi lại câu hỏi' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Gửi câu hỏi' })).toBeVisible();
-    expect(await page.evaluate(() => window.__aborted)).toBe(true);
+    // The stopped state shows at once; the stub notes the abort on its next 300 ms tick.
+    await expect.poll(() => page.evaluate(() => window.__aborted)).toBe(true);
   });
 });

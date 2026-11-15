@@ -1,13 +1,16 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowUp, Lightbulb, Square } from 'lucide-react';
+import { ArrowUp, Lightbulb, Mic, Square } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from '@/lib/gsap';
 import type { SuggestionGroup } from './model';
+import { useSpeechInput } from '@/hooks/use-speech-input';
+import { cn } from '@/components/ui/utils';
 
 // The question box. Typing stays possible while an answer streams (the next
 // question can be drafted), sending does not: one request at a time, as the
 // chat flow requires. The only attachment is a book-cover photo (Phase F,
-// /vision/identify); no voice / web-search buttons - the API has none.
+// /vision/identify). Speech goes through the browser's own recogniser and only
+// fills the box; the question is still sent by the person.
 
 const MAX_HEIGHT = 200;
 
@@ -34,6 +37,16 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const speechBase = useRef('');
+  const speech = useSpeechInput({ onText: (text) => onChange(speechBase.current ? `${speechBase.current} ${text}` : text) });
+  const toggleSpeech = () => {
+    if (speech.listening) {
+      speech.stop();
+      return;
+    }
+    speechBase.current = value.trim();
+    speech.start();
+  };
   const canSend = !sending && !blocked && (value.trim().length > 0 || Boolean(allowEmpty));
 
   // Grow with the text up to MAX_HEIGHT, then scroll inside: no layout jump
@@ -84,6 +97,17 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
         <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5">
           <div className="flex min-w-0 items-center gap-1">
             {attachSlot}
+            {speech.supported && (
+              <button type="button" onClick={toggleSpeech} disabled={blocked}
+                aria-pressed={speech.listening}
+                aria-label={speech.listening ? 'Dừng nói' : 'Nói câu hỏi'}
+                title={speech.listening ? 'Dừng nói' : 'Nói câu hỏi (trình duyệt chuyển giọng nói thành chữ)'}
+                className={cn('relative grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40',
+                  speech.listening ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80')}>
+                {speech.listening && <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-lg bg-primary/15 motion-reduce:animate-none" />}
+                <Mic className="relative h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             {suggestions && suggestions.length > 0 && (
               <Popover open={suggestOpen} onOpenChange={setSuggestOpen}>
                 <PopoverTrigger asChild>
@@ -110,7 +134,7 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
               </Popover>
             )}
             <span id="assistant-composer-hint" className="hidden truncate px-1.5 text-[11.5px] text-muted-foreground sm:inline">
-              {sending ? 'Đang trả lời. Bạn có thể soạn câu tiếp theo hoặc bấm Dừng' : 'Enter để gửi · Shift + Enter để xuống dòng'}
+              {speech.listening ? 'Đang nghe. Nói xong, kiểm tra lại rồi bấm gửi' : sending ? 'Đang trả lời. Bạn có thể soạn câu tiếp theo hoặc bấm Dừng' : 'Enter để gửi, Shift + Enter để xuống dòng'}
             </span>
           </div>
           {sending && onStop ? (
@@ -127,7 +151,7 @@ export function AssistantComposer({ value, onChange, onSubmit, sending, onStop, 
         </div>
       </form>
       <p className="mt-2 px-1 text-center text-[11.5px] text-muted-foreground">
-        Câu hỏi phân tích có thể mất 30–120 giây. Hãy kiểm tra số liệu quan trọng trước khi quyết định.
+        Câu hỏi phân tích có thể mất từ 30 đến 120 giây. Hãy kiểm tra số liệu quan trọng trước khi quyết định.
       </p>
     </div>
   );

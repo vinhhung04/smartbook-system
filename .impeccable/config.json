@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-11-15T22:03:56.347Z",
+        "reason": "brand decision: assets/branding/brand-tokens.json names Inter as the ui-web face (and Fraunces as the wordmark); pre-existing app-wide token, not introduced by the chatbox work"
+      }
+    ]
+  }
+}

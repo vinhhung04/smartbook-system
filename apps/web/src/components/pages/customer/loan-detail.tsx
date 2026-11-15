@@ -12,6 +12,7 @@ import { formatCurrencyVnd, formatDateTime } from './_shared/customer-format';
 import { getStatusTone } from './_shared/customer-status';
 import { LoanReceiptPrintSheet } from '../loan-receipt-print-sheet';
 import { getBorrowLabel } from '@/lib/status-registry';
+import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
 
 export function CustomerLoanDetailPage() {
   const { id } = useParams();
@@ -183,6 +184,14 @@ export function CustomerLoanDetailPage() {
           </ul>
         )}
       </section>
+
+      <AskAiPanel questions={canRequestRenewal ? [
+        { label: 'Gia hạn được không?', prompt: `Phiếu mượn ${loan.loan_number} có gia hạn được không?` },
+        { label: 'Trả trễ bị phạt bao nhiêu?', prompt: `Nếu trả trễ phiếu mượn ${loan.loan_number} thì bị phạt bao nhiêu?` },
+      ] : [
+        { label: 'Có phí phạt nào không?', prompt: `Phiếu mượn ${loan.loan_number} có phát sinh phí phạt nào không?` },
+        ...(items[0] ? [{ label: 'Sách tương tự', prompt: `Gợi ý cho tôi vài cuốn sách giống “${getBookTitle(items[0])}”.` }] : []),
+      ]} />
     </div>
   );
 }

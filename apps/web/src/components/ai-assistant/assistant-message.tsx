@@ -1,6 +1,7 @@
 import { memo, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Camera, Check, Copy, FileSearch, LibraryBig, RotateCw } from 'lucide-react';
+import { AlertTriangle, Camera, Check, Copy, FileSearch, RotateCw } from 'lucide-react';
+import { SmartBookAiMark } from '@/components/ai-experience/smartbook-icons';
 import { toast } from 'sonner';
 import type { AiEvidenceItem } from '@/services/ai';
 import { verificationNotice } from '@/lib/copilot-verification';
@@ -114,9 +115,7 @@ function AnswerHeader({ children }: { children?: ReactNode }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1">
       <span className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
-        <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
-          <LibraryBig className="h-3.5 w-3.5" aria-hidden="true" />
-        </span>
+        <SmartBookAiMark className="h-7 w-7 shrink-0" />
         SmartBook AI
       </span>
       {children}

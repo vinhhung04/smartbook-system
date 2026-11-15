@@ -1,4 +1,5 @@
-import { Archive, ListChecks, PackageSearch, ShieldAlert, TrendingUp, type LucideIcon } from 'lucide-react';
+import type { ComponentType, SVGProps } from 'react';
+import { BookAlertIcon, BookDueIcon, BookPileIcon, BookStackIcon, BookTaskIcon } from '@/components/ai-experience/smartbook-icons';
 import type {
   AiDecision,
   AiEvidenceItem,
@@ -66,7 +67,7 @@ export function extrasToMessageFields(extras?: AssistantExtras | null): Partial<
 
 export interface SuggestionGroup {
   label: string;
-  icon: LucideIcon;
+  icon: ComponentType<Omit<SVGProps<SVGSVGElement>, 'children'>>;
   questions: string[];
 }
 
@@ -77,19 +78,19 @@ export function suggestionGroupsFor(user: AuthUser | null): SuggestionGroup[] {
   const readsBorrow = Boolean(user?.is_superuser) || hasAnyPermission(user, ['analytics.borrow.read']);
   const restock: SuggestionGroup = {
     label: 'Tồn kho và nhập hàng',
-    icon: PackageSearch,
+    icon: BookPileIcon,
     questions: ['Sách nào được mượn nhiều nhưng tồn kho thấp và cần nhập thêm?', 'Với ngân sách 20 triệu nên nhập sách gì?'],
   };
   if (readsBorrow) {
     return [
-      { label: 'Ưu tiên hôm nay', icon: ListChecks, questions: ['Nên ưu tiên xử lý việc gì hôm nay?'] },
+      { label: 'Ưu tiên hôm nay', icon: BookTaskIcon, questions: ['Nên ưu tiên xử lý việc gì hôm nay?'] },
       restock,
-      { label: 'Nhu cầu mượn sách', icon: TrendingUp, questions: ['Lượt mượn tháng này so với tháng trước thế nào?'] },
+      { label: 'Nhu cầu mượn sách', icon: BookStackIcon, questions: ['Lượt mượn tháng này so với tháng trước thế nào?'] },
     ];
   }
   return [
-    { label: 'Rủi ro vận hành', icon: ShieldAlert, questions: ['Kho nào đang rủi ro thiếu sách nhất?'] },
+    { label: 'Rủi ro vận hành', icon: BookAlertIcon, questions: ['Kho nào đang rủi ro thiếu sách nhất?'] },
     restock,
-    { label: 'Tồn kho chậm luân chuyển', icon: Archive, questions: ['Sách nào tồn kho lâu không ai mượn?'] },
+    { label: 'Tồn kho chậm luân chuyển', icon: BookDueIcon, questions: ['Sách nào tồn kho lâu không ai mượn?'] },
   ];
 }
