@@ -525,19 +525,19 @@
         },
         "V2": {
           "users": 966,
-          "hit_rate@10": 0.0041,
-          "recall@10": 0.0008,
-          "ndcg@10": 0.0005,
-          "mrr": 0.002,
+          "hit_rate@10": 0.0145,
+          "recall@10": 0.0055,
+          "ndcg@10": 0.0062,
+          "mrr": 0.0129,
           "catalog_coverage@10": 0.0005,
           "personalization@10": 0.0
         },
         "V2+CATEGORY_CAP3": {
           "users": 966,
-          "hit_rate@10": 0.0021,
-          "recall@10": 0.0004,
-          "ndcg@10": 0.0003,
-          "mrr": 0.0019,
+          "hit_rate@10": 0.0145,
+          "recall@10": 0.0055,
+          "ndcg@10": 0.0062,
+          "mrr": 0.0128,
           "catalog_coverage@10": 0.0005,
           "personalization@10": 0.0
         }
@@ -988,14 +988,14 @@
     },
     "passed": true
   },
-  "runtime_seconds": 14645.9,
+  "runtime_seconds": 14928.6,
   "conclusion": [
     "V2 vs V1_PRODUCTION on 616 test users: hit_rate@10 better (Δ=+0.0812, 95% CI [+0.0552, +0.1088]); ndcg@10 better (Δ=+0.0222, 95% CI [+0.0147, +0.0307]); recall@10 better (Δ=+0.0226, 95% CI [+0.0127, +0.0339]); mrr better (Δ=+0.0425, 95% CI [+0.0296, +0.0568]).",
     "V2 vs POPULARITY on 616 test users: hit_rate@10 better (Δ=+0.0747, 95% CI [+0.0471, +0.1023]); ndcg@10 better (Δ=+0.0170, 95% CI [+0.0085, +0.0263]); recall@10 better (Δ=+0.0240, 95% CI [+0.0148, +0.0344]); mrr better (Δ=+0.0201, 95% CI [+0.0013, +0.0390]).",
     "Coverage@10 / Personalization@10: POPULARITY 0.0005/0.0224, V1_PRODUCTION 0.0219/0.9132, V2 0.1921/0.9988.",
     "Ablation: not run (--skip-ablations).",
     "Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.0378, imputation only 0.025, zero evidence 0.025, POPULARITY 0.0, RANDOM 0.0 (V2 when their history is known: 0.0292).",
-    "Cold start, new users (n=966): NDCG@10 V2 0.0005 vs POPULARITY 0.0062 (POPULARITY higher).",
+    "Cold start, new users (n=966): NDCG@10 V2 0.0062 vs POPULARITY 0.0062 (equal).",
     "Cold start, sparse users (n=113): NDCG@10 V2 0.0187 vs POPULARITY 0.0 (V2 higher).",
     "Acceptance rule on this real library: met (informational - the production model choice is made on the synthetic dataset and is unchanged)."
   ]

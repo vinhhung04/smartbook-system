@@ -185,7 +185,7 @@ một lần trên cửa sổ test; relevance = đầu sách lần đầu đượ
 |---|---|---|
 | Tổng hợp (production) | 0,423 / 0,429 (n=58) | 0,285 / 0,407 (n=13) |
 | ĐH Binus (toàn bộ) | 0,031 / 0,031 (n=2702) | 0,094 / 0,031 (n=231) |
-| TV công cộng (mẫu 6.000 bạn đọc) | 0,001 / 0,006 (n=966) | 0,019 / 0,000 (n=113) |
+| TV công cộng (mẫu 6.000 bạn đọc) | 0,006 / 0,006 (n=966) | 0,019 / 0,000 (n=113) |
 
 - Tổng hợp (production): quy tắc chấp nhận (V2 hơn cả V1 và POPULARITY trên NDCG@10, Recall@10, MRR với khoảng tin cậy trên 0) **đạt**.
 - ĐH Binus (toàn bộ): quy tắc chấp nhận (V2 hơn cả V1 và POPULARITY trên NDCG@10, Recall@10, MRR với khoảng tin cậy trên 0) **đạt**.
@@ -204,11 +204,15 @@ một lần trên cửa sổ test; relevance = đầu sách lần đầu đượ
    còn thư viện công cộng dồn vào tín hiệu nội dung (`author` 3,0, `semantic` 2,0, `preference` 1,5; `collaborative`
    0,25, `popularity` 0). Điều này ủng hộ thiết kế V2 kết hợp nhiều nhóm tín hiệu có trọng số chỉnh được, thay vì một
    thuật toán cố định.
-4. **Bạn đọc mới (chưa có lượt mượn)**: POPULARITY tốt hơn V2 ở cả hai thư viện (ĐH Binus 0,031 so với 0,024; công cộng
-   0,006 so với 0,0005 khi trọng số `popularity` được chọn bằng 0). V2 hiện chấm điểm bạn đọc mới bằng cùng bộ trọng số
-   (chỉ gắn mã giải thích `COLD_START_FALLBACK`), không chuyển hẳn sang xếp hạng theo độ phổ biến. Đây là một cải tiến
-   có căn cứ (chưa triển khai): với bạn đọc 0 lượt mượn thì dùng xếp hạng phổ biến. Với bạn đọc có 1–2 lượt mượn V2 đã
-   tốt hơn rõ (ĐH Binus 0,094 so với 0,031; công cộng 0,019 so với 0).
+4. **Bạn đọc mới (chưa có lượt mượn)**: lần chạy đầu cho thấy POPULARITY tốt hơn V2 ở cả hai thư viện (ĐH Binus 0,031
+   so với 0,024; công cộng 0,006 so với 0,0005 khi trọng số `popularity` được chọn bằng 0), vì V2 chấm bạn đọc mới bằng
+   cùng bộ trọng số của bạn đọc có lịch sử. **Đã sửa trong production**: bạn đọc không có tín hiệu nào
+   (`signal_count == 0`) được xếp hạng chỉ theo số lượt mượn (`COLD_START_WEIGHTS` trong `recommendation_v2.py`;
+   ô sách mới và giới hạn thể loại vẫn áp dụng). Chạy lại: V2 bằng POPULARITY ở cả hai thư viện (ĐH Binus 0,031;
+   công cộng 0,006), các nhóm bạn đọc khác không đổi. Trên dữ liệu tổng hợp nhóm này giảm nhẹ (0,432 → 0,423 so với
+   0,429 của POPULARITY, n=58, 2 bạn đọc đổi kết quả trúng); phần thấp hơn POPULARITY là do ô sách mới luôn dành một
+   chỗ cho sách vừa nhập. Quyết định dựa vào dữ liệu thật vì mẫu lớn hơn nhiều (2.702 và 966 bạn đọc so với 58). Với
+   bạn đọc có 1–2 lượt mượn V2 vẫn tốt hơn rõ (ĐH Binus 0,094 so với 0,031; công cộng 0,019 so với 0).
 5. V2 gợi ý đa dạng hơn: độ phủ danh mục@10 của V2 là 0,104 (ĐH Binus) và 0,192 (công cộng), so với 0,002 và 0,0005 của
    POPULARITY.
 
