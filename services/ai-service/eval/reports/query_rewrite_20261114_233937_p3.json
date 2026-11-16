@@ -1,0 +1,622 @@
+{
+ "by_variant": {
+  "original": {
+   "cases": 18,
+   "answerable": {
+    "count": 15,
+    "recall_at_1": 0.6,
+    "recall_at_3": 0.6667,
+    "recall_at_5": 0.6667,
+    "mrr": 0.6222
+   },
+   "no_answer_count": 3,
+   "answerable_count": 15,
+   "no_answer_accuracy": 1.0,
+   "false_positive_rate": 0.0,
+   "false_negative_rate": 0.2,
+   "coverage": 0.6667,
+   "abstention_precision": 0.5,
+   "abstention_recall": 1.0,
+   "abstention_f1": 0.6667
+  },
+  "rewritten": {
+   "cases": 18,
+   "answerable": {
+    "count": 15,
+    "recall_at_1": 0.9333,
+    "recall_at_3": 0.9333,
+    "recall_at_5": 0.9333,
+    "mrr": 0.9333
+   },
+   "no_answer_count": 3,
+   "answerable_count": 15,
+   "no_answer_accuracy": 0.3333,
+   "false_positive_rate": 0.6667,
+   "false_negative_rate": 0.0667,
+   "coverage": 0.8889,
+   "abstention_precision": 0.5,
+   "abstention_recall": 0.3333,
+   "abstention_f1": 0.4
+  },
+  "standalone": {
+   "cases": 18,
+   "answerable": {
+    "count": 15,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "no_answer_count": 3,
+   "answerable_count": 15,
+   "no_answer_accuracy": 0.3333,
+   "false_positive_rate": 0.6667,
+   "false_negative_rate": 0.0,
+   "coverage": 0.9444,
+   "abstention_precision": 1.0,
+   "abstention_recall": 0.3333,
+   "abstention_f1": 0.5
+  }
+ },
+ "statuses": {
+  "not_eligible": 4,
+  "rewritten": 13,
+  "unchanged": 1
+ },
+ "rows": [
+  {
+   "id": "cv-001",
+   "kind": "follow_up",
+   "expected_ids": [
+    "membership-loan-limit"
+   ],
+   "question": "Còn hạng Bạc Sĩ thì sao?",
+   "rewrite": "Mỗi hạng thành viên Bạc Sĩ được mượn tối đa bao nhiêu quyển sách?",
+   "status": "rewritten",
+   "latency_ms": 1421,
+   "original": {
+    "retrieved_ids": [
+     "borrowing-process",
+     "membership-plans-overview",
+     "fine-calculation"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "membership-loan-limit",
+     "renewal-count",
+     "membership-plans-overview"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "membership-loan-limit",
+     "renewal-count",
+     "membership-plans-overview"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-002",
+   "kind": "follow_up",
+   "expected_ids": [
+    "fine-calculation"
+   ],
+   "question": "Còn hạng Bạc Sĩ thì sao?",
+   "rewrite": "Phí phạt trả sách trễ hạn được tính như thế nào đối với hạng Bạc Sĩ?",
+   "status": "rewritten",
+   "latency_ms": 694,
+   "original": {
+    "retrieved_ids": [
+     "borrowing-process",
+     "membership-plans-overview",
+     "fine-calculation"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "fine-calculation",
+     "fines-payment"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "fine-calculation",
+     "fines-payment"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-003",
+   "kind": "follow_up",
+   "expected_ids": [
+    "lost-item-fee"
+   ],
+   "question": "Còn hạng Thẻ Đọc thì sao?",
+   "rewrite": "Làm mất sách đang mượn thì phải đền bao nhiêu đối với hạng Thẻ Đọc?",
+   "status": "rewritten",
+   "latency_ms": 745,
+   "original": {
+    "retrieved_ids": [
+     "borrowing-process",
+     "membership-plans-overview"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "lost-item-fee",
+     "fines-payment"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "lost-item-fee",
+     "fines-payment"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   }
+  },
+  {
+   "id": "cv-004",
+   "kind": "follow_up",
+   "expected_ids": [
+    "reservation-hold"
+   ],
+   "question": "Còn hạng nào giữ lâu nhất?",
+   "rewrite": "Hạng nào giữ chỗ lâu nhất?",
+   "status": "rewritten",
+   "latency_ms": 703,
+   "original": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "rewritten": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "reservation-hold",
+     "borrowing-process",
+     "membership-loan-limit"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-005",
+   "kind": "follow_up",
+   "expected_ids": [
+    "renewal-count"
+   ],
+   "question": "Còn mỗi lần thêm bao lâu?",
+   "rewrite": "Gia hạn sách đã mượn mỗi lần thêm bao lâu?",
+   "status": "rewritten",
+   "latency_ms": 657,
+   "original": {
+    "retrieved_ids": [
+     "renewal-count",
+     "fines-payment",
+     "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "renewal-count",
+     "membership-loan-limit"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "renewal-count",
+     "membership-loan-limit"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-006",
+   "kind": "follow_up",
+   "expected_ids": [
+    "supplier-portal"
+   ],
+   "question": "Cái đó có cần đăng nhập không?",
+   "rewrite": "Nhà cung cấp xác nhận đơn hàng bằng cách nào nếu chưa có tài khoản và cái đó có cần đăng nhập không?",
+   "status": "rewritten",
+   "latency_ms": 825,
+   "original": {
+    "retrieved_ids": [
+     "supplier-portal",
+     "reader-features",
+     "account-security"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "supplier-portal",
+     "goods-receipt-process",
+     "account-security"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "supplier-portal",
+     "goods-receipt-process",
+     "reader-features"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   }
+  },
+  {
+   "id": "cv-007",
+   "kind": "follow_up",
+   "expected_ids": [
+    "account-security"
+   ],
+   "question": "Còn quên mật khẩu thì sao?",
+   "rewrite": "Quên mật khẩu thì sao?",
+   "status": "rewritten",
+   "latency_ms": 637,
+   "original": {
+    "retrieved_ids": [
+     "account-security",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "account-security",
+     "reader-features"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "account-security",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-008",
+   "kind": "follow_up",
+   "expected_ids": [
+    "fines-payment"
+   ],
+   "question": "Còn qua VNPay mà chưa cập nhật thì sao?",
+   "rewrite": "Thanh toán tiền phạt online được không? Còn qua VNPay mà chưa cập nhật thì sao?",
+   "status": "rewritten",
+   "latency_ms": 728,
+   "original": {
+    "retrieved_ids": [
+     "fines-payment",
+     "wallet-vnpay"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "fines-payment"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "fines-payment",
+     "wallet-vnpay"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-009",
+   "kind": "follow_up",
+   "expected_ids": [
+    "branches-opening-hours"
+   ],
+   "question": "Chủ nhật thì sao?",
+   "rewrite": "Giờ mở cửa của thư viện vào chủ nhật là mấy giờ?",
+   "status": "rewritten",
+   "latency_ms": 722,
+   "original": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "branches-opening-hours",
+     "reader-features",
+     "borrowing-process"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "branches-opening-hours",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-010",
+   "kind": "follow_up",
+   "expected_ids": [
+    "branches-opening-hours"
+   ],
+   "question": "Còn Cần Thơ thì sao?",
+   "rewrite": "Chi nhánh SmartBook ở Cần Thơ nằm ở địa chỉ nào?",
+   "status": "rewritten",
+   "latency_ms": 701,
+   "original": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "branches-opening-hours"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "branches-opening-hours"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   }
+  },
+  {
+   "id": "cv-011",
+   "kind": "follow_up",
+   "expected_ids": [
+    "roles-permissions"
+   ],
+   "question": "Còn nhân viên kho thì sao?",
+   "rewrite": "Nhân viên kho có những quyền gì trong hệ thống?",
+   "status": "rewritten",
+   "latency_ms": 664,
+   "original": {
+    "retrieved_ids": [
+     "roles-permissions",
+     "warehouse-operations"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "roles-permissions",
+     "warehouse-operations"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "roles-permissions",
+     "warehouse-operations",
+     "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-012",
+   "kind": "no_answer_follow_up",
+   "expected_ids": [],
+   "question": "Còn cho thuê máy tính xách tay thì sao?",
+   "rewrite": "Còn cho thuê máy tính xách tay thì sao?",
+   "status": "unchanged",
+   "latency_ms": 772,
+   "original": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "rewritten": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "standalone": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   }
+  },
+  {
+   "id": "cv-013",
+   "kind": "no_answer_follow_up",
+   "expected_ids": [],
+   "question": "Còn ngày lễ thì sao?",
+   "rewrite": "Giờ mở cửa của thư viện vào ngày lễ là mấy giờ?",
+   "status": "rewritten",
+   "latency_ms": 655,
+   "original": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "branches-opening-hours",
+     "renewal-count",
+     "ai-assistant-scope"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "branches-opening-hours",
+     "account-security",
+     "renewal-count"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-014",
+   "kind": "no_answer_follow_up",
+   "expected_ids": [],
+   "question": "Còn mang thú cưng vào thì sao?",
+   "rewrite": "Phí phạt trả sách trễ hạn được tính như thế nào khi mang thú cưng vào?",
+   "status": "rewritten",
+   "latency_ms": 830,
+   "original": {
+    "retrieved_ids": [],
+    "decision": "NO_EVIDENCE"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "fines-payment",
+     "fine-calculation"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "membership-plans-overview",
+     "book-care",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-015",
+   "kind": "control_complete",
+   "expected_ids": [
+    "fine-calculation"
+   ],
+   "question": "Phí phạt trả sách trễ hạn được tính như thế nào?",
+   "rewrite": "Phí phạt trả sách trễ hạn được tính như thế nào?",
+   "status": "not_eligible",
+   "latency_ms": 0,
+   "original": {
+    "retrieved_ids": [
+     "fine-calculation",
+     "fines-payment"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "fine-calculation",
+     "fines-payment"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "fine-calculation",
+     "fines-payment"
+    ],
+    "decision": "CONFIDENT_MATCH"
+   }
+  },
+  {
+   "id": "cv-016",
+   "kind": "control_complete",
+   "expected_ids": [
+    "account-security"
+   ],
+   "question": "Tôi quên mật khẩu đăng nhập thì phải làm gì?",
+   "rewrite": "Tôi quên mật khẩu đăng nhập thì phải làm gì?",
+   "status": "not_eligible",
+   "latency_ms": 0,
+   "original": {
+    "retrieved_ids": [
+     "account-security",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "account-security",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "account-security",
+     "reader-features"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-017",
+   "kind": "control_complete",
+   "expected_ids": [
+    "fines-payment"
+   ],
+   "question": "Còn nợ tiền phạt thì có mượn thêm sách được không?",
+   "rewrite": "Còn nợ tiền phạt thì có mượn thêm sách được không?",
+   "status": "not_eligible",
+   "latency_ms": 0,
+   "original": {
+    "retrieved_ids": [
+     "fines-payment",
+     "membership-plans-overview"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "fines-payment",
+     "membership-plans-overview"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "fines-payment",
+     "membership-plans-overview"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  },
+  {
+   "id": "cv-018",
+   "kind": "control_complete",
+   "expected_ids": [
+    "isbn-classification"
+   ],
+   "question": "Mã ISBN 13 số gồm những phần nào?",
+   "rewrite": "Mã ISBN 13 số gồm những phần nào?",
+   "status": "not_eligible",
+   "latency_ms": 0,
+   "original": {
+    "retrieved_ids": [
+     "isbn-classification",
+     "borrowing-process"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "rewritten": {
+    "retrieved_ids": [
+     "isbn-classification",
+     "borrowing-process"
+    ],
+    "decision": "UNCERTAIN"
+   },
+   "standalone": {
+    "retrieved_ids": [
+     "isbn-classification",
+     "borrowing-process"
+    ],
+    "decision": "UNCERTAIN"
+   }
+  }
+ ]
+}

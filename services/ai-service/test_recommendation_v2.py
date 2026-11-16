@@ -184,10 +184,19 @@ class ColdStartTests(unittest.TestCase):
     def test_new_user_gets_a_popularity_led_list_marked_cold_start(self):
         out = v2.recommend(CATALOG, [], model(), CONFIG, limit=3)
         self.assertEqual(len(out["entries"]), 3)
-        self.assertEqual(out["entries"][0]["book_id"], "b3")  # most borrowed + best rated
+        self.assertEqual(out["entries"][0]["book_id"], "b1")  # most borrowed (ties b3 on 3 loans; book_id breaks it)
         for e in out["entries"]:
             self.assertIn("COLD_START_FALLBACK", e["reason_codes"])
             self.assertEqual(e["tier"], "EXPLORE")
+
+    def test_new_user_list_follows_borrow_counts_only(self):
+        m = model()
+        entries = v2.recommend(CATALOG, [], m, CONFIG, limit=10)["entries"]
+        new = v2.new_book_ids(CATALOG, m)  # placed by the new-arrival slot, not by loans
+        counts = [m["popularity"].get(e["book_id"], 0) for e in entries if e["book_id"] not in new]
+        self.assertEqual(counts, sorted(counts, reverse=True))
+        for e in entries:
+            self.assertEqual({k for k, v in e["breakdown"]["contributions"].items() if v}, {"popularity"} if e["breakdown"]["contributions"]["popularity"] else set())
 
     def test_no_history_at_all_still_returns_books(self):
         empty = v2.build_global_model(CATALOG, [], NOW)

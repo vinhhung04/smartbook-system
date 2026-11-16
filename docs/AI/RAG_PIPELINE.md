@@ -48,6 +48,17 @@ flowchart TD
 
 `calibrate_rag.py` chọn ngưỡng trên nửa `val` và báo kết quả trên nửa `test` riêng (chia bằng hash ổn định của id, không rò rỉ). Ứng viên hợp lệ phải giữ answerable Recall@5 trong khoảng 0,06 so với baseline **và** giữ nhánh dự phòng keyword. Không có ứng viên hợp lệ → `NO_VALID_CANDIDATE`, giữ nguyên production. Script chỉ ghi báo cáo, không bao giờ sửa `retrieval_confidence.py`. Báo cáo có Recall@5, answerable Recall@5, No-answer Accuracy, FPR, FNR, Coverage, Abstention Precision/Recall/F1.
 
+### Cập nhật 2026-11-15 (RAG Quality Upgrade)
+
+- INTERNAL_DOC: kết quả UNCERTAIN mà chunk top-1 không chứa **từ nội dung nào** của câu hỏi → NO_EVIDENCE
+  (`LOW_QUERY_TERM_COVERAGE`, `DOC_CONF_MIN_FOCUS_COVERAGE`, mặc định 0,01). FPR 0,30 → 0,225, FNR 0.
+- Sách: tiêu đề chính xác bỏ qua hậu tố "(Tái Bản …)" và từ gợi ý ("tìm sách … không"); câu tra ISBN không có trong
+  catalog → NO_EVIDENCE `ISBN_NOT_FOUND`.
+- Câu tiếp nối có lịch sử ("Còn hạng Bạc Sĩ thì sao?") được viết lại thành câu độc lập trước khi tra tài liệu
+  (`query_rewrite.py`, `RAG_QUERY_REWRITE_ENABLED`); lỗi → dùng câu gốc.
+- Benchmark: `eval/rag_integrity.py`, tập trusted, manifest, `rag_dataset_supplement.json`, `rag_conversation_dataset.json`.
+  Chi tiết và số liệu: `RAG_QUALITY_ROADMAP.md`.
+
 ## Grounding và tự từ chối
 
 Quy tắc trong `rag.RAG_SYSTEM_RULES` (phiên bản ở `/health` → `prompt_versions["chat.rag_rules"]`):

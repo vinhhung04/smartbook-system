@@ -16,11 +16,19 @@
 
 smartbook.io.vn {
 	import common
-	# During a deploy the upstream container is briefly recreated: hold requests
-	# until it is back instead of answering 502.
-	reverse_proxy web:80 {
-		lb_try_duration 30s
-		lb_try_interval 500ms
+	# Book and branch pages change with the catalog, so this sitemap is built by
+	# inventory-service; it must sit on this host to list this host's URLs.
+	handle /sitemap-catalog.xml {
+		rewrite * /public/catalog/sitemap.xml
+		reverse_proxy api-gateway:3000
+	}
+	handle {
+		# During a deploy the upstream container is briefly recreated: hold requests
+		# until it is back instead of answering 502.
+		reverse_proxy web:80 {
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
 	}
 }
 

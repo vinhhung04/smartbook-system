@@ -10,6 +10,7 @@ import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
+import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
 
 interface BookLocation {
   warehouse_name: string;
@@ -538,6 +539,14 @@ export function BookDetailPage() {
                 {details.map((item) => <DetailItem key={item.label} label={item.label} value={item.value} mono={item.mono} />)}
               </dl>
             </section>
+          </FadeItem>
+
+          <FadeItem>
+            <AskAiPanel questions={[
+              { label: 'Tồn kho ở các kho', prompt: `Tồn kho của cuốn “${book.title}” ở các kho hiện thế nào?` },
+              { label: 'Có cần nhập thêm?', prompt: `Cuốn “${book.title}” có cần nhập thêm không?` },
+              { label: 'Mức độ được mượn', prompt: `Cuốn “${book.title}” được mượn nhiều không?` },
+            ]} />
           </FadeItem>
         </aside>
       </div>

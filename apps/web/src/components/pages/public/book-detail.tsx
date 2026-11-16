@@ -18,6 +18,7 @@ import { BookRow } from '@/components/public/book-row';
 import { useReserveAction } from '@/components/public/use-reserve-action';
 import { ReserveModal } from '@/components/pages/customer/_shared/reserve-modal';
 import { BookReviews } from './book-reviews';
+import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
 
 const DESCRIPTION_PREVIEW_CHARS = 600;
 const LANGUAGE_LABELS: Record<string, string> = { vi: 'Tiếng Việt', en: 'Tiếng Anh', fr: 'Tiếng Pháp', ja: 'Tiếng Nhật', zh: 'Tiếng Trung', ko: 'Tiếng Hàn' };
@@ -96,6 +97,7 @@ export function PublicBookDetailPage() {
     description: book ? (book.summary_vi || book.description || `${book.title} tại thư viện SmartBook.`) : undefined,
     image: book?.cover_image_url,
     type: 'book',
+    noindex: status === 'not-found',
   });
 
   const toggleWishlist = async () => {
@@ -351,6 +353,14 @@ export function PublicBookDetailPage() {
                 <p className="mt-2 whitespace-pre-line text-[13.5px] leading-relaxed text-foreground/85">{book.summary_vi}</p>
                 <p className="mt-2 text-[11.5px] text-muted-foreground">Tóm tắt tự động từ thông tin sách, có thể chưa chính xác hoàn toàn.</p>
               </section>
+            ) : null}
+
+            {isCustomer ? (
+              <AskAiPanel className="mt-8" questions={[
+                { label: 'Sách này nói về gì?', prompt: `Cuốn “${book.title}”${book.author ? ` của ${book.author}` : ''} nói về nội dung gì?` },
+                { label: 'Tôi mượn được không?', prompt: `Tôi có thể mượn hoặc đặt trước cuốn “${book.title}” không?` },
+                { label: 'Sách tương tự', prompt: `Gợi ý cho tôi vài cuốn sách giống “${book.title}”.` },
+              ]} />
             ) : null}
 
             <section aria-labelledby="thong-tin" className="mt-8">

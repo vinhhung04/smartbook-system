@@ -1,4 +1,4 @@
-import { Outlet, useLocation } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { AIChatbot } from "./ai-chatbot";
@@ -9,6 +9,7 @@ import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 import { RouteErrorBoundary } from "./route-error-boundary";
 import { CommandPalette } from "./command-palette";
 import { useMediaQuery } from "./pages/ai-import/use-media-query";
+import { registerAssistantNavigator } from "./ai-assistant/assistant-run";
 
 export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -22,6 +23,9 @@ export function AppLayout() {
   const setMobileNavOpen = (open: boolean) => setNavOpenFor(open ? location.pathname : null);
   // ADMIN/WAREHOUSE_MANAGER have the dedicated /ai-assistant page instead of the floating widget.
   const hasDedicatedAssistant = canAccess(currentUser, ROUTE_ACCESS.aiAssistant);
+  // A toast for an answer finished while away from /ai-assistant opens it in place.
+  const navigate = useNavigate();
+  useEffect(() => registerAssistantNavigator((to) => navigate(to)), [navigate]);
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -49,7 +53,8 @@ export function AppLayout() {
         />
         <div className="flex-1 flex flex-col min-w-0">
           <Topbar onMenuClick={isDesktop ? undefined : () => setMobileNavOpen(true)} menuOpen={mobileNavOpen} />
-          <main className="flex-1 overflow-y-auto scroll-smooth">
+          {/* relative: absolute children (sr-only) would otherwise anchor to the viewport and stretch the document, making the whole shell scroll away */}
+          <main className="relative flex-1 overflow-y-auto scroll-smooth">
             <RouteErrorBoundary resetKey={location.pathname}>
               <Outlet />
             </RouteErrorBoundary>

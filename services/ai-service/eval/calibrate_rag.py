@@ -60,6 +60,9 @@ RECALL_TOLERANCE = 0.06
 
 TAU_EVIDENCE_GRID = [round(0.20 + 0.05 * i, 2) for i in range(11)]  # 0.20 .. 0.70
 TAU_CONFIDENT_GRID = [0.5, 0.6, 0.66, 0.75, 0.85]
+# Phase 1: retrieval_confidence.min_focus_coverage. A value > 0 is eligible only if it does
+# not raise the calib-split false-refusal rate (FNR) above the same tau pair with the gate off.
+MIN_FOCUS_COVERAGE_GRID = [0.0, 0.2, 0.25, 0.3, 0.35, 0.4, 0.5]
 SPLIT_SEED = 20260925
 
 
@@ -139,13 +142,20 @@ def calibrate_corpus(corpus: str, rows: list[dict], base_cfg: confidence.Confide
         for tau_evidence in TAU_EVIDENCE_GRID:
             if tau_evidence >= tau_confident:
                 continue
-            cfg = confidence.ConfidenceConfig(
-                cos_floor=base_cfg.cos_floor, cos_ceil=base_cfg.cos_ceil,
-                tau_confident=tau_confident, tau_evidence=tau_evidence,
-                w_semantic=base_cfg.w_semantic, w_keyword=base_cfg.w_keyword, w_agree=base_cfg.w_agree,
-            )
-            calib_metrics = _evaluate_candidate(calib_rows, cfg)
-            table.append({"tau_confident": tau_confident, "tau_evidence": tau_evidence, **calib_metrics})
+            gate_off_fnr = None
+            for min_focus in MIN_FOCUS_COVERAGE_GRID:
+                cfg = confidence.ConfidenceConfig(
+                    cos_floor=base_cfg.cos_floor, cos_ceil=base_cfg.cos_ceil,
+                    tau_confident=tau_confident, tau_evidence=tau_evidence,
+                    w_semantic=base_cfg.w_semantic, w_keyword=base_cfg.w_keyword, w_agree=base_cfg.w_agree,
+                    min_focus_coverage=min_focus,
+                )
+                calib_metrics = _evaluate_candidate(calib_rows, cfg)
+                if min_focus == 0.0:
+                    gate_off_fnr = calib_metrics["false_negative_rate"] or 0.0
+                calib_metrics["focus_gate_ok"] = (calib_metrics["false_negative_rate"] or 0.0) <= gate_off_fnr
+                table.append({"tau_confident": tau_confident, "tau_evidence": tau_evidence,
+                              "min_focus_coverage": min_focus, **calib_metrics})
 
     # Compared against ANSWERABLE Recall@5, not the blended one: the blended
     # metric's ceiling depends on how many no-answer cases are in the split
@@ -158,16 +168,20 @@ def calibrate_corpus(corpus: str, rows: list[dict], base_cfg: confidence.Confide
     # result is NO_VALID_CANDIDATE - never "the best of the invalid ones" -
     # and the production thresholds (retrieval_confidence.py) stay as they are.
     eligible = [row for row in table
-                if row["answerable_recall_at_5"] >= baseline - RECALL_TOLERANCE and row["keyword_fallback_ok"]]
+                if row["answerable_recall_at_5"] >= baseline - RECALL_TOLERANCE and row["keyword_fallback_ok"]
+                and row["focus_gate_ok"]]
     if not eligible:
         return {"status": NO_VALID_CANDIDATE, "chosen": None, "test_split_metrics": None,
                 "calib_n": len(calib_rows), "test_n": len(test_rows)}, table
-    best = max(eligible, key=lambda row: (row["no_answer_accuracy"] or 0.0, row["abstention_f1"] or 0.0))
+    # last key: on a tie prefer the weaker gate (closest to current production behaviour)
+    best = max(eligible, key=lambda row: (row["no_answer_accuracy"] or 0.0, row["abstention_f1"] or 0.0,
+                                          -row["min_focus_coverage"]))
 
     best_cfg = confidence.ConfidenceConfig(
         cos_floor=base_cfg.cos_floor, cos_ceil=base_cfg.cos_ceil,
         tau_confident=best["tau_confident"], tau_evidence=best["tau_evidence"],
         w_semantic=base_cfg.w_semantic, w_keyword=base_cfg.w_keyword, w_agree=base_cfg.w_agree,
+        min_focus_coverage=best["min_focus_coverage"],
     )
     test_metrics = _evaluate_candidate(test_rows, best_cfg)
     return {"status": "OK", "chosen": best, "test_split_metrics": test_metrics,
@@ -191,20 +205,22 @@ def render_report(by_corpus: dict, tables: dict, timestamp: str) -> str:
                       "keyword-only fallback alive. Keep the production thresholds."]
         else:
             lines += [
-                f"- **Chosen: tau_confident={chosen['tau_confident']}, tau_evidence={chosen['tau_evidence']}**"
+                f"- **Chosen: tau_confident={chosen['tau_confident']}, tau_evidence={chosen['tau_evidence']}, "
+                f"min_focus_coverage={chosen['min_focus_coverage']}**"
                 f" (calib R@5 {chosen['recall_at_5']}, No-answer acc {chosen['no_answer_accuracy']}, "
                 f"F1 {chosen['abstention_f1']})",
                 f"- On the held-out `test` split: {outcome['test_split_metrics']}",
             ]
         lines += [
             "",
-            "| tau_confident | tau_evidence | R@5 | Answerable R@5 | No-answer acc | FPR | FNR | Coverage "
+            "| tau_confident | tau_evidence | min_focus | R@5 | Answerable R@5 | No-answer acc | FPR | FNR | Coverage "
             "| Abst. P | Abst. R | Abst. F1 | Keyword fallback |",
-            "|---|---|---|---|---|---|---|---|---|---|---|---|",
+            "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
-        for row in sorted(tables[corpus], key=lambda r: (r["tau_confident"], r["tau_evidence"])):
+        for row in sorted(tables[corpus], key=lambda r: (r["tau_confident"], r["tau_evidence"], r["min_focus_coverage"])):
             lines.append(
-                f"| {row['tau_confident']} | {row['tau_evidence']} | {row['recall_at_5']} | "
+                f"| {row['tau_confident']} | {row['tau_evidence']} | {row['min_focus_coverage']}"
+                f"{'' if row['focus_gate_ok'] else ' (FNR up)'} | {row['recall_at_5']} | "
                 f"{row['answerable_recall_at_5']} | {row['no_answer_accuracy']} | {row['false_positive_rate']} | "
                 f"{row['false_negative_rate']} | {row['coverage']} | {row['abstention_precision']} | "
                 f"{row['abstention_recall']} | {row['abstention_f1']} | {'ok' if row['keyword_fallback_ok'] else 'OFF'} |"

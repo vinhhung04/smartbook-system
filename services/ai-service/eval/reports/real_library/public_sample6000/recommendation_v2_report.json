@@ -1,0 +1,1002 @@
+{
+  "title": "Recommendation V2 Evaluation",
+  "dataset": {
+    "source": "research-inputs/library-loans-mendeley/derived/public_sample6000_events.json",
+    "sha256": "f400b2e223ab48db9d9e36a1287f32784e0ad3ff38ba8b8ca92cdfa7f4063a56",
+    "seed": null,
+    "synthetic": false,
+    "real_source": {
+      "file": "datasetPublicLib.csv",
+      "sha256": "d102b8d7fac8784b95603ca4344c1736e8c5a33f44a7508e5e528a1030895101",
+      "library": "Indonesian public library system",
+      "doi": "10.17632/6rd45bvxjy.1",
+      "license": "CC BY 4.0",
+      "use": "research and education only",
+      "skipped_rows": {
+        "no_borrow_date": 0,
+        "duplicate": 339,
+        "no_member_or_copy": 0
+      },
+      "reader_sample": {
+        "readers": 6000,
+        "rule": "smallest sha256(doi + member id)"
+      }
+    },
+    "users": 6000,
+    "books": 21509,
+    "interactions": 47641,
+    "interactions_by_kind": {
+      "LOAN": 47641,
+      "WISHLIST": 0,
+      "REVIEW": 0,
+      "RESERVATION": 0
+    },
+    "malformed_dropped": 0,
+    "train_range": [
+      "2023-01-02T00:00:00Z",
+      "2024-06-03T00:00:00Z"
+    ],
+    "validation_range": [
+      "2024-06-03T00:00:00Z",
+      "2024-12-08T00:00:00Z"
+    ],
+    "test_range": [
+      "2024-12-08T00:00:00Z",
+      "2025-07-28T00:00:00Z"
+    ],
+    "validation_eligible_users": 557,
+    "test_eligible_users": 616,
+    "test_users_all_segments": 1695,
+    "min_train_loans": 3,
+    "protocol": "audited point-in-time (see recsys_protocol.py)",
+    "ablations": "skipped (--skip-ablations)"
+  },
+  "model_configuration": {
+    "V2": {
+      "weights": {
+        "preference": 1.5,
+        "author": 3.0,
+        "semantic": 2.0,
+        "collaborative": 0.25,
+        "popularity": 0.0,
+        "recency": 0.5,
+        "quality": 1.0,
+        "availability": 1.5
+      },
+      "params": {
+        "prior_strength": 3.0,
+        "half_life_days": 180,
+        "cf_shrinkage": 0.0,
+        "wishlist_weight": 1.0,
+        "liked_rating_weight": 1.0,
+        "trend_window_days": 30,
+        "quality_prior_count": 5.0,
+        "per_source_k": 40,
+        "new_book_days": 60,
+        "new_arrival_slots": 1
+      },
+      "feature_scale": {
+        "preference": 1.9492324508288839,
+        "author": 0.1686509784958601,
+        "semantic": 0.09876610744506745,
+        "collaborative": 0.05317769700896213,
+        "popularity": 0.9528687678214195,
+        "recency": 0.5771601532919384,
+        "quality": 1.270973839553593e-06,
+        "availability": 0.19419319894875142
+      },
+      "validation_objective": 0.04135,
+      "objective": "ndcg@10",
+      "evaluations": 276
+    }
+  },
+  "selected_max_per_category": null,
+  "category_cap_validation": {
+    "without": 0.04135,
+    "cap3": 0.0299
+  },
+  "results": {
+    "RANDOM": {
+      "users": 616,
+      "hit_rate@5": 0.0016,
+      "recall@5": 0.0002,
+      "ndcg@5": 0.0003,
+      "mrr": 0.0024,
+      "catalog_coverage@5": 0.132,
+      "personalization@5": 0.9999,
+      "hit_rate@10": 0.0016,
+      "recall@10": 0.0002,
+      "ndcg@10": 0.0002,
+      "catalog_coverage@10": 0.247,
+      "personalization@10": 0.9997,
+      "novelty@10": 14.618,
+      "popularity_bias_arp@10": 0.4991,
+      "category_diversity@10": 0.8519
+    },
+    "POPULARITY": {
+      "users": 616,
+      "hit_rate@5": 0.0292,
+      "recall@5": 0.0048,
+      "ndcg@5": 0.0114,
+      "mrr": 0.0321,
+      "catalog_coverage@5": 0.0003,
+      "personalization@5": 0.0329,
+      "hit_rate@10": 0.0292,
+      "recall@10": 0.0048,
+      "ndcg@10": 0.0089,
+      "catalog_coverage@10": 0.0005,
+      "personalization@10": 0.0224,
+      "novelty@10": 10.7058,
+      "popularity_bias_arp@10": 0.9998,
+      "category_diversity@10": 0.8187
+    },
+    "V1_PRODUCTION": {
+      "users": 616,
+      "hit_rate@5": 0.0114,
+      "recall@5": 0.0037,
+      "ndcg@5": 0.0027,
+      "mrr": 0.0096,
+      "catalog_coverage@5": 0.011,
+      "personalization@5": 0.9137,
+      "hit_rate@10": 0.0227,
+      "recall@10": 0.0062,
+      "ndcg@10": 0.0037,
+      "catalog_coverage@10": 0.0219,
+      "personalization@10": 0.9132,
+      "novelty@10": 14.6791,
+      "popularity_bias_arp@10": 0.4868,
+      "category_diversity@10": 0.0472
+    },
+    "V2": {
+      "users": 616,
+      "hit_rate@5": 0.0812,
+      "recall@5": 0.0229,
+      "ndcg@5": 0.0255,
+      "mrr": 0.0521,
+      "catalog_coverage@5": 0.1092,
+      "personalization@5": 0.9993,
+      "hit_rate@10": 0.1039,
+      "recall@10": 0.0288,
+      "ndcg@10": 0.0259,
+      "catalog_coverage@10": 0.1921,
+      "personalization@10": 0.9988,
+      "novelty@10": 14.3585,
+      "popularity_bias_arp@10": 0.5807,
+      "category_diversity@10": 0.3633
+    },
+    "V2+CATEGORY_CAP3": {
+      "users": 616,
+      "hit_rate@5": 0.0795,
+      "recall@5": 0.0205,
+      "ndcg@5": 0.0247,
+      "mrr": 0.0495,
+      "catalog_coverage@5": 0.1122,
+      "personalization@5": 0.9993,
+      "hit_rate@10": 0.1039,
+      "recall@10": 0.0235,
+      "ndcg@10": 0.0243,
+      "catalog_coverage@10": 0.1908,
+      "personalization@10": 0.9967,
+      "novelty@10": 14.3542,
+      "popularity_bias_arp@10": 0.5797,
+      "category_diversity@10": 0.7661
+    }
+  },
+  "bootstrap_95ci": {
+    "RANDOM": {
+      "hit_rate@10": {
+        "mean": 0.0016,
+        "low": 0.0,
+        "high": 0.0049,
+        "n": 616
+      },
+      "ndcg@10": {
+        "mean": 0.0002,
+        "low": 0.0,
+        "high": 0.0007,
+        "n": 616
+      },
+      "recall@10": {
+        "mean": 0.0002,
+        "low": 0.0,
+        "high": 0.0005,
+        "n": 616
+      },
+      "mrr": {
+        "mean": 0.0024,
+        "low": 0.0012,
+        "high": 0.0042,
+        "n": 616
+      }
+    },
+    "POPULARITY": {
+      "hit_rate@10": {
+        "mean": 0.0292,
+        "low": 0.0162,
+        "high": 0.0422,
+        "n": 616
+      },
+      "ndcg@10": {
+        "mean": 0.0089,
+        "low": 0.0046,
+        "high": 0.014,
+        "n": 616
+      },
+      "recall@10": {
+        "mean": 0.0048,
+        "low": 0.0018,
+        "high": 0.009,
+        "n": 616
+      },
+      "mrr": {
+        "mean": 0.0321,
+        "low": 0.0197,
+        "high": 0.0457,
+        "n": 616
+      }
+    },
+    "V1_PRODUCTION": {
+      "hit_rate@10": {
+        "mean": 0.0227,
+        "low": 0.0114,
+        "high": 0.0357,
+        "n": 616
+      },
+      "ndcg@10": {
+        "mean": 0.0037,
+        "low": 0.0016,
+        "high": 0.0063,
+        "n": 616
+      },
+      "recall@10": {
+        "mean": 0.0062,
+        "low": 0.0021,
+        "high": 0.0117,
+        "n": 616
+      },
+      "mrr": {
+        "mean": 0.0096,
+        "low": 0.007,
+        "high": 0.013,
+        "n": 616
+      }
+    },
+    "V2": {
+      "hit_rate@10": {
+        "mean": 0.1039,
+        "low": 0.0812,
+        "high": 0.1282,
+        "n": 616
+      },
+      "ndcg@10": {
+        "mean": 0.0259,
+        "low": 0.0191,
+        "high": 0.0341,
+        "n": 616
+      },
+      "recall@10": {
+        "mean": 0.0288,
+        "low": 0.0199,
+        "high": 0.0385,
+        "n": 616
+      },
+      "mrr": {
+        "mean": 0.0521,
+        "low": 0.0393,
+        "high": 0.0665,
+        "n": 616
+      }
+    },
+    "V2+CATEGORY_CAP3": {
+      "hit_rate@10": {
+        "mean": 0.1039,
+        "low": 0.0795,
+        "high": 0.1299,
+        "n": 616
+      },
+      "ndcg@10": {
+        "mean": 0.0243,
+        "low": 0.0174,
+        "high": 0.0319,
+        "n": 616
+      },
+      "recall@10": {
+        "mean": 0.0235,
+        "low": 0.0158,
+        "high": 0.0326,
+        "n": 616
+      },
+      "mrr": {
+        "mean": 0.0495,
+        "low": 0.0365,
+        "high": 0.0639,
+        "n": 616
+      }
+    }
+  },
+  "comparisons": {
+    "V2_vs_V1": {
+      "hit_rate@10": {
+        "mean": 0.0812,
+        "low": 0.0552,
+        "high": 0.1088,
+        "n": 616,
+        "wins": 63,
+        "losses": 13,
+        "ties": 540
+      },
+      "ndcg@10": {
+        "mean": 0.0222,
+        "low": 0.0147,
+        "high": 0.0307,
+        "n": 616,
+        "wins": 64,
+        "losses": 13,
+        "ties": 539
+      },
+      "recall@10": {
+        "mean": 0.0226,
+        "low": 0.0127,
+        "high": 0.0339,
+        "n": 616,
+        "wins": 63,
+        "losses": 13,
+        "ties": 540
+      },
+      "mrr": {
+        "mean": 0.0425,
+        "low": 0.0296,
+        "high": 0.0568,
+        "n": 616,
+        "wins": 168,
+        "losses": 448,
+        "ties": 0
+      }
+    },
+    "V2_vs_POPULARITY": {
+      "hit_rate@10": {
+        "mean": 0.0747,
+        "low": 0.0471,
+        "high": 0.1023,
+        "n": 616,
+        "wins": 61,
+        "losses": 15,
+        "ties": 540
+      },
+      "ndcg@10": {
+        "mean": 0.017,
+        "low": 0.0085,
+        "high": 0.0263,
+        "n": 616,
+        "wins": 61,
+        "losses": 18,
+        "ties": 537
+      },
+      "recall@10": {
+        "mean": 0.024,
+        "low": 0.0148,
+        "high": 0.0344,
+        "n": 616,
+        "wins": 62,
+        "losses": 15,
+        "ties": 539
+      },
+      "mrr": {
+        "mean": 0.0201,
+        "low": 0.0013,
+        "high": 0.039,
+        "n": 616,
+        "wins": 153,
+        "losses": 463,
+        "ties": 0
+      }
+    },
+    "V1_vs_POPULARITY": {
+      "hit_rate@10": {
+        "mean": -0.0065,
+        "low": -0.0244,
+        "high": 0.0114,
+        "n": 616,
+        "wins": 13,
+        "losses": 17,
+        "ties": 586
+      },
+      "ndcg@10": {
+        "mean": -0.0052,
+        "low": -0.0111,
+        "high": -0.0004,
+        "n": 616,
+        "wins": 13,
+        "losses": 18,
+        "ties": 585
+      },
+      "recall@10": {
+        "mean": 0.0014,
+        "low": -0.0048,
+        "high": 0.0082,
+        "n": 616,
+        "wins": 13,
+        "losses": 17,
+        "ties": 586
+      },
+      "mrr": {
+        "mean": -0.0225,
+        "low": -0.0362,
+        "high": -0.0098,
+        "n": 616,
+        "wins": 397,
+        "losses": 219,
+        "ties": 0
+      }
+    }
+  },
+  "per_user_ndcg@10_distribution": {
+    "RANDOM": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0,
+      "q3": 0.0,
+      "max": 0.1389,
+      "share_zero": 0.9984
+    },
+    "POPULARITY": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0,
+      "q3": 0.0,
+      "max": 1.0,
+      "share_zero": 0.9708
+    },
+    "V1_PRODUCTION": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0,
+      "q3": 0.0,
+      "max": 0.5,
+      "share_zero": 0.9773
+    },
+    "V2": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0,
+      "q3": 0.0,
+      "max": 1.0,
+      "share_zero": 0.8961
+    },
+    "V2+CATEGORY_CAP3": {
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 0.0,
+      "q3": 0.0,
+      "max": 1.0,
+      "share_zero": 0.8961
+    }
+  },
+  "ablation": {
+    "V2 full": {
+      "users": 616,
+      "hit_rate@5": 0.0812,
+      "recall@5": 0.0229,
+      "ndcg@5": 0.0255,
+      "mrr": 0.0521,
+      "catalog_coverage@5": 0.1092,
+      "personalization@5": 0.9993,
+      "hit_rate@10": 0.1039,
+      "recall@10": 0.0288,
+      "ndcg@10": 0.0259,
+      "catalog_coverage@10": 0.1921,
+      "personalization@10": 0.9988,
+      "novelty@10": 14.3585,
+      "popularity_bias_arp@10": 0.5807,
+      "category_diversity@10": 0.3633
+    }
+  },
+  "ablation_paired_delta_full_minus_ablated": {},
+  "cold_start": {
+    "new_users_0_train_loans": {
+      "users": 966,
+      "models": {
+        "RANDOM": {
+          "users": 966,
+          "hit_rate@10": 0.001,
+          "recall@10": 0.0001,
+          "ndcg@10": 0.0001,
+          "mrr": 0.0013,
+          "catalog_coverage@10": 0.3625,
+          "personalization@10": 0.9998
+        },
+        "POPULARITY": {
+          "users": 966,
+          "hit_rate@10": 0.0145,
+          "recall@10": 0.0055,
+          "ndcg@10": 0.0062,
+          "mrr": 0.0136,
+          "catalog_coverage@10": 0.0005,
+          "personalization@10": 0.0
+        },
+        "V1_PRODUCTION": {
+          "users": 966,
+          "hit_rate@10": 0.0031,
+          "recall@10": 0.0009,
+          "ndcg@10": 0.0009,
+          "mrr": 0.0023,
+          "catalog_coverage@10": 0.0005,
+          "personalization@10": 0.0
+        },
+        "V2": {
+          "users": 966,
+          "hit_rate@10": 0.0041,
+          "recall@10": 0.0008,
+          "ndcg@10": 0.0005,
+          "mrr": 0.002,
+          "catalog_coverage@10": 0.0005,
+          "personalization@10": 0.0
+        },
+        "V2+CATEGORY_CAP3": {
+          "users": 966,
+          "hit_rate@10": 0.0021,
+          "recall@10": 0.0004,
+          "ndcg@10": 0.0003,
+          "mrr": 0.0019,
+          "catalog_coverage@10": 0.0005,
+          "personalization@10": 0.0
+        }
+      }
+    },
+    "sparse_users_1_2_train_loans": {
+      "users": 113,
+      "models": {
+        "RANDOM": {
+          "users": 113,
+          "hit_rate@10": 0.0,
+          "recall@10": 0.0,
+          "ndcg@10": 0.0,
+          "mrr": 0.0014,
+          "catalog_coverage@10": 0.0513,
+          "personalization@10": 0.9998
+        },
+        "POPULARITY": {
+          "users": 113,
+          "hit_rate@10": 0.0,
+          "recall@10": 0.0,
+          "ndcg@10": 0.0,
+          "mrr": 0.0013,
+          "catalog_coverage@10": 0.0005,
+          "personalization@10": 0.0
+        },
+        "V1_PRODUCTION": {
+          "users": 113,
+          "hit_rate@10": 0.0265,
+          "recall@10": 0.0096,
+          "ndcg@10": 0.0043,
+          "mrr": 0.0076,
+          "catalog_coverage@10": 0.0135,
+          "personalization@10": 0.8931
+        },
+        "V2": {
+          "users": 113,
+          "hit_rate@10": 0.0619,
+          "recall@10": 0.0264,
+          "ndcg@10": 0.0187,
+          "mrr": 0.0246,
+          "catalog_coverage@10": 0.0472,
+          "personalization@10": 0.9988
+        },
+        "V2+CATEGORY_CAP3": {
+          "users": 113,
+          "hit_rate@10": 0.0442,
+          "recall@10": 0.0178,
+          "ndcg@10": 0.0144,
+          "mrr": 0.0216,
+          "catalog_coverage@10": 0.0462,
+          "personalization@10": 0.9975
+        }
+      }
+    },
+    "regular_users_3plus_train_loans": {
+      "users": 616,
+      "models": {
+        "RANDOM": {
+          "users": 616,
+          "hit_rate@10": 0.0016,
+          "recall@10": 0.0002,
+          "ndcg@10": 0.0002,
+          "mrr": 0.0024,
+          "catalog_coverage@10": 0.247,
+          "personalization@10": 0.9997
+        },
+        "POPULARITY": {
+          "users": 616,
+          "hit_rate@10": 0.0292,
+          "recall@10": 0.0048,
+          "ndcg@10": 0.0089,
+          "mrr": 0.0321,
+          "catalog_coverage@10": 0.0005,
+          "personalization@10": 0.0224
+        },
+        "V1_PRODUCTION": {
+          "users": 616,
+          "hit_rate@10": 0.0227,
+          "recall@10": 0.0062,
+          "ndcg@10": 0.0037,
+          "mrr": 0.0096,
+          "catalog_coverage@10": 0.0219,
+          "personalization@10": 0.9132
+        },
+        "V2": {
+          "users": 616,
+          "hit_rate@10": 0.1039,
+          "recall@10": 0.0288,
+          "ndcg@10": 0.0259,
+          "mrr": 0.0521,
+          "catalog_coverage@10": 0.1921,
+          "personalization@10": 0.9988
+        },
+        "V2+CATEGORY_CAP3": {
+          "users": 616,
+          "hit_rate@10": 0.1039,
+          "recall@10": 0.0235,
+          "ndcg@10": 0.0243,
+          "mrr": 0.0495,
+          "catalog_coverage@10": 0.1908,
+          "personalization@10": 0.9967
+        }
+      }
+    },
+    "empty_recommendation_lists": {
+      "RANDOM": 0,
+      "POPULARITY": 0,
+      "V1_PRODUCTION": 0,
+      "V2": 0,
+      "V2+CATEGORY_CAP3": 0
+    },
+    "item_cold_start": {
+      "masked_books": 2101,
+      "rule": "sha1(book_id) % 10 == 0; all their interactions before the test cutoff removed from features (targets unchanged). zero_evidence = popularity/CF/recency left at 0; neutral_imputation = those features set to the mean of the reader's other candidates; new_arrival_slot = additionally the best-scoring new title is guaranteed one of the top-10 places (production policy: both)",
+      "V2_with_history": {
+        "users": 240,
+        "recall@10": 0.0292
+      },
+      "V2_as_new_books_zero_evidence": {
+        "users": 240,
+        "recall@10": 0.025
+      },
+      "V2_as_new_books_neutral_imputation": {
+        "users": 240,
+        "recall@10": 0.025
+      },
+      "V2_as_new_books_imputation_plus_new_arrival_slot": {
+        "users": 240,
+        "recall@10": 0.0378
+      },
+      "POPULARITY_as_new_books": {
+        "users": 240,
+        "recall@10": 0.0
+      },
+      "V1_PRODUCTION": {
+        "users": 240,
+        "recall@10": 0.0
+      },
+      "RANDOM": {
+        "users": 240,
+        "recall@10": 0.0
+      }
+    }
+  },
+  "legacy_protocol": {
+    "results": {
+      "POPULARITY": {
+        "users": 616,
+        "hit_rate@5": 0.0292,
+        "recall@5": 0.0048,
+        "ndcg@5": 0.0114,
+        "mrr": 0.0321,
+        "catalog_coverage@5": 0.0003,
+        "personalization@5": 0.0329,
+        "hit_rate@10": 0.0292,
+        "recall@10": 0.0048,
+        "ndcg@10": 0.0089,
+        "catalog_coverage@10": 0.0005,
+        "personalization@10": 0.0224
+      },
+      "V1_PRODUCTION": {
+        "users": 616,
+        "hit_rate@5": 0.0114,
+        "recall@5": 0.0037,
+        "ndcg@5": 0.0027,
+        "mrr": 0.0096,
+        "catalog_coverage@5": 0.011,
+        "personalization@5": 0.9137,
+        "hit_rate@10": 0.0227,
+        "recall@10": 0.0062,
+        "ndcg@10": 0.0037,
+        "catalog_coverage@10": 0.022,
+        "personalization@10": 0.9132
+      },
+      "V2": {
+        "users": 616,
+        "hit_rate@5": 0.0812,
+        "recall@5": 0.0229,
+        "ndcg@5": 0.0255,
+        "mrr": 0.0522,
+        "catalog_coverage@5": 0.1093,
+        "personalization@5": 0.9993,
+        "hit_rate@10": 0.1055,
+        "recall@10": 0.0296,
+        "ndcg@10": 0.0262,
+        "catalog_coverage@10": 0.1922,
+        "personalization@10": 0.9988
+      },
+      "V2_LEGACY_EXCLUSIONS": {
+        "users": 616,
+        "hit_rate@5": 0.0812,
+        "recall@5": 0.0229,
+        "ndcg@5": 0.0255,
+        "mrr": 0.0522,
+        "catalog_coverage@5": 0.1093,
+        "personalization@5": 0.9993,
+        "hit_rate@10": 0.1055,
+        "recall@10": 0.0296,
+        "ndcg@10": 0.0262,
+        "catalog_coverage@10": 0.1922,
+        "personalization@10": 0.9988
+      }
+    },
+    "parity_with_simulation_report": {
+      "status": "n/a: real data"
+    }
+  },
+  "error_analysis": {
+    "v2_vs_popularity_ndcg@10_per_user": {
+      "mean": 0.017,
+      "low": 0.0085,
+      "high": 0.0263,
+      "n": 616,
+      "wins": 61,
+      "losses": 18,
+      "ties": 537
+    },
+    "v2_vs_v1_ndcg@10_per_user": {
+      "mean": 0.0222,
+      "low": 0.0147,
+      "high": 0.0307,
+      "n": 616,
+      "wins": 64,
+      "losses": 13,
+      "ties": 539
+    },
+    "by_activity_tertile": {
+      "low (<= 6 train loans)": {
+        "users": 219,
+        "models": {
+          "RANDOM": {
+            "users": 219,
+            "hit_rate@10": 0.0,
+            "recall@10": 0.0,
+            "ndcg@10": 0.0,
+            "mrr": 0.0009,
+            "catalog_coverage@10": 0.0969,
+            "personalization@10": 0.9998
+          },
+          "POPULARITY": {
+            "users": 219,
+            "hit_rate@10": 0.0137,
+            "recall@10": 0.0066,
+            "ndcg@10": 0.0078,
+            "mrr": 0.0154,
+            "catalog_coverage@10": 0.0005,
+            "personalization@10": 0.0033
+          },
+          "V1_PRODUCTION": {
+            "users": 219,
+            "hit_rate@10": 0.0046,
+            "recall@10": 0.0046,
+            "ndcg@10": 0.0014,
+            "mrr": 0.0035,
+            "catalog_coverage@10": 0.0153,
+            "personalization@10": 0.9125
+          },
+          "V2": {
+            "users": 219,
+            "hit_rate@10": 0.0776,
+            "recall@10": 0.034,
+            "ndcg@10": 0.0255,
+            "mrr": 0.0376,
+            "catalog_coverage@10": 0.0882,
+            "personalization@10": 0.9991
+          },
+          "V2+CATEGORY_CAP3": {
+            "users": 219,
+            "hit_rate@10": 0.0685,
+            "recall@10": 0.0249,
+            "ndcg@10": 0.0211,
+            "mrr": 0.0341,
+            "catalog_coverage@10": 0.0865,
+            "personalization@10": 0.998
+          }
+        }
+      },
+      "mid (7-17)": {
+        "users": 200,
+        "models": {
+          "RANDOM": {
+            "users": 200,
+            "hit_rate@10": 0.005,
+            "recall@10": 0.0005,
+            "ndcg@10": 0.0007,
+            "mrr": 0.0039,
+            "catalog_coverage@10": 0.0885,
+            "personalization@10": 0.9997
+          },
+          "POPULARITY": {
+            "users": 200,
+            "hit_rate@10": 0.02,
+            "recall@10": 0.0029,
+            "ndcg@10": 0.0058,
+            "mrr": 0.0227,
+            "catalog_coverage@10": 0.0005,
+            "personalization@10": 0.0141
+          },
+          "V1_PRODUCTION": {
+            "users": 200,
+            "hit_rate@10": 0.02,
+            "recall@10": 0.0078,
+            "ndcg@10": 0.0047,
+            "mrr": 0.0092,
+            "catalog_coverage@10": 0.0157,
+            "personalization@10": 0.9219
+          },
+          "V2": {
+            "users": 200,
+            "hit_rate@10": 0.095,
+            "recall@10": 0.0269,
+            "ndcg@10": 0.0223,
+            "mrr": 0.0452,
+            "catalog_coverage@10": 0.0775,
+            "personalization@10": 0.9984
+          },
+          "V2+CATEGORY_CAP3": {
+            "users": 200,
+            "hit_rate@10": 0.085,
+            "recall@10": 0.0232,
+            "ndcg@10": 0.021,
+            "mrr": 0.0426,
+            "catalog_coverage@10": 0.0733,
+            "personalization@10": 0.9952
+          }
+        }
+      },
+      "high (> 17)": {
+        "users": 197,
+        "models": {
+          "RANDOM": {
+            "users": 197,
+            "hit_rate@10": 0.0,
+            "recall@10": 0.0,
+            "ndcg@10": 0.0,
+            "mrr": 0.0024,
+            "catalog_coverage@10": 0.0878,
+            "personalization@10": 0.9998
+          },
+          "POPULARITY": {
+            "users": 197,
+            "hit_rate@10": 0.0558,
+            "recall@10": 0.0047,
+            "ndcg@10": 0.0133,
+            "mrr": 0.0602,
+            "catalog_coverage@10": 0.0005,
+            "personalization@10": 0.0484
+          },
+          "V1_PRODUCTION": {
+            "users": 197,
+            "hit_rate@10": 0.0457,
+            "recall@10": 0.0064,
+            "ndcg@10": 0.005,
+            "mrr": 0.0168,
+            "catalog_coverage@10": 0.0133,
+            "personalization@10": 0.9055
+          },
+          "V2": {
+            "users": 197,
+            "hit_rate@10": 0.1421,
+            "recall@10": 0.025,
+            "ndcg@10": 0.03,
+            "mrr": 0.0753,
+            "catalog_coverage@10": 0.0716,
+            "personalization@10": 0.9979
+          },
+          "V2+CATEGORY_CAP3": {
+            "users": 197,
+            "hit_rate@10": 0.1624,
+            "recall@10": 0.0222,
+            "ndcg@10": 0.0311,
+            "mrr": 0.0736,
+            "catalog_coverage@10": 0.0689,
+            "personalization@10": 0.9954
+          }
+        }
+      }
+    },
+    "head_vs_tail_targets": {
+      "head_definition": "top 4302 books by train loan count",
+      "RANDOM": {
+        "head": {
+          "users": 388,
+          "recall@10": 0.0009
+        },
+        "tail": {
+          "users": 576,
+          "recall@10": 0.0
+        }
+      },
+      "POPULARITY": {
+        "head": {
+          "users": 388,
+          "recall@10": 0.0207
+        },
+        "tail": {
+          "users": 576,
+          "recall@10": 0.0
+        }
+      },
+      "V1_PRODUCTION": {
+        "head": {
+          "users": 388,
+          "recall@10": 0.009
+        },
+        "tail": {
+          "users": 576,
+          "recall@10": 0.0024
+        }
+      },
+      "V2": {
+        "head": {
+          "users": 388,
+          "recall@10": 0.034
+        },
+        "tail": {
+          "users": 576,
+          "recall@10": 0.0229
+        }
+      },
+      "V2+CATEGORY_CAP3": {
+        "head": {
+          "users": 388,
+          "recall@10": 0.0289
+        },
+        "tail": {
+          "users": 576,
+          "recall@10": 0.0189
+        }
+      }
+    },
+    "candidate_pool": {
+      "mean_pool_size": 188.164,
+      "per_source_k": 40,
+      "target_recall_of_pool": 0.086
+    }
+  },
+  "acceptance": {
+    "rule": "V2 - baseline > 0 with paired 95% bootstrap CI above zero, for NDCG@10, Recall@10 and MRR, against V1_PRODUCTION and POPULARITY",
+    "checks": {
+      "V2_vs_V1:ndcg@10": true,
+      "V2_vs_V1:recall@10": true,
+      "V2_vs_V1:mrr": true,
+      "V2_vs_POPULARITY:ndcg@10": true,
+      "V2_vs_POPULARITY:recall@10": true,
+      "V2_vs_POPULARITY:mrr": true
+    },
+    "passed": true
+  },
+  "runtime_seconds": 14645.9,
+  "conclusion": [
+    "V2 vs V1_PRODUCTION on 616 test users: hit_rate@10 better (Δ=+0.0812, 95% CI [+0.0552, +0.1088]); ndcg@10 better (Δ=+0.0222, 95% CI [+0.0147, +0.0307]); recall@10 better (Δ=+0.0226, 95% CI [+0.0127, +0.0339]); mrr better (Δ=+0.0425, 95% CI [+0.0296, +0.0568]).",
+    "V2 vs POPULARITY on 616 test users: hit_rate@10 better (Δ=+0.0747, 95% CI [+0.0471, +0.1023]); ndcg@10 better (Δ=+0.0170, 95% CI [+0.0085, +0.0263]); recall@10 better (Δ=+0.0240, 95% CI [+0.0148, +0.0344]); mrr better (Δ=+0.0201, 95% CI [+0.0013, +0.0390]).",
+    "Coverage@10 / Personalization@10: POPULARITY 0.0005/0.0224, V1_PRODUCTION 0.0219/0.9132, V2 0.1921/0.9988.",
+    "Ablation: not run (--skip-ablations).",
+    "Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.0378, imputation only 0.025, zero evidence 0.025, POPULARITY 0.0, RANDOM 0.0 (V2 when their history is known: 0.0292).",
+    "Cold start, new users (n=966): NDCG@10 V2 0.0005 vs POPULARITY 0.0062 (POPULARITY higher).",
+    "Cold start, sparse users (n=113): NDCG@10 V2 0.0187 vs POPULARITY 0.0 (V2 higher).",
+    "Acceptance rule on this real library: met (informational - the production model choice is made on the synthetic dataset and is unchanged)."
+  ]
+}

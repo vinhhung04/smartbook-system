@@ -258,3 +258,72 @@ class AuthorRouteTest(unittest.TestCase):
             _, other = run(assistant_tools._score_and_rank_books_with_confidence(BOOKS, "Sách nào của Xuân Diệu?", 5))
         self.assertNotIn("AUTHOR_EXACT", confidence.reason_codes)
         self.assertNotIn("AUTHOR_EXACT", other.reason_codes)
+
+
+class MetadataRouteTest(unittest.TestCase):
+    """Phase 2: exact title and ISBN-miss filters."""
+
+    CATALOG = [
+        {"id": "m1", "title": "Mắt Biếc (Tái Bản 2022)", "author": "Nguyễn Nhật Ánh", "category": "Văn học Việt Nam",
+         "isbn": "8934974163442", "description": "", "summary_vi": ""},
+        {"id": "m2", "title": "Project Hail Mary", "author": "Andy Weir", "category": "Văn học nước ngoài",
+         "isbn": "9780593135204", "description": "", "summary_vi": ""},
+        {"id": "m3", "title": "Project Hail Mary (Bìa mềm)", "author": "Andy Weir", "category": "Văn học nước ngoài",
+         "isbn": "8935325029677", "description": "", "summary_vi": ""},
+        {"id": "m4", "title": "Tuổi Thơ Dữ Dội - Tập 1", "author": "Phùng Quán", "category": "Thiếu nhi",
+         "isbn": "", "description": "Tuổi thơ trong kháng chiến", "summary_vi": ""},
+        {"id": "m5", "title": "Đất Rừng Phương Nam", "author": "Đoàn Giỏi", "category": "Thiếu nhi",
+         "isbn": "", "description": "Cậu bé An lưu lạc miền Tây", "summary_vi": ""},
+    ]
+
+    def setUp(self):
+        import vector_store
+        from vector_store import Chunk
+        self.vector_store = vector_store
+        self.store = vector_store.InMemoryVectorStore()
+        vector_store.set_store(self.store)
+        for book in self.CATALOG:
+            doc = run(self.store.upsert_document(
+                corpus=vector_store.CORPUS_BOOK, source_id=book["id"], title=book["title"],
+                content=book_index.book_text(book), content_hash="h-" + book["id"], metadata={}))
+            run(self.store.upsert_chunks([Chunk(doc, vector_store.CORPUS_BOOK, 0, book_index.book_text(book),
+                                                "c-" + book["id"], [1.0, 0.0], "test-model")]))
+
+    def tearDown(self):
+        self.vector_store.set_store(None)
+
+    def rank(self, query, limit=5):
+        # every book has the same vector: the semantic arm cannot tell them apart
+        flat = embeddings.EmbedResult(vector=[1.0, 0.0], model="test-model", provider="openrouter")
+        with mock.patch.object(embeddings, "embed_text", return_value=flat):
+            return run(assistant_tools._score_and_rank_books_with_confidence(self.CATALOG, query, limit))
+
+    def test_title_without_edition_suffix_cue_words_or_diacritics_is_an_exact_match(self):
+        for query in ("Mắt Biếc", "tim sach mat biec", "Có cuốn Mắt Biếc không?"):
+            results, confidence = self.rank(query)
+            self.assertEqual(results[0]["id"], "m1", query)
+            self.assertEqual(confidence.reason_codes, ["TITLE_EXACT"], query)
+
+    def test_every_edition_of_an_exact_title_comes_first(self):
+        results, _ = self.rank("Project Hail Mary")
+        self.assertEqual({r["id"] for r in results[:2]}, {"m2", "m3"})
+
+    def test_a_different_volume_is_not_an_exact_title(self):
+        _, confidence = self.rank("Có Tuổi Thơ Dữ Dội tập 2 không?")
+        self.assertNotIn("TITLE_EXACT", confidence.reason_codes)
+
+    def test_isbn_lookup_without_catalog_match_abstains_instead_of_returning_lookalikes(self):
+        results, confidence = self.rank("Tìm sách ISBN 9780593135205")
+        self.assertEqual((results, confidence.decision, confidence.reason_codes), ([], "NO_EVIDENCE", ["ISBN_NOT_FOUND"]))
+        results, confidence = self.rank("ISBN 978-0-593-13520-4 là sách gì?")
+        self.assertEqual((results[0]["id"], confidence.reason_codes), ("m2", ["ISBN_EXACT"]))
+
+    def test_isbn10_matches_the_catalog_isbn13(self):
+        results, confidence = self.rank("Tìm sách ISBN 0-593-13520-2")
+        self.assertEqual((results[0]["id"], confidence.reason_codes), ("m2", ["ISBN_EXACT"]))
+        _, confidence = self.rank("Tìm sách ISBN 0593135203")  # bad check digit: not an ISBN-10
+        self.assertEqual(confidence.reason_codes, ["ISBN_NOT_FOUND"])
+
+    def test_isbn_plus_other_words_still_uses_hybrid_search(self):
+        _, confidence = self.rank("Project Hail Mary 9780593135205")
+        self.assertNotIn("ISBN_NOT_FOUND", confidence.reason_codes)

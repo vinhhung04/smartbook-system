@@ -226,6 +226,38 @@ export async function getSystemHealthSnapshot(): Promise<MonitorSnapshot> {
   };
 }
 
+export type MonitorCheck = { status: MonitorStatus; latencyMs: number | null; checkedAt: string };
+
+/** Checks the gateway ran on its own (one a minute), per service id, oldest first; null when unavailable or not permitted. */
+async function getHealthHistory(): Promise<Record<string, MonitorCheck[]> | null> {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const response = await fetch(`${SYSTEM_HEALTH_URL}/history`, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (!isRecord(body) || !Array.isArray(body.samples)) return null;
+    const history: Record<string, MonitorCheck[]> = {};
+    for (const sample of body.samples as Array<{ checked_at: string; services: Array<{ id: string; status: string; latency_ms: number | null; details: unknown }> }>) {
+      for (const service of sample.services) {
+        (history[service.id] ??= []).push({
+          status: normalizeStatus(service.status === 'ok', isRecord(service.details) ? service.details : null),
+          latencyMs: service.latency_ms,
+          checkedAt: sample.checked_at,
+        });
+      }
+    }
+    return history;
+  } catch {
+    return null;
+  }
+}
+
 export const monitorService = {
   getSystemHealthSnapshot,
+  getHealthHistory,
 };

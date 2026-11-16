@@ -1,0 +1,396 @@
+{
+ "version": "c1-2026-11-15",
+ "note": "Multi-turn follow-ups for Phase 3. expected_ids are copied from the rag_dataset.json case named in standalone_of (the same question asked on its own); no new ground truth. history = that case's question plus a placeholder assistant turn.",
+ "cases": [
+  {
+   "id": "cv-001",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Mỗi hạng thành viên được mượn tối đa bao nhiêu quyển sách?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn hạng Bạc Sĩ thì sao?",
+   "standalone_of": "doc-001",
+   "standalone_question": "Mỗi hạng thành viên được mượn tối đa bao nhiêu quyển sách?",
+   "expected_ids": [
+    "membership-loan-limit"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-002",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Phí phạt trả sách trễ hạn được tính như thế nào?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn hạng Bạc Sĩ thì sao?",
+   "standalone_of": "doc-005",
+   "standalone_question": "Mức phạt mỗi ngày trễ hạn của hạng Bạc Sĩ là bao nhiêu?",
+   "expected_ids": [
+    "fine-calculation"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-003",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Làm mất sách đang mượn thì phải đền bao nhiêu?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn hạng Thẻ Đọc thì sao?",
+   "standalone_of": "doc-013",
+   "standalone_question": "Hệ số đền bù sách mất của hạng Thẻ Đọc là bao nhiêu?",
+   "expected_ids": [
+    "lost-item-fee"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-004",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Đặt trước sách xong thì giữ chỗ trong bao lâu?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn hạng nào giữ lâu nhất?",
+   "standalone_of": "doc-011",
+   "standalone_question": "Hạng thành viên nào được giữ chỗ sách đặt trước lâu nhất?",
+   "expected_ids": [
+    "reservation-hold"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-005",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Tôi có thể gia hạn sách đã mượn không?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn mỗi lần thêm bao lâu?",
+   "standalone_of": "doc-009",
+   "standalone_question": "Mỗi lần gia hạn sách kéo dài thêm bao lâu?",
+   "expected_ids": [
+    "renewal-count"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-006",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Nhà cung cấp xác nhận đơn hàng bằng cách nào nếu chưa có tài khoản?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Cái đó có cần đăng nhập không?",
+   "standalone_of": "doc-021",
+   "standalone_question": "Supplier Portal có cần đăng nhập không?",
+   "expected_ids": [
+    "supplier-portal"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-007",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Mã OTP xác thực email có hiệu lực trong bao lâu?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn quên mật khẩu thì sao?",
+   "standalone_of": "doc-094",
+   "standalone_question": "Tôi quên mật khẩu đăng nhập thì phải làm gì?",
+   "expected_ids": [
+    "account-security"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-008",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Thanh toán tiền phạt online được không?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn qua VNPay mà chưa cập nhật thì sao?",
+   "standalone_of": "doc-088",
+   "standalone_question": "Đã trả tiền phạt qua VNPay mà hệ thống chưa cập nhật?",
+   "expected_ids": [
+    "fines-payment"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-009",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Giờ mở cửa của thư viện là mấy giờ?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Chủ nhật thì sao?",
+   "standalone_of": "doc-079",
+   "standalone_question": "Chủ nhật thư viện có mở cửa không?",
+   "expected_ids": [
+    "branches-opening-hours"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-010",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Chi nhánh SmartBook ở Hà Nội nằm ở địa chỉ nào?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn Cần Thơ thì sao?",
+   "standalone_of": "doc-078",
+   "standalone_question": "Chi nhánh SmartBook ở Hà Nội nằm ở địa chỉ nào?",
+   "expected_ids": [
+    "branches-opening-hours"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-011",
+   "corpus": "INTERNAL_DOC",
+   "kind": "follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Thủ thư có những quyền gì trong hệ thống?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn nhân viên kho thì sao?",
+   "standalone_of": "doc-109",
+   "standalone_question": "Nhân viên kho chỉ thấy dữ liệu kho nào?",
+   "expected_ids": [
+    "roles-permissions"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-012",
+   "corpus": "INTERNAL_DOC",
+   "kind": "no_answer_follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Đặt trước sách xong thì giữ chỗ trong bao lâu?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn cho thuê máy tính xách tay thì sao?",
+   "standalone_of": "doc-056",
+   "standalone_question": "Thư viện có cho thuê máy tính xách tay không?",
+   "expected_ids": [],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-013",
+   "corpus": "INTERNAL_DOC",
+   "kind": "no_answer_follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Giờ mở cửa của thư viện là mấy giờ?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn ngày lễ thì sao?",
+   "standalone_of": "doc-053",
+   "standalone_question": "Thư viện đóng cửa vào những ngày lễ nào trong năm?",
+   "expected_ids": [],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-014",
+   "corpus": "INTERNAL_DOC",
+   "kind": "no_answer_follow_up",
+   "history": [
+    {
+     "role": "user",
+     "content": "Phí phạt trả sách trễ hạn được tính như thế nào?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn mang thú cưng vào thì sao?",
+   "standalone_of": "doc-057",
+   "standalone_question": "Có được mang thú cưng vào thư viện không?",
+   "expected_ids": [],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-015",
+   "corpus": "INTERNAL_DOC",
+   "kind": "control_complete",
+   "history": [
+    {
+     "role": "user",
+     "content": "Mỗi hạng thành viên được mượn tối đa bao nhiêu quyển sách?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Phí phạt trả sách trễ hạn được tính như thế nào?",
+   "standalone_of": "doc-004",
+   "standalone_question": "Phí phạt trả sách trễ hạn được tính như thế nào?",
+   "expected_ids": [
+    "fine-calculation"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-016",
+   "corpus": "INTERNAL_DOC",
+   "kind": "control_complete",
+   "history": [
+    {
+     "role": "user",
+     "content": "Mã OTP xác thực email có hiệu lực trong bao lâu?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Tôi quên mật khẩu đăng nhập thì phải làm gì?",
+   "standalone_of": "doc-094",
+   "standalone_question": "Tôi quên mật khẩu đăng nhập thì phải làm gì?",
+   "expected_ids": [
+    "account-security"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-017",
+   "corpus": "INTERNAL_DOC",
+   "kind": "control_complete",
+   "history": [
+    {
+     "role": "user",
+     "content": "Làm mất sách đang mượn thì phải đền bao nhiêu?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Còn nợ tiền phạt thì có mượn thêm sách được không?",
+   "standalone_of": "doc-087",
+   "standalone_question": "Còn nợ tiền phạt thì có mượn thêm sách được không?",
+   "expected_ids": [
+    "fines-payment"
+   ],
+   "expected_facts": []
+  },
+  {
+   "id": "cv-018",
+   "corpus": "INTERNAL_DOC",
+   "kind": "control_complete",
+   "history": [
+    {
+     "role": "user",
+     "content": "Phân loại Dewey chia sách thành mấy lớp?"
+    },
+    {
+     "role": "assistant",
+     "content": "(câu trả lời trước)"
+    }
+   ],
+   "question": "Mã ISBN 13 số gồm những phần nào?",
+   "standalone_of": "doc-114",
+   "standalone_question": "Mã ISBN 13 số gồm những phần nào?",
+   "expected_ids": [
+    "isbn-classification"
+   ],
+   "expected_facts": []
+  }
+ ]
+}

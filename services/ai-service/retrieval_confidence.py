@@ -31,6 +31,7 @@ import logging
 import os
 from dataclasses import dataclass
 
+import vector_store
 from metrics import ai_retrieval_decisions_total
 from vector_store import Hit
 
@@ -58,6 +59,10 @@ class ConfidenceConfig:
     w_semantic: float = 0.5
     w_keyword: float = 0.4
     w_agree: float = 0.1
+    # Phase 1 (2026-11-15): an UNCERTAIN match whose top evidence chunk contains less than
+    # this share of the question's content words is topical similarity, not evidence
+    # (e.g. "cho thuê máy tính xách tay?" landing on the reader-features chunk). 0 = off.
+    min_focus_coverage: float = 0.0
 
 
 def _config_from_env(prefix: str, defaults: ConfidenceConfig) -> ConfidenceConfig:
@@ -72,6 +77,7 @@ def _config_from_env(prefix: str, defaults: ConfidenceConfig) -> ConfidenceConfi
         w_semantic=_f("W_SEMANTIC", defaults.w_semantic),
         w_keyword=_f("W_KEYWORD", defaults.w_keyword),
         w_agree=_f("W_AGREE", defaults.w_agree),
+        min_focus_coverage=_f("MIN_FOCUS_COVERAGE", defaults.min_focus_coverage),
     )
 
 
@@ -108,7 +114,14 @@ def _config_from_env(prefix: str, defaults: ConfidenceConfig) -> ConfidenceConfi
 # chỉ để tăng no-answer"). Re-run eval/calibrate_rag.py if the corpus or
 # embedding model changes enough to shift this trade-off.
 _BOOK_DEFAULTS = ConfidenceConfig(cos_floor=0.30, cos_ceil=0.60, tau_confident=0.66, tau_evidence=0.25)
-_DOC_DEFAULTS = ConfidenceConfig(cos_floor=0.30, cos_ceil=0.55, tau_confident=0.66, tau_evidence=0.40)
+# min_focus_coverage=0.01 (2026-11-15, Phase 1) = "the top evidence chunk shares NO content word
+# with the question". eval/calibrate_rag.py --split=hash (production taus fixed) picked 0.2, but the
+# end-to-end chat eval then refused a false-premise question whose top chunk scored 0.167
+# (chat_answers_20261115_020850, ans-contra-01): the answerable/no-answer margin is too thin for a
+# tuned cut-off. Zero overlap catches the same held-out test cases as 0.2 (test FPR 0.304 -> 0.217,
+# FNR 0, answerable R@5 unchanged). BOOK_METADATA keeps it off: titles/authors are not content words.
+_DOC_DEFAULTS = ConfidenceConfig(cos_floor=0.30, cos_ceil=0.55, tau_confident=0.66, tau_evidence=0.40,
+                                 min_focus_coverage=0.01)
 
 BOOK_CONFIDENCE = _config_from_env("BOOK_CONF", _BOOK_DEFAULTS)
 DOC_CONFIDENCE = _config_from_env("DOC_CONF", _DOC_DEFAULTS)
@@ -127,6 +140,9 @@ class RetrievalSignals:
     keyword_rank: int | None
     top1_agree: bool
     hard_match: str | None = None
+    # share of the question's content words (vector_store.keyword_terms) found in the
+    # fused top-1 chunk; None = not computed (old dumps, no query, no content terms)
+    focus_coverage: float | None = None
 
 
 @dataclass(frozen=True)
@@ -173,6 +189,7 @@ def extract_signals(
     fused_hits: list[Hit],
     semantic_available: bool,
     hard_match: str | None = None,
+    query: str | None = None,
 ) -> RetrievalSignals:
     """`semantic_hits`/`keyword_hits` are the two arms BEFORE fusion (already
     filtered by the corpus's own semantic threshold), `fused_hits` is the RRF
@@ -189,10 +206,12 @@ def extract_signals(
     semantic_rank = _rank_of(semantic_hits, top_id)
     keyword_rank = _rank_of(keyword_hits, top_id)
     semantic_top1 = next((hit.score for hit in semantic_hits if hit.source_id == top_id), 0.0)
+    terms = vector_store.keyword_terms(query) if query else []
+    focus = round(vector_store.keyword_coverage(terms, fused_hits[0].content), 4) if terms else None
     return RetrievalSignals(
         corpus=corpus, result_count=len(fused_hits), semantic_available=semantic_available,
         semantic_top1=semantic_top1, semantic_rank=semantic_rank, keyword_rank=keyword_rank,
-        top1_agree=(semantic_rank == 1 and keyword_rank == 1),
+        top1_agree=(semantic_rank == 1 and keyword_rank == 1), focus_coverage=focus,
     )
 
 
@@ -229,6 +248,12 @@ def evaluate(signals: RetrievalSignals, cfg: ConfidenceConfig) -> RetrievalConfi
         decision = CONFIDENT_MATCH
     elif confidence >= cfg.tau_evidence:
         decision = UNCERTAIN
+        # Only with a working semantic arm: a keyword-only hit (embeddings down) matched
+        # the words by definition, and that fallback must keep working.
+        if (signals.semantic_available and signals.focus_coverage is not None
+                and signals.focus_coverage < cfg.min_focus_coverage):
+            decision = NO_EVIDENCE
+            reasons.append("LOW_QUERY_TERM_COVERAGE")
     else:
         decision = NO_EVIDENCE
         reasons.append("LOW_OVERALL_CONFIDENCE")
@@ -246,5 +271,6 @@ def log_decision(result: RetrievalConfidence) -> None:
         "corpus": result.signals.corpus, "decision": result.decision, "confidence": result.confidence,
         "semantic_top1": round(result.signals.semantic_top1, 3), "semantic_rank": result.signals.semantic_rank,
         "keyword_rank": result.signals.keyword_rank, "top1_agree": result.signals.top1_agree,
+        "focus_coverage": result.signals.focus_coverage,
         "abstained": result.decision == NO_EVIDENCE, "reason_codes": result.reason_codes,
     }))

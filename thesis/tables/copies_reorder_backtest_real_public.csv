@@ -1,0 +1,7 @@
+group,samples,mean_empty_shelf_share,shortage_share,share_of_later_shortages,mean_suggested_qty,mean_suggested_qty_if_shortfall_floors,mean_suggested_qty_without_floors
+priority HIGH,16296,0.048249,0.037064,0.659389,5.568606,5.490488,4.579406
+priority MEDIUM,18660,0.004541,0.002036,0.041485,3.008628,1.441908,1.441908
+priority LOW,66128,0.005964,0.004143,0.299127,0.234515,0.234515,0.234515
+top 50 by PRODUCTION_RANKING,600,0.066944,0.053333,,,,
+top 50 by RECENT_BORROWS,600,0.037611,0.028333,,,,
+all candidates,101084,0.012518,0.009062,,,,

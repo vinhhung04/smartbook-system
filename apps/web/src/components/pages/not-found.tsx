@@ -1,8 +1,10 @@
 import { NavLink } from 'react-router';
 import { motion } from 'motion/react';
 import { Home } from 'lucide-react';
+import { usePageMeta } from '@/lib/page-meta';
 
 export function NotFoundPage() {
+  usePageMeta({ title: 'Không tìm thấy trang', noindex: true });
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-6 p-8">
       <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}

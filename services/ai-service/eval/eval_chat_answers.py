@@ -260,6 +260,12 @@ def score_dynamic(case: dict, body: dict, truth: dict | None) -> dict:
 
 # ── document cases ──────────────────────────────────────────────────────────
 
+# Phase 4 (2026-11-15): a SEPARATE metric, the citation numbers above are unchanged. These
+# documents only explain values the system reads live by design (retrieval._live_policy_data:
+# "the live value wins"); a reply grounded on that live source has the evidence the document holds.
+LIVE_SOURCE_FOR_DOC = {"/public/membership/plans": "membership-plans-overview",
+                       "/public/catalog/branches": "branches-opening-hours"}
+
 def score(case: dict, body: dict, truth: dict | None = None, corpus: dict[str, str] | None = None) -> dict:
     corpus = corpus if corpus is not None else {}
     reply = normalize(body.get("reply", ""))
@@ -276,6 +282,10 @@ def score(case: dict, body: dict, truth: dict | None = None, corpus: dict[str, s
         "citation_relevance": round(len(cited & acceptable) / len(cited), 3) if cited and acceptable else None,
         "citation_recall": round(len(cited & expected) / len(expected), 3) if expected else None,
         "citation_complete": (cited >= expected) if expected else None,
+        "evidence_complete": ((cited | {LIVE_SOURCE_FOR_DOC[str(s.get("endpoint"))]
+                                        for s in body.get("context_sources") or []
+                                        if str(s.get("endpoint")) in LIVE_SOURCE_FOR_DOC}) >= expected)
+                             if expected else None,
         "grounding_warning": any(GROUNDING_WARNING in w for w in body.get("retrieval_warnings") or []),
         "forbidden_hits": [], "facts_ok": None, "numeric_claims": None, "unsupported_claims": [],
     }
@@ -371,6 +381,8 @@ def summarize(rows: list[dict]) -> dict:
         "citation_relevance": mean("citation_relevance"),
         "citation_recall": mean("citation_recall"),
         "citation_completeness": rate([r for r in rows if r.get("citation_complete") is not None], "citation_complete"),
+        "evidence_completeness_with_live_sources": rate([r for r in rows if r.get("evidence_complete") is not None],
+                                                        "evidence_complete"),
         "numeric_claim_support": (round(sum(len(c["supported"]) for c in claims)
                                         / sum(len(c["claims"]) for c in claims), 3) if claims else None),
         "grounding_warning_rate": rate(rows, "grounding_warning"),

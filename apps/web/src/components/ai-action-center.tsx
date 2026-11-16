@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import {
-  AlertTriangle, Bell, BookOpen, ChevronDown, ChevronRight, ClipboardList, FileText, Inbox, RefreshCw, ShoppingCart, Sparkles,
+  AlertTriangle, Bell, BookOpen, ChevronDown, ChevronRight, ClipboardList, FileText, Inbox, MessagesSquare, RefreshCw, ShoppingCart, Sparkles,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/status-badge';
 import { getStatusVariant } from '@/lib/status-registry';
@@ -204,7 +204,7 @@ function ReconcilePanel({ actionId, onDone }: { actionId: string; onDone: () => 
   );
 }
 
-function ActionDetailPanel({ actionId }: { actionId: string }) {
+function ActionDetailPanel({ actionId, onOpenConversation }: { actionId: string; onOpenConversation?: (conversationId: string) => void }) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [detail, setDetail] = useState<{ action: AiActionDetail; audit_logs: AiAuditLogEntry[] } | null>(null);
@@ -287,6 +287,13 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
             Từ câu hỏi: <span className="text-foreground">“{action.created_from_message}”</span>
           </p>
         )}
+        {action.conversation_id && onOpenConversation && (
+          <button type="button" onClick={() => onOpenConversation(action.conversation_id!)}
+            className="inline-flex h-8 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 text-[12.5px] font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary active:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <MessagesSquare className="h-3.5 w-3.5" aria-hidden="true" />
+            Mở hội thoại gốc
+          </button>
+        )}
       </header>
 
       {action.status === 'PENDING_CONFIRMATION' && (
@@ -328,11 +335,19 @@ function ActionDetailPanel({ actionId }: { actionId: string }) {
   );
 }
 
-export function AIActionCenter() {
+export function AIActionCenter({ onOpenConversation, focusActionId }: {
+  /** Opens the conversation an action came from (the chat view of the same page). */
+  onOpenConversation?: (conversationId: string) => void;
+  /** Selects this action when it changes (e.g. "Xem bản tin" on the welcome screen). */
+  focusActionId?: string | null;
+} = {}) {
   const [items, setItems] = useState<AiActionListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(focusActionId ?? null);
+  useEffect(() => {
+    if (focusActionId) setSelectedId(focusActionId);
+  }, [focusActionId]);
   const { connected } = useSocket();
   const wide = useMediaQuery(WIDE_QUERY);
   const reloadTimerRef = useRef<number | null>(null);
@@ -534,7 +549,7 @@ export function AIActionCenter() {
         {wide && (
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {selected ? (
-              <ActionDetailPanel key={selected.id} actionId={selected.id} />
+              <ActionDetailPanel key={selected.id} actionId={selected.id} onOpenConversation={onOpenConversation} />
             ) : (
               <div className="mx-auto max-w-md px-8 py-16">
                 <h3 className="font-display text-[18px] font-semibold tracking-tight text-foreground">Chọn một hành động ở danh sách</h3>
@@ -557,7 +572,7 @@ export function AIActionCenter() {
           <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:max-w-lg">
             <SheetTitle className="sr-only">{selected?.summary ?? 'Chi tiết hành động'}</SheetTitle>
             <SheetDescription className="sr-only">Chi tiết, xác nhận và lịch sử audit của hành động AI.</SheetDescription>
-            {selected && <ActionDetailPanel key={selected.id} actionId={selected.id} />}
+            {selected && <ActionDetailPanel key={selected.id} actionId={selected.id} onOpenConversation={onOpenConversation} />}
           </SheetContent>
         </Sheet>
       )}

@@ -66,6 +66,14 @@ DEFAULT_PARAMS = {
 # principle as the rating prior: absence of history is not evidence of dislike.
 HISTORY_FEATURES = ("collaborative", "popularity", "recency")
 DEFAULT_WEIGHTS = {name: 1.0 for name in FEATURES}
+# A reader with no own signal (no loan, rating, wishlist...) is ranked by how much
+# each book is borrowed and nothing else: on two real libraries' loans that beat
+# the full weight mix for new readers (docs/ANALYSIS/REAL_LIBRARY_DATA_VALIDATION.md).
+COLD_START_WEIGHTS = {"popularity": 1.0}
+
+
+def effective_weights(signal_count: int, weights: dict) -> dict:
+    return weights if signal_count > 0 else COLD_START_WEIGHTS
 
 RATING_LIKED_MIN = 4
 RATING_DISLIKED_MAX = 2
@@ -677,7 +685,7 @@ def recommend(
 ) -> dict:
     """Production entry point. Returns {"entries": [...], "profile": profile}."""
     profile = build_user_profile(user_interactions, model)
-    weights, scale = config["weights"], config["feature_scale"]
+    weights, scale = effective_weights(profile["signal_count"], config["weights"]), config["feature_scale"]
     ranked = rank(catalog, profile, model, weights, scale)
     ranked = apply_category_cap(ranked, config.get("max_per_category"))
     ranked = apply_new_arrival_slot(ranked, limit, config["params"].get("new_arrival_slots", 0))

@@ -1,0 +1,818 @@
+{
+ "timestamp_utc": "20261115_020418",
+ "dataset": "rag_dataset_supplement.json",
+ "cases": 43,
+ "catalog_books": 136,
+ "embedding": "qwen/qwen3-embedding-8b@768",
+ "abstention": "on",
+ "split": "all",
+ "overall": {
+  "count": 43,
+  "recall_at_1": 0.6058,
+  "recall_at_3": 0.7475,
+  "recall_at_5": 0.7497,
+  "mrr": 0.7674
+ },
+ "by_corpus": {
+  "BOOK_METADATA": {
+   "count": 43,
+   "recall_at_1": 0.6058,
+   "recall_at_3": 0.7475,
+   "recall_at_5": 0.7497,
+   "mrr": 0.7674
+  },
+  "INTERNAL_DOC": {
+   "count": 0,
+   "recall_at_1": 0.0,
+   "recall_at_3": 0.0,
+   "recall_at_5": 0.0,
+   "mrr": 0.0
+  }
+ },
+ "abstention_by_corpus": {
+  "BOOK_METADATA": {
+   "no_answer_count": 8,
+   "answerable_count": 35,
+   "no_answer_accuracy": 0.25,
+   "false_positive_rate": 0.75,
+   "false_negative_rate": 0.0286,
+   "coverage": 0.9302,
+   "abstention_precision": 0.6667,
+   "abstention_recall": 0.25,
+   "abstention_f1": 0.3636
+  },
+  "INTERNAL_DOC": {
+   "no_answer_count": 0,
+   "answerable_count": 0,
+   "no_answer_accuracy": null,
+   "false_positive_rate": null,
+   "false_negative_rate": null,
+   "coverage": null,
+   "abstention_precision": null,
+   "abstention_recall": null,
+   "abstention_f1": null
+  }
+ },
+ "by_query_type": {
+  "author": {
+   "cases": 9,
+   "answerable": 9,
+   "reachable": 9,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 9,
+    "recall_at_1": 0.5185,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 9,
+    "recall_at_1": 0.5185,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.4333,
+   "no_answer": null
+  },
+  "author_category": {
+   "cases": 1,
+   "answerable": 1,
+   "reachable": 1,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 1,
+    "recall_at_1": 0.3333,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 1,
+    "recall_at_1": 0.3333,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.6,
+   "no_answer": null
+  },
+  "author_near_miss": {
+   "cases": 2,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.5,
+    "false_positive_rate": 0.5,
+    "false_negative_rate": null,
+    "coverage": 0.5,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.5,
+    "abstention_f1": 0.6667
+   }
+  },
+  "category": {
+   "cases": 3,
+   "answerable": 3,
+   "reachable": 3,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 3,
+    "recall_at_1": 0.0159,
+    "recall_at_3": 0.0476,
+    "recall_at_5": 0.0794,
+    "mrr": 0.3333
+   },
+   "reachable_only": {
+    "count": 3,
+    "recall_at_1": 0.0159,
+    "recall_at_3": 0.0476,
+    "recall_at_5": 0.0794,
+    "mrr": 0.3333
+   },
+   "precision_at_5": 0.5,
+   "no_answer": null
+  },
+  "category_near_miss": {
+   "cases": 2,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.0,
+    "false_positive_rate": 1.0,
+    "false_negative_rate": null,
+    "coverage": 1.0,
+    "abstention_precision": null,
+    "abstention_recall": 0.0,
+    "abstention_f1": null
+   }
+  },
+  "category_semantic": {
+   "cases": 1,
+   "answerable": 1,
+   "reachable": 1,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 1,
+    "recall_at_1": 0.5,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 1,
+    "recall_at_1": 0.5,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.4,
+   "no_answer": null
+  },
+  "description": {
+   "cases": 5,
+   "answerable": 5,
+   "reachable": 5,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 5,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": null
+  },
+  "isbn_exact": {
+   "cases": 5,
+   "answerable": 5,
+   "reachable": 5,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 5,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": null
+  },
+  "isbn_near_miss": {
+   "cases": 1,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 1,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "title": {
+   "cases": 10,
+   "answerable": 10,
+   "reachable": 10,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 10,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 10,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": null
+  },
+  "title_multi_edition": {
+   "cases": 1,
+   "answerable": 1,
+   "reachable": 1,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 1,
+    "recall_at_1": 0.5,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 1,
+    "recall_at_1": 0.5,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.4,
+   "no_answer": null
+  },
+  "title_near_miss": {
+   "cases": 3,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 3,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.0,
+    "false_positive_rate": 1.0,
+    "false_negative_rate": null,
+    "coverage": 1.0,
+    "abstention_precision": null,
+    "abstention_recall": 0.0,
+    "abstention_f1": null
+   }
+  }
+ },
+ "unreachable_book_cases": [],
+ "per_corpus": {
+  "BOOK_METADATA": {
+   "all": {
+    "cases": 43,
+    "answerable_recall": {
+     "count": 35,
+     "recall_at_1": 0.7442,
+     "recall_at_3": 0.9184,
+     "recall_at_5": 0.9211,
+     "mrr": 0.9429
+    },
+    "abstention": {
+     "no_answer_count": 8,
+     "answerable_count": 35,
+     "no_answer_accuracy": 0.25,
+     "false_positive_rate": 0.75,
+     "false_negative_rate": 0.0286,
+     "coverage": 0.9302,
+     "abstention_precision": 0.6667,
+     "abstention_recall": 0.25,
+     "abstention_f1": 0.3636
+    },
+    "selective_accuracy_at_1": 0.6512
+   },
+   "trusted": {
+    "cases": 34,
+    "answerable_recall": {
+     "count": 29,
+     "recall_at_1": 0.7085,
+     "recall_at_3": 0.9015,
+     "recall_at_5": 0.9048,
+     "mrr": 0.931
+    },
+    "abstention": {
+     "no_answer_count": 5,
+     "answerable_count": 29,
+     "no_answer_accuracy": 0.4,
+     "false_positive_rate": 0.6,
+     "false_negative_rate": 0.0345,
+     "coverage": 0.9118,
+     "abstention_precision": 0.6667,
+     "abstention_recall": 0.4,
+     "abstention_f1": 0.5
+    },
+    "selective_accuracy_at_1": 0.6628
+   }
+  },
+  "INTERNAL_DOC": {
+   "all": {
+    "cases": 0,
+    "answerable_recall": {
+     "count": 0,
+     "recall_at_1": 0.0,
+     "recall_at_3": 0.0,
+     "recall_at_5": 0.0,
+     "mrr": 0.0
+    },
+    "abstention": null,
+    "selective_accuracy_at_1": null
+   },
+   "trusted": {
+    "cases": 0,
+    "answerable_recall": {
+     "count": 0,
+     "recall_at_1": 0.0,
+     "recall_at_3": 0.0,
+     "recall_at_5": 0.0,
+     "mrr": 0.0
+    },
+    "abstention": null,
+    "selective_accuracy_at_1": null
+   }
+  }
+ },
+ "trusted_by_query_type": {
+  "author": {
+   "cases": 9,
+   "answerable": 9,
+   "reachable": 9,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 9,
+    "recall_at_1": 0.5185,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 9,
+    "recall_at_1": 0.5185,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.4333,
+   "no_answer": null
+  },
+  "author_category": {
+   "cases": 1,
+   "answerable": 1,
+   "reachable": 1,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 1,
+    "recall_at_1": 0.3333,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 1,
+    "recall_at_1": 0.3333,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.6,
+   "no_answer": null
+  },
+  "author_near_miss": {
+   "cases": 2,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.5,
+    "false_positive_rate": 0.5,
+    "false_negative_rate": null,
+    "coverage": 0.5,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.5,
+    "abstention_f1": 0.6667
+   }
+  },
+  "category": {
+   "cases": 3,
+   "answerable": 3,
+   "reachable": 3,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 3,
+    "recall_at_1": 0.0159,
+    "recall_at_3": 0.0476,
+    "recall_at_5": 0.0794,
+    "mrr": 0.3333
+   },
+   "reachable_only": {
+    "count": 3,
+    "recall_at_1": 0.0159,
+    "recall_at_3": 0.0476,
+    "recall_at_5": 0.0794,
+    "mrr": 0.3333
+   },
+   "precision_at_5": 0.5,
+   "no_answer": null
+  },
+  "category_near_miss": {
+   "cases": 2,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.0,
+    "false_positive_rate": 1.0,
+    "false_negative_rate": null,
+    "coverage": 1.0,
+    "abstention_precision": null,
+    "abstention_recall": 0.0,
+    "abstention_f1": null
+   }
+  },
+  "isbn_exact": {
+   "cases": 5,
+   "answerable": 5,
+   "reachable": 5,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 5,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": null
+  },
+  "isbn_near_miss": {
+   "cases": 1,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 1,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "title": {
+   "cases": 10,
+   "answerable": 10,
+   "reachable": 10,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 10,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 10,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": null
+  },
+  "title_multi_edition": {
+   "cases": 1,
+   "answerable": 1,
+   "reachable": 1,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 1,
+    "recall_at_1": 0.5,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 1,
+    "recall_at_1": 0.5,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.4,
+   "no_answer": null
+  }
+ },
+ "integrity": {
+  "sp-001": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-002": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-003": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-004": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-005": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-006": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-007": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-008": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-009": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-010": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-011": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-012": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-013": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-014": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-015": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-016": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-017": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-018": {
+   "status": "NO_ANSWER",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-019": {
+   "status": "NO_ANSWER",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-020": {
+   "status": "NO_ANSWER",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-021": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-022": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-023": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-024": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-025": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-026": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-027": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-028": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-029": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-030": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-031": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-032": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-033": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-034": {
+   "status": "REACHABLE",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-035": {
+   "status": "REACHABLE",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-036": {
+   "status": "REACHABLE",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-037": {
+   "status": "REACHABLE",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-038": {
+   "status": "REACHABLE",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-039": {
+   "status": "REACHABLE",
+   "flags": [
+    "UNVERIFIED_LABEL"
+   ],
+   "trusted": false
+  },
+  "sp-040": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-041": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-042": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "sp-043": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  }
+ }
+}

@@ -41,3 +41,8 @@ test('long-open loans are censored: they lower the return probability instead of
   assert.ok(withOpen.at(30) > withoutOpen.at(30));
   assert.ok(expectedReturns([25], 20, withOpen) < expectedReturns([25], 20, withoutOpen) + 1e-12);
 });
+
+test('a large library (300k loans in the year) builds the curve without overflowing the stack', () => {
+  const durations = repeat(14, 300000);
+  assert.equal(loanSurvival(durations, durations).samples, 300000);
+});

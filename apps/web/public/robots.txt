@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+# Account, staff and portal pages need a login: nothing useful to index.
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /customer
+Disallow: /supplier
+Disallow: /my
+Disallow: /dashboard
+Disallow: /account
+
+Sitemap: https://smartbook.io.vn/sitemap.xml
+Sitemap: https://smartbook.io.vn/sitemap-catalog.xml

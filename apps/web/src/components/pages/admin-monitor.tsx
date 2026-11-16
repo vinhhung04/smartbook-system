@@ -9,14 +9,14 @@ import { LoadingOverlay } from '@/components/ui/loading-state';
 import { SectionCard } from '@/components/ui/section-card';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/components/ui/utils';
-import { monitorService, type MonitorServiceHealth, type MonitorSnapshot, type MonitorStatus } from '@/services/monitor';
+import { monitorService, type MonitorCheck, type MonitorServiceHealth, type MonitorSnapshot, type MonitorStatus } from '@/services/monitor';
 import { useSocket } from '@/lib/socket';
 import { toast } from 'sonner';
 
 const AUTO_REFRESH_MS = 30000;
 const HISTORY_LENGTH = 30;
 
-type Check = { status: MonitorStatus; latencyMs: number | null; checkedAt: string };
+type Check = MonitorCheck;
 
 const STATUS_META: Record<MonitorStatus, { label: string; icon: typeof CheckCircle2; text: string; fill: string; description: string }> = {
   ok: { label: 'Hoạt động', icon: CheckCircle2, text: 'text-primary', fill: 'bg-primary', description: 'Phản hồi bình thường' },
@@ -196,6 +196,8 @@ function ServiceRow({ service, checks, expanded, onToggle }: {
 export function AdminMonitorPage() {
   const [snapshot, setSnapshot] = useState<MonitorSnapshot | null>(null);
   const [history, setHistory] = useState<Record<string, Check[]>>({});
+  // true when the strip comes from the gateway's own sampling rather than this page's polling
+  const [serverHistory, setServerHistory] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -216,9 +218,12 @@ export function AdminMonitorPage() {
     try {
       if (showSpinner) setRefreshing(true);
       setError(null);
-      const nextSnapshot = await monitorService.getSystemHealthSnapshot();
+      const [nextSnapshot, sampled] = await Promise.all([monitorService.getSystemHealthSnapshot(), monitorService.getHealthHistory()]);
       setSnapshot(nextSnapshot);
-      setHistory((prev) => {
+      setServerHistory(Boolean(sampled));
+      if (sampled) {
+        setHistory(Object.fromEntries(Object.entries(sampled).map(([id, checks]) => [id, checks.slice(-HISTORY_LENGTH)])));
+      } else setHistory((prev) => {
         const next = { ...prev };
         for (const service of nextSnapshot.services) {
           next[service.id] = [...(prev[service.id] || []), { status: service.status, latencyMs: service.latencyMs, checkedAt: service.checkedAt }].slice(-HISTORY_LENGTH);
@@ -316,7 +321,9 @@ export function AdminMonitorPage() {
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-border px-5 py-3.5">
               <h2 id="services-title" className="font-display text-[18px] font-semibold tracking-tight text-foreground">Dịch vụ</h2>
               <p className="text-[12px] text-muted-foreground">
-                Dải màu là {checksSoFar} trên {HISTORY_LENGTH} lần kiểm tra gần nhất trong phiên này. Bấm một dịch vụ để xem chi tiết.
+                {serverHistory
+                  ? `Dải màu là ${checksSoFar} lần kiểm tra gần nhất do gateway tự chạy mỗi phút, kể cả khi không ai mở trang này. Bấm một dịch vụ để xem chi tiết.`
+                  : `Dải màu là ${checksSoFar} trên ${HISTORY_LENGTH} lần kiểm tra gần nhất trong phiên này. Bấm một dịch vụ để xem chi tiết.`}
               </p>
             </div>
             <ul>

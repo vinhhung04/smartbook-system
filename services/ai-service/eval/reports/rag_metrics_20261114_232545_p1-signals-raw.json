@@ -1,0 +1,1625 @@
+{
+ "timestamp_utc": "20261114_232545",
+ "dataset": "rag_dataset.json",
+ "cases": 226,
+ "catalog_books": 136,
+ "embedding": "qwen/qwen3-embedding-8b@768",
+ "abstention": "off",
+ "split": "all",
+ "overall": {
+  "count": 226,
+  "recall_at_1": 0.4142,
+  "recall_at_3": 0.4329,
+  "recall_at_5": 0.4353,
+  "mrr": 0.4327
+ },
+ "by_corpus": {
+  "BOOK_METADATA": {
+   "count": 107,
+   "recall_at_1": 0.1926,
+   "recall_at_3": 0.204,
+   "recall_at_5": 0.2092,
+   "mrr": 0.2177
+  },
+  "INTERNAL_DOC": {
+   "count": 119,
+   "recall_at_1": 0.6134,
+   "recall_at_3": 0.6387,
+   "recall_at_5": 0.6387,
+   "mrr": 0.6261
+  }
+ },
+ "abstention_by_corpus": {
+  "BOOK_METADATA": {
+   "no_answer_count": 52,
+   "answerable_count": 55,
+   "no_answer_accuracy": 0.8462,
+   "false_positive_rate": 0.1538,
+   "false_negative_rate": 0.1273,
+   "coverage": 0.5234,
+   "abstention_precision": 0.8627,
+   "abstention_recall": 0.8462,
+   "abstention_f1": 0.8544
+  },
+  "INTERNAL_DOC": {
+   "no_answer_count": 40,
+   "answerable_count": 79,
+   "no_answer_accuracy": 0.7,
+   "false_positive_rate": 0.3,
+   "false_negative_rate": 0.0,
+   "coverage": 0.7647,
+   "abstention_precision": 1.0,
+   "abstention_recall": 0.7,
+   "abstention_f1": 0.8235
+  }
+ },
+ "by_query_type": {
+  "AUTHOR": {
+   "cases": 6,
+   "answerable": 6,
+   "reachable": 4,
+   "unreachable": 2,
+   "all_answerable": {
+    "count": 6,
+    "recall_at_1": 0.1019,
+    "recall_at_3": 0.3056,
+    "recall_at_5": 0.3981,
+    "mrr": 0.5278
+   },
+   "reachable_only": {
+    "count": 4,
+    "recall_at_1": 0.1528,
+    "recall_at_3": 0.4583,
+    "recall_at_5": 0.5972,
+    "mrr": 0.7917
+   },
+   "precision_at_5": 0.4333,
+   "no_answer": null
+  },
+  "CATEGORY": {
+   "cases": 7,
+   "answerable": 5,
+   "reachable": 0,
+   "unreachable": 5,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0,
+    "mrr": 0.0
+   },
+   "reachable_only": null,
+   "precision_at_5": 0.0,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "DESCRIPTION": {
+   "cases": 77,
+   "answerable": 28,
+   "reachable": 11,
+   "unreachable": 17,
+   "all_answerable": {
+    "count": 28,
+    "recall_at_1": 0.3571,
+    "recall_at_3": 0.3571,
+    "recall_at_5": 0.3571,
+    "mrr": 0.3616
+   },
+   "reachable_only": {
+    "count": 11,
+    "recall_at_1": 0.9091,
+    "recall_at_3": 0.9091,
+    "recall_at_5": 0.9091,
+    "mrr": 0.9205
+   },
+   "precision_at_5": 0.0714,
+   "no_answer": {
+    "no_answer_count": 49,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.8367,
+    "false_positive_rate": 0.1633,
+    "false_negative_rate": null,
+    "coverage": 0.1633,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.8367,
+    "abstention_f1": 0.9111
+   }
+  },
+  "ISBN": {
+   "cases": 11,
+   "answerable": 11,
+   "reachable": 6,
+   "unreachable": 5,
+   "all_answerable": {
+    "count": 11,
+    "recall_at_1": 0.5455,
+    "recall_at_3": 0.5455,
+    "recall_at_5": 0.5455,
+    "mrr": 0.5455
+   },
+   "reachable_only": {
+    "count": 6,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.1091,
+   "no_answer": null
+  },
+  "TITLE": {
+   "cases": 6,
+   "answerable": 5,
+   "reachable": 4,
+   "unreachable": 1,
+   "all_answerable": {
+    "count": 5,
+    "recall_at_1": 0.8,
+    "recall_at_3": 0.8,
+    "recall_at_5": 0.8,
+    "mrr": 0.8
+   },
+   "reachable_only": {
+    "count": 4,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.16,
+   "no_answer": {
+    "no_answer_count": 1,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "INTERNAL_DOC": {
+   "cases": 119,
+   "answerable": 79,
+   "reachable": 79,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 79,
+    "recall_at_1": 0.9241,
+    "recall_at_3": 0.962,
+    "recall_at_5": 0.962,
+    "mrr": 0.943
+   },
+   "reachable_only": {
+    "count": 79,
+    "recall_at_1": 0.9241,
+    "recall_at_3": 0.962,
+    "recall_at_5": 0.962,
+    "mrr": 0.943
+   },
+   "precision_at_5": 0.5,
+   "no_answer": {
+    "no_answer_count": 40,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.7,
+    "false_positive_rate": 0.3,
+    "false_negative_rate": null,
+    "coverage": 0.3,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.7,
+    "abstention_f1": 0.8235
+   }
+  }
+ },
+ "unreachable_book_cases": [
+  "bm-001",
+  "bm-002",
+  "bm-003",
+  "bm-006",
+  "bm-007",
+  "bm-016",
+  "bm-017",
+  "bm-018",
+  "bm-019",
+  "bm-020",
+  "bm-021",
+  "bm-022",
+  "bm-023",
+  "bm-024",
+  "bm-025",
+  "bm-030",
+  "bm-031",
+  "bm-032",
+  "bm-033",
+  "bm-036",
+  "bm-037",
+  "bm-043",
+  "bm-044",
+  "bm-046",
+  "bm-047",
+  "bm-048",
+  "bm-049",
+  "bm-050",
+  "bm-053",
+  "bm-054"
+ ],
+ "per_corpus": {
+  "BOOK_METADATA": {
+   "all": {
+    "cases": 107,
+    "answerable_recall": {
+     "count": 55,
+     "recall_at_1": 0.3747,
+     "recall_at_3": 0.397,
+     "recall_at_5": 0.4071,
+     "mrr": 0.4235
+    },
+    "abstention": {
+     "no_answer_count": 52,
+     "answerable_count": 55,
+     "no_answer_accuracy": 0.8462,
+     "false_positive_rate": 0.1538,
+     "false_negative_rate": 0.1273,
+     "coverage": 0.5234,
+     "abstention_precision": 0.8627,
+     "abstention_recall": 0.8462,
+     "abstention_f1": 0.8544
+    },
+    "selective_accuracy_at_1": 0.3681
+   },
+   "trusted": {
+    "cases": 73,
+    "answerable_recall": {
+     "count": 24,
+     "recall_at_1": 0.8594,
+     "recall_at_3": 0.9115,
+     "recall_at_5": 0.9358,
+     "mrr": 0.9635
+    },
+    "abstention": {
+     "no_answer_count": 49,
+     "answerable_count": 24,
+     "no_answer_accuracy": 0.898,
+     "false_positive_rate": 0.102,
+     "false_negative_rate": 0.0,
+     "coverage": 0.3973,
+     "abstention_precision": 1.0,
+     "abstention_recall": 0.898,
+     "abstention_f1": 0.9463
+    },
+    "selective_accuracy_at_1": 0.7112
+   }
+  },
+  "INTERNAL_DOC": {
+   "all": {
+    "cases": 119,
+    "answerable_recall": {
+     "count": 79,
+     "recall_at_1": 0.9241,
+     "recall_at_3": 0.962,
+     "recall_at_5": 0.962,
+     "mrr": 0.943
+    },
+    "abstention": {
+     "no_answer_count": 40,
+     "answerable_count": 79,
+     "no_answer_accuracy": 0.7,
+     "false_positive_rate": 0.3,
+     "false_negative_rate": 0.0,
+     "coverage": 0.7647,
+     "abstention_precision": 1.0,
+     "abstention_recall": 0.7,
+     "abstention_f1": 0.8235
+    },
+    "selective_accuracy_at_1": 0.8022
+   },
+   "trusted": {
+    "cases": 119,
+    "answerable_recall": {
+     "count": 79,
+     "recall_at_1": 0.9241,
+     "recall_at_3": 0.962,
+     "recall_at_5": 0.962,
+     "mrr": 0.943
+    },
+    "abstention": {
+     "no_answer_count": 40,
+     "answerable_count": 79,
+     "no_answer_accuracy": 0.7,
+     "false_positive_rate": 0.3,
+     "false_negative_rate": 0.0,
+     "coverage": 0.7647,
+     "abstention_precision": 1.0,
+     "abstention_recall": 0.7,
+     "abstention_f1": 0.8235
+    },
+    "selective_accuracy_at_1": 0.8022
+   }
+  }
+ },
+ "trusted_by_query_type": {
+  "AUTHOR": {
+   "cases": 3,
+   "answerable": 3,
+   "reachable": 3,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 3,
+    "recall_at_1": 0.2083,
+    "recall_at_3": 0.625,
+    "recall_at_5": 0.8194,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 3,
+    "recall_at_1": 0.2083,
+    "recall_at_3": 0.625,
+    "recall_at_5": 0.8194,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.8667,
+   "no_answer": null
+  },
+  "CATEGORY": {
+   "cases": 2,
+   "answerable": 0,
+   "reachable": 0,
+   "unreachable": 0,
+   "all_answerable": null,
+   "reachable_only": null,
+   "precision_at_5": null,
+   "no_answer": {
+    "no_answer_count": 2,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  },
+  "DESCRIPTION": {
+   "cases": 57,
+   "answerable": 11,
+   "reachable": 11,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 11,
+    "recall_at_1": 0.9091,
+    "recall_at_3": 0.9091,
+    "recall_at_5": 0.9091,
+    "mrr": 0.9205
+   },
+   "reachable_only": {
+    "count": 11,
+    "recall_at_1": 0.9091,
+    "recall_at_3": 0.9091,
+    "recall_at_5": 0.9091,
+    "mrr": 0.9205
+   },
+   "precision_at_5": 0.1818,
+   "no_answer": {
+    "no_answer_count": 46,
+    "answerable_count": 0,
+    "no_answer_accuracy": 0.8913,
+    "false_positive_rate": 0.1087,
+    "false_negative_rate": null,
+    "coverage": 0.1087,
+    "abstention_precision": 1.0,
+    "abstention_recall": 0.8913,
+    "abstention_f1": 0.9425
+   }
+  },
+  "ISBN": {
+   "cases": 6,
+   "answerable": 6,
+   "reachable": 6,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 6,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 6,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": null
+  },
+  "TITLE": {
+   "cases": 5,
+   "answerable": 4,
+   "reachable": 4,
+   "unreachable": 0,
+   "all_answerable": {
+    "count": 4,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "reachable_only": {
+    "count": 4,
+    "recall_at_1": 1.0,
+    "recall_at_3": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
+   },
+   "precision_at_5": 0.2,
+   "no_answer": {
+    "no_answer_count": 1,
+    "answerable_count": 0,
+    "no_answer_accuracy": 1.0,
+    "false_positive_rate": 0.0,
+    "false_negative_rate": null,
+    "coverage": 0.0,
+    "abstention_precision": 1.0,
+    "abstention_recall": 1.0,
+    "abstention_f1": 1.0
+   }
+  }
+ },
+ "integrity": {
+  "bm-001": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-002": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-003": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-004": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-005": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-006": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-007": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-008": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-009": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-010": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-011": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-012": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-013": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-014": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-015": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-016": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-017": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-018": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-019": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-020": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-021": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-022": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-023": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-024": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-025": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-026": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-027": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-028": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-029": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-030": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-031": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-032": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-033": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-034": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-035": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-036": {
+   "status": "UNREACHABLE",
+   "flags": [
+    "QUESTIONABLE_LABEL"
+   ],
+   "trusted": false
+  },
+  "bm-037": {
+   "status": "UNREACHABLE",
+   "flags": [
+    "QUESTIONABLE_LABEL"
+   ],
+   "trusted": false
+  },
+  "bm-038": {
+   "status": "PARTIALLY_REACHABLE",
+   "flags": [
+    "LABEL_AUTHOR_MISMATCH",
+    "QUESTIONABLE_LABEL"
+   ],
+   "trusted": false
+  },
+  "bm-039": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-040": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-041": {
+   "status": "PARTIALLY_REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-042": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-043": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-044": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-045": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-046": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-047": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-048": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-049": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-050": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-051": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-052": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-053": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-054": {
+   "status": "UNREACHABLE",
+   "flags": [],
+   "trusted": false
+  },
+  "bm-055": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-056": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-057": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-058": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-059": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-060": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-001": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-002": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-003": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-004": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-005": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-006": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-007": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-008": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-009": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-010": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-011": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-012": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-013": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-014": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-015": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-016": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-017": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-018": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-019": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-020": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-021": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-022": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-023": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-024": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-025": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-026": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-027": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-028": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-029": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-030": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-031": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-032": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-033": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-034": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-035": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-036": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-037": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-038": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-039": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-040": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-061": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-062": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-063": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-064": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-065": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-066": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-067": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-068": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-069": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-070": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-071": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-072": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-073": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-074": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-075": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-041": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-042": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-043": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-044": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-045": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-046": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-047": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-048": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-049": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-050": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-051": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-052": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-053": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-054": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-055": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-076": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-077": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-078": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-079": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-080": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-081": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-082": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-083": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-084": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-085": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-086": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-087": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-088": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-089": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-090": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-091": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-092": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-093": {
+   "status": "NO_ANSWER",
+   "flags": [
+    "STALE_NO_ANSWER_MANUAL"
+   ],
+   "trusted": false
+  },
+  "bm-094": {
+   "status": "NO_ANSWER",
+   "flags": [
+    "STALE_NO_ANSWER_MANUAL"
+   ],
+   "trusted": false
+  },
+  "bm-095": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-096": {
+   "status": "STALE_NO_ANSWER",
+   "flags": [
+    "STALE_NO_ANSWER_MANUAL"
+   ],
+   "trusted": false
+  },
+  "bm-097": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-098": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-099": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-100": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-101": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-102": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-103": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-104": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-105": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-106": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "bm-107": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-056": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-057": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-058": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-059": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-060": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-061": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-062": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-063": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-064": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-065": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-066": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-067": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-068": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-069": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-070": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-071": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-072": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-073": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-074": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-075": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-076": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-077": {
+   "status": "NO_ANSWER",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-078": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-079": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-080": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-081": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-082": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-083": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-084": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-085": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-086": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-087": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-088": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-089": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-090": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-091": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-092": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-093": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-094": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-095": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-096": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-097": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-098": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-099": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-100": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-101": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-102": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-103": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-104": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-105": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-106": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-107": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-108": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-109": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-110": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-111": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-112": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-113": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-114": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-115": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-116": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-117": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-118": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  },
+  "doc-119": {
+   "status": "REACHABLE",
+   "flags": [],
+   "trusted": true
+  }
+ }
+}

@@ -1,6 +1,4 @@
-const { PrismaClient } = require("@prisma/client");
-
-const prisma = new PrismaClient();
+const { prisma } = require("../lib/prisma");
 
 const { parseId, normalizeText } = require("../utils/validation");
 const { canReadWarehouse, canWriteWarehouse } = require("../utils/warehouse-scope.utils");

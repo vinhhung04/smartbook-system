@@ -124,6 +124,11 @@ class ChatAnswerScoringTest(unittest.TestCase):
         scored = ev.score(case, body)
         self.assertEqual((scored["citation_recall"], scored["citation_complete"]), (0.5, False))
         self.assertEqual((scored["citation_precision"], scored["citation_relevance"]), (0.5, 1.0))
+        self.assertFalse(scored["evidence_complete"])
+        live = {**body, "context_sources": [*body["context_sources"], {"endpoint": "/public/membership/plans"}]}
+        rescored = ev.score(case, live)
+        # the separate metric counts the live plans source; the citation numbers do not change
+        self.assertEqual((rescored["evidence_complete"], rescored["citation_complete"]), (True, False))
 
 
 if __name__ == "__main__":
