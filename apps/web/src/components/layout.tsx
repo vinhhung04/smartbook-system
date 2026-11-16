@@ -53,7 +53,8 @@ export function AppLayout() {
         />
         <div className="flex-1 flex flex-col min-w-0">
           <Topbar onMenuClick={isDesktop ? undefined : () => setMobileNavOpen(true)} menuOpen={mobileNavOpen} />
-          <main className="flex-1 overflow-y-auto scroll-smooth">
+          {/* relative: absolute children (sr-only) would otherwise anchor to the viewport and stretch the document, making the whole shell scroll away */}
+          <main className="relative flex-1 overflow-y-auto scroll-smooth">
             <RouteErrorBoundary resetKey={location.pathname}>
               <Outlet />
             </RouteErrorBoundary>
