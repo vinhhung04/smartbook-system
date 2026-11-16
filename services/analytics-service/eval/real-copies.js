@@ -47,13 +47,14 @@ function occupancy(data) {
   const loans = data.events.filter((e) => e.kind === 'LOAN');
   const fallback = median(loans.filter((e) => e.until).map((e) => Math.max(1, dayOf(e.until) - dayOf(e.at))));
   const titles = new Map(data.catalog.map((b) => [b.id, {
-    id: b.id, category: b.category, copies: b.variant_ids.length, borrowDays: [], out: new Int16Array(days + 1),
+    id: b.id, category: b.category, copies: b.variant_ids.length, borrowDays: [], loans: [], out: new Int16Array(days + 1),
   }]));
   for (const e of loans) {
     const t = titles.get(e.book_id);
     const s = dayOf(e.at) - start;
     const end = Math.min(days - 1, e.until ? Math.max(s, dayOf(e.until) - start - 1) : s + fallback - 1);
     t.borrowDays.push(s);
+    t.loans.push({ s, ret: e.until ? dayOf(e.until) - start : null }); // ret null: no return date in the file
     t.out[s] += 1;
     t.out[end + 1] -= 1;
   }

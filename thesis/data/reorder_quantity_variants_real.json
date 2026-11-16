@@ -1,0 +1,119 @@
+{
+  "protocol": "12 monthly reviews, outcome = days 14..44 after each review (as eval/real-copies.js)",
+  "libraries": {
+    "univ": [
+      {
+        "variant": "CURRENT",
+        "samples": 3083,
+        "mean_suggested_qty": 3.228998,
+        "high_titles": 1442,
+        "high_mean_suggested_qty": 5.371706,
+        "high_share_of_later_shortages": 0.854118,
+        "top50_mean_empty_shelf_share": 0.273222,
+        "copies_to_titles_never_empty_later": 0.586238,
+        "shortage_titles_given_no_copy": 0.004706
+      },
+      {
+        "variant": "IF_SHORTFALL",
+        "samples": 3083,
+        "mean_suggested_qty": 3.109958,
+        "high_titles": 1442,
+        "high_mean_suggested_qty": 5.349515,
+        "high_share_of_later_shortages": 0.854118,
+        "top50_mean_empty_shelf_share": 0.273222,
+        "copies_to_titles_never_empty_later": 0.574781,
+        "shortage_titles_given_no_copy": 0.007059
+      },
+      {
+        "variant": "NO_FLOORS",
+        "samples": 3083,
+        "mean_suggested_qty": 2.375284,
+        "high_titles": 1442,
+        "high_mean_suggested_qty": 3.778779,
+        "high_share_of_later_shortages": 0.854118,
+        "top50_mean_empty_shelf_share": 0.271667,
+        "copies_to_titles_never_empty_later": 0.603851,
+        "shortage_titles_given_no_copy": 0.007059
+      },
+      {
+        "variant": "FLOOR_BY_BORROWS",
+        "samples": 3083,
+        "mean_suggested_qty": 2.437885,
+        "high_titles": 1442,
+        "high_mean_suggested_qty": 3.807906,
+        "high_share_of_later_shortages": 0.854118,
+        "top50_mean_empty_shelf_share": 0.271667,
+        "copies_to_titles_never_empty_later": 0.609899,
+        "shortage_titles_given_no_copy": 0.004706
+      },
+      {
+        "variant": "RETURNS_PRIORITY",
+        "samples": 3083,
+        "mean_suggested_qty": 2.39734,
+        "high_titles": 504,
+        "high_mean_suggested_qty": 5.865079,
+        "high_share_of_later_shortages": 0.258824,
+        "top50_mean_empty_shelf_share": 0.238167,
+        "copies_to_titles_never_empty_later": 0.606278,
+        "shortage_titles_given_no_copy": 0.007059
+      }
+    ],
+    "public": [
+      {
+        "variant": "CURRENT",
+        "samples": 101084,
+        "mean_suggested_qty": 1.606535,
+        "high_titles": 16296,
+        "high_mean_suggested_qty": 5.568606,
+        "high_share_of_later_shortages": 0.659389,
+        "top50_mean_empty_shelf_share": 0.066944,
+        "copies_to_titles_never_empty_later": 0.908809,
+        "shortage_titles_given_no_copy": 0.0131
+      },
+      {
+        "variant": "IF_SHORTFALL",
+        "samples": 101084,
+        "mean_suggested_qty": 1.304727,
+        "high_titles": 16296,
+        "high_mean_suggested_qty": 5.490488,
+        "high_share_of_later_shortages": 0.659389,
+        "top50_mean_empty_shelf_share": 0.066944,
+        "copies_to_titles_never_empty_later": 0.892658,
+        "shortage_titles_given_no_copy": 0.0131
+      },
+      {
+        "variant": "NO_FLOORS",
+        "samples": 101084,
+        "mean_suggested_qty": 1.157849,
+        "high_titles": 16296,
+        "high_mean_suggested_qty": 4.579406,
+        "high_share_of_later_shortages": 0.659389,
+        "top50_mean_empty_shelf_share": 0.066778,
+        "copies_to_titles_never_empty_later": 0.899684,
+        "shortage_titles_given_no_copy": 0.0131
+      },
+      {
+        "variant": "FLOOR_BY_BORROWS",
+        "samples": 101084,
+        "mean_suggested_qty": 1.293024,
+        "high_titles": 16296,
+        "high_mean_suggested_qty": 4.653719,
+        "high_share_of_later_shortages": 0.659389,
+        "top50_mean_empty_shelf_share": 0.066778,
+        "copies_to_titles_never_empty_later": 0.907057,
+        "shortage_titles_given_no_copy": 0.0131
+      },
+      {
+        "variant": "RETURNS_PRIORITY",
+        "samples": 101084,
+        "mean_suggested_qty": 1.123472,
+        "high_titles": 9348,
+        "high_mean_suggested_qty": 5.627835,
+        "high_share_of_later_shortages": 0.266376,
+        "top50_mean_empty_shelf_share": 0.084444,
+        "copies_to_titles_never_empty_later": 0.898217,
+        "shortage_titles_given_no_copy": 0.0131
+      }
+    ]
+  }
+}

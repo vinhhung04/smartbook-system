@@ -46,6 +46,7 @@ cd services/analytics-service && INVENTORY_DATABASE_URL=postgres://user:pass@hos
 | `data/lead_time_results.json`, `tables/lead_time_results.csv` | lead-time backtest (status + metrics, or `INSUFFICIENT_DATA`) |
 | `data/forecast_model_results_real_{univ,public,synthetic}.json`, `tables/forecast_*_real_*.csv` | the same forecast comparison plus 7/30-day horizon totals on REAL library loans (Mendeley 10.17632/6rd45bvxjy.1); see `docs/ANALYSIS/REAL_LIBRARY_DATA_VALIDATION.md` |
 | `data/copies_needed_real_{univ,public}.json`, `tables/copies_*_real_*.csv` | copies per title on REAL loans: empty-shelf days, idle/extra copies, and a monthly backtest of production's reorder ranking (`services/analytics-service/eval/real-copies.js`) |
+| `data/reorder_quantity_variants_{real,synthetic}.json`, `tables/reorder_quantity_variants_real.csv` | smaller HIGH-priority order quantities measured on real loans and (post-hoc) on the synthetic test seeds; none adopted (`services/analytics-service/eval/reorder-quantity-variants.js`) |
 | `figures/*.png` | charts for the report (`lead_time_mae.png` only when lead-time status is `OK`) |
 
 Code: `services/analytics-service/eval/` (pipeline), `services/analytics-service/src/utils/`

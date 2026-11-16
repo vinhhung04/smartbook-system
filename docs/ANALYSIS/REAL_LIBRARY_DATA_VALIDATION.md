@@ -129,7 +129,8 @@ một lần trên cửa sổ test; relevance = đầu sách lần đầu đượ
 - Không chạy ablation từng nhóm đặc trưng và mô hình chẩn đoán `V2_NO_CANDIDATE_PRUNING` (`--skip-ablations`): với
   7.563–21.509 đầu sách mỗi lần tinh chỉnh mất 30–90 phút, và mô hình chẩn đoán dựng đặc trưng cho mọi bạn đọc × mọi
   đầu sách (vượt 16 GB RAM ở thư viện công cộng). Các mô hình so sánh chính (POPULARITY, V1, V2) giữ nguyên. Lần chạy
-  ĐH Binus được thực hiện trước thay đổi này nên báo cáo JSON của nó vẫn có `V2_NO_CANDIDATE_PRUNING`.
+  ĐH Binus đầu tiên có `V2_NO_CANDIDATE_PRUNING` (NDCG@10 0,0787 so với 0,0776 của V2, cắt tỉa ứng viên gần như không
+  mất gì); lần chạy lại sau thay đổi khởi đầu lạnh (mục 4.3) dùng `--skip-ablations` nên báo cáo hiện tại không còn dòng này.
 - Thư viện công cộng dùng mẫu cố định 6.000 bạn đọc (SHA-256 của DOI + mã bạn đọc nhỏ nhất, giữ trọn lịch sử mỗi bạn
   đọc), vì toàn bộ 53.043 bạn đọc / 54.564 đầu sách vượt quá thời gian chạy hợp lý. Không lọc theo `Location Code` vì
   cùng một bạn đọc mượn ở nhiều vị trí.
@@ -182,8 +183,8 @@ một lần trên cửa sổ test; relevance = đầu sách lần đầu đượ
 
 | Dữ liệu | Bạn đọc mới (0 lượt): V2 / POPULARITY | Bạn đọc thưa (1–2 lượt): V2 / POPULARITY |
 |---|---|---|
-| Tổng hợp (production) | 0,432 / 0,429 (n=58) | 0,285 / 0,407 (n=13) |
-| ĐH Binus (toàn bộ) | 0,024 / 0,031 (n=2702) | 0,094 / 0,031 (n=231) |
+| Tổng hợp (production) | 0,423 / 0,429 (n=58) | 0,285 / 0,407 (n=13) |
+| ĐH Binus (toàn bộ) | 0,031 / 0,031 (n=2702) | 0,094 / 0,031 (n=231) |
 | TV công cộng (mẫu 6.000 bạn đọc) | 0,001 / 0,006 (n=966) | 0,019 / 0,000 (n=113) |
 
 - Tổng hợp (production): quy tắc chấp nhận (V2 hơn cả V1 và POPULARITY trên NDCG@10, Recall@10, MRR với khoảng tin cậy trên 0) **đạt**.
@@ -284,13 +285,52 @@ Nhóm HIGH chứa 85,4% (ĐH Binus) và 65,9% (TV công cộng) số trường h
    số ngày sau khi hàng về nhưng được đề xuất trung bình 5,6 bản (khoảng 1.358 đầu sách mỗi kỳ). Nguyên nhân là điều
    kiện HIGH `available_qty <= 0 && borrow_count > 0`: mọi đầu sách 1 bản đang được mượn đều thành HIGH, rồi mức tối
    thiểu 5 bản được áp dụng. Lựa chọn `IF_SHORTFALL` đã có trong production chỉ giảm nhóm MEDIUM, không giảm nhóm HIGH
-   (vì `available_qty` bằng 0); bỏ hẳn mức tối thiểu vẫn còn 3,8–4,6 bản do tồn kho an toàn. Đây là một cải tiến có số
-   liệu chứng minh (**chưa triển khai**, cần sửa code production): tính cả số bản sẽ được trả trong thời gian giao hàng
-   (`expectedReturns`, đã có trong production cho chế độ ngân sách) trước khi xếp HIGH, hoặc đặt mức tối thiểu theo số
-   lượt mượn thay vì cố định 5 bản. Dữ liệu không cho biết nhu cầu không được phục vụ, nên chưa kết luận được số bản
-   đúng cho mỗi đầu sách.
+   (vì `available_qty` bằng 0); bỏ hẳn mức tối thiểu vẫn còn 3,8–4,6 bản do tồn kho an toàn. Hai cách sửa đã được đo ở
+   mục 5.4; **không cách nào đủ căn cứ để thay đổi production**.
 5. Ở ĐH Binus, tỷ lệ hết bản về sau của nhóm HIGH cao (27,5%) một phần vì có lượt mượn rất dài (lâu nhất 1.735 ngày, có
    thể là sách bị mất), nên bản sách vẫn chưa về sau 14–44 ngày.
+
+### 5.4. Thử giảm số lượng cho nhóm HIGH (không thay đổi production)
+
+`services/analytics-service/eval/reorder-quantity-variants.js` đo hai cách sửa đã đề xuất ở 5.3, cùng 12 kỳ rà soát và
+cùng cách chấm như 5.2, so với production và hai lựa chọn có sẵn (`IF_SHORTFALL`, bỏ mức tối thiểu):
+
+- **RETURNS_PRIORITY**: xếp ưu tiên theo số bản trên kệ cộng số bản dự kiến được trả trong thời gian giao hàng (ước lượng
+  Kaplan–Meier như production, chỉ dùng dữ liệu trước ngày rà soát, giữ phần lẻ), mức tối thiểu chỉ khi thiếu.
+- **FLOOR_BY_BORROWS**: giữ nguyên cách xếp ưu tiên; mức tối thiểu = min(5 hoặc 3, số lượt mượn + đặt giữ trong kỳ).
+
+| ĐH Binus / TV công cộng | Số bản đề xuất TB | Số mẫu HIGH | Số bản TB nhóm HIGH | Nhóm HIGH chứa bao nhiêu % ca thiếu bản về sau | Hết bản về sau, 50 đầu sách đầu tiên | % số bản đề xuất cho đầu sách không hết bản về sau |
+|---|---|---|---|---|---|---|
+| Production | 3,23 / 1,61 | 1.442 / 16.296 | 5,37 / 5,57 | 85,4% / 65,9% | 27,3% / 6,7% | 58,6% / 90,9% |
+| `IF_SHORTFALL` | 3,11 / 1,31 | 1.442 / 16.296 | 5,35 / 5,49 | 85,4% / 65,9% | 27,3% / 6,7% | 57,5% / 89,3% |
+| Bỏ mức tối thiểu | 2,38 / 1,16 | 1.442 / 16.296 | 3,78 / 4,58 | 85,4% / 65,9% | 27,2% / 6,7% | 60,4% / 90,0% |
+| FLOOR_BY_BORROWS | 2,44 / 1,29 | 1.442 / 16.296 | 3,81 / 4,65 | 85,4% / 65,9% | 27,2% / 6,7% | 61,0% / 90,7% |
+| RETURNS_PRIORITY | 2,40 / 1,12 | 504 / 9.348 | 5,87 / 5,63 | 25,9% / 26,6% | 23,8% / 8,4% | 60,6% / 89,8% |
+
+1. **RETURNS_PRIORITY** giảm 26–30% số bản đề xuất nhưng làm hỏng phần đang tốt: nhóm HIGH chỉ còn chứa khoảng 26% ca
+   thiếu bản về sau (production 66–85%), vì các ca thiếu bản kéo dài chủ yếu là lượt mượn không trả đúng như ước lượng.
+   Ở ĐH Binus, 50 đầu sách đầu tiên của danh sách cũng ít trúng hơn (23,8% so với 27,3%).
+2. **FLOOR_BY_BORROWS** và bỏ mức tối thiểu giữ nguyên thứ hạng và giảm 20–26% số bản, nhưng **không chuyển số bản sang
+   đúng chỗ hơn**: tỷ lệ số bản dành cho đầu sách không hết bản về sau gần như không đổi (58–61% và 89–91%). Đây chỉ là
+   mua ít hơn theo cùng tỷ lệ.
+3. Dữ liệu thật không cho biết nhu cầu không được phục vụ, nên không biết số bản bị cắt có cần hay không. Bộ mô phỏng tổng
+   hợp có ghi nhận nhu cầu này; chạy `--synthetic` trên 8 seed kiểm định với quy tắc chấp nhận đăng ký trước của
+   `reorder-optimization.js` (**kiểm định hậu nghiệm**: các seed này đã được dùng trước đó):
+
+   | Ứng viên | Fill rate TB (production 98,89%) | Chi phí so với production | Số lần chạy không đạt mức phục vụ |
+   |---|---|---|---|
+   | FLOOR_BY_BORROWS | 98,87% | 99,6% | 5/24 |
+   | Bỏ mức tối thiểu | 98,79% | 83,2% | 22/24 |
+
+   Không ứng viên nào đạt, giống kết quả của `IF_SHORTFALL` trong
+   [REORDER_OPTIMIZATION_EVALUATION.md](REORDER_OPTIMIZATION_EVALUATION.md).
+4. **Kết luận**: giữ nguyên logic đề xuất nhập sách của production. Số lượng lớn của nhóm HIGH là một **lựa chọn đánh
+   đổi chi phí – mức phục vụ** (mua dư để không thiếu), không phải lỗi có thể sửa mà không mất gì. Nếu thư viện muốn
+   tiết kiệm, cách có căn cứ hơn là đặt ngân sách: chế độ ngân sách của production đã dùng số bản dự kiến được trả và
+   phân bổ từng bản theo xác suất phục vụ (IP_RETURNS+FLOOR+MARGINAL, đạt 24/24 lần chạy trong nghiên cứu trên).
+5. Khi đo, phát hiện lỗi production: ước lượng số bản được trả (`loanSurvival`) dùng `Math.max(...mảng)`, vượt giới hạn
+   call stack khi một năm có khoảng 10^5 lượt mượn (thư viện công cộng), làm hỏng chế độ ngân sách với thư viện lớn.
+   **Đã sửa** (vòng lặp thay cho spread), có test 300.000 lượt mượn.
 
 ## 6. Hạn chế
 
@@ -331,6 +371,16 @@ cd services/analytics-service && node eval/real-copies.js ../../research-inputs/
 ```
 
 Thay `public` bằng `univ` cho thư viện ĐH.
+
+Thử giảm số lượng nhập cho nhóm HIGH (mục 5.4; dữ liệu thật vài phút, `--synthetic` khoảng 30 giây):
+
+```bash
+cd services/analytics-service && node --max-old-space-size=4096 eval/reorder-quantity-variants.js ../../research-inputs/library-loans-mendeley/derived/univ_events.json ../../research-inputs/library-loans-mendeley/derived/public_events.json
+```
+
+```bash
+cd services/analytics-service && node eval/reorder-quantity-variants.js --synthetic
+```
 
 Gợi ý sách (mỗi lần 1–4 giờ, không gọi mạng, không tốn phí):
 
