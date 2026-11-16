@@ -402,6 +402,31 @@ app.get("/system/health", requireAdminToken, async (_req, res) => {
   });
 });
 
+// The gateway samples every dependency on its own, so the admin monitor shows recent
+// history even for the time nobody had the page open.
+// shortcut: kept in this process's memory, so a gateway restart (every deploy) starts it empty; move it to Redis if history must survive restarts.
+const HEALTH_SAMPLE_INTERVAL_MS = 60_000;
+const HEALTH_HISTORY_LENGTH = 30;
+const healthHistory = [];
+
+async function sampleHealth() {
+  const services = await Promise.all(DEPENDENCIES.map(probeDependency));
+  healthHistory.push({
+    checked_at: new Date().toISOString(),
+    // A sample exists only while the gateway runs, so the gateway itself is up in every one.
+    services: [
+      { id: "api-gateway", status: "ok", latency_ms: null, details: { status: "ok" } },
+      ...services.map(({ id, status, latency_ms, details }) => ({ id, status, latency_ms, details })),
+    ],
+  });
+  if (healthHistory.length > HEALTH_HISTORY_LENGTH) healthHistory.shift();
+}
+
+app.get("/system/health/history", requireAdminToken, (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  return res.json({ interval_seconds: HEALTH_SAMPLE_INTERVAL_MS / 1000, samples: healthHistory });
+});
+
 // --------------- Public (anonymous) read-only API ---------------
 // The public website browses the catalog (books, categories, branches), reads
 // reviews and the active membership plans without a token.
@@ -604,4 +629,6 @@ app.use((error, req, res, _next) => {
 server.listen(port, "0.0.0.0", () => {
   console.log(`api-gateway running at http://0.0.0.0:${port} (HTTP + WebSocket)`);
   startGatewayRabbitMqConsumer(io);
+  void sampleHealth();
+  setInterval(() => void sampleHealth(), HEALTH_SAMPLE_INTERVAL_MS).unref();
 });
