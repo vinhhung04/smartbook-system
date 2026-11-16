@@ -571,6 +571,11 @@ function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}
       const { books } = await getSnapshot();
       return buildCategories(books);
     },
+    // Book and branch pages for the website's sitemap; the same rows the catalog shows.
+    async sitemapPaths() {
+      const [{ books }, branches] = await Promise.all([getBooks(), getBranches()]);
+      return [...books.map((book) => `/books/${book.id}`), ...branches.map((branch) => `/branches/${branch.id}`)];
+    },
     async detail(id) {
       if (!UUID_PATTERN.test(String(id || ''))) return null;
       const row = await prisma.books.findFirst({ where: { ...PUBLIC_BOOK_WHERE, id }, select: PUBLIC_BOOK_SELECT });
@@ -580,6 +585,13 @@ function createPublicCatalog(prisma, { fetchSignals = fetchCatalogSignals } = {}
       return { ...detail, related: relatedBooks(books, detail) };
     },
   };
+}
+
+// Paths are /books/<uuid> and /branches/<uuid>, so nothing in them needs XML escaping.
+function buildSitemapXml(origin, paths) {
+  const base = String(origin || '').replace(/\/+$/, '');
+  const urls = paths.map((path) => `  <url><loc>${base}${path}</loc></url>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
 module.exports = {
@@ -594,6 +606,7 @@ module.exports = {
   buildCategories,
   buildFacets,
   buildHome,
+  buildSitemapXml,
   createCachedLoader,
   createPublicCatalog,
   normalizeText,

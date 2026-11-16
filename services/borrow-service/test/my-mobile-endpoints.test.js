@@ -67,6 +67,7 @@ function basePrisma() {
     fines: table([]),
     fine_payment_intents: table([]),
     $transaction: async (fn) => fn(prisma),
+    async $executeRaw() {},
   };
   // getMyLoans includes loan_items; the fake keeps them inline.
   return prisma;

@@ -3,7 +3,7 @@ const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
-const { resolveActiveMembership } = require('../services/membership.service');
+const { resolveActiveMembership, countActiveBorrowedItems } = require('../services/membership.service');
 const {
   checkAvailability,
   reserveStock,
@@ -22,6 +22,14 @@ const {
 } = require('../services/deposit.service');
 const { normalizePickupCode } = require('../utils/pickup-code');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
+const {
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  readableWarehouseFilter,
+  scopeErrorStatus,
+  WarehouseScopeUnavailableError,
+} = require('../utils/warehouse-scope.utils');
 
 const CONVERTIBLE_RESERVATION_STATUSES = ['CONFIRMED', 'READY_FOR_PICKUP'];
 const ACTIVE_LOAN_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
@@ -103,25 +111,30 @@ async function listLoans(req, res) {
   const q = searchTerm(req.query);
   const status = parseStatusFilter(req.query.status);
 
-  // Everything except the status condition; per-status counts are taken over this.
-  const whereWithoutStatus = {
-    ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
-    ...(q
-      ? {
-        OR: [
-          { loan_number: { contains: q, mode: 'insensitive' } },
-          { customers: { full_name: { contains: q, mode: 'insensitive' } } },
-          { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
-          // customer_id is a UUID column: comparing it with a name made Postgres throw (500).
-          ...(isUuid(q) ? [{ customer_id: q }] : []),
-        ],
-      }
-      : {}),
-  };
-  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
-  const orderBy = req.query.sort === 'due_date' ? [{ due_date: 'asc' }] : [{ borrow_date: 'desc' }];
-
   try {
+    // Only the warehouses (branches) this caller may read; fail-closed per
+    // warehouse-scope.utils.js. Never trust a warehouse_id the client might send.
+    const scopeWhere = await scopedWarehouseWhere(req.user);
+
+    // Everything except the status condition; per-status counts are taken over this.
+    const whereWithoutStatus = {
+      ...scopeWhere,
+      ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
+      ...(q
+        ? {
+          OR: [
+            { loan_number: { contains: q, mode: 'insensitive' } },
+            { customers: { full_name: { contains: q, mode: 'insensitive' } } },
+            { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
+            // customer_id is a UUID column: comparing it with a name made Postgres throw (500).
+            ...(isUuid(q) ? [{ customer_id: q }] : []),
+          ],
+        }
+        : {}),
+    };
+    const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
+    const orderBy = req.query.sort === 'due_date' ? [{ due_date: 'asc' }] : [{ borrow_date: 'desc' }];
+
     const [items, total, statusCounts] = await Promise.all([
       prisma.loan_transactions.findMany({
         where,
@@ -155,6 +168,9 @@ async function listLoans(req, res) {
       },
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while listing loans:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -200,6 +216,9 @@ async function createDirectLoan(req, res) {
     return res.status(400).json({ message: 'source_channel không hợp lệ' });
   }
 
+  // Never trust warehouse_id from the client: it must be a branch this caller can write.
+  if (!(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
+
   const reservationId = deterministicUuid(`direct-loan:reservation:${idempotencyKey}`);
   const loanId = deterministicUuid(`direct-loan:loan:${idempotencyKey}`);
 
@@ -226,12 +245,7 @@ async function createDirectLoan(req, res) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await prisma.loan_transactions.count({
-      where: {
-        customer_id,
-        status: { in: ACTIVE_LOAN_STATUSES },
-      },
-    });
+    const activeLoanCount = await countActiveBorrowedItems(prisma, customer_id);
 
     if (activeLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
@@ -319,9 +333,7 @@ async function createDirectLoan(req, res) {
         // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
         // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${customer_id}`}, 0))`;
-        const recheckLoanCount = await tx.loan_transactions.count({
-          where: { customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
-        });
+        const recheckLoanCount = await countActiveBorrowedItems(tx, customer_id);
         if (recheckLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
           throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
         }
@@ -499,26 +511,31 @@ async function listRenewalRequests(req, res) {
       .map((item) => item.reference_id)
       .filter((value) => isUuid(value));
 
+    // Scope which underlying loans this caller may even look at; a renewal request
+    // whose loan is out of scope is dropped below, same as it never listed.
+    const readable = await readableWarehouseFilter(req.user);
     const loans = loanIds.length > 0
       ? await prisma.loan_transactions.findMany({
-        where: { id: { in: loanIds } },
+        where: { id: { in: loanIds }, ...(readable === null ? {} : { warehouse_id: { in: readable } }) },
         include: { loan_items: true },
       })
       : [];
 
     const loanMap = new Map(loans.map((loan) => [loan.id, loan]));
 
-    const mapped = items.map((item) => ({
-      request_id: item.id,
-      status: item.status,
-      requested_at: item.scheduled_at,
-      reviewed_at: item.sent_at,
-      review_decision: item.metadata?.review_decision || null,
-      loan: loanMap.get(item.reference_id) || null,
-      customer: item.customers,
-      requested_extension_days: Number(item.metadata?.requested_extension_days || 0) || null,
-      metadata: item.metadata || {},
-    }));
+    const mapped = items
+      .filter((item) => !isUuid(item.reference_id) || loanMap.has(item.reference_id))
+      .map((item) => ({
+        request_id: item.id,
+        status: item.status,
+        requested_at: item.scheduled_at,
+        reviewed_at: item.sent_at,
+        review_decision: item.metadata?.review_decision || null,
+        loan: loanMap.get(item.reference_id) || null,
+        customer: item.customers,
+        requested_extension_days: Number(item.metadata?.requested_extension_days || 0) || null,
+        metadata: item.metadata || {},
+      }));
 
     const filtered = status === 'REVIEWED'
       ? mapped.filter((item) => Boolean(item.review_decision))
@@ -534,6 +551,9 @@ async function listRenewalRequests(req, res) {
       },
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while listing renewal requests:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -562,6 +582,8 @@ async function reviewLoanRenewal(req, res) {
     if (!loan) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
+
+    if (!(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
 
     const pendingRequest = await prisma.customer_notifications.findFirst({
       where: {
@@ -596,6 +618,17 @@ async function reviewLoanRenewal(req, res) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent reviews of the same loan's renewal request: without this, two
+      // managers approving at once could both read the same pre-renewal loan_renewals count
+      // and both create a renewal record, exceeding max_renewal_count. Same lock key family
+      // used by requestMyLoanRenewal, so request-creation and review never interleave either.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`loan-renewal:${loan.id}`}, 0))`;
+
+      const freshPending = await tx.customer_notifications.findUnique({ where: { id: pendingRequest.id } });
+      if (!freshPending || freshPending.status !== 'PENDING') {
+        return { code: 409, payload: { message: 'Yêu cầu gia hạn này đã được xử lý' } };
+      }
+
       let newDueDate = loan.due_date;
       const renewalRows = [];
 
@@ -650,8 +683,10 @@ async function reviewLoanRenewal(req, res) {
         });
       }
 
-      await tx.customer_notifications.update({
-        where: { id: pendingRequest.id },
+      // Conditional on PENDING (belt-and-suspenders with the lock above): only one
+      // transaction can ever be the one that actually flips this request's status.
+      const claimed = await tx.customer_notifications.updateMany({
+        where: { id: pendingRequest.id, status: 'PENDING' },
         data: {
           status: 'SENT',
           sent_at: new Date(),
@@ -664,6 +699,9 @@ async function reviewLoanRenewal(req, res) {
           },
         },
       });
+      if (claimed.count !== 1) {
+        return { code: 409, payload: { message: 'Yêu cầu gia hạn này đã được xử lý' } };
+      }
 
       await createNotificationRecord(tx, {
         customer_id: loan.customer_id,
@@ -750,6 +788,8 @@ async function getLoanById(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
+    if (!(await requireWarehouseReadAccess(req, res, loan.warehouse_id))) return;
+
     return res.json({ data: loan });
   } catch (error) {
     console.error('Error while loading loan:', error);
@@ -781,6 +821,8 @@ async function previewLoanReturn(req, res) {
     if (!loan) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
+
+    if (!(await requireWarehouseReadAccess(req, res, loan.warehouse_id))) return;
 
     const targets = loanItemId
       ? loan.loan_items.filter((item) => item.id === loanItemId && (item.status === 'BORROWED' || item.status === 'OVERDUE'))
@@ -824,6 +866,8 @@ async function convertReservationToLoan(req, res) {
     if (!reservation) {
       return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
+
+    if (!(await requireWarehouseWriteAccess(req, res, reservation.warehouse_id))) return;
 
     if (reservation.status === 'CONVERTED_TO_LOAN') {
       const existingLoan = await prisma.loan_transactions.findFirst({ where: { source_reservation_id: reservationId } });
@@ -884,12 +928,7 @@ async function convertReservationToLoan(req, res) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await prisma.loan_transactions.count({
-      where: {
-        customer_id: reservation.customer_id,
-        status: { in: ACTIVE_LOAN_STATUSES },
-      },
-    });
+    const activeLoanCount = await countActiveBorrowedItems(prisma, reservation.customer_id);
 
     if (activeLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
@@ -958,9 +997,7 @@ async function convertReservationToLoan(req, res) {
         // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
         // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${reservation.customer_id}`}, 0))`;
-        const recheckLoanCount = await tx.loan_transactions.count({
-          where: { customer_id: reservation.customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
-        });
+        const recheckLoanCount = await countActiveBorrowedItems(tx, reservation.customer_id);
         if (recheckLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
           throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
         }
@@ -1205,6 +1242,10 @@ async function returnLoan(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
+    // Returns always post stock at loan.warehouse_id (see returnBorrowedStock call
+    // below) - that is the warehouse this write must be scoped against.
+    if (!(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
+
     if (!ACTIVE_LOAN_STATUSES.includes(loan.status)) {
       return res.status(409).json({ message: `Không thể trả sách khi phiếu mượn ở trạng thái ${loan.status}` });
     }
@@ -1248,9 +1289,12 @@ async function returnLoan(req, res) {
         authHeader,
         requestId: req.requestId,
       });
+      // Recorded as each item's remote call actually succeeds (not after the whole loop):
+      // if a LATER item throws, the catch block below must still know these earlier ones
+      // already moved stock in inventory-service, so it can queue them for reconciliation
+      // instead of silently leaving loan_items here out of sync with real stock.
+      returnedLoanItemIds.push(item.id);
     }
-
-    returnedLoanItemIds = targets.map((item) => item.id);
     const returnedAt = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -1382,24 +1426,29 @@ async function returnLoan(req, res) {
 
     return res.json({ data: updated });
   } catch (error) {
-    if (error?.status === 409) {
-      return res.status(409).json({ message: error.message });
-    }
-
     console.error('Error while returning loan:', error);
 
+    // Some items in the loop above may have already succeeded in inventory-service before
+    // this one failed - that must be queued for reconciliation regardless of which error
+    // (409 business conflict or anything else) stopped the loop, otherwise those items'
+    // stock move is real but loan_items here silently never catches up.
     if (returnedLoanItemIds.length > 0) {
-      // The returnBorrowedStock loop above already succeeded: Inventory has
-      // moved borrowed_qty -> available_qty for these items, but loan_items/
-      // loan status here never updated to match. Same "no safe automatic
-      // undo" reasoning as createDirectLoan/convertReservationToLoan: queue
-      // it instead of guessing.
       await queueReconciliation({
         aggregateId: loanId,
         eventType: 'LOAN_RETURN_UNRESOLVED',
         payload: { loan_id: loanId, loan_item_ids: returnedLoanItemIds },
       });
+      if (error?.status === 409) {
+        return res.status(409).json({
+          message: error.message,
+          detail: { reconciliation_queued: true, returned_loan_item_ids: returnedLoanItemIds },
+        });
+      }
       return res.status(500).json({ message: 'Internal server error. Stock was already returned; this has been queued for reconciliation.' });
+    }
+
+    if (error?.status === 409) {
+      return res.status(409).json({ message: error.message });
     }
 
     return res.status(500).json({ message: 'Internal server error' });

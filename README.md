@@ -4,6 +4,8 @@
 
 ### Nền tảng Quản lý Thư viện & Kho vận kết hợp — Đồ án tốt nghiệp (KLTN)
 
+**🌐 Dùng thử: [smartbook.io.vn](https://smartbook.io.vn)**
+
 ![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
@@ -364,7 +366,7 @@ Phía kho, màn hình nhận hàng từ nhà cung cấp (`/supplier-deliveries/:
 AI Service hỗ trợ tự động hóa nhập liệu và ra quyết định:
 
 - OCR hóa đơn/phiếu giao hàng khi nhập kho (`/scan-receipt`).
-- 🔎 **Tra cứu ISBN hai vòng** (`POST /lookup-book-by-isbn`, [`docs/reports/BOOK_SEARCH_UPGRADE_REPORT.md`](docs/reports/BOOK_SEARCH_UPGRADE_REPORT.md)): vòng 1 hỏi lần lượt từng nguồn và dừng ở bản ghi đầu tiên có đúng mã; vòng 2 hỏi mọi nguồn còn bật, giữ nguồn gốc từng trường và loại ấn bản khác. Nguồn: catalog SmartBook, Google Books, Open Library, Tiki, Fahasa (HTTP thường), Đinh Tị, Bizbooks và feed `products.json` của các nhà xuất bản/nhà sách (Nhã Nam, Văn Lang, Thái Hà, IPM, Kim Đồng, AZ Việt Nam, Omega+, Tân Việt, Alpha Books, Phương Nam, Nhân Văn, Minh Long) trong phạm vi robots.txt; Vinabook và WorldCat đã tắt ([`docs/reports/BOOK_DATA_SOURCE_AUDIT.md`](docs/reports/BOOK_DATA_SOURCE_AUDIT.md)). Có giãn cách theo host, tạm dừng nguồn khi gặp 403/429, cache "lần đúng gần nhất" trong Postgres; tìm kiếm web bằng AI theo tên sách ở vòng 2 có giới hạn ngày/tháng và giá trị phải khớp trang được trích dẫn.
+- 🔎 **Tra cứu ISBN hai vòng** (`POST /lookup-book-by-isbn`, [`docs/reports/BOOK_SEARCH_UPGRADE_REPORT.md`](docs/reports/BOOK_SEARCH_UPGRADE_REPORT.md)): vòng 1 hỏi lần lượt từng nguồn và dừng ở bản ghi đầu tiên có đúng mã; vòng 2 hỏi mọi nguồn còn bật, giữ nguồn gốc từng trường và loại ấn bản khác. Nguồn: catalog SmartBook, Google Books, Open Library, Library of Congress và Thư viện Quốc gia Đức (SRU, tra theo ISBN), sổ lưu chiểu của Cục Xuất bản (ppdvn.gov.vn, chỉ vòng 2 theo tên sách, đối chiếu ISBN trên từng dòng), Tiki, Fahasa (HTTP thường), Đinh Tị, Bizbooks và feed `products.json` của các nhà xuất bản/nhà sách (Nhã Nam, Văn Lang, Thái Hà, IPM, Kim Đồng, AZ Việt Nam, Omega+, Tân Việt, Alpha Books, Phương Nam, Nhân Văn, Minh Long) trong phạm vi robots.txt; Vinabook và WorldCat đã gỡ bỏ vì ngừng hoạt động ([`docs/reports/BOOK_DATA_SOURCE_AUDIT.md`](docs/reports/BOOK_DATA_SOURCE_AUDIT.md)). Có giãn cách theo host, tạm dừng nguồn khi gặp 403/429, cache "lần đúng gần nhất" trong Postgres; tìm kiếm web bằng AI theo tên sách ở vòng 2 có giới hạn ngày/tháng và giá trị phải khớp trang được trích dẫn.
 - 📚 **Nhập sách từ ảnh** (`POST /book-metadata/scan-images`, trang `/ai-import`): 1–3 ảnh có nhãn (bìa trước, bìa sau, trang bản quyền) trong một lần gọi; kiểm tra checksum ISBN, phát hiện mâu thuẫn giữa các ảnh, so sánh nghiêm ngặt giữ dấu tiếng Việt; ISBN đọc được đi qua tra cứu ở trên rồi đối soát từng trường. Trường người dùng đã sửa không bao giờ bị ghi đè, bản ghi khác ấn bản không bao giờ tự áp dụng. Chỉ đọc, cần quyền quản lý + `inventory.catalog.write`. Đánh giá: `docs/ANALYSIS/BOOK_OCR_IMPORT.md`, `BOOK_OCR_EVALUATION.md`.
 - Gợi ý mô tả/tóm tắt sách, chat/agent hỗ trợ nghiệp vụ (nhận diện ý định, gợi ý kho/hàng cần nhập).
 - `llm_provider.py` **đã bỏ hẳn Anthropic, Groq và Ollama** — OpenRouter (Qwen) là provider duy nhất cho `/chat`, `/assistant`, NLU và vision/OCR, qua `get_openrouter_provider()`.

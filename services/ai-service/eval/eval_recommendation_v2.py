@@ -197,17 +197,28 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=REPORT_DIR)
     ap.add_argument("--write-weights", action="store_true", help="write recommendation_v2_weights.json for production")
     ap.add_argument("--bootstrap", type=int, default=1000)
+    ap.add_argument("--skip-ablations", action="store_true",
+                    help="no per-group ablations, single-family variants or no-pruning diagnostic - bounds runtime and memory on large catalogs")
+    ap.add_argument("--real-data", action="store_true",
+                    help="evaluate a real loan file from eval/real_library_loans.py (never writes production weights)")
     args = ap.parse_args(argv)
 
     t0 = time.time()
     with open(args.events, encoding="utf-8") as handle:
         raw = handle.read()
     data = json.loads(raw)
-    if not data.get("synthetic"):
+    if args.real_data:
+        if data.get("synthetic") is not False or not data.get("real_source"):
+            print("refusing: --real-data input must come from eval/real_library_loans.py", file=sys.stderr)
+            return 1
+        if args.write_weights:
+            print("refusing: production weights are selected on the synthetic dataset only", file=sys.stderr)
+            return 1
+    elif not data.get("synthetic"):
         print("refusing: input is not marked synthetic", file=sys.stderr)
         return 1
-    oracle = None
-    if os.path.exists(args.oracle):
+    oracle = None  # the latent-truth oracle exists only for the simulator's readers
+    if not args.real_data and os.path.exists(args.oracle):
         with open(args.oracle, encoding="utf-8") as handle:
             oracle = json.load(handle)
 
@@ -234,13 +245,13 @@ def main(argv=None):
     log(f"[v2-eval] V2 validation {full['objective']}={full['validation_objective']} weights={full['weights']} params={full['params']}")
 
     configs = {"V2": full}
-    for group in ABLATION_ORDER:
+    for group in () if args.skip_ablations else ABLATION_ORDER:
         fixed = v2.ABLATION_GROUPS[group]
         fixed_params = {"half_life_days": None} if group == "recency" else {}
         start = {"weights": full["weights"], "params": {**full["params"], **fixed_params}}
         log(f"[v2-eval] ablation V2-{group}")
         configs[f"V2-{group}"] = tuning.tune(val_harness, fixed_zero=fixed, fixed_params=fixed_params, start=start, passes=3)
-    for name, keep in ONLY_VARIANTS.items():
+    for name, keep in () if args.skip_ablations else ONLY_VARIANTS.items():
         log(f"[v2-eval] {name}")
         fixed = tuple(f for f in v2.FEATURES if f not in keep)
         fixed_params = {"half_life_days": None} if "recency" in fixed else {}
@@ -253,7 +264,8 @@ def main(argv=None):
     test_split = proto.segment(test_split_all, MIN_TRAIN_LOANS)
     test_avail = proto.availability_at(catalog, copies, interactions, t_test)
     test_harness = tuning.Harness(catalog, interactions, test_split_all, test_avail)
-    full_catalog_harness = tuning.Harness(catalog, interactions, test_split_all, test_avail, use_pool=False)
+    # every reader x every book: the memory hog on large catalogs, a pruning diagnostic only
+    full_catalog_harness = None if args.skip_ablations else tuning.Harness(catalog, interactions, test_split_all, test_avail, use_pool=False)
     pop = popularity_counts(interactions, t_test)
     extra = (pop, category_of, catalog_keys, 10)
 
@@ -266,9 +278,8 @@ def main(argv=None):
         "V1_PRODUCTION": v1_rankings(catalog, interactions, test_split_all, test_avail, "audited"),
         "V2": v2_rank(full),
         "V2+CATEGORY_CAP3": v2_rank(full, cap=CATEGORY_CAP),
-        "V2_NO_CANDIDATE_PRUNING": v2_rank(full, full_catalog_harness),
-        "CONTENT_ONLY": v2_rank(configs["CONTENT_ONLY"]),
-        "CF_ONLY": v2_rank(configs["CF_ONLY"]),
+        **({} if full_catalog_harness is None else {"V2_NO_CANDIDATE_PRUNING": v2_rank(full, full_catalog_harness)}),
+        **{name: v2_rank(configs[name]) for name in ONLY_VARIANTS if name in configs},
     }
     orc = oracle_rankings(test_split_all, catalog_keys, oracle)
     if orc:
@@ -335,7 +346,7 @@ def main(argv=None):
     if orc_legacy:
         legacy_models["ORACLE_TRUE_PREFERENCE"] = orc_legacy
     legacy = {name: all_metrics(r, legacy_split, catalog) for name, r in legacy_models.items()}
-    parity = legacy_parity(legacy)
+    parity = {"status": "n/a: real data"} if args.real_data else legacy_parity(legacy)
 
     # ── 5. Error analysis ──
     head_n = max(1, round(len(catalog_keys) * 0.2))
@@ -377,7 +388,8 @@ def main(argv=None):
         "source": os.path.relpath(args.events, REPO).replace("\\", "/"),
         "sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest(),
         "seed": data.get("seed"),
-        "synthetic": True,
+        "synthetic": not args.real_data,
+        "real_source": data.get("real_source"),
         "users": len(data.get("customers") or []),
         "books": len(catalog),
         "interactions": len(interactions),
@@ -391,6 +403,7 @@ def main(argv=None):
         "test_users_all_segments": len(test_split_all["users"]),
         "min_train_loans": MIN_TRAIN_LOANS,
         "protocol": "audited point-in-time (see recsys_protocol.py)",
+        "ablations": "skipped (--skip-ablations)" if args.skip_ablations else "run",
     }
     report = {
         "title": "Recommendation V2 Evaluation",
@@ -487,7 +500,10 @@ def conclusion(report):
     helps = [n for n, d in report["ablation_paired_delta_full_minus_ablated"].items() if verdict(d["ndcg@10"]) == "better"]
     hurts = [n for n, d in report["ablation_paired_delta_full_minus_ablated"].items() if verdict(d["ndcg@10"]) == "worse"]
     neutral = [n for n in report["ablation_paired_delta_full_minus_ablated"] if n not in helps and n not in hurts]
-    lines.append("Ablation (NDCG@10, paired CI): removing " + (", ".join(g.replace("V2 - ", "") for g in helps) or "no group")
+    if not report["ablation_paired_delta_full_minus_ablated"]:
+        lines.append("Ablation: not run (--skip-ablations).")
+    else:
+        lines.append("Ablation (NDCG@10, paired CI): removing " + (", ".join(g.replace("V2 - ", "") for g in helps) or "no group")
                  + " significantly hurts; " + (", ".join(g.replace("V2 - ", "") for g in neutral) or "none")
                  + " show no significant effect" + (("; removing " + ", ".join(g.replace("V2 - ", "") for g in hurts) + " would help") if hurts else "") + ".")
     ic = report["cold_start"]["item_cold_start"]
@@ -501,8 +517,12 @@ def conclusion(report):
         if v is not None and p is not None:
             size = f"n={seg['users']}" + (", small sample - indicative only" if seg["users"] < 30 else "")
             lines.append(f"Cold start, {label} ({size}): NDCG@10 V2 {v} vs POPULARITY {p} ({'V2 higher' if v > p else 'POPULARITY higher' if p > v else 'equal'}).")
-    lines.append("Acceptance " + ("PASSED - V2 may become the production default." if report["acceptance"]["passed"]
-                                   else "NOT passed - keep V1 as the production default; V2 stays behind RECOMMENDATION_MODEL=v2."))
+    if report["dataset"].get("real_source"):
+        lines.append("Acceptance rule on this real library: " + ("met" if report["acceptance"]["passed"] else "not met")
+                     + " (informational - the production model choice is made on the synthetic dataset and is unchanged).")
+    else:
+        lines.append("Acceptance " + ("PASSED - V2 may become the production default." if report["acceptance"]["passed"]
+                                       else "NOT passed - keep V1 as the production default; V2 stays behind RECOMMENDATION_MODEL=v2."))
     return lines
 
 
@@ -556,8 +576,11 @@ def ci_str(ci):
 def render_markdown(rep):
     d = rep["dataset"]
     r = rep["results"]
+    real = d.get("real_source")
+    banner = (f"Real library loans: {real['library']} (Mendeley `{real['doi']}`, {real['license']}, {real['use']})."
+              if real else "Synthetic behavioural dataset (simulation, not real users).")
     o = ["# Recommendation V2 Evaluation\n",
-         "> Synthetic behavioural dataset (simulation, not real users). All numbers below are generated by "
+         f"> {banner} All numbers below are generated by "
          "`services/ai-service/eval/eval_recommendation_v2.py`; the conclusion is derived from them, not written by hand.\n"]
     o.append("## Dataset\n")
     o.append(md_table([
@@ -658,9 +681,14 @@ def render_markdown(rep):
                       [("model", "model"), ("head", "head"), ("tail", "tail")]))
 
     o.append("## Limitations\n")
-    o.append("- The data is synthetic: the simulator's choice model (category preference × Zipf popularity × author affinity) favours signals of that shape; results show what V2 recovers from observable rows, not real-user accuracy.\n"
-             "- 113 books / 11 categories: the candidate pool covers most of the catalog, so candidate generation is exercised but rarely decisive; item-item CF is estimated on a small item set.\n"
-             "- Semantic similarity is TF-IDF over title/author/category/description (same code offline and online); production V1's Qwen embeddings are not evaluated offline.\n"
+    o.append((
+        "- Real loans of one library, borrowing only: no wishlist/review/reservation rows, so the preference signals V2 gets in production from those are absent here.\n"
+        "- Weights are tuned on this library's own validation window, not copied from production; production weights stay the synthetic ones.\n"
+        "- Categories are DDC divisions and the text is title + author only (no descriptions); copies never borrowed are unknown, so availability is a lower bound.\n"
+        if real else
+        "- The data is synthetic: the simulator's choice model (category preference × Zipf popularity × author affinity) favours signals of that shape; results show what V2 recovers from observable rows, not real-user accuracy.\n"
+        "- 113 books / 11 categories: the candidate pool covers most of the catalog, so candidate generation is exercised but rarely decisive; item-item CF is estimated on a small item set.\n")
+             + "- Semantic similarity is TF-IDF over title/author/category/description (same code offline and online); production V1's Qwen embeddings are not evaluated offline.\n"
              "- Availability is the point-in-time state at the cutoff, while targets span the whole test window.\n"
              "- Weights are tuned on one validation window of one seed; the bootstrap CI covers user sampling, not dataset/seed variance.\n"
              "- `feature_scale` is fixed from tuning; in production the popularity/recency count ranges drift as history grows.\n")

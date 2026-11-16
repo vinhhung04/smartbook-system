@@ -5,6 +5,7 @@
     "sha256": "41c35ea0d43b93bcd88b4e439eb212bb10cb5b25c469a7bd732ffb3f8446a8ec",
     "seed": 20260928,
     "synthetic": true,
+    "real_source": null,
     "users": 600,
     "books": 113,
     "interactions": 33866,
@@ -31,7 +32,8 @@
     "test_eligible_users": 344,
     "test_users_all_segments": 415,
     "min_train_loans": 3,
-    "protocol": "audited point-in-time (see recsys_protocol.py)"
+    "protocol": "audited point-in-time (see recsys_protocol.py)",
+    "ablations": "run"
   },
   "model_configuration": {
     "V2": {
@@ -1430,48 +1432,48 @@
         },
         "V2": {
           "users": 58,
-          "hit_rate@10": 0.7931,
-          "recall@10": 0.4693,
-          "ndcg@10": 0.4324,
-          "mrr": 0.579,
+          "hit_rate@10": 0.7586,
+          "recall@10": 0.4485,
+          "ndcg@10": 0.4232,
+          "mrr": 0.5779,
           "catalog_coverage@10": 0.177,
-          "personalization@10": 0.0568
+          "personalization@10": 0.0565
         },
         "V2+CATEGORY_CAP3": {
           "users": 58,
-          "hit_rate@10": 0.8276,
-          "recall@10": 0.5015,
-          "ndcg@10": 0.4422,
-          "mrr": 0.5794,
-          "catalog_coverage@10": 0.1593,
-          "personalization@10": 0.0509
+          "hit_rate@10": 0.7931,
+          "recall@10": 0.4788,
+          "ndcg@10": 0.4345,
+          "mrr": 0.5786,
+          "catalog_coverage@10": 0.1504,
+          "personalization@10": 0.043
         },
         "V2_NO_CANDIDATE_PRUNING": {
           "users": 58,
-          "hit_rate@10": 0.7931,
-          "recall@10": 0.4693,
-          "ndcg@10": 0.4324,
-          "mrr": 0.5794,
+          "hit_rate@10": 0.7586,
+          "recall@10": 0.4485,
+          "ndcg@10": 0.4232,
+          "mrr": 0.5784,
           "catalog_coverage@10": 0.177,
-          "personalization@10": 0.0568
+          "personalization@10": 0.0565
         },
         "CONTENT_ONLY": {
           "users": 58,
-          "hit_rate@10": 0.431,
-          "recall@10": 0.1294,
-          "ndcg@10": 0.1269,
-          "mrr": 0.2464,
-          "catalog_coverage@10": 0.2743,
-          "personalization@10": 0.0822
+          "hit_rate@10": 0.7414,
+          "recall@10": 0.4416,
+          "ndcg@10": 0.4186,
+          "mrr": 0.5731,
+          "catalog_coverage@10": 0.3186,
+          "personalization@10": 0.0979
         },
         "CF_ONLY": {
           "users": 58,
-          "hit_rate@10": 0.3621,
-          "recall@10": 0.0812,
-          "ndcg@10": 0.083,
-          "mrr": 0.206,
-          "catalog_coverage@10": 0.2832,
-          "personalization@10": 0.0979
+          "hit_rate@10": 0.7586,
+          "recall@10": 0.4451,
+          "ndcg@10": 0.4203,
+          "mrr": 0.575,
+          "catalog_coverage@10": 0.2212,
+          "personalization@10": 0.0697
         },
         "ORACLE_TRUE_PREFERENCE": {
           "users": 58,
@@ -2192,7 +2194,7 @@
     },
     "passed": true
   },
-  "runtime_seconds": 262.4,
+  "runtime_seconds": 288.4,
   "conclusion": [
     "V2 vs V1_PRODUCTION on 344 test users: hit_rate@10 better (Δ=+0.2820, 95% CI [+0.2238, +0.3430]); ndcg@10 better (Δ=+0.2158, 95% CI [+0.1859, +0.2471]); recall@10 better (Δ=+0.2656, 95% CI [+0.2253, +0.3080]); mrr better (Δ=+0.2216, 95% CI [+0.1744, +0.2671]).",
     "V2 vs POPULARITY on 344 test users: hit_rate@10 better (Δ=+0.0930, 95% CI [+0.0581, +0.1308]); ndcg@10 better (Δ=+0.0760, 95% CI [+0.0500, +0.1009]); recall@10 better (Δ=+0.0964, 95% CI [+0.0663, +0.1282]); mrr better (Δ=+0.0632, 95% CI [+0.0238, +0.1034]).",
@@ -2200,7 +2202,7 @@
     "Coverage@10 / Personalization@10: POPULARITY 0.7965/0.8537, V1_PRODUCTION 0.9381/0.8856, V2 0.885/0.8946.",
     "Ablation (NDCG@10, paired CI): removing collaborative, preference significantly hurts; popularity, quality, availability, recency show no significant effect; removing semantic would help.",
     "Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.1694, imputation only 0.0196, zero evidence 0.0, POPULARITY 0.0, RANDOM 0.1122 (V2 when their history is known: 0.6531).",
-    "Cold start, new users (n=58): NDCG@10 V2 0.4324 vs POPULARITY 0.4288 (V2 higher).",
+    "Cold start, new users (n=58): NDCG@10 V2 0.4232 vs POPULARITY 0.4288 (POPULARITY higher).",
     "Cold start, sparse users (n=13, small sample - indicative only): NDCG@10 V2 0.2855 vs POPULARITY 0.4069 (POPULARITY higher).",
     "Acceptance PASSED - V2 may become the production default."
   ]

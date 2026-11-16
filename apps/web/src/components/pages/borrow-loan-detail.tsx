@@ -11,6 +11,7 @@ import { borrowService, type Loan, type ReturnPreview } from '@/services/borrow'
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 import { LoanReceiptPrintSheet } from './loan-receipt-print-sheet';
+import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/components/ui/utils';
@@ -352,6 +353,11 @@ export function BorrowLoanDetailPage() {
                       {loan.notes ? <div className="border-t border-border pt-2.5"><dt className="text-muted-foreground">Ghi chú</dt><dd className="mt-0.5 whitespace-pre-line text-foreground">{loan.notes}</dd></div> : null}
                     </dl>
                   </section>
+
+                  <AskAiPanel questions={[
+                    { label: 'Phí nếu trả trễ', prompt: `Nếu phiếu mượn ${loan.loan_number} trả trễ thì bị phạt bao nhiêu?` },
+                    { label: 'Khách còn nợ gì?', prompt: `Khách ${loan.customers?.full_name || loan.customer_id} còn phiếu quá hạn hoặc khoản phạt nào chưa thanh toán?` },
+                  ]} />
                 </aside>
               </div>
             </div>

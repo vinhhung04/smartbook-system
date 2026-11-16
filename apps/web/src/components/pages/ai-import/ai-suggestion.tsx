@@ -11,7 +11,7 @@ gsap.registerPlugin(Flip, SplitText);
 
 // Achromatic ledger (design-taste app style): the chrome is ink and grey; the one hue,
 // #1d5fbf, marks the AI's own output and the figure that changed. No tinted cards,
-// no shadow at rest; one layer of tone (a grey shell) holds one white core.
+// no shadow at rest; the suggestion is one tinted band inside its field's frame.
 const AI_HUE = "text-[#1d5fbf] dark:text-[#8ab4f8]";
 const STROKE = 1.5;
 
@@ -39,17 +39,15 @@ function textInsight(current: string, value: string): string[] {
   return facts;
 }
 
-const greyButton = "inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md bg-[#ececec] px-3 text-[13px] font-medium text-foreground transition-[background-color,transform] duration-150 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] hover:bg-[#e2e2e2] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/10 dark:hover:bg-white/15";
-const ghostButton = "inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-[#f2f2f2] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring dark:hover:bg-white/5";
+const greyButton = "inline-flex h-9 pointer-coarse:min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-md bg-[#ececec] px-3 text-[13px] font-medium text-foreground transition-[background-color,transform] duration-150 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] hover:bg-[#e2e2e2] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white/10 dark:hover:bg-white/15";
+const ghostButton = "inline-flex h-9 pointer-coarse:min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-[#f2f2f2] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring dark:hover:bg-white/5";
 
-/** The grey shell + white core: one tonal layer that says "this came from the assistant". */
+/** One tinted band at the foot of the field frame: "this came from the assistant". */
 function Shell({ children, live, busy, rootRef }: { children: ReactNode; live?: "status" | "alert"; busy?: boolean; rootRef?: Ref<HTMLDivElement> }) {
   return (
-    <div className="mx-2 mb-2 rounded-[10px] bg-[#f4f4f4] p-1 dark:bg-white/[0.04]">
-      <div ref={rootRef} role={live} aria-busy={busy || undefined}
-        className="rounded-md bg-card px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-black/[0.04] dark:shadow-none dark:ring-white/[0.06]">
-        {children}
-      </div>
+    <div ref={rootRef} role={live} aria-busy={busy || undefined}
+      className="border-t border-border/70 bg-[#f7f7f8] px-4 py-3.5 dark:border-white/[0.06] dark:bg-white/[0.035]">
+      {children}
     </div>
   );
 }
@@ -74,7 +72,7 @@ function AiMark({ children, meta }: { children: ReactNode; meta?: ReactNode }) {
  * here writes the form: every action goes back through the page's own handlers.
  */
 export function AiSuggestionPanel({
-  copy, candidate, loading, error, applied, currentValue, existingCategories, disabled,
+  copy, candidate, loading, error, applied, currentValue, existingCategories, disabled, stale = false,
   onApply, onUndo, onDismiss, onRegenerate,
 }: {
   copy: AiFieldCopy;
@@ -86,6 +84,8 @@ export function AiSuggestionPanel({
   /** Catalog categories, to tell an existing category from a new one. */
   existingCategories?: string[];
   disabled: boolean;
+  /** The field changed after the suggestion was written (AiFieldCandidate.basis). */
+  stale?: boolean;
   onApply: (selected?: string[]) => void;
   onUndo: () => void;
   onDismiss: () => void;
@@ -100,11 +100,13 @@ export function AiSuggestionPanel({
   const [compare, setCompare] = useState(false);
   const state = loading ? "loading" : error ? "error" : applied ? "applied" : candidate?.value.trim() ? "pending" : "none";
 
-  // Chips: what is already in the field is not offered again; the rest start selected.
+  // Chips: what is already in the field is not offered again; the rest start selected,
+  // except a category the catalog does not have yet - adding one is a taxonomy decision.
   const present = useMemo(() => new Set(splitCommaValues(currentValue).map(normalizeForCompare)), [currentValue]);
   const catalog = useMemo(() => new Set((existingCategories || []).map(normalizeForCompare)), [existingCategories]);
   const chips = useMemo(() => [...new Set(splitCommaValues(candidate?.value || ""))], [candidate?.value]);
-  const [deselected, setDeselected] = useState<ReadonlySet<string>>(() => new Set());
+  const [deselected, setDeselected] = useState<ReadonlySet<string>>(() => new Set(
+    catalog.size ? chips.filter((chip) => !catalog.has(normalizeForCompare(chip))) : []));
   const offered = chips.filter((chip) => !present.has(normalizeForCompare(chip)));
   const selected = offered.filter((chip) => !deselected.has(chip));
 
@@ -224,6 +226,14 @@ export function AiSuggestionPanel({
         Đề xuất AI
       </AiMark>
       <p className="mt-0.5 pl-6 text-[12px] text-muted-foreground">{origin}. Chưa áp dụng.</p>
+      {stale ? (
+        <p className="mt-2 flex items-start gap-2 pl-6 text-[12.5px] text-[#92400e] dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={STROKE} aria-hidden="true" />
+          {copy.kind === "text"
+            ? `${copy.noun.charAt(0).toUpperCase()}${copy.noun.slice(1)} đã đổi sau khi AI viết đề xuất này. Đọc kỹ trước khi thay, hoặc bấm Viết lại.`
+            : `Trường đã đổi sau khi AI viết đề xuất này.`}
+        </p>
+      ) : null}
 
       {copy.kind === "text" ? (
         <div id={bodyId} className={`mt-3 grid gap-4 ${comparing ? "md:grid-cols-2" : ""}`}>
@@ -235,12 +245,12 @@ export function AiSuggestionPanel({
           ) : null}
           <div data-flip-id="suggested" className="min-w-0">
             {comparing ? <p className={`text-[12px] font-medium ${AI_HUE}`}>Đề xuất, <span className="tabular-nums">{wordCount(value)} từ</span></p> : null}
-            <p ref={textRef} className={`max-w-[68ch] whitespace-pre-wrap break-words text-[14px] leading-[1.7] text-foreground ${comparing ? "mt-1" : ""} ${expanded ? "" : "line-clamp-6"}`}>{value}</p>
+            <p ref={textRef} className={`max-w-[60ch] whitespace-pre-wrap break-words text-[14px] leading-[1.7] text-foreground ${comparing ? "mt-1" : ""} ${expanded ? "" : "line-clamp-6"}`}>{value}</p>
             {same ? <p className="mt-1 text-[12px] text-muted-foreground">Giống hệt nội dung đang có.</p> : null}
           </div>
           {long ? (
             <button type="button" aria-expanded={expanded} aria-controls={bodyId} onClick={() => setExpanded((v) => !v)}
-              className="inline-flex w-fit cursor-pointer items-center gap-1 text-[12.5px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring md:col-span-full">
+              className="inline-flex min-h-9 pointer-coarse:min-h-[44px] w-fit cursor-pointer items-center gap-1 text-[12.5px] font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-ring md:col-span-full">
               {expanded ? "Thu gọn" : "Đọc toàn bộ"}
               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`} strokeWidth={STROKE} aria-hidden="true" />
             </button>
@@ -254,7 +264,7 @@ export function AiSuggestionPanel({
             const isOn = !already && !deselected.has(chip);
             if (already) {
               return (
-                <li key={chip} data-ai-chip className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground">
+                <li key={chip} data-ai-chip className="inline-flex h-9 items-center gap-1.5 rounded-md px-2 text-[13px] text-muted-foreground">
                   <Check className="h-3.5 w-3.5" strokeWidth={STROKE} aria-hidden="true" />{chip}<span className="sr-only">, đã có trong biểu mẫu</span>
                 </li>
               );
@@ -263,15 +273,15 @@ export function AiSuggestionPanel({
               <li key={chip} data-ai-chip>
                 <button type="button" aria-pressed={isOn}
                   onClick={() => setDeselected((current) => { const next = new Set(current); if (next.has(chip)) next.delete(chip); else next.add(chip); return next; })}
-                  className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-[13px] transition-[background-color,border-color,color,transform] duration-200 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
+                  className={`inline-flex h-9 pointer-coarse:min-h-[44px] cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-[13px] transition-[background-color,border-color,color,transform] duration-200 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${
                     isOn ? "border-black/15 bg-card font-medium text-foreground dark:border-white/20"
                       : "border-dashed border-black/15 bg-transparent text-muted-foreground hover:text-foreground dark:border-white/15"
                   }`}>
                   {isOn ? <Check className={`h-3.5 w-3.5 ${AI_HUE}`} strokeWidth={2} aria-hidden="true" /> : <Plus className="h-3.5 w-3.5" strokeWidth={STROKE} aria-hidden="true" />}
                   {chip}
                   {catalog.size ? (inCatalog
-                    ? <FolderCheck className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={STROKE} aria-label="có trong danh mục" />
-                    : <span className="text-[11.5px] font-normal text-muted-foreground">mới</span>) : null}
+                    ? <><FolderCheck className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={STROKE} aria-hidden="true" /><span className="sr-only">, có trong danh mục</span></>
+                    : <span className="text-[11.5px] font-normal text-muted-foreground"><span className="sr-only">, </span>mới</span>) : null}
                 </button>
               </li>
             );
@@ -317,12 +327,17 @@ const SEGMENT: Record<AiReviewItem["state"], string> = {
 
 /**
  * The review of the AI's suggestions as a task with a real count: one segment per
- * suggestion, filled as the user applies (ink) or skips (grey) it. The one dark
- * button applies every suggestion still waiting; Undo all comes back once some are in.
+ * suggestion, filled as the user applies (ink) or skips (grey) it. The bulk action is
+ * secondary and applies only `safe` suggestions (planBulkAiApply); `held` says which
+ * ones need a look in their own field. Undo all appears once two or more are in.
  */
-export function AiReviewStrip({ items, note, onApplyAll, onUndoAll }: {
+export function AiReviewStrip({ items, note, safe, held, onApplyAll, onUndoAll }: {
   items: AiReviewItem[];
   note?: string | null;
+  /** What one click would do, e.g. "thêm 2 từ khóa". */
+  safe: string[];
+  /** Suggestions left for per-field review, with the reason in words. */
+  held: string[];
   onApplyAll: () => void;
   onUndoAll: () => void;
 }) {
@@ -331,29 +346,32 @@ export function AiReviewStrip({ items, note, onApplyAll, onUndoAll }: {
   const applied = items.filter((item) => item.state === "applied").length;
   const done = items.length - pending.length;
   return (
-    <section aria-labelledby="ai-review-title" className="mt-3 rounded-lg border border-border bg-card px-4 py-3.5">
+    <section aria-labelledby="ai-review-title" className="mt-3 rounded-lg bg-[#f7f7f8] px-4 py-3.5 dark:bg-white/[0.035]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h4 id="ai-review-title" className="flex items-center gap-2 text-[13.5px] font-semibold text-foreground">
             <Sparkles className={`h-4 w-4 ${AI_HUE}`} strokeWidth={STROKE} aria-hidden="true" />Đề xuất AI
-            <span className="font-normal tabular-nums text-muted-foreground" aria-live="polite">đã xử lý {done}/{items.length}</span>
+            <span className="font-normal tabular-nums text-muted-foreground"><span className="sr-only">, </span>đã xử lý {done}/{items.length}</span>
           </h4>
           <p className="mt-1 pl-6 text-[13px] text-muted-foreground">
             {pending.length ? <>Chờ bạn duyệt: <span className="text-foreground">{pending.map((item) => item.action).join(", ")}</span>.</>
               : applied ? "Đã duyệt xong. Vẫn nên đọc lại nội dung trước khi lưu." : "Đã bỏ qua mọi đề xuất."}
           </p>
+          {held.length ? <p className="mt-0.5 pl-6 text-[12px] text-muted-foreground">Cần duyệt riêng: {held.join("; ")}.</p> : null}
           {note ? <p className="mt-0.5 pl-6 text-[12px] text-muted-foreground">{note}</p> : null}
         </div>
-        {pending.length > 1 ? (
-          <button type="button" onClick={onApplyAll}
-            className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 self-start whitespace-nowrap rounded-md bg-[#141414] px-3.5 text-[13px] font-medium text-white transition-[background-color,transform] duration-150 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] hover:bg-[#2a2a2a] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:bg-white dark:text-[#141414] dark:hover:bg-white/90">
-            Áp dụng {pending.length} đề xuất còn lại
-          </button>
-        ) : applied > 1 ? (
-          <button type="button" onClick={onUndoAll} className={`${ghostButton} shrink-0 self-start whitespace-nowrap`}>
-            <RotateCcw className="h-3.5 w-3.5" strokeWidth={STROKE} aria-hidden="true" />Hoàn tác tất cả
-          </button>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap gap-1 self-start">
+          {safe.length > 1 ? (
+            <button type="button" onClick={onApplyAll} title={`Sẽ ${safe.join(", ")}`} className={`${greyButton} whitespace-nowrap`}>
+              Áp dụng {safe.length} đề xuất an toàn
+            </button>
+          ) : null}
+          {applied > 1 ? (
+            <button type="button" onClick={onUndoAll} className={`${ghostButton} whitespace-nowrap`}>
+              <RotateCcw className="h-3.5 w-3.5" strokeWidth={STROKE} aria-hidden="true" />Hoàn tác tất cả
+            </button>
+          ) : null}
+        </div>
       </div>
       <ol className="mt-3 flex gap-1" aria-label="Tiến độ duyệt đề xuất AI">
         {items.map((item) => (
@@ -399,14 +417,16 @@ export function AiField({ id, label, status, generating, hasSuggestion, disabled
   }, { dependencies: [appliedKey], revertOnUpdate: true });
 
   return (
-    <div ref={frameRef} className="overflow-hidden rounded-lg border border-border bg-card transition-colors focus-within:border-[#c9c9c9] dark:focus-within:border-white/25">
+    <div ref={frameRef} className="overflow-hidden rounded-lg border border-border bg-card transition-colors has-[:is(textarea,input):focus-visible]:border-ring has-[:is(textarea,input):focus-visible]:outline-1 has-[:is(textarea,input):focus-visible]:outline-ring">
       <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5 pl-4 pr-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
           <Label htmlFor={id} className="text-[13px] font-semibold text-foreground">{label}</Label>
-          {status}
+          <span id={`${id}-state`}>{status}</span>
         </div>
-        <button type="button" onClick={onGenerate} disabled={generating || disabled} title={disabled ? "Cần có tên sách để dùng AI" : undefined}
-          className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-[#f2f2f2] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/5">
+        {/* aria-disabled while writing: a disabled button would drop keyboard focus to the page. */}
+        <button type="button" onClick={() => { if (!generating) onGenerate(); }} disabled={disabled} aria-disabled={generating || undefined}
+          title={disabled ? "Cần có tên sách để dùng AI" : undefined}
+          className="inline-flex h-9 pointer-coarse:min-h-[44px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-foreground transition-[background-color,transform] duration-150 hover:bg-[#f2f2f2] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-45 aria-disabled:cursor-progress dark:hover:bg-white/5">
           {generating ? <Loader2 className={`h-3.5 w-3.5 animate-spin motion-reduce:animate-none ${AI_HUE}`} aria-hidden="true" />
             : hasSuggestion ? <RefreshCw className={`h-3.5 w-3.5 ${AI_HUE}`} strokeWidth={STROKE} aria-hidden="true" />
             : <Sparkles className={`h-3.5 w-3.5 ${AI_HUE}`} strokeWidth={STROKE} aria-hidden="true" />}

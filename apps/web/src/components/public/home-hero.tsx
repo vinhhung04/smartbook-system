@@ -195,7 +195,7 @@ export function HomeHero({ home, books, onShelf }: HomeHeroProps) {
             <span data-hero="line" className="block">tiếp theo của bạn.</span>
           </h1>
           <p data-hero="lede" className="mt-5 max-w-[34rem] text-pretty text-[16px] leading-relaxed text-foreground/75 sm:text-[17px]">
-            Tìm theo tên sách, tác giả, hoặc mô tả cuốn bạn muốn đọc để AI gợi ý. Xem ngay chi nhánh nào còn sách và đặt trước khi đến thư viện.
+            Thư viện SmartBook: tìm theo tên sách, tác giả, hoặc mô tả cuốn bạn muốn đọc để AI gợi ý. Xem ngay chi nhánh nào còn sách và đặt trước khi đến thư viện.
           </p>
           <div data-hero="search" className="mt-7">
             <HeroSearch categories={home?.categories ?? []} />

@@ -384,46 +384,56 @@ async function requestMyLoanRenewal(req, res) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
-    const pendingRequest = await prisma.customer_notifications.findFirst({
-      where: {
-        customer_id: customer.id,
-        template_code: 'LOAN_RENEWAL_REQUEST',
-        reference_id: loan.id,
-        status: 'PENDING',
-      },
-      select: { id: true, scheduled_at: true },
-    });
-    if (pendingRequest) {
-      // A second tap (or a retried request) must not file another request — and use up
-      // another of the membership's renewals — while the first is still under review.
-      return res.status(409).json({
-        message: 'Đã có yêu cầu gia hạn đang chờ thư viện duyệt',
-        code: 'RENEWAL_PENDING',
-        detail: { requested_at: pendingRequest.scheduled_at },
-      });
-    }
-
-    const existingRequests = await prisma.customer_notifications.count({
-      where: {
-        customer_id: customer.id,
-        template_code: 'LOAN_RENEWAL_REQUEST',
-        reference_id: loan.id,
-      },
-    });
-
-    if (existingRequests >= membershipInfo.limits.max_renewal_count) {
-      return res.status(409).json({
-        message: 'Đã vượt số lần gia hạn cho phép của gói thành viên',
-        detail: {
-          max_renewal_count: membershipInfo.limits.max_renewal_count,
-          existing_request_count: existingRequests,
-        },
-      });
-    }
-
     const extensionDays = Math.max(1, Math.floor(Number(membershipInfo.limits.max_loan_days || 14) / 2));
 
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
+      // Same lock key family as reviewLoanRenewal: serializes two concurrent taps of
+      // "request renewal" for this loan (and keeps this from interleaving with a review).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`loan-renewal:${loan.id}`}, 0))`;
+
+      const pendingRequest = await tx.customer_notifications.findFirst({
+        where: {
+          customer_id: customer.id,
+          template_code: 'LOAN_RENEWAL_REQUEST',
+          reference_id: loan.id,
+          status: 'PENDING',
+        },
+        select: { id: true, scheduled_at: true },
+      });
+      if (pendingRequest) {
+        // A second tap (or a retried request) must not file another request — and use up
+        // another of the membership's renewals — while the first is still under review.
+        return {
+          code: 409,
+          payload: {
+            message: 'Đã có yêu cầu gia hạn đang chờ thư viện duyệt',
+            code: 'RENEWAL_PENDING',
+            detail: { requested_at: pendingRequest.scheduled_at },
+          },
+        };
+      }
+
+      const existingRequests = await tx.customer_notifications.count({
+        where: {
+          customer_id: customer.id,
+          template_code: 'LOAN_RENEWAL_REQUEST',
+          reference_id: loan.id,
+        },
+      });
+
+      if (existingRequests >= membershipInfo.limits.max_renewal_count) {
+        return {
+          code: 409,
+          payload: {
+            message: 'Đã vượt số lần gia hạn cho phép của gói thành viên',
+            detail: {
+              max_renewal_count: membershipInfo.limits.max_renewal_count,
+              existing_request_count: existingRequests,
+            },
+          },
+        };
+      }
+
       await createNotificationRecord(tx, {
         customer_id: customer.id,
         channel: 'IN_APP',
@@ -446,17 +456,22 @@ async function requestMyLoanRenewal(req, res) {
         before_data: { status: loan.status, due_date: loan.due_date },
         after_data: { requested_extension_days: extensionDays },
       });
+
+      return {
+        code: 201,
+        payload: {
+          message: 'Renewal request submitted',
+          data: {
+            loan_id: loan.id,
+            loan_number: loan.loan_number,
+            requested_extension_days: extensionDays,
+            request_status: 'PENDING_REVIEW',
+          },
+        },
+      };
     });
 
-    return res.status(201).json({
-      message: 'Renewal request submitted',
-      data: {
-        loan_id: loan.id,
-        loan_number: loan.loan_number,
-        requested_extension_days: extensionDays,
-        request_status: 'PENDING_REVIEW',
-      },
-    });
+    return res.status(result.code).json(result.payload);
   } catch (error) {
     console.error('requestMyLoanRenewal error:', error);
     return res.status(500).json({ message: 'Internal server error' });

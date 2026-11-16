@@ -110,11 +110,11 @@ Per-user NDCG@10 distribution:
 | RANDOM | 0.2414 | 0.0563 | 0.0393 | 0.1063 |
 | POPULARITY | 0.7586 | 0.452 | 0.4288 | 0.5923 |
 | V1_PRODUCTION | 0.5345 | 0.1865 | 0.2215 | 0.4374 |
-| V2 | 0.7931 | 0.4693 | 0.4324 | 0.579 |
-| V2+CATEGORY_CAP3 | 0.8276 | 0.5015 | 0.4422 | 0.5794 |
-| V2_NO_CANDIDATE_PRUNING | 0.7931 | 0.4693 | 0.4324 | 0.5794 |
-| CONTENT_ONLY | 0.431 | 0.1294 | 0.1269 | 0.2464 |
-| CF_ONLY | 0.3621 | 0.0812 | 0.083 | 0.206 |
+| V2 | 0.7586 | 0.4485 | 0.4232 | 0.5779 |
+| V2+CATEGORY_CAP3 | 0.7931 | 0.4788 | 0.4345 | 0.5786 |
+| V2_NO_CANDIDATE_PRUNING | 0.7586 | 0.4485 | 0.4232 | 0.5784 |
+| CONTENT_ONLY | 0.7414 | 0.4416 | 0.4186 | 0.5731 |
+| CF_ONLY | 0.7586 | 0.4451 | 0.4203 | 0.575 |
 | ORACLE_TRUE_PREFERENCE | 0.8793 | 0.5708 | 0.4998 | 0.6078 |
 
 **Sparse users (1–2 train loans)** – 13 users
@@ -253,7 +253,7 @@ Recall@10 on head vs tail targets (top 23 books by train loan count):
 - Coverage@10 / Personalization@10: POPULARITY 0.7965/0.8537, V1_PRODUCTION 0.9381/0.8856, V2 0.885/0.8946.
 - Ablation (NDCG@10, paired CI): removing collaborative, preference significantly hurts; popularity, quality, availability, recency show no significant effect; removing semantic would help.
 - Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.1694, imputation only 0.0196, zero evidence 0.0, POPULARITY 0.0, RANDOM 0.1122 (V2 when their history is known: 0.6531).
-- Cold start, new users (n=58): NDCG@10 V2 0.4324 vs POPULARITY 0.4288 (V2 higher).
+- Cold start, new users (n=58): NDCG@10 V2 0.4232 vs POPULARITY 0.4288 (POPULARITY higher).
 - Cold start, sparse users (n=13, small sample - indicative only): NDCG@10 V2 0.2855 vs POPULARITY 0.4069 (POPULARITY higher).
 - Acceptance PASSED - V2 may become the production default.
 

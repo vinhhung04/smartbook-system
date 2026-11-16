@@ -442,7 +442,7 @@ class FieldLevelScoringTests(unittest.TestCase):
         "metadataCoverage": {"ratio": 0.5}, "processingTimeMs": 30000,
         "sources": [
             {"name": "googleBooks", "status": "SUCCESS"}, {"name": "tiki", "status": "NOT_FOUND"},
-            {"name": "fahasa", "status": "TIMEOUT"}, {"name": "worldCat", "status": "DISABLED"},
+            {"name": "fahasa", "status": "TIMEOUT"},
             {"name": "webSearch", "status": "SKIPPED"},
         ],
     }

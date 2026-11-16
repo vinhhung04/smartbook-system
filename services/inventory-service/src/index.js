@@ -12,7 +12,13 @@ const {
 const { enforceRequestedWarehouseScope } = require('./middlewares/warehouse-scope.middleware');
 const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
 const { createInternalWarehousesRouter } = require('./routes/internal-warehouses.routes');
-const { clearScopeCache, scopedWarehouseWhere, scopeErrorStatus } = require('./utils/warehouse-scope.utils');
+const {
+  clearScopeCache,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+  readableWarehouseFilter,
+  WarehouseScopeUnavailableError,
+} = require('./utils/warehouse-scope.utils');
 
 const { prisma } = require('./lib/prisma');
 const bookRoutes = require('./routes/book.routes');
@@ -435,11 +441,16 @@ app.use('/api/transfer-receiving', rejectInvalidUuidParams(transferReceivingRout
 // Lấy danh sách toàn bộ sách kèm variants, số lượng tồn kho và vị trí kệ
 app.get('/api/inventory', authorizeManagerRead(['inventory.stock.read']), async (req, res) => {
   try {
+    // Legacy endpoint, no known current consumer — still scoped like the current book APIs
+    // rather than removed, in case something outside this repo still calls it.
+    const readable = await readableWarehouseFilter(req.user);
+    const stockWhere = readable === null ? undefined : { warehouse_id: { in: readable } };
     const books = await prisma.books.findMany({
       include: {
         book_variants: {
           include: {
             stock_balances: {
+              where: stockWhere,
               include: {
                 locations: {
                   select: {
@@ -456,6 +467,9 @@ app.get('/api/inventory', authorizeManagerRead(['inventory.stock.read']), async 
     });
     res.json(books);
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error(error);
     res.status(500).json({ error: 'Internal server error' });
   }

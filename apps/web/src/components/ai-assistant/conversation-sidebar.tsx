@@ -42,9 +42,11 @@ function groupOf(iso: string, now: Date): (typeof GROUPS)[number] {
 
 function timeLabel(iso: string): string {
   const date = new Date(iso);
+  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  // Several conversations a day share a date; the time tells them apart.
   return isToday(date)
-    ? date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    : `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}${date.getFullYear() === new Date().getFullYear() ? '' : `/${date.getFullYear()}`}`;
+    ? time
+    : `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}${date.getFullYear() === new Date().getFullYear() ? '' : `/${date.getFullYear()}`}, ${time}`;
 }
 
 const UNTITLED = 'Hội thoại chưa đặt tên';
@@ -151,10 +153,10 @@ export function ConversationSidebar({
                         disabled={busy && !active}
                         aria-current={active ? 'true' : undefined}
                         className="min-w-0 flex-1 cursor-pointer rounded-lg py-2 pl-3 pr-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-60">
-                        <span className={cn('block truncate text-[13px]', active ? 'font-semibold text-foreground' : 'font-medium text-foreground/90', !conv.title && 'italic text-muted-foreground')}>
+                        <span title={title} className={cn('line-clamp-2 text-[13px] leading-[18px]', active ? 'font-semibold text-foreground' : 'font-medium text-foreground/90', !conv.title && 'italic text-muted-foreground')}>
                           {title}
                         </span>
-                        <span className="block text-[11.5px] tabular-nums text-muted-foreground">
+                        <span className="mt-0.5 block text-[11.5px] tabular-nums text-muted-foreground">
                           {timeLabel(conv.last_message_at ?? conv.updated_at)}
                         </span>
                       </button>

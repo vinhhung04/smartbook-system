@@ -46,6 +46,7 @@ import assistant_tools  # noqa: E402
 import embed_cache  # noqa: E402
 import embeddings  # noqa: E402
 import faq_retrieval  # noqa: E402
+import rag_integrity  # noqa: E402
 
 DATASET_PATH = os.path.join(os.path.dirname(__file__), "rag_dataset.json")
 REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
@@ -78,6 +79,7 @@ async def retrieve(entry: dict, books: list[dict], apply_abstention: bool) -> di
     """Ca hai nhanh deu dung ham co tra ve RetrievalConfidence (khong phai
     search_books()/find_relevant() vi hai ham do da tu ap abstention roi —
     o day can kiem soat rieng qua `apply_abstention` de tai lap baseline)."""
+    chunks: list[dict] = []
     if entry["corpus"] == "BOOK_METADATA":
         results, confidence = await assistant_tools._score_and_rank_books_with_confidence(
             books, entry["question"], assistant_tools.SEARCH_BOOKS_RESULT_LIMIT,
@@ -88,6 +90,9 @@ async def retrieve(entry: dict, books: list[dict], apply_abstention: bool) -> di
             faq_retrieval.find_relevant_with_confidence, entry["question"]
         )
         retrieved_ids = [str(match.entry.get("id") or "") for match in matches]
+        # diagnostics only (signals dump): the matched chunk text, to classify false positives
+        chunks = [{"id": str(match.entry.get("id") or ""), "heading": match.entry.get("question", ""),
+                   "text": match.entry.get("answer", ""), "cosine": round(match.score, 4)} for match in matches]
 
     if apply_abstention and confidence.decision == "NO_EVIDENCE":
         retrieved_ids = []
@@ -95,7 +100,7 @@ async def retrieve(entry: dict, books: list[dict], apply_abstention: bool) -> di
     return {
         "retrieved_ids": retrieved_ids, "decision": confidence.decision,
         "confidence": confidence.confidence, "reason_codes": list(confidence.reason_codes),
-        "signals": vars(confidence.signals),
+        "signals": vars(confidence.signals), "chunks": chunks,
     }
 
 
@@ -121,6 +126,8 @@ async def main() -> int:
                               "(scoring.dataset_split); tune on val, report on test")
     parser.add_argument("--no-embed-cache", action="store_true",
                          help="call OpenRouter for every query instead of eval/.cache (not reproducible)")
+    parser.add_argument("--dataset", default=DATASET_PATH,
+                         help="dataset file (default rag_dataset.json); e.g. a supplement set")
     parser.add_argument("--label", default="",
                          help="short tag added to the report file name, e.g. baseline / after-fix")
     args = parser.parse_args()
@@ -128,8 +135,7 @@ async def main() -> int:
     if not args.no_embed_cache:
         embed_cache.install()
 
-    with open(DATASET_PATH, "r", encoding="utf-8") as handle:
-        dataset = json.load(handle)
+    dataset = rag_integrity.load_dataset(args.dataset)
 
     if args.split != "all":
         dataset = [entry for entry in dataset if scoring.dataset_split(entry["id"]) == args.split]
@@ -147,8 +153,9 @@ async def main() -> int:
             "id": entry["id"], "corpus": entry["corpus"], "question": entry["question"],
             "expected_ids": entry["expected_ids"], **outcome,
             # Phase E: the route this question should take (scoring.classify_book_query)
-            "query_type": (scoring.classify_book_query(entry["question"]) if entry["corpus"] == "BOOK_METADATA"
-                           else "INTERNAL_DOC"),
+            # a supplement case's explicit group (isbn_near_miss, title_multi_edition...) wins
+            "query_type": entry.get("group") or (scoring.classify_book_query(entry["question"])
+                                                 if entry["corpus"] == "BOOK_METADATA" else "INTERNAL_DOC"),
         })
 
     embed_cache.save()
@@ -172,6 +179,21 @@ async def main() -> int:
     by_type = scoring.by_query_type([r for r in results if r["corpus"] == "BOOK_METADATA"], catalog_ids)
     by_type.update(scoring.by_query_type([r for r in results if r["corpus"] == "INTERNAL_DOC"], doc_ids))
     selective_overall = scoring.selective_accuracy(results, k=1)
+    # Phase 0: integrity of each case against THIS catalog/corpus; trusted-subset metrics
+    # are reported next to (never instead of) the all-cases numbers above.
+    review = rag_integrity.load_json(rag_integrity.REVIEW_PATH) if os.path.exists(rag_integrity.REVIEW_PATH) else None
+    integrity = rag_integrity.audit(dataset, books, doc_ids=doc_ids, review=review)
+    trusted = rag_integrity.trusted_results(results, integrity["cases"])
+
+    def corpus_block(rows: list[dict]) -> dict:
+        return {"cases": len(rows), "answerable_recall": scoring.answerable_recall(rows),
+                "abstention": scoring.abstention_metrics(rows) if rows else None,
+                "selective_accuracy_at_1": scoring.selective_accuracy(rows, k=1)}
+
+    per_corpus = {corpus: {"all": corpus_block([r for r in results if r["corpus"] == corpus]),
+                           "trusted": corpus_block([r for r in trusted if r["corpus"] == corpus])}
+                  for corpus in ("BOOK_METADATA", "INTERNAL_DOC")}
+    trusted_by_type = scoring.by_query_type([r for r in trusted if r["corpus"] == "BOOK_METADATA"])
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     os.makedirs(REPORTS_DIR, exist_ok=True)
@@ -220,6 +242,32 @@ async def main() -> int:
                    and not set(r["expected_ids"]) & catalog_ids]
     lines += ["", f"Case BOOK_METADATA unreachable: {len(unreachable)} — "
               + ", ".join(f"`{r['id']}`" for r in unreachable)]
+    lines += ["", "## Phase 0 — integrity va tap trusted (rag_integrity.py)", "",
+              "Trusted = case con tim duoc (REACHABLE, hoac PARTIALLY_REACHABLE cham tren id con trong catalog) "
+              "hoac NO_ANSWER, khong co co nao (rag_dataset_review.json + kiem tra tu dong). Nhan KHONG bi sua.", "",
+              "| corpus | tap | case | answerable | Ans R@1 | Ans R@3 | Ans R@5 | Ans MRR | no-answer | "
+              "no-answer acc | FPR | FNR | coverage | abst F1 | selective acc@1 |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for corpus, blocks in per_corpus.items():
+        for subset, block in blocks.items():
+            ar, ab = block["answerable_recall"], block["abstention"] or {}
+            lines.append(f"| {corpus} | {subset} | {block['cases']} | {ar['count']} | {ar['recall_at_1']} | "
+                         f"{ar['recall_at_3']} | {ar['recall_at_5']} | {ar['mrr']} | {ab.get('no_answer_count', '-')} | "
+                         f"{ab.get('no_answer_accuracy', '-')} | {ab.get('false_positive_rate', '-')} | "
+                         f"{ab.get('false_negative_rate', '-')} | {ab.get('coverage', '-')} | "
+                         f"{ab.get('abstention_f1', '-')} | {block['selective_accuracy_at_1']} |")
+    lines += ["", "BOOK_METADATA trusted theo loai truy van:", "",
+              "| loai | case | co dap an | R@1 | R@5 | MRR | P@5 | no-answer acc | FPR |", "|---|---|---|---|---|---|---|---|---|"]
+    for qtype, m in trusted_by_type.items():
+        allm, na = m["all_answerable"] or {}, m["no_answer"] or {}
+        lines.append(f"| {qtype} | {m['cases']} | {m['answerable']} | {allm.get('recall_at_1', '-')} | "
+                     f"{allm.get('recall_at_5', '-')} | {allm.get('mrr', '-')} | "
+                     f"{m['precision_at_5'] if m['precision_at_5'] is not None else '-'} | "
+                     f"{na.get('no_answer_accuracy', '-')} | {na.get('false_positive_rate', '-')} |")
+    untrusted = {cid: info for cid, info in integrity["cases"].items() if not info["trusted"]}
+    lines += ["", f"Case ngoai tap trusted: {len(untrusted)} — "
+              + ", ".join(f"`{cid}` ({info['status']}{', ' + '+'.join(info['flags']) if info['flags'] else ''})"
+                          for cid, info in untrusted.items())]
     lines += ["", "## Case truot (khong co expected nao trong top-5)", ""]
     for r in results:
         if r["expected_ids"] and scoring.recall_at_k(r["retrieved_ids"], r["expected_ids"], 5) == 0.0:
@@ -236,12 +284,31 @@ async def main() -> int:
 
     metrics_path = os.path.join(REPORTS_DIR, f"rag_metrics_{timestamp}{suffix}.json")
     with open(metrics_path, "w", encoding="utf-8") as handle:
-        json.dump({"timestamp_utc": timestamp, "dataset": os.path.basename(DATASET_PATH), "cases": len(results),
+        json.dump({"timestamp_utc": timestamp, "dataset": os.path.basename(args.dataset), "cases": len(results),
                    "catalog_books": len(books), "embedding": embeddings.EMBED_IDENTITY, "abstention": args.abstention,
                    "split": args.split, "overall": overall, "by_corpus": by_corpus,
                    "abstention_by_corpus": abstention_by_corpus, "by_query_type": by_type,
-                   "unreachable_book_cases": [r["id"] for r in unreachable]}, handle, ensure_ascii=False, indent=1)
+                   "unreachable_book_cases": [r["id"] for r in unreachable],
+                   "per_corpus": per_corpus, "trusted_by_query_type": trusted_by_type,
+                   "integrity": {cid: {k: info[k] for k in ("status", "flags", "trusted")}
+                                 for cid, info in integrity["cases"].items()}},
+                  handle, ensure_ascii=False, indent=1)
     print(f"Metrics: {metrics_path}")
+
+    conf = assistant_tools.retrieval_confidence
+    manifest = rag_integrity.build_manifest(args.dataset, books, embeddings.EMBED_IDENTITY, {
+        "abstention": args.abstention, "split": args.split, "label": args.label,
+        "embed_cache": not args.no_embed_cache, "embed_cache_stats": dict(embed_cache.stats),
+        "book_confidence": vars(conf.BOOK_CONFIDENCE), "doc_confidence": vars(conf.DOC_CONFIDENCE),
+        "book_semantic_threshold": assistant_tools.book_index.BOOK_SEMANTIC_THRESHOLD,
+        "faq_match_threshold": faq_retrieval.FAQ_MATCH_THRESHOLD, "faq_top_k": faq_retrieval.FAQ_TOP_K,
+        "search_books_limit": assistant_tools.SEARCH_BOOKS_RESULT_LIMIT,
+        "rrf_k": assistant_tools.fusion.RRF_K,
+    })
+    manifest_path = os.path.join(REPORTS_DIR, f"rag_manifest_{timestamp}{suffix}.json")
+    with open(manifest_path, "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, ensure_ascii=False, indent=1)
+    print(f"Manifest: {manifest_path}")
 
     if args.dump_signals:
         signals_path = os.path.join(REPORTS_DIR, f"rag_signals_{timestamp}{suffix}.json")

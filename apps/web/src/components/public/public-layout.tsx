@@ -3,6 +3,7 @@ import { SocketProvider } from '@/lib/socket';
 import { useAuthUser } from '@/hooks/useAuthUser';
 import { RouteErrorBoundary } from '@/components/route-error-boundary';
 import { PublicHeader } from './public-header';
+import { AIChatbot } from '@/components/ai-chatbot';
 
 const FOOTER_LINK = 'inline-flex min-h-9 items-center rounded-sm text-[14px] text-indigo-100/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300/70';
 
@@ -24,7 +25,7 @@ function FooterColumn({ label, links }: { label: string; links: Array<{ to: stri
 function PublicFooter() {
   const { isAuthenticated } = useAuthUser();
   return (
-    <footer className="mt-24 overflow-hidden bg-[#1d1a4a] text-white sm:mt-32 dark:bg-[#121030]">
+    <footer className="mt-24 overflow-hidden bg-brand-ink text-white sm:mt-32 dark:bg-brand-night">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 pb-6 pt-14 sm:grid-cols-3 sm:px-6 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:px-8 lg:pt-20">
         <p className="max-w-sm font-display text-[22px] font-medium leading-snug tracking-[-0.01em] text-white sm:col-span-3 lg:col-span-1">
           Tìm sách, xem chi nhánh nào còn sách và đặt trước trực tuyến. Nhận sách tại quầy bằng mã nhận sách.
@@ -74,7 +75,9 @@ function PublicFooter() {
 /** Shell for the public website: anyone can browse; account actions appear once signed in. */
 export function PublicLayout() {
   const { pathname } = useLocation();
-  const { isCustomer } = useAuthUser();
+  const { user, isCustomer } = useAuthUser();
+  // Book pages keep a fixed reserve bar at the bottom of phones; the chat button sits above it.
+  const overBottomBar = /^\/books\/[^/]+$/.test(pathname);
 
   const shell = (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -89,6 +92,7 @@ export function PublicLayout() {
       </main>
       <PublicFooter />
       <ScrollRestoration />
+      {isCustomer && user ? <AIChatbot key={user.id} aboveBottomNav={overBottomBar} /> : null}
     </div>
   );
 

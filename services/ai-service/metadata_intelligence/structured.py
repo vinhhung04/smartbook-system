@@ -97,23 +97,6 @@ def extract_rules(doc):
                     vals.append(val)
                     paths.append(f'/subjects/{i}' + ('/name' if isinstance(item, dict) else ''))
             emit('categories', vals, paths)
-        elif doc['provider'] == 'vinabook':
-            emit('title', payload.get('title'), ['/title'])
-            for i, variant in enumerate(payload.get('variants') or []):
-                for attr in ('barcode', 'sku'):
-                    emit('isbn', variant.get(attr), [f'/variants/{i}/{attr}'])
-            for i, option in enumerate(payload.get('options') or []):
-                label = str(option.get('name', '')).casefold()
-                values = option.get('values') or []
-                if not values:
-                    continue
-                for field, pattern in ROLE_LABELS.items():
-                    if re.fullmatch(pattern, label, re.I):
-                        emit(field, values if field in LIST_FIELDS else values[0],
-                             [f'/options/{i}/values/{j}' for j in range(len(values) if field in LIST_FIELDS else 1)],
-                             origin='RULE_EXTRACTED')
-            if isinstance(payload.get('description'), str) and '<' not in payload['description']:
-                emit('description', payload['description'], ['/description'])
         elif doc['provider'] == 'tiki':
             emit('title', payload.get('name'), ['/name'])
             # SKU is not an ISBN identity assertion. Only explicitly labelled ISBNs qualify.

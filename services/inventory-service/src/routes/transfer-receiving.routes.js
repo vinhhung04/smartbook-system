@@ -2,6 +2,7 @@ const express = require('express');
 
 const {
   listTransferReceivingQueue,
+  getTransferReceivingLines,
   assignTransferReceiving,
   claimSelfTransferReceiving,
   confirmTransferReceiving,
@@ -17,8 +18,11 @@ const { transferDestinationWarehouse } = require('../utils/record-warehouse');
 const router = express.Router();
 // the destination warehouse receives: assign / claim / confirm need WRITE there
 const writesDestination = requireRecordWarehouse(transferDestinationWarehouse, { fresh: true });
+// reading line details only needs READ scope at the destination (same record, same loader)
+const readsDestination = requireRecordWarehouse(transferDestinationWarehouse, { access: 'read' });
 
 router.get('/', authorizeTaskRead(['inventory.task.read']), listTransferReceivingQueue);
+router.get('/:id/lines', authorizeTaskRead(['inventory.task.read']), readsDestination, getTransferReceivingLines);
 router.patch('/:id/assign', authorizeManagerDecision(['inventory.operation.decide']), writesDestination, assignTransferReceiving);
 router.patch('/:id/claim-self', authorizeTaskProgress(['inventory.task.progress']), writesDestination, claimSelfTransferReceiving);
 router.post('/:id/confirm', authorizeTaskProgress(['inventory.task.progress']), writesDestination, confirmTransferReceiving);

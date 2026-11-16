@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { MotionConfig } from 'motion/react';
 import { ArrowDown, History, MessagesSquare, Plus, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { formatDataAsOf } from '@/lib/copilot-visualization';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { AIActionCenter } from '@/components/ai-action-center';
+import type { AiActionListItem } from '@/services/ai';
 import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
 import { cn } from '@/components/ui/utils';
 import { extrasToMessageFields, suggestionGroupsFor, type AssistantMessage } from '@/components/ai-assistant/model';
@@ -23,6 +24,9 @@ import { AssistantEmptyState } from '@/components/ai-assistant/assistant-empty-s
 import { AssistantComposer } from '@/components/ai-assistant/assistant-composer';
 import { MessageItem, type StreamPhase } from '@/components/ai-assistant/assistant-message';
 import { useStickToBottom } from '@/components/ai-assistant/use-stick-to-bottom';
+import {
+  abandonRun, attachPage, getRun, isRunning, markRunSeen, startRun, stopRun, subscribeRun, type RunStatus,
+} from '@/components/ai-assistant/assistant-run';
 import { aiExperienceService, AiHttpError, type AiCapabilities, type BookRecognition, type RecognitionCandidate, type TurnImage } from '@/services/ai-experience';
 import { usePhotoAttachment } from '@/components/ai-experience/use-photo-attachment';
 import { PhotoAttachButton, PhotoPreview } from '@/components/ai-experience/photo-composer';
@@ -52,14 +56,21 @@ function newConversationId() {
 
 export function AIAssistantPage() {
   const location = useLocation();
+  const navigate = useNavigate();
+  // Another page can hand over a question (router state); with `send` it is asked at once in a new conversation.
+  const [handover] = useState(() => (location.state as { prompt?: string; send?: boolean } | null) ?? null);
+  // An answer still being written (or finished while the page was closed) is shown again on return.
+  const [resume] = useState(() => {
+    const r = getRun();
+    return r && !handover?.send && (r.status === 'running' || r.unseen) ? r : null;
+  });
   const [currentUser] = useState<AuthUser | null>(() => authService.getCurrentUser());
   const suggestionGroups = suggestionGroupsFor(currentUser);
-  const [messages, setMessages] = useState<AssistantMessage[]>([]);
-  // Another page can hand over a question via router state; it is only pre-filled, never auto-sent.
-  const [input, setInput] = useState(() => (location.state as { prompt?: string } | null)?.prompt ?? '');
-  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState<AssistantMessage[]>(() => resume?.thread ?? []);
+  const [input, setInput] = useState(() => (handover?.send ? '' : handover?.prompt ?? ''));
+  const [loading, setLoading] = useState(() => resume?.status === 'running');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [conversationId, setConversationId] = useState<string>(newConversationId);
+  const [conversationId, setConversationId] = useState<string>(() => resume?.conversationId ?? newConversationId());
   const [conversations, setConversations] = useState<AiConversationSummary[]>([]);
   const [conversationsStatus, setConversationsStatus] = useState<ConversationsStatus>('loading');
   const [hydrating, setHydrating] = useState(false);
@@ -74,10 +85,11 @@ export function AIAssistantPage() {
   const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
   const [tab, setTab] = useState<'chat' | 'actions'>('chat');
   const [pendingActionCount, setPendingActionCount] = useState(0);
+  const [briefing, setBriefing] = useState<AiActionListItem | null>(null);
+  const [focusActionId, setFocusActionId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const messagesRef = useRef(messages);
   const pendingCountReloadTimerRef = useRef<number | null>(null);
-  // Guards a second send fired before React re-renders with loading=true (double Enter/click).
-  const inFlightRef = useRef(false);
   // Phase F: cover photo -> recognised book the next questions may refer to.
   const [caps, setCaps] = useState<AiCapabilities | null>(null);
   const photo = usePhotoAttachment();
@@ -86,10 +98,9 @@ export function AIAssistantPage() {
   useEffect(() => {
     aiExperienceService.getCapabilities().then(setCaps).catch(() => setCaps(null));
   }, []);
-  // The in-flight /assistant/stream request: "Dừng", a new conversation and
-  // leaving the page abort it, so no late answer lands in the wrong thread.
-  const streamRef = useRef<AbortController | null>(null);
-  useEffect(() => () => streamRef.current?.abort(), []);
+  // The answer in flight lives in assistant-run.ts: leaving the page keeps it
+  // going; "Dừng", a new conversation or another conversation drop it.
+  useEffect(() => attachPage(), []);
   const { scrollRef, contentRef, atBottom, scrollToBottom } = useStickToBottom(messages.length > 0);
 
   const loadConversations = async () => {
@@ -109,7 +120,11 @@ export function AIAssistantPage() {
   const loadPendingActionCount = () => {
     aiService
       .listActions({ status: 'PENDING_CONFIRMATION', limit: 50 })
-      .then((res) => setPendingActionCount(res.items.length))
+      .then((res) => {
+        setPendingActionCount(res.items.length);
+        // The nightly agent's report: a pending report draft that no person and no conversation created.
+        setBriefing(res.items.find((a) => a.type === 'CREATE_REPORT_DRAFT' && !a.conversation_id && !a.created_by_user_id) ?? null);
+      })
       .catch(() => {
         // Non-critical — the badge just stays at its last known count.
       });
@@ -170,14 +185,55 @@ export function AIAssistantPage() {
     }
   };
 
+  const handedOver = useRef(false);
   useEffect(() => {
     loadConversations();
     loadPendingActionCount();
+    if (resume) {
+      if (resume.status !== 'running') markRunSeen();
+      return;
+    }
+    if (handover?.send && handover.prompt) {
+      if (handedOver.current) return;
+      handedOver.current = true;
+      // Asked once: a reload must not ask again.
+      navigate(location.pathname, { replace: true, state: null });
+      void sendMessage(handover.prompt);
+      return;
+    }
     const storedId = localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY);
     if (storedId) {
       hydrateConversation(storedId);
     }
+    // Runs once on mount: the handover and stored conversation are read only at entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mirror the run into the thread on screen, and react when it ends.
+  const runStatusRef = useRef<RunStatus | null>(resume?.status ?? null);
+  useEffect(() => subscribeRun(() => {
+    const r = getRun();
+    if (!r) return;
+    setMessages(r.thread);
+    setLoading(r.status === 'running');
+    const before = runStatusRef.current;
+    runStatusRef.current = r.status;
+    if (r.status === 'running') {
+      if (before === 'running' && r.thread[r.thread.length - 1]?.content) setAnnouncement('Trợ lý đang soạn bản nháp câu trả lời.');
+      return;
+    }
+    if (before !== 'running') return;
+    if (r.status === 'done') {
+      setAnnouncement('Trợ lý đã trả lời xong.');
+      setConversationId(r.conversationId);
+      loadConversations();
+    } else if (r.status === 'error') {
+      if (r.errorStatus === 410 || r.errorStatus === 400) setActiveImage(null);
+      setAnnouncement('Có lỗi khi trả lời câu hỏi.');
+    } else {
+      setAnnouncement('Đã dừng câu trả lời.');
+    }
+  }), []);
 
   // A reopened conversation opens at its latest message.
   useEffect(() => {
@@ -189,110 +245,32 @@ export function AIAssistantPage() {
       setElapsedSeconds(0);
       return;
     }
-    const startedAt = Date.now();
+    const startedAt = getRun()?.startedAt ?? Date.now();
     const interval = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
     return () => clearInterval(interval);
   }, [loading]);
 
-  const updateLastMessage = (updater: (message: AssistantMessage) => AssistantMessage) => {
-    setMessages((prev) => {
-      if (prev.length === 0) return prev;
-      const next = [...prev];
-      next[next.length - 1] = updater(next[next.length - 1]);
-      return next;
-    });
-  };
-
-  const sendMessage = async (text: string, image?: TurnImage, skipUser = false) => {
+  /** `base` is the thread to append to when the caller has just changed it (not yet rendered). */
+  const sendMessage = async (text: string, image?: TurnImage, skipUser = false, base?: AssistantMessage[]) => {
     const trimmed = text.trim();
-    if (!trimmed || inFlightRef.current || hydrating) return;
-    inFlightRef.current = true;
+    if (!trimmed || isRunning() || hydrating) return;
     const turnImage = image ?? (activeImage ? { attachment_id: activeImage.attachment_id, book_id: activeImage.book_id } : undefined);
-    // Placeholder assistant message is filled in-place as tokens stream in — this IS the
-    // "is the assistant working" indicator, no separate loading bubble needed once text starts.
-    setMessages((prev) => [...prev, ...(skipUser ? [] : [{ role: 'user' as const, content: trimmed }]),
-      { role: 'assistant', content: '' }]);
+    const before = base ?? messagesRef.current;
+    // The empty assistant message the run appends IS the "is the assistant working" indicator.
+    const thread: AssistantMessage[] = skipUser ? before : [...before, { role: 'user', content: trimmed }];
     setInput((current) => (current.trim() === trimmed ? '' : current));
-    setLoading(true);
     setAnnouncement('Đã gửi câu hỏi. Đang chờ trợ lý trả lời.');
+    runStatusRef.current = 'running';
+    startRun({ question: trimmed, conversationId, image: turnImage, thread });
     scrollToBottom();
-    let firstToken = true;
-    const controller = new AbortController();
-    streamRef.current = controller;
-    try {
-      await aiService.askAssistantStream(trimmed, conversationId, {
-        signal: controller.signal,
-        image: turnImage,
-        onToken: (token) => {
-          if (firstToken) {
-            firstToken = false;
-            setAnnouncement('Trợ lý đang soạn bản nháp câu trả lời.');
-          }
-          updateLastMessage((message) => ({ ...message, content: message.content + token }));
-        },
-        onStatus: (stage) => {
-          if (stage === 'verifying') {
-            updateLastMessage((message) => ({ ...message, verifying: true }));
-            setAnnouncement('Đang đối chiếu câu trả lời với dữ liệu.');
-          }
-        },
-        onDone: (response) => {
-          updateLastMessage(() => ({
-            role: 'assistant',
-            content: response.answer,
-            pendingAction: response.pending_action ?? undefined,
-            evidence: response.evidence,
-            groundingWarning: response.grounding_warning,
-            retrievalWarnings: response.retrieval_warnings,
-            explainability: response.explainability ?? null,
-            ...extrasToMessageFields(response),
-          }));
-          setAnnouncement('Trợ lý đã trả lời xong.');
-          const finalConversationId = response.conversation_id || conversationId;
-          setConversationId(finalConversationId);
-          localStorage.setItem(ACTIVE_CONVERSATION_STORAGE_KEY, finalConversationId);
-          loadConversations();
-        },
-        onError: (error) => {
-          if (error instanceof AiHttpError && turnImage && (error.status === 410 || error.status === 400)) {
-            setActiveImage(null);
-          }
-          toast.error(error instanceof AiHttpError ? error.message : getApiErrorMessage(error, 'Không thể gửi câu hỏi tới trợ lý AI'));
-          setAnnouncement('Có lỗi khi trả lời câu hỏi.');
-          updateLastMessage(() => ({
-            role: 'assistant',
-            content: 'Xin lỗi, đã có lỗi xảy ra khi xử lý câu hỏi của bạn. Vui lòng thử lại.',
-            isError: true,
-          }));
-        },
-      });
-    } finally {
-      if (streamRef.current === controller) streamRef.current = null;
-      inFlightRef.current = false;
-      setLoading(false);
-    }
   };
 
   // The streamed text is an unverified draft, so a stopped answer is not kept;
   // marked as an error, the turn gets the usual "retry" affordance.
-  const stopAnswer = useCallback(() => {
-    if (!streamRef.current) return;
-    streamRef.current.abort();
-    setMessages((prev) => {
-      if (prev.length === 0 || prev[prev.length - 1].role !== 'assistant') return prev;
-      const next = [...prev];
-      next[next.length - 1] = {
-        role: 'assistant',
-        content: 'Đã dừng câu trả lời. Bản nháp chưa được đối chiếu với dữ liệu nên không được giữ lại.',
-        isError: true,
-      };
-      return next;
-    });
-    setAnnouncement('Đã dừng câu trả lời.');
-  }, []);
+  const stopAnswer = useCallback(() => stopRun(), []);
 
   const askWithPhoto = async (question: string) => {
-    if (inFlightRef.current || hydrating) return;
+    if (isRunning() || hydrating) return;
     setMessages((prev) => [...prev, { role: 'user', content: question, hasPhoto: true }]);
     setInput('');
     setLoading(true);
@@ -305,14 +283,15 @@ export function AIAssistantPage() {
     }
     photo.clear();
     const top = rec.candidates[0];
-    setMessages((prev) => [...prev, {
+    const withRecognition: AssistantMessage[] = [...messagesRef.current, {
       role: 'assistant', content: rec.explanation.summary, recognition: rec, pendingQuestion: question,
       chosenBookId: rec.status === 'IDENTIFIED' ? top?.book_id : null,
-    }]);
+    }];
+    setMessages(withRecognition);
     setAnnouncement(rec.explanation.summary);
     if (rec.status === 'IDENTIFIED' && top) {
       setActiveImage({ attachment_id: rec.attachment_id, book_id: top.book_id, title: top.title });
-      await sendMessage(question, { attachment_id: rec.attachment_id, book_id: top.book_id, image_turn: true }, true);
+      await sendMessage(question, { attachment_id: rec.attachment_id, book_id: top.book_id, image_turn: true }, true, withRecognition);
     } else {
       setActiveImage(null);
     }
@@ -328,9 +307,10 @@ export function AIAssistantPage() {
 
   // Children are memoised; hand them stable callbacks that always run the latest closure.
   const sendRef = useRef(submit);
-  const messagesRef = useRef(messages);
+  const sendMessageRef = useRef(sendMessage);
   useLayoutEffect(() => {
     sendRef.current = submit;
+    sendMessageRef.current = sendMessage;
     messagesRef.current = messages;
   });
   const ask = useCallback((text: string) => {
@@ -340,20 +320,22 @@ export function AIAssistantPage() {
   const retryLast = useCallback(() => {
     const current = messagesRef.current;
     const question = current[current.length - 2];
-    if (question?.role !== 'user' || !current[current.length - 1]?.isError || inFlightRef.current) return;
+    if (question?.role !== 'user' || !current[current.length - 1]?.isError || isRunning()) return;
     // Drop the failed exchange, then ask again: the resend appends it back.
-    setMessages((prev) => prev.slice(0, -2));
-    void sendRef.current(question.content);
+    const base = current.slice(0, -2);
+    setMessages(base);
+    void sendMessageRef.current(question.content, undefined, false, base);
   }, []);
 
   const chooseRef = useRef<(rec: BookRecognition, c: RecognitionCandidate) => void>(() => {});
   chooseRef.current = (rec, candidate) => {
-    if (inFlightRef.current) return;
+    if (isRunning()) return;
     const owner = messagesRef.current.find((m) => m.recognition?.attachment_id === rec.attachment_id);
-    setMessages((prev) => prev.map((m) => (m.recognition?.attachment_id === rec.attachment_id ? { ...m, chosenBookId: candidate.book_id } : m)));
+    const base = messagesRef.current.map((m) => (m.recognition?.attachment_id === rec.attachment_id ? { ...m, chosenBookId: candidate.book_id } : m));
+    setMessages(base);
     setActiveImage({ attachment_id: rec.attachment_id, book_id: candidate.book_id, title: candidate.title });
     void sendMessage(owner?.pendingQuestion || DEFAULT_PHOTO_QUESTION,
-      { attachment_id: rec.attachment_id, book_id: candidate.book_id, image_turn: true }, true);
+      { attachment_id: rec.attachment_id, book_id: candidate.book_id, image_turn: true }, true, base);
   };
   const chooseBook = useCallback((rec: BookRecognition, c: RecognitionCandidate) => chooseRef.current(rec, c), []);
 
@@ -389,7 +371,9 @@ export function AIAssistantPage() {
   // The typed draft is kept across new/switched conversations: it is the
   // person's own text, and only sending it clears it.
   const startNewConversation = () => {
-    streamRef.current?.abort();
+    abandonRun();
+    runStatusRef.current = null;
+    setLoading(false);
     setMessages([]);
     setConversationId(newConversationId());
     localStorage.removeItem(ACTIVE_CONVERSATION_STORAGE_KEY);
@@ -599,7 +583,12 @@ export function AIAssistantPage() {
                       ))}
                     </div>
                   ) : (
-                    <AssistantEmptyState groups={suggestionGroups} onAsk={ask} disabled={busy} />
+                    <AssistantEmptyState groups={suggestionGroups} onAsk={ask} disabled={busy}
+                      briefing={briefing ? {
+                        summary: briefing.summary,
+                        createdAt: briefing.created_at,
+                        onOpen: () => { setFocusActionId(briefing.id); setTab('actions'); },
+                      } : null} />
                   )
                 ) : (
                   <div className={cn('space-y-8 transition-opacity', hydrating && 'opacity-50')}>
@@ -670,7 +659,14 @@ export function AIAssistantPage() {
           </TabsContent>
 
           <TabsContent value="actions" className="flex min-h-0 flex-1 flex-col">
-            <AIActionCenter />
+            <AIActionCenter focusActionId={focusActionId} onOpenConversation={(id) => {
+              if (isRunning()) {
+                toast.info('Trợ lý đang trả lời câu hỏi hiện tại. Hãy mở hội thoại này sau khi xong.');
+                return;
+              }
+              setTab('chat');
+              switchConversation(id);
+            }} />
           </TabsContent>
         </div>
       </Tabs>

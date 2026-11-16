@@ -14,10 +14,10 @@ FOUND_RESULT = {
     "authors": ["J. K. Rowling"],
     "categories": [],
     "publisher": "Scholastic",
-    "source": {"googleBooks": True, "openLibrary": False, "worldCat": False,
-               "fahasa": False, "tiki": False, "vinabook": False, "webSearch": False, "aiSummary": "none"},
-    "confidence": {"overall": 0.9, "googleBooks": 0.9, "openLibrary": 0.0, "worldCat": 0.0,
-                   "fahasa": 0.0, "tiki": 0.0, "vinabook": 0.0, "webSearch": 0.0},
+    "source": {"googleBooks": True, "openLibrary": False,
+               "fahasa": False, "tiki": False, "webSearch": False, "aiSummary": "none"},
+    "confidence": {"overall": 0.9, "googleBooks": 0.9, "openLibrary": 0.0,
+                   "fahasa": 0.0, "tiki": 0.0, "webSearch": 0.0},
     "_providerMetadata": {},
 }
 
@@ -26,10 +26,10 @@ NOT_FOUND_RESULT = {
     "found": False,
     "isbn": "9780439708180",
     "title": None,
-    "source": {"googleBooks": False, "openLibrary": False, "worldCat": False,
-               "fahasa": False, "tiki": False, "vinabook": False, "webSearch": False},
-    "confidence": {"overall": 0.0, "googleBooks": 0.0, "openLibrary": 0.0, "worldCat": 0.0,
-                   "fahasa": 0.0, "tiki": 0.0, "vinabook": 0.0, "webSearch": 0.0},
+    "source": {"googleBooks": False, "openLibrary": False,
+               "fahasa": False, "tiki": False, "webSearch": False},
+    "confidence": {"overall": 0.0, "googleBooks": 0.0, "openLibrary": 0.0,
+                   "fahasa": 0.0, "tiki": 0.0, "webSearch": 0.0},
     "_providerMetadata": {},
 }
 

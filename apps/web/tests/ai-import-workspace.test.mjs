@@ -145,3 +145,32 @@ test('candidates rank by support and mark the value Evidence Fusion selected', (
   assert.equal(toFormValue(['Paulo Coelho', ' Lê Chu Cầu ']), 'Paulo Coelho, Lê Chu Cầu');
   assert.equal(toFormValue(null), '');
 });
+
+test('bulk apply never replaces a description the user chose, and holds stale or new-taxonomy suggestions', () => {
+  const { planBulkAiApply } = utils;
+  const form = { description: 'Mô tả thủ thư chọn', summaryVi: '', keywordsText: 'clean code', categoriesText: '' };
+  const candidates = {
+    description: { value: 'Bản AI dịch', basis: 'Mô tả nguồn ban đầu' },
+    summaryVi: { value: 'Tóm tắt AI', basis: '' },
+    keywords: { value: 'clean code, refactoring', basis: 'clean code' },
+    categories: { value: 'Lập trình, Danh mục mới', basis: '' },
+  };
+  const plan = planBulkAiApply({ form, candidates, applied: {}, edited: new Set(['description']), existingCategories: ['Lập trình'] });
+  assert.deepEqual(plan.apply.map((item) => item.field).sort(), ['categories', 'keywords', 'summaryVi']);
+  assert.equal(plan.apply.find((item) => item.field === 'categories').next, 'Lập trình');
+  assert.equal(plan.apply.find((item) => item.field === 'keywords').next, 'clean code, refactoring');
+  assert.deepEqual(plan.held, [{ field: 'description', reason: 'edited' }]);
+
+  // Not edited, but the field no longer holds the text the suggestion was written for.
+  const stale = planBulkAiApply({ form, candidates, applied: {}, edited: new Set(), existingCategories: [] });
+  assert.deepEqual(stale.held, [{ field: 'description', reason: 'stale' }, { field: 'categories', reason: 'newCategories' }]);
+
+  // A suggestion that would replace text already in the field is never applied in bulk.
+  const filled = { ...form, description: 'Mô tả nguồn ban đầu' };
+  const replace = planBulkAiApply({ form: filled, candidates, applied: {}, edited: new Set(), existingCategories: ['Lập trình'] });
+  assert.deepEqual(replace.held, [{ field: 'description', reason: 'replaces' }]);
+
+  // Already applied suggestions are left alone.
+  const done = planBulkAiApply({ form, candidates, applied: { summaryVi: {}, keywords: {} }, edited: new Set(['description']), existingCategories: ['Lập trình'] });
+  assert.deepEqual(done.apply.map((item) => item.field), ['categories']);
+});

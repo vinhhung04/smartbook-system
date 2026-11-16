@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { createPublicCatalog } = require('../services/public-catalog.service');
+const { buildSitemapXml, createPublicCatalog } = require('../services/public-catalog.service');
 
 const { prisma } = require('../lib/prisma');
 const catalog = createPublicCatalog(prisma);
@@ -36,6 +36,12 @@ router.get('/books/:id', cacheFor(30), handle(async (req, res) => {
   const book = await catalog.detail(req.params.id);
   if (!book) return res.status(404).json({ message: 'Không tìm thấy sách' });
   return res.json(book);
+}));
+
+// Served to crawlers as https://smartbook.io.vn/sitemap-catalog.xml (deploy/Caddyfile).
+router.get('/sitemap.xml', cacheFor(3600), handle(async (_req, res) => {
+  const origin = process.env.PUBLIC_WEB_URL || 'https://smartbook.io.vn';
+  return res.type('application/xml').send(buildSitemapXml(origin, await catalog.sitemapPaths()));
 }));
 
 router.get('/branches', cacheFor(60), handle(async (_req, res) => res.json({ data: await catalog.branches() })));

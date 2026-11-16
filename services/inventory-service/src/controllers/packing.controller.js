@@ -4,6 +4,7 @@ const { prisma } = require("../lib/prisma");
 const { parseId, normalizeText } = require("../utils/validation");
 const {
   requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
   scopedWarehouseWhere,
   scopeErrorStatus,
 } = require("../utils/warehouse-scope.utils");
@@ -70,6 +71,12 @@ async function scanInvoice(req, res) {
     if (!order) {
       return res.status(404).json({ message: "Không tìm thấy phiếu xuất kho với mã này" });
     }
+    // scan-invoice has no :taskId for the route-level requireRecordWarehouse guard to key off
+    // (it may create the packing task), so the order's own warehouse must be checked here -
+    // otherwise any staff with task-progress permission could scan another branch's invoice,
+    // see its order/item detail, and spin up a packing_tasks row for a warehouse they have no
+    // scope in.
+    if (!(await requireWarehouseWriteAccess(req, res, order.warehouse_id))) return undefined;
     if (!ORDER_READY_FOR_PACKING_STATUS.includes(order.status)) {
       return res.status(400).json({
         message: `Order chưa sẵn sàng đóng gói (status hiện tại: ${order.status}). Picking phải hoàn tất trước.`,

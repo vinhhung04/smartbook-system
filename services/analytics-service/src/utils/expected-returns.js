@@ -33,7 +33,10 @@ function loanSurvival(durations, censoredAges = []) {
   const events = (durations || []).filter((d) => Number.isFinite(d) && d >= 0).map((d) => Math.floor(d));
   if (events.length < MIN_RETURNED_SAMPLES) return null;
   const censored = (censoredAges || []).filter((a) => Number.isFinite(a) && a >= 0).map((a) => Math.floor(a));
-  const maxT = Math.max(...events, ...censored, 0);
+  // a loop, not Math.max(...arrays): spreading ~10^5 loans overflows the call stack
+  let maxT = 0;
+  for (const t of events) if (t > maxT) maxT = t;
+  for (const t of censored) if (t > maxT) maxT = t;
   const deaths = new Array(maxT + 2).fill(0);
   const exits = new Array(maxT + 2).fill(0); // events + censorings leaving the risk set after t
   for (const d of events) { deaths[d] += 1; exits[d] += 1; }

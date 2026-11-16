@@ -16,6 +16,7 @@ import os
 import re
 from typing import Any
 
+import query_rewrite
 from cache import SummaryCache
 from llm_provider import get_openrouter_provider, TEXT_MODEL
 from intent import (
@@ -373,6 +374,16 @@ async def _call_llm(message: str, history: str) -> tuple[dict, bool]:
         return {}, False
 
 
+async def _with_rewrite(shape: dict, message: str, conversation_history: list | None) -> dict:
+    """RAG Phase 3: on the paths whose `query` is the raw message, a context-dependent
+    document question gets a standalone query (query_rewrite.py; falls back to the
+    original). The LLM path writes its own `query` from the history and is left alone."""
+    if shape.get("intent") != GENERAL_QUERY:
+        return shape
+    result = await query_rewrite.rewrite(message.strip(), _history_snippet(conversation_history))
+    return {**shape, "query": result.query, "query_original": result.original, "query_rewrite": result.status}
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 async def classify_user_message(
@@ -409,7 +420,7 @@ async def classify_user_message(
     # A policy question goes to the documents before any keyword intent or the
     # LLM classifier can file it under statistics - unless it asks for an action.
     if is_policy_question(message) and not any(marker in normalized for marker in _ACTION_REQUEST_MARKERS):
-        shape = _policy_shape(message)
+        shape = await _with_rewrite(_policy_shape(message), message, conversation_history)
         _nlu_cache.set(cache_key, shape)
         return shape
 
@@ -420,7 +431,7 @@ async def classify_user_message(
         and not _is_complex_message(message)
         and not _has_action_surface(normalized)
     ):
-        shape = _rule_to_nlu_shape(rule_result, message)
+        shape = await _with_rewrite(_rule_to_nlu_shape(rule_result, message), message, conversation_history)
         _nlu_cache.set(cache_key, shape)
         return shape
 
@@ -435,6 +446,6 @@ async def classify_user_message(
             return validated
 
     # Fallback to rule-based
-    shape = _fallback_shape(rule_result, message)
+    shape = await _with_rewrite(_fallback_shape(rule_result, message), message, conversation_history)
     _nlu_cache.set(cache_key, shape)
     return shape

@@ -1,0 +1,32 @@
+{
+  "note": "POST-HOC: candidates added after the pre-registered study had used these test seeds",
+  "test_seeds": [
+    20261201,
+    20261202,
+    20261203,
+    20261204,
+    20261205,
+    20261206,
+    20261207,
+    20261208
+  ],
+  "smartbook_mean_fill_rate": 0.988946,
+  "candidates": [
+    {
+      "candidate": "FLOOR_BY_BORROWS",
+      "mean_fill_rate": 0.988718,
+      "cost_ratio_vs_smartbook": 0.996458,
+      "runs_failing_service_rule": 5,
+      "runs": 24,
+      "passes": false
+    },
+    {
+      "candidate": "NO_FLOORS",
+      "mean_fill_rate": 0.987887,
+      "cost_ratio_vs_smartbook": 0.832284,
+      "runs_failing_service_rule": 22,
+      "runs": 24,
+      "passes": false
+    }
+  ]
+}

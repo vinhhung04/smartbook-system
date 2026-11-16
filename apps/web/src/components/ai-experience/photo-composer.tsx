@@ -1,5 +1,6 @@
 import { useRef, useState, type Ref } from 'react';
-import { ImagePlus, Loader2, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { Loader2, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { CoverScanIcon } from './smartbook-icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,7 +41,7 @@ export function PhotoAttachButton({ photo, maxBytes, notice, disabled, className
         aria-label={photo.file ? 'Thay ảnh bìa sách' : 'Đính kèm ảnh bìa sách'}
         title="Đính kèm ảnh bìa sách (JPEG, PNG, WebP)"
         className={cn('grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-40', className)}>
-        <ImagePlus className="h-4 w-4" aria-hidden="true" />
+        <CoverScanIcon className="h-[18px] w-[18px]" />
       </button>
       <AlertDialog open={askNotice} onOpenChange={setAskNotice}>
         <AlertDialogContent>

@@ -26,6 +26,10 @@ async function layoutProblems(page: Page): Promise<string[]> {
     }
     // The staff shell scrolls inside <main>, so <main> itself must not scroll sideways either.
     const root = document.querySelector('main') ?? document.body;
+    // Where <main> is the scroller, the document must not scroll too (it slides the shell away).
+    if (getComputedStyle(root).overflowY === 'auto' && document.documentElement.scrollHeight > innerHeight) {
+      problems.push(`page scrolls outside main (${document.documentElement.scrollHeight}px > ${innerHeight}px)`);
+    }
     if (root.scrollWidth > root.clientWidth + 1) {
       problems.push(`main area scrolls sideways (${root.scrollWidth}px > ${root.clientWidth}px)`);
     }

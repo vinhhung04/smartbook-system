@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fixed public pages. Book and branch pages are in /sitemap-catalog.xml (built by inventory-service). -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://smartbook.io.vn/</loc></url>
+  <url><loc>https://smartbook.io.vn/books</loc></url>
+  <url><loc>https://smartbook.io.vn/categories</loc></url>
+  <url><loc>https://smartbook.io.vn/discover</loc></url>
+  <url><loc>https://smartbook.io.vn/branches</loc></url>
+  <url><loc>https://smartbook.io.vn/membership</loc></url>
+  <url><loc>https://smartbook.io.vn/about</loc></url>
+</urlset>

@@ -14,6 +14,9 @@ import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:3000';
 const CUSTOMER = { identifier: 'customer01', password: '123456' };
 const LIBRARIAN = { identifier: 'librarian01', password: '123456' };
+// auth/inventory seeds give librarian01 OPERATOR access only at BR-HCM-01.
+const PICKUP_BRANCH_ID = '00000000-0000-0000-0000-000000000004';
+const PICKUP_BRANCH_NAME = 'Chi Nhanh District 1';
 
 async function apiToken(request: APIRequestContext, identifier: string, password: string) {
   const response = await request.post(`${GATEWAY}/auth/login`, { data: { identifier, password } });
@@ -27,7 +30,9 @@ const idempotency = (prefix: string) => ({ 'Idempotency-Key': `e2e-${prefix}-${D
 /** Cancel customer01's live reservations and return their open loans. */
 async function settleOpenCustomerState(request: APIRequestContext) {
   const customer = { Authorization: `Bearer ${await apiToken(request, CUSTOMER.identifier, CUSTOMER.password)}` };
-  const staff = { Authorization: `Bearer ${await apiToken(request, LIBRARIAN.identifier, LIBRARIAN.password)}` };
+  // Other tests can leave records at other branches; cross-branch fixture cleanup
+  // needs the seeded admin, while the actual UI flow still uses librarian01.
+  const staff = { Authorization: `Bearer ${await apiToken(request, 'hung', LIBRARIAN.password)}` };
 
   const reservations = (await (await request.get(`${GATEWAY}/my/reservations`, { headers: customer, params: { pageSize: '100' } })).json()).data ?? [];
   for (const reservation of reservations) {
@@ -55,21 +60,27 @@ test.beforeEach(async ({ request }) => {
 test('customer reservation through pickup and return', async ({ page }) => {
   await loginAsCustomer(page, CUSTOMER);
 
-  await page.goto('/customer/books');
+  await page.goto(`/books?branch=${PICKUP_BRANCH_ID}&availability=available`);
   const reserveButton = page.locator('[data-testid="reserve-book-button"]:not([disabled])').first();
   await reserveButton.waitFor();
   await reserveButton.click();
 
-  // Pick a branch explicitly when the dialog offers more than one.
+  // Choose the branch this librarian can operate, even if another branch has
+  // more copies and appears first in the modal.
   const dialog = page.getByRole('dialog', { name: 'Chọn chi nhánh đặt trước' });
   await expect(dialog).toBeVisible();
   const branchOptions = dialog.locator('button').filter({ hasText: 'cuốn sẵn sàng' });
-  if (await branchOptions.count() > 1) await branchOptions.first().click();
+  if (await branchOptions.count() > 1) {
+    await branchOptions.filter({ hasText: PICKUP_BRANCH_NAME }).click();
+  } else {
+    await expect(dialog.getByText(PICKUP_BRANCH_NAME, { exact: true })).toBeVisible();
+  }
 
   const createdResponse = page.waitForResponse((r) => r.request().method() === 'POST' && /\/my\/reservations$/.test(new URL(r.url()).pathname));
   await page.getByTestId('confirm-reserve-button').click();
   const created = await (await createdResponse).json();
   const reservationNumber: string = created.data.reservation_number;
+  expect(created.data.warehouse_id).toBe(PICKUP_BRANCH_ID);
   expect(reservationNumber).toMatch(/^RSV-/);
   await expect(toast(page, 'Đặt trước thành công!')).toBeVisible();
 

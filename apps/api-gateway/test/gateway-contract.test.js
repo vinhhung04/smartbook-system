@@ -35,6 +35,7 @@ test('ai-service metrics and generated API docs are not proxied from the public 
 
 test('per-service health breakdown is admin-only and readiness checks dependency /ready', () => {
   assert.match(source, /app\.get\("\/system\/health", requireAdminToken,/);
+  assert.match(source, /app\.get\("\/system\/health\/history", requireAdminToken,/);
   assert.match(source, /path: "\/ready", critical: true/);
   assert.doesNotMatch(source, /app\.get\("\/ready"[\s\S]{0,200}\/health`/);
 });

@@ -1,0 +1,239 @@
+{
+  "provenance": {
+    "file": "dataset_univLib.csv",
+    "sha256": "c26fe2cb68be9793080fbd221a045688e459e9272f9dd63c8a68c980144976a2",
+    "library": "Binus University library (Jakarta)",
+    "doi": "10.17632/6rd45bvxjy.1",
+    "license": "CC BY 4.0",
+    "use": "research and education only",
+    "skipped_rows": {
+      "no_borrow_date": 0,
+      "duplicate": 5,
+      "no_member_or_copy": 0
+    },
+    "loans": 52389,
+    "missing_return_dates": 216,
+    "imputed_loan_days": 8
+  },
+  "copies_rule": "copies of a title = distinct copies that ever appear in a loan (copies never borrowed are unknown; late acquisitions count from the start)",
+  "last_year": {
+    "window_days": 365,
+    "shortage_rule": "all copies out on >= 50% of the days",
+    "idle_rule": "copies of titles with no copy out on any day of the window",
+    "extra_rule": "for titles out at least once: copies minus the most copies out on the same day (share is of the copies of those titles)",
+    "overall": {
+      "titles": 7563,
+      "copies": 8369,
+      "utilization": 0.019721,
+      "empty_shelf_share": 0.016549,
+      "shortage_titles": 18,
+      "borrowed_titles": 1659,
+      "idle_copies": 6228,
+      "extra_copies": 297,
+      "extra_copy_share": 0.13872
+    },
+    "by_copies": [
+      {
+        "copies_per_title": "1",
+        "titles": 7046,
+        "copies": 7046,
+        "utilization": 0.017242,
+        "empty_shelf_share": 0.017242,
+        "shortage_titles": 17,
+        "borrowed_titles": 1428,
+        "idle_copies": 5573,
+        "extra_copies": 0,
+        "extra_copy_share": 0
+      },
+      {
+        "copies_per_title": "2",
+        "titles": 355,
+        "copies": 710,
+        "utilization": 0.02771,
+        "empty_shelf_share": 0.008435,
+        "shortage_titles": 1,
+        "borrowed_titles": 135,
+        "idle_copies": 432,
+        "extra_copies": 95,
+        "extra_copy_share": 0.341727
+      },
+      {
+        "copies_per_title": "3-5",
+        "titles": 148,
+        "copies": 515,
+        "utilization": 0.035058,
+        "empty_shelf_share": 0.004572,
+        "shortage_titles": 0,
+        "borrowed_titles": 84,
+        "idle_copies": 211,
+        "extra_copies": 155,
+        "extra_copy_share": 0.509868
+      },
+      {
+        "copies_per_title": "6+",
+        "titles": 14,
+        "copies": 98,
+        "utilization": 0.059435,
+        "empty_shelf_share": 0,
+        "shortage_titles": 0,
+        "borrowed_titles": 12,
+        "idle_copies": 12,
+        "extra_copies": 47,
+        "extra_copy_share": 0.546512
+      }
+    ],
+    "top_categories_by_empty_shelf_days": [
+      {
+        "category": "DDC 650",
+        "titles": 1821,
+        "copies": 2214,
+        "utilization": 0.018359,
+        "empty_shelf_share": 0.011695,
+        "shortage_titles": 4,
+        "empty_title_days": 7773
+      },
+      {
+        "category": "DDC 000",
+        "titles": 557,
+        "copies": 621,
+        "utilization": 0.026109,
+        "empty_shelf_share": 0.023315,
+        "shortage_titles": 2,
+        "empty_title_days": 4740
+      },
+      {
+        "category": "DDC 150",
+        "titles": 405,
+        "copies": 439,
+        "utilization": 0.027859,
+        "empty_shelf_share": 0.028513,
+        "shortage_titles": 4,
+        "empty_title_days": 4215
+      },
+      {
+        "category": "DDC 490",
+        "titles": 315,
+        "copies": 325,
+        "utilization": 0.029884,
+        "empty_shelf_share": 0.027789,
+        "shortage_titles": 3,
+        "empty_title_days": 3195
+      },
+      {
+        "category": "DDC 810",
+        "titles": 210,
+        "copies": 214,
+        "utilization": 0.03536,
+        "empty_shelf_share": 0.035121,
+        "shortage_titles": 0,
+        "empty_title_days": 2692
+      },
+      {
+        "category": "DDC 740",
+        "titles": 443,
+        "copies": 445,
+        "utilization": 0.016377,
+        "empty_shelf_share": 0.016253,
+        "shortage_titles": 0,
+        "empty_title_days": 2628
+      },
+      {
+        "category": "DDC 330",
+        "titles": 405,
+        "copies": 459,
+        "utilization": 0.021966,
+        "empty_shelf_share": 0.016919,
+        "shortage_titles": 0,
+        "empty_title_days": 2501
+      },
+      {
+        "category": "DDC 890",
+        "titles": 209,
+        "copies": 234,
+        "utilization": 0.021133,
+        "empty_shelf_share": 0.023661,
+        "shortage_titles": 1,
+        "empty_title_days": 1805
+      },
+      {
+        "category": "DDC 510",
+        "titles": 303,
+        "copies": 361,
+        "utilization": 0.028133,
+        "empty_shelf_share": 0.016167,
+        "shortage_titles": 1,
+        "empty_title_days": 1788
+      },
+      {
+        "category": "DDC 340",
+        "titles": 165,
+        "copies": 171,
+        "utilization": 0.030618,
+        "empty_shelf_share": 0.02944,
+        "shortage_titles": 0,
+        "empty_title_days": 1773
+      }
+    ],
+    "title_days_more_out_than_copies": 2590,
+    "title_days_more_out_than_copies_share": 0.000938
+  },
+  "reorder_backtest": {
+    "reviews": 12,
+    "lead_time_days": 14,
+    "outcome": "share of days 14..44 after the review with every copy out",
+    "inputs_missing": "no reservations, wishlists, availability alerts, reorder points or costs in the files; seasonal index fixed at 1; default 14-day lead time",
+    "by_priority": [
+      {
+        "priority": "HIGH",
+        "samples": 1442,
+        "mean_empty_shelf_share": 0.275081,
+        "shortage_share": 0.251734,
+        "mean_suggested_qty": 5.371706,
+        "mean_suggested_qty_if_shortfall_floors": 5.349515,
+        "mean_suggested_qty_without_floors": 3.778779,
+        "share_of_later_shortages": 0.854118
+      },
+      {
+        "priority": "MEDIUM",
+        "samples": 291,
+        "mean_empty_shelf_share": 0.042726,
+        "shortage_share": 0.030928,
+        "mean_suggested_qty": 3.020619,
+        "mean_suggested_qty_if_shortfall_floors": 1.869416,
+        "mean_suggested_qty_without_floors": 1.869416,
+        "share_of_later_shortages": 0.021176
+      },
+      {
+        "priority": "LOW",
+        "samples": 1350,
+        "mean_empty_shelf_share": 0.048049,
+        "shortage_share": 0.039259,
+        "mean_suggested_qty": 0.985185,
+        "mean_suggested_qty_if_shortfall_floors": 0.985185,
+        "mean_suggested_qty_without_floors": 0.985185,
+        "share_of_later_shortages": 0.124706
+      }
+    ],
+    "top_k": 50,
+    "rankers": [
+      {
+        "ranker": "PRODUCTION_RANKING",
+        "samples": 600,
+        "mean_empty_shelf_share": 0.273222,
+        "shortage_share": 0.255
+      },
+      {
+        "ranker": "RECENT_BORROWS",
+        "samples": 600,
+        "mean_empty_shelf_share": 0.214833,
+        "shortage_share": 0.2
+      },
+      {
+        "ranker": "ALL_CANDIDATES",
+        "samples": 3083,
+        "mean_empty_shelf_share": 0.153736,
+        "shortage_share": 0.137853
+      }
+    ]
+  }
+}

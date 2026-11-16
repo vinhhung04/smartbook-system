@@ -34,7 +34,8 @@ def normalize_for_match(text: str | None) -> str:
     only in how the provider encoded the name."""
     if not text:
         return ""
-    decomposed = unicodedata.normalize("NFD", text)
+    # đ/Đ is a base letter, not base + accent: NFD keeps it and the [^a-z0-9] pass below dropped it ("Đi" -> "i").
+    decomposed = unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D"))
     without_accents = "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
     cleaned = re.sub(r"[^a-z0-9\s]", " ", without_accents.lower())
     return re.sub(r"\s+", " ", cleaned).strip()

@@ -144,3 +144,52 @@ def test_internal_doc_keyword_only_hit_can_still_pass_the_evidence_threshold():
     higher tau would silently disable that fallback (re-calibration 2026-11-12
     picked 0.45 on semantic-only data; rejected for this reason)."""
     assert rc._DOC_DEFAULTS.tau_evidence <= rc._DOC_DEFAULTS.w_keyword
+
+
+def _doc_hit(source_id: str, score: float, content: str) -> Hit:
+    return Hit(chunk_id="c-" + source_id, document_id="d-" + source_id, source_id=source_id,
+               corpus="INTERNAL_DOC", content=content, score=score)
+
+
+def test_focus_coverage_is_share_of_question_content_words_in_top_chunk():
+    top = _doc_hit("reader-features", 0.5, "## Dành cho bạn đọc\nĐặt trước sách, gia hạn, đánh giá.")
+    signals = rc.extract_signals("INTERNAL_DOC", [top], [], [top], True,
+                                 query="Thư viện có cho thuê máy tính xách tay không?")
+    assert signals.focus_coverage == 0.0
+    no_query = rc.extract_signals("INTERNAL_DOC", [top], [], [top], True)
+    assert no_query.focus_coverage is None
+
+
+def _uncertain(focus, semantic_available=True):
+    # semantic strong, no keyword support -> confidence 0.5, UNCERTAIN under the doc defaults
+    return rc.RetrievalSignals(corpus="INTERNAL_DOC", result_count=3, semantic_available=semantic_available,
+                               semantic_top1=0.6, semantic_rank=1, keyword_rank=None, top1_agree=False,
+                               focus_coverage=focus)
+
+
+def test_uncertain_match_without_question_terms_in_evidence_abstains():
+    result = rc.evaluate(_uncertain(0.0), rc._DOC_DEFAULTS)
+    assert result.decision == rc.NO_EVIDENCE and "LOW_QUERY_TERM_COVERAGE" in result.reason_codes
+    assert rc.evaluate(_uncertain(0.4), rc._DOC_DEFAULTS).decision == rc.UNCERTAIN
+    assert rc.evaluate(_uncertain(None), rc._DOC_DEFAULTS).decision == rc.UNCERTAIN  # old dumps / no terms
+
+
+def test_focus_gate_never_touches_confident_matches_or_the_keyword_only_fallback():
+    confident = rc.RetrievalSignals(corpus="INTERNAL_DOC", result_count=1, semantic_available=True,
+                                    semantic_top1=0.6, semantic_rank=1, keyword_rank=1, top1_agree=True,
+                                    focus_coverage=0.0)
+    assert rc.evaluate(confident, rc._DOC_DEFAULTS).decision == rc.CONFIDENT_MATCH
+    keyword_only = rc.RetrievalSignals(corpus="INTERNAL_DOC", result_count=1, semantic_available=False,
+                                       semantic_top1=0.0, semantic_rank=None, keyword_rank=1, top1_agree=False,
+                                       focus_coverage=0.0)
+    assert rc.evaluate(keyword_only, rc._DOC_DEFAULTS).decision != rc.NO_EVIDENCE
+
+
+def test_book_corpus_has_no_focus_gate():
+    assert rc._BOOK_DEFAULTS.min_focus_coverage == 0.0
+
+
+def test_focus_gate_only_fires_on_zero_overlap():
+    """A false-premise question ('nghe nói… có đúng không') carries words its evidence lacks;
+    0.167 coverage was a real answerable question (chat eval ans-contra-01)."""
+    assert rc.evaluate(_uncertain(0.1667), rc._DOC_DEFAULTS).decision == rc.UNCERTAIN

@@ -10,6 +10,12 @@
   --popover-foreground: #0f0f12;
   --primary: #4f46e5;
   --primary-foreground: #ffffff;
+  /* SmartBook brand (assets/branding/brand-tokens.json); --brand-mark is the symbol on the UI surface */
+  --brand-ink: #1d1a4a;
+  --brand-lamp: #f6dfb4;
+  --brand-mist: #e6e8ff;
+  --brand-night: #14123a;
+  --brand-mark: var(--brand-ink);
   --secondary: #eef0fb;
   --secondary-foreground: #4f46e5;
   --muted: #f0f1f5;
@@ -49,6 +55,7 @@
 
 .dark {
   --background: #0b0c10;
+  --brand-mark: var(--brand-mist);
   --foreground: #f1f2f6;
   --card: #16181f;
   --card-foreground: #f1f2f6;
@@ -101,6 +108,11 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-lamp: var(--brand-lamp);
+  --color-brand-mist: var(--brand-mist);
+  --color-brand-night: var(--brand-night);
+  --color-brand-mark: var(--brand-mark);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

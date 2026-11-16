@@ -9,7 +9,6 @@ import re
 import logging
 import asyncio
 import functools
-import xml.etree.ElementTree as ET
 import hashlib
 import html as _html_module
 import time
@@ -173,15 +172,10 @@ OPEN_LIBRARY_API_BASE_URL = os.getenv(
 )
 # Trang chủ OL (dùng để lấy /books/… .json và /works/… .json — API books không có description)
 OPEN_LIBRARY_SITE_ORIGIN = os.getenv("OPEN_LIBRARY_SITE_ORIGIN", "https://openlibrary.org").rstrip("/")
-WORLDCAT_CLASSIFY_API_BASE_URL = os.getenv(
-    "WORLDCAT_CLASSIFY_API_BASE_URL",
-    "https://classify.oclc.org/classify2/Classify",
-)
 GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY", "").strip()
 BOOK_LOOKUP_TIMEOUT_SECONDS = float(os.getenv("BOOK_LOOKUP_TIMEOUT_SECONDS", "15"))
-ENABLE_WORLDCAT_LOOKUP = os.getenv("ENABLE_WORLDCAT_LOOKUP", "false").lower() == "true"
 
-# ── Marketplace lookup (Fahasa / Tiki / Vinabook) ─────────────────────────────
+# ── Marketplace lookup (Fahasa / Tiki) ────────────────────────────────────────
 ENABLE_MARKETPLACE_LOOKUP = os.getenv("ENABLE_MARKETPLACE_LOOKUP", "false").lower() == "true"
 # Bumped 20 -> 30: live testing showed a legitimate Fahasa match (correct book, real
 # Fahasa product page) taking ~26s end-to-end - right at the old 20s edge, so it would
@@ -199,14 +193,14 @@ ISBN_LOOKUP_TOTAL_BUDGET_SECONDS = float(os.getenv("ISBN_LOOKUP_TOTAL_BUDGET_SEC
 # Two-round search (isbn_rounds.py). Round 1 asks these code-capable sources one
 # at a time, in this order; ISBN_DISABLED_SOURCES switches any source off.
 # Barcode-indexed stores come right after the catalog: a miss there costs no request.
-ISBN_ROUND1_ORDER = os.getenv("ISBN_ROUND1_ORDER", "catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,fahasa")
+ISBN_ROUND1_ORDER = os.getenv("ISBN_ROUND1_ORDER", "catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,loc,dnb,fahasa")
 ISBN_DISABLED_SOURCES = os.getenv("ISBN_DISABLED_SOURCES", "")
 ISBN_PROVIDER_TIMEOUT_SECONDS = float(os.getenv("ISBN_PROVIDER_TIMEOUT_SECONDS", "10"))
 ISBN_PROVIDER_RETRIES = int(os.getenv("ISBN_PROVIDER_RETRIES", "1"))
 # A found-but-incomplete lookup (gaps left, or a provider timed out/errored) is cached
 # only briefly so it is retried soon instead of sticking for the full 7 days.
 ISBN_INCOMPLETE_CACHE_TTL_SECONDS = int(os.getenv("ISBN_INCOMPLETE_CACHE_TTL_SECONDS", "600"))
-MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn", "vinabook.com"}
+MARKETPLACE_DOMAIN_ALLOWLIST: set[str] = {"fahasa.com", "tiki.vn"}
 ENABLE_FAHA_CLOAKBROWSER = os.getenv("ENABLE_FAHA_CLOAKBROWSER", "false").lower() == "true"
 BOOK_BROWSER_TIMEOUT_SECONDS = float(os.getenv("BOOK_BROWSER_TIMEOUT_SECONDS", "20"))
 # Hard ceiling on one fahasa_browser.py subprocess call (launch + navigate + evaluate),
@@ -752,7 +746,7 @@ def _normalize_and_validate_isbn(raw_isbn: str) -> tuple[str | None, str | None,
 
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Marketplace lookup helpers (Fahasa / Tiki / Vinabook)
+# Marketplace lookup helpers (Fahasa / Tiki)
 # ────────────────────────────────────────────────────────────────────────────────
 
 
@@ -963,9 +957,8 @@ async def _fetch_first_valid(
     source_name: str,
     search_code: str | None = None,
 ) -> tuple[dict | None, float]:
-    """Only called for Fahasa (source_name == "fahasa") - Tiki and Vinabook each
-    have their own direct-API function (_fetch_tiki_by_isbn_api,
-    _fetch_vinabook_by_isbn_api) and never go through this path.
+    """Only called for Fahasa (source_name == "fahasa") - Tiki has its own
+    direct-API function (_fetch_tiki_by_isbn_api) and never goes through this path.
 
     Tries CloakBrowser's own-site search FIRST - it hits Fahasa's internal search
     API directly and doesn't depend on a third-party search engine at all. The
@@ -1397,132 +1390,6 @@ async def _fetch_tiki_by_isbn_api(
     return None, 0.0
 
 
-# ── 5b. Vinabook direct search (Shopify/Haravan storefront) ──────────────────
-
-class _PlainTextParser(HTMLParser):
-    """Strips tags from a product-description HTML fragment, keeping block-level
-    boundaries as newlines. Vinabook's `description` field (Haravan CMS output)
-    is rich HTML, not og:-tag plain text like _MetaTagParser handles."""
-
-    _BLOCK_TAGS = {"p", "br", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4"}
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self._chunks: list[str] = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag in self._BLOCK_TAGS:
-            self._chunks.append("\n")
-
-    def handle_data(self, data):
-        self._chunks.append(data)
-
-    def get_text(self) -> str:
-        text = "".join(self._chunks)
-        lines = [line.strip() for line in text.split("\n")]
-        return "\n".join(line for line in lines if line).strip()
-
-
-def _html_to_plain_text(html_fragment: str | None) -> str | None:
-    if not html_fragment:
-        return None
-    parser = _PlainTextParser()
-    try:
-        parser.feed(html_fragment)
-    except Exception:
-        return None
-    return parser.get_text() or None
-
-
-def _parse_vinabook_options(product: dict) -> dict:
-    """Vinabook's product-level `options` array self-describes each variant
-    dimension by Vietnamese label (e.g. "Nhà Phát Hành", "Năm XB", "Số Trang") -
-    match on label rather than position, since position isn't guaranteed stable
-    across products (some list author or cover type instead)."""
-    out: dict = {}
-    for option in product.get("options") or []:
-        name = (option.get("name") or "").strip().lower()
-        values = option.get("values") or []
-        value = (values[0] if values else "").strip()
-        if not value:
-            continue
-        if any(k in name for k in ("phát hành", "phat hanh", "nhà xuất bản", "nha xuat ban", "nxb")):
-            out.setdefault("publisher", value)
-        elif any(k in name for k in ("năm", "nam xb", "year")):
-            out.setdefault("publishedDate", value)
-        elif any(k in name for k in ("số trang", "so trang", "trang")):
-            try:
-                out.setdefault("pageCount", int("".join(filter(str.isdigit, value))) or None)
-            except (ValueError, TypeError):
-                pass
-        elif any(k in name for k in ("tác giả", "tac gia", "author")):
-            out.setdefault("authors", [v.strip() for v in value.replace(";", ",").split(",") if v.strip()])
-    return out
-
-
-async def _fetch_vinabook_by_isbn_api(
-    client: httpx.AsyncClient,
-    isbn: str,
-) -> tuple[dict | None, float]:
-    """Vinabook runs on Haravan (a Shopify-API-compatible Vietnamese storefront
-    platform): unlike Tiki, its products store the real EAN/ISBN barcode as
-    variant `sku`/`barcode`, and its built-in search (`/search?q=...`) matches
-    on it directly - verified live against real barcodes, including ones Tiki's
-    own search cannot find at all (Tiki never stores ISBN as a searchable
-    field). No DDGS/CloakBrowser needed: this is a plain, unauthenticated
-    storefront endpoint with no anti-bot gate observed.
-    """
-    logger.info("Calling vinabook-search for ISBN %s", isbn)
-    try:
-        search_resp = await client.get(
-            "https://www.vinabook.com/search",
-            params={"q": isbn, "type": "product"},
-            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
-        )
-        search_resp.raise_for_status()
-        match = re.search(r'href="(/products/[^"?]+)"', search_resp.text)
-        if not match:
-            return None, 0.0
-        product_url = "https://www.vinabook.com" + match.group(1)
-
-        product_resp = await client.get(
-            product_url + ".js",
-            headers={"User-Agent": BOOK_LOOKUP_USER_AGENT},
-        )
-        product_resp.raise_for_status()
-        product = product_resp.json() or {}
-        capture_metadata_source('vinabook', 'json', product, product_url + '.js')
-
-        variant = (product.get("variants") or [{}])[0]
-        sku = (variant.get("barcode") or variant.get("sku") or "").strip()
-        if sku != isbn:
-            # Search matched a different field (title/tags) than the barcode -
-            # don't attribute a possibly-unrelated product to this ISBN.
-            return None, 0.0
-
-        options_meta = _parse_vinabook_options(product)
-        images = product.get("images") or []
-        metadata = {
-            "title": _safe_text(product.get("title")),
-            "subtitle": None,
-            "authors": options_meta.get("authors", []),
-            "publisher": options_meta.get("publisher") or _safe_text(product.get("vendor")),
-            "publishedDate": options_meta.get("publishedDate"),
-            "description": _html_to_plain_text(product.get("description")),
-            "categories": [],
-            "language": "vi",
-            "pageCount": options_meta.get("pageCount"),
-            "thumbnail": images[0] if images else None,
-            "sourceUrl": product_url,
-        }
-        score = _metadata_completeness_score(metadata)
-        logger.info("vinabook-search returned data, score=%.3f for ISBN %s", score, isbn)
-        return metadata, score
-    except Exception as exc:
-        logger.warning("Vinabook search lookup failed for %s: %s", isbn, exc)
-        raise
-
-
 # ── 5c. Two-round search adapters (isbn_rounds.BookProvider callables) ───────
 # Code searches must return the codes printed on the record in `identifiers`
 # (isbn_rounds verifies them); title searches return candidate records.
@@ -1722,71 +1589,6 @@ async def _google_books_by_title(client: httpx.AsyncClient, title: str, author: 
 
 # ── 6. Orchestrate all marketplace providers ──────────────────────────────────
 
-async def _fetch_all_marketplace(
-    isbn13: str,
-    isbn10: str | None,
-) -> tuple[dict | None, float, dict | None, float, dict | None, float, bool, dict[str, str]]:
-    """
-    Run Fahasa (own-site search via CloakBrowser), Tiki (API), Vinabook (own-site
-    search API) in parallel. Returns metadata plus per-provider TIMEOUT/ERROR
-    outcomes when a provider fails.
-    """
-    # Step 1: DuckDuckGo search for Fahasa URLs only - it's the fallback path when
-    # CloakBrowser's own-site search finds nothing (see _fetch_first_valid). Tiki
-    # and Vinabook each have a direct API/search of their own and never needed
-    # DDGS-sourced URLs; Vinabook's DDGS-sourced path in particular was removed
-    # after live testing showed DDGS never returns the actual product page for a
-    # barcode query (generic author/category pages instead) - useless as either a
-    # primary or fallback source there, so this now only searches fahasa.com.
-    fahasa_urls: list[str] = []
-    search_outcomes: dict[str, str] = {}
-    try:
-        fahasa_urls = await asyncio.wait_for(
-            asyncio.to_thread(_ddgs_search_one_domain, isbn13, "fahasa.com", BOOK_LOOKUP_MAX_WEB_RESULTS),
-            timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
-        )
-    except asyncio.TimeoutError:
-        logger.warning("DuckDuckGo Fahasa search timed out for ISBN %s", isbn13)
-        search_outcomes = {"fahasa": "TIMEOUT"}
-    except Exception as exc:
-        logger.warning("DuckDuckGo Fahasa search error for ISBN %s: %s", isbn13, exc)
-        search_outcomes = {"fahasa": "ERROR"}
-
-    web_searched = bool(fahasa_urls)
-
-    # Step 2: Fetch pages + Tiki/Vinabook APIs in parallel
-    mp_timeout = httpx.Timeout(BOOK_MARKETPLACE_TIMEOUT_SECONDS)
-    async with httpx.AsyncClient(timeout=mp_timeout) as client:
-        logger.info("Calling marketplace providers for ISBN %s", isbn13)
-        results = await asyncio.gather(
-            asyncio.wait_for(
-                _fetch_first_valid(client, fahasa_urls, "fahasa", isbn13),
-                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
-            ),
-            asyncio.wait_for(
-                _fetch_tiki_by_isbn_api(client, isbn13),
-                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
-            ),
-            asyncio.wait_for(
-                _fetch_vinabook_by_isbn_api(client, isbn13),
-                timeout=BOOK_MARKETPLACE_TIMEOUT_SECONDS,
-            ),
-            return_exceptions=True,
-        )
-
-    def _safe_unpack(r, source):
-        if not isinstance(r, Exception):
-            return r
-        search_outcomes[source] = "TIMEOUT" if isinstance(r, (asyncio.TimeoutError, httpx.TimeoutException)) else "ERROR"
-        return None, 0.0
-
-    fahasa_data, fahasa_score = _safe_unpack(results[0], "fahasa")
-    tiki_data, tiki_score = _safe_unpack(results[1], "tiki")
-    vinabook_data, vinabook_score = _safe_unpack(results[2], "vinabook")
-
-    return fahasa_data, fahasa_score, tiki_data, tiki_score, vinabook_data, vinabook_score, web_searched, search_outcomes
-
-
 async def _fetch_marketplace_provider(provider: str, isbn13: str) -> tuple[dict | None, float, str | None]:
     """One marketplace/web provider on its own, for field-level targeted retrieval.
 
@@ -1802,8 +1604,6 @@ async def _fetch_marketplace_provider(provider: str, isbn13: str) -> tuple[dict 
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client:
             if provider == "tiki":
                 call = _fetch_tiki_by_isbn_api(client, isbn13)
-            elif provider == "vinabook":
-                call = _fetch_vinabook_by_isbn_api(client, isbn13)
             elif provider == "fahasa":
                 fahasa_urls: list[str] = []
                 try:
@@ -1825,38 +1625,10 @@ async def _fetch_marketplace_provider(provider: str, isbn13: str) -> tuple[dict 
         return None, 0.0, "ERROR"
 
 
-# ── 7. Merge marketplace data into base metadata ─────────────────────────────
-
-def _merge_with_marketplace(
-    base: dict,
-    fahasa: dict | None,
-    tiki: dict | None,
-    vinabook: dict | None,
-) -> dict:
-    """
-    Fill missing fields in base from marketplace sources.
-    Marketplace is lower priority — only fills gaps, never overwrites existing values.
-    """
-    result = dict(base)
-    for src in [fahasa, tiki, vinabook]:
-        if not src:
-            continue
-        for field in ("title", "publisher", "publishedDate", "language", "pageCount"):
-            if not result.get(field) and src.get(field):
-                result[field] = src[field]
-        if not result.get("authors") and src.get("authors"):
-            result["authors"] = src["authors"]
-        if not result.get("description") and src.get("description"):
-            result["description"] = src["description"]
-        if not result.get("thumbnail") and src.get("thumbnail"):
-            result["thumbnail"] = src["thumbnail"]
-    return result
-
-
 # ── 8. Standard lookups extracted as helper ───────────────────────────────────
 
 async def _run_standard_lookups(isbn13: str, isbn10: str | None) -> list:
-    """Run Google Books, Open Library (and optionally WorldCat) in parallel."""
+    """Run Google Books and Open Library in parallel."""
     timeout = httpx.Timeout(BOOK_LOOKUP_TIMEOUT_SECONDS)
     headers = {"User-Agent": BOOK_LOOKUP_USER_AGENT}
     async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
@@ -1864,8 +1636,6 @@ async def _run_standard_lookups(isbn13: str, isbn10: str | None) -> list:
             _fetch_google_books_by_isbn(client, isbn13),
             _fetch_open_library_by_isbn(client, isbn13, isbn10),
         ]
-        if ENABLE_WORLDCAT_LOOKUP:
-            tasks.append(_fetch_worldcat_by_isbn(client, isbn13, isbn10))
         return await asyncio.gather(*tasks, return_exceptions=True)
 
 
@@ -1904,8 +1674,10 @@ def _check_book_quality(
     publisher: str | None,
     description: str | None,
     categories: list[str],
+    language: str | None = None,
 ) -> list[str]:
-    """Rule-based quality checks for book metadata. No AI needed."""
+    """Rule-based quality checks for book metadata. No AI needed. `language` is the
+    book's own language: a foreign-language book's description is not expected in Vietnamese."""
     warnings = []
     if not authors:
         warnings.append("Thiếu thông tin tác giả")
@@ -1923,8 +1695,11 @@ def _check_book_quality(
             warnings.append("Mô tả chứa thẻ HTML cần loại bỏ")
         if re.search(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", desc):
             warnings.append("Mô tả chứa ký tự rác (control characters)")
+        if isbn_fusion.promotional_signals(desc) >= isbn_fusion.PROMO_SIGNALS_TO_REJECT:
+            warnings.append("Mô tả có dấu hiệu là quảng cáo (mã giảm giá, khuyến mãi), không phải giới thiệu sách")
         vi_chars = set("àáâãèéêìíòóôõùúưăđÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚƯĂĐ")
-        if len(desc) > 50 and not any(c in vi_chars for c in desc):
+        book_in_vietnamese = not language or language.strip().lower() in ("vi", "vie", "vietnamese", "tiếng việt")
+        if book_in_vietnamese and len(desc) > 50 and not any(c in vi_chars for c in desc):
             warnings.append("Mô tả có thể không phải tiếng Việt hoặc đang thiếu dấu tiếng Việt")
     return warnings
 
@@ -1962,6 +1737,7 @@ import isbn_matching  # noqa: E402
 import isbn_rounds  # noqa: E402
 import isbn_progress  # noqa: E402
 import bookstore_providers  # noqa: E402
+import library_providers  # noqa: E402
 import isbn_cache_store  # noqa: E402
 import ai_web_search  # noqa: E402
 from dataclasses import replace  # noqa: E402
@@ -2240,72 +2016,6 @@ async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn13: str) ->
     return None, 0.0
 
 
-def _parse_worldcat_classify_xml(payload_text: str) -> dict | None:
-    try:
-        root = ET.fromstring(payload_text)
-    except Exception:
-        return None
-
-    works_node = root.find("works")
-    if works_node is None:
-        return None
-
-    work = works_node.find("work")
-    if work is None:
-        return None
-
-    title = _safe_text(work.attrib.get("title"))
-    author = _safe_text(work.attrib.get("author"))
-    if not title and not author:
-        return None
-
-    authors = [author] if author else []
-    return {
-        "title": title,
-        "subtitle": None,
-        "authors": authors,
-        "publisher": None,
-        "publishedDate": None,
-        "description": None,
-        "categories": [],
-        "language": None,
-        "pageCount": None,
-        "thumbnail": None,
-    }
-
-
-async def _fetch_worldcat_by_isbn(
-    client: httpx.AsyncClient,
-    isbn13: str,
-    isbn10: str | None,
-) -> tuple[dict | None, float]:
-    last_error: Exception | None = None
-    for isbn in [isbn13, isbn10]:
-        if not isbn:
-            continue
-
-        try:
-            response = await client.get(
-                WORLDCAT_CLASSIFY_API_BASE_URL,
-                params={
-                    "isbn": isbn,
-                    "summary": "true",
-                },
-            )
-            response.raise_for_status()
-            metadata = _parse_worldcat_classify_xml(response.text)
-            if not metadata:
-                continue
-            return metadata, _metadata_completeness_score(metadata)
-        except Exception as exc:
-            logger.warning("WorldCat lookup failed for ISBN %s: %s", isbn, exc)
-            last_error = exc
-
-    if last_error:
-        raise last_error
-    return None, 0.0
-
-
 async def _fetch_open_library_by_isbn(
     client: httpx.AsyncClient,
     isbn13: str,
@@ -2367,17 +2077,6 @@ def _merge_lookup_metadata(google_data: dict | None, open_data: dict | None) -> 
         "pageCount": _pick_value(primary.get("pageCount"), secondary.get("pageCount")),
         "thumbnail": _pick_value(primary.get("thumbnail"), secondary.get("thumbnail")),
     }
-
-
-def _merge_lookup_metadata_with_fallbacks(
-    google_data: dict | None,
-    open_data: dict | None,
-    worldcat_data: dict | None,
-) -> dict:
-    merged = _merge_lookup_metadata(google_data, open_data)
-    if worldcat_data:
-        merged = _merge_lookup_metadata(merged, worldcat_data)
-    return merged
 
 
 def _should_generate_summary(merged: dict) -> bool:
@@ -2526,13 +2225,12 @@ async def _generate_summary_vi_and_keywords(metadata: dict) -> tuple[str | None,
 
 
 def _enabled_targeted_providers() -> set[str]:
-    return {"tiki", "vinabook", "fahasa", "webSearch"} if ENABLE_MARKETPLACE_LOOKUP else set()
+    return {"tiki", "fahasa", "webSearch"} if ENABLE_MARKETPLACE_LOOKUP else set()
 
 
 def _isbn_source_flags_and_confidence(provider_metadata: dict, scores: dict, ai_provider: str = "none") -> tuple[dict, dict]:
     """Same `source` / `confidence` shapes the legacy flow returns (frontend contract)."""
     source = {name: bool(provider_metadata.get(name)) for name in ISBN_SOURCE_ORDER}
-    source["worldCat"] = source["worldCat"] if ENABLE_WORLDCAT_LOOKUP else False
     source["aiSummary"] = ai_provider
     all_scores = [scores.get(name, 0.0) for name in ISBN_SOURCE_ORDER]
     overall = round(max(all_scores), 3)
@@ -2571,7 +2269,7 @@ async def _run_field_level_lookup(raw_isbn: str, isbn13: str, isbn10: str | None
         return intelligence, analyze_field_coverage(intelligence)
 
     # Round 0 - INITIAL: structured APIs only (marketplace/web are targeted, not eager).
-    initial_names = ["googleBooks", "openLibrary"] + (["worldCat"] if ENABLE_WORLDCAT_LOOKUP else [])
+    initial_names = ["googleBooks", "openLibrary"]
     began = time.perf_counter()
     std_results = await _run_standard_lookups(isbn13, isbn10)
     for index, name in enumerate(initial_names):
@@ -2650,7 +2348,7 @@ async def _run_field_level_lookup(raw_isbn: str, isbn13: str, isbn10: str | None
             summary_vi, keywords, ok = await _generate_summary_vi_and_keywords(metadata)
             ai_provider = _get_text_llm_provider().name if ok else "none"
         source, confidence = _isbn_source_flags_and_confidence(provider_metadata, scores, ai_provider)
-        market = next((provider_metadata[n] for n in ("fahasa", "tiki", "vinabook", "webSearch") if provider_metadata[n]), None) or {}
+        market = next((provider_metadata[n] for n in ("fahasa", "tiki", "webSearch") if provider_metadata[n]), None) or {}
         result = {
             "success": True, "found": True, "isbn": isbn13, "isbn13": isbn13, "isbn10": isbn10,
             "title": metadata.get("title"), "subtitle": metadata.get("subtitle"),
@@ -2697,11 +2395,6 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
 
 # ── Two-round search: registry and orchestration (isbn_rounds.py) ────────────
 
-# Sources that exist in the codebase but cannot be used - see docs/reports/BOOK_DATA_SOURCE_AUDIT.md.
-UNUSABLE_BOOK_SOURCES = {
-    "vinabook": "INACTIVE: vinabook.com trả 404 cho cả trang chủ và trang tìm kiếm",
-    "worldCat": "INACTIVE: OCLC Classify API (classify.oclc.org) trả 404 - dịch vụ đã ngừng",
-}
 NOT_FOUND_MESSAGE = "Không tìm thấy thông tin sách theo mã đã nhập."
 
 
@@ -2718,6 +2411,13 @@ def _book_providers() -> list[isbn_rounds.BookProvider]:
                  **{**common, "timeout": 5.0, "retries": 0}),
         Provider("googleBooks", by_code=_google_books_by_code, by_title=_google_books_by_title, round1=True, **common),
         Provider("openLibrary", by_code=_open_library_by_code, by_title=_open_library_by_title, round1=True, **common),
+        # National library catalogues (SRU, no key): exact ISBN index, strongest for foreign books.
+        Provider("loc", by_code=library_providers.loc_by_code, by_title=library_providers.loc_by_title,
+                 round1=True, **common),
+        Provider("dnb", by_code=library_providers.dnb_by_code, by_title=library_providers.dnb_by_title,
+                 round1=True, **common),
+        # Legal-deposit register: searches titles only, so Round 2 (rows carry the ISBN to verify).
+        Provider("ppdvn", by_title=library_providers.ppdvn_by_title, **common),
         Provider("dinhTi", by_code=bookstore_providers.dinhti_by_code, by_title=bookstore_providers.dinhti_by_title,
                  round1=True, accepts_raw_barcode=True, **common),
         Provider("bizbooks", by_code=bookstore_providers.bizbooks_by_code, by_title=bookstore_providers.bizbooks_by_title,
@@ -2744,7 +2444,7 @@ def _book_providers() -> list[isbn_rounds.BookProvider]:
     ] + [
         Provider("webSearch", by_code=_web_search_by_code,
                  **{**common, "timeout": BOOK_MARKETPLACE_TIMEOUT_SECONDS, "retries": 0}),
-    ] + [Provider(name, disabled_reason=reason) for name, reason in UNUSABLE_BOOK_SOURCES.items()]
+    ]
 
     marketplace = {"dinhTi", "bizbooks", "tiki", "fahasa", "nhanam", "thaiHa", "vanLang", "webSearch"} | {
         store.name for store in bookstore_providers.FEED_ONLY_STORES}
@@ -2883,10 +2583,8 @@ def _build_field_level_source_statuses(ledger: dict[str, dict]) -> dict:
     enabled = {
         "googleBooks": True,
         "openLibrary": True,
-        "worldCat": ENABLE_WORLDCAT_LOOKUP,
         "fahasa": ENABLE_MARKETPLACE_LOOKUP,
         "tiki": ENABLE_MARKETPLACE_LOOKUP,
-        "vinabook": ENABLE_MARKETPLACE_LOOKUP,
         "webSearch": ENABLE_MARKETPLACE_LOOKUP,
     }
     statuses = {}
@@ -2910,10 +2608,8 @@ def _build_source_statuses(result: dict, started_at: float, trace: dict | None =
     enabled = {
         "googleBooks": True,
         "openLibrary": True,
-        "worldCat": ENABLE_WORLDCAT_LOOKUP,
         "fahasa": ENABLE_MARKETPLACE_LOOKUP,
         "tiki": ENABLE_MARKETPLACE_LOOKUP,
-        "vinabook": ENABLE_MARKETPLACE_LOOKUP,
         "webSearch": ENABLE_MARKETPLACE_LOOKUP,
     }
     elapsed = int((time.perf_counter() - started_at) * 1000)
@@ -3186,7 +2882,7 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             ["Không có metadata đủ tin cậy sau khi tra cứu ISBN, vui lòng nhập tay."]
         )
 
-    quality_warnings = _check_book_quality(title, authors, publisher, description, categories)
+    quality_warnings = _check_book_quality(title, authors, publisher, description, categories, lookup.get("language"))
     summary_vi = lookup.get("summaryVi")
     keywords = [str(keyword).strip() for keyword in (lookup.get("keywords") or []) if str(keyword).strip()]
     suggested_categories: list[str] = []
@@ -3495,6 +3191,7 @@ class EnrichBookMetadataRequest(BaseModel):
     description: str | None = None
     categories: list[str] = []
     existingCategories: list[str] = []  # distinct categories already in the catalog, for suggest_categories mode
+    language: str | None = None  # the book's language, for quality_check (e.g. "en": no "not Vietnamese" warning)
     mode: str = "keywords"  # keywords | short_summary | normalize_description | suggest_categories | quality_check
 
 
@@ -3535,7 +3232,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
 
     # quality_check: rule-based only, no AI call
     if mode == "quality_check":
-        warnings = _check_book_quality(title, req.authors, req.publisher, req.description, req.categories)
+        warnings = _check_book_quality(title, req.authors, req.publisher, req.description, req.categories, req.language)
         return EnrichBookMetadataResponse(
             success=True,
             mode=mode,
