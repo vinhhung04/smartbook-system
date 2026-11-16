@@ -1289,9 +1289,12 @@ async function returnLoan(req, res) {
         authHeader,
         requestId: req.requestId,
       });
+      // Recorded as each item's remote call actually succeeds (not after the whole loop):
+      // if a LATER item throws, the catch block below must still know these earlier ones
+      // already moved stock in inventory-service, so it can queue them for reconciliation
+      // instead of silently leaving loan_items here out of sync with real stock.
+      returnedLoanItemIds.push(item.id);
     }
-
-    returnedLoanItemIds = targets.map((item) => item.id);
     const returnedAt = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -1423,24 +1426,29 @@ async function returnLoan(req, res) {
 
     return res.json({ data: updated });
   } catch (error) {
-    if (error?.status === 409) {
-      return res.status(409).json({ message: error.message });
-    }
-
     console.error('Error while returning loan:', error);
 
+    // Some items in the loop above may have already succeeded in inventory-service before
+    // this one failed - that must be queued for reconciliation regardless of which error
+    // (409 business conflict or anything else) stopped the loop, otherwise those items'
+    // stock move is real but loan_items here silently never catches up.
     if (returnedLoanItemIds.length > 0) {
-      // The returnBorrowedStock loop above already succeeded: Inventory has
-      // moved borrowed_qty -> available_qty for these items, but loan_items/
-      // loan status here never updated to match. Same "no safe automatic
-      // undo" reasoning as createDirectLoan/convertReservationToLoan: queue
-      // it instead of guessing.
       await queueReconciliation({
         aggregateId: loanId,
         eventType: 'LOAN_RETURN_UNRESOLVED',
         payload: { loan_id: loanId, loan_item_ids: returnedLoanItemIds },
       });
+      if (error?.status === 409) {
+        return res.status(409).json({
+          message: error.message,
+          detail: { reconciliation_queued: true, returned_loan_item_ids: returnedLoanItemIds },
+        });
+      }
       return res.status(500).json({ message: 'Internal server error. Stock was already returned; this has been queued for reconciliation.' });
+    }
+
+    if (error?.status === 409) {
+      return res.status(409).json({ message: error.message });
     }
 
     return res.status(500).json({ message: 'Internal server error' });

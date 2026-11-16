@@ -20,6 +20,7 @@ const {
   getReadableWarehouseIds,
   canWriteWarehouse,
   requireWarehouseReadAccess,
+  requireAssignableUser,
 } = require("../utils/warehouse-scope.utils");
 
 function isPositiveInteger(value) {
@@ -411,10 +412,14 @@ async function getGoodsReceiptById(req, res) {
       return res.status(404).json({ message: "Không tìm thấy phiếu nhập kho" });
     }
 
-    if (!canViewAllReceivingTasks(req.user || {}) && receipt.received_by_user_id !== req.user?.id) {
-      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
-    }
-    if (receipt.received_by_user_id !== req.user?.id) {
+    if (!canViewAllReceivingTasks(req.user || {})) {
+      // Being the assigned receiver is not itself a warehouse-scope grant: the assignment
+      // only ever gets made to someone with scope there (requireAssignableUser, see
+      // assignGoodsReceipt), but a scope row can later change, so this check must stand on
+      // its own too, not be skipped just because the caller happens to be the assignee.
+      if (receipt.received_by_user_id !== req.user?.id) {
+        return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
+      }
       const canRead = await requireWarehouseReadAccess(req, res, receipt.warehouse_id);
       if (!canRead) return;
     }
@@ -1508,6 +1513,7 @@ async function assignGoodsReceipt(req, res) {
     if (!(await canWriteWarehouse(req.user, existing.warehouse_id))) {
       return res.status(403).json({ message: "Bạn không có quyền thao tác trên kho này" });
     }
+    if (!(await requireAssignableUser(res, receivedByUserId, existing.warehouse_id))) return undefined;
 
     const updated = await prisma.goods_receipts.update({
       where: { id },
