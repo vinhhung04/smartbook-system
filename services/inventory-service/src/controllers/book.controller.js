@@ -1,7 +1,19 @@
 const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
 const { normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear } = require('../services/catalog-metadata.validation');
+const {
+  readableWarehouseFilter,
+  WarehouseScopeUnavailableError,
+  scopeErrorStatus,
+} = require('../utils/warehouse-scope.utils');
 
 const { prisma } = require('../lib/prisma');
+
+/** null (superuser, no filter) or the Prisma `where` to scope a stock_balances include/query
+ * to warehouses the caller may READ — never write-scope here, catalog browsing is read-only. */
+async function stockBalanceScopeWhere(user) {
+  const readable = await readableWarehouseFilter(user);
+  return readable === null ? undefined : { warehouse_id: { in: readable } };
+}
 
 const UNCATEGORIZED_NAME = 'Chưa phân loại';
 const UNCATEGORIZED_SLUG = 'chua-phan-loai';
@@ -141,6 +153,7 @@ async function getAllBooks(req, res) {
     const categoryFilter = String(req.query?.category || '').trim().toLowerCase();
     const publisherFilter = String(req.query?.publisher || '').trim().toLowerCase();
     const availability = String(req.query?.availability || '').trim().toLowerCase();
+    const stockWhere = await stockBalanceScopeWhere(req.user);
 
     const books = await prisma.books.findMany({
       include: {
@@ -174,6 +187,7 @@ async function getAllBooks(req, res) {
         book_variants: {
           include: {
             stock_balances: {
+              where: stockWhere,
               include: {
                 warehouses: {
                   select: {
@@ -227,6 +241,9 @@ async function getAllBooks(req, res) {
 
     return res.json(rows);
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while fetching books:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -240,6 +257,7 @@ async function getBookById(req, res) {
   }
 
   try {
+    const stockWhere = await stockBalanceScopeWhere(req.user);
     const book = await prisma.books.findUnique({
       where: { id: bookId },
       include: {
@@ -273,6 +291,7 @@ async function getBookById(req, res) {
         book_variants: {
           include: {
             stock_balances: {
+              where: stockWhere,
               include: {
                 warehouses: {
                   select: {
@@ -301,6 +320,9 @@ async function getBookById(req, res) {
 
     return res.json(mapBookSummary(book));
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while fetching book by id:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -708,6 +730,7 @@ async function updateBookDetails(req, res) {
   }
 
   try {
+    const stockWhere = await stockBalanceScopeWhere(req.user);
     const updated = await prisma.$transaction(async (tx) => {
       const existingBook = await tx.books.findUnique({ where: { id: bookId } });
       if (!existingBook) {
@@ -810,6 +833,7 @@ async function updateBookDetails(req, res) {
           book_variants: {
             include: {
               stock_balances: {
+                where: stockWhere,
                 include: {
                   warehouses: {
                     select: {
@@ -844,6 +868,9 @@ async function updateBookDetails(req, res) {
       data: updated.data,
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while updating book details:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }

@@ -37,6 +37,36 @@ async function resolveActiveMembership(tx, customerId) {
   };
 }
 
+const ACTIVE_LOAN_ITEM_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
+const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
+
+/**
+ * Books a customer currently has out, counted as individual loan_items — not loan_transactions
+ * rows. One loan transaction (receipt) can hold several books, and loan_transactions.total_items
+ * is a fixed snapshot taken at creation that doesn't shrink as items are returned one at a time,
+ * so neither can stand in for "how many books does this customer have out right now".
+ */
+async function countActiveBorrowedItems(client, customerId) {
+  return client.loan_items.count({
+    where: {
+      status: { in: ACTIVE_LOAN_ITEM_STATUSES },
+      loan_transactions: { customer_id: customerId },
+    },
+  });
+}
+
+/**
+ * Books tied up in a customer's still-live reservations, summed from loan_reservations.quantity
+ * — not the number of reservation rows, since one reservation can cover several copies.
+ */
+async function countActiveReservedItems(client, customerId) {
+  const result = await client.loan_reservations.aggregate({
+    where: { customer_id: customerId, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
+    _sum: { quantity: true },
+  });
+  return result._sum.quantity || 0;
+}
+
 const DEFAULT_MEMBERSHIP_DURATION_DAYS = 365;
 
 function computeMembershipEndDate(startDate, durationDays = DEFAULT_MEMBERSHIP_DURATION_DAYS) {
@@ -120,6 +150,8 @@ module.exports = {
   findDefaultMembershipPlan,
   setDefaultMembershipPlan,
   resolveActiveMembership,
+  countActiveBorrowedItems,
+  countActiveReservedItems,
   computeMembershipEndDate,
   resolveRenewalStart,
   DEFAULT_MEMBERSHIP_DURATION_DAYS,

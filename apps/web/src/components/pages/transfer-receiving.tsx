@@ -6,7 +6,7 @@ import { FadeItem, PageWrapper } from '../motion-utils';
 import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
-import { transferReceivingService, type TransferReceivingItem } from '@/services/transfer-receiving';
+import { transferReceivingService, type TransferReceivingItem, type TransferReceivingLine } from '@/services/transfer-receiving';
 import { userService, type WarehouseStaffOption } from '@/services/user';
 import { canManageReceiving } from '@/lib/rbac';
 import { PageHeader } from '@/components/ui/page-header';
@@ -16,9 +16,13 @@ import { StatusBadge } from '@/components/status-badge';
 import { SectionCard } from '@/components/ui/section-card';
 import { FilterBar } from '@/components/ui/filter-bar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/components/ui/utils';
+
+type LineCount = { delivered: number; damaged: number; rejected: number };
 
 export function TransferReceivingPage() {
   const [loading, setLoading] = useState(true);
@@ -32,6 +36,11 @@ export function TransferReceivingPage() {
   const [warehouseStaff, setWarehouseStaff] = useState<WarehouseStaffOption[]>([]);
   const [assigningStaffById, setAssigningStaffById] = useState<Record<string, string>>({});
   const [assigningId, setAssigningId] = useState('');
+
+  const [countingItem, setCountingItem] = useState<TransferReceivingItem | null>(null);
+  const [lines, setLines] = useState<TransferReceivingLine[]>([]);
+  const [loadingLines, setLoadingLines] = useState(false);
+  const [counts, setCounts] = useState<Record<string, LineCount>>({});
 
   const currentUser = authService.getCurrentUser();
   const canManageQueue = canManageReceiving(currentUser);
@@ -107,19 +116,67 @@ export function TransferReceivingPage() {
     }
   };
 
-  const handleConfirmReceiving = async (item: TransferReceivingItem) => {
+  const finishConfirm = async (item: TransferReceivingItem, items?: Parameters<typeof transferReceivingService.confirmReceiving>[1]) => {
     try {
       setConfirming(item.id);
-      const result = await transferReceivingService.confirmReceiving(item.id);
+      const result = await transferReceivingService.confirmReceiving(item.id, items);
       toast.success(
         `Đã nhận hàng từ chuyển kho ${item.transfer_number}. Phiếu nhập: ${result.data.goods_receipt_number}`
       );
+      setCountingItem(null);
       await loadQueue(canManageQueue ? (selectedWarehouseId || undefined) : undefined);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Xác nhận nhận hàng thất bại'));
     } finally {
       setConfirming('');
     }
+  };
+
+  // "Đã nhận hàng" opens the counting step instead of confirming outright - what was
+  // shipped is not what necessarily arrived; staff must say so explicitly (quick
+  // "nhận đủ" action further below is the one exception, and it is still a click).
+  const openCounting = async (item: TransferReceivingItem) => {
+    setCountingItem(item);
+    setLines([]);
+    setCounts({});
+    try {
+      setLoadingLines(true);
+      const response = await transferReceivingService.getLines(item.id);
+      const nextLines = response.data.items;
+      setLines(nextLines);
+      setCounts(Object.fromEntries(nextLines.map((line) => [
+        line.transfer_order_item_id,
+        { delivered: line.shipped_qty, damaged: 0, rejected: 0 },
+      ])));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Không tải được chi tiết chuyến hàng'));
+      setCountingItem(null);
+    } finally {
+      setLoadingLines(false);
+    }
+  };
+
+  const handleConfirmFull = (item: TransferReceivingItem) => void finishConfirm(item);
+
+  const handleConfirmCounted = () => {
+    if (!countingItem) return;
+    const payload = lines.map((line) => {
+      const count = counts[line.transfer_order_item_id] || { delivered: line.shipped_qty, damaged: 0, rejected: 0 };
+      return {
+        transfer_order_item_id: line.transfer_order_item_id,
+        delivered_qty: count.delivered,
+        damaged_qty: count.damaged,
+        rejected_qty: count.rejected,
+      };
+    });
+    void finishConfirm(countingItem, payload);
+  };
+
+  const setLineCount = (lineId: string, field: keyof LineCount, value: number) => {
+    setCounts((current) => ({
+      ...current,
+      [lineId]: { ...(current[lineId] || { delivered: 0, damaged: 0, rejected: 0 }), [field]: Math.max(0, Math.floor(value) || 0) },
+    }));
   };
 
   const getAssignedStaffName = (userId: string | null) => {
@@ -305,7 +362,7 @@ export function TransferReceivingPage() {
                       <TableCell className="py-3 pl-4 pr-5 text-right align-top">
                         <Button
                           size="sm"
-                          onClick={() => void handleConfirmReceiving(item)}
+                          onClick={() => void openCounting(item)}
                           disabled={!canManageQueue && !item.received_by_user_id}
                           loading={confirming === item.id}
                           className="gap-1.5"
@@ -321,6 +378,99 @@ export function TransferReceivingPage() {
           )}
         </section>
       </FadeItem>
+
+      <Dialog open={Boolean(countingItem)} onOpenChange={(open) => { if (!open) setCountingItem(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Kiểm đếm hàng nhận — {countingItem?.transfer_number}</DialogTitle>
+            <DialogDescription>
+              Số lượng đã xuất không phải là số lượng chắc chắn đã nhận. Kiểm đếm từng dòng trước khi xác nhận, hoặc chọn "Nhận đủ" nếu đã kiểm tra và không có vấn đề gì.
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingLines ? (
+            <div className="py-8 text-center text-[13px] text-muted-foreground">Đang tải...</div>
+          ) : (
+            <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-border">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="bg-muted/30 text-left text-[12px] text-muted-foreground">
+                    <th className="px-3 py-2">Sách</th>
+                    <th className="px-2 py-2 text-right">Đã xuất</th>
+                    <th className="px-2 py-2 text-right">Thực nhận</th>
+                    <th className="px-2 py-2 text-right">Hỏng</th>
+                    <th className="px-2 py-2 text-right">Từ chối</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => {
+                    const count = counts[line.transfer_order_item_id] || { delivered: line.shipped_qty, damaged: 0, rejected: 0 };
+                    return (
+                      <tr key={line.transfer_order_item_id} className="border-t border-border">
+                        <td className="px-3 py-2">
+                          <span className="font-medium">{line.title || '-'}</span>
+                          <span className="block font-mono text-[11px] text-muted-foreground">{line.isbn13 || line.sku || ''}</span>
+                        </td>
+                        <td className="px-2 py-2 text-right tabular-nums">{line.shipped_qty}</td>
+                        <td className="px-2 py-2 text-right">
+                          <Input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            aria-label={`Số thực nhận — ${line.title || line.transfer_order_item_id}`}
+                            value={count.delivered}
+                            onChange={(event) => setLineCount(line.transfer_order_item_id, 'delivered', Number(event.target.value))}
+                            className="ml-auto h-8 w-20 text-right tabular-nums"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <Input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            aria-label={`Số hỏng — ${line.title || line.transfer_order_item_id}`}
+                            value={count.damaged}
+                            onChange={(event) => setLineCount(line.transfer_order_item_id, 'damaged', Number(event.target.value))}
+                            className="ml-auto h-8 w-16 text-right tabular-nums"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <Input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            aria-label={`Số từ chối — ${line.title || line.transfer_order_item_id}`}
+                            value={count.rejected}
+                            onChange={(event) => setLineCount(line.transfer_order_item_id, 'rejected', Number(event.target.value))}
+                            className="ml-auto h-8 w-16 text-right tabular-nums"
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => countingItem && handleConfirmFull(countingItem)}
+              loading={countingItem ? confirming === countingItem.id : false}
+            >
+              Nhận đủ, không có vấn đề gì
+            </Button>
+            <Button
+              onClick={handleConfirmCounted}
+              disabled={loadingLines || lines.length === 0}
+              loading={countingItem ? confirming === countingItem.id : false}
+            >
+              Xác nhận theo số đã kiểm đếm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageWrapper>
   );
 }

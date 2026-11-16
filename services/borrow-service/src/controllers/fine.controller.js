@@ -316,6 +316,9 @@ async function waiveFine(req, res) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // Same row lock as recordFinePayment: a concurrent payment must not be able to commit
+      // against the remaining balance this waiver is about to compute from.
+      await tx.$executeRaw`SELECT id FROM fines WHERE id = ${fineId}::uuid FOR UPDATE`;
       const fine = await tx.fines.findUnique({
         where: { id: fineId },
         include: { fine_payments: true },

@@ -858,6 +858,10 @@ async function getIncomingQtyByVariant() {
     FROM purchase_order_items poi
     JOIN purchase_orders po ON po.id = poi.purchase_order_id
     WHERE po.status = ANY($1::text[])
+      -- A line the warehouse closed with remaining (purchase-order-line-closure.controller.js)
+      -- will never actually arrive, even though the parent PO's own status can stay
+      -- PARTIALLY_RECEIVED/APPROVED/etc. because another line on it is still open.
+      AND poi.closure_status != 'CLOSED_WITH_REMAINING'
     GROUP BY poi.variant_id
     `,
     [INCOMING_PO_STATUSES],
