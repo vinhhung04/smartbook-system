@@ -42,6 +42,46 @@ function computeTransferLineOutcome({ shippedQty, delivered, damaged = 0, reject
   return { delivered: d, damaged: dmg, rejected: rej, accepted: d - dmg - rej, missing: Math.max(0, shipped - d), overage };
 }
 
+/**
+ * Build goods_receipt_items rows for a transfer's shipped lines.
+ * outcomeByVariant (when present) already holds the PER-VARIANT total across every line that
+ * shares that variant - writing it into one row per line (instead of one row per variant)
+ * would duplicate it when postTransferReceiptToReceiving aggregates by variant again, so this
+ * collapses to one row per variant in that case. Without a counting payload each line already
+ * carries its own shipped_qty (never aggregated), so there is no duplication risk there - keep
+ * one row per line as before.
+ */
+function buildGoodsReceiptItemRows(shippedLines, outcomeByVariant, goodsReceiptId) {
+  if (!outcomeByVariant) {
+    return shippedLines.map((line) => ({
+      goods_receipt_id: goodsReceiptId,
+      variant_id: line.variant_id,
+      location_id: null,
+      quantity: Number(line.shipped_qty || 0),
+      delivered_qty: Number(line.shipped_qty || 0),
+      damaged_qty: 0,
+      rejected_qty: 0,
+      unit_cost: Number(line.unit_cost || 0),
+      note: `Tu chuyen kho line ${line.id}`,
+    }));
+  }
+  return Array.from(outcomeByVariant.entries()).map(([variantId, outcome]) => {
+    const representativeLine =
+      shippedLines.find((l) => String(l.variant_id) === variantId) || shippedLines[0];
+    return {
+      goods_receipt_id: goodsReceiptId,
+      variant_id: variantId,
+      location_id: null,
+      quantity: outcome.accepted,
+      delivered_qty: outcome.delivered,
+      damaged_qty: outcome.damaged,
+      rejected_qty: outcome.rejected,
+      unit_cost: Number(representativeLine?.unit_cost || 0),
+      note: `Tu chuyen kho line ${representativeLine?.id || ""}`.trim(),
+    };
+  });
+}
+
 function getTaskPermissionScope(user = {}) {
   const roles = Array.isArray(user.roles)
     ? user.roles.map((r) => String(r).toUpperCase())
@@ -411,34 +451,28 @@ async function confirmTransferReceiving(req, res) {
             );
             if (shippedLines.length > 0) {
               await tx.goods_receipt_items.createMany({
-                data: shippedLines.map((line) => {
-                  const outcome = outcomeByVariant?.get(String(line.variant_id));
-                  return {
-                    goods_receipt_id: destinationReceipt.id,
-                    variant_id: line.variant_id,
-                    location_id: null,
-                    quantity: outcome ? outcome.accepted : Number(line.shipped_qty || 0),
-                    delivered_qty: outcome ? outcome.delivered : Number(line.shipped_qty || 0),
-                    damaged_qty: outcome ? outcome.damaged : 0,
-                    rejected_qty: outcome ? outcome.rejected : 0,
-                    unit_cost: Number(line.unit_cost || 0),
-                    note: `Tu chuyen kho line ${line.id}`,
-                  };
-                }),
+                data: buildGoodsReceiptItemRows(shippedLines, outcomeByVariant, destinationReceipt.id),
               });
             }
           } else if (outcomeByVariant) {
-            // Lines already exist at shipped_qty (created by confirmOutbound) -
-            // apply the destination's actual count before posting to stock.
+            // Lines already exist at shipped_qty (created by confirmOutbound, one row per
+            // transfer line) - apply the destination's actual count before posting to stock.
             const existingItems = await tx.goods_receipt_items.findMany({
               where: { goods_receipt_id: existingReceipt.id },
               select: { id: true, variant_id: true },
             });
+            const existingItemsByVariant = new Map();
             for (const item of existingItems) {
-              const outcome = outcomeByVariant.get(String(item.variant_id));
-              if (!outcome) continue;
+              const key = String(item.variant_id);
+              if (!existingItemsByVariant.has(key)) existingItemsByVariant.set(key, []);
+              existingItemsByVariant.get(key).push(item);
+            }
+            for (const [variantId, outcome] of outcomeByVariant) {
+              const rows = existingItemsByVariant.get(variantId);
+              if (!rows || rows.length === 0) continue;
+              const [primary, ...duplicates] = rows;
               await tx.goods_receipt_items.update({
-                where: { id: item.id },
+                where: { id: primary.id },
                 data: {
                   quantity: outcome.accepted,
                   delivered_qty: outcome.delivered,
@@ -446,6 +480,15 @@ async function confirmTransferReceiving(req, res) {
                   rejected_qty: outcome.rejected,
                 },
               });
+              // A variant shipped across multiple transfer lines has one existing row per
+              // line, all sharing this variant_id - keep exactly one (already updated to the
+              // full per-variant total above) so postTransferReceiptToReceiving's own
+              // per-variant aggregation over goods_receipt_items doesn't double-count it.
+              if (duplicates.length > 0) {
+                await tx.goods_receipt_items.deleteMany({
+                  where: { id: { in: duplicates.map((d) => d.id) } },
+                });
+              }
             }
           }
 
@@ -474,20 +517,7 @@ async function confirmTransferReceiving(req, res) {
             select: { id: true, warehouse_id: true, receipt_number: true, status: true },
           });
           await tx.goods_receipt_items.createMany({
-            data: shippedLines.map((line) => {
-              const outcome = outcomeByVariant?.get(String(line.variant_id));
-              return {
-                goods_receipt_id: destinationReceipt.id,
-                variant_id: line.variant_id,
-                location_id: null,
-                quantity: outcome ? outcome.accepted : Number(line.shipped_qty || 0),
-                delivered_qty: outcome ? outcome.delivered : Number(line.shipped_qty || 0),
-                damaged_qty: outcome ? outcome.damaged : 0,
-                rejected_qty: outcome ? outcome.rejected : 0,
-                unit_cost: Number(line.unit_cost || 0),
-                note: `Tu chuyen kho line ${line.id}`,
-              };
-            }),
+            data: buildGoodsReceiptItemRows(shippedLines, outcomeByVariant, destinationReceipt.id),
           });
           await postTransferReceiptToReceiving(tx, destinationReceipt, actorUserIdOptional);
         }
