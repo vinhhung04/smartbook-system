@@ -4,6 +4,8 @@
 
 ### Nền tảng Quản lý Thư viện & Kho vận kết hợp — Đồ án tốt nghiệp (KLTN)
 
+**🌐 Dùng thử: [smartbook.io.vn](https://smartbook.io.vn)**
+
 ![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
