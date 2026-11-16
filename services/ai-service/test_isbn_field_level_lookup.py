@@ -43,15 +43,15 @@ class MarketplaceProviderTests(unittest.IsolatedAsyncioTestCase):
         with patch("main._fetch_tiki_by_isbn_api", new=AsyncMock(return_value=(meta, 0.5))):
             self.assertEqual(await _fetch_marketplace_provider("tiki", "9780439708180"), (meta, 0.5, None))
 
-    async def test_vinabook_not_found_has_no_outcome(self):
-        with patch("main._fetch_vinabook_by_isbn_api", new=AsyncMock(return_value=(None, 0.0))):
-            self.assertEqual(await _fetch_marketplace_provider("vinabook", "9780439708180"), (None, 0.0, None))
+    async def test_tiki_not_found_has_no_outcome(self):
+        with patch("main._fetch_tiki_by_isbn_api", new=AsyncMock(return_value=(None, 0.0))):
+            self.assertEqual(await _fetch_marketplace_provider("tiki", "9780439708180"), (None, 0.0, None))
 
     async def test_timeout_and_error_are_reported_not_raised(self):
         with patch("main._fetch_tiki_by_isbn_api", new=AsyncMock(side_effect=asyncio.TimeoutError())):
             self.assertEqual((await _fetch_marketplace_provider("tiki", "x"))[2], "TIMEOUT")
-        with patch("main._fetch_vinabook_by_isbn_api", new=AsyncMock(side_effect=RuntimeError("boom"))):
-            self.assertEqual((await _fetch_marketplace_provider("vinabook", "x"))[2], "ERROR")
+        with patch("main._fetch_tiki_by_isbn_api", new=AsyncMock(side_effect=RuntimeError("boom"))):
+            self.assertEqual((await _fetch_marketplace_provider("tiki", "x"))[2], "ERROR")
 
     async def test_fahasa_uses_ddgs_urls_then_first_valid(self):
         meta = {"title": "F", "sourceUrl": "https://fahasa.test/p"}

@@ -1,15 +1,14 @@
 """Initial documented priors for ISBN source selection; not measured accuracy.
 
-Rationale for the ordering (highest default first): googleBooks and openLibrary/
-worldCat are library-grade bibliographic databases with editorial curation and
+Rationale for the ordering (highest default first): googleBooks and openLibrary
+are library-grade bibliographic databases with editorial curation and
 stable identifiers - the closest thing to a canonical record this service can
-reach. The Vietnamese marketplaces (fahasa, tiki, vinabook) sell physical
+reach. The Vietnamese marketplaces (fahasa, tiki) sell physical
 books and so tend to have accurate title/author/price data (needed to fulfil
 orders), but their publisher/category taxonomy is looser and sometimes
-reflects the distributor rather than the publisher (see main.py's Vinabook
-"phát hành" parsing note). fahasa ranks above tiki/vinabook for publisher
-specifically because its listing pages are the most consistently structured
-of the three for that field. webSearch is a free-text search-snippet fallback
+reflects the distributor rather than the publisher. fahasa ranks above tiki
+for publisher specifically because its listing pages are the more consistently
+structured of the two for that field. webSearch is a free-text search-snippet fallback
 with no structural guarantee at all, used only when nothing else answered -
 hence the lowest default and the lowest per-field values throughout.
 isbn_fusion.py additionally weighs each value's extraction method (structured
@@ -20,10 +19,14 @@ SOURCE_RELIABILITY = {
     "catalog": {"default": 0.93, "title": 0.95, "authors": 0.93, "categories": 0.85},
     "googleBooks": {"default": 1.0, "title": 0.95, "authors": 0.9, "publisher": 0.82, "categories": 0.7},
     "openLibrary": {"default": 0.9, "title": 0.88, "authors": 0.86, "publisher": 0.76, "categories": 0.65},
-    "worldCat": {"default": 0.85, "title": 0.9, "authors": 0.88, "publisher": 0.8},
+    # National library catalogues: records catalogued by librarians from the book in
+    # hand (titles are in sentence case, so title sits a little below the publishers').
+    "loc": {"default": 0.9, "title": 0.9, "authors": 0.9, "translator": 0.9, "publisher": 0.88, "publishedDate": 0.9, "pageCount": 0.9, "categories": 0.7},
+    "dnb": {"default": 0.88, "title": 0.9, "authors": 0.88, "translator": 0.88, "publisher": 0.86, "publishedDate": 0.88, "pageCount": 0.88},
+    # Legal-deposit register of Cục Xuất bản: what the publisher filed for this ISBN.
+    "ppdvn": {"default": 0.9, "title": 0.93, "authors": 0.9, "publisher": 0.95},
     "fahasa": {"default": 0.8, "title": 0.85, "authors": 0.76, "publisher": 0.84, "categories": 0.72},
     "tiki": {"default": 0.8, "title": 0.8, "authors": 0.7, "publisher": 0.72, "categories": 0.7},
-    "vinabook": {"default": 0.75, "title": 0.78, "authors": 0.68, "publisher": 0.72, "categories": 0.66},
     # Publishers' own storefronts (Nhã Nam, Đinh Tị, Thái Hà, Văn Lang) - the official
     # issuer of their own editions, so the strongest source for that edition's facts
     # once the record is tied to the scanned code (isbn_fusion discounts title-only

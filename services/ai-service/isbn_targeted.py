@@ -8,13 +8,11 @@ provider's parser cannot fill.
 from __future__ import annotations
 
 # What each targeted provider's parser in main.py can actually return.
-# (Google Books / Open Library / WorldCat only run in the initial round and are
+# (Google Books / Open Library only run in the initial round and are
 # already exhausted by it, so they are not listed here.)
 PROVIDER_CAPABILITY: dict[str, frozenset[str]] = {
     # _fetch_tiki_by_isbn_api: pageCount / publishedDate / categories are always empty.
     "tiki": frozenset({"title", "authors", "publisher", "description", "thumbnail"}),
-    # _fetch_vinabook_by_isbn_api: no categories.
-    "vinabook": frozenset({"title", "authors", "publisher", "publishedDate", "description", "pageCount", "thumbnail"}),
     # Fahasa JSON-LD/DOM: no categories.
     "fahasa": frozenset({"title", "authors", "publisher", "publishedDate", "description", "pageCount", "thumbnail", "language"}),
     # _parse_web_search_metadata: only labelled title | author | publisher | year snippets.
@@ -26,15 +24,15 @@ PROVIDER_CAPABILITY: dict[str, frozenset[str]] = {
 PROVIDER_CAPABILITIES = PROVIDER_CAPABILITY
 
 PROVIDER_COST: dict[str, str] = {
-    "tiki": "cheap", "vinabook": "cheap", "fahasa": "expensive", "webSearch": "last_resort",
+    "tiki": "cheap", "fahasa": "expensive", "webSearch": "last_resort",
 }
 # Below this much remaining budget a provider is not worth starting (Fahasa's
 # CloakBrowser path was measured at ~26s end to end).
-PROVIDER_MIN_SECONDS: dict[str, float] = {"tiki": 3.0, "vinabook": 3.0, "fahasa": 20.0, "webSearch": 5.0}
+PROVIDER_MIN_SECONDS: dict[str, float] = {"tiki": 3.0, "fahasa": 20.0, "webSearch": 5.0}
 
 ROUND_COSTS = ("cheap", "expensive", "last_resort")
 MAX_ROUNDS = len(ROUND_COSTS)
-_PROVIDER_ORDER = ("tiki", "vinabook", "fahasa", "webSearch")
+_PROVIDER_ORDER = ("tiki", "fahasa", "webSearch")
 
 
 class ProviderLedger:

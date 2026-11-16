@@ -37,7 +37,7 @@ export interface LookupBookByIsbnRequest {
 }
 
 export type IsbnSourceName =
-  | 'catalog' | 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook'
+  | 'catalog' | 'googleBooks' | 'openLibrary' | 'loc' | 'dnb' | 'ppdvn' | 'fahasa' | 'tiki'
   | 'nhanam' | 'dinhTi' | 'thaiHa' | 'vanLang'
   | 'ipm' | 'kimDong' | 'azVietnam' | 'omegaPlus' | 'tanViet' | 'alphaBooks'
   | 'phuongNam' | 'nhanVan' | 'minhLong' | 'bizbooks' | 'webSearch' | 'aiWebSearch';
@@ -192,10 +192,11 @@ export interface LookupBookByIsbnResponse {
     catalog?: boolean;
     googleBooks: boolean;
     openLibrary: boolean;
-    worldCat?: boolean;
+    loc?: boolean;
+    dnb?: boolean;
+    ppdvn?: boolean;
     fahasa?: boolean;
     tiki?: boolean;
-    vinabook?: boolean;
     nhanam?: boolean;
     dinhTi?: boolean;
     thaiHa?: boolean;
@@ -219,10 +220,11 @@ export interface LookupBookByIsbnResponse {
     catalog?: number;
     googleBooks: number;
     openLibrary: number;
-    worldCat?: number;
+    loc?: number;
+    dnb?: number;
+    ppdvn?: number;
     fahasa?: number;
     tiki?: number;
-    vinabook?: number;
     nhanam?: number;
     dinhTi?: number;
     thaiHa?: number;

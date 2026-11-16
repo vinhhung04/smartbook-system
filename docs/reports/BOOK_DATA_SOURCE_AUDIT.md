@@ -100,4 +100,16 @@ Mã thử: `9780132350884` (Clean Code), `8935235226272` (Nhà giả kim – Nh�
 | Vinabook | **Tắt** (giữ code) | Site 404 |
 | WorldCat Classify | **Tắt** (giữ code) | Dịch vụ đã đóng (404) |
 
-Code của các nguồn bị tắt vẫn còn nguyên (`_fetch_first_valid`, `_fetch_vinabook_by_isbn_api`, `_fetch_worldcat_by_isbn`). Chúng chỉ còn được dùng bởi luồng field-level (đang tắt bằng cờ), và không bị xóa.
+**Cập nhật 2026-11-16:** code của Vinabook (`_fetch_vinabook_by_isbn_api`) và WorldCat Classify (`_fetch_worldcat_by_isbn`, cờ `ENABLE_WORLDCAT_LOOKUP`) đã được **gỡ hẳn** khỏi ai-service, frontend và cấu hình; hai nguồn không còn xuất hiện trong `sources[]` của phản hồi. `_fetch_first_valid` (Fahasa) vẫn giữ.
+
+## 5. Bổ sung 2026-11-16: nguồn thư viện và lưu chiểu
+
+Mỗi nguồn được gọi thử một lần (User-Agent `SmartBookBot/1.0 (+repo URL)`), code ở `services/ai-service/library_providers.py`, test `test_library_providers.py`.
+
+| Nguồn | Endpoint | Tìm theo mã | Tìm theo tên | Kết quả kiểm tra | Tích hợp |
+|---|---|---|---|---|---|
+| Library of Congress (`loc`) | `lx2.loc.gov/sru/lcdb`, MARCXML, `bath.isbn=` | Có | Có (`bath.title`, `bath.author`) | 200, ~1,3 s, Clean Code đúng ISBN; ba ISBN 978-604 không có | Vòng 1 + 2 |
+| Thư viện Quốc gia Đức (`dnb`) | `services.dnb.de/sru/dnb`, MARC21-xml, `num=` | Có | Có (`tit`, `per`) | 200, ~0,8 s, Clean Code đúng ISBN | Vòng 1 + 2 |
+| Cục Xuất bản, In và Phát hành – tra cứu lưu chiểu (`ppdvn`) | `ppdvn.gov.vn/web/guest/tra-cuu-luu-chieu?query=` | **Không** (tìm ISBN trả "Không tìm thấy dữ liệu") | Có | 200, 0,2–4 s; "Nhà giả kim" → 978-604-53-9639-1, Paulo Coelho, NXB Hội Nhà văn | Chỉ vòng 2; mỗi dòng có ISBN nên được đối chiếu mã |
+
+Ghi chú: `robots.txt` của ppdvn.gov.vn trả 500 (không có quy tắc); dùng giãn cách theo host sẵn có của `isbn_rounds`. Bản ghi LoC tiếng Việt lưu dấu theo MARC-8 (dấu thanh trước dấu mũ), adapter sắp lại trước khi chuẩn hóa NFC. Ngày nộp lưu chiểu không được dùng làm ngày xuất bản. Google Books dùng `GOOGLE_BOOKS_API_KEY` đã cấu hình (kiểm tra 200 trong container).

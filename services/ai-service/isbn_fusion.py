@@ -46,7 +46,7 @@ from source_reliability import reliability as source_reliability_score
 # the page). Ordered per Chức năng 2.4: structured API/JSON-LD > exact DOM
 # field > regex/snippet text > LLM free-text inference.
 METHOD_RELIABILITY = {
-    "api_structured": 1.0,   # a provider's own JSON API response (Google Books, Open Library, WorldCat, Tiki, Vinabook)
+    "api_structured": 1.0,   # a provider's own JSON API response (Google Books, Open Library, Tiki)
     "json_ld": 1.0,          # schema.org structured markup embedded in an HTML page (Fahasa's default fetch)
     "dom": 0.9,              # a specific DOM field read after the page had to be rendered (Fahasa CloakBrowser path)
     "snippet_regex": 0.75,   # a labelled "Title | ISBN: ...; Tác giả: ...; Nhà XB: ..." pattern matched out of free text (web search)
@@ -71,10 +71,11 @@ NO_LLM_FIELDS = frozenset({"title", "authors", "publisher", "pageCount"})
 INDEPENDENCE_GROUPS = {
     "googleBooks": "bibliographic_api",
     "openLibrary": "bibliographic_api_commons",
-    "worldCat": "bibliographic_api_commons",  # OL and WorldCat both aggregate library MARC/union-catalog records
+    "loc": "national_library_loc",
+    "dnb": "national_library_dnb",
+    "ppdvn": "legal_deposit_vn",
     "fahasa": "vn_marketplace",
-    "tiki": "vn_marketplace",
-    "vinabook": "vn_marketplace",  # Vietnamese marketplaces frequently reuse the same publisher/distributor feed
+    "tiki": "vn_marketplace",  # Vietnamese marketplaces frequently reuse the same publisher/distributor feed
     "catalog": "smartbook_catalog",
     "nhanam": "publisher_nhanam",
     "dinhTi": "publisher_dinhti",

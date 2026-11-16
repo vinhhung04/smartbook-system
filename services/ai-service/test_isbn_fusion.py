@@ -38,14 +38,14 @@ class NormalizationTest(unittest.TestCase):
 
 class FuseFieldPublisherTest(unittest.TestCase):
     def test_same_normalized_publisher_from_two_sources_is_agreement(self):
-        result = fusion.fuse_field("publisher", [ev("tiki", "NXB Trẻ"), ev("vinabook", "Nhà Xuất Bản Trẻ")])
+        result = fusion.fuse_field("publisher", [ev("tiki", "NXB Trẻ"), ev("fahasa", "Nhà Xuất Bản Trẻ")])
         self.assertEqual(result["conflictCount"], 0)
         self.assertEqual(result["agreementCount"], 2)
         self.assertIn("MULTI_SOURCE_AGREEMENT", result["reasonCodes"])
         self.assertEqual(result["alternatives"], [])
 
     def test_multi_source_agreement_yields_higher_confidence_than_either_alone(self):
-        two_sources = fusion.fuse_field("publisher", [ev("tiki", "NXB Tre"), ev("vinabook", "NXB Tre")])
+        two_sources = fusion.fuse_field("publisher", [ev("tiki", "NXB Tre"), ev("fahasa", "NXB Tre")])
         one_source = fusion.fuse_field("publisher", [ev("tiki", "NXB Tre")])
         self.assertGreater(two_sources["confidence"], one_source["confidence"])
 
@@ -129,15 +129,15 @@ class FuseFieldCategoryTest(unittest.TestCase):
 class FuseFieldMultipleEvidenceTest(unittest.TestCase):
     def test_three_agreeing_sources_yield_strong_confidence(self):
         result = fusion.fuse_field("title", [
-            ev("googleBooks", "Clean Code"), ev("openLibrary", "Clean Code"), ev("worldCat", "Clean Code"),
+            ev("googleBooks", "Clean Code"), ev("openLibrary", "Clean Code"), ev("dinhTi", "Clean Code"),
         ])
         self.assertEqual(result["agreementCount"], 3)
         self.assertGreater(result["confidence"], 0.9)
 
     def test_confidence_is_capped_below_certainty(self):
         result = fusion.fuse_field("title", [
-            ev("googleBooks", "Clean Code"), ev("openLibrary", "Clean Code"), ev("worldCat", "Clean Code"),
-            ev("fahasa", "Clean Code"), ev("tiki", "Clean Code"), ev("vinabook", "Clean Code"),
+            ev("googleBooks", "Clean Code"), ev("openLibrary", "Clean Code"), ev("dinhTi", "Clean Code"),
+            ev("fahasa", "Clean Code"), ev("tiki", "Clean Code"), ev("nhanam", "Clean Code"),
         ])
         self.assertLessEqual(result["confidence"], fusion.MAX_SUPPORT)
 
