@@ -89,10 +89,10 @@ class Harness:
         """`new_arrival` = (new_book_ids, limit, slots) applies v2.apply_new_arrival_slot."""
         m = self.matrix(params)
         scale = scale or m["scale"]
-        w = [weights.get(f, 0.0) / (scale.get(f) or 1.0) for f in v2.FEATURES]
         by_id = m["model"]["by_id"]
         out = {}
         for uid, u in m["users"].items():
+            w = _vector(v2.effective_weights(u["profile_signals"], weights), scale)
             scored = sorted(
                 ((sum(wi * fi for wi, fi in zip(w, row)), k) for k, row in zip(u["keys"], u["rows"])),
                 key=lambda s: (-s[0], s[1]),
@@ -116,14 +116,18 @@ class Harness:
             ranks = self.rankings(params, weights, scale, max_per_category)
             vals = [per_user_metrics(ranks[u], users[u]["targets"], k)[OBJECTIVE] for u in users]
             return sum(vals) / len(vals) if vals else 0.0
-        w = [weights.get(f, 0.0) / (scale.get(f) or 1.0) for f in v2.FEATURES]
         total = 0.0
         for uid, u in m["users"].items():
+            w = _vector(v2.effective_weights(u["profile_signals"], weights), scale)
             top = heapq.nsmallest(
                 k, ((-(sum(wi * fi for wi, fi in zip(w, row))), key) for key, row in zip(u["keys"], u["rows"])),
             )
             total += per_user_metrics([key for _, key in top], users[uid]["targets"], k)[OBJECTIVE]
         return total / len(m["users"]) if m["users"] else 0.0
+
+
+def _vector(weights: dict, scale: dict) -> list[float]:
+    return [weights.get(f, 0.0) / (scale.get(f) or 1.0) for f in v2.FEATURES]
 
 
 def _scale(users: dict) -> dict[str, float]:

@@ -176,23 +176,6 @@
       "novelty@10": 9.8825,
       "popularity_bias_arp@10": 0.9162,
       "category_diversity@10": 0.7366
-    },
-    "V2_NO_CANDIDATE_PRUNING": {
-      "users": 200,
-      "hit_rate@5": 0.165,
-      "recall@5": 0.0739,
-      "ndcg@5": 0.0628,
-      "mrr": 0.1044,
-      "catalog_coverage@5": 0.0599,
-      "personalization@5": 0.9762,
-      "hit_rate@10": 0.235,
-      "recall@10": 0.1177,
-      "ndcg@10": 0.0787,
-      "catalog_coverage@10": 0.1045,
-      "personalization@10": 0.9621,
-      "novelty@10": 10.465,
-      "popularity_bias_arp@10": 0.8806,
-      "category_diversity@10": 0.2903
     }
   },
   "bootstrap_95ci": {
@@ -323,32 +306,6 @@
         "mean": 0.0899,
         "low": 0.0607,
         "high": 0.1222,
-        "n": 200
-      }
-    },
-    "V2_NO_CANDIDATE_PRUNING": {
-      "hit_rate@10": {
-        "mean": 0.235,
-        "low": 0.175,
-        "high": 0.3,
-        "n": 200
-      },
-      "ndcg@10": {
-        "mean": 0.0787,
-        "low": 0.0545,
-        "high": 0.1058,
-        "n": 200
-      },
-      "recall@10": {
-        "mean": 0.1177,
-        "low": 0.0821,
-        "high": 0.1575,
-        "n": 200
-      },
-      "mrr": {
-        "mean": 0.1044,
-        "low": 0.0749,
-        "high": 0.1377,
         "n": 200
       }
     }
@@ -509,14 +466,6 @@
       "q3": 0.0,
       "max": 1.0,
       "share_zero": 0.83
-    },
-    "V2_NO_CANDIDATE_PRUNING": {
-      "min": 0.0,
-      "q1": 0.0,
-      "median": 0.0,
-      "q3": 0.0,
-      "max": 1.0,
-      "share_zero": 0.765
     }
   },
   "ablation": {
@@ -572,28 +521,19 @@
         },
         "V2": {
           "users": 2702,
-          "hit_rate@10": 0.0855,
-          "recall@10": 0.0477,
-          "ndcg@10": 0.0243,
-          "mrr": 0.0296,
+          "hit_rate@10": 0.0803,
+          "recall@10": 0.0502,
+          "ndcg@10": 0.0314,
+          "mrr": 0.0412,
           "catalog_coverage@10": 0.0013,
           "personalization@10": 0.0
         },
         "V2+CATEGORY_CAP3": {
           "users": 2702,
-          "hit_rate@10": 0.0988,
-          "recall@10": 0.058,
-          "ndcg@10": 0.0278,
-          "mrr": 0.0298,
-          "catalog_coverage@10": 0.0013,
-          "personalization@10": 0.0
-        },
-        "V2_NO_CANDIDATE_PRUNING": {
-          "users": 2702,
-          "hit_rate@10": 0.0855,
-          "recall@10": 0.0477,
-          "ndcg@10": 0.0243,
-          "mrr": 0.0303,
+          "hit_rate@10": 0.0811,
+          "recall@10": 0.0481,
+          "ndcg@10": 0.0307,
+          "mrr": 0.0406,
           "catalog_coverage@10": 0.0013,
           "personalization@10": 0.0
         }
@@ -646,15 +586,6 @@
           "mrr": 0.0976,
           "catalog_coverage@10": 0.0951,
           "personalization@10": 0.9267
-        },
-        "V2_NO_CANDIDATE_PRUNING": {
-          "users": 231,
-          "hit_rate@10": 0.2424,
-          "recall@10": 0.142,
-          "ndcg@10": 0.0942,
-          "mrr": 0.1102,
-          "catalog_coverage@10": 0.1034,
-          "personalization@10": 0.9471
         }
       }
     },
@@ -705,15 +636,6 @@
           "mrr": 0.0899,
           "catalog_coverage@10": 0.0841,
           "personalization@10": 0.9203
-        },
-        "V2_NO_CANDIDATE_PRUNING": {
-          "users": 200,
-          "hit_rate@10": 0.235,
-          "recall@10": 0.1177,
-          "ndcg@10": 0.0787,
-          "mrr": 0.1044,
-          "catalog_coverage@10": 0.1045,
-          "personalization@10": 0.9621
         }
       }
     },
@@ -722,8 +644,7 @@
       "POPULARITY": 0,
       "V1_PRODUCTION": 0,
       "V2": 0,
-      "V2+CATEGORY_CAP3": 0,
-      "V2_NO_CANDIDATE_PRUNING": 0
+      "V2+CATEGORY_CAP3": 0
     },
     "item_cold_start": {
       "masked_books": 713,
@@ -888,15 +809,6 @@
             "mrr": 0.1068,
             "catalog_coverage@10": 0.0431,
             "personalization@10": 0.9204
-          },
-          "V2_NO_CANDIDATE_PRUNING": {
-            "users": 83,
-            "hit_rate@10": 0.2169,
-            "recall@10": 0.1163,
-            "ndcg@10": 0.0865,
-            "mrr": 0.1197,
-            "catalog_coverage@10": 0.0567,
-            "personalization@10": 0.9563
           }
         }
       },
@@ -947,15 +859,6 @@
             "mrr": 0.1103,
             "catalog_coverage@10": 0.0338,
             "personalization@10": 0.9331
-          },
-          "V2_NO_CANDIDATE_PRUNING": {
-            "users": 51,
-            "hit_rate@10": 0.2745,
-            "recall@10": 0.1649,
-            "ndcg@10": 0.103,
-            "mrr": 0.1207,
-            "catalog_coverage@10": 0.0419,
-            "personalization@10": 0.9666
           }
         }
       },
@@ -1006,15 +909,6 @@
             "mrr": 0.0528,
             "catalog_coverage@10": 0.0394,
             "personalization@10": 0.9098
-          },
-          "V2_NO_CANDIDATE_PRUNING": {
-            "users": 66,
-            "hit_rate@10": 0.2273,
-            "recall@10": 0.083,
-            "ndcg@10": 0.0502,
-            "mrr": 0.0725,
-            "catalog_coverage@10": 0.0483,
-            "personalization@10": 0.9667
           }
         }
       }
@@ -1070,16 +964,6 @@
           "users": 142,
           "recall@10": 0.0044
         }
-      },
-      "V2_NO_CANDIDATE_PRUNING": {
-        "head": {
-          "users": 146,
-          "recall@10": 0.1852
-        },
-        "tail": {
-          "users": 142,
-          "recall@10": 0.0091
-        }
       }
     },
     "candidate_pool": {
@@ -1100,14 +984,14 @@
     },
     "passed": true
   },
-  "runtime_seconds": 3752.3,
+  "runtime_seconds": 4605.3,
   "conclusion": [
     "V2 vs V1_PRODUCTION on 200 test users: hit_rate@10 better (Δ=+0.2100, 95% CI [+0.1500, +0.2750]); ndcg@10 better (Δ=+0.0742, 95% CI [+0.0500, +0.1016]); recall@10 better (Δ=+0.1122, 95% CI [+0.0765, +0.1528]); mrr better (Δ=+0.0872, 95% CI [+0.0568, +0.1223]).",
     "V2 vs POPULARITY on 200 test users: hit_rate@10 better (Δ=+0.0950, 95% CI [+0.0350, +0.1600]); ndcg@10 better (Δ=+0.0367, 95% CI [+0.0124, +0.0631]); recall@10 better (Δ=+0.0555, 95% CI [+0.0240, +0.0916]); mrr better (Δ=+0.0436, 95% CI [+0.0112, +0.0786]).",
     "Coverage@10 / Personalization@10: POPULARITY 0.0017/0.0731, V1_PRODUCTION 0.0336/0.8641, V2 0.1039/0.9598.",
     "Ablation: not run (--skip-ablations).",
     "Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.0, imputation only 0.0, zero evidence 0.0, POPULARITY 0.0, RANDOM 0.0 (V2 when their history is known: 0.0244).",
-    "Cold start, new users (n=2702): NDCG@10 V2 0.0243 vs POPULARITY 0.0314 (POPULARITY higher).",
+    "Cold start, new users (n=2702): NDCG@10 V2 0.0314 vs POPULARITY 0.0314 (equal).",
     "Cold start, sparse users (n=231): NDCG@10 V2 0.0942 vs POPULARITY 0.0312 (V2 higher).",
     "Acceptance rule on this real library: met (informational - the production model choice is made on the synthetic dataset and is unchanged)."
   ]

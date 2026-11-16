@@ -54,7 +54,6 @@ Hyperparameters: `prior_strength`=1.0, `half_life_days`=90, `cf_shrinkage`=50.0,
 | V1_PRODUCTION | 200 | 0.01 | 0.0028 | 0.0032 | 0.02 | 0.0035 | 0.0034 | 0.0135 |
 | V2 | 200 | 0.16 | 0.073 | 0.0621 | 0.23 | 0.1157 | 0.0776 | 0.1007 |
 | V2+CATEGORY_CAP3 | 200 | 0.14 | 0.059 | 0.0549 | 0.17 | 0.0685 | 0.057 | 0.0899 |
-| V2_NO_CANDIDATE_PRUNING | 200 | 0.165 | 0.0739 | 0.0628 | 0.235 | 0.1177 | 0.0787 | 0.1044 |
 
 Bootstrap 95% CI (per-user resampling, 200 users):
 
@@ -65,7 +64,6 @@ Bootstrap 95% CI (per-user resampling, 200 users):
 | V1_PRODUCTION | 0.02 [0.005, 0.04] | 0.0034 [0.0004, 0.0081] | 0.0035 [0.0002, 0.0094] | 0.0135 [0.0059, 0.0248] |
 | V2 | 0.23 [0.17, 0.295] | 0.0776 [0.0545, 0.1045] | 0.1157 [0.0797, 0.1555] | 0.1007 [0.072, 0.1339] |
 | V2+CATEGORY_CAP3 | 0.17 [0.12, 0.225] | 0.057 [0.0356, 0.0812] | 0.0685 [0.0432, 0.0978] | 0.0899 [0.0607, 0.1222] |
-| V2_NO_CANDIDATE_PRUNING | 0.235 [0.175, 0.3] | 0.0787 [0.0545, 0.1058] | 0.1177 [0.0821, 0.1575] | 0.1044 [0.0749, 0.1377] |
 
 Per-user NDCG@10 distribution:
 
@@ -76,7 +74,6 @@ Per-user NDCG@10 distribution:
 | V1_PRODUCTION | 0.0 | 0.0 | 0.0 | 0.0 | 0.3066 | 0.98 |
 | V2 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.77 |
 | V2+CATEGORY_CAP3 | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.83 |
-| V2_NO_CANDIDATE_PRUNING | 0.0 | 0.0 | 0.0 | 0.0 | 1.0 | 0.765 |
 
 ## Coverage / Diversity Metrics (test)
 
@@ -87,7 +84,6 @@ Per-user NDCG@10 distribution:
 | V1_PRODUCTION | 0.0336 | 0.8641 | 14.0315 | 0.412 | 0.0644 |
 | V2 | 0.1039 | 0.9598 | 10.4481 | 0.8796 | 0.2927 |
 | V2+CATEGORY_CAP3 | 0.0841 | 0.9203 | 9.8825 | 0.9162 | 0.7366 |
-| V2_NO_CANDIDATE_PRUNING | 0.1045 | 0.9621 | 10.465 | 0.8806 | 0.2903 |
 
 ## Cold-start Evaluation
 
@@ -98,9 +94,8 @@ Per-user NDCG@10 distribution:
 | RANDOM | 0.0019 | 0.0007 | 0.0006 | 0.0023 |
 | POPULARITY | 0.0803 | 0.0502 | 0.0314 | 0.0424 |
 | V1_PRODUCTION | 0.0007 | 0.0002 | 0.0002 | 0.0015 |
-| V2 | 0.0855 | 0.0477 | 0.0243 | 0.0296 |
-| V2+CATEGORY_CAP3 | 0.0988 | 0.058 | 0.0278 | 0.0298 |
-| V2_NO_CANDIDATE_PRUNING | 0.0855 | 0.0477 | 0.0243 | 0.0303 |
+| V2 | 0.0803 | 0.0502 | 0.0314 | 0.0412 |
+| V2+CATEGORY_CAP3 | 0.0811 | 0.0481 | 0.0307 | 0.0406 |
 
 **Sparse users (1–2 train loans)** – 231 users
 
@@ -111,7 +106,6 @@ Per-user NDCG@10 distribution:
 | V1_PRODUCTION | 0.013 | 0.0101 | 0.0039 | 0.0094 |
 | V2 | 0.2424 | 0.142 | 0.0942 | 0.1095 |
 | V2+CATEGORY_CAP3 | 0.1688 | 0.0961 | 0.0756 | 0.0976 |
-| V2_NO_CANDIDATE_PRUNING | 0.2424 | 0.142 | 0.0942 | 0.1102 |
 
 **Regular users (≥ 3 train loans)** – 200 users
 
@@ -122,9 +116,8 @@ Per-user NDCG@10 distribution:
 | V1_PRODUCTION | 0.02 | 0.0035 | 0.0034 | 0.0135 |
 | V2 | 0.23 | 0.1157 | 0.0776 | 0.1007 |
 | V2+CATEGORY_CAP3 | 0.17 | 0.0685 | 0.057 | 0.0899 |
-| V2_NO_CANDIDATE_PRUNING | 0.235 | 0.1177 | 0.0787 | 0.1044 |
 
-Empty recommendation lists: RANDOM 0, POPULARITY 0, V1_PRODUCTION 0, V2 0, V2+CATEGORY_CAP3 0, V2_NO_CANDIDATE_PRUNING 0.
+Empty recommendation lists: RANDOM 0, POPULARITY 0, V1_PRODUCTION 0, V2 0, V2+CATEGORY_CAP3 0.
 
 **New books** – 713 books masked (sha1(book_id) % 10 == 0; all their interactions before the test cutoff removed from features (targets unchanged). zero_evidence = popularity/CF/recency left at 0; neutral_imputation = those features set to the mean of the reader's other candidates; new_arrival_slot = additionally the best-scoring new title is guaranteed one of the top-10 places (production policy: both)). Recall@10 restricted to targets among them:
 
@@ -194,7 +187,6 @@ Recall@10 on head vs tail targets (top 1513 books by train loan count):
 | V1_PRODUCTION | 0.0 | 0.0051 |
 | V2 | 0.1872 | 0.0067 |
 | V2+CATEGORY_CAP3 | 0.1158 | 0.0044 |
-| V2_NO_CANDIDATE_PRUNING | 0.1852 | 0.0091 |
 
 ## Limitations
 
@@ -213,7 +205,7 @@ Recall@10 on head vs tail targets (top 1513 books by train loan count):
 - Coverage@10 / Personalization@10: POPULARITY 0.0017/0.0731, V1_PRODUCTION 0.0336/0.8641, V2 0.1039/0.9598.
 - Ablation: not run (--skip-ablations).
 - Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.0, imputation only 0.0, zero evidence 0.0, POPULARITY 0.0, RANDOM 0.0 (V2 when their history is known: 0.0244).
-- Cold start, new users (n=2702): NDCG@10 V2 0.0243 vs POPULARITY 0.0314 (POPULARITY higher).
+- Cold start, new users (n=2702): NDCG@10 V2 0.0314 vs POPULARITY 0.0314 (equal).
 - Cold start, sparse users (n=231): NDCG@10 V2 0.0942 vs POPULARITY 0.0312 (V2 higher).
 - Acceptance rule on this real library: met (informational - the production model choice is made on the synthetic dataset and is unchanged).
 
