@@ -71,13 +71,14 @@ export function candidatesFor(lookup: LookupBookByIsbnResponse, key: string): Ca
   const selected = toFormValue(evidence.selectedValue);
   const detail = (source: IsbnSourceName) => details.get(source) || { source };
   if (evidence.candidates?.length) {
+    // The system's choice first (it is what the field holds), then by support.
     return [...evidence.candidates]
-      .sort((a, b) => b.support - a.support)
       .map((candidate) => {
         const value = toFormValue(candidate.value);
         return { value, sources: candidate.sources.map(detail), support: candidate.support, selected: same(value, selected) };
       })
-      .filter((candidate) => candidate.value);
+      .filter((candidate) => candidate.value)
+      .sort((a, b) => Number(b.selected) - Number(a.selected) || (b.support ?? 0) - (a.support ?? 0));
   }
   const groups = new Map<string, Candidate>();
   const raw = evidence.evidence?.length ? evidence.evidence : evidence.confirmations || [];
@@ -124,6 +125,10 @@ export function fieldState({ field, lookup, value, origin, edited, hasAiSuggesti
   }
   if (origin && (origin.tone === "ocr" || origin.tone === "ocr-weak")) return { label: origin.label, icon: ScanText, tone: origin.tone === "ocr" ? "ok" : "info", filters };
   if (low) return { label: "Độ tin cậy thấp", icon: AlertTriangle, tone: "warn", filters };
+  // Free text never "conflicts" in the backend, but several different descriptions are not a
+  // confirmation either: say so in a neutral tone instead of a green "verified".
+  const distinctTexts = field === "description" ? (evidence?.candidates?.length ?? 0) : 0;
+  if (distinctTexts > 1) return { label: `${distinctTexts} nguồn viết khác nhau`, icon: Layers, tone: "info", filters };
   if (agreeing >= 2) return { label: `${agreeing} nguồn xác nhận`, icon: Layers, tone: "ok", filters };
   if (evidence?.selectedSource) return { label: codeVerified ? "Một nguồn · khớp mã" : "Một nguồn", icon: BadgeCheck, tone: codeVerified ? "ok" : "muted", filters };
   // The ISBN fields hold the code that was searched; Round 1 accepted a source only when its record printed it.

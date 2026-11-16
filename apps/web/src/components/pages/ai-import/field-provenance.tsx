@@ -38,7 +38,7 @@ function SourceFacts({ detail }: { detail: SourceDetail }) {
       <span className="font-medium text-foreground">{SOURCE_LABELS[detail.source] || detail.source}</span>
       {facts.length ? <span className="text-muted-foreground">{facts.join(" · ")}</span> : null}
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-6 items-center gap-0.5 text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+        <a href={url} target="_blank" rel="noreferrer noopener" className="inline-flex min-h-6 pointer-coarse:min-h-[44px] items-center gap-0.5 text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
           Nguồn<ExternalLink className="h-3 w-3" aria-hidden="true" /><span className="sr-only"> {SOURCE_LABELS[detail.source]} (mở tab mới)</span>
         </a>
       ) : null}
@@ -52,12 +52,14 @@ function SourceFacts({ detail }: { detail: SourceDetail }) {
  * Choosing a value goes through the page's own field handler (it counts as the
  * user's explicit choice); nothing here applies a value by itself.
  */
-export function FieldProvenance({ field, label, lookup, value, onChoose, preview }: {
+export function FieldProvenance({ field, label, lookup, value, onChoose, preview, aiWritten = false }: {
   field: string;
   label: string;
   lookup: LookupBookByIsbnResponse | null;
   value: string;
   onChoose: (value: string) => void;
+  /** The value now in the field is an applied AI suggestion. */
+  aiWritten?: boolean;
   /** Render a value (e.g. a cover thumbnail) instead of plain text. */
   preview?: (value: string) => ReactNode;
 }) {
@@ -69,30 +71,34 @@ export function FieldProvenance({ field, label, lookup, value, onChoose, preview
   const candidates = candidatesFor(lookup, key);
   if (!evidence?.selectedSource && !candidates.length) return null;
   const choosable = CHOOSABLE.has(field);
-  const selected = candidates.find((c) => c.selected) || candidates[0];
   const backendValue = toFormValue(evidence?.selectedValue);
   const seen = new Set(candidates.flatMap((c) => c.sources.map((s) => s.source)));
-  const silent = (lookup.sources || []).filter((s) => s.status === "SUCCESS" && !seen.has(s.name)).map((s) => SOURCE_LABELS[s.name] || s.name);
-  const lead = selected?.sources[0];
-  const summary = [
-    selected ? `${selected.sources.map((s) => SOURCE_LABELS[s.source] || s.source).slice(0, 3).join(", ")}${selected.sources.length > 3 ? ` +${selected.sources.length - 3}` : ""}` : null,
+  // Texts the backend dropped as adverts (isbn_fusion): named as rejected, not as "had nothing".
+  const rejected = evidence?.reasonCodes?.includes("PROMOTIONAL_DESCRIPTION_REJECTED")
+    ? [...new Set((evidence.evidence || []).map((item) => item.source).filter((source) => !seen.has(source)))] : [];
+  const silent = (lookup.sources || []).filter((s) => s.status === "SUCCESS" && !seen.has(s.name) && !rejected.includes(s.name)).map((s) => SOURCE_LABELS[s.name] || s.name);
+  // The line under the field describes the value IN the field, not the one the system picked.
+  const current = value.trim() ? candidates.find((c) => same(c.value, value)) : undefined;
+  const lead = current?.sources[0];
+  const summary = aiWritten ? "AI viết (đề xuất bạn đã áp dụng)" : current ? [
+    `${current.sources.map((s) => SOURCE_LABELS[s.source] || s.source).slice(0, 3).join(", ")}${current.sources.length > 3 ? ` +${current.sources.length - 3}` : ""}`,
     lead?.round ? `vòng ${lead.round}` : null,
     lead?.verification ? (VERIFICATION_LABELS[lead.verification as keyof typeof VERIFICATION_LABELS] || "").toLowerCase() : null,
-    evidence?.selectedPhase === "TARGETED" ? "bổ sung sau" : null,
-  ].filter(Boolean).join(" · ");
+    current.selected && evidence?.selectedPhase === "TARGETED" ? "bổ sung sau" : null,
+  ].filter(Boolean).join(" · ") : value.trim() ? "bạn nhập, không từ nguồn tra cứu" : "";
 
   return (
     <div className="mt-1.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
-        {summary ? <span className="min-w-0">Nguồn: {summary}</span> : null}
+        {summary ? <span className="min-w-0">Giá trị hiện tại: {summary}</span> : null}
         <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((v) => !v)}
-          className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-md px-1 font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+          className="inline-flex min-h-8 pointer-coarse:min-h-[44px] cursor-pointer items-center gap-1 rounded-md px-1 font-medium text-foreground underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
           {candidates.length > 1 ? `So sánh ${candidates.length} giá trị` : "Xem bằng chứng"}
           <span className="sr-only"> cho {label}</span>
           <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-150 motion-reduce:transition-none ${open ? "rotate-180" : ""}`} aria-hidden="true" />
         </button>
         {choosable && backendValue && !same(backendValue, value) ? (
-          <button type="button" onClick={() => onChoose(backendValue)} className="inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-md px-1 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+          <button type="button" onClick={() => onChoose(backendValue)} className="inline-flex min-h-8 pointer-coarse:min-h-[44px] cursor-pointer items-center gap-1 rounded-md px-1 font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
             <RotateCcw className="h-3 w-3" aria-hidden="true" />Dùng lại giá trị hệ thống chọn
           </button>
         ) : null}
@@ -121,7 +127,7 @@ export function FieldProvenance({ field, label, lookup, value, onChoose, preview
                         <span className="inline-flex min-h-8 items-center gap-1 text-[12.5px] font-medium text-emerald-700 dark:text-emerald-400"><Check className="h-3.5 w-3.5" aria-hidden="true" />Đang dùng</span>
                       ) : (
                         <button type="button" onClick={() => onChoose(candidate.value)}
-                          className="inline-flex min-h-9 shrink-0 cursor-pointer items-center rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring">
+                          className="inline-flex min-h-9 pointer-coarse:min-h-[44px] shrink-0 cursor-pointer items-center rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring">
                           Dùng giá trị này<span className="sr-only"> cho {label}</span>
                         </button>
                       )
@@ -134,6 +140,9 @@ export function FieldProvenance({ field, label, lookup, value, onChoose, preview
               );
             })}
           </ul>
+          {rejected.length ? (
+            <p className="mt-3 text-[12px] text-muted-foreground">Đã loại vì có dấu hiệu quảng cáo, không phải giới thiệu sách: {rejected.map((source) => SOURCE_LABELS[source] || source).join(", ")}.</p>
+          ) : null}
           {silent.length ? (
             <p className="mt-3 text-[12px] text-muted-foreground">Có bản ghi nhưng không ghi trường này: {silent.join(", ")}.</p>
           ) : null}

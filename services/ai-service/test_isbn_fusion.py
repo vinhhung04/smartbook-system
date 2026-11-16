@@ -114,6 +114,39 @@ class FuseFieldDescriptionTest(unittest.TestCase):
         self.assertEqual(result["selectedSource"], "fahasa")
         self.assertEqual(len(result["evidence"]), 2)  # both sources' provenance is kept
 
+    # Open Library returned this advert as the description of Clean Code (9780132350884) on 2026-11-16.
+    SPAM = ("How is the Earn2Trade Discount Code **“BONUS99”** one of the best promotional offers for traders "
+            "in 2026? It provides an advertised 60% discount on eligible Earn2Trade programs. By applying BONUS99, "
+            "traders can access promotional pricing. Customers should check that the 60% discount is reflected in "
+            "the final checkout price. ") * 3
+    CATALOG = ("Even bad code can function. But if code isn't clean, it can bring a development organization to its "
+               "knees. Noted software expert Robert C. Martin presents a revolutionary paradigm with Clean Code. ") * 3
+    GOOGLE = "This title shows the process of cleaning code, step by step."
+
+    def test_promotional_text_is_never_selected_and_not_offered(self):
+        result = fusion.fuse_field("description", [
+            ev("catalog", self.CATALOG), ev("googleBooks", self.GOOGLE), ev("openLibrary", self.SPAM),
+        ])
+        self.assertEqual(result["selectedSource"], "catalog")
+        self.assertIn("PROMOTIONAL_DESCRIPTION_REJECTED", result["reasonCodes"])
+        self.assertNotIn("openLibrary", [s for c in result["candidates"] for s in c["sources"]])
+        self.assertEqual(len(result["evidence"]), 3)  # the rejected text keeps its provenance
+
+    def test_only_promotional_descriptions_leave_the_field_empty(self):
+        result = fusion.fuse_field("description", [ev("openLibrary", self.SPAM)])
+        self.assertIsNone(result["value"])
+        self.assertIn("PROMOTIONAL_DESCRIPTION_REJECTED", result["reasonCodes"])
+
+    def test_a_real_description_mentioning_a_discount_once_is_kept(self):
+        text = "Cuốn sách hướng dẫn quản lý tài chính cá nhân, từ lập ngân sách tới đầu tư; có chương về mã giảm giá khi mua sắm."
+        self.assertLess(fusion.promotional_signals(text), fusion.PROMO_SIGNALS_TO_REJECT)
+        self.assertEqual(fusion.fuse_field("description", [ev("fahasa", text)])["value"], text)
+
+    def test_length_past_the_cap_does_not_beat_a_more_reliable_source(self):
+        long_web = "x " * 2000
+        result = fusion.fuse_field("description", [ev("webSearch", long_web), ev("catalog", "y " * 700)])
+        self.assertEqual(result["selectedSource"], "catalog")
+
 
 class FuseFieldCategoryTest(unittest.TestCase):
     def test_categories_from_different_sources_are_merged_not_conflicted(self):

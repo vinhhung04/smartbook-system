@@ -318,20 +318,50 @@ def _fuse_union(field: str, responses: list[dict]) -> dict:
     }
 
 
+# Marketing copy that community-edited records (Open Library) sometimes carry in
+# place of a book description: coupon codes, discounts, sign-up pitches, casinos.
+_PROMO_PATTERNS = [re.compile(p, re.IGNORECASE) for p in (
+    r"\b(discount|promo|promotional|coupon|voucher|referral)\s+codes?\b",
+    r"\b(use|apply|applying|enter)\s+(the\s+)?(code|coupon)\b",
+    r"\bmã\s+(giảm\s+giá|khuyến\s+mãi|ưu\s+đãi)\b",
+    r"\b\d{1,3}\s?%\s+(off|discount|savings|giảm)\b",
+    r"\b(sign\s?up|register)\s+(now|today)\b",
+    r"\b(casino|betting|forex\s+signals?|crypto\s+bonus|free\s+spins)\b",
+    r"\bat\s+checkout\b|\bcheckout\s+price\b",
+)]
+PROMO_SIGNALS_TO_REJECT = 2
+# Past this many characters a longer description is not a better one: the source's
+# reliability decides (a librarian-reviewed catalog text beats a longer web blurb).
+DESCRIPTION_LENGTH_CAP = 1200
+
+
+def promotional_signals(text: str) -> int:
+    """How many distinct promotional patterns a text matches; >= PROMO_SIGNALS_TO_REJECT
+    is treated as an advert, not a book description."""
+    return sum(1 for pattern in _PROMO_PATTERNS if pattern.search(text or ""))
+
+
 def _fuse_richest(field: str, responses: list[dict]) -> dict:
     """description: two different descriptions are not a conflict (Chức năng
-    2.9) - pick the richest (longest x most reliable) one and keep every
-    candidate's provenance."""
-    def score(evidence: dict) -> float:
-        return len(str(evidence["value"]).strip()) * _evidence_reliability(field, evidence)
+    2.9) - pick the richest (length up to DESCRIPTION_LENGTH_CAP x most reliable)
+    one and keep every candidate's provenance. Promotional texts are dropped."""
+    usable = [e for e in responses if promotional_signals(str(e["value"])) < PROMO_SIGNALS_TO_REJECT]
+    rejected = [e for e in responses if e not in usable]
+    rejected_codes = ["PROMOTIONAL_DESCRIPTION_REJECTED"] if rejected else []
+    if not usable:
+        return {**_empty_result(["NO_SOURCE_RESPONDED", *rejected_codes]),
+                "evidence": [_evidence_item(field, e) for e in responses]}
 
-    ranked = sorted(responses, key=score, reverse=True)
+    def score(evidence: dict) -> float:
+        return min(len(str(evidence["value"]).strip()), DESCRIPTION_LENGTH_CAP) * _evidence_reliability(field, evidence)
+
+    ranked = sorted(usable, key=score, reverse=True)
     winner = ranked[0]
-    support = round(_support(field, responses), 3)
+    support = round(_support(field, usable), 3)
     return {
         "value": winner["value"], "selectedSource": winner["source"],
-        "confidence": support, "agreementCount": len(responses), "conflictCount": 0, "alternatives": [],
-        "reasonCodes": ["RICHEST_DESCRIPTION"],
+        "confidence": support, "agreementCount": len(usable), "conflictCount": 0, "alternatives": [],
+        "reasonCodes": ["RICHEST_DESCRIPTION", *rejected_codes],
         "candidates": [
             {"value": e["value"], "sources": [e["source"]], "support": round(_evidence_reliability(field, e), 3)}
             for e in ranked

@@ -219,6 +219,54 @@ export function mergeCommaText(current: string, additions: string[]): string {
   return [...new Set(merged)].join(", ");
 }
 
+type BulkField = "description" | "summaryVi" | "keywords" | "categories";
+type BulkFormKey = "description" | "summaryVi" | "keywordsText" | "categoriesText";
+const BULK_FORM_FIELD: Record<BulkField, BulkFormKey> = {
+  description: "description", summaryVi: "summaryVi", keywords: "keywordsText", categories: "categoriesText",
+};
+
+/** Why "apply suggestions" leaves a field for the user to review one by one. */
+export type BulkHoldReason = "edited" | "stale" | "replaces" | "newCategories";
+
+/**
+ * What one click on "apply suggestions" may write. A text suggestion is applied in bulk
+ * only into an empty field: it is held when the user has typed or chosen a value there
+ * ("edited"), when the field no longer holds the text it was written for ("stale"), or
+ * when it would replace text already in the field ("replaces", read it first). Chip
+ * suggestions only add; categories add only those already in the catalog, since a new
+ * category is a taxonomy decision ("newCategories" when nothing else is left).
+ */
+export function planBulkAiApply({ form, candidates, applied, edited, existingCategories }: {
+  form: Record<BulkFormKey, string>;
+  candidates: Partial<Record<BulkField, { value: string; basis: string } | null>>;
+  applied: Partial<Record<BulkField, unknown>>;
+  edited: ReadonlySet<string>;
+  existingCategories: string[];
+}): { apply: Array<{ field: BulkField; next: string; added?: number }>; held: Array<{ field: BulkField; reason: BulkHoldReason }> } {
+  const apply: Array<{ field: BulkField; next: string; added?: number }> = [];
+  const held: Array<{ field: BulkField; reason: BulkHoldReason }> = [];
+  const catalog = new Set(existingCategories.map(normalizeForCompare));
+  for (const field of Object.keys(BULK_FORM_FIELD) as BulkField[]) {
+    const candidate = candidates[field];
+    if (!candidate?.value.trim() || applied[field]) continue;
+    const target = BULK_FORM_FIELD[field];
+    const current = form[target] ?? "";
+    if (field === "description" || field === "summaryVi") {
+      if (edited.has(target)) held.push({ field, reason: "edited" });
+      else if (current !== candidate.basis) held.push({ field, reason: "stale" });
+      else if (current.trim()) held.push({ field, reason: "replaces" });
+      else apply.push({ field, next: candidate.value });
+      continue;
+    }
+    const present = new Set(splitCommaValues(current).map(normalizeForCompare));
+    const offered = splitCommaValues(candidate.value).filter((chip) => !present.has(normalizeForCompare(chip)));
+    const chosen = field === "categories" ? offered.filter((chip) => catalog.has(normalizeForCompare(chip))) : offered;
+    if (chosen.length) apply.push({ field, next: mergeCommaText(current, chosen), added: chosen.length });
+    else if (offered.length) held.push({ field, reason: "newCategories" });
+  }
+  return { apply, held };
+}
+
 export function displayEvidenceValue(value: unknown): string {
   if (Array.isArray(value)) return value.join(", ");
   if (value === null || value === undefined || value === "") return "–";

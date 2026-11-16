@@ -1674,8 +1674,10 @@ def _check_book_quality(
     publisher: str | None,
     description: str | None,
     categories: list[str],
+    language: str | None = None,
 ) -> list[str]:
-    """Rule-based quality checks for book metadata. No AI needed."""
+    """Rule-based quality checks for book metadata. No AI needed. `language` is the
+    book's own language: a foreign-language book's description is not expected in Vietnamese."""
     warnings = []
     if not authors:
         warnings.append("Thiếu thông tin tác giả")
@@ -1693,8 +1695,11 @@ def _check_book_quality(
             warnings.append("Mô tả chứa thẻ HTML cần loại bỏ")
         if re.search(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", desc):
             warnings.append("Mô tả chứa ký tự rác (control characters)")
+        if isbn_fusion.promotional_signals(desc) >= isbn_fusion.PROMO_SIGNALS_TO_REJECT:
+            warnings.append("Mô tả có dấu hiệu là quảng cáo (mã giảm giá, khuyến mãi), không phải giới thiệu sách")
         vi_chars = set("àáâãèéêìíòóôõùúưăđÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚƯĂĐ")
-        if len(desc) > 50 and not any(c in vi_chars for c in desc):
+        book_in_vietnamese = not language or language.strip().lower() in ("vi", "vie", "vietnamese", "tiếng việt")
+        if book_in_vietnamese and len(desc) > 50 and not any(c in vi_chars for c in desc):
             warnings.append("Mô tả có thể không phải tiếng Việt hoặc đang thiếu dấu tiếng Việt")
     return warnings
 
@@ -2877,7 +2882,7 @@ async def _build_post_isbn_ai_suggestions(lookup: dict, existing_categories: lis
             ["Không có metadata đủ tin cậy sau khi tra cứu ISBN, vui lòng nhập tay."]
         )
 
-    quality_warnings = _check_book_quality(title, authors, publisher, description, categories)
+    quality_warnings = _check_book_quality(title, authors, publisher, description, categories, lookup.get("language"))
     summary_vi = lookup.get("summaryVi")
     keywords = [str(keyword).strip() for keyword in (lookup.get("keywords") or []) if str(keyword).strip()]
     suggested_categories: list[str] = []
@@ -3186,6 +3191,7 @@ class EnrichBookMetadataRequest(BaseModel):
     description: str | None = None
     categories: list[str] = []
     existingCategories: list[str] = []  # distinct categories already in the catalog, for suggest_categories mode
+    language: str | None = None  # the book's language, for quality_check (e.g. "en": no "not Vietnamese" warning)
     mode: str = "keywords"  # keywords | short_summary | normalize_description | suggest_categories | quality_check
 
 
@@ -3226,7 +3232,7 @@ async def enrich_book_metadata(req: EnrichBookMetadataRequest):
 
     # quality_check: rule-based only, no AI call
     if mode == "quality_check":
-        warnings = _check_book_quality(title, req.authors, req.publisher, req.description, req.categories)
+        warnings = _check_book_quality(title, req.authors, req.publisher, req.description, req.categories, req.language)
         return EnrichBookMetadataResponse(
             success=True,
             mode=mode,

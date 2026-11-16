@@ -50,7 +50,8 @@ export type IsbnExtractionMethod = 'api_structured' | 'json_ld' | 'dom' | 'snipp
  *  services/ai-service/isbn_fusion.py's reasonCodes. */
 export type IsbnFieldReasonCode =
   | 'MULTI_SOURCE_AGREEMENT' | 'SINGLE_SOURCE' | 'SOURCE_CONFLICT' | 'MINORITY_DISAGREEMENT'
-  | 'LLM_ONLY_EVIDENCE_REJECTED' | 'NO_SOURCE_RESPONDED' | 'CATEGORY_UNION' | 'RICHEST_DESCRIPTION';
+  | 'LLM_ONLY_EVIDENCE_REJECTED' | 'NO_SOURCE_RESPONDED' | 'CATEGORY_UNION' | 'RICHEST_DESCRIPTION'
+  | 'PROMOTIONAL_DESCRIPTION_REJECTED';
 
 /** One competing value group for a field - e.g. two sources naming a different
  *  publisher each form their own candidate, ranked by `support`. */
@@ -664,6 +665,8 @@ export interface EnrichBookMetadataRequest {
   description?: string;
   categories: string[];
   existingCategories?: string[];
+  /** The book's language, for quality_check (a foreign-language book is not warned for not being Vietnamese). */
+  language?: string;
   mode: EnrichMode;
 }
 
