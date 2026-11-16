@@ -8,7 +8,7 @@ export function NotFoundPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-6 p-8">
       <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}
-        className="text-[120px] leading-none font-bold bg-gradient-to-br from-indigo-400 to-violet-500 bg-clip-text text-transparent select-none">
+        className="text-[120px] leading-none font-bold text-primary select-none">
         404
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
@@ -21,7 +21,7 @@ export function NotFoundPage() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
         className="flex items-center gap-3">
         <NavLink to="/"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[13px] shadow-lg hover:shadow-xl transition-all"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-[13px] transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
           style={{ fontWeight: 600 }}>
           <Home className="w-4 h-4" /> Về trang chủ
         </NavLink>
