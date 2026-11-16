@@ -1,6 +1,6 @@
 const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
-const { resolveActiveMembership } = require('../services/membership.service');
+const { resolveActiveMembership, countActiveBorrowedItems, countActiveReservedItems } = require('../services/membership.service');
 const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
 const { compensateWithRetry } = require('../services/reconciliation.service');
 const { writeAuditLog } = require('../lib/audit');
@@ -218,12 +218,8 @@ async function reservationRefusal({ customer_id, variant_id, quantity }) {
   }
 
   const [activeLoanCount, activeReservationCount] = await Promise.all([
-    prisma.loan_transactions.count({
-      where: { customer_id, status: { in: ['RESERVED', 'BORROWED', 'OVERDUE'] } },
-    }),
-    prisma.loan_reservations.count({
-      where: { customer_id, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
-    }),
+    countActiveBorrowedItems(prisma, customer_id),
+    countActiveReservedItems(prisma, customer_id),
   ]);
   if (activeLoanCount + activeReservationCount + quantity > membershipInfo.limits.max_active_loans) {
     return {
@@ -357,12 +353,8 @@ async function createReservation(req, res) {
         if (sameKey) return { replay: sameKey };
 
         const [recheckLoanCount, recheckReservationCount] = await Promise.all([
-          tx.loan_transactions.count({
-            where: { customer_id, status: { in: ['RESERVED', 'BORROWED', 'OVERDUE'] } },
-          }),
-          tx.loan_reservations.count({
-            where: { customer_id, status: { in: ACTIVE_RESERVATION_STATUSES }, expires_at: { gt: new Date() } },
-          }),
+          countActiveBorrowedItems(tx, customer_id),
+          countActiveReservedItems(tx, customer_id),
         ]);
         if (recheckLoanCount + recheckReservationCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
           const limitError = new Error('Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên');

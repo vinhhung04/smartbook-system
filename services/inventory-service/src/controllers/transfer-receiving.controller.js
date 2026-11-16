@@ -305,12 +305,37 @@ async function confirmTransferReceiving(req, res) {
         // Optional per-line count of what actually arrived. Without it (older
         // clients, or the explicit "received in full" quick action), every shipped
         // line is still accepted in full - unchanged, backward-compatible default.
+        // items: [] is NOT the same as omitting items entirely: an explicit but empty
+        // counting payload is rejected rather than silently treated as "received in full".
+        const rawItems = req.body?.items;
+        if (rawItems !== undefined && !Array.isArray(rawItems)) {
+          return { invalid: true, statusCode: 400, message: "items phải là một mảng" };
+        }
+        if (Array.isArray(rawItems) && rawItems.length === 0) {
+          return {
+            invalid: true,
+            statusCode: 400,
+            message: "items không được để trống - bỏ hẳn trường items nếu muốn nhận đủ theo số lượng đã xuất",
+          };
+        }
+
         let outcomeByVariant = null;
-        if (Array.isArray(req.body?.items) && req.body.items.length > 0) {
+        // transfer_order_items.received_qty (one write per line, set exactly once when the
+        // order moves out of IN_TRANSIT - unlike a PO, a transfer has a single receiving
+        // confirmation, not multiple batches) - mirrors the accepted qty posted to stock,
+        // same convention as purchase_order_items.received_qty.
+        const receivedQtyByLineId = new Map();
+        if (Array.isArray(rawItems) && rawItems.length > 0) {
           const lineById = new Map(order.transfer_order_items.map((l) => [String(l.id), l]));
           outcomeByVariant = new Map();
-          for (const raw of req.body.items) {
-            const line = lineById.get(String(raw?.transfer_order_item_id || ""));
+          const seenLineIds = new Set();
+          for (const raw of rawItems) {
+            const lineId = String(raw?.transfer_order_item_id || "");
+            if (seenLineIds.has(lineId)) {
+              return { invalid: true, statusCode: 400, message: `transfer_order_item_id bị lặp trong payload: ${lineId}` };
+            }
+            seenLineIds.add(lineId);
+            const line = lineById.get(lineId);
             if (!line) {
               return { invalid: true, statusCode: 400, message: `transfer_order_item_id không hợp lệ: ${raw?.transfer_order_item_id}` };
             }
@@ -331,13 +356,19 @@ async function confirmTransferReceiving(req, res) {
               damaged: prev.damaged + outcome.damaged,
               rejected: prev.rejected + outcome.rejected,
             });
+            receivedQtyByLineId.set(lineId, outcome.accepted);
           }
-          const coveredIds = new Set(req.body.items.map((raw) => String(raw?.transfer_order_item_id || "")));
           const missingLine = order.transfer_order_items.find(
-            (l) => Number(l.shipped_qty || 0) > 0 && !coveredIds.has(String(l.id)),
+            (l) => Number(l.shipped_qty || 0) > 0 && !seenLineIds.has(String(l.id)),
           );
           if (missingLine) {
             return { invalid: true, statusCode: 400, message: "Thiếu số lượng kiểm đếm cho một hoặc nhiều dòng đã xuất" };
+          }
+        } else {
+          for (const line of order.transfer_order_items) {
+            if (Number(line.shipped_qty || 0) > 0) {
+              receivedQtyByLineId.set(String(line.id), Number(line.shipped_qty || 0));
+            }
           }
         }
 
@@ -459,6 +490,13 @@ async function confirmTransferReceiving(req, res) {
             }),
           });
           await postTransferReceiptToReceiving(tx, destinationReceipt, actorUserIdOptional);
+        }
+
+        for (const [lineId, receivedQty] of receivedQtyByLineId) {
+          await tx.transfer_order_items.update({
+            where: { id: lineId },
+            data: { received_qty: receivedQty },
+          });
         }
 
         await tx.transfer_orders.update({

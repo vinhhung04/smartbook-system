@@ -3,7 +3,7 @@ const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
-const { resolveActiveMembership } = require('../services/membership.service');
+const { resolveActiveMembership, countActiveBorrowedItems } = require('../services/membership.service');
 const {
   checkAvailability,
   reserveStock,
@@ -245,12 +245,7 @@ async function createDirectLoan(req, res) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await prisma.loan_transactions.count({
-      where: {
-        customer_id,
-        status: { in: ACTIVE_LOAN_STATUSES },
-      },
-    });
+    const activeLoanCount = await countActiveBorrowedItems(prisma, customer_id);
 
     if (activeLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
@@ -338,9 +333,7 @@ async function createDirectLoan(req, res) {
         // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
         // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${customer_id}`}, 0))`;
-        const recheckLoanCount = await tx.loan_transactions.count({
-          where: { customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
-        });
+        const recheckLoanCount = await countActiveBorrowedItems(tx, customer_id);
         if (recheckLoanCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
           throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
         }
@@ -625,6 +618,17 @@ async function reviewLoanRenewal(req, res) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent reviews of the same loan's renewal request: without this, two
+      // managers approving at once could both read the same pre-renewal loan_renewals count
+      // and both create a renewal record, exceeding max_renewal_count. Same lock key family
+      // used by requestMyLoanRenewal, so request-creation and review never interleave either.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`loan-renewal:${loan.id}`}, 0))`;
+
+      const freshPending = await tx.customer_notifications.findUnique({ where: { id: pendingRequest.id } });
+      if (!freshPending || freshPending.status !== 'PENDING') {
+        return { code: 409, payload: { message: 'Yêu cầu gia hạn này đã được xử lý' } };
+      }
+
       let newDueDate = loan.due_date;
       const renewalRows = [];
 
@@ -679,8 +683,10 @@ async function reviewLoanRenewal(req, res) {
         });
       }
 
-      await tx.customer_notifications.update({
-        where: { id: pendingRequest.id },
+      // Conditional on PENDING (belt-and-suspenders with the lock above): only one
+      // transaction can ever be the one that actually flips this request's status.
+      const claimed = await tx.customer_notifications.updateMany({
+        where: { id: pendingRequest.id, status: 'PENDING' },
         data: {
           status: 'SENT',
           sent_at: new Date(),
@@ -693,6 +699,9 @@ async function reviewLoanRenewal(req, res) {
           },
         },
       });
+      if (claimed.count !== 1) {
+        return { code: 409, payload: { message: 'Yêu cầu gia hạn này đã được xử lý' } };
+      }
 
       await createNotificationRecord(tx, {
         customer_id: loan.customer_id,
@@ -919,12 +928,7 @@ async function convertReservationToLoan(req, res) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await prisma.loan_transactions.count({
-      where: {
-        customer_id: reservation.customer_id,
-        status: { in: ACTIVE_LOAN_STATUSES },
-      },
-    });
+    const activeLoanCount = await countActiveBorrowedItems(prisma, reservation.customer_id);
 
     if (activeLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
@@ -993,9 +997,7 @@ async function convertReservationToLoan(req, res) {
         // $executeRaw (not $queryRaw): pg_advisory_xact_lock returns void, which Prisma's
         // $queryRaw cannot deserialize (P2010 "Failed to deserialize column of type 'void'").
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`membership-limit:${reservation.customer_id}`}, 0))`;
-        const recheckLoanCount = await tx.loan_transactions.count({
-          where: { customer_id: reservation.customer_id, status: { in: ACTIVE_LOAN_STATUSES } },
-        });
+        const recheckLoanCount = await countActiveBorrowedItems(tx, reservation.customer_id);
         if (recheckLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
           throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
         }

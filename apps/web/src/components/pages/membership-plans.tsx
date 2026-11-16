@@ -543,21 +543,21 @@ export function MembershipPlansPage() {
               <fieldset className="border-t border-border pt-4">
                 <legend className="pr-2 text-[13px] font-semibold text-foreground">Quyền mượn</legend>
                 <div className="mt-2 grid grid-cols-2 gap-3">
-                  {numberField('max_active_loans', 'plan-max-active-loans', 'Mượn cùng lúc, cuốn', 1)}
-                  {numberField('max_loan_days', 'plan-max-loan-days', 'Thời hạn mỗi lượt, ngày', 1)}
-                  {numberField('max_renewal_count', 'plan-max-renewals', 'Gia hạn tối đa, lần', 0)}
-                  {numberField('reservation_hold_hours', 'plan-hold-hours', 'Giữ đặt trước, giờ', 1)}
+                  {numberField('max_active_loans', 'plan-max-active-loans', 'Mượn cùng lúc (cuốn)', 1)}
+                  {numberField('max_loan_days', 'plan-max-loan-days', 'Thời hạn mỗi lượt (ngày)', 1)}
+                  {numberField('max_renewal_count', 'plan-max-renewals', 'Gia hạn tối đa (lần)', 0)}
+                  {numberField('reservation_hold_hours', 'plan-hold-hours', 'Giữ đặt trước (giờ)', 1)}
                 </div>
               </fieldset>
 
               <fieldset className="border-t border-border pt-4">
                 <legend className="pr-2 text-[13px] font-semibold text-foreground">Phí và tiền phạt</legend>
                 <div className="mt-2 grid grid-cols-2 gap-3">
-                  {numberField('price', 'plan-price', 'Phí gói, VND', 0, '1000')}
-                  {numberField('duration_days', 'plan-duration', 'Thời hạn thẻ, ngày', 1)}
-                  {numberField('fine_per_day', 'plan-fine-per-day', 'Phạt mỗi ngày trễ, VND', 0, '0.01')}
+                  {numberField('price', 'plan-price', 'Phí gói (VND)', 0, '1000')}
+                  {numberField('duration_days', 'plan-duration', 'Thời hạn thẻ (ngày)', 1)}
+                  {numberField('fine_per_day', 'plan-fine-per-day', 'Phạt mỗi ngày trễ (VND)', 0, '0.01')}
                   {numberField('lost_item_fee_multiplier', 'plan-lost-multiplier', 'Hệ số phí mất sách', 0, '0.01')}
-                  {numberField('deposit_per_item', 'plan-deposit', 'Tiền cọc mỗi cuốn, VND', 0, '1000')}
+                  {numberField('deposit_per_item', 'plan-deposit', 'Tiền cọc mỗi cuốn (VND)', 0, '1000')}
                 </div>
               </fieldset>
 

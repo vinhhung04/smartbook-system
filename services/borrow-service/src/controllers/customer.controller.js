@@ -1,6 +1,6 @@
 const { prisma } = require('../lib/prisma');
 const { writeAuditLog } = require('../lib/audit');
-const { assignDefaultMembership, resolveActiveMembership, computeMembershipEndDate, resolveRenewalStart } = require('../services/membership.service');
+const { assignDefaultMembership, resolveActiveMembership, countActiveBorrowedItems, computeMembershipEndDate, resolveRenewalStart } = require('../services/membership.service');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
 function isUuid(value) {
@@ -369,12 +369,7 @@ async function getActiveMembership(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await prisma.loan_transactions.count({
-      where: {
-        customer_id: id,
-        status: { in: ['RESERVED', 'BORROWED', 'OVERDUE'] },
-      },
-    });
+    const activeLoanCount = await countActiveBorrowedItems(prisma, id);
 
     return res.json({ data: toMembershipView(id, membershipInfo, activeLoanCount, customer.total_fine_balance) });
   } catch (error) {
@@ -554,12 +549,7 @@ async function getMyMembership(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await prisma.loan_transactions.count({
-      where: {
-        customer_id: customer.id,
-        status: { in: ['RESERVED', 'BORROWED', 'OVERDUE'] },
-      },
-    });
+    const activeLoanCount = await countActiveBorrowedItems(prisma, customer.id);
 
     return res.json({ data: toMembershipView(customer.id, membershipInfo, activeLoanCount, customer.total_fine_balance) });
   } catch (error) {
