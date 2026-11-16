@@ -9,6 +9,39 @@ const {
   createReceiptNumber,
 } = require("./outbound.controller");
 
+function toNonNegativeInt(value, fallback) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) && Number.isInteger(n) && n >= 0 ? n : null;
+}
+
+/**
+ * Per-line counting for a transfer receipt: shipped_qty is what the source
+ * warehouse sent, never what the destination actually received. Same
+ * accepted/damaged/rejected/missing/overage math as supplier receipts
+ * (procurement-receipt.service.js: accepted = delivered - damaged - rejected is
+ * the only quantity posted to stock), minus the PO cap - a transfer's only
+ * ceiling is what was shipped.
+ * @returns {{error:string}|{delivered:number,damaged:number,rejected:number,accepted:number,missing:number,overage:number}}
+ */
+function computeTransferLineOutcome({ shippedQty, delivered, damaged = 0, rejected = 0 }) {
+  const d = toNonNegativeInt(delivered, null);
+  const dmg = toNonNegativeInt(damaged, 0);
+  const rej = toNonNegativeInt(rejected, 0);
+  if (d === null || dmg === null || rej === null) {
+    return { error: "Số lượng thực nhận, hỏng và từ chối phải là số nguyên không âm" };
+  }
+  if (dmg + rej > d) {
+    return { error: "Số lượng hỏng + từ chối không được vượt số lượng thực nhận" };
+  }
+  const shipped = Number(shippedQty || 0);
+  const overage = Math.max(0, d - shipped);
+  if (rej < overage) {
+    return { error: `Nhận thừa ${overage} so với số lượng đã xuất - ghi phần thừa vào số lượng từ chối` };
+  }
+  return { delivered: d, damaged: dmg, rejected: rej, accepted: d - dmg - rej, missing: Math.max(0, shipped - d), overage };
+}
+
 function getTaskPermissionScope(user = {}) {
   const roles = Array.isArray(user.roles)
     ? user.roles.map((r) => String(r).toUpperCase())
@@ -79,6 +112,60 @@ async function listTransferReceivingQueue(req, res) {
   } catch (error) {
     if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error("Error while listing transfer receiving queue:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+// Per-book lines for the counting step before confirm: id here is always the
+// transfer_order_item id (stable from creation, unlike the GRN item id which may
+// not exist yet), so the client can send counts back by the same id.
+async function getTransferReceivingLines(req, res) {
+  const transferId = parseId(req.params.id);
+  if (!transferId) {
+    return res.status(400).json({ message: "Mã phiếu chuyển kho không hợp lệ" });
+  }
+
+  try {
+    const order = await prisma.transfer_orders.findUnique({
+      where: { id: transferId },
+      select: {
+        id: true,
+        transfer_number: true,
+        status: true,
+        transfer_order_items: {
+          select: {
+            id: true,
+            variant_id: true,
+            shipped_qty: true,
+            book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Không tìm thấy phiếu chuyển kho" });
+    }
+
+    return res.json({
+      data: {
+        transfer_id: order.id,
+        transfer_number: order.transfer_number,
+        status: order.status,
+        items: order.transfer_order_items
+          .filter((line) => Number(line.shipped_qty || 0) > 0)
+          .map((line) => ({
+            transfer_order_item_id: line.id,
+            variant_id: line.variant_id,
+            title: line.book_variants?.books?.title || null,
+            sku: line.book_variants?.sku || null,
+            isbn13: line.book_variants?.isbn13 || null,
+            shipped_qty: Number(line.shipped_qty || 0),
+          })),
+      },
+    });
+  } catch (error) {
+    console.error("Error while loading transfer receiving lines:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -215,6 +302,45 @@ async function confirmTransferReceiving(req, res) {
           }
         }
 
+        // Optional per-line count of what actually arrived. Without it (older
+        // clients, or the explicit "received in full" quick action), every shipped
+        // line is still accepted in full - unchanged, backward-compatible default.
+        let outcomeByVariant = null;
+        if (Array.isArray(req.body?.items) && req.body.items.length > 0) {
+          const lineById = new Map(order.transfer_order_items.map((l) => [String(l.id), l]));
+          outcomeByVariant = new Map();
+          for (const raw of req.body.items) {
+            const line = lineById.get(String(raw?.transfer_order_item_id || ""));
+            if (!line) {
+              return { invalid: true, statusCode: 400, message: `transfer_order_item_id không hợp lệ: ${raw?.transfer_order_item_id}` };
+            }
+            const outcome = computeTransferLineOutcome({
+              shippedQty: line.shipped_qty,
+              delivered: raw?.delivered_qty,
+              damaged: raw?.damaged_qty,
+              rejected: raw?.rejected_qty,
+            });
+            if (outcome.error) {
+              return { invalid: true, statusCode: 400, message: outcome.error };
+            }
+            const key = String(line.variant_id);
+            const prev = outcomeByVariant.get(key) || { accepted: 0, delivered: 0, damaged: 0, rejected: 0 };
+            outcomeByVariant.set(key, {
+              accepted: prev.accepted + outcome.accepted,
+              delivered: prev.delivered + outcome.delivered,
+              damaged: prev.damaged + outcome.damaged,
+              rejected: prev.rejected + outcome.rejected,
+            });
+          }
+          const coveredIds = new Set(req.body.items.map((raw) => String(raw?.transfer_order_item_id || "")));
+          const missingLine = order.transfer_order_items.find(
+            (l) => Number(l.shipped_qty || 0) > 0 && !coveredIds.has(String(l.id)),
+          );
+          if (missingLine) {
+            return { invalid: true, statusCode: 400, message: "Thiếu số lượng kiểm đếm cho một hoặc nhiều dòng đã xuất" };
+          }
+        }
+
         // Three-branch receipt promotion: POSTED (idempotent) | DRAFT→POSTED | no receipt (fallback)
         const existingReceipt = await tx.goods_receipts.findFirst({
           where: {
@@ -254,14 +380,40 @@ async function confirmTransferReceiving(req, res) {
             );
             if (shippedLines.length > 0) {
               await tx.goods_receipt_items.createMany({
-                data: shippedLines.map((line) => ({
-                  goods_receipt_id: destinationReceipt.id,
-                  variant_id: line.variant_id,
-                  location_id: null,
-                  quantity: Number(line.shipped_qty || 0),
-                  unit_cost: Number(line.unit_cost || 0),
-                  note: `Tu chuyen kho line ${line.id}`,
-                })),
+                data: shippedLines.map((line) => {
+                  const outcome = outcomeByVariant?.get(String(line.variant_id));
+                  return {
+                    goods_receipt_id: destinationReceipt.id,
+                    variant_id: line.variant_id,
+                    location_id: null,
+                    quantity: outcome ? outcome.accepted : Number(line.shipped_qty || 0),
+                    delivered_qty: outcome ? outcome.delivered : Number(line.shipped_qty || 0),
+                    damaged_qty: outcome ? outcome.damaged : 0,
+                    rejected_qty: outcome ? outcome.rejected : 0,
+                    unit_cost: Number(line.unit_cost || 0),
+                    note: `Tu chuyen kho line ${line.id}`,
+                  };
+                }),
+              });
+            }
+          } else if (outcomeByVariant) {
+            // Lines already exist at shipped_qty (created by confirmOutbound) -
+            // apply the destination's actual count before posting to stock.
+            const existingItems = await tx.goods_receipt_items.findMany({
+              where: { goods_receipt_id: existingReceipt.id },
+              select: { id: true, variant_id: true },
+            });
+            for (const item of existingItems) {
+              const outcome = outcomeByVariant.get(String(item.variant_id));
+              if (!outcome) continue;
+              await tx.goods_receipt_items.update({
+                where: { id: item.id },
+                data: {
+                  quantity: outcome.accepted,
+                  delivered_qty: outcome.delivered,
+                  damaged_qty: outcome.damaged,
+                  rejected_qty: outcome.rejected,
+                },
               });
             }
           }
@@ -291,14 +443,20 @@ async function confirmTransferReceiving(req, res) {
             select: { id: true, warehouse_id: true, receipt_number: true, status: true },
           });
           await tx.goods_receipt_items.createMany({
-            data: shippedLines.map((line) => ({
-              goods_receipt_id: destinationReceipt.id,
-              variant_id: line.variant_id,
-              location_id: null,
-              quantity: Number(line.shipped_qty || 0),
-              unit_cost: Number(line.unit_cost || 0),
-              note: `Tu chuyen kho line ${line.id}`,
-            })),
+            data: shippedLines.map((line) => {
+              const outcome = outcomeByVariant?.get(String(line.variant_id));
+              return {
+                goods_receipt_id: destinationReceipt.id,
+                variant_id: line.variant_id,
+                location_id: null,
+                quantity: outcome ? outcome.accepted : Number(line.shipped_qty || 0),
+                delivered_qty: outcome ? outcome.delivered : Number(line.shipped_qty || 0),
+                damaged_qty: outcome ? outcome.damaged : 0,
+                rejected_qty: outcome ? outcome.rejected : 0,
+                unit_cost: Number(line.unit_cost || 0),
+                note: `Tu chuyen kho line ${line.id}`,
+              };
+            }),
           });
           await postTransferReceiptToReceiving(tx, destinationReceipt, actorUserIdOptional);
         }
@@ -442,7 +600,9 @@ async function claimSelfTransferReceiving(req, res) {
 
 module.exports = {
   listTransferReceivingQueue,
+  getTransferReceivingLines,
   assignTransferReceiving,
   claimSelfTransferReceiving,
   confirmTransferReceiving,
+  computeTransferLineOutcome,
 };

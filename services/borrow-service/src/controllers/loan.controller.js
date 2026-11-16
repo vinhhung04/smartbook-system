@@ -22,6 +22,14 @@ const {
 } = require('../services/deposit.service');
 const { normalizePickupCode } = require('../utils/pickup-code');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
+const {
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  readableWarehouseFilter,
+  scopeErrorStatus,
+  WarehouseScopeUnavailableError,
+} = require('../utils/warehouse-scope.utils');
 
 const CONVERTIBLE_RESERVATION_STATUSES = ['CONFIRMED', 'READY_FOR_PICKUP'];
 const ACTIVE_LOAN_STATUSES = ['BORROWED', 'OVERDUE', 'RESERVED'];
@@ -103,25 +111,30 @@ async function listLoans(req, res) {
   const q = searchTerm(req.query);
   const status = parseStatusFilter(req.query.status);
 
-  // Everything except the status condition; per-status counts are taken over this.
-  const whereWithoutStatus = {
-    ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
-    ...(q
-      ? {
-        OR: [
-          { loan_number: { contains: q, mode: 'insensitive' } },
-          { customers: { full_name: { contains: q, mode: 'insensitive' } } },
-          { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
-          // customer_id is a UUID column: comparing it with a name made Postgres throw (500).
-          ...(isUuid(q) ? [{ customer_id: q }] : []),
-        ],
-      }
-      : {}),
-  };
-  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
-  const orderBy = req.query.sort === 'due_date' ? [{ due_date: 'asc' }] : [{ borrow_date: 'desc' }];
-
   try {
+    // Only the warehouses (branches) this caller may read; fail-closed per
+    // warehouse-scope.utils.js. Never trust a warehouse_id the client might send.
+    const scopeWhere = await scopedWarehouseWhere(req.user);
+
+    // Everything except the status condition; per-status counts are taken over this.
+    const whereWithoutStatus = {
+      ...scopeWhere,
+      ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
+      ...(q
+        ? {
+          OR: [
+            { loan_number: { contains: q, mode: 'insensitive' } },
+            { customers: { full_name: { contains: q, mode: 'insensitive' } } },
+            { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
+            // customer_id is a UUID column: comparing it with a name made Postgres throw (500).
+            ...(isUuid(q) ? [{ customer_id: q }] : []),
+          ],
+        }
+        : {}),
+    };
+    const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
+    const orderBy = req.query.sort === 'due_date' ? [{ due_date: 'asc' }] : [{ borrow_date: 'desc' }];
+
     const [items, total, statusCounts] = await Promise.all([
       prisma.loan_transactions.findMany({
         where,
@@ -155,6 +168,9 @@ async function listLoans(req, res) {
       },
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while listing loans:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -199,6 +215,9 @@ async function createDirectLoan(req, res) {
   if (!['WEB', 'MOBILE', 'COUNTER', 'ADMIN'].includes(normalizedSource)) {
     return res.status(400).json({ message: 'source_channel không hợp lệ' });
   }
+
+  // Never trust warehouse_id from the client: it must be a branch this caller can write.
+  if (!(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
 
   const reservationId = deterministicUuid(`direct-loan:reservation:${idempotencyKey}`);
   const loanId = deterministicUuid(`direct-loan:loan:${idempotencyKey}`);
@@ -499,26 +518,31 @@ async function listRenewalRequests(req, res) {
       .map((item) => item.reference_id)
       .filter((value) => isUuid(value));
 
+    // Scope which underlying loans this caller may even look at; a renewal request
+    // whose loan is out of scope is dropped below, same as it never listed.
+    const readable = await readableWarehouseFilter(req.user);
     const loans = loanIds.length > 0
       ? await prisma.loan_transactions.findMany({
-        where: { id: { in: loanIds } },
+        where: { id: { in: loanIds }, ...(readable === null ? {} : { warehouse_id: { in: readable } }) },
         include: { loan_items: true },
       })
       : [];
 
     const loanMap = new Map(loans.map((loan) => [loan.id, loan]));
 
-    const mapped = items.map((item) => ({
-      request_id: item.id,
-      status: item.status,
-      requested_at: item.scheduled_at,
-      reviewed_at: item.sent_at,
-      review_decision: item.metadata?.review_decision || null,
-      loan: loanMap.get(item.reference_id) || null,
-      customer: item.customers,
-      requested_extension_days: Number(item.metadata?.requested_extension_days || 0) || null,
-      metadata: item.metadata || {},
-    }));
+    const mapped = items
+      .filter((item) => !isUuid(item.reference_id) || loanMap.has(item.reference_id))
+      .map((item) => ({
+        request_id: item.id,
+        status: item.status,
+        requested_at: item.scheduled_at,
+        reviewed_at: item.sent_at,
+        review_decision: item.metadata?.review_decision || null,
+        loan: loanMap.get(item.reference_id) || null,
+        customer: item.customers,
+        requested_extension_days: Number(item.metadata?.requested_extension_days || 0) || null,
+        metadata: item.metadata || {},
+      }));
 
     const filtered = status === 'REVIEWED'
       ? mapped.filter((item) => Boolean(item.review_decision))
@@ -534,6 +558,9 @@ async function listRenewalRequests(req, res) {
       },
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while listing renewal requests:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -562,6 +589,8 @@ async function reviewLoanRenewal(req, res) {
     if (!loan) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
+
+    if (!(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
 
     const pendingRequest = await prisma.customer_notifications.findFirst({
       where: {
@@ -750,6 +779,8 @@ async function getLoanById(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
 
+    if (!(await requireWarehouseReadAccess(req, res, loan.warehouse_id))) return;
+
     return res.json({ data: loan });
   } catch (error) {
     console.error('Error while loading loan:', error);
@@ -781,6 +812,8 @@ async function previewLoanReturn(req, res) {
     if (!loan) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
+
+    if (!(await requireWarehouseReadAccess(req, res, loan.warehouse_id))) return;
 
     const targets = loanItemId
       ? loan.loan_items.filter((item) => item.id === loanItemId && (item.status === 'BORROWED' || item.status === 'OVERDUE'))
@@ -824,6 +857,8 @@ async function convertReservationToLoan(req, res) {
     if (!reservation) {
       return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
+
+    if (!(await requireWarehouseWriteAccess(req, res, reservation.warehouse_id))) return;
 
     if (reservation.status === 'CONVERTED_TO_LOAN') {
       const existingLoan = await prisma.loan_transactions.findFirst({ where: { source_reservation_id: reservationId } });
@@ -1204,6 +1239,10 @@ async function returnLoan(req, res) {
     if (!loan) {
       return res.status(404).json({ message: 'Không tìm thấy phiếu mượn' });
     }
+
+    // Returns always post stock at loan.warehouse_id (see returnBorrowedStock call
+    // below) - that is the warehouse this write must be scoped against.
+    if (!(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
 
     if (!ACTIVE_LOAN_STATUSES.includes(loan.status)) {
       return res.status(409).json({ message: `Không thể trả sách khi phiếu mượn ở trạng thái ${loan.status}` });

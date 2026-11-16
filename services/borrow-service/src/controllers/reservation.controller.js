@@ -7,6 +7,13 @@ const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
 const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
+const {
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopedWarehouseWhere,
+  scopeErrorStatus,
+  WarehouseScopeUnavailableError,
+} = require('../utils/warehouse-scope.utils');
 
 const ACTIVE_RESERVATION_STATUSES = ['PENDING', 'CONFIRMED', 'READY_FOR_PICKUP'];
 const DUPLICATE_RESERVATION_MESSAGE = 'Khách đã có một đặt chỗ đang hoạt động cho cuốn sách này';
@@ -14,6 +21,16 @@ const RESERVATION_EXPIRY_BATCH_SIZE = 100;
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || ''));
+}
+
+// createReservation/cancelReservation are shared with my.controller.js's customer
+// self-service path (createMyReservation/cancelMyReservation); warehouse scope is
+// a staff concept (who may act on which branch's records) and never applied to a
+// customer acting on their own reservation - same role check authorizeCustomerSelf
+// already gates that path on.
+function isCustomerCaller(req) {
+  const roles = Array.isArray(req.user?.roles) ? req.user.roles.map((r) => String(r).toUpperCase()) : [];
+  return roles.includes('CUSTOMER');
 }
 
 function parseId(value) {
@@ -39,24 +56,27 @@ async function listReservations(req, res) {
   const q = searchTerm(req.query);
   const status = parseStatusFilter(req.query.status);
 
-  // Everything except the status condition; per-status counts are taken over this.
-  const whereWithoutStatus = {
-    ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
-    ...(q
-      ? {
-        OR: [
-          { reservation_number: { contains: q, mode: 'insensitive' } },
-          { pickup_code: { contains: q, mode: 'insensitive' } },
-          { customers: { full_name: { contains: q, mode: 'insensitive' } } },
-          { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
-        ],
-      }
-      : {}),
-  };
-  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
-  const orderBy = req.query.sort === 'expires_at' ? [{ expires_at: 'asc' }] : [{ reserved_at: 'desc' }];
-
   try {
+    const scopeWhere = await scopedWarehouseWhere(req.user);
+
+    // Everything except the status condition; per-status counts are taken over this.
+    const whereWithoutStatus = {
+      ...scopeWhere,
+      ...(typeof customer_id === 'string' && customer_id ? { customer_id } : {}),
+      ...(q
+        ? {
+          OR: [
+            { reservation_number: { contains: q, mode: 'insensitive' } },
+            { pickup_code: { contains: q, mode: 'insensitive' } },
+            { customers: { full_name: { contains: q, mode: 'insensitive' } } },
+            { customers: { customer_code: { contains: q, mode: 'insensitive' } } },
+          ],
+        }
+        : {}),
+    };
+    const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
+    const orderBy = req.query.sort === 'expires_at' ? [{ expires_at: 'asc' }] : [{ reserved_at: 'desc' }];
+
     const [items, total, statusCounts] = await Promise.all([
       prisma.loan_reservations.findMany({
         where,
@@ -89,6 +109,9 @@ async function listReservations(req, res) {
       },
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('Error while listing reservations:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -120,6 +143,8 @@ async function getReservationById(req, res) {
     if (!reservation) {
       return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
+
+    if (!(await requireWarehouseReadAccess(req, res, reservation.warehouse_id))) return;
 
     return res.json({ data: reservation });
   } catch (error) {
@@ -257,6 +282,10 @@ async function createReservation(req, res) {
   if (!['WEB', 'MOBILE', 'COUNTER', 'ADMIN'].includes(normalizedSource)) {
     return res.status(400).json({ message: 'source_channel không hợp lệ' });
   }
+
+  // Staff creating a reservation on a customer's behalf must hold write scope on
+  // that branch; a customer reserving for themself is not warehouse-scoped at all.
+  if (!isCustomerCaller(req) && !(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
 
   const fingerprint = { customer_id, variant_id, warehouse_id, quantity: normalizedQuantity };
   const ids = { ...reservationIdsFor(actorUserId, idempotencyKey), actorUserId };
@@ -464,6 +493,14 @@ async function cancelReservation(req, res) {
     return res.status(400).json({ message: 'Cần header Idempotency-Key khi hủy đặt trước' });
   }
 
+  if (!isCustomerCaller(req)) {
+    const target = await prisma.loan_reservations.findUnique({ where: { id }, select: { warehouse_id: true } });
+    if (!target) {
+      return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
+    }
+    if (!(await requireWarehouseWriteAccess(req, res, target.warehouse_id))) return;
+  }
+
   try {
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.loan_reservations.findUnique({ where: { id } });
@@ -589,6 +626,12 @@ async function confirmReservation(req, res) {
   if (!['CONFIRMED', 'READY_FOR_PICKUP'].includes(nextStatus)) {
     return res.status(400).json({ message: 'status phải là CONFIRMED hoặc READY_FOR_PICKUP' });
   }
+
+  const target = await prisma.loan_reservations.findUnique({ where: { id }, select: { warehouse_id: true } });
+  if (!target) {
+    return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
+  }
+  if (!(await requireWarehouseWriteAccess(req, res, target.warehouse_id))) return;
 
   try {
     const result = await prisma.$transaction(async (tx) => {

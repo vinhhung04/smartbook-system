@@ -629,6 +629,9 @@ async function main() {
     { user_id: userByUsername.staff03.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.warehouse01.id, warehouse_id: warehouseIds['WH-HN-01'], access_level: 'OPERATOR' },
     { user_id: userByUsername.cs01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
+    // Circulation desk (borrow-service warehouse scope): librarian01 reads/writes
+    // loans and reservations at its own branch only, same level as cs01.
+    { user_id: userByUsername.librarian01.id, warehouse_id: warehouseIds['BR-HCM-01'], access_level: 'OPERATOR' },
     // Read-only manager of one warehouse: the account the warehouse-scope checks
     // are exercised with (can read WH-HCM-01, cannot write it, cannot see others).
     { user_id: userByUsername.curator01.id, warehouse_id: warehouseIds['WH-HCM-01'], access_level: 'READ' },
