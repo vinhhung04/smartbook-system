@@ -105,7 +105,7 @@ test('without a budget the limit is applied as before', async () => {
   assert.deepEqual(data.items.map((i) => i.variant_id), ['a']);
 });
 
-test('copies on approved purchase orders reduce the budget need; the query skips draft and shortage statuses', async () => {
+test('copies on committed purchase orders reduce the budget need, including open shortage POs', async () => {
   fixture.incoming = [{ variant_id: 'a', incoming_qty: 4 }];
   const data = await call({ limit: '20', budgetVnd: '50000000' });
   const a = data.items.find((i) => i.variant_id === 'a');
@@ -114,7 +114,7 @@ test('copies on approved purchase orders reduce the budget need; the query skips
   assert.equal(a.budget_plan.cap_qty, 1);
   assert.equal(a.funded_qty, 1);
   const poQuery = sqlSeen.find((q) => q.text.includes('FROM purchase_order_items poi'));
-  assert.deepEqual(poQuery.params[0], ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED']);
+  assert.deepEqual(poQuery.params[0], ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED', 'SHORTAGE_REPORTED']);
   assert.match(poQuery.text, /GREATEST\(poi\.ordered_qty - poi\.received_qty, 0\)/);
 });
 
