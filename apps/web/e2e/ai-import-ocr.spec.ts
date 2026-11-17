@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { DEMO_PASSWORD, loginStaff } from './helpers';
+import { randomUUID } from 'node:crypto';
 
 /**
  * AI Import - multi-image OCR.
@@ -85,6 +86,40 @@ async function openAiImport(page: Page) {
   await page.goto('/ai-import');
   await expect(page.getByText('Nhập sách bằng hình ảnh (AI OCR)')).toBeVisible({ timeout: 20_000 });
 }
+
+test('OCR never writes automatically; explicit confirmation persists the reviewed metadata with zero stock', async ({ page, request }) => {
+  const title = `QA OCR ${randomUUID()}`;
+  const prefix = '979' + randomUUID().replace(/-/g, '').slice(0, 9).split('').map(c => parseInt(c, 16) % 10).join('');
+  const sum = [...prefix].reduce((n, c, i) => n + Number(c) * (i % 2 ? 3 : 1), 0);
+  const isbn = prefix + ((10 - sum % 10) % 10);
+  const writes = watchCatalogWrites(page);
+  await page.route('**/book-metadata/scan-images', route => route.fulfill({ json: scanResult({
+    proposals: { title: proposal('title', title, 'CORROBORATED', true), authorsText: proposal('authorsText', 'QA Author', 'EXTRACTED', true), publisher: proposal('publisher', 'QA Publisher', 'EXTRACTED', true) },
+  }) }));
+  await openAiImport(page);
+  await page.getByLabel('Chọn ảnh bìa trước').setInputFiles(FRONT);
+  await page.getByRole('button', { name: 'Quét và trích xuất bằng AI' }).click();
+  await expect(page.locator('#title')).toHaveValue(title);
+  expect(writes).toEqual([]);
+  await page.locator('#isbn').fill(isbn);
+  const create = page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/books/incomplete');
+  const update = page.waitForResponse(r => r.request().method() === 'PATCH' && /\/api\/books\/[0-9a-f-]+$/.test(new URL(r.url()).pathname));
+  await page.getByRole('region', { name: 'Lưu sách', exact: true }).getByRole('button', { name: 'Lưu sách', exact: true }).click();
+  const created = await create;
+  expect(created.ok(), await created.text()).toBeTruthy();
+  const id = (await created.json()).data.book_id;
+  const updated = await update;
+  expect(updated.ok(), await updated.text()).toBeTruthy();
+  const login = await request.post(`${GATEWAY}/auth/login`, { data: { identifier: 'hung', password: DEMO_PASSWORD } });
+  expect(login.ok()).toBeTruthy();
+  const saved = await request.get(`${GATEWAY}/api/books/${id}`, { headers: { Authorization: `Bearer ${(await login.json()).token}` } });
+  expect(saved.ok()).toBeTruthy();
+  const book = await saved.json();
+  expect(book.title).toBe(title);
+  expect(book.author).toContain('QA Author');
+  expect(book.publisher).toBe('QA Publisher');
+  expect(book.quantity).toBe(0);
+});
 
 test('upload, preview, replace and remove photos; scan fills only safe fields and keeps the user\'s edits', async ({ page }) => {
   const writes = watchCatalogWrites(page);
@@ -307,7 +342,9 @@ test.describe('real path: browser -> API Gateway -> ai-service (no mocks)', () =
 
   test('the page shows either the OCR card or a clear availability notice, never nothing', async ({ page }) => {
     await loginStaff(page);
+    const capabilities = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/book-metadata/capabilities'));
     await page.goto('/ai-import');
+    expect([200, 503]).toContain((await capabilities).status());
     await expect(page.getByText('Nhập sách bằng hình ảnh (AI OCR)')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByLabel('Chọn ảnh bìa trước')
       .or(page.getByText(/Dịch vụ AI OCR hiện không phản hồi|đang tắt trong cấu hình/))).toBeAttached();

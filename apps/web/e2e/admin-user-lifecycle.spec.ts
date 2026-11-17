@@ -1,3 +1,4 @@
+import { DEMO_PASSWORD } from './helpers';
 import { test, expect } from '@playwright/test';
 import { loginAs, logout } from './helpers/auth';
 
@@ -12,7 +13,7 @@ test('admin creates, assigns a role to, and locks a user', async ({ page }) => {
   const username = `e2e-user-${Date.now()}`;
   const password = 'Password123!';
 
-  await loginAs(page, { identifier: 'hung', password: '123456' });
+  await loginAs(page, { identifier: 'hung', password: DEMO_PASSWORD });
   await page.goto('/users');
 
   await page.getByTestId('create-user-button').click();

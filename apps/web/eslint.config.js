@@ -62,7 +62,7 @@ const mixedRefreshExportFiles = [
 ]
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'playwright-report', 'test-results']),
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     extends: [

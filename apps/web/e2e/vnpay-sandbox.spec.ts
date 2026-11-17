@@ -81,7 +81,7 @@ test.describe.serial('VNPay sandbox (real)', () => {
     await fillCardAndAcceptTerms(CARD.success, 'success');
 
     await expect(page.locator('#otpvalue')).toBeVisible({ timeout: 20_000 });
-    await page.locator('#otpvalue').fill('123456');
+    await page.locator('#otpvalue').fill(DEMO_PASSWORD);
     await shot('success-3-otp');
     await page.locator('#btnConfirm').click();
 
@@ -108,7 +108,7 @@ test.describe.serial('VNPay sandbox (real)', () => {
     await fillCardAndAcceptTerms(CARD.insufficient, 'insufficient');
     await page.waitForTimeout(3000);
     if (await page.locator('#otpvalue').isVisible().catch(() => false)) {
-      await page.locator('#otpvalue').fill('123456');
+      await page.locator('#otpvalue').fill(DEMO_PASSWORD);
       await page.locator('#btnConfirm').click();
       await page.waitForTimeout(3000);
     }
@@ -148,7 +148,7 @@ test.describe.serial('VNPay sandbox (real)', () => {
     await chooseNcbOnVnpay('fine');
     await fillCardAndAcceptTerms(CARD.success, 'fine');
     await expect(page.locator('#otpvalue')).toBeVisible({ timeout: 20_000 });
-    await page.locator('#otpvalue').fill('123456');
+    await page.locator('#otpvalue').fill(DEMO_PASSWORD);
     await page.locator('#btnConfirm').click();
 
     await page.waitForURL(/\/webhooks\/vnpay\/return/, { timeout: 45_000 });

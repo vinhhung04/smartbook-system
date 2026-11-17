@@ -1,3 +1,6 @@
+import { DEMO_PASSWORD } from './helpers';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { loginAs, logout } from './helpers/auth';
 
@@ -8,10 +11,10 @@ import { loginAs, logout } from './helpers/auth';
 // the goods receipt (stock increases) -> staff puts the stock away on a shelf.
 test('purchase request through approval, supplier confirmation, receiving, and putaway', async ({ page, browser }) => {
   // The PR -> PO conversion needs a title that exists in the catalog (variant search), so reuse a seeded book.
-  const bookTitle = 'Nhà Giả Kim';
+  const bookTitle = 'Dế Mèn Phiêu Lưu Ký';
 
   // 1. Staff creates a purchase request.
-  await loginAs(page, { identifier: 'staff01', password: '123456' });
+  await loginAs(page, { identifier: 'staff01', password: DEMO_PASSWORD });
   await page.goto('/my-purchase-requests');
   await page.getByRole('button', { name: 'Tạo yêu cầu' }).first().click();
   await page.getByTestId('new-pr-warehouse-select').click();
@@ -27,7 +30,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
 
   // 2. Manager approves the request, converts it to a PO, and drives the PO
   // through submit -> approve -> send to supplier.
-  await loginAs(page, { identifier: 'manager01', password: '123456' });
+  await loginAs(page, { identifier: 'manager01', password: DEMO_PASSWORD });
   await page.goto('/purchase-requests');
   // Earlier runs leave approved PRs for the same title; pick the newest still-pending one and pin it by its number.
   const pendingRow = page.locator('tr', { hasText: bookTitle }).filter({ has: page.getByTestId('approve-purchase-request-button') }).first();
@@ -56,6 +59,15 @@ test('purchase request through approval, supplier confirmation, receiving, and p
 
   const portalHref = await page.getByTestId('supplier-portal-link').getAttribute('href');
   expect(portalHref).toBeTruthy();
+  if (process.env.SMARTBOOK_TEST_ISOLATED !== '1') throw new Error('Run procurement E2E in the disposable QA stack');
+  const poId = new URL(page.url()).pathname.split('/').at(-1)!;
+  expect(poId).toMatch(/^[0-9a-f-]{36}$/i);
+  const sql = (query: string) => execFileSync('docker', ['compose', 'exec', '-T', 'db', 'psql', '-U', process.env.DB_USER!, '-d', 'inventory_db', '-v', 'ON_ERROR_STOP=1', '-At', '-c', query], { cwd: resolve(import.meta.dirname, '../../..'), encoding: 'utf8' }).trim();
+  const variant = sql(`SELECT variant_id FROM purchase_order_items WHERE purchase_order_id='${poId}'`);
+  expect(variant).toMatch(/^[0-9a-f-]{36}$/i);
+  const onHand = () => Number(sql(`SELECT COALESCE(SUM(on_hand_qty),0) FROM stock_balances WHERE variant_id='${variant}'`));
+  const available = () => Number(sql(`SELECT COALESCE(SUM(available_qty),0) FROM stock_balances WHERE variant_id='${variant}'`));
+  const stockBeforeReceipt = onHand();
 
   // 3. Supplier confirms and submits an invoice, in a browser context with
   // no session at all -- the portal is reached only via the token in the URL.
@@ -87,7 +99,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await logout(page);
 
   // 5. Staff counts the received stock.
-  await loginAs(page, { identifier: 'staff01', password: '123456' });
+  await loginAs(page, { identifier: 'staff01', password: DEMO_PASSWORD });
   await page.goto('/my-warehouse-tasks');
   // The queue is paged (10, oldest first) and may hold older receipts on a
   // database that is not fresh: narrow to receiving tasks, then open this receipt's task.
@@ -101,11 +113,13 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await logout(page);
 
   // 6. Manager approves the goods receipt -- stock increases -- then hands off to putaway.
-  await loginAs(page, { identifier: 'manager01', password: '123456' });
+  await loginAs(page, { identifier: 'manager01', password: DEMO_PASSWORD });
   await page.goto(receiptUrl.replace(/^https?:\/\/[^/]+/, ''));
   await page.getByTestId('approve-goods-receipt-button').click();
   // The badge shows the Vietnamese label; the raw POSTED code is no longer printed on the page.
   await expect(page.getByTestId('goods-receipt-status')).toHaveText(/Đã duyệt/);
+  expect(onHand()).toBe(stockBeforeReceipt + 5);
+  const availableBeforePutaway = available();
 
   await page.getByTestId('go-to-putaway-link').click();
   await page.getByTestId('start-putaway-button').first().click();
@@ -116,4 +130,6 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   // Final assertion: the shelf-transfer mutation actually happened. The success
   // toast is only shown after the transfer API call returns.
   await expect(page.getByText(/Đã chuyển \d+ quyển lên kệ/)).toBeVisible();
+  expect(onHand()).toBe(stockBeforeReceipt + 5);
+  expect(available()).toBeGreaterThan(availableBeforePutaway);
 });

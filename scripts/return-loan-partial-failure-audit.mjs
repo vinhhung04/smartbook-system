@@ -1,4 +1,4 @@
-// STT5 audit/reproduction only: when returning several books in one request and the
+// STT5 reconciliation regression: when returning several books in one request and the
 // SECOND item's remote inventory call fails, does the FIRST item's already-returned state
 // get reconciled (queued) or silently lost (stock moved in inventory-service, but
 // loan_items.status locally still BORROWED, with no reconciliation record)?
@@ -9,6 +9,7 @@
 //
 // Usage: node scripts/return-loan-partial-failure-audit.mjs
 import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
@@ -98,6 +99,10 @@ async function main() {
   console.log(`\nItem 1 (should have returned successfully in inventory-service before item 2 failed): local status = ${item1Status}`);
 
   const outboxRows = sqlBorrow(`SELECT event_type, payload FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
+  assert.ok(returnResp.status >= 400, 'the injected second-item failure must fail the return');
+  assert.equal(outboxRows.length, 1, 'the first successful remote return must be queued exactly once');
+  const queued = sqlBorrow(`SELECT payload->'loan_item_ids' ? '${items[0].id}' AS includes_first FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
+  assert.equal(queued[0]?.[0], 't', 'reconciliation must name the item whose remote stock already moved');
   console.log(`\nintegration_outbox rows for LOAN_RETURN_UNRESOLVED on this loan: ${outboxRows.length}`);
   if (outboxRows.length > 0) console.log(`  ${JSON.stringify(outboxRows)}`);
 
