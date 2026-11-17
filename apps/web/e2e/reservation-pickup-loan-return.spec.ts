@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { loginStaff, loginCustomer } from './helpers';
+import { loginStaff, loginCustomer, DEMO_PASSWORD } from './helpers';
+import { createCustomerFixture } from '../../../scripts/testing/customer-fixture.mjs';
 
 /**
  * The core library golden path, driven entirely through the UI (mirrors
@@ -20,7 +21,10 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
 
   try {
     // 1. Customer: find any reservable book on the catalog and reserve it.
-    await loginCustomer(customerPage);
+    const fixture = process.env.SMARTBOOK_TEST_ISOLATED === '1'
+      ? await createCustomerFixture({ baseUrl: process.env.GATEWAY_URL || 'http://localhost:13000', password: DEMO_PASSWORD })
+      : null;
+    await loginCustomer(customerPage, fixture?.username || 'customer01');
     await customerPage.goto('/customer/books');
 
     const bookCard = customerPage

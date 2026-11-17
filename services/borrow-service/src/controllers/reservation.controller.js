@@ -495,6 +495,8 @@ async function cancelReservation(req, res) {
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`reservation-state:${id}`}, 0))`;
+
       const existing = await tx.loan_reservations.findUnique({ where: { id } });
       if (!existing) {
         return { notFound: true };
@@ -542,7 +544,7 @@ async function cancelReservation(req, res) {
       });
 
       return { data: reservation, previous_status: existing.status };
-    });
+    }, { timeout: 30000 });
 
     if (updated.notFound) {
       return res.status(404).json({ message: 'Không tìm thấy đặt trước' });

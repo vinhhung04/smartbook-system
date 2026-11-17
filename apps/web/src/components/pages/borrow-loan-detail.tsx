@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { Link, useParams } from 'react-router';
 import { ArrowLeft, Check, Printer } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,7 +8,7 @@ import { StatusBadge } from '../status-badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
-import { borrowService, type Loan, type ReturnPreview } from '@/services/borrow';
+import { borrowService, type Loan, type ReturnPreview, type ReturnPayload, type ReturnItemResult } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 import { LoanReceiptPrintSheet } from './loan-receipt-print-sheet';
@@ -25,11 +26,12 @@ function daysOverdue(dueDate: string): number {
 const formatVnd = (value: number | string | null | undefined) => `${Number(value || 0).toLocaleString('vi-VN')} VND`;
 
 type ReturnMode = 'return' | 'damage' | 'lost';
+type ReturnRow = { condition: 'GOOD' | 'DAMAGED' | 'LOST'; notes: string; reason: string };
 
 const RETURN_DIALOG: Record<ReturnMode, { title: string; description: string; variant: 'default' | 'destructive'; success: string; failure: string }> = {
   return: {
     title: 'Xác nhận trả sách',
-    description: 'Trả tất cả sách đang mượn trong phiếu này? Hành động này không thể hoàn tác.',
+    description: 'Kiểm tra tình trạng, tiền phạt và tiền cọc của từng cuốn trước khi xác nhận.',
     variant: 'default',
     success: 'Đã trả sách thành công',
     failure: 'Trả sách thất bại',
@@ -61,6 +63,11 @@ export function BorrowLoanDetailPage() {
   );
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [returnRows, setReturnRows] = useState<Record<string, ReturnRow>>({});
+  const [returnKey, setReturnKey] = useState('');
+  const [returnLocked, setReturnLocked] = useState(false);
+  const [returnResults, setReturnResults] = useState<ReturnItemResult[]>([]);
+  const [previewError, setPreviewError] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -96,7 +103,19 @@ export function BorrowLoanDetailPage() {
     }
     // Lost is always one book (defaults to the first active one, as before).
     setReturnDialog({ open: true, mode, itemId: mode === 'lost' ? activeItems[0].id : '', reason: '' });
+    setReturnRows(Object.fromEntries(activeItems.map(item => [item.id, {
+      condition: mode === 'damage' ? 'DAMAGED' : mode === 'lost' ? 'LOST' : 'GOOD', notes: '', reason: '',
+    }])));
+    setReturnKey(crypto.randomUUID());
+    setReturnLocked(false);
+    setReturnResults([]);
   };
+
+  const returnPayload = useMemo<ReturnPayload>(() => ({ items: (loan?.loan_items || [])
+    .filter(item => (item.status === 'BORROWED' || item.status === 'OVERDUE') && (!returnDialog.itemId || item.id === returnDialog.itemId))
+    .map(item => ({ loan_item_id: item.id, item_condition_on_return: returnRows[item.id]?.condition || 'GOOD',
+      notes: returnRows[item.id]?.notes || '', settlement_reason: returnRows[item.id]?.reason || '',
+      mark_lost: returnRows[item.id]?.condition === 'LOST' })) }), [loan, returnDialog.itemId, returnRows]);
 
   // Deposit/fine preview for the current dialog inputs, so staff see what will be
   // refunded or still owed before they confirm.
@@ -105,38 +124,38 @@ export function BorrowLoanDetailPage() {
     let cancelled = false;
     setPreviewLoading(true);
     setPreview(null);
-    borrowService
-      .previewReturn(loan.id, {
-        ...(returnDialog.itemId ? { loan_item_id: returnDialog.itemId } : {}),
-        item_condition_on_return: returnDialog.mode === 'damage' ? 'DAMAGED' : returnDialog.mode === 'lost' ? 'LOST' : 'GOOD',
-        ...(returnDialog.mode === 'lost' ? { mark_lost: true } : {}),
-      })
+    setPreviewError('');
+    const timer = setTimeout(() => { void borrowService
+      .previewReturn(loan.id, returnPayload)
       .then((response) => { if (!cancelled) setPreview(response.data); })
-      .catch(() => { if (!cancelled) setPreview(null); })
-      .finally(() => { if (!cancelled) setPreviewLoading(false); });
-    return () => { cancelled = true; };
-  }, [loan, returnDialog.open, returnDialog.mode, returnDialog.itemId]);
+      .catch(error => { if (!cancelled) setPreviewError(getApiErrorMessage(error, 'Không tải được dự toán trả sách')); })
+      .finally(() => { if (!cancelled) setPreviewLoading(false); }); }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [loan, returnDialog.open, returnPayload]);
 
   const confirmReturn = async () => {
     if (!loan) return;
-    const { mode, itemId, reason } = returnDialog;
+    const { mode } = returnDialog;
     const copy = RETURN_DIALOG[mode];
-    if (preview?.requires_reason && !reason.trim()) {
-      toast.error('Nhập lý do khấu trừ tiền cọc trước khi xác nhận');
+    if (previewLoading || !preview) {
+      toast.error(previewError || 'Chờ tải dự toán tiền cọc và tiền phạt trước khi xác nhận');
       return;
     }
-    const payload = {
-      ...(itemId ? { loan_item_id: itemId } : {}),
-      ...(mode === 'damage' ? { item_condition_on_return: 'DAMAGED' } : {}),
-      ...(mode === 'lost' ? { mark_lost: true, item_condition_on_return: 'LOST' } : {}),
-      ...(reason.trim() ? { settlement_reason: reason.trim() } : {}),
-    };
+    if (preview.items.some(item => item.requires_reason && !returnRows[item.loan_item_id]?.reason.trim() && !returnRows[item.loan_item_id]?.notes.trim())) {
+      toast.error('Nhập lý do xử lý tiền cọc cho từng cuốn hỏng hoặc mất'); return;
+    }
     try {
-      await borrowService.returnLoan(loan.id, payload);
+      const response = await borrowService.returnLoan(loan.id, returnPayload, returnKey);
+      setReturnResults(response.data.item_results || []);
       toast.success(copy.success);
       setReturnDialog((s) => ({ ...s, open: false }));
       await load();
     } catch (error) {
+      if (isAxiosError(error) && error.response?.data?.detail?.reconciliation_queued) {
+        setReturnLocked(true);
+        const results = error.response.data.detail.item_results;
+        if (Array.isArray(results)) setReturnResults(results);
+      }
       toast.error(getApiErrorMessage(error, copy.failure));
     }
   };
@@ -372,6 +391,7 @@ export function BorrowLoanDetailPage() {
         description={dialogCopy.description}
         variant={dialogCopy.variant}
         onConfirm={confirmReturn}
+        confirmLabel={returnLocked ? 'Thử lại lượt trả' : 'Xác nhận'}
       >
         <div className="space-y-3 text-[13px]">
           {returnDialog.mode !== 'return' && activeItems.length > 1 && (
@@ -380,6 +400,7 @@ export function BorrowLoanDetailPage() {
               <select
                 value={returnDialog.itemId}
                 onChange={(e) => setReturnDialog((s) => ({ ...s, itemId: e.target.value }))}
+                disabled={returnLocked}
                 className="h-9 w-full rounded-lg border border-input bg-card px-2 text-[12px] text-foreground"
               >
                 {returnDialog.mode === 'damage' && <option value="">Tất cả sách đang mượn</option>}
@@ -392,9 +413,34 @@ export function BorrowLoanDetailPage() {
             </label>
           )}
 
+          <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1" aria-label="Tình trạng từng cuốn trả">
+            {(returnPayload.items || []).map(row => {
+              const item = activeItems.find(item => item.id === row.loan_item_id)!;
+              const values = returnRows[item.id] || { condition: 'GOOD', notes: '', reason: '' };
+              const update = (patch: Partial<ReturnRow>) => setReturnRows(rows => ({ ...rows, [item.id]: { ...values, ...patch } }));
+              const itemPreview = preview?.items.find(value => value.loan_item_id === item.id);
+              return <fieldset key={item.id} disabled={returnLocked} className="space-y-2 rounded-lg border border-border p-3" data-testid={`return-item-${item.id}`}>
+                <legend className="max-w-full truncate px-1 font-medium">{item.item_barcode || item.id.slice(0, 8)} · {getBookTitle(item.variant_id)}</legend>
+                <label className="block space-y-1"><span>Tình trạng trả</span>
+                  <select aria-label={`Tình trạng trả ${item.id}`} value={values.condition} onChange={event => update({ condition: event.target.value as ReturnRow['condition'] })} className="h-9 w-full rounded-lg border border-input bg-card px-2">
+                    <option value="GOOD">Bình thường</option><option value="DAMAGED">Hư hỏng</option><option value="LOST">Mất sách</option>
+                  </select>
+                </label>
+                <label className="block space-y-1"><span>Ghi chú</span><textarea aria-label={`Ghi chú trả ${item.id}`} value={values.notes} onChange={event => update({ notes: event.target.value })} maxLength={2000} rows={1} className="w-full rounded-lg border border-input bg-card px-2 py-1" /></label>
+                {values.condition !== 'GOOD' && <label className="block space-y-1"><span>Lý do xử lý cọc{itemPreview?.requires_reason ? ' (bắt buộc)' : ''}</span>
+                  <textarea aria-label={`Lý do xử lý ${item.id}`} value={values.reason} onChange={event => update({ reason: event.target.value })} maxLength={2000} rows={1} className="w-full rounded-lg border border-input bg-card px-2 py-1" />
+                </label>}
+                {itemPreview && <p className="text-[12px] text-muted-foreground">Phạt {formatVnd(itemPreview.penalty)} · Hoàn cọc {formatVnd(itemPreview.deposit_refunded)} · Còn phải trả {formatVnd(itemPreview.additional_due)}</p>}
+              </fieldset>;
+            })}
+          </div>
+          {previewError && <p role="alert" className="text-red-700">{previewError}</p>}
+          {returnLocked && <p role="alert">Một số cuốn cần đối soát. Thử lại giữ nguyên nội dung và mã yêu cầu; không tạo lượt trả mới.</p>}
+          {returnResults.length > 0 && <ul aria-label="Kết quả từng cuốn" className="space-y-1 text-[12px]">{returnResults.map(item => <li key={item.loan_item_id}>{item.loan_item_id.slice(0, 8)}: {{ RETURNED: 'Đã trả', LOST: 'Đã ghi nhận mất', RECONCILIATION_REQUIRED: 'Đã đổi tồn kho, chờ đối soát', UNKNOWN: 'Chưa xác nhận, chờ đối soát', NOT_PROCESSED: 'Chưa xử lý' }[item.status]}</li>)}</ul>}
+
           {previewLoading ? (
             <p className="text-muted-foreground">Đang tính tiền cọc và tiền phạt…</p>
-          ) : preview && preview.totals.deposit_amount > 0 ? (
+          ) : preview && (preview.totals.deposit_amount > 0 || preview.totals.penalty > 0) ? (
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/40 p-3">
               <dt className="text-muted-foreground">Tiền cọc đang giữ</dt>
               <dd className="text-right tabular-nums">{formatVnd(preview.totals.deposit_amount)}</dd>
@@ -413,19 +459,6 @@ export function BorrowLoanDetailPage() {
             </dl>
           ) : null}
 
-          {preview?.requires_reason && (
-            <label className="block space-y-1">
-              <span className="text-muted-foreground">Lý do khấu trừ tiền cọc (bắt buộc)</span>
-              <textarea
-                value={returnDialog.reason}
-                onChange={(e) => setReturnDialog((s) => ({ ...s, reason: e.target.value }))}
-                rows={2}
-                maxLength={1000}
-                placeholder="Mô tả tình trạng sách"
-                className="w-full rounded-lg border border-input bg-card px-2 py-1.5 text-[12px] text-foreground"
-              />
-            </label>
-          )}
         </div>
       </ConfirmDialog>
     </PageWrapper>

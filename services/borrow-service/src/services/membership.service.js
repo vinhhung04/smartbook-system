@@ -10,6 +10,7 @@ async function resolveActiveMembership(tx, customerId) {
     where: {
       customer_id: customerId,
       status: 'ACTIVE',
+      start_date: { lte: today },
       OR: [{ end_date: null }, { end_date: { gte: today } }],
     },
     include: {

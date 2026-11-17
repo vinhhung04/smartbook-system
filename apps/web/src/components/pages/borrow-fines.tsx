@@ -10,6 +10,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { StatusBadge } from '@/components/status-badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { hasPermission } from '@/services/http-clients';
 import {
   Dialog,
   DialogContent,
@@ -87,7 +89,7 @@ export function BorrowFinesPage() {
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
   const [waiveDialogFine, setWaiveDialogFine] = useState<Fine | null>(null);
-  const [waiveForm, setWaiveForm] = useState({ amount: '', note: '' });
+  const [waiveForm, setWaiveForm] = useState({ amount: '', note: '', waiveFuture: false });
   const [submittingWaive, setSubmittingWaive] = useState(false);
 
   const loadTotals = async () => {
@@ -144,7 +146,7 @@ export function BorrowFinesPage() {
 
   const openWaiveDialog = (fine: Fine) => {
     const remaining = Number(fine.summary?.remaining_balance || 0);
-    setWaiveForm({ amount: remaining > 0 ? String(remaining) : '', note: '' });
+    setWaiveForm({ amount: remaining > 0 ? String(remaining) : '', note: '', waiveFuture: false });
     setWaiveDialogFine(fine);
   };
 
@@ -182,6 +184,10 @@ export function BorrowFinesPage() {
     if (!waiveDialogFine) return;
     const remaining = Number(waiveDialogFine.summary?.remaining_balance || 0);
     const amount = Number(waiveForm.amount);
+    if (waiveForm.waiveFuture && !waiveForm.note.trim()) {
+      toast.error('Nhập lý do miễn phạt cả thời gian tiếp theo');
+      return;
+    }
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error('Số tiền miễn giảm phải là số dương');
       return;
@@ -196,6 +202,7 @@ export function BorrowFinesPage() {
       await borrowService.waiveFine(waiveDialogFine.id, {
         amount,
         note: waiveForm.note.trim() || undefined,
+        ...(waiveForm.waiveFuture ? { waive_future: true } : {}),
       });
       toast.success('Đã miễn giảm tiền phạt');
       setWaiveDialogFine(null);
@@ -500,6 +507,17 @@ export function BorrowFinesPage() {
                 </div>
               </dl>
 
+              {detailFine.fine_type === 'OVERDUE' && (
+                <p className="text-[13px] text-muted-foreground">
+                  {detailFine.accrual_from_days != null && detailFine.accrual_through_days != null
+                    ? `Khoản này tính từ ngày quá hạn ${detailFine.accrual_from_days + 1} đến ${detailFine.accrual_through_days}. `
+                    : ''}
+                  {detailFine.loan_items?.overdue_fine_episode?.waived_future
+                    ? 'Đã được duyệt miễn phạt cho thời gian tiếp theo của cuốn sách này.'
+                    : 'Thanh toán hoặc miễn khoản này chỉ chốt phần đã phát sinh; các ngày giữ sách tiếp theo tiếp tục tính phạt.'}
+                </p>
+              )}
+
               <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[13px]">
                 <dt className="text-muted-foreground">Phát sinh</dt>
                 <dd className="tabular-nums">{new Date(detailFine.issued_at).toLocaleString('vi-VN')}</dd>
@@ -673,6 +691,12 @@ export function BorrowFinesPage() {
               </div>
 
               <div className="space-y-3">
+                {waiveDialogFine.fine_type === 'OVERDUE' && hasPermission('borrow.fines.manage') && (
+                  <label className="flex items-start gap-2 text-[13px]">
+                    <Checkbox checked={waiveForm.waiveFuture} onCheckedChange={checked => setWaiveForm(current => ({ ...current, waiveFuture: checked === true }))} />
+                    <span>Miễn cả tiền phạt quá hạn phát sinh trong thời gian tiếp theo của cuốn sách này</span>
+                  </label>
+                )}
                 <div className="space-y-1.5">
                   <label htmlFor="fine-waive-amount" className="text-[13px] font-medium text-foreground">Số tiền miễn giảm, VND</label>
                   <Input
@@ -686,7 +710,7 @@ export function BorrowFinesPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label htmlFor="fine-waive-note" className="text-[13px] font-medium text-foreground">Lý do (không bắt buộc)</label>
+                  <label htmlFor="fine-waive-note" className="text-[13px] font-medium text-foreground">Lý do {waiveForm.waiveFuture ? '(bắt buộc)' : '(không bắt buộc)'}</label>
                   <Textarea
                     id="fine-waive-note"
                     rows={2}
