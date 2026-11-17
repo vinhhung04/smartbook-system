@@ -1,5 +1,7 @@
 
 const { prisma } = require("../lib/prisma");
+const { getTransferShippedLines } = require('../services/repick-quantities.service');
+const { recordTransferDiscrepancy, caseDetail } = require('../services/transfer-discrepancy.service');
 
 const { parseId, normalizeRequiredUserId, normalizeOptionalUserId } = require("../utils/validation");
 const { toSerializableError } = require("../utils/inventory");
@@ -121,13 +123,16 @@ async function listTransferReceivingQueue(req, res) {
           select: { id: true, code: true, name: true },
         },
         transfer_order_items: {
-          select: { quantity: true, shipped_qty: true },
+          select: { id: true, variant_id: true, quantity: true, shipped_qty: true },
         },
       },
       orderBy: { shipped_at: "asc" },
     });
 
-    const data = orders.map((order) => ({
+    const shippedOrders = await Promise.all(orders.map(async (order) => ({
+      ...order, transfer_order_items: await getTransferShippedLines(prisma, order),
+    })));
+    const data = shippedOrders.map((order) => ({
       id: order.id,
       transfer_number: order.transfer_number,
       status: order.status,
@@ -178,6 +183,7 @@ async function getTransferReceivingLines(req, res) {
             id: true,
             variant_id: true,
             shipped_qty: true,
+            quantity: true,
             book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
           },
         },
@@ -188,12 +194,13 @@ async function getTransferReceivingLines(req, res) {
       return res.status(404).json({ message: "Không tìm thấy phiếu chuyển kho" });
     }
 
+    const shippedLines = await getTransferShippedLines(prisma, order);
     return res.json({
       data: {
         transfer_id: order.id,
         transfer_number: order.transfer_number,
         status: order.status,
-        items: order.transfer_order_items
+        items: shippedLines
           .filter((line) => Number(line.shipped_qty || 0) > 0)
           .map((line) => ({
             transfer_order_item_id: line.id,
@@ -292,6 +299,7 @@ async function confirmTransferReceiving(req, res) {
             id: true,
             transfer_number: true,
             status: true,
+            from_warehouse_id: true,
             to_warehouse_id: true,
             received_by_user_id: true,
             transfer_order_items: {
@@ -299,6 +307,7 @@ async function confirmTransferReceiving(req, res) {
                 id: true,
                 variant_id: true,
                 shipped_qty: true,
+                quantity: true,
                 unit_cost: true,
               },
             },
@@ -310,6 +319,7 @@ async function confirmTransferReceiving(req, res) {
 
         // Idempotent re-confirm: already received
         if (order.status === "RECEIVED") {
+          const discrepancy = await caseDetail(tx, order.id);
           const postedReceipt = await tx.goods_receipts.findFirst({
             where: { source_type: "TRANSFER", source_reference_id: order.id },
             select: { id: true, receipt_number: true },
@@ -320,6 +330,8 @@ async function confirmTransferReceiving(req, res) {
               status: "RECEIVED",
               goods_receipt_id: postedReceipt?.id ?? null,
               goods_receipt_number: postedReceipt?.receipt_number ?? null,
+              discrepancy_id: discrepancy?.id || null,
+              discrepancy_status: discrepancy?.status || 'NONE',
             },
           };
         }
@@ -342,6 +354,8 @@ async function confirmTransferReceiving(req, res) {
             };
           }
         }
+
+        const shippedLines = await getTransferShippedLines(tx, order);
 
         // Optional per-line count of what actually arrived. Without it (older
         // clients, or the explicit "received in full" quick action), every shipped
@@ -366,8 +380,9 @@ async function confirmTransferReceiving(req, res) {
         // confirmation, not multiple batches) - mirrors the accepted qty posted to stock,
         // same convention as purchase_order_items.received_qty.
         const receivedQtyByLineId = new Map();
+        const outcomeByLineId = new Map();
         if (Array.isArray(rawItems) && rawItems.length > 0) {
-          const lineById = new Map(order.transfer_order_items.map((l) => [String(l.id), l]));
+          const lineById = new Map(shippedLines.map((l) => [String(l.id), l]));
           outcomeByVariant = new Map();
           const seenLineIds = new Set();
           for (const raw of rawItems) {
@@ -398,15 +413,16 @@ async function confirmTransferReceiving(req, res) {
               rejected: prev.rejected + outcome.rejected,
             });
             receivedQtyByLineId.set(lineId, outcome.accepted);
+            outcomeByLineId.set(lineId, outcome);
           }
-          const missingLine = order.transfer_order_items.find(
+          const missingLine = shippedLines.find(
             (l) => Number(l.shipped_qty || 0) > 0 && !seenLineIds.has(String(l.id)),
           );
           if (missingLine) {
             return { invalid: true, statusCode: 400, message: "Thiếu số lượng kiểm đếm cho một hoặc nhiều dòng đã xuất" };
           }
         } else {
-          for (const line of order.transfer_order_items) {
+          for (const line of shippedLines) {
             if (Number(line.shipped_qty || 0) > 0) {
               receivedQtyByLineId.set(String(line.id), Number(line.shipped_qty || 0));
             }
@@ -447,12 +463,12 @@ async function confirmTransferReceiving(req, res) {
             where: { goods_receipt_id: existingReceipt.id },
           });
           if (existingItemCount === 0) {
-            const shippedLines = order.transfer_order_items.filter(
+            const linesToReceive = shippedLines.filter(
               (l) => Number(l.shipped_qty || 0) > 0,
             );
-            if (shippedLines.length > 0) {
+            if (linesToReceive.length > 0) {
               await tx.goods_receipt_items.createMany({
-                data: buildGoodsReceiptItemRows(shippedLines, outcomeByVariant, destinationReceipt.id),
+                data: buildGoodsReceiptItemRows(linesToReceive, outcomeByVariant, destinationReceipt.id),
               });
             }
           } else if (outcomeByVariant) {
@@ -498,10 +514,10 @@ async function confirmTransferReceiving(req, res) {
 
         } else {
           // No receipt: migration period — order went IN_TRANSIT before this fix was deployed
-          const shippedLines = order.transfer_order_items.filter(
+          const linesToReceive = shippedLines.filter(
             (line) => Number(line.shipped_qty || 0) > 0,
           );
-          if (shippedLines.length === 0) {
+          if (linesToReceive.length === 0) {
             return { invalid: true, statusCode: 400, message: "Không có hàng đã gửi để nhận" };
           }
           destinationReceipt = await tx.goods_receipts.create({
@@ -518,10 +534,15 @@ async function confirmTransferReceiving(req, res) {
             select: { id: true, warehouse_id: true, receipt_number: true, status: true },
           });
           await tx.goods_receipt_items.createMany({
-            data: buildGoodsReceiptItemRows(shippedLines, outcomeByVariant, destinationReceipt.id),
+            data: buildGoodsReceiptItemRows(linesToReceive, outcomeByVariant, destinationReceipt.id),
           });
           await postTransferReceiptToReceiving(tx, destinationReceipt, actorUserIdOptional);
         }
+
+        const discrepancy = await recordTransferDiscrepancy(tx, {
+          order, receiptId: destinationReceipt.id, lines: shippedLines,
+          outcomes: outcomeByLineId, actorId: actorUserIdOptional,
+        });
 
         for (const [lineId, receivedQty] of receivedQtyByLineId) {
           await tx.transfer_order_items.update({
@@ -559,6 +580,8 @@ async function confirmTransferReceiving(req, res) {
             status: "RECEIVED",
             goods_receipt_id: destinationReceipt.id,
             goods_receipt_number: destinationReceipt.receipt_number,
+            discrepancy_id: discrepancy?.id || null,
+            discrepancy_status: discrepancy?.status || 'NONE',
           },
         };
       },

@@ -108,6 +108,13 @@ function seedPostingDb({ received = 0, item = {}, noteQty = 100, ordered = 100 }
   });
 }
 
+test('SB-16: posting a legacy incomplete GRN refuses to lose an uncounted delivery line', async () => {
+  const { client, table } = seedPostingDb();
+  table('supplier_delivery_invoice_items').push({ id: 'dni-2', invoice_id: 'dn-1', purchase_order_item_id: 'poi-2', variant_id: 'v2', invoiced_qty: 10 });
+  table('purchase_order_items').push({ id: 'poi-2', purchase_order_id: 'po-1', variant_id: 'v2', ordered_qty: 10, received_qty: 0 });
+  await assert.rejects(settleSupplierReceiptQuantities(client, table('goods_receipts')[0]), (error) => error.code === 'INCOMPLETE_DELIVERY_COUNT');
+});
+
 test('posting uses the staff count: 98 counted, 3 damaged -> the GRN line becomes 95 before stock posting', async () => {
   const { client, table } = seedPostingDb({ item: { actual_quantity: 98, damaged_qty: 3 } });
   const receipt = table('goods_receipts')[0];

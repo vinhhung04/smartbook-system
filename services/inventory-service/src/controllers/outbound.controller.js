@@ -1,5 +1,6 @@
 
 const { prisma } = require("../lib/prisma");
+const { addRepickQuantities } = require('../services/repick-quantities.service');
 
 const { SHIPPING_LOCATION_TYPE } = require("../utils/constants");
 const {
@@ -1008,8 +1009,8 @@ async function confirmOutbound(req, res) {
 
           const movementRows = [];
 
-          for (const line of lines) {
-            const qty = Number(line.processed_qty || 0) + (repickQtyByVariant.get(line.variant_id) || 0);
+          for (const line of addRepickQuantities(lines, repickQtyByVariant, 'processed_qty')) {
+            const qty = Number(line.processed_qty || 0);
             if (qty <= 0) continue;
 
             await tx.$queryRawUnsafe(
@@ -1293,9 +1294,10 @@ async function confirmOutbound(req, res) {
           order.from_warehouse_id,
         );
 
+        const shippingLines = addRepickQuantities(lines, repickShippedByVariant, 'shipped_qty');
         const movementRows = [];
-        for (const line of lines) {
-          const qty = Number(line.shipped_qty || 0) + (repickShippedByVariant.get(line.variant_id) || 0);
+        for (const line of shippingLines) {
+          const qty = Number(line.shipped_qty || 0);
           if (qty <= 0) continue;
 
           await tx.$queryRawUnsafe(
@@ -1420,10 +1422,10 @@ async function confirmOutbound(req, res) {
           });
 
           // Use aggregate quantity (root shipped + repick chain) for the GR
-          const draftLines = lines
+          const draftLines = shippingLines
             .map((l) => ({
               ...l,
-              total_shipped: Number(l.shipped_qty || 0) + (repickShippedByVariant.get(l.variant_id) || 0),
+              total_shipped: Number(l.shipped_qty || 0),
             }))
             .filter((l) => l.total_shipped > 0);
           if (draftLines.length > 0) {

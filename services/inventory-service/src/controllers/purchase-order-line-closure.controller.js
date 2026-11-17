@@ -54,6 +54,18 @@ async function closeRemainingLine(req, res) {
       if (!item) return { statusCode: 404, message: "Không tìm thấy dòng hàng trong đơn đặt hàng này" };
 
       const proposal = buildCloseRemaining(po, item, req.body);
+      // A declared delivery still in transit must be received or cancelled before
+      // closing the PO remainder. Posting a GRN for a closed line is prohibited.
+      const deliveryLines = await tx.supplier_delivery_invoice_items.findMany({
+        where: { purchase_order_item_id: item.id }, select: { invoice_id: true },
+      });
+      const pendingDelivery = deliveryLines.length > 0 && await tx.supplier_delivery_invoices.findFirst({
+        where: { id: { in: deliveryLines.map(line => line.invoice_id) }, status: { notIn: ['RECEIVED', 'SHORTAGE_REPORTED', 'CANCELLED'] } },
+        select: { id: true },
+      });
+      if (pendingDelivery) {
+        return { statusCode: 409, message: 'Còn phiếu giao hàng chưa xử lý; nhận hàng hoặc hủy phiếu giao trước khi đóng phần còn lại' };
+      }
       const updated = await tx.purchase_order_items.update({
         where: { id: item.id },
         data: {

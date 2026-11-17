@@ -11,6 +11,7 @@ const {
 } = require('./middlewares/auth.middleware');
 const { enforceRequestedWarehouseScope } = require('./middlewares/warehouse-scope.middleware');
 const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
+const { stockAuditFreezeResponses } = require('./middlewares/stock-audit-freeze.middleware');
 const { createInternalWarehousesRouter } = require('./routes/internal-warehouses.routes');
 const {
   clearScopeCache,
@@ -80,6 +81,7 @@ app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+app.use(stockAuditFreezeResponses);
 
 app.get('/health', (_req, res) => {
   res.json({ service: 'inventory-service', status: 'ok', version: '1.0.0' });

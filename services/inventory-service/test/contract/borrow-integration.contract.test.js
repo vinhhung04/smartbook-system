@@ -162,18 +162,14 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     assert.ok(valid, ajv.errorsText(ajv.errors));
   });
 
-  await t.test('POST reservations/release (idempotent-replay branch, has `idempotent`) matches schema', async () => {
-    // The reservation was already CONSUMED above, so a release attempt
-    // now hits the "not active" branch -- still validates the shared
-    // release schema, which is what's being locked here.
+  await t.test('POST reservations/release refuses a previously CONSUMED hold', async () => {
     const res = await request('POST', '/api/borrow-integration/reservations/release', {
       reservation_id: reservationId,
       reason: 'CONTRACT_TEST_CLEANUP',
       idempotency_key: `ct-release-${runTag}`,
     });
-    const valid = ajv.validate(schemas.release, res.data);
-    assert.ok(valid, ajv.errorsText(ajv.errors));
-    assert.equal(res.data.idempotent, true);
+    assert.equal(res.status, 409, JSON.stringify(res.data));
+    assert.equal(res.data.data, undefined);
   });
 });
 

@@ -7,6 +7,7 @@ import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { transferReceivingService, type TransferReceivingItem, type TransferReceivingLine } from '@/services/transfer-receiving';
+import { TransferDiscrepancyPanel } from '@/components/inventory/TransferDiscrepancyPanel';
 import { userService, type WarehouseStaffOption } from '@/services/user';
 import { canManageReceiving } from '@/lib/rbac';
 import { PageHeader } from '@/components/ui/page-header';
@@ -300,6 +301,10 @@ export function TransferReceivingPage() {
             </li>
           ))}
         </ol>
+      </FadeItem>
+
+      <FadeItem>
+        <TransferDiscrepancyPanel warehouseId={selectedWarehouseId || undefined} refreshKey={queue.length} canManage={canManageQueue} />
       </FadeItem>
 
       <FadeItem>

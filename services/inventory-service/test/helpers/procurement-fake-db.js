@@ -197,6 +197,7 @@ function createFakeDb(seed = {}) {
   const client = new Proxy({}, {
     get(_target, prop) {
       if (prop === '$transaction') return async (fn) => fn(client);
+      if (prop === '$queryRawUnsafe') return async () => [];
       if (prop === 'then') return undefined;
       return model(prop);
     },

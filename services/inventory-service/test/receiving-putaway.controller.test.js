@@ -126,6 +126,7 @@ function createFakeDb(seed) {
   };
 
   const client = {
+    async $queryRawUnsafe() { return []; },
     locations: createModel(state.locations),
     stock_balances: createModel(state.stock_balances),
     stock_movements: createModel(state.stock_movements),

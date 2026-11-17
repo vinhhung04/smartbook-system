@@ -45,6 +45,61 @@ function requireIdempotencyKey(res, idempotency_key) {
   return idempotency_key.trim();
 }
 
+function borrowRequestIdentity(operation, body) {
+  if (operation === 'release') {
+    const reason = String(body.reason || 'RELEASED').toUpperCase();
+    return { operation, reservation_id: body.reservation_id, reason: ['EXPIRED', 'CANCELLED', 'RELEASED'].includes(reason) ? reason : 'RELEASED', warehouse_id: body.warehouse_id || null, variant_id: body.variant_id || null, quantity: body.quantity == null ? null : Number(body.quantity) };
+  }
+  if (operation === 'consume') {
+    return { operation, reservation_id: body.reservation_id, loan_id: body.loan_id, loan_number: body.loan_number, warehouse_id: body.warehouse_id, variant_id: body.variant_id || null, quantity: body.quantity == null ? null : Number(body.quantity) };
+  }
+  const condition = String(body.item_condition_on_return || 'GOOD').trim().toUpperCase();
+  return { operation, loan_id: body.loan_id, loan_item_id: body.loan_item_id || null, variant_id: body.variant_id, warehouse_id: body.warehouse_id, quantity: parsePositiveInteger(body.quantity, 1), location_id: body.location_id || null, inventory_unit_id: body.inventory_unit_id || null, item_condition_on_return: condition, mark_lost: body.mark_lost === true || condition === 'LOST' };
+}
+
+function assertBorrowReplay(movement, identity) {
+  const saved = movement.metadata?.borrow_request;
+  let matches;
+  if (saved) {
+    matches = Object.keys(identity).every((key) => saved[key] === identity[key]);
+  } else {
+    // Existing movements predate request fingerprints. Reconstruct the business
+    // identity from their persisted references instead of invalidating old retries.
+    const meta = movement.metadata || {};
+    matches = movement.source_service === 'BORROW_SERVICE';
+    if (identity.operation === 'release') {
+      matches = matches && movement.movement_type === 'RELEASE' && movement.reference_type === 'LOAN_RESERVATION' && movement.reference_id === identity.reservation_id && meta.reason === identity.reason;
+    } else if (identity.operation === 'consume') {
+      matches = matches && movement.movement_type === 'BORROW' && movement.reference_type === 'LOAN_TRANSACTION' && movement.reference_id === identity.loan_id && meta.reservation_id === identity.reservation_id && meta.loan_number === identity.loan_number;
+    } else {
+      matches = matches && ['RETURN', 'ADJUSTMENT'].includes(movement.movement_type) && movement.reference_type === 'LOAN_TRANSACTION' && movement.reference_id === identity.loan_id && (meta.loan_item_id || null) === identity.loan_item_id && (movement.inventory_unit_id || null) === identity.inventory_unit_id && meta.item_condition_on_return === identity.item_condition_on_return && Boolean(meta.mark_lost) === identity.mark_lost && (!identity.location_id || identity.mark_lost || movement.to_location_id === identity.location_id);
+    }
+    for (const field of ['warehouse_id', 'variant_id', 'quantity']) {
+      if (identity[field] != null) matches = matches && movement[field] === identity[field];
+    }
+  }
+  if (!matches) throw new Error('IDEMPOTENCY_PAYLOAD_CONFLICT');
+}
+
+async function recoverBorrowReplay(error, req, res, operation) {
+  if (error.code !== 'P2002' && !['RESERVATION_STOCK_ALREADY_RELEASED', 'RESERVATION_STOCK_ALREADY_CONSUMED', 'RESERVATION_NOT_ACTIVE', 'BORROWED_STOCK_NOT_FOUND'].includes(error.message)) return false;
+  // A simultaneous retry can lose the unique-key race after both transactions
+  // read no movement. Its stock writes have rolled back; replay the winner.
+  const movement = await prisma.stock_movements.findUnique({ where: { idempotency_key: req.body.idempotency_key.trim() } });
+  if (!movement) return false;
+  try {
+    assertBorrowReplay(movement, borrowRequestIdentity(operation, req.body));
+  } catch {
+    res.status(409).json({ message: 'idempotency_key đã được dùng cho nghiệp vụ hoặc dữ liệu khác' });
+    return true;
+  }
+  const data = operation === 'release'
+    ? await prisma.stock_reservations.findFirst({ where: { source_service: 'BORROW', source_reference_id: req.body.reservation_id }, orderBy: [{ updated_at: 'desc' }] })
+    : movement;
+  res.status(200).json({ data: data || null, idempotent: true });
+  return true;
+}
+
 async function searchBorrowVariants(req, res) {
   const keyword = String(req.query.q || '').trim();
   const limit = Math.min(20, Math.max(1, Number.parseInt(String(req.query.limit || '8'), 10) || 8));
@@ -403,11 +458,13 @@ async function releaseBorrowReservation(req, res) {
 
   const releaseReason = String(reason || 'RELEASED').toUpperCase();
   const targetStatus = ['EXPIRED', 'CANCELLED', 'RELEASED'].includes(releaseReason) ? releaseReason : 'RELEASED';
+  const requestIdentity = borrowRequestIdentity('release', req.body);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const movementByKey = await tx.stock_movements.findUnique({ where: { idempotency_key: movementIdempotency } });
       if (movementByKey) {
+        assertBorrowReplay(movementByKey, requestIdentity);
         const alreadyUpdated = await tx.stock_reservations.findFirst({
           where: {
             source_service: 'BORROW',
@@ -427,12 +484,20 @@ async function releaseBorrowReservation(req, res) {
       });
 
       if (!reservation) {
+        const terminal = await tx.stock_reservations.findFirst({ where: { source_service: 'BORROW', source_reference_id: reservation_id } });
+        if (terminal?.status === 'CONSUMED') throw new Error('RESERVATION_NOT_ACTIVE');
         return { data: null, idempotent: true };
       }
 
       if (!reservation.location_id) {
         throw new Error('RESERVATION_LOCATION_MISSING');
       }
+
+      const stateClaim = await tx.stock_reservations.updateMany({
+        where: { id: reservation.id, status: 'ACTIVE' },
+        data: { status: targetStatus },
+      });
+      if (stateClaim.count !== 1) throw new Error('RESERVATION_NOT_ACTIVE');
 
       const claimed = await releaseReservedStock(tx, {
         variant_id: reservation.variant_id,
@@ -443,12 +508,7 @@ async function releaseBorrowReservation(req, res) {
         throw new Error('RESERVATION_STOCK_ALREADY_RELEASED');
       }
 
-      const updated = await tx.stock_reservations.update({
-        where: { id: reservation.id },
-        data: {
-          status: targetStatus,
-        },
-      });
+      const updated = await tx.stock_reservations.findUnique({ where: { id: reservation.id } });
 
       await tx.stock_movements.create({
         data: {
@@ -469,6 +529,7 @@ async function releaseBorrowReservation(req, res) {
           metadata: {
             reason: targetStatus,
             reservation_code: reservation.reservation_code,
+            borrow_request: requestIdentity,
           },
         },
       });
@@ -496,6 +557,9 @@ async function releaseBorrowReservation(req, res) {
 
     return res.json(result);
   } catch (error) {
+    if (error.message === 'IDEMPOTENCY_PAYLOAD_CONFLICT') return res.status(409).json({ message: 'idempotency_key đã được dùng cho nghiệp vụ hoặc dữ liệu khác' });
+    if (await recoverBorrowReplay(error, req, res, 'release')) return undefined;
+    if (error.message === 'RESERVATION_NOT_ACTIVE') return res.status(409).json({ message: 'Phần giữ hàng không còn ACTIVE, không thể hủy giữ hàng' });
     if (error.message === 'RESERVATION_LOCATION_MISSING') {
       return res.status(409).json({ message: 'Thiếu vị trí giữ hàng của đặt trước, không thể trả lại tồn an toàn' });
     }
@@ -527,11 +591,13 @@ async function consumeBorrowReservation(req, res) {
 
   const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
   if (!movementIdempotency) return undefined;
+  const requestIdentity = borrowRequestIdentity('consume', req.body);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const movementByKey = await tx.stock_movements.findUnique({ where: { idempotency_key: movementIdempotency } });
       if (movementByKey) {
+        assertBorrowReplay(movementByKey, requestIdentity);
         return { idempotent: true, data: movementByKey };
       }
 
@@ -551,6 +617,12 @@ async function consumeBorrowReservation(req, res) {
         throw new Error('RESERVATION_LOCATION_MISSING');
       }
 
+      const stateClaim = await tx.stock_reservations.updateMany({
+        where: { id: reservation.id, status: 'ACTIVE' },
+        data: { status: 'CONSUMED' },
+      });
+      if (stateClaim.count !== 1) throw new Error('RESERVATION_NOT_ACTIVE');
+
       const claimed = await consumeReservedStock(tx, {
         variant_id: reservation.variant_id,
         location_id: reservation.location_id,
@@ -559,13 +631,6 @@ async function consumeBorrowReservation(req, res) {
       if (!claimed) {
         throw new Error('RESERVATION_STOCK_ALREADY_CONSUMED');
       }
-
-      await tx.stock_reservations.update({
-        where: { id: reservation.id },
-        data: {
-          status: 'CONSUMED',
-        },
-      });
 
       const movement = await tx.stock_movements.create({
         data: {
@@ -586,6 +651,7 @@ async function consumeBorrowReservation(req, res) {
           metadata: {
             loan_number,
             reservation_id,
+            borrow_request: requestIdentity,
           },
         },
       });
@@ -612,6 +678,8 @@ async function consumeBorrowReservation(req, res) {
 
     return res.status(result.idempotent ? 200 : 201).json(result);
   } catch (error) {
+    if (error.message === 'IDEMPOTENCY_PAYLOAD_CONFLICT') return res.status(409).json({ message: 'idempotency_key đã được dùng cho nghiệp vụ hoặc dữ liệu khác' });
+    if (await recoverBorrowReplay(error, req, res, 'consume')) return undefined;
     if (error.message === 'RESERVATION_NOT_ACTIVE') {
       return res.status(409).json({ message: 'Phần giữ hàng của đặt trước không còn ACTIVE trong kho, không thể xuất cho mượn' });
     }
@@ -668,12 +736,25 @@ async function returnBorrowedLoan(req, res) {
 
   const movementIdempotency = requireIdempotencyKey(res, idempotency_key);
   if (!movementIdempotency) return undefined;
+  const requestIdentity = borrowRequestIdentity('return', req.body);
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      if (loan_item_id) {
+        await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text', `borrow-return:${loan_item_id.toLowerCase()}`);
+      }
       const movementByKey = await tx.stock_movements.findUnique({ where: { idempotency_key: movementIdempotency } });
       if (movementByKey) {
+        assertBorrowReplay(movementByKey, requestIdentity);
         return { data: movementByKey, idempotent: true };
+      }
+
+      if (loan_item_id) {
+        const returned = await tx.$queryRawUnsafe(
+          "SELECT id FROM stock_movements WHERE source_service = 'BORROW_SERVICE' AND reference_type = 'LOAN_TRANSACTION' AND movement_type IN ('RETURN', 'ADJUSTMENT') AND LOWER(metadata->>'loan_item_id') = LOWER($1) LIMIT 1",
+          loan_item_id,
+        );
+        if (returned.length > 0) throw new Error('LOAN_ITEM_ALREADY_RETURNED');
       }
 
       const balance = await tx.stock_balances.findFirst({
@@ -788,6 +869,7 @@ async function returnBorrowedLoan(req, res) {
             loan_item_id: loan_item_id || null,
             item_condition_on_return: normalizedCondition,
             mark_lost: isLost,
+            borrow_request: requestIdentity,
           },
         },
       });
@@ -820,6 +902,9 @@ async function returnBorrowedLoan(req, res) {
 
     return res.status(result.idempotent ? 200 : 201).json(result);
   } catch (error) {
+    if (error.message === 'IDEMPOTENCY_PAYLOAD_CONFLICT') return res.status(409).json({ message: 'idempotency_key đã được dùng cho nghiệp vụ hoặc dữ liệu khác' });
+    if (await recoverBorrowReplay(error, req, res, 'return')) return undefined;
+    if (error.message === 'LOAN_ITEM_ALREADY_RETURNED') return res.status(409).json({ message: 'Cuốn sách này đã được xử lý trả hoặc mất' });
     if (error.message === 'BORROWED_STOCK_NOT_FOUND') {
       return res.status(409).json({ message: 'Không có tồn đang cho mượn để nhận trả cho ấn bản/kho này' });
     }
