@@ -114,6 +114,7 @@ function signAccessToken(user, roles, permissions) {
       roles,
       permissions,
       jti: crypto.randomUUID(),
+      iat: Date.now() / 1000,
     },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '2h' }
@@ -735,7 +736,7 @@ async function verifyLoginOtp(req, res) {
       console.error('verifyLoginOtp: revocation state unavailable:', error.message);
       return res.status(503).json({ message: 'Sign-in cannot be completed right now. Try again shortly.', code: 'AUTH_STATE_UNAVAILABLE' });
     }
-    if (Number.isFinite(cutoff) && cutoff > Math.floor(new Date(challenge.created_at).getTime() / 1000)) {
+    if (Number.isFinite(cutoff) && cutoff > new Date(challenge.created_at).getTime() / 1000) {
       return res.status(410).json({ message: 'Phiên xác thực không còn hiệu lực. Vui lòng bắt đầu lại.', code: 'OTP_CHALLENGE_INVALID' });
     }
 

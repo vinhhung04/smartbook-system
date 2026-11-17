@@ -1,3 +1,4 @@
+import { availableStockFixture } from './testing/stock-fixture.mjs';
 // P1.4 + P1.5 concurrency checks (borrow-service):
 //   P1.4a - two managers approving the SAME pending renewal request at the same instant
 //           must not both succeed (would create two loan_renewals rows and risk exceeding
@@ -73,11 +74,7 @@ function check(name, condition, detail = '') {
 }
 
 async function findStockTarget() {
-  const books = await ok('GET', '/api/books', null, managerToken);
-  const sorted = books.filter((b) => b?.variant_id && b?.default_warehouse_id)
-    .sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0));
-  if (sorted.length === 0) throw new Error('No borrowable stock found');
-  return sorted[0];
+  return availableStockFixture(10);
 }
 
 async function main() {

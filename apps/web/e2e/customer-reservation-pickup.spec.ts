@@ -1,3 +1,4 @@
+import { DEMO_PASSWORD } from './helpers';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 
@@ -12,8 +13,8 @@ import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 // from the API responses) — never "the first row mentioning customer01".
 
 const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:3000';
-const CUSTOMER = { identifier: 'customer01', password: '123456' };
-const LIBRARIAN = { identifier: 'librarian01', password: '123456' };
+const CUSTOMER = { identifier: 'customer01', password: DEMO_PASSWORD };
+const LIBRARIAN = { identifier: 'librarian01', password: DEMO_PASSWORD };
 // auth/inventory seeds give librarian01 OPERATOR access only at BR-HCM-01.
 const PICKUP_BRANCH_ID = '00000000-0000-0000-0000-000000000004';
 const PICKUP_BRANCH_NAME = 'Chi Nhanh District 1';
@@ -53,11 +54,42 @@ function toast(page: Page, text: string | RegExp) {
   return page.locator('[data-sonner-toast]').filter({ hasText: text });
 }
 
+let restorePlan: { id: string; deposit: number; token: string } | null = null;
 test.beforeEach(async ({ request }) => {
   await settleOpenCustomerState(request);
+  const reader = await apiToken(request, CUSTOMER.identifier, CUSTOMER.password);
+  const membershipResponse = await request.get(`${GATEWAY}/my/membership`, { headers: { Authorization: `Bearer ${reader}` } });
+  expect(membershipResponse.ok()).toBeTruthy();
+  const membership = (await membershipResponse.json()).data;
+  const admin = await apiToken(request, 'hung', DEMO_PASSWORD);
+  restorePlan = { id: membership.plan_id, deposit: Number(membership.limits.deposit_per_item), token: admin };
+  const configured = await request.patch(`${GATEWAY}/borrow/membership-plans/${membership.plan_id}`, {
+    headers: { Authorization: `Bearer ${admin}` }, data: { deposit_per_item: 30000 },
+  });
+  expect(configured.ok()).toBeTruthy();
+  const funded = await request.post(`${GATEWAY}/borrow/customers/${membership.customer_id}/account/topups`, {
+    headers: { Authorization: `Bearer ${admin}`, ...idempotency('deposit-fixture') },
+    data: { amount: 200000, method: 'CASH', note: 'Disposable E2E deposit fixture' },
+  });
+  expect(funded.ok()).toBeTruthy();
+});
+test.afterEach(async ({ request }) => {
+  if (!restorePlan) return;
+  const restored = await request.patch(`${GATEWAY}/borrow/membership-plans/${restorePlan.id}`, {
+    headers: { Authorization: `Bearer ${restorePlan.token}` }, data: { deposit_per_item: restorePlan.deposit },
+  });
+  expect(restored.ok()).toBeTruthy();
+  restorePlan = null;
 });
 
-test('customer reservation through pickup and return', async ({ page }) => {
+test('customer reservation through pickup and return', async ({ page, request }) => {
+  const headers = { Authorization: `Bearer ${await apiToken(request, CUSTOMER.identifier, CUSTOMER.password)}` };
+  const account = async () => {
+    const response = await request.get(`${GATEWAY}/my/account`, { headers });
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()).data;
+  };
+  const beforeWallet = await account();
   await loginAsCustomer(page, CUSTOMER);
 
   await page.goto(`/books?branch=${PICKUP_BRANCH_ID}&availability=available`);
@@ -105,9 +137,16 @@ test('customer reservation through pickup and return', async ({ page }) => {
   const convertResponse = page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/borrow/reservations/pickup/convert-to-loan'));
   await page.getByTestId('pickup-code-input').fill(pickupCode);
   await page.getByTestId('convert-pickup-submit').click();
-  const loan = (await (await convertResponse).json()).data;
+  const convertedResponse = await convertResponse;
+  expect(convertedResponse.ok(), await convertedResponse.text()).toBeTruthy();
+  const loan = (await convertedResponse.json()).data;
   expect(loan.loan_number).toMatch(/^LOAN-/);
   await expect(toast(page, `Đã tạo phiếu mượn ${loan.loan_number}`)).toBeVisible();
+  const heldWallet = await account();
+  const deposit = Number(loan.deposit_total || 0);
+  expect(deposit).toBe(30000);
+  expect(Number(heldWallet.held_balance)).toBe(Number(beforeWallet.held_balance) + deposit);
+  expect(Number(heldWallet.available_balance)).toBe(Number(beforeWallet.available_balance) - deposit - Number(loan.borrow_fee_amount || 0));
 
   // Open exactly the loan this test created.
   await page.goto(`/borrow/loans/${loan.id}`);
@@ -116,4 +155,10 @@ test('customer reservation through pickup and return', async ({ page }) => {
   await expect(toast(page, 'Đã trả sách thành công')).toBeVisible();
 
   await expect(page.getByTestId('loan-status-badge')).toContainText('Đã trả');
+  const afterWallet = await account();
+  expect(Number(afterWallet.held_balance)).toBe(Number(beforeWallet.held_balance));
+  expect(Number(afterWallet.available_balance)).toBe(Number(heldWallet.available_balance) + deposit);
+  const persistedResponse = await request.get(`${GATEWAY}/my/loans/${loan.id}`, { headers });
+  expect(persistedResponse.ok()).toBeTruthy();
+  expect((await persistedResponse.json()).data.status).toBe('RETURNED');
 });

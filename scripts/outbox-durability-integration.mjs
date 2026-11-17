@@ -12,6 +12,7 @@ const envPath = resolve(root, '.env');
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 
 function readEnvVar(name, fallback) {
+  if (process.env[name] !== undefined) return process.env[name];
   if (!existsSync(envPath)) return fallback;
   const contents = readFileSync(envPath, 'utf8');
   const match = contents.match(new RegExp(`^${name}=(.*)$`, 'm'));

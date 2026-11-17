@@ -12,7 +12,7 @@
     "test:node": "pnpm -r --workspace-concurrency=1 --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service test",
     "test:ai": "python -m pytest services/ai-service -q",
     "test:web": "pnpm --filter web test:unit",
-    "test:mobile": "pnpm --filter @smartbook/mobile test --ci",
+    "test:mobile": "pnpm --filter @smartbook/mobile test --ci --runInBand",
     "check:mobile-config": "pnpm --filter @smartbook/mobile exec expo config --type public --json",
     "test:workspace-config": "node --test tests/*.test.mjs",
     "test:smoke": "node scripts/demo-smoke.mjs",
@@ -33,7 +33,8 @@
     "dev:web": "pnpm --filter web dev",
     "dev:auth": "pnpm --filter auth-service dev",
     "dev:inventory": "pnpm --filter inventory-service dev",
-    "dev:gateway": "pnpm --filter api-gateway dev"
+    "dev:gateway": "pnpm --filter api-gateway dev",
+    "test:stack": "node scripts/testing/stack.mjs"
   },
   "dependencies": {
     "amqp-connection-manager": "^5.0.0",

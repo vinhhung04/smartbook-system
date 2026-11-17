@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 
-export const DEMO_PASSWORD = '123456';
+export const DEMO_PASSWORD = process.env.DEMO_PASSWORD || '123456';
 
 /**
  * Staff/admin login (internal app). Demo account seeded by `pnpm demo:seed`.

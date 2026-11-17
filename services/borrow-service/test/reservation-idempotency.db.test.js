@@ -67,7 +67,8 @@ async function makeCustomer({ maxLoans = 5 } = {}) {
 function call(body, { key, user = crypto.randomUUID() } = {}) {
   const req = {
     body,
-    user: { id: user },
+    // Synthetic staff actor; explicit full scope is required by the real controller.
+    user: { id: user, is_superuser: true },
     headers: key ? { 'idempotency-key': key, authorization: 'Bearer test' } : { authorization: 'Bearer test' },
   };
   return new Promise((resolve) => {
