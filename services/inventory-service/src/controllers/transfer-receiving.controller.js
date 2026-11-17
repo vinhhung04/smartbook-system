@@ -11,6 +11,7 @@ const {
 
 function toNonNegativeInt(value, fallback) {
   if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const n = Number(value);
   return Number.isFinite(n) && Number.isInteger(n) && n >= 0 ? n : null;
 }
