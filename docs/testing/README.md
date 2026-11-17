@@ -33,7 +33,7 @@ Always execute `down`, including after a failure. It removes only the generated 
 
 The integration manifest schedules all offline `*-integration.mjs` scripts and two assertion-based reconciliation/scope audits. `ai-assistant-integration.mjs` and `cover-search-integration.mjs` are live-model checks, outside deterministic CI; their provider boundaries are exercised by Python tests and controlled Playwright fixtures instead. Do not enable paid providers in QA. `copilot-3-2-security-integration.mjs` runs its default security checks without the optional `--ai` model calls.
 
-`test:stack db` executes all three borrow PostgreSQL suites with real migrations, wallet ledger constraints and concurrent transactions, followed by the three analytics Vietnam-time bucket tests against session-local temporary tables. `ai-db` needs Python `asyncpg`, SQLAlchemy and pgvector (already in AI requirements) and a fresh QA project. CI's dedicated AI job supplies its own isolated Postgres/pgvector service.
+`test:stack db` first generates the host borrow Prisma Client (the Docker client stays inside its image), then executes all three borrow PostgreSQL suites with real migrations, wallet ledger constraints and concurrent transactions, followed by the three analytics Vietnam-time bucket tests against session-local temporary tables. `ai-db` needs Python `asyncpg`, SQLAlchemy and pgvector (already in AI requirements) and a fresh QA project. CI's dedicated AI job supplies its own isolated Postgres/pgvector service.
 
 ## Browser tests on a separate clean project
 

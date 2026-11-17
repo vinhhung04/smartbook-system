@@ -44,6 +44,9 @@ try {
   else if (action === 'integration') run(process.execPath, ['scripts/testing/run-integration.mjs']);
   else if (action === 'db') {
     const url = `postgresql://${env.DB_USER}:${env.DB_PASSWORD}@127.0.0.1:15432/borrow_db?schema=public`;
+    // exec node bypasses borrow-service's pretest hook. Docker-generated clients
+    // live in the image, so a clean host needs its own matching client first.
+    run('pnpm', ['--filter', 'borrow-service', 'prisma:generate'], { DATABASE_URL: url });
     run('pnpm', ['--filter', 'borrow-service', 'exec', 'node', '--test', '--test-reporter=tap', 'test/deposit.db.test.js', 'test/vnpay-topup.db.test.js', 'test/reservation-idempotency.db.test.js'], {
       DEPOSIT_TEST_DATABASE_URL: url, BORROW_TEST_DATABASE_URL: url,
     });
