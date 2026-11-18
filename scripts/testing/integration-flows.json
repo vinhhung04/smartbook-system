@@ -29,5 +29,6 @@
   "outbox-durability-integration.mjs",
   "gateway-consumer-durability-integration.mjs",
   "return-loan-partial-failure-audit.mjs",
-  "warehouse-scope-stt123-audit.mjs"
+  "warehouse-scope-stt123-audit.mjs",
+  "isbn-ean-classification-integration.mjs"
 ]
