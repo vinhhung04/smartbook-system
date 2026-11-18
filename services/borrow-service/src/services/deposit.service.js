@@ -1,7 +1,8 @@
 const { Prisma } = require('@prisma/client');
 const { writeAuditLog } = require('../lib/audit');
 const { toMoney, holdFunds, releaseHeldFunds, captureHeldFunds } = require('./account.service');
-const { computeReturnFineAmounts } = require('./fine.service');
+const { computeReturnFineAmounts, daysOverdue } = require('./fine.service');
+const { previewOverdueAccrual } = require('./overdue-accrual.service');
 
 // Per-book deposits. A deposit is held from the wallet's available balance when a
 // book is lent, and settled exactly once when it comes back (or is declared
@@ -269,13 +270,22 @@ async function previewReturnSettlement(db, { items, returnedAt = new Date(), mem
   ]);
   const depositByItem = new Map(deposits.map((row) => [row.loan_item_id, row]));
 
-  const rows = items.map((item) => {
+  const rows = await Promise.all(items.map(async (item) => {
     const itemFines = existingFines.filter((fine) => fine.loan_item_id === item.id);
     const charges = computeReturnFineAmounts({ item, returnedAt, membershipLimits, markLost, itemConditionOnReturn });
     const chargedTypes = new Set(charges.map((charge) => charge.fineType));
     const lines = [];
 
+    if (charges.some(charge => charge.fineType === 'OVERDUE') || itemFines.some(fine => fine.fine_type === 'OVERDUE')) {
+      lines.push(...await previewOverdueAccrual(db, {
+        loanItemId: item.id, overdueDays: daysOverdue(item.due_date, returnedAt), dueDate: item.due_date,
+        dailyRate: Number(membershipLimits?.fine_per_day || 0), fines: itemFines,
+      }));
+      chargedTypes.add('OVERDUE');
+    }
+
     for (const charge of charges) {
+      if (charge.fineType === 'OVERDUE') continue;
       const existing = itemFines.find((fine) => fine.fine_type === charge.fineType);
       if (existing && (existing.status === 'PAID' || existing.status === 'WAIVED')) continue;
       const due = existing
@@ -306,7 +316,7 @@ async function previewReturnSettlement(db, { items, returnedAt = new Date(), mem
       deposit_refunded: split.refunded.toNumber(),
       additional_due: split.additionalDue.toNumber(),
     };
-  });
+  }));
 
   const sum = (key) => rows.reduce((total, row) => total.add(toMoney(row[key])), ZERO).toNumber();
   return {

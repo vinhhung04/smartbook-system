@@ -109,9 +109,10 @@ async function releaseReservation({ reservation_id, reason, idempotency_key, aut
   });
 }
 
-async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader, requestId }) {
+async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader, requestId, timeoutMs }) {
   return requestInventory('/api/borrow-integration/reservations/consume', {
     method: 'POST',
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
@@ -145,6 +146,7 @@ async function returnBorrowedStock({
 }) {
   return requestInventory('/api/borrow-integration/loans/return', {
     method: 'POST',
+    signal: AbortSignal.timeout(10000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
@@ -224,7 +226,15 @@ async function getBookVariantIds({ bookId, requestId }) {
   return Array.isArray(result?.data) ? result.data : [];
 }
 
+async function getReturnLocations({ locationIds, requestId }) {
+  return Promise.all([...new Set(locationIds)].map(id => requestInventory(`/api/locations/${encodeURIComponent(id)}`, {
+    method: 'GET', headers: { Authorization: createServiceAuthHeader(), ...correlationHeader(requestId) },
+    signal: AbortSignal.timeout(10000),
+  })));
+}
+
 module.exports = {
+  getReturnLocations,
   getVariantPublicAvailability,
   getBookPublicAvailability,
   getBookVariantIds,

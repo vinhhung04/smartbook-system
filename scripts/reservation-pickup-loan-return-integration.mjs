@@ -66,11 +66,14 @@ function idemHeader() {
 async function findStockTarget(minimumQuantity = 1) {
   const response = await fetch(`${baseUrl}/api/books`, { headers: makeHeaders() });
   const books = await response.json().catch(() => []);
-  return (Array.isArray(books) ? books : []).find((book) =>
-    book?.variant_id &&
-    book?.default_warehouse_id &&
-    Number(book?.quantity || 0) >= minimumQuantity
-  );
+  // Catalog quantity can include stock at a different warehouse. Probe the
+  // actual reservation target so repeated QA runs do not choose exhausted stock.
+  for (const book of Array.isArray(books) ? books : []) {
+    if (!book?.variant_id || !book?.default_warehouse_id || Number(book.quantity || 0) < minimumQuantity) continue;
+    const availability = await request('GET', `/api/borrow-integration/availability?variant_id=${encodeURIComponent(book.variant_id)}&warehouse_id=${encodeURIComponent(book.default_warehouse_id)}&quantity=${minimumQuantity}`);
+    if (availability.ok) return book;
+  }
+  return null;
 }
 
 async function resolveStockTarget() {

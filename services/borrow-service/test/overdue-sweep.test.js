@@ -14,8 +14,12 @@ function createFakePrisma(items) {
   const updatedItems = [];
   const tx = {
     async $executeRaw() {},
-    loan_items: { async update({ where }) { updatedItems.push(where.id); } },
-    loan_transactions: { async update() {} },
+    overdue_fine_episodes: { async upsert() { return { baseline_days: 0, waived_future: false }; } },
+    loan_items: {
+      async findUnique({ where }) { return items.find(item => item.id === where.id); },
+      async update({ where }) { updatedItems.push(where.id); },
+    },
+    loan_transactions: { async update() {}, async updateMany() {} },
     fines: {
       async findFirst() { return null; },
       async create({ data }) { return { id: `fine-${data.loan_item_id}`, ...data }; },
@@ -46,7 +50,7 @@ function createFakePrisma(items) {
       },
     },
     customer_memberships: {
-      async findFirst() { return { membership_plans: { fine_per_day: 5000 } }; },
+      async findFirst() { return { membership_plans: { is_active: true, fine_per_day: 5000 } }; },
     },
     async $transaction(fn) { return fn(tx); },
   };
@@ -89,4 +93,25 @@ test('runOverdueSweep pages with a stable (due_date, id) keyset so ties are neit
   assert.equal(result.processed_items, 3);
   assert.deepEqual(prisma.updatedItems, ['t1', 't2', 't3']);
   assert.deepEqual(prisma.findManyCalls[0].orderBy, [{ due_date: 'asc' }, { id: 'asc' }]);
+});
+
+
+test('SB19: a return committed after scan is not overwritten or fined by the sweep', async () => {
+  const row = item('returned-during-scan', 3);
+  const prisma = createFakePrisma([row]);
+  const transaction = prisma.$transaction;
+  let fineWrites = 0;
+  prisma.$transaction = async fn => {
+    row.status = 'RETURNED';
+    row.return_date = NOW;
+    row.loan_transactions.status = 'RETURNED';
+    return transaction(async tx => {
+      tx.fines.create = async () => { fineWrites += 1; return { status: 'UNPAID' }; };
+      return fn(tx);
+    });
+  };
+  const result = await runOverdueSweep(prisma, { now: NOW });
+  assert.deepEqual(prisma.updatedItems, []);
+  assert.equal(fineWrites, 0);
+  assert.equal(result.processed_items, 0);
 });

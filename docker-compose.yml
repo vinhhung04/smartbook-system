@@ -400,9 +400,7 @@ services:
       - OPEN_LIBRARY_API_BASE_URL=${OPEN_LIBRARY_API_BASE_URL:-https://openlibrary.org/api/books}
       - BOOK_LOOKUP_TIMEOUT_SECONDS=${BOOK_LOOKUP_TIMEOUT_SECONDS:-15}
       - GOOGLE_BOOKS_API_KEY=${GOOGLE_BOOKS_API_KEY:-}
-      # WorldCat thường chậm & ít cải thiện, tắt mặc định để lookup nhanh hơn
-      - ENABLE_WORLDCAT_LOOKUP=${ENABLE_WORLDCAT_LOOKUP:-false}
-      # Marketplace lookup (Fahasa / Tiki / Vinabook)
+      # Marketplace lookup (Fahasa / Tiki)
       - ENABLE_MARKETPLACE_LOOKUP=${ENABLE_MARKETPLACE_LOOKUP:-true}
       # Field-level retrieval: chỉ gọi marketplace/web cho field còn thiếu (mặc định tắt, chờ eval)
       - ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL=${ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL:-false}
@@ -414,7 +412,7 @@ services:
       - ISBN_INCOMPLETE_CACHE_TTL_SECONDS=${ISBN_INCOMPLETE_CACHE_TTL_SECONDS:-600}
       # Tra cứu hai vòng (isbn_rounds.py): vòng 1 hỏi tuần tự theo mã theo thứ tự này,
       # vòng 2 hỏi mọi nguồn còn bật. Xem docs/reports/BOOK_SEARCH_UPGRADE_REPORT.md.
-      - ISBN_ROUND1_ORDER=${ISBN_ROUND1_ORDER:-catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,fahasa}
+      - ISBN_ROUND1_ORDER=${ISBN_ROUND1_ORDER:-catalog,nhanam,vanLang,thaiHa,ipm,kimDong,azVietnam,omegaPlus,tanViet,alphaBooks,phuongNam,nhanVan,minhLong,dinhTi,bizbooks,googleBooks,openLibrary,loc,dnb,fahasa}
       - ISBN_DISABLED_SOURCES=${ISBN_DISABLED_SOURCES:-}
       - ISBN_PROVIDER_TIMEOUT_SECONDS=${ISBN_PROVIDER_TIMEOUT_SECONDS:-10}
       - ISBN_PROVIDER_RETRIES=${ISBN_PROVIDER_RETRIES:-1}

@@ -707,12 +707,26 @@ model stock_audit_lines {
   counted_qty       Int?
   variance_qty      Int?
   adjustment_posted Boolean       @default(false)
+  counted_at        DateTime?      @db.Timestamptz(6)
+  baseline_on_hand_qty Int?
+  baseline_borrowed_qty Int?
   note              String?
   locations         locations     @relation(fields: [location_id], references: [id], onUpdate: NoAction)
   stock_audits      stock_audits  @relation(fields: [stock_audit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   book_variants     book_variants @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
 
   @@unique([stock_audit_id, variant_id, location_id])
+}
+
+model stock_audit_location_sessions {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stock_audit_id        String    @db.Uuid
+  location_id           String    @db.Uuid
+  started_at            DateTime? @db.Timestamptz(6)
+  counting_completed_at DateTime? @db.Timestamptz(6)
+  released_at           DateTime? @db.Timestamptz(6)
+
+  @@index([stock_audit_id], map: "idx_stock_audit_location_audit")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -1465,4 +1479,52 @@ model procurement_reconciliations {
   purchase_orders      purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([purchase_order_id, created_at], map: "idx_procurement_reconciliations_po")
+}
+
+model transfer_discrepancies {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transfer_order_id String @unique @db.Uuid
+  goods_receipt_id String @db.Uuid
+  from_warehouse_id String @db.Uuid
+  to_warehouse_id String @db.Uuid
+  status String @default("OPEN") @db.VarChar(20)
+  created_by_user_id String? @db.Uuid
+  resolved_by_user_id String? @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  resolved_at DateTime? @db.Timestamptz(6)
+  @@index([to_warehouse_id, status], map: "idx_transfer_discrepancies_destination_status")
+}
+
+model transfer_discrepancy_items {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  discrepancy_id String @db.Uuid
+  transfer_order_item_id String @unique @db.Uuid
+  variant_id String @db.Uuid
+  shipped_qty Int
+  delivered_qty Int
+  accepted_qty Int
+  damaged_qty Int
+  rejected_qty Int
+  missing_qty Int
+  remaining_damaged_qty Int
+  remaining_rejected_qty Int
+  remaining_missing_qty Int
+  @@index([discrepancy_id], map: "idx_transfer_discrepancy_items_case")
+}
+
+model transfer_discrepancy_resolutions {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  discrepancy_id String @db.Uuid
+  discrepancy_item_id String @db.Uuid
+  bucket String @db.VarChar(20)
+  action String @db.VarChar(30)
+  quantity Int
+  reason String
+  evidence_reference String
+  idempotency_key String @unique @db.VarChar(100)
+  redelivery_transfer_id String? @db.Uuid
+  actor_user_id String @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  @@index([discrepancy_id], map: "idx_transfer_resolution_case")
+  @@index([redelivery_transfer_id], map: "idx_transfer_resolution_replacement")
 }

@@ -33,7 +33,7 @@ import { SourceComparison } from "./source-comparison";
 import { ReviewChecklist, type ChecklistItem } from "./review-checklist";
 import { applyProgressEvent, finishProgress, initialProgress, markClientStep, type LookupProgress, type PhaseState } from "./lookup-progress";
 import type { FieldFilter } from "./field-review-model";
-import { AI_FORM_FIELD, EMPTY_FORM, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
+import { AI_FIELD_NOUN, AI_FORM_FIELD, EMPTY_FORM, qualityCheckBasis, type QualityCheckResult, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
 import { applySafeProposals, formFromScan, lookupStateFromScan, OCR_FIELD_LABELS, singleSourceProposals, unresolvedOcrFields } from "@/lib/book-ocr";
 import type { BookOcrScanResult } from "@/services/book-ocr";
 import { imageFileToDataUrl } from "@/lib/resize-image";
@@ -43,6 +43,7 @@ import {
   findDuplicateMatches,
   mapLookupToForm,
   mergeCommaText,
+  planBulkAiApply,
   normalizeIsbnInput,
   parsePublishYear,
   reconciliationValueFromForm,
@@ -111,7 +112,7 @@ export function AIImportPage() {
   const [aiApplied, setAiApplied] = useState<Partial<Record<AiFieldKey, AiAppliedChange>>>({});
   const [aiDismissed, setAiDismissed] = useState<Partial<Record<AiFieldKey, true>>>({});
   const [qualityCheckLoading, setQualityCheckLoading] = useState(false);
-  const [qualityCheckResult, setQualityCheckResult] = useState<{ provider: string; warnings: string[] } | null>(null);
+  const [qualityCheckResult, setQualityCheckResult] = useState<QualityCheckResult | null>(null);
 
   const [catalogBooks, setCatalogBooks] = useState<CatalogBookLite[]>([]);
   const [confirmDuplicateSave, setConfirmDuplicateSave] = useState(false);
@@ -337,11 +338,13 @@ export function AIImportPage() {
       setProgress((current) => finishProgress(current, lookup));
       setLookupData(lookup);
       setPostIsbnSuggestions(result.aiSuggestions);
+      // Each suggestion remembers the field value it was written against (the form this lookup fills).
+      const lookupForm = lookup.found ? mapLookupToForm(lookup) : EMPTY_FORM;
       setAiFieldCandidates({
-        description: result.aiSuggestions.description ? { value: result.aiSuggestions.description, source: "postIsbn" } : null,
-        summaryVi: result.aiSuggestions.summaryVi ? { value: result.aiSuggestions.summaryVi, source: "postIsbn" } : null,
-        keywords: result.aiSuggestions.keywords.length > 0 ? { value: result.aiSuggestions.keywords.join(", "), source: "postIsbn" } : null,
-        categories: result.aiSuggestions.categories.length > 0 ? { value: result.aiSuggestions.categories.join(", "), source: "postIsbn" } : null,
+        description: result.aiSuggestions.description ? { value: result.aiSuggestions.description, source: "postIsbn", basis: lookupForm.description } : null,
+        summaryVi: result.aiSuggestions.summaryVi ? { value: result.aiSuggestions.summaryVi, source: "postIsbn", basis: lookupForm.summaryVi } : null,
+        keywords: result.aiSuggestions.keywords.length > 0 ? { value: result.aiSuggestions.keywords.join(", "), source: "postIsbn", basis: lookupForm.keywordsText } : null,
+        categories: result.aiSuggestions.categories.length > 0 ? { value: result.aiSuggestions.categories.join(", "), source: "postIsbn", basis: lookupForm.categoriesText } : null,
       });
 
       if (lookup.found) {
@@ -607,6 +610,8 @@ export function AIImportPage() {
     setAiApplied((prev) => ({ ...prev, [field]: undefined }));
     setAiDismissed((prev) => ({ ...prev, [field]: undefined }));
     const failed = (message: string) => setAiFieldErrors((prev) => ({ ...prev, [field]: message }));
+    // The field values this request is written against (see AiFieldCandidate.basis).
+    const basis = { description: form.description, summaryVi: form.summaryVi, keywords: form.keywordsText, categories: form.categoriesText };
     try {
       if (field === "description") {
         if (!form.description.trim()) {
@@ -619,8 +624,8 @@ export function AIImportPage() {
           });
           setAiFieldCandidates((prev) => ({
             ...prev,
-            description: result.summaryVi ? { value: result.summaryVi, source: "generated" } : prev.description,
-            keywords: result.keywords?.length ? { value: result.keywords.join(", "), source: "generated" } : prev.keywords,
+            description: result.summaryVi ? { value: result.summaryVi, source: "generated", basis: basis.description } : prev.description,
+            keywords: result.keywords?.length ? { value: result.keywords.join(", "), source: "generated", basis: basis.keywords } : prev.keywords,
           }));
           if (result.keywords?.length) setAiApplied((prev) => ({ ...prev, keywords: undefined }));
           if (!result.summaryVi) failed("AI không trả về mô tả mới.");
@@ -634,7 +639,7 @@ export function AIImportPage() {
             mode: "normalize_description",
           });
           if (result.normalizedDescription) {
-            setAiFieldCandidates((prev) => ({ ...prev, description: { value: result.normalizedDescription!, source: "generated" } }));
+            setAiFieldCandidates((prev) => ({ ...prev, description: { value: result.normalizedDescription!, source: "generated", basis: basis.description } }));
           } else {
             failed(result.qualityWarnings[0] || "AI không tạo được mô tả mới.");
           }
@@ -660,12 +665,12 @@ export function AIImportPage() {
       // The new suggestion appears in its own field (and is announced there); a failure is
       // said inline next to it, with a retry, instead of in a toast far from the field.
       if (field === "summaryVi" && result.shortSummary) {
-        setAiFieldCandidates((prev) => ({ ...prev, summaryVi: { value: result.shortSummary!, source: "generated" } }));
+        setAiFieldCandidates((prev) => ({ ...prev, summaryVi: { value: result.shortSummary!, source: "generated", basis: basis.summaryVi } }));
       } else if (field === "keywords" && result.keywords.length > 0) {
         const sanitized = [...new Set(result.keywords.map((k) => k.trim()).filter((k) => k.length > 0 && k.length <= 50))].slice(0, 15);
-        setAiFieldCandidates((prev) => ({ ...prev, keywords: { value: sanitized.join(", "), source: "generated" } }));
+        setAiFieldCandidates((prev) => ({ ...prev, keywords: { value: sanitized.join(", "), source: "generated", basis: basis.keywords } }));
       } else if (field === "categories" && result.suggestedCategories.length > 0) {
-        setAiFieldCandidates((prev) => ({ ...prev, categories: { value: result.suggestedCategories.join(", "), source: "generated" } }));
+        setAiFieldCandidates((prev) => ({ ...prev, categories: { value: result.suggestedCategories.join(", "), source: "generated", basis: basis.categories } }));
       } else {
         failed(result.qualityWarnings[0] || "AI không trả về kết quả nào.");
       }
@@ -685,44 +690,65 @@ export function AIImportPage() {
     return mergeCommaText(current, selected ?? splitCommaValues(candidate.value));
   }
 
+  /** An applied suggestion is the field's value now, so the field shows "Đã dùng đề xuất AI";
+   *  whether it was the user's own value before is kept for Undo. */
+  function setEditedFlags(fields: string[], edited: boolean) {
+    if (!fields.length) return;
+    setUserEditedFields((current) => {
+      const next = new Set(current);
+      for (const field of fields) { if (edited) next.add(field); else next.delete(field); }
+      return next;
+    });
+  }
+
   function applyAiFieldCandidate(field: AiFieldKey, selected?: string[]) {
     const target = AI_FORM_FIELD[field];
     const previous = form[target];
     const next = aiAppliedValue(field, previous, selected);
     if (next === null || next === previous) return;
     setForm((prev) => ({ ...prev, [target]: next }));
-    setAiApplied((prev) => ({ ...prev, [field]: { previous, applied: next, direct: true } }));
+    setAiApplied((prev) => ({ ...prev, [field]: { previous, applied: next, direct: true, wasEdited: userEditedFields.has(target) } }));
+    setEditedFlags([target], false);
   }
 
+  /** Applies only what planBulkAiApply calls safe; what it holds back is said, not skipped silently. */
   function applyAllAiFieldCandidates() {
-    const fields = (Object.keys(AI_FORM_FIELD) as AiFieldKey[]).filter((field) => !aiApplied[field] && aiFieldCandidates[field]?.value.trim());
+    const plan = planBulkAiApply({ form, candidates: aiFieldCandidates, applied: aiApplied, edited: userEditedFields, existingCategories });
     const changes: Partial<Record<AiFieldKey, AiAppliedChange>> = {};
     const patch: Partial<EditableBookForm> = {};
-    for (const field of fields) {
-      const previous = form[AI_FORM_FIELD[field]];
-      const next = aiAppliedValue(field, previous);
-      if (next === null || next === previous) continue;
-      patch[AI_FORM_FIELD[field]] = next;
-      changes[field] = { previous, applied: next, direct: false };
+    for (const { field, next } of plan.apply) {
+      const target = AI_FORM_FIELD[field];
+      patch[target] = next;
+      changes[field] = { previous: form[target], applied: next, direct: false, wasEdited: userEditedFields.has(target) };
     }
-    if (!Object.keys(changes).length) return;
-    setForm((prev) => ({ ...prev, ...patch }));
-    setAiApplied((prev) => ({ ...prev, ...changes }));
+    if (Object.keys(changes).length) {
+      setForm((prev) => ({ ...prev, ...patch }));
+      setAiApplied((prev) => ({ ...prev, ...changes }));
+      setEditedFlags(plan.apply.map(({ field }) => AI_FORM_FIELD[field]), false);
+    }
+    if (plan.held.length) {
+      const nouns = plan.held.map(({ field }) => AI_FIELD_NOUN[field]).join(", ");
+      toast.info(`Chưa áp dụng ${nouns}: cần bạn duyệt riêng ở từng trường.`);
+    }
   }
 
   /** Undo puts the old value back only if the field still holds what the suggestion wrote;
    *  a later edit by the user is never thrown away. */
   function undoAiFields(fields: AiFieldKey[]) {
     const patch: Partial<EditableBookForm> = {};
+    const restoredEdited: string[] = [];
     let kept = 0;
     for (const field of fields) {
       const change = aiApplied[field];
       if (!change) continue;
       const target = AI_FORM_FIELD[field];
-      if (form[target] === change.applied) patch[target] = change.previous;
-      else kept += 1;
+      if (form[target] === change.applied) {
+        patch[target] = change.previous;
+        if (change.wasEdited) restoredEdited.push(target);
+      } else kept += 1;
     }
     setForm((prev) => ({ ...prev, ...patch }));
+    setEditedFlags(restoredEdited, true);
     setAiApplied((prev) => ({ ...prev, ...Object.fromEntries(fields.map((field) => [field, undefined])) }));
     if (kept) toast.info("Trường đã được sửa sau khi áp dụng, nên giữ nguyên nội dung hiện tại.");
   }
@@ -741,6 +767,8 @@ export function AIImportPage() {
     }
     setQualityCheckLoading(true);
     setQualityCheckResult(null);
+    const basis = qualityCheckBasis(form);
+    // The result is shown (and announced) next to the button, so no toast repeats it.
     try {
       const result = await aiService.enrichBookMetadata({
         title: form.title.trim(),
@@ -748,13 +776,12 @@ export function AIImportPage() {
         publisher: form.publisher || undefined,
         description: form.description || undefined,
         categories: form.categoriesText.split(",").map((c) => c.trim()).filter(Boolean),
+        language: form.language.trim() || undefined,
         mode: "quality_check",
       });
-      setQualityCheckResult({ provider: result.ai_provider, warnings: result.qualityWarnings });
-      if (result.qualityWarnings.length === 0) toast.success("AI không đưa ra cảnh báo chất lượng nào");
-      else toast.warning(result.qualityWarnings[0]);
+      setQualityCheckResult({ provider: result.ai_provider, warnings: result.qualityWarnings, checkedAt: Date.now(), basis });
     } catch (err) {
-      toast.error(getApiErrorMessage(err, "Công cụ AI gặp lỗi, vui lòng thử lại"));
+      setQualityCheckResult({ provider: "none", warnings: [], checkedAt: Date.now(), basis, error: getApiErrorMessage(err, "Không chạy được kiểm tra chất lượng, vui lòng thử lại") });
     } finally {
       setQualityCheckLoading(false);
     }

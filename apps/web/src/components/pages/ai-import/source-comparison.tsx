@@ -1,11 +1,12 @@
 import { useRef, type ReactNode } from "react";
-import { BadgeCheck, Camera, ChevronDown, ExternalLink, Info, PencilLine, SearchX } from "lucide-react";
+import { Camera, Check, ChevronDown, ExternalLink, Info, PencilLine, SearchX, Star } from "lucide-react";
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from "@/lib/gsap";
 import type { IsbnLookupSource, LookupBookByIsbnResponse } from "@/services/ai";
 import {
-  QUERY_LABELS, SOURCE_KIND_META, SOURCE_STATUS_META, TONE_CHIP, VERIFICATION_LABELS, formatDuration, publicError, reasonLabel,
-  safeHttpUrl, sourceKind, summarizeSources, type SourceStatus, type SourceTileData,
+  QUERY_LABELS, SOURCE_DOMAINS, SOURCE_KIND_META, SOURCE_STATUS_META, TONE_CHIP, VERIFICATION_LABELS, formatDuration, publicError,
+  reasonLabel, safeHttpUrl, sourceKind, summarizeSources, type SourceStatus, type SourceTileData,
 } from "./source-meta";
+import { SourceLogo } from "./source-logo";
 import { SourceTile } from "./source-tile";
 import { SOURCE_LABELS } from "./utils";
 
@@ -26,34 +27,53 @@ const toTile = (source: IsbnLookupSource): SourceTileData => ({
   attempts: source.attempts, verification: source.verification, matchConfidence: source.matchConfidence, reason: source.reason, error: source.error,
 });
 
+/** Badge on a logo corner: the source that identified the book gets a star, the rest a check. */
+function FoundBadge({ identifying }: { identifying: boolean }) {
+  return identifying
+    ? <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-emerald-600 text-white dark:bg-emerald-500"><Star className="h-2.5 w-2.5 fill-current" /></span>
+    : <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-emerald-500 text-white dark:bg-emerald-600"><Check className="h-3 w-3" strokeWidth={3} /></span>;
+}
+
 /** A source that returned data: the one place with full detail and a link. */
 function FoundSource({ source, identifying }: { source: IsbnLookupSource; identifying: boolean }) {
-  const kind = SOURCE_KIND_META[sourceKind(source.name)];
   const url = safeHttpUrl(source.sourceUrl);
+  const domain = SOURCE_DOMAINS[source.name];
+  const kind = SOURCE_KIND_META[sourceKind(source.name)].label;
+  const name = SOURCE_LABELS[source.name] || source.name;
   const how = [
     source.round ? `Vòng ${source.round}` : null,
     source.query && source.query !== "-" ? QUERY_LABELS[source.query]?.toLowerCase() : null,
   ].filter(Boolean).join(", ");
+  const duration = formatDuration(source.durationMs);
   return (
-    <li className="flex items-start gap-3 px-4 py-3" data-testid={`source-row-${source.name}`}>
-      <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${identifying ? "bg-emerald-600 text-white dark:bg-emerald-500" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"}`}>
-        <kind.icon className="h-4 w-4" aria-hidden="true" />
-      </span>
+    <li className="group/source flex items-center gap-3.5 px-4 py-3.5" data-testid={`source-row-${source.name}`}>
+      <SourceLogo source={source.name} size="lg" badge={<FoundBadge identifying={identifying} />} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-[14px] font-semibold text-foreground">{SOURCE_LABELS[source.name] || source.name}</p>
-          <StatusChip status={source.status} />
-          {identifying ? <span className="text-[12px] font-medium text-emerald-700 dark:text-emerald-400">Xác định sách</span> : null}
+          <p className="text-[14.5px] font-semibold leading-snug text-foreground">
+            {name}<span className="sr-only">, {SOURCE_STATUS_META[source.status].label.toLowerCase()}</span>
+          </p>
+          {identifying ? (
+            <span className="inline-flex items-center rounded-full bg-emerald-600/10 px-2 py-px text-[11.5px] font-semibold text-emerald-800 dark:bg-emerald-400/15 dark:text-emerald-300">
+              Xác định sách
+            </span>
+          ) : null}
         </div>
-        <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-          {how}
-          {source.verification ? <>{how ? ", " : ""}<span className="text-foreground">{VERIFICATION_LABELS[source.verification]}</span>{source.verification === "TITLE_MATCH" && source.matchConfidence ? ` ${Math.round(source.matchConfidence * 100)}%` : ""}</> : null}
-          {formatDuration(source.durationMs) ? <span className="tabular-nums">, {formatDuration(source.durationMs)}</span> : null}
+        <p className="truncate text-[12.5px] text-muted-foreground">{domain ? <>{domain}<span aria-hidden="true"> · </span>{kind}</> : kind}</p>
+        <p className="mt-1 flex flex-wrap gap-x-1.5 text-[12px] text-muted-foreground">
+          {source.verification ? (
+            <span className="font-medium text-foreground">
+              {VERIFICATION_LABELS[source.verification]}
+              {source.verification === "TITLE_MATCH" && source.matchConfidence ? ` ${Math.round(source.matchConfidence * 100)}%` : ""}
+            </span>
+          ) : null}
+          {how ? <span>{source.verification ? <span aria-hidden="true">· </span> : null}{how}</span> : null}
+          {duration ? <span className="tabular-nums">{source.verification || how ? <span aria-hidden="true">· </span> : null}{duration}</span> : null}
         </p>
       </div>
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer noopener" aria-label={`Mở trang ${SOURCE_LABELS[source.name] || source.name} (tab mới)`}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
+        <a href={url} target="_blank" rel="noreferrer noopener" aria-label={`Mở bản ghi trên ${name} (tab mới)`} title="Mở bản ghi gốc"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring">
           <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </a>
       ) : null}
@@ -119,8 +139,8 @@ export function SourceComparison({ lookup, onUseOcr, onManualEntry }: {
   return (
     <div className="space-y-6">
       {lookup.found && identifyingSource ? (
-        <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3.5 dark:border-emerald-500/25 dark:bg-emerald-500/[0.07]">
-          <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+        <div className="flex items-start gap-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3.5 dark:border-emerald-500/25 dark:bg-emerald-500/[0.07]">
+          <SourceLogo source={identifying!} size="lg" badge={<FoundBadge identifying />} />
           <div className="min-w-0 text-[13.5px]">
             <p className="font-semibold text-foreground">Sách được xác định bởi {SOURCE_LABELS[identifying!] || identifying}</p>
             <p className="mt-0.5 text-muted-foreground">

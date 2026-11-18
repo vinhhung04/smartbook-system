@@ -9,6 +9,8 @@ const {
   submitStockAudit,
   approveStockAudit,
   cancelStockAudit,
+  recountStockAudit,
+  confirmLocationCount,
 } = require('../controllers/stock-audit.controller');
 const {
   authorizeAnyPermission,
@@ -30,6 +32,8 @@ router.get('/:id', canRead, getStockAuditById);
 router.post('/', canCreate, createStockAudit);
 router.patch('/:id/assign', canDecide, assignStockAudit);
 router.patch('/:id/lines/:lineId', canCount, submitLineCount);
+router.patch('/:id/recount', canCount, recountStockAudit);
+router.patch('/:id/locations/:locationId/confirm-count', canCount, confirmLocationCount);
 router.patch('/:id/submit', canCount, submitStockAudit);
 router.patch('/:id/approve', canApprove, approveStockAudit);
 router.patch('/:id/cancel', canDecide, cancelStockAudit);

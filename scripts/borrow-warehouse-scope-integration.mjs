@@ -4,6 +4,7 @@
 // auth seed; manager01/hung are scoped to WH-HCM-01 too, used here only to create
 // fixtures). Customer self-service must stay unaffected (no warehouse scope at all).
 import crypto from 'node:crypto';
+import { createCustomerFixture } from './testing/customer-fixture.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
@@ -74,13 +75,22 @@ async function main() {
   check('fixture: BR-HCM-01 and WH-HCM-01 both exist', Boolean(brHcm && whHcm));
 
   const books = await ok('GET', '/api/books', H);
-  const bookAt = (warehouseId) => books.find((b) => b.variant_id && b.default_warehouse_id === warehouseId && Number(b.quantity || 0) >= 1);
-  const bookBr = bookAt(brHcm.id);
-  const bookWh = bookAt(whHcm.id);
+  const bookAt = async (warehouseId) => {
+    for (const book of books) {
+      if (!book.variant_id || book.default_warehouse_id !== warehouseId || Number(book.quantity || 0) < 1) continue;
+      const available = await request('GET', `/api/borrow-integration/availability?variant_id=${encodeURIComponent(book.variant_id)}&warehouse_id=${encodeURIComponent(warehouseId)}&quantity=1`, H);
+      if (available.response.ok) return book;
+    }
+    return null;
+  };
+  const bookBr = await bookAt(brHcm.id);
+  const bookWh = await bookAt(whHcm.id);
   check('fixture: a borrowable book exists at BR-HCM-01', Boolean(bookBr));
   check('fixture: a borrowable book exists at WH-HCM-01', Boolean(bookWh));
 
-  const customer01 = await login('customer01');
+  const customer01 = process.env.SMARTBOOK_TEST_ISOLATED === '1'
+    ? await createCustomerFixture({ baseUrl, password, adminToken: H })
+    : await login('customer01');
   const profile = await ok('GET', '/borrow/my/profile', customer01.token);
   const customerId = profile.data.id;
   check('fixture: resolved a real, active customer id', Boolean(customerId));

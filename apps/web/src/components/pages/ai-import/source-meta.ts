@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import {
-  Ban, BookMarked, Building2, CheckCircle2, CircleSlash, Clock3, CopyX, FileWarning, Library, PauseCircle, Search, SkipForward, Sparkles, Store, XCircle,
+  Ban, BookMarked, Building2, CheckCircle2, CircleSlash, Clock3, CopyX, FileWarning, Landmark, Library, PauseCircle, ScrollText, Search, SkipForward, Sparkles, Store, XCircle,
 } from "lucide-react";
 import type { IsbnLookupSource, IsbnSourceName, IsbnVerification, LookupBookByIsbnResponse } from "@/services/ai";
 import { SOURCE_LABELS } from "./utils";
@@ -106,14 +106,23 @@ export function summarizeSources(lookup: LookupBookByIsbnResponse): SourceSummar
   };
 }
 
-export type SourceKind = "catalog" | "library" | "publisher" | "store" | "web" | "ai";
+export type SourceKind = "catalog" | "library" | "national" | "registry" | "publisher" | "store" | "web" | "ai";
 
 /** What kind of place each source is - drawn as the tile icon so a list of names scans by type. */
 const SOURCE_KIND: Partial<Record<IsbnSourceName, SourceKind>> = {
   catalog: "catalog",
-  googleBooks: "library", openLibrary: "library", worldCat: "library",
-  fahasa: "store", tiki: "store", vinabook: "store", phuongNam: "store", nhanVan: "store",
+  googleBooks: "library", openLibrary: "library", loc: "national", dnb: "national", ppdvn: "registry",
+  fahasa: "store", tiki: "store", phuongNam: "store", nhanVan: "store",
   webSearch: "web", aiWebSearch: "ai",
+};
+
+/** The site each source reads, shown under its name so a librarian can tell where data came from. */
+export const SOURCE_DOMAINS: Partial<Record<IsbnSourceName, string>> = {
+  googleBooks: "books.google.com", openLibrary: "openlibrary.org", loc: "loc.gov", dnb: "dnb.de", ppdvn: "ppdvn.gov.vn",
+  fahasa: "fahasa.com", tiki: "tiki.vn", nhanam: "nhanam.vn", dinhTi: "dinhtibooks.com.vn", thaiHa: "nhasachthaiha.vn",
+  vanLang: "vanlang.vn", ipm: "ipm.vn", kimDong: "nxbkimdong.com.vn", azVietnam: "azvietnam.vn", omegaPlus: "omegaplus.vn",
+  tanViet: "tanvietbooks.vn", alphaBooks: "alphabooks.vn", phuongNam: "nhasachphuongnam.com", nhanVan: "nhanvan.vn",
+  minhLong: "minhlongbook.vn", bizbooks: "bizbooks.vn",
 };
 
 export function sourceKind(source: IsbnSourceName): SourceKind {
@@ -121,8 +130,10 @@ export function sourceKind(source: IsbnSourceName): SourceKind {
 }
 
 export const SOURCE_KIND_META: Record<SourceKind, { label: string; icon: ComponentType<{ className?: string }> }> = {
-  catalog: { label: "Kho SmartBook", icon: Library },
-  library: { label: "Thư viện số / cơ sở dữ liệu sách", icon: BookMarked },
+  catalog: { label: "Danh mục của thư viện", icon: Library },
+  library: { label: "Cơ sở dữ liệu sách", icon: BookMarked },
+  national: { label: "Thư viện quốc gia", icon: Landmark },
+  registry: { label: "Sổ lưu chiểu xuất bản", icon: ScrollText },
   publisher: { label: "Nhà xuất bản / nhà phát hành", icon: Building2 },
   store: { label: "Nhà sách trực tuyến", icon: Store },
   web: { label: "Tìm kiếm web", icon: Search },

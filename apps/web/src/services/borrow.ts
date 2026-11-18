@@ -152,6 +152,23 @@ export interface ReturnPreviewItem {
   deposit_captured: number;
   deposit_refunded: number;
   additional_due: number;
+  item_condition_on_return?: string;
+  requires_reason?: boolean;
+}
+
+export interface ReturnItemInput {
+  loan_item_id: string;
+  item_condition_on_return?: string;
+  returned_to_location_id?: string;
+  notes?: string;
+  mark_lost?: boolean;
+  settlement_reason?: string;
+}
+export interface ReturnPayload extends Partial<ReturnItemInput> { items?: ReturnItemInput[] }
+export interface ReturnItemResult {
+  loan_item_id: string;
+  status: 'RETURNED' | 'LOST' | 'RECONCILIATION_REQUIRED' | 'UNKNOWN' | 'NOT_PROCESSED';
+  item_condition_on_return?: string;
 }
 
 export interface ReturnPreview {
@@ -242,6 +259,10 @@ export interface Fine {
   paid_at: string | null;
   waived_by_user_id: string | null;
   note: string | null;
+  accrual_from_days?: number | null;
+  accrual_through_days?: number | null;
+  accrual_daily_rate?: number | string | null;
+  accrual_due_date?: string | null;
   customers?: {
     id: string;
     customer_code: string;
@@ -255,6 +276,7 @@ export interface Fine {
     status: string;
     item_barcode: string | null;
     loan_transactions?: { loan_number: string };
+    overdue_fine_episode?: { waived_future: boolean; waiver_reason: string | null } | null;
   } | null;
   fine_payments?: FinePayment[];
   summary?: FineSummary;
@@ -420,15 +442,17 @@ export const borrowService = {
     return response.data as { data: Loan };
   },
 
-  returnLoan: async (id: string, payload?: { loan_item_id?: string; returned_to_location_id?: string; item_condition_on_return?: string; notes?: string; mark_lost?: boolean; settlement_reason?: string }, idempotencyKey?: string) => {
+  returnLoan: async (id: string, payload?: ReturnPayload, idempotencyKey?: string) => {
     const response = await gatewayAPI.post(`/borrow/loans/${id}/return`, payload || {}, {
         headers: createIdempotencyHeaders(idempotencyKey),
       });
-    return response.data as { data: Loan };
+    return response.data as { data: Loan & { item_results?: ReturnItemResult[] }; idempotent?: boolean };
   },
 
-  previewReturn: async (id: string, params: { loan_item_id?: string; item_condition_on_return?: string; mark_lost?: boolean }) => {
-    const response = await gatewayAPI.get(`/borrow/loans/${id}/return-preview`, { params });
+  previewReturn: async (id: string, params: ReturnPayload) => {
+    const response = params.items
+      ? await gatewayAPI.post(`/borrow/loans/${id}/return-preview`, params)
+      : await gatewayAPI.get(`/borrow/loans/${id}/return-preview`, { params });
     return response.data as { data: ReturnPreview };
   },
 
@@ -489,7 +513,7 @@ export const borrowService = {
     return response.data;
   },
 
-  waiveFine: async (id: string, payload: { amount?: number; note?: string }) => {
+  waiveFine: async (id: string, payload: { amount?: number; note?: string; waive_future?: boolean }) => {
     const response = await gatewayAPI.patch(`/borrow/fines/${id}/waive`, payload);
     return response.data as {
       message: string;

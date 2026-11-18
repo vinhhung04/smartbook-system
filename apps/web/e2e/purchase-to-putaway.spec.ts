@@ -122,7 +122,9 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   const availableBeforePutaway = available();
 
   await page.getByTestId('go-to-putaway-link').click();
-  await page.getByTestId('start-putaway-button').first().click();
+  // The header opens warehouse-wide putaway. Use this receipt's book row so
+  // older receiving backlog cannot select a different title or quantity.
+  await page.getByRole('row').filter({ hasText: bookTitle }).getByTestId('start-putaway-button').click();
 
   await page.getByTestId('putaway-reason-input').fill('E2E test putaway');
   await page.getByTestId('putaway-confirm-button').click();

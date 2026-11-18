@@ -94,8 +94,8 @@ Per-user NDCG@10 distribution:
 | RANDOM | 0.001 | 0.0001 | 0.0001 | 0.0013 |
 | POPULARITY | 0.0145 | 0.0055 | 0.0062 | 0.0136 |
 | V1_PRODUCTION | 0.0031 | 0.0009 | 0.0009 | 0.0023 |
-| V2 | 0.0041 | 0.0008 | 0.0005 | 0.002 |
-| V2+CATEGORY_CAP3 | 0.0021 | 0.0004 | 0.0003 | 0.0019 |
+| V2 | 0.0145 | 0.0055 | 0.0062 | 0.0129 |
+| V2+CATEGORY_CAP3 | 0.0145 | 0.0055 | 0.0062 | 0.0128 |
 
 **Sparse users (1–2 train loans)** – 113 users
 
@@ -205,7 +205,7 @@ Recall@10 on head vs tail targets (top 4302 books by train loan count):
 - Coverage@10 / Personalization@10: POPULARITY 0.0005/0.0224, V1_PRODUCTION 0.0219/0.9132, V2 0.1921/0.9988.
 - Ablation: not run (--skip-ablations).
 - Item cold start: Recall@10 on masked new books - V2 with imputation + new-arrival slot 0.0378, imputation only 0.025, zero evidence 0.025, POPULARITY 0.0, RANDOM 0.0 (V2 when their history is known: 0.0292).
-- Cold start, new users (n=966): NDCG@10 V2 0.0005 vs POPULARITY 0.0062 (POPULARITY higher).
+- Cold start, new users (n=966): NDCG@10 V2 0.0062 vs POPULARITY 0.0062 (equal).
 - Cold start, sparse users (n=113): NDCG@10 V2 0.0187 vs POPULARITY 0.0 (V2 higher).
 - Acceptance rule on this real library: met (informational - the production model choice is made on the synthetic dataset and is unchanged).
 

@@ -37,7 +37,7 @@ export interface LookupBookByIsbnRequest {
 }
 
 export type IsbnSourceName =
-  | 'catalog' | 'googleBooks' | 'openLibrary' | 'worldCat' | 'fahasa' | 'tiki' | 'vinabook'
+  | 'catalog' | 'googleBooks' | 'openLibrary' | 'loc' | 'dnb' | 'ppdvn' | 'fahasa' | 'tiki'
   | 'nhanam' | 'dinhTi' | 'thaiHa' | 'vanLang'
   | 'ipm' | 'kimDong' | 'azVietnam' | 'omegaPlus' | 'tanViet' | 'alphaBooks'
   | 'phuongNam' | 'nhanVan' | 'minhLong' | 'bizbooks' | 'webSearch' | 'aiWebSearch';
@@ -50,7 +50,8 @@ export type IsbnExtractionMethod = 'api_structured' | 'json_ld' | 'dom' | 'snipp
  *  services/ai-service/isbn_fusion.py's reasonCodes. */
 export type IsbnFieldReasonCode =
   | 'MULTI_SOURCE_AGREEMENT' | 'SINGLE_SOURCE' | 'SOURCE_CONFLICT' | 'MINORITY_DISAGREEMENT'
-  | 'LLM_ONLY_EVIDENCE_REJECTED' | 'NO_SOURCE_RESPONDED' | 'CATEGORY_UNION' | 'RICHEST_DESCRIPTION';
+  | 'LLM_ONLY_EVIDENCE_REJECTED' | 'NO_SOURCE_RESPONDED' | 'CATEGORY_UNION' | 'RICHEST_DESCRIPTION'
+  | 'PROMOTIONAL_DESCRIPTION_REJECTED';
 
 /** One competing value group for a field - e.g. two sources naming a different
  *  publisher each form their own candidate, ranked by `support`. */
@@ -192,10 +193,11 @@ export interface LookupBookByIsbnResponse {
     catalog?: boolean;
     googleBooks: boolean;
     openLibrary: boolean;
-    worldCat?: boolean;
+    loc?: boolean;
+    dnb?: boolean;
+    ppdvn?: boolean;
     fahasa?: boolean;
     tiki?: boolean;
-    vinabook?: boolean;
     nhanam?: boolean;
     dinhTi?: boolean;
     thaiHa?: boolean;
@@ -219,10 +221,11 @@ export interface LookupBookByIsbnResponse {
     catalog?: number;
     googleBooks: number;
     openLibrary: number;
-    worldCat?: number;
+    loc?: number;
+    dnb?: number;
+    ppdvn?: number;
     fahasa?: number;
     tiki?: number;
-    vinabook?: number;
     nhanam?: number;
     dinhTi?: number;
     thaiHa?: number;
@@ -662,6 +665,8 @@ export interface EnrichBookMetadataRequest {
   description?: string;
   categories: string[];
   existingCategories?: string[];
+  /** The book's language, for quality_check (a foreign-language book is not warned for not being Vietnamese). */
+  language?: string;
   mode: EnrichMode;
 }
 

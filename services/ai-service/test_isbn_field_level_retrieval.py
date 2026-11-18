@@ -58,7 +58,6 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
         self._patches = [
             patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", True),
             patch("main.ENABLE_MARKETPLACE_LOOKUP", True),
-            patch("main.ENABLE_WORLDCAT_LOOKUP", False),
         ]
         for p in self._patches:
             p.start()
@@ -81,23 +80,23 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
         provider.assert_not_awaited()
 
     async def test_partial_metadata_still_triggers_targeted_retrieval(self):
-        vina = market(publisher="NXB Hội Nhà Văn", publishedDate="2020", description=LONG_DESC, pageCount=228,
-                      sourceUrl="https://vinabook.test/p")
-        result, provider = await self._lookup(google_partial(), {"vinabook": vina})
+        fahasa = market(publisher="NXB Hội Nhà Văn", publishedDate="2020", description=LONG_DESC, pageCount=228,
+                        sourceUrl="https://fahasa.test/p")
+        result, provider = await self._lookup(google_partial(), {"fahasa": fahasa})
 
         self.assertTrue(result["found"])
-        self.assertEqual(called_providers(provider).count("vinabook"), 1)
+        self.assertEqual(called_providers(provider).count("fahasa"), 1)
         self.assertEqual(result["publisher"], "NXB Hội Nhà Văn")
         self.assertEqual(result["description"], LONG_DESC)
         self.assertEqual(result["pageCount"], 228)
-        self.assertEqual(result["fieldEvidence"]["publisher"]["selectedSource"], "vinabook")
+        self.assertEqual(result["fieldEvidence"]["publisher"]["selectedSource"], "fahasa")
 
-    async def test_each_provider_called_once_and_fahasa_skipped_when_gaps_filled(self):
+    async def test_each_provider_called_once_and_web_search_skipped_when_gaps_filled(self):
         tiki = market(publisher="NXB X", description=LONG_DESC)
-        vina = market(publisher="NXB X", publishedDate="2020", pageCount=228)
-        result, provider = await self._lookup(google_partial(), {"tiki": tiki, "vinabook": vina})
+        fahasa = market(publisher="NXB X", publishedDate="2020", pageCount=228)
+        result, provider = await self._lookup(google_partial(), {"tiki": tiki, "fahasa": fahasa})
 
-        self.assertEqual(sorted(called_providers(provider)), ["tiki", "vinabook"])
+        self.assertEqual(called_providers(provider), ["tiki", "fahasa"])
         self.assertEqual(result["publisher"], "NXB X")
         self.assertEqual(result["pageCount"], 228)
         self.assertEqual(result["conflicts"], [])
@@ -105,18 +104,17 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
     async def test_falls_through_to_fahasa_when_cheap_providers_cannot_fill_gaps(self):
         fahasa = market(publisher="NXB X", publishedDate="2020", description=LONG_DESC, pageCount=300)
         result, provider = await self._lookup(google_partial(), {"fahasa": fahasa})
-        self.assertEqual(called_providers(provider), ["tiki", "vinabook", "fahasa"])
+        self.assertEqual(called_providers(provider), ["tiki", "fahasa"])
         self.assertEqual(result["pageCount"], 300)
 
     async def test_provider_timeout_returns_partial_metadata_not_an_error(self):
-        table = {"tiki": market(publisher="NXB X"), "vinabook": (None, 0.0, "TIMEOUT"), "fahasa": (None, 0.0, "TIMEOUT")}
+        table = {"tiki": market(publisher="NXB X"), "fahasa": (None, 0.0, "TIMEOUT")}
         result, _ = await self._lookup(google_partial(), table)
 
         self.assertTrue(result["success"])
         self.assertTrue(result["found"])
         self.assertEqual(result["publisher"], "NXB X")
         statuses = {s["name"]: s["status"] for s in result["sources"]}
-        self.assertEqual(statuses["vinabook"], "TIMEOUT")
         self.assertEqual(statuses["fahasa"], "TIMEOUT")
 
     async def test_provider_exception_does_not_fail_the_lookup(self):
@@ -132,7 +130,7 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
         result, provider = await self._lookup((None, 0.0), {})
         self.assertFalse(result["found"])
         self.assertTrue(result["manualEntryRequired"])
-        self.assertEqual(called_providers(provider), ["tiki", "vinabook", "fahasa", "webSearch"])
+        self.assertEqual(called_providers(provider), ["tiki", "fahasa", "webSearch"])
 
     async def test_missing_only_supporting_fields_does_not_call_providers(self):
         data, score = google_full()
@@ -185,20 +183,21 @@ class ContractTests(FieldLevelLookupTests):
     """Same fixture as FieldLevelLookupTests; asserts the additive response contract."""
 
     async def test_legacy_keys_are_all_still_present(self):
-        result, _ = await self._lookup(google_partial(), {"vinabook": market(publisher="NXB X")})
+        result, _ = await self._lookup(google_partial(), {"tiki": market(publisher="NXB X")})
         for key in LEGACY_KEYS:
             self.assertIn(key, result)
 
     async def test_sources_report_phase_reasons_and_skipped(self):
         result, _ = await self._lookup(google_partial(), {"tiki": market(publisher="NXB X", description=LONG_DESC),
-                                                          "vinabook": market(publisher="NXB X", publishedDate="2020", pageCount=1)})
+                                                          "fahasa": market(publisher="NXB X", publishedDate="2020", pageCount=1)})
         by_name = {s["name"]: s for s in result["sources"]}
         self.assertEqual(by_name["googleBooks"]["phase"], "INITIAL")
         self.assertEqual(by_name["tiki"]["phase"], "TARGETED")
         self.assertIn("MISSING:publisher", by_name["tiki"]["reasons"])
-        self.assertEqual(by_name["fahasa"]["status"], "SKIPPED")
+        self.assertEqual(by_name["fahasa"]["phase"], "TARGETED")
         self.assertEqual(by_name["webSearch"]["status"], "SKIPPED")
-        self.assertEqual(by_name["worldCat"]["status"], "DISABLED")
+        self.assertNotIn("worldCat", by_name)
+        self.assertNotIn("vinabook", by_name)
 
     async def test_full_metadata_marks_marketplace_as_skipped_not_not_found(self):
         result, _ = await self._lookup(google_full(), {})
@@ -208,7 +207,7 @@ class ContractTests(FieldLevelLookupTests):
         self.assertEqual(result["retrieval"]["providerCalls"], 2)
 
     async def test_coverage_fields_and_selected_phase(self):
-        result, _ = await self._lookup(google_partial(), {"vinabook": market(
+        result, _ = await self._lookup(google_partial(), {"fahasa": market(
             publisher="NXB X", publishedDate="2020", description=LONG_DESC, pageCount=228)})
         self.assertEqual(result["fieldEvidence"]["publisher"]["selectedPhase"], "TARGETED")
         self.assertEqual(result["fieldEvidence"]["title"]["selectedPhase"], "INITIAL")
@@ -256,8 +255,8 @@ class ObservabilityTests(FieldLevelLookupTests):
     async def test_structured_log_line_summarizes_the_lookup_without_secrets(self):
         import json
         with self.assertLogs("uvicorn.error", level="INFO") as captured:
-            await self._lookup(google_partial(), {"vinabook": market(publisher="NXB X", publishedDate="2020",
-                                                                     description=LONG_DESC, pageCount=228)})
+            await self._lookup(google_partial(), {"fahasa": market(publisher="NXB X", publishedDate="2020",
+                                                                   description=LONG_DESC, pageCount=228)})
         lines = [m for m in captured.output if "isbn_lookup " in m]
         self.assertEqual(len(lines), 1)
         payload = json.loads(lines[0].split("isbn_lookup ", 1)[1])

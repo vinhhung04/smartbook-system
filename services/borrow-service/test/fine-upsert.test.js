@@ -49,7 +49,7 @@ test('upsertFine creates one UNPAID fine when none exists', async () => {
   assert.equal(tx.calls.filter((c) => c.op === 'create').length, 1);
 });
 
-test('upsertFine never re-bills a fine that is already PAID or WAIVED (one fine per loan item and type)', async () => {
+test('legacy amount-only upsertFine never infers new periods from a PAID or WAIVED amount', async () => {
   for (const status of ['PAID', 'WAIVED']) {
     const existing = { id: 'fine-1', status, amount: 8000, note: null };
     const tx = createFakeTx({ existing });

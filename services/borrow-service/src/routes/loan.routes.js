@@ -21,6 +21,7 @@ router.post('/:id/renewals/review', authorizeBorrowAdminWrite, reviewLoanRenewal
 router.get('/:id', authorizeBorrowAdminRead, getLoanById);
 router.post('/from-reservation/:id', authorizeBorrowAdminWrite, convertReservationToLoan);
 router.get('/:id/return-preview', authorizeBorrowAdminRead, previewLoanReturn);
+router.post('/:id/return-preview', authorizeBorrowAdminRead, previewLoanReturn);
 router.post('/:id/return', authorizeBorrowAdminWrite, returnLoan);
 router.post('/jobs/overdue-sweep', authorizeBorrowAdminWrite, runOverdueSweepNow);
 

@@ -1,5 +1,6 @@
 const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
+const { accrueOverdueFine } = require('./overdue-accrual.service');
 
 function normalizeMoney(value) {
   const parsed = Number(value || 0);
@@ -44,12 +45,13 @@ async function upsertFine(tx, input) {
   // $executeRaw only needs the statement to execute, never parses a result set.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`fine:${loanItemId}:${fineType}`}, 0))`;
 
-  // Matches on customer+loan_item+fine_type regardless of status — by design, only one
-  // fine per (loan item, fine type) is ever meant to exist. Restricting this lookup to
-  // UNPAID/PARTIALLY_PAID used to let a paid-off fine "disappear" from view, so the next
-  // overdue sweep (or the return-time recompute in applyReturnFines) would find no match
-  // and mint a brand-new fine for the same already-settled overdue period — charging the
-  // customer twice for one overdue stretch.
+  if (fineType === 'OVERDUE' && input.overdueDays != null && input.dailyRate != null) {
+    return accrueOverdueFine(tx, input);
+  }
+
+  // Legacy amount-only calls have no trustworthy period/rate context. Keep their
+  // settled history immutable. Production overdue accrual above uses explicit
+  // day intervals; damage/loss still have one charge per item/type.
   const existing = await tx.fines.findFirst({
     where: {
       customer_id: customerId,
@@ -117,6 +119,27 @@ async function recomputeCustomerFineBalance(tx, customerId) {
   return normalizeMoney(total);
 }
 
+async function lockFineAccrual(tx, fineId) {
+  const fine = await tx.fines.findUnique({ where: { id: fineId }, select: { loan_item_id: true, fine_type: true } });
+  if (fine?.loan_item_id && fine.fine_type === 'OVERDUE') {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`fine:${fine.loan_item_id}:OVERDUE`}, 0))`;
+  }
+}
+
+// Refresh an open period before accepting a settlement. Payment of an older
+// displayed amount is then partial if additional days have elapsed meanwhile.
+async function refreshFineAccrual(tx, fine, now = new Date()) {
+  if (fine?.fine_type !== 'OVERDUE' || ['PAID', 'WAIVED'].includes(fine.status) || fine.accrual_daily_rate == null) return;
+  const item = await tx.loan_items.findUnique({ where: { id: fine.loan_item_id } });
+  if (!item || !['BORROWED', 'OVERDUE'].includes(item.status) || item.return_date) return;
+  await upsertFine(tx, {
+    customerId: fine.customer_id, loanItemId: item.id, fineType: 'OVERDUE',
+    amount: daysOverdue(item.due_date, now) * Number(fine.accrual_daily_rate),
+    overdueDays: daysOverdue(item.due_date, now), dailyRate: Number(fine.accrual_daily_rate),
+    note: 'Cập nhật tiền phạt đến ngày thanh toán/miễn giảm',
+  });
+}
+
 /**
  * The fines one returned item is charged under the library's current policy
  * (membership fine_per_day / lost_item_fee_multiplier, LOST_ITEM_BASE_FEE,
@@ -173,6 +196,7 @@ async function applyReturnFines(tx, input) {
         amount: charge.amount,
         actorUserId,
         note: charge.note,
+        ...(charge.fineType === 'OVERDUE' ? { overdueDays: daysOverdue(item.due_date, returnedAt), dailyRate: Number(membershipLimits?.fine_per_day || 0) } : {}),
       });
       if (fine) {
         createdOrUpdated.push(fine);
@@ -265,31 +289,29 @@ async function runOverdueSweep(prisma, options = {}) {
         where: {
           customer_id: loan.customer_id,
           status: 'ACTIVE',
+          start_date: { lte: toStartOfUtcDay(now) },
         },
-        include: {
-          membership_plans: true,
-        },
+        include: { membership_plans: true },
         orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }],
       });
 
-      const finePerDay = normalizeMoney(membership?.membership_plans?.fine_per_day || process.env.DEFAULT_FINE_PER_DAY || 0);
-      const overdueDayCount = daysOverdue(item.due_date, now);
-      const amount = normalizeMoney(overdueDayCount * finePerDay);
-
-      await prisma.$transaction(async (tx) => {
-        if (item.status !== 'OVERDUE') {
-          await tx.loan_items.update({
-            where: { id: item.id },
-            data: { status: 'OVERDUE' },
-          });
+      const processed = await prisma.$transaction(async (tx) => {
+        // A return may commit after the page was scanned. Lock the same item row
+        // that returnLoan updates, then make every decision from its current state.
+        await tx.$executeRaw`SELECT id FROM loan_items WHERE id = ${item.id}::uuid FOR UPDATE`;
+        const current = await tx.loan_items.findUnique({ where: { id: item.id } });
+        if (!current || !['BORROWED', 'OVERDUE'].includes(current.status)
+          || current.return_date || new Date(current.due_date) >= now) return false;
+        const finePerDay = normalizeMoney(membership?.membership_plans?.fine_per_day || process.env.DEFAULT_FINE_PER_DAY || 0);
+        const overdueDayCount = daysOverdue(current.due_date, now);
+        const amount = normalizeMoney(overdueDayCount * finePerDay);
+        if (current.status !== 'OVERDUE') {
+          await tx.loan_items.update({ where: { id: item.id }, data: { status: 'OVERDUE' } });
         }
-
-        if (loan.status === 'BORROWED') {
-          await tx.loan_transactions.update({
-            where: { id: loan.id },
-            data: { status: 'OVERDUE' },
-          });
-        }
+        await tx.loan_transactions.updateMany({
+          where: { id: loan.id, status: 'BORROWED' },
+          data: { status: 'OVERDUE' },
+        });
 
         if (amount > 0) {
           const fine = await upsertFine(tx, {
@@ -299,6 +321,9 @@ async function runOverdueSweep(prisma, options = {}) {
             amount,
             actorUserId: null,
             note: `Scheduled overdue fine for ${overdueDayCount} day(s)`,
+            overdueDays: overdueDayCount,
+            dailyRate: finePerDay,
+            notifyAccrual: true,
           });
 
           // A PAID/WAIVED fine returned untouched (see upsertFine) isn't a fine this sweep
@@ -309,7 +334,7 @@ async function runOverdueSweep(prisma, options = {}) {
           }
         }
 
-        if (item.status !== 'OVERDUE') {
+        if (current.status !== 'OVERDUE') {
           await createNotificationRecord(tx, {
             customer_id: loan.customer_id,
             channel: 'IN_APP',
@@ -333,7 +358,7 @@ async function runOverdueSweep(prisma, options = {}) {
           action_name: 'MARK_ITEM_OVERDUE',
           entity_type: 'LOAN_ITEM',
           entity_id: item.id,
-          before_data: { status: item.status },
+          before_data: { status: current.status },
           after_data: {
             status: 'OVERDUE',
             overdue_days: overdueDayCount,
@@ -342,9 +367,10 @@ async function runOverdueSweep(prisma, options = {}) {
         });
 
         await recomputeCustomerFineBalance(tx, loan.customer_id);
+        return true;
       });
 
-      processedItems += 1;
+      if (processed) processedItems += 1;
     }
 
     if (overdueItems.length < limit) break;
@@ -367,4 +393,6 @@ module.exports = {
   computeReturnFineAmounts,
   applyReturnFines,
   runOverdueSweep,
+  lockFineAccrual,
+  refreshFineAccrual,
 };

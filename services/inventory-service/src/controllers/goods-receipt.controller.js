@@ -5,6 +5,7 @@ const { parseId, normalizeIsbn13 } = require("../utils/validation");
 const { createMovementNumber } = require("../utils/inventory");
 const { resolveOrCreateReceivingLocation } = require("../utils/locations");
 const { pushToRooms } = require("../lib/socket-emitter");
+const { reverseReceiptPutaway } = require('../services/receipt-putaway-reversal.service');
 const {
   claimDraftReceiptForPosting,
 } = require("../services/goods-receipt-posting.service");
@@ -1143,6 +1144,7 @@ async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
 }
 
 async function cancelStockMovements(tx, goodsReceiptId) {
+  await reverseReceiptPutaway(tx, goodsReceiptId);
   const movements = await tx.stock_movements.findMany({
     where: {
       reference_type: "GOODS_RECEIPT",
@@ -1175,6 +1177,7 @@ async function cancelStockMovements(tx, goodsReceiptId) {
       (bucket === null && movement.to_location_id !== null);
 
     if (movement.movement_type === "INBOUND" && movement.to_location_id) {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE', movement.variant_id, movement.to_location_id);
       const currentBalance = await tx.stock_balances.findUnique({
         where: {
           variant_id_location_id: {
@@ -1182,12 +1185,15 @@ async function cancelStockMovements(tx, goodsReceiptId) {
             location_id: movement.to_location_id,
           },
         },
-        select: { available_qty: true },
+        select: { available_qty: true, on_hand_qty: true },
       });
 
       const currentAvail = Number(currentBalance?.available_qty || 0);
       // If stock was already picked (available_qty would go negative), only restore on_hand.
       const canRestoreAvailable = currentAvail >= movement.quantity;
+      if (!currentBalance || Number(currentBalance.on_hand_qty) < movement.quantity || (hasAvailableQty && !canRestoreAvailable)) {
+        throw new ProcurementError('RECEIPT_STOCK_UNAVAILABLE', 'Không đủ tồn khả dụng để hoàn nguyên phiếu nhập', 409);
+      }
 
       await tx.stock_balances.update({
         where: {
@@ -1284,10 +1290,20 @@ async function updateGoodsReceipt(req, res) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      if (status === 'CANCELLED') {
+        // Read the current state after the lock: two cancellations must not
+        // reverse PO quantities twice, or race receipt-scoped putaway.
+        await tx.$queryRawUnsafe('SELECT id FROM goods_receipts WHERE id = $1::uuid FOR UPDATE', id);
+      }
       const existing = await tx.goods_receipts.findUnique({ where: { id } });
 
       if (!existing) {
         return { notFound: true };
+      }
+
+      if (status === 'CANCELLED' && existing.source_type === 'TRANSFER' && existing.source_reference_id) {
+        const discrepancy = await tx.transfer_discrepancies.findUnique({ where: { transfer_order_id: existing.source_reference_id } });
+        if (discrepancy) throw new ProcurementError('TRANSFER_DISCREPANCY_CUSTODY_EXISTS', 'Phiếu đã có hồ sơ chênh lệch; xử lý hàng qua hồ sơ để bảo toàn lịch sử và hàng cách ly', 409);
       }
 
       const targetStatus = status || existing.status;

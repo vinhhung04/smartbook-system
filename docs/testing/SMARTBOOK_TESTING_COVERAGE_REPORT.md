@@ -217,4 +217,12 @@ Các luồng P0 đã chọn trong matrix có bằng chứng thực thi unit + da
 
 Giới hạn cần giữ rõ: hosted CI NOT RUN; branch protection chưa bật; 14 E2E optional cases bị skip; live providers/sandbox/mobile device chưa kiểm chứng; chưa có lượt unfiltered E2E mới sau hai sửa test cuối. Cần một hosted run đầy đủ sau khi được phép push để xác nhận môi trường CI. Không đánh giá READY không điều kiện hoặc tuyên bố coverage 100%.
 
-Cleanup đã hoàn tất: project `smartbook-qa-79db6600`, containers, network và volumes thử nghiệm đã được gỡ; file secrets `.git/qa-testing/test.env` đã xóa. Branch vẫn là `khoa` tại baseline SHA, thay đổi còn trong working tree để review. `git diff --check` PASS; workflow deploy production không đổi.
+Cleanup đã hoàn tất: project `smartbook-qa-79db6600`, containers, network và volumes thử nghiệm đã được gỡ; file secrets `.git/qa-testing/test.env` đã xóa. Tại thời điểm hoàn tất lượt QA ban đầu, branch là `khoa` tại baseline SHA và thay đổi chưa được commit. `git diff --check` PASS; workflow deploy production không đổi.
+
+## I. Đồng bộ sang hungg theo yêu cầu tiếp theo (17/11/2026)
+
+- Đã lưu thay đổi QA thành hai commit `2548af0` (regression fixes) và `5303c17` (testing/CI), rồi merge vào `hungg` bằng commit `318eeff`.
+- Giữ nguyên toàn bộ lịch sử `hungg` tại `8593178` và sáu commit riêng so với baseline khoa. Xung đột duy nhất ở customer-reservation-pickup được giải quyết bằng `DEMO_PASSWORD` từ môi trường; logic chi nhánh của hungg và các assertion ví/cọc của QA được giữ đầy đủ.
+- `pnpm verify` trên cây code đã merge: **PASS** (lint, typecheck, build, workspace/web/mobile/Node/Python tests). Python hiện là **1612 passed, 12 skipped, 153 subtests passed** do giữ thêm các test library provider của hungg. Log local: `test-results/qa/hungg-merge-verify.log`.
+- Các kết quả integration/E2E ở A–H là lượt QA trước khi đồng bộ; không gắn nhãn chúng là lượt Docker/Playwright mới trên hungg. Chưa chạy lại Docker/E2E local cho cây merge; workflow CI được cấu hình chạy các nhóm đó khi cập nhật remote.
+- Yêu cầu tiếp theo cho phép cập nhật hungg; các giới hạn không publish/merge của lượt QA ban đầu không còn áp dụng riêng cho thao tác này. Nhánh main và cài đặt branch protection không được thay đổi.

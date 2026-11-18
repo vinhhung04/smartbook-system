@@ -290,7 +290,6 @@ export function GoodsReceiptPage() {
   const createFromInvoice = async () => {
     if (!invoice || !supplierDeliveryInvoiceId) return;
     const payloadItems = invoice.items
-      .filter((item) => Number(countedQty[item.id] || 0) > 0)
       .map((item) => ({
         invoice_item_id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
@@ -300,7 +299,7 @@ export function GoodsReceiptPage() {
         location_id: null,
         note: Number(countedQty[item.id] || 0) < item.remaining_qty ? "Supplier delivered short" : null,
       }));
-    if (payloadItems.length === 0) {
+    if (!payloadItems.some((item) => item.delivered_qty > 0)) {
       toast.error("Nhập ít nhất một dòng hàng thực nhận");
       return;
     }

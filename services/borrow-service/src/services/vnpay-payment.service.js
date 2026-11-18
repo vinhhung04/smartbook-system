@@ -1,6 +1,6 @@
 const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
-const { normalizeMoney, recomputeCustomerFineBalance } = require('./fine.service');
+const { normalizeMoney, recomputeCustomerFineBalance, lockFineAccrual, refreshFineAccrual } = require('./fine.service');
 
 const VNPAY_SUCCESS_CODE = '00';
 
@@ -63,8 +63,9 @@ async function finalizeVnpayPayment(prismaClient, verifiedParams) {
 
     // Row-lock the fine: a counter payment or a deposit settlement for the same fine
     // waits until this one commits, so the remaining balance below cannot go stale.
+    await lockFineAccrual(tx, intent.fine_id);
     await tx.$executeRaw`SELECT id FROM fines WHERE id = ${intent.fine_id}::uuid FOR UPDATE`;
-    const fine = await tx.fines.findUnique({ where: { id: intent.fine_id }, include: { fine_payments: true } });
+    let fine = await tx.fines.findUnique({ where: { id: intent.fine_id }, include: { fine_payments: true } });
     if (!fine) {
       const updated = await tx.fine_payment_intents.update({
         where: { id: intent.id },
@@ -72,6 +73,9 @@ async function finalizeVnpayPayment(prismaClient, verifiedParams) {
       });
       return { outcome: 'FINE_NOT_FOUND', intent: updated };
     }
+
+    await refreshFineAccrual(tx, fine);
+    fine = await tx.fines.findUnique({ where: { id: intent.fine_id }, include: { fine_payments: true } });
 
     const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + normalizeMoney(item.amount), 0);
     const remaining = Math.max(0, normalizeMoney(fine.amount) - normalizeMoney(fine.waived_amount) - paidSoFar);

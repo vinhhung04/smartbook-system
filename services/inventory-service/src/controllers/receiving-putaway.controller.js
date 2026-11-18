@@ -920,6 +920,8 @@ async function transferReceivingToShelf(req, res) {
         // is the ceiling — otherwise a receipt already fully put away keeps accepting stock
         // stamped against it and its putaway_quantity overshoots total_quantity.
         if (goodsReceiptId) {
+          // Serialize receipt-scoped putaway with cancellation of that receipt.
+          await tx.$queryRawUnsafe('SELECT id FROM goods_receipts WHERE id = $1::uuid FOR UPDATE', goodsReceiptId);
           const receipt = await tx.goods_receipts.findUnique({
             where: { id: goodsReceiptId },
             select: { id: true, warehouse_id: true, status: true },

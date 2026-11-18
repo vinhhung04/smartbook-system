@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -8,8 +8,8 @@ import { CoverPreview, type FieldOrigin } from "./field";
 import { FieldProvenance, FieldStateLabel } from "./field-provenance";
 import { FIELD_FILTERS, fieldState, type FieldFilter } from "./field-review-model";
 import { AiField, AiReviewStrip, AiSuggestionPanel, type AiFieldCopy, type AiReviewItem } from "./ai-suggestion";
-import { AI_FORM_FIELD, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type EditableBookForm } from "./types";
-import { normalizeForCompare, normalizeIsbnInput, splitCommaValues } from "./utils";
+import { AI_FIELD_NOUN, AI_FORM_FIELD, qualityCheckBasis, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type EditableBookForm, type QualityCheckResult } from "./types";
+import { normalizeForCompare, normalizeIsbnInput, planBulkAiApply, splitCommaValues, type BulkHoldReason } from "./utils";
 
 const AI_COPY: Record<AiFieldKey, AiFieldCopy> = {
   description: { noun: "mô tả", kind: "text" },
@@ -23,6 +23,20 @@ type FormKey = keyof EditableBookForm;
 const AI_FIELD_FOR: Partial<Record<FormKey, AiFieldKey>> = {
   description: "description", summaryVi: "summaryVi", keywordsText: "keywords", categoriesText: "categories",
 };
+
+const HOLD_REASON: Record<BulkHoldReason, string> = {
+  edited: "bạn đã sửa hoặc chọn giá trị khác",
+  stale: "trường đã đổi sau khi AI viết",
+  replaces: "sẽ thay nội dung đang có",
+  newCategories: "chỉ có thể loại chưa có trong danh mục",
+};
+
+/** Which field a quality warning is about, so the warning can take the user there. */
+const WARNING_FIELD: Array<[RegExp, string]> = [
+  [/mô tả/i, "description"], [/tác giả/i, "authors"], [/nhà xuất bản/i, "publisher"], [/thể loại/i, "categories"],
+];
+
+const timeOf = (ms: number) => new Date(ms).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
 
 const inputClass = "min-h-11 border-border/80 bg-muted/[0.12] text-[14px] shadow-none transition-colors focus-visible:bg-card";
 
@@ -71,7 +85,7 @@ export function MetadataReview({
   onUndoAllAiFields: () => void;
   onDismissAiField: (field: AiFieldKey) => void;
   qualityCheckLoading: boolean;
-  qualityCheckResult: { provider: string; warnings: string[] } | null;
+  qualityCheckResult: QualityCheckResult | null;
   onQualityCheck: () => void;
   onDismissQualityCheck: () => void;
   postIsbnSuggestions: PostIsbnAiSuggestions | null;
@@ -91,8 +105,9 @@ export function MetadataReview({
     ...(showRequired && !normalizeIsbnInput(form.isbn) ? { isbn: "Cần ISBN để lưu sách" } : {}),
     ...(showRequired && noTitle ? { title: "Cần tên sách để lưu" } : {}),
   };
+  // No model name and no self-rated score: neither helps a librarian decide; reading the text does.
   const providerNote = hasPostIsbnSuggestions && postIsbnSuggestions
-    ? postIsbnSuggestions.provider === "none" ? "AI không khả dụng lúc tra cứu." : `Do ${postIsbnSuggestions.provider} viết; AI tự đánh giá ${Math.round((postIsbnSuggestions.confidence || 0) * 100)}%, đây không phải độ chính xác.`
+    ? postIsbnSuggestions.provider === "none" ? "AI không khả dụng lúc tra cứu." : "AI viết từ metadata đã tra cứu; đọc lại trước khi dùng."
     : null;
 
   // A render helper, not a component: a component declared here would remount the inputs on every keystroke.
@@ -134,6 +149,16 @@ export function MetadataReview({
     const fresh = splitCommaValues(aiFieldCandidates[key]?.value || "").filter((chip) => !present.has(normalizeForCompare(chip))).length;
     return fresh ? `thêm ${fresh} ${AI_COPY[key].noun}` : `${AI_COPY[key].noun} (đã có đủ)`;
   };
+  // What one click on the bulk action would do, and what it leaves for the user (planBulkAiApply).
+  const bulk = planBulkAiApply({ form, candidates: aiFieldCandidates, applied: aiApplied, edited: userEdited, existingCategories });
+  const bulkSafe = bulk.apply.filter(({ field }) => pendingAi.includes(field)).map(({ field, added }) =>
+    AI_COPY[field].kind === "text" ? `${String(form[AI_FORM_FIELD[field]] ?? "").trim() ? "thay" : "điền"} ${AI_FIELD_NOUN[field]}` : `thêm ${added} ${AI_FIELD_NOUN[field]}`);
+  const bulkHeld = bulk.held.filter(({ field }) => pendingAi.includes(field)).map(({ field, reason }) => `${AI_FIELD_NOUN[field]} (${HOLD_REASON[reason]})`);
+  const isStale = (field: AiFieldKey) => {
+    const candidate = aiFieldCandidates[field];
+    return Boolean(candidate?.value.trim() && !aiApplied[field] && String(form[AI_FORM_FIELD[field]] ?? "") !== candidate.basis);
+  };
+
   // One item per suggestion this lookup produced: waiting, applied (Undo is on the field) or skipped.
   const aiReviewItems: AiReviewItem[] = aiKeys.flatMap((key): AiReviewItem[] => {
     if (aiApplied[key]) return [{ key, state: "applied" as const, action: AI_COPY[key].kind === "text" ? `${AI_COPY[key].noun} mới` : AI_COPY[key].noun }];
@@ -153,7 +178,7 @@ export function MetadataReview({
         suggestion={(
           <AiSuggestionPanel key={candidate?.value || "none"} copy={AI_COPY[field]} candidate={candidate} loading={aiFieldLoading[field]}
             error={aiFieldErrors[field]} applied={applied} currentValue={String(form[formField] ?? "")}
-            existingCategories={field === "categories" ? existingCategories : undefined} disabled={noTitle}
+            existingCategories={field === "categories" ? existingCategories : undefined} disabled={noTitle} stale={isStale(field)}
             onApply={(selected) => onApplyField(field, selected)} onUndo={() => onUndoAiField(field)}
             onDismiss={() => onDismissAiField(field)} onRegenerate={() => onRegenerateField(field)} />
         )}>
@@ -164,9 +189,38 @@ export function MetadataReview({
   const identityFields: FormKey[] = ["isbn", "isbn13", "isbn10", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate", "pageCount", "language"];
   const contentFields: FormKey[] = ["description", "summaryVi", "categoriesText", "keywordsText"];
   const nothingVisible = !allFields.some(visible);
+  const qualityOutdated = Boolean(qualityCheckResult && !qualityCheckResult.error && qualityCheckResult.basis !== qualityCheckBasis(form));
+
+  // One always-mounted live region: a suggestion that lands, or a finished check, is said
+  // once (a region inserted already holding its text is often not announced at all).
+  const [announcement, setAnnouncement] = useState("");
+  const seenCandidates = useRef<Partial<Record<AiFieldKey, string>>>({});
+  const candidateKey = aiKeys.map((key) => aiFieldCandidates[key]?.value || "").join("\u0000");
+  useEffect(() => {
+    const fresh = aiKeys.filter((key) => {
+      const value = aiFieldCandidates[key]?.value || "";
+      const changed = value && value !== seenCandidates.current[key];
+      seenCandidates.current[key] = value;
+      return changed;
+    });
+    if (fresh.length) setAnnouncement(`Có đề xuất AI mới cho ${fresh.map((key) => AI_FIELD_NOUN[key]).join(", ")}. Chưa áp dụng.`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- candidateKey is the change signal
+  }, [candidateKey]);
+  useEffect(() => {
+    if (!qualityCheckResult) return;
+    setAnnouncement(qualityCheckResult.error ? `Kiểm tra chất lượng lỗi: ${qualityCheckResult.error}`
+      : qualityCheckResult.warnings.length ? `Kiểm tra chất lượng xong: ${qualityCheckResult.warnings.length} cảnh báo.` : "Kiểm tra chất lượng xong: không có cảnh báo.");
+  }, [qualityCheckResult]);
+
+  const goToField = (id: string) => {
+    const element = document.getElementById(id);
+    element?.scrollIntoView({ behavior: "smooth", block: "center" });
+    element?.focus({ preventScroll: true });
+  };
 
   return (
     <div className="space-y-5">
+      <p className="sr-only" aria-live="polite">{announcement}</p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[17px] font-semibold text-foreground">Kiểm duyệt metadata</h2>
@@ -202,29 +256,54 @@ export function MetadataReview({
       </div>
 
       <div hidden={!contentFields.some(visible)}>
-        <Group id="group-content" title="Mô tả và phân loại" hint="Trợ lý AI chỉ đề xuất. Xem trước rồi bấm Áp dụng — không có gì tự ghi đè nội dung bạn đã viết."
+        <Group id="group-content" title="Mô tả và phân loại" hint="AI chỉ đề xuất: đọc đề xuất ở từng trường rồi chọn Dùng, Thay hoặc Thêm. Áp dụng hàng loạt bỏ qua trường bạn đã sửa."
           actions={(
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={onQualityCheck} disabled={qualityCheckLoading || noTitle} title={noTitle ? "Cần có tên sách để dùng AI" : undefined}
-                className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
+                className="inline-flex min-h-9 pointer-coarse:min-h-[44px] cursor-pointer items-center justify-center gap-1.5 rounded-md border border-border bg-card px-3 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring">
                 {qualityCheckLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" />}
                 Kiểm tra chất lượng
               </button>
             </div>
           )}>
-          <AiReviewStrip items={aiReviewItems} note={providerNote} onApplyAll={onApplyAllFields} onUndoAll={onUndoAllAiFields} />
+          <AiReviewStrip items={aiReviewItems} note={providerNote} safe={bulkSafe} held={bulkHeld} onApplyAll={onApplyAllFields} onUndoAll={onUndoAllAiFields} />
           {qualityCheckResult ? (
-            <div role="status" className={`mb-2 mt-3 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-[13px] ${qualityCheckResult.warnings.length === 0 ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-warning/30 bg-warning/10"}`}>
-              {qualityCheckResult.warnings.length === 0
+            <div className={`mb-2 mt-3 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-[13px] ${
+              qualityCheckResult.error ? "border-red-200 bg-red-50/60 dark:border-red-500/30 dark:bg-red-500/10"
+                : qualityCheckResult.warnings.length === 0 ? "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10" : "border-warning/30 bg-warning/10"}`}>
+              {qualityCheckResult.error ? <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+                : qualityCheckResult.warnings.length === 0
                 ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
                 : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />}
               <div className="min-w-0 flex-1 text-foreground">
-                {qualityCheckResult.warnings.length === 0 ? (
-                  <><p className="font-medium">AI không đưa ra cảnh báo chất lượng nào</p><p className="mt-0.5 text-muted-foreground">Điều này không bảo đảm metadata đúng — vẫn nên so với sách thật.</p></>
+                {qualityCheckResult.error ? (
+                  <><p className="font-medium">Chưa kiểm tra được chất lượng</p><p className="mt-0.5 text-muted-foreground">{qualityCheckResult.error}</p></>
+                ) : qualityCheckResult.warnings.length === 0 ? (
+                  <><p className="font-medium">Không có cảnh báo chất lượng</p><p className="mt-0.5 text-muted-foreground">Kiểm tra theo quy tắc, không bảo đảm metadata đúng — vẫn nên so với sách thật.</p></>
                 ) : (
                   <><p className="font-semibold">{qualityCheckResult.warnings.length} cảnh báo chất lượng (không chặn việc lưu)</p>
-                    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">{qualityCheckResult.warnings.map((w, i) => <li key={`${w}-${i}`}>{w}</li>)}</ul></>
+                    <ul className="mt-1 space-y-1 text-muted-foreground">
+                      {qualityCheckResult.warnings.map((warning, index) => {
+                        const target = WARNING_FIELD.find(([pattern]) => pattern.test(warning))?.[1];
+                        return (
+                          <li key={`${warning}-${index}`} className="flex flex-wrap items-center gap-x-2">
+                            <span>{warning}</span>
+                            {target ? (
+                              <button type="button" onClick={() => goToField(target)}
+                                className="inline-flex min-h-8 pointer-coarse:min-h-[44px] cursor-pointer items-center rounded px-1 text-[12.5px] font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring">
+                                Xem trường<span className="sr-only"> liên quan</span>
+                              </button>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul></>
                 )}
+                {!qualityCheckResult.error ? (
+                  <p className={`mt-1.5 text-[12px] ${qualityOutdated ? "font-medium text-[#92400e] dark:text-amber-300" : "text-muted-foreground"}`}>
+                    Kiểm tra lúc {timeOf(qualityCheckResult.checkedAt)}{qualityOutdated ? ". Nội dung đã đổi sau đó: bấm Kiểm tra chất lượng để kiểm lại." : "."}
+                  </p>
+                ) : null}
               </div>
               <button type="button" onClick={onDismissQualityCheck} aria-label="Đóng kết quả kiểm tra" className="-m-1 cursor-pointer rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -234,28 +313,28 @@ export function MetadataReview({
           <div className="grid grid-cols-1 gap-4 py-4">
             <div hidden={!visible("description")} data-field-row="description">
               {renderAiField({ field: "description", id: "description", label: "Mô tả", formField: "description", children: (
-                <Textarea id="description" value={form.description} onChange={(e) => onFieldChange("description", e.target.value)} rows={5} placeholder="Giới thiệu nội dung sách cho bạn đọc…"
+                <Textarea id="description" aria-describedby="description-state" value={form.description} onChange={(e) => onFieldChange("description", e.target.value)} rows={5} placeholder="Giới thiệu nội dung sách cho bạn đọc…"
                   className="min-h-28 max-h-72 resize-y overflow-y-auto border-none bg-transparent p-0 text-[14px] leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent" />
               ) })}
-              <FieldProvenance field="description" label="Mô tả" lookup={lookup} value={form.description} onChoose={(value) => onFieldChange("description", value)} />
+              <FieldProvenance field="description" label="Mô tả" lookup={lookup} value={form.description} aiWritten={Boolean(aiApplied.description)} onChoose={(value) => onFieldChange("description", value)} />
             </div>
             <div hidden={!visible("summaryVi")} data-field-row="summaryVi">
               {renderAiField({ field: "summaryVi", id: "summaryVi", label: "Tóm tắt tiếng Việt", formField: "summaryVi", children: (
-                <Textarea id="summaryVi" value={form.summaryVi} onChange={(e) => onFieldChange("summaryVi", e.target.value)} rows={2} placeholder="2–3 câu, chatbot dùng để giới thiệu sách…"
+                <Textarea id="summaryVi" aria-describedby="summaryVi-state" value={form.summaryVi} onChange={(e) => onFieldChange("summaryVi", e.target.value)} rows={2} placeholder="2–3 câu, chatbot dùng để giới thiệu sách…"
                   className="min-h-14 resize-y border-none bg-transparent p-0 text-[14px] leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent" />
               ) })}
             </div>
             <div hidden={!visible("categoriesText")} data-field-row="categoriesText">
               {renderAiField({ field: "categories", id: "categories", label: "Thể loại", formField: "categoriesText", children: (
-                <Input id="categories" value={form.categoriesText} onChange={(e) => onFieldChange("categoriesText", e.target.value)} placeholder="Cách nhau bằng dấu phẩy"
-                  className="h-8 border-none bg-transparent p-0 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent" />
+                <Input id="categories" aria-describedby="categories-state" value={form.categoriesText} onChange={(e) => onFieldChange("categoriesText", e.target.value)} placeholder="Cách nhau bằng dấu phẩy"
+                  className="h-8 pointer-coarse:min-h-[44px] border-none bg-transparent p-0 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent" />
               ) })}
-              <FieldProvenance field="categoriesText" label="Thể loại" lookup={lookup} value={form.categoriesText} onChoose={(value) => onFieldChange("categoriesText", value)} />
+              <FieldProvenance field="categoriesText" label="Thể loại" lookup={lookup} value={form.categoriesText} aiWritten={Boolean(aiApplied.categories)} onChoose={(value) => onFieldChange("categoriesText", value)} />
             </div>
             <div hidden={!visible("keywordsText")} data-field-row="keywordsText">
               {renderAiField({ field: "keywords", id: "keywords", label: "Từ khóa", formField: "keywordsText", children: (
-                <Input id="keywords" value={form.keywordsText} onChange={(e) => onFieldChange("keywordsText", e.target.value)} placeholder="Cách nhau bằng dấu phẩy"
-                  className="h-8 border-none bg-transparent p-0 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent" />
+                <Input id="keywords" aria-describedby="keywords-state" value={form.keywordsText} onChange={(e) => onFieldChange("keywordsText", e.target.value)} placeholder="Cách nhau bằng dấu phẩy"
+                  className="h-8 pointer-coarse:min-h-[44px] border-none bg-transparent p-0 text-[14px] shadow-none focus-visible:ring-0 dark:bg-transparent" />
               ) })}
             </div>
           </div>

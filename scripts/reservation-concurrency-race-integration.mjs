@@ -97,6 +97,7 @@ function idemHeader() {
 }
 
 const results = [];
+let activeAuditId = null;
 function add(name, ok, detail) {
   results.push({ name, ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'} - ${name}${detail ? ` :: ${detail}` : ''}`);
@@ -294,6 +295,9 @@ async function scenarioStockAuditApprovalRace(target) {
     throw new Error(`Failed to create stock audit: ${JSON.stringify(created.data)}`);
   }
   const auditId = created.data.data.id;
+  activeAuditId = auditId;
+  const started = await request('PATCH', `/api/stock-audits/${auditId}/recount`);
+  if (!started.ok) throw new Error(`Failed to start physical count: ${JSON.stringify(started.data)}`);
 
   const detail = await request('GET', `/api/stock-audits/${auditId}`);
   const lines = detail.data?.data?.items || [];
@@ -398,6 +402,7 @@ async function run() {
     await scenarioConsumeRace(target);
     await scenarioStockAuditApprovalRace(target);
   } finally {
+    if (activeAuditId) await request('PATCH', `/api/stock-audits/${activeAuditId}/cancel`);
     if (!restored) {
       restored = true;
       restoreLocationBalances(snapshot);

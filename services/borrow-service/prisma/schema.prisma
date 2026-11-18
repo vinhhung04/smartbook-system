@@ -138,10 +138,26 @@ model loan_transactions {
   loan_reservations     loan_reservations? @relation(fields: [source_reservation_id], references: [id], onUpdate: NoAction)
   loan_items            loan_items[]
   loan_item_deposits    loan_item_deposits[]
+  return_requests       loan_return_requests[]
 
   @@index([customer_id, status], map: "idx_loan_transactions_customer_id")
   @@index([due_date, status], map: "idx_loan_transactions_due_date")
   @@index([borrow_date], map: "idx_loan_transactions_borrow_date")
+}
+
+model loan_return_requests {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  idempotency_key String            @unique @db.VarChar(255)
+  loan_id         String            @db.Uuid
+  fingerprint     String
+  status          String            @default("PROCESSING") @db.VarChar(20)
+  response        Json?
+  unresolved_item_ids Json          @default("[]")
+  started_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  loan_transactions loan_transactions @relation(fields: [loan_id], references: [id], onUpdate: NoAction)
+
+  @@index([loan_id], map: "idx_loan_return_requests_loan")
 }
 
 model loan_items {
@@ -161,6 +177,7 @@ model loan_items {
   lost_fee_amount         Decimal            @default(0) @db.Decimal(10, 2)
   notes                   String?
   fines                   fines[]
+    overdue_fine_episode    overdue_fine_episodes?
   loan_renewals           loan_renewals[]
   loan_item_deposits      loan_item_deposits?
   loan_transactions       loan_transactions  @relation(fields: [loan_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
@@ -196,6 +213,10 @@ model fines {
   paid_at           DateTime?      @db.Timestamptz(6)
   waived_by_user_id String?        @db.Uuid
   note              String?
+  accrual_from_days Int?
+  accrual_through_days Int?
+  accrual_daily_rate Decimal? @db.Decimal(10, 2)
+  accrual_due_date DateTime? @db.Timestamptz(6)
   customers         customers      @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   loan_items        loan_items?    @relation(fields: [loan_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   fine_payments     fine_payments[]
@@ -203,6 +224,18 @@ model fines {
 
   @@index([customer_id, status], map: "idx_fines_customer_status")
   @@index([loan_item_id], map: "idx_fines_loan_item_id")
+}
+
+model overdue_fine_episodes {
+  loan_item_id String @id @db.Uuid
+  baseline_days Int @default(0)
+  due_date DateTime? @db.Timestamptz(6)
+  policy_started_at DateTime @default(now()) @db.Timestamptz(6)
+  waived_future Boolean @default(false)
+  waived_at DateTime? @db.Timestamptz(6)
+  waived_by_user_id String? @db.Uuid
+  waiver_reason String?
+  loan_items loan_items @relation(fields: [loan_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model fine_payment_intents {

@@ -846,9 +846,9 @@ async function getLoanReturnView(to) {
 }
 
 // Copies ordered and not yet received on purchase orders a supplier is working
-// on. DRAFT / PENDING_APPROVAL are not commitments; SHORTAGE_REPORTED means
-// the rest may never come, so neither counts as incoming.
-const INCOMING_PO_STATUSES = ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED'];
+// on. A shortage report describes a delivery discrepancy, not closure of all
+// remaining PO lines. Only explicitly closed lines stop being incoming.
+const INCOMING_PO_STATUSES = ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED', 'SHORTAGE_REPORTED'];
 
 async function getIncomingQtyByVariant() {
   const rows = await query(

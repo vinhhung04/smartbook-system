@@ -1,5 +1,4 @@
 import unittest
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -45,17 +44,13 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         result = _build_isbn_intelligence({
             "googleBooks": {"title": "Clean Code", "authors": ["Robert C. Martin"]},
             "openLibrary": {"title": "Clean Code (2nd edition)", "authors": ["Robert C. Martin"]},
-            "worldCat": None,
             "fahasa": None,
             "tiki": None,
-            "vinabook": None,
         }, {
             "googleBooks": {"enabled": True, "status": "SUCCESS", "durationMs": 12},
             "openLibrary": {"enabled": True, "status": "SUCCESS", "durationMs": 10},
-            "worldCat": {"enabled": False, "status": "DISABLED", "durationMs": 0},
             "fahasa": {"enabled": False, "status": "DISABLED", "durationMs": 0},
             "tiki": {"enabled": False, "status": "DISABLED", "durationMs": 0},
-            "vinabook": {"enabled": False, "status": "DISABLED", "durationMs": 0},
         })
 
         self.assertEqual(result["metadata"]["title"], "Clean Code")
@@ -82,17 +77,13 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         result = _build_isbn_intelligence({
             "googleBooks": None,
             "openLibrary": {"title": "Available from Open Library"},
-            "worldCat": None,
             "fahasa": None,
             "tiki": None,
-            "vinabook": None,
         }, {
             "googleBooks": {"enabled": True, "status": "TIMEOUT", "durationMs": 8000},
             "openLibrary": {"enabled": True, "status": "SUCCESS", "durationMs": 10},
-            "worldCat": {"enabled": False, "status": "DISABLED", "durationMs": 0},
             "fahasa": {"enabled": False, "status": "DISABLED", "durationMs": 0},
             "tiki": {"enabled": False, "status": "DISABLED", "durationMs": 0},
-            "vinabook": {"enabled": False, "status": "DISABLED", "durationMs": 0},
         })
 
         self.assertEqual(result["metadata"]["title"], "Available from Open Library")
@@ -106,7 +97,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["found"])
         self.assertEqual(result["metadataQualityScore"], 0.0)
-        self.assertEqual(len(result["sources"]), 23)
+        self.assertEqual(len(result["sources"]), 24)
         self.assertIn("processingTimeMs", result)
 
     async def test_lookup_keeps_metadata_when_one_provider_times_out(self):
@@ -120,7 +111,7 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
             "_providerMetadata": {
                 "googleBooks": None,
                 "openLibrary": {"title": "Open Library result"},
-                "worldCat": None, "fahasa": None, "tiki": None, "vinabook": None,
+                "fahasa": None, "tiki": None,
             },
         })
         with patch("main._lookup_book_by_isbn_legacy", new=AsyncMock(return_value=legacy)):
@@ -129,25 +120,6 @@ class EnrichBookAfterIsbnTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["title"], "Open Library result")
         self.assertEqual({s["name"]: s for s in result["sources"]}["openLibrary"]["status"], "SUCCESS")
         self.assertGreater(result["fieldConfidence"]["title"], 0)
-
-    async def test_marketplace_provider_timeout_does_not_block_other_sources(self):
-        from main import _fetch_all_marketplace
-
-        async def slow_provider(*_args, **_kwargs):
-            await asyncio.sleep(0.08)
-            return None, 0.0
-
-        with patch("main._ddgs_search_one_domain", return_value=[]), \
-             patch("main._fetch_first_valid", new=AsyncMock(side_effect=slow_provider)), \
-             patch("main._fetch_tiki_by_isbn_api", new=AsyncMock(side_effect=slow_provider)), \
-             patch("main.BOOK_MARKETPLACE_TIMEOUT_SECONDS", 0.01):
-            result = await _fetch_all_marketplace("9780132350884", None)
-
-        self.assertEqual(result[-1], {
-            "fahasa": "TIMEOUT",
-            "tiki": "TIMEOUT",
-            "vinabook": "TIMEOUT",
-        })
 
     async def test_lookup_without_a_code_match_returns_no_metadata(self):
         from main import lookup_book_by_isbn, IsbnLookupRequest

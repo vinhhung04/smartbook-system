@@ -79,7 +79,7 @@ async function main() {
     customer_id: customerId, variant_id: bulk.variant_id, warehouse_id: bulk.default_warehouse_id, quantity: 3,
   }, { 'Idempotency-Key': crypto.randomUUID() });
   const loanDetail = await ok('GET', `/borrow/loans/${bulkLoan.data.id}`);
-  const items = loanDetail.data.loan_items || loanDetail.loan_items;
+  const items = [...(loanDetail.data.loan_items || loanDetail.loan_items)].sort((a, b) => a.id.localeCompare(b.id));
   console.log(`3-book loan ${bulkLoan.data.id}, items: ${items.map((i) => i.id).join(', ')}`);
 
   const targetItem = items[1]; // "the second item"
@@ -87,29 +87,38 @@ async function main() {
   sqlBorrow(`UPDATE loan_items SET variant_id = '${bogusVariantId}' WHERE id = '${targetItem.id}'`);
   console.log(`Corrupted item 2 (${targetItem.id}) to a nonexistent variant_id so its remote return call must fail.`);
 
-  const returnKey = crypto.randomUUID();
-  const returnResp = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, {}, { 'Idempotency-Key': returnKey });
-  console.log(`\nreturn all 3 -> status=${returnResp.status}`);
-  console.log(`  body: ${JSON.stringify(returnResp.data).slice(0, 300)}`);
+  try {
+    const returnKey = crypto.randomUUID();
+    const returnResp = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, {}, { 'Idempotency-Key': returnKey });
+    console.log(`\nreturn all 3 -> status=${returnResp.status}`);
+    console.log(`  body: ${JSON.stringify(returnResp.data).slice(0, 300)}`);
 
-  const itemStatuses = sqlBorrow(`SELECT id, status FROM loan_items WHERE loan_id = '${bulkLoan.data.id}' ORDER BY id`);
-  console.log('\nloan_items status after the failed call:');
-  for (const [id, status] of itemStatuses) console.log(`  ${id} -> ${status}`);
-  const item1Status = itemStatuses.find(([id]) => id === items[0].id)?.[1];
-  console.log(`\nItem 1 (should have returned successfully in inventory-service before item 2 failed): local status = ${item1Status}`);
+    const itemStatuses = sqlBorrow(`SELECT id, status FROM loan_items WHERE loan_id = '${bulkLoan.data.id}' ORDER BY id`);
+    console.log('\nloan_items status after the failed call:');
+    for (const [id, status] of itemStatuses) console.log(`  ${id} -> ${status}`);
+    const item1Status = itemStatuses.find(([id]) => id === items[0].id)?.[1];
+    console.log(`\nItem 1 (should have returned successfully in inventory-service before item 2 failed): local status = ${item1Status}`);
 
-  const outboxRows = sqlBorrow(`SELECT event_type, payload FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
-  assert.ok(returnResp.status >= 400, 'the injected second-item failure must fail the return');
-  assert.equal(outboxRows.length, 1, 'the first successful remote return must be queued exactly once');
-  const queued = sqlBorrow(`SELECT payload->'loan_item_ids' ? '${items[0].id}' AS includes_first FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
-  assert.equal(queued[0]?.[0], 't', 'reconciliation must name the item whose remote stock already moved');
-  console.log(`\nintegration_outbox rows for LOAN_RETURN_UNRESOLVED on this loan: ${outboxRows.length}`);
-  if (outboxRows.length > 0) console.log(`  ${JSON.stringify(outboxRows)}`);
+    const outboxRows = sqlBorrow(`SELECT event_type, payload FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
+    assert.ok(returnResp.status >= 400, 'the injected second-item failure must fail the return');
+    assert.equal(outboxRows.length, 1, 'the first successful remote return must be queued exactly once');
+    const queued = sqlBorrow(`SELECT payload->'loan_item_ids' ? '${items[0].id}' AS includes_first FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
+    assert.equal(queued[0]?.[0], 't', 'reconciliation must name the item whose remote stock already moved');
+    console.log(`\nintegration_outbox rows for LOAN_RETURN_UNRESOLVED on this loan: ${outboxRows.length}`);
+    if (outboxRows.length > 0) console.log(`  ${JSON.stringify(outboxRows)}`);
 
-  console.log(`\n=> ${item1Status === 'BORROWED' && outboxRows.length === 0
-    ? 'CONFIRMED: item 1 succeeded remotely but local status never updated AND no reconciliation record was queued.'
-    : (item1Status === 'RETURNED' ? 'Item 1 was actually persisted as returned despite the later failure - not reproduced as described.'
-      : 'Item 1 stayed BORROWED but a reconciliation record WAS queued - partially as designed, check manually.')}`);
+    sqlBorrow(`UPDATE loan_items SET variant_id = '${variantId}' WHERE id = '${targetItem.id}'`);
+    const recovered = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, {}, { 'Idempotency-Key': returnKey });
+    assert.equal(recovered.status, 200, JSON.stringify(recovered.data));
+    const final = sqlBorrow(`SELECT status FROM loan_items WHERE loan_id = '${bulkLoan.data.id}'`);
+    assert.ok(final.every(([status]) => status === 'RETURNED'));
+    const resolved = sqlBorrow(`SELECT status FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
+    assert.ok(resolved.every(([status]) => status === 'PUBLISHED'));
+    console.log('PASS partial remote success is queued; same-key retry recovers all copies and closes reconciliation.');
+  } finally {
+    sqlBorrow(`UPDATE loan_items SET variant_id = '${variantId}' WHERE id = '${targetItem.id}'`);
+  }
+
 }
 
 main().catch((error) => {

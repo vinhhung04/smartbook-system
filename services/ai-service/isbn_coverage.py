@@ -11,7 +11,7 @@ from __future__ import annotations
 # source reliability, while agreement is calculated from the responses received
 # for this ISBN; no model-generated score is used for catalog metadata.
 ISBN_SOURCE_ORDER = [
-    "catalog", "googleBooks", "openLibrary", "worldCat", "fahasa", "tiki", "vinabook",
+    "catalog", "googleBooks", "openLibrary", "loc", "dnb", "ppdvn", "fahasa", "tiki",
     "nhanam", "dinhTi", "thaiHa", "vanLang",
     "ipm", "kimDong", "azVietnam", "omegaPlus", "tanViet", "alphaBooks",
     "phuongNam", "nhanVan", "minhLong", "bizbooks", "webSearch", "aiWebSearch",

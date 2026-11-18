@@ -3,11 +3,11 @@ import { Loader2 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MOTION_OK, gsap, useGSAP } from "@/lib/gsap";
 import {
-  QUERY_LABELS, SOURCE_KIND_META, SOURCE_STATUS_META, VERIFICATION_LABELS, describeTile, formatDuration, publicError, reasonLabel,
-  sourceKind, type SourceStatus, type SourceTileData, type Tone,
+  QUERY_LABELS, SOURCE_DOMAINS, SOURCE_KIND_META, SOURCE_STATUS_META, VERIFICATION_LABELS, describeTile, formatDuration, publicError,
+  reasonLabel, sourceKind, type SourceStatus, type SourceTileData, type Tone,
 } from "./source-meta";
+import { SourceLogo } from "./source-logo";
 import { SOURCE_LABELS } from "./utils";
-
 
 const TILE_TONE: Record<Tone | "running" | "queued", string> = {
   ok: "border-emerald-300/80 bg-emerald-50 text-emerald-900 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-100",
@@ -26,7 +26,8 @@ const STATUS_ICON_TONE: Record<Tone, string> = {
 };
 
 /**
- * One source as a compact tile: kind icon, name, status glyph. Every state comes
+ * One source as a compact tile: its logo, name, status glyph. Sources that were
+ * not asked (queued, disabled, skipped) show the logo in grey until hovered. Every state comes
  * from the backend; the tile only answers that change - it settles when the source
  * answers and pulses while it is being asked. Details are in the tooltip (hover or
  * keyboard focus) and in the accessible name, so nothing depends on colour.
@@ -37,6 +38,8 @@ export function SourceTile({ tile, index }: { tile: SourceTileData; index?: numb
   const previous = useRef<string | null>(null);
   const meta = tile.status ? SOURCE_STATUS_META[tile.status] : null;
   const kind = SOURCE_KIND_META[sourceKind(tile.source)];
+  const domain = SOURCE_DOMAINS[tile.source];
+  const notAsked = tile.state === "queued" || tile.status === "DISABLED" || tile.status === "SKIPPED";
   const key = `${tile.state}:${tile.status ?? ""}`;
   const toneClass = tile.state === "running" ? TILE_TONE.running : tile.state === "queued" || !meta ? TILE_TONE.queued : TILE_TONE[meta.tone];
 
@@ -68,10 +71,10 @@ export function SourceTile({ tile, index }: { tile: SourceTileData; index?: numb
           aria-label={describeTile(tile)}
           data-source-tile={tile.source}
           data-state={tile.state}
-          className={`relative inline-flex h-8 max-w-full cursor-default items-center gap-1.5 rounded-lg border pl-2 pr-2.5 text-[12.5px] font-medium transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${toneClass}`}
+          className={`group/source relative inline-flex h-9 max-w-full cursor-default items-center gap-2 rounded-[11px] border pl-[6px] pr-2.5 text-[12.5px] font-medium transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring ${toneClass}`}
         >
-          {index != null ? <span className="text-[11px] tabular-nums opacity-60" aria-hidden="true">{index}</span> : null}
-          <kind.icon className={`h-3.5 w-3.5 shrink-0 ${tile.source === "aiWebSearch" ? "text-[#1d5fbf] dark:text-[#8ab4f8]" : "opacity-70"}`} aria-hidden="true" />
+          {index != null ? <span className="min-w-[1ch] text-[11px] tabular-nums opacity-60" aria-hidden="true">{index}</span> : null}
+          <SourceLogo source={tile.source} size="xs" muted={notAsked} />
           <span className="truncate">{SOURCE_LABELS[tile.source] || tile.source}</span>
           {tile.state === "running" ? (
             <span className="relative grid h-3.5 w-3.5 shrink-0 place-items-center" aria-hidden="true">
@@ -84,9 +87,14 @@ export function SourceTile({ tile, index }: { tile: SourceTileData; index?: numb
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-[18rem] bg-foreground px-3 py-2 text-left text-background">
-        <p className="text-[12.5px] font-semibold">{SOURCE_LABELS[tile.source] || tile.source}</p>
-        <p className="text-[11.5px] opacity-75">{kind.label}</p>
-        <p className="mt-1 text-[12px]">
+        <div className="flex items-center gap-2.5">
+          <SourceLogo source={tile.source} size="md" />
+          <div className="min-w-0">
+            <p className="text-[12.5px] font-semibold leading-tight">{SOURCE_LABELS[tile.source] || tile.source}</p>
+            <p className="truncate text-[11.5px] opacity-75">{domain ? `${domain} · ${kind.label}` : kind.label}</p>
+          </div>
+        </div>
+        <p className="mt-2 text-[12px]">
           {tile.state === "running" ? "Đang truy vấn…" : meta ? meta.label : "Chờ lượt"}
           {tile.round ? `, vòng ${tile.round}` : ""}
           {tile.query && tile.query !== "-" ? `, ${QUERY_LABELS[tile.query]?.toLowerCase()}` : ""}

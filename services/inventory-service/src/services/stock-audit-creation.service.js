@@ -1,3 +1,4 @@
+const { countBaseline } = require('./stock-audit-count.service');
 // Extracted from stock-audit.controller.js's createStockAudit so the location-
 // scoping behavior (the exact mechanism the warehouse floor map's "Tao phieu
 // kiem ke" button depends on) is unit-testable without a real database,
@@ -34,7 +35,7 @@ async function createAuditWithLines(tx, { auditNumber, warehouseId, note, userId
       stock_audit_id: audit.id,
       variant_id: b.variant_id,
       location_id: b.location_id,
-      expected_qty: b.on_hand_qty,
+      expected_qty: countBaseline(b).expected_qty,
     })),
   });
 
