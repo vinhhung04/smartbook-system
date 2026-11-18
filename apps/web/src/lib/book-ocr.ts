@@ -5,7 +5,7 @@
 // by two sources, or a low-risk field read once - never conflicted, inferred or unverified).
 import type { EditableBookForm } from '@/components/pages/ai-import/types';
 import type { LookupBookByIsbnResponse } from '@/services/ai';
-import type { BookOcrScanResult, OcrFieldStatus, OcrImageKind, OcrProposal } from '@/services/book-ocr';
+import type { BookOcrScanResult, OcrFieldStatus, OcrImageKind, OcrProposal, OcrVisualStatus } from '@/services/book-ocr';
 
 export type FormField = keyof EditableBookForm;
 
@@ -130,6 +130,24 @@ export function lookupStateFromScan(result: BookOcrScanResult): LookupBookByIsbn
   };
 }
 
+/** Form fields whose OCR reading needs a person's attention (CONFLICTED / REVIEW_REQUIRED /
+ *  INVALID) and that nobody has looked at yet (typed into, or applied with one click - both
+ *  mark a field "user edited"). Blocks save until resolved: the reconciliation draft's own
+ *  PENDING gate only exists when an ISBN lookup matched a record, and even then only covers
+ *  catalog-authority fields (author/publisher/category normalization) - never book_ocr's own
+ *  per-field status, which this function is the only check for. */
+export function unresolvedOcrFields(proposals: Record<string, OcrProposal>, userEdited: ReadonlySet<string>): FormField[] {
+  const UNSAFE = new Set<OcrFieldStatus>(['CONFLICTED', 'REVIEW_REQUIRED', 'INVALID']);
+  const fields: FormField[] = [];
+  for (const proposal of Object.values(proposals)) {
+    if (!UNSAFE.has(proposal.status)) continue;
+    const field = proposal.formField as FormField;
+    if (userEdited.has(field)) continue;
+    fields.push(field);
+  }
+  return fields;
+}
+
 export const OCR_FIELD_LABELS: Record<string, string> = {
   isbn: 'ISBN', isbn13: 'ISBN-13', isbn10: 'ISBN-10', title: 'Tên sách', subtitle: 'Tựa phụ',
   authorsText: 'Tác giả', translatorText: 'Dịch giả', publisher: 'Nhà xuất bản', publishedDate: 'Năm xuất bản',
@@ -160,6 +178,15 @@ export const OCR_STATUS_META: Record<OcrFieldStatus, { label: string; tone: stri
   INVALID: { label: 'Không hợp lệ', tone: 'danger' },
   INFERRED: { label: 'Suy luận', tone: 'neutral' },
   MISSING: { label: 'Không thấy', tone: 'neutral' },
+};
+
+/** Feature A - visualEvidence status (a second model's blind re-read of the same
+ *  image - never the OCR model grading its own transcription). */
+export const OCR_VISUAL_STATUS_META: Record<OcrVisualStatus, { label: string; tone: string }> = {
+  VERIFIED: { label: 'Đã xác minh trên ảnh', tone: 'success' },
+  PARTIALLY_VERIFIED: { label: 'Xác minh được một phần', tone: 'warning' },
+  UNVERIFIED: { label: 'Không tìm thấy trên ảnh', tone: 'danger' },
+  ILLEGIBLE: { label: 'Ảnh chưa đủ rõ để kiểm tra', tone: 'neutral' },
 };
 
 export const OCR_SOURCE_LABELS: Record<string, string> = {

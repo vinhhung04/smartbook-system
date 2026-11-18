@@ -48,6 +48,10 @@ class BookOcrSettings:
     lookup_timeout_seconds: float
     fallback_daily_budget_usd: float
     max_concurrency: int
+    visual_verification_enabled: bool
+    verify_model: str | None
+    verify_max_tokens: int
+    verify_daily_budget_usd: float
 
 
 def load_settings() -> BookOcrSettings:
@@ -69,4 +73,10 @@ def load_settings() -> BookOcrSettings:
         lookup_timeout_seconds=_float("BOOK_OCR_LOOKUP_TIMEOUT_SECONDS", 35, 1, 90),
         fallback_daily_budget_usd=_float("BOOK_OCR_FALLBACK_DAILY_BUDGET_USD", 0.5, 0, 100),
         max_concurrency=_int("BOOK_OCR_MAX_CONCURRENCY", 2, 1, 8),
+        # Independent check of each reading by a SECOND vision model of another family,
+        # re-reading the images blind - see visual_verification.py. Empty model = off.
+        visual_verification_enabled=os.getenv("BOOK_OCR_VISUAL_VERIFICATION_ENABLED", "true").strip().lower() in ("1", "true", "on", "yes"),
+        verify_model=os.getenv("OPENROUTER_BOOK_OCR_VERIFY_MODEL", "google/gemini-3.1-flash-lite").strip() or None,
+        verify_max_tokens=_int("BOOK_OCR_VERIFY_MAX_TOKENS", 4000, 300, 6000),
+        verify_daily_budget_usd=_float("BOOK_OCR_VERIFY_DAILY_BUDGET_USD", 0.5, 0, 100),
     )

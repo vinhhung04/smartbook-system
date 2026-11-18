@@ -34,8 +34,9 @@ import { ReviewChecklist, type ChecklistItem } from "./review-checklist";
 import { applyProgressEvent, finishProgress, initialProgress, markClientStep, type LookupProgress, type PhaseState } from "./lookup-progress";
 import type { FieldFilter } from "./field-review-model";
 import { AI_FORM_FIELD, EMPTY_FORM, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
-import { applySafeProposals, formFromScan, lookupStateFromScan, singleSourceProposals } from "@/lib/book-ocr";
+import { applySafeProposals, formFromScan, lookupStateFromScan, OCR_FIELD_LABELS, singleSourceProposals, unresolvedOcrFields } from "@/lib/book-ocr";
 import type { BookOcrScanResult } from "@/services/book-ocr";
+import { imageFileToDataUrl } from "@/lib/resize-image";
 import {
   buildDuplicateCheckMetadata,
   finalMetadataFromForm,
@@ -453,7 +454,14 @@ export function AIImportPage() {
     const seq = beginSession();
     setLookupLoading(false);
     const lookup = lookupStateFromScan(result);
-    const { form: nextForm, applied, keptUserValues } = formFromScan(formRef.current, result.proposals, userEditedRef.current, EMPTY_FORM);
+    const scanned = formFromScan(formRef.current, result.proposals, userEditedRef.current, EMPTY_FORM);
+    const { applied, keptUserValues } = scanned;
+    // Cover: the verified lookup record's image when it has one, otherwise the
+    // front-cover photo (set below, once resized). A cover the user set is kept.
+    const keepCover = userEditedRef.current.has("thumbnail");
+    const nextForm = !keepCover && lookup.thumbnail ? { ...scanned.form, thumbnail: lookup.thumbnail } : scanned.form;
+    const frontCover = !keepCover && !lookup.thumbnail ? ocr.slots.front_cover?.file : undefined;
+    if (frontCover) void applyFrontCoverThumbnail(frontCover, seq);
     setPostIsbnSuggestions(null);
     setReconciliationDraft(null);
     setCreateAuthorityEntities({});
@@ -475,6 +483,17 @@ export function AIImportPage() {
     else toast.success(`Đã điền ${applied.length} trường an toàn từ ảnh${conflicts ? `; ${conflicts} trường có xung đột cần bạn chọn` : ""}.`);
     if (keptUserValues.length) toast.info(`Giữ nguyên ${keptUserValues.length} trường bạn đã nhập.`);
     if (lookup.found || nextForm.title.trim() || nextForm.isbn.trim()) await startCatalogReview(lookup, NO_AI_SUGGESTIONS, nextForm, seq, true);
+  }
+
+  async function applyFrontCoverThumbnail(file: File, seq: number) {
+    try {
+      // ~600 px JPEG keeps the data URL small enough for cover_image_url and catalog lists.
+      const dataUrl = await imageFileToDataUrl(file, { maxDimension: 600, quality: 0.8 });
+      if (seq !== lookupSeqRef.current || userEditedRef.current.has("thumbnail")) return;
+      setForm((current) => (current.thumbnail ? current : { ...current, thumbnail: dataUrl }));
+    } catch {
+      // The cover simply stays empty; a URL can still be pasted by hand.
+    }
   }
 
   function handleOcrApply(fields: Array<keyof EditableBookForm>, value: string, label: string) {
@@ -764,6 +783,18 @@ export function AIImportPage() {
     if (reconciliationDraft?.decisions.some((item) => item.status === "PENDING")) {
       toast.error("Vui lòng hoàn tất các quyết định metadata trước khi lưu.");
       return;
+    }
+    // The reconciliation draft's PENDING gate above only exists for a matched ISBN record,
+    // and even then only covers authority normalization (author/publisher/category) - never
+    // book_ocr's own per-field CONFLICTED / REVIEW_REQUIRED / INVALID status. A photo-only
+    // import with no (or no matching) ISBN record never gets a draft at all, so without this
+    // check nothing stops a flagged field the user hasn't looked at from being saved.
+    if (ocr.result && !ocr.resultStale) {
+      const unresolved = unresolvedOcrFields(ocr.result.proposals, userEditedFields);
+      if (unresolved.length) {
+        toast.error(`Cần kiểm tra lại thông tin đọc từ ảnh trước khi lưu: ${unresolved.map((field) => OCR_FIELD_LABELS[field] || field).join(", ")}.`);
+        return;
+      }
     }
     if (duplicateReview && duplicateReview.classification !== "NEW_TITLE") {
       toast.error("Vui lòng xử lý duplicate review trước khi lưu.");

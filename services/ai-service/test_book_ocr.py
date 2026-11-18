@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import llm_provider
-from book_ocr import service
+from book_ocr import service, visual_verification
 from book_ocr.config import load_settings
 from book_ocr.errors import BookOcrError
 from book_ocr.extractor import FallbackBudget
@@ -74,10 +74,15 @@ class FakeProvider:
             self.analyze_images.return_value = (answer, usage(model))
 
 
+VERIFY_MODEL = "google/gemini-3.1-flash-lite"
+
+
 def settings(**overrides):
+    # The independent second-model check is off here so every test counts only the
+    # OCR model's calls; ExtractionTests.verified_scan turns it on explicitly.
     base = dataclasses.replace(load_settings(), enabled=True, model="qwen/qwen3.7-flash", fallback_model=None,
                                max_file_bytes=2 * 1024 * 1024, max_total_bytes=5 * 1024 * 1024, max_images=3,
-                               fallback_daily_budget_usd=0.5)
+                               fallback_daily_budget_usd=0.5, visual_verification_enabled=False)
     return dataclasses.replace(base, **overrides)
 
 
@@ -97,6 +102,8 @@ def http_status_error(code):
 class BookOcrTestCase(unittest.TestCase):
     def setUp(self):
         service.extraction_cache.clear()
+        visual_verification.verification_cache.clear()
+        visual_verification.verify_budget = visual_verification.FallbackBudget()
 
 
 class ExtractionTests(BookOcrTestCase):
@@ -301,6 +308,53 @@ class ExtractionTests(BookOcrTestCase):
         self.assertEqual(result["fields"]["authors"]["status"], "REVIEW_REQUIRED")
         self.assertEqual(result["metadata"]["authors"], ["Ngô Tất Tố", "Phan Văn A"])
         self.assertFalse(result["proposals"]["authorsText"]["safeToApply"])
+
+    def verified_scan(self, answer, uploads, verifier_answer=None, verifier_error=None):
+        providers = {"qwen/qwen3.7-flash": FakeProvider("qwen/qwen3.7-flash", answer),
+                     VERIFY_MODEL: FakeProvider(VERIFY_MODEL, verifier_answer, verifier_error)}
+        cfg = settings(visual_verification_enabled=True, verify_model=VERIFY_MODEL)
+        return scan(uploads, answer, cfg=cfg, providers=providers)
+
+    def test_visual_verification_wired_into_the_scan_response(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")],
+                              authors=[obs("front_cover", ["Nguyễn Nhật Ánh"], "NGUYỄN NHẬT ÁNH")])
+        verifier = {"images": [{"source": "front_cover", "legible": True, "lines": [
+            {"text": "MẮT BIẾC", "box_2d": [350, 100, 440, 690]}, {"text": "Truyện dài"}]}]}
+        result, providers = self.verified_scan(answer, {"front_cover": jpeg()}, verifier)
+        self.assertEqual(result["visualEvidence"]["title"],
+                         [{"source": "front_cover", "status": "VERIFIED", "readText": "MẮT BIẾC",
+                           "boxes": [{"x": 0.1, "y": 0.35, "width": 0.59, "height": 0.09}]}])
+        # Read on the image by the OCR model, but not by the independent re-read.
+        self.assertEqual(result["visualEvidence"]["authors"][0]["status"], "UNVERIFIED")
+        # The verifier's call is paid for and reported with the scan's own cost.
+        self.assertEqual([c["trigger"] for c in result["usage"]["calls"]], ["primary", "verify"])
+        self.assertAlmostEqual(result["usage"]["costUsd"], 0.0008)
+        # Blind: the verifier is never shown the OCR model's readings.
+        verify_prompt = providers[VERIFY_MODEL].analyze_images.call_args.args[1]
+        self.assertNotIn("Mắt Biếc", verify_prompt)
+
+    def test_verifier_failure_keeps_the_scan_and_only_drops_the_evidence(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")])
+        result, _ = self.verified_scan(answer, {"front_cover": jpeg()}, verifier_error=http_status_error(503))
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["visualEvidence"], {})
+        self.assertIn("VISUAL_VERIFICATION_UNAVAILABLE", result["warnings"])
+
+    def test_anomalies_wired_into_the_scan_response(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")],
+                              isbn=[obs("front_cover", ISBN), obs("copyright_page", ISBN_OTHER)])
+        result, _ = scan({"front_cover": jpeg(), "copyright_page": jpeg()}, answer)
+        self.assertEqual(result["fields"]["isbn"]["status"], "CONFLICTED")
+        isbn_anomalies = [a for a in result["anomalies"] if a["anomalyType"] == "ISBN_ANOMALY"]
+        self.assertEqual(len(isbn_anomalies), 1)
+        self.assertEqual(isbn_anomalies[0]["severity"], "CRITICAL")
+        self.assertTrue(isbn_anomalies[0]["requiresHumanReview"])
+
+    def test_visual_verification_off_switch_makes_no_second_call(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")])
+        result, _ = scan({"front_cover": jpeg()}, answer, cfg=settings(visual_verification_enabled=False))
+        self.assertEqual(result["visualEvidence"], {})
+        self.assertEqual([c["trigger"] for c in result["usage"]["calls"]], ["primary"])
 
 
 class BarcodeTests(BookOcrTestCase):

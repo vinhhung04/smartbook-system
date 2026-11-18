@@ -30,6 +30,8 @@ from .prompts import build_prompt
 from .reconcile import FORM_FIELDS, build_proposals, lookup_mismatch
 from .schemas import (OCR_FIELDS, PROMPT_VERSION, FieldResult, IsbnLookupOutcome, ScanResponse, ScanUsage)
 from .validation import validate_extraction
+from .visual_verification import UNCHECKED_FIELDS, read_images, verify_value
+from .anomaly_detection import detect_anomalies
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -120,6 +122,36 @@ async def _lookup(isbn_field: FieldResult, lookup_isbn: LookupFn | None, timeout
                              editionMatches=lookup_isbn13 == isbn if lookup_isbn13 else None)
 
 
+async def _verification_off() -> tuple[dict, list, list]:
+    return {}, [], []
+
+
+def _visual_evidence(fields: dict[str, FieldResult], readings: dict[str, dict]) -> dict[str, list[dict]]:
+    """Feature A - per observation (not per field, like fieldEvidence): the
+    second model's independent re-read of that EXACT image, checked against the
+    reading taken from it. Skips "barcode" (not an uploaded image - already its
+    own independent signal), anything invalid (never proposed, nothing to
+    verify) and UNCHECKED_FIELDS. Keyed by the raw OCR field name (OCR_FIELDS),
+    the same key the frontend already uses to read `fields`/`observations` -
+    unlike fieldEvidence (keyed by the flat metadata name)."""
+    evidence: dict[str, list[dict]] = {}
+    for field, result in fields.items():
+        if field in UNCHECKED_FIELDS:
+            continue
+        entries = []
+        for o in result.observations:
+            if not o.valid or o.source not in readings:
+                continue
+            value = o.normalizedValue if o.normalizedValue is not None else o.value
+            if isinstance(value, list):
+                value = ", ".join(str(v) for v in value)
+            outcome = verify_value(value, readings[o.source])
+            entries.append({"source": o.source, **outcome})
+        if entries:
+            evidence[field] = entries
+    return evidence
+
+
 def _metadata(fields: dict[str, FieldResult], isbn10: str | None) -> dict:
     meta = {_name(f): _usable(fields[f]) for f in (*OCR_FIELDS, "language")}
     for list_field in ("authors", "translators"):
@@ -167,7 +199,13 @@ async def scan_book_images(uploads: dict[str, bytes], *, barcode: str | None = N
             extraction_cache.set(key, {"raw": raw, "model": used_model})
         validated = validate_extraction(raw, kinds, barcode)
         fields: dict[str, FieldResult] = validated["fields"]
-        isbn_lookup = await _lookup(fields["isbn"], lookup_isbn, settings.lookup_timeout_seconds)
+        # Independent of the ISBN lookup (network I/O) and of each other: run together.
+        verify_coro = (read_images(prepared, settings, provider_factory or default_provider_factory)
+                       if settings.visual_verification_enabled else _verification_off())
+        isbn_lookup, (readings, verify_calls, verify_warnings) = await asyncio.gather(
+            _lookup(fields["isbn"], lookup_isbn, settings.lookup_timeout_seconds), verify_coro)
+        calls = [*calls, *verify_calls]
+        warnings.extend(verify_warnings)
         if isbn_lookup.status in ("TIMEOUT", "ERROR", "NOT_FOUND"):
             warnings.append(f"ISBN_LOOKUP_{isbn_lookup.status}")
         if isbn_lookup.status == "FOUND":
@@ -199,14 +237,18 @@ async def scan_book_images(uploads: dict[str, bytes], *, barcode: str | None = N
             if any(c.costUsd is not None for c in calls) else (0.0 if cached else None),
             latencyMs=sum(c.latencyMs for c in calls), calls=calls,
         )
+        visual_evidence = _visual_evidence(fields, readings)
+        all_warnings = sorted(set(validated["warnings"] + warnings))
         response = ScanResponse(
             status=status, images=[p.summary() for p in prepared], metadata=metadata, fields=fields,
             fieldEvidence={_name(f): [{"source": o.source, "observedText": o.observedText or o.value}
                                       for o in r.observations if o.valid]
                            for f, r in fields.items() if any(o.valid for o in r.observations)},
+            visualEvidence=visual_evidence,
+            anomalies=detect_anomalies(fields, all_warnings),
             missingFields=[_name(f) for f, r in fields.items() if r.status == "MISSING"],
             conflictedFields=sorted(conflicted), otherCodes=validated["otherCodes"],
-            warnings=sorted(set(validated["warnings"] + warnings)), isbnLookup=isbn_lookup, proposals=proposals,
+            warnings=all_warnings, isbnLookup=isbn_lookup, proposals=proposals,
             usage=usage, processingTimeMs=round((time.perf_counter() - started) * 1000),
         )
         logger.info("book_ocr_scan %s", json.dumps({

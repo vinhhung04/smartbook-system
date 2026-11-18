@@ -26,6 +26,7 @@ const CAPABILITIES = {
 const FRONT = 'e2e/fixtures/book-front.jpg';
 const BACK = 'e2e/fixtures/book-back.jpg';
 const TITLE = 'Sách Kiểm Thử OCR E2E';
+const TITLE_BOX = { x: 0.1, y: 0.3, width: 0.6, height: 0.1 };
 
 const proposal = (formField: string, value: string | null, status: string, safeToApply: boolean, extra: Record<string, unknown> = {}) => ({
   formField, value, status, safeToApply, source: value ? 'images' : null, reasons: [], ocrValue: value, lookupValue: null, options: [], ...extra,
@@ -46,6 +47,8 @@ function scanResult(overrides: Record<string, unknown> = {}) {
         observations: [observation('front_cover', 228, '228 trang'), observation('copyright_page', 238, 'Số trang: 238')] },
     },
     fieldEvidence: {}, missingFields: ['isbn13'], conflictedFields: ['pageCount'], otherCodes: [],
+    visualEvidence: { title: [{ source: 'front_cover', status: 'VERIFIED', readText: TITLE.toUpperCase(), boxes: [TITLE_BOX] }] },
+    anomalies: [],
     warnings: ['ONLY_PRINT_YEAR_FOUND'],
     isbnLookup: { status: 'SKIPPED_NO_VALID_ISBN', isbn: null, editionMatches: null, lookup: null },
     proposals: {
@@ -215,6 +218,30 @@ test('readings that differ only in tone marks are not filled; both spellings are
   // Single-photo readings: one explicit bulk confirmation.
   await page.getByRole('button', { name: /Đã so với sách — áp dụng 1 giá trị đọc từ một ảnh/ }).click();
   await expect(page.locator('#authors')).toHaveValue('Kanehito Yamada');
+});
+
+test('the verifying model\'s location is drawn on the photo, labelled as its own estimate', async ({ page }) => {
+  await page.route('**/book-metadata/scan-images', (route) => route.fulfill({ json: scanResult() }));
+  await openAiImport(page);
+  await page.getByLabel('Chọn ảnh bìa trước').setInputFiles(FRONT);
+  await page.getByRole('button', { name: 'Quét và trích xuất bằng AI' }).click();
+  const row = page.getByTestId('ocr-row-title');
+  await row.getByText('Bằng chứng từ ảnh (1)').click();
+  await expect(row.getByText('Đã xác minh trên ảnh')).toBeVisible();
+  await row.getByRole('button', { name: 'Xem vị trí trên ảnh' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText(/vị trí do model xác minh tự chỉ ra/)).toBeVisible();
+  const image = await dialog.getByAltText('Ảnh bìa trước').boundingBox();
+  const box = await dialog.getByTestId('ocr-location-box').boundingBox();
+  expect(image && box).toBeTruthy();
+  // The box sits at the returned fractions of the rendered image (within a pixel).
+  expect(Math.abs(box!.x - (image!.x + TITLE_BOX.x * image!.width))).toBeLessThan(1.5);
+  expect(Math.abs(box!.y - (image!.y + TITLE_BOX.y * image!.height))).toBeLessThan(1.5);
+  expect(Math.abs(box!.width - TITLE_BOX.width * image!.width)).toBeLessThan(1.5);
+  // Plain "view photo" (no field) draws no box.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /Xem lại bìa trước/ }).click();
+  await expect(page.getByRole('dialog').getByTestId('ocr-location-box')).toHaveCount(0);
 });
 
 test('a failed scan shows a readable error and leaves the page usable', async ({ page }) => {

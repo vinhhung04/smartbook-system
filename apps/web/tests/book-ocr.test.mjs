@@ -123,6 +123,18 @@ test('warning codes become readable Vietnamese', () => {
   assert.equal(ocr.formatUsd(null), 'không rõ');
 });
 
+test('save is blocked on CONFLICTED / REVIEW_REQUIRED / INVALID fields nobody has looked at', () => {
+  assert.deepEqual(ocr.unresolvedOcrFields(PROPOSALS, new Set()).sort(), ['pageCount', 'publisher']);
+  // a field the user typed into (or one-click applied) no longer blocks save
+  assert.deepEqual(ocr.unresolvedOcrFields(PROPOSALS, new Set(['publisher'])), ['pageCount']);
+  assert.deepEqual(ocr.unresolvedOcrFields(PROPOSALS, new Set(['pageCount', 'publisher'])), []);
+  // safe statuses (CORROBORATED, EXTRACTED, INFERRED, MISSING, LOOKUP_ONLY) never block
+  const safe = { title: proposal('title', 'Nhà giả kim', 'CORROBORATED'), language: proposal('language', 'vi', 'INFERRED', false) };
+  assert.deepEqual(ocr.unresolvedOcrFields(safe, new Set()), []);
+  const invalid = { isbn: proposal('isbn', null, 'INVALID', false) };
+  assert.deepEqual(ocr.unresolvedOcrFields(invalid, new Set()), ['isbn']);
+});
+
 test('single-photo readings of identity fields are offered for one bulk click, never auto-filled', () => {
   const single = (formField, value) => proposal(formField, value, 'EXTRACTED', false, { reasons: ['SINGLE_SOURCE'] });
   const proposals = {

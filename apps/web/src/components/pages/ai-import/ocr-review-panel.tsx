@@ -3,11 +3,12 @@ import {
   AlertTriangle, CheckCheck, CircleDashed, Eye, FileSearch, GitCompareArrows, Globe, Info, PencilLine, ScanText, Sparkles, X, XCircle,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { AnomalyDashboard } from "./anomaly-dashboard";
 import {
   describeOcrCode, formatUsd, OCR_FIELD_FOR_FORM, OCR_FIELD_LABELS, OCR_READING_LABELS, OCR_SLOTS, OCR_STATUS_META,
-  ocrSourceLabel, safeProposalCount, singleSourceProposals,
+  OCR_VISUAL_STATUS_META, ocrSourceLabel, safeProposalCount, singleSourceProposals,
 } from "@/lib/book-ocr";
-import type { BookOcrScanResult, OcrFieldStatus, OcrImageKind, OcrProposal } from "@/services/book-ocr";
+import type { BookOcrScanResult, OcrFieldStatus, OcrImageKind, OcrProposal, OcrVisualBox } from "@/services/book-ocr";
 import type { EditableBookForm } from "./types";
 import type { OcrSlots } from "./use-book-ocr";
 
@@ -74,8 +75,16 @@ function ValueBlock({ label, value, emphasis = false, clamp = false }: { label: 
   );
 }
 
+interface ImageView {
+  kind: OcrImageKind;
+  boxes: OcrVisualBox[];
+  /** Which field's evidence is boxed, e.g. "Tên sách". */
+  fieldLabel?: string;
+  readText?: string | null;
+}
+
 function ProposalRow({
-  proposal, result, form, edited, disabled, onApply,
+  proposal, result, form, edited, disabled, onApply, onShowLocation,
 }: {
   proposal: OcrProposal;
   result: BookOcrScanResult;
@@ -83,10 +92,13 @@ function ProposalRow({
   edited: boolean;
   disabled: boolean;
   onApply: (fields: Array<keyof EditableBookForm>, value: string, label: string) => void;
+  /** Absent while the result is stale (the photos it points at are gone). */
+  onShowLocation?: (view: ImageView) => void;
 }) {
   const label = OCR_FIELD_LABELS[proposal.formField] || proposal.formField;
   const ocrField = OCR_FIELD_FOR_FORM[proposal.formField];
   const observations = ocrField ? result.fields[ocrField]?.observations || [] : [];
+  const visualByObservation = ocrField ? result.visualEvidence[ocrField] || [] : [];
   const current = String(form[proposal.formField as keyof EditableBookForm] ?? "");
   const fields = fieldsForApply(proposal.formField);
   const showComparison = proposal.ocrValue && proposal.lookupValue && proposal.ocrValue !== proposal.lookupValue;
@@ -169,17 +181,42 @@ function ProposalRow({
         <details className="group mt-2.5 text-[12px]">
           <summary className="inline-flex min-h-8 cursor-pointer items-center rounded-md font-medium text-primary focus-visible:outline-2 focus-visible:outline-ring">Bằng chứng từ ảnh ({observations.length})</summary>
           <ul className="mt-2 space-y-2">
-            {observations.map((observation, index) => (
-              <li key={`${observation.source}-${index}`} className="rounded-lg bg-muted/50 p-2.5">
-                <p className="font-medium text-foreground">{ocrSourceLabel(observation.source)} {observation.valid ? "" : "· không dùng"}</p>
-                <blockquote className="mt-1 whitespace-pre-wrap break-words border-l-2 border-primary/40 pl-2 text-muted-foreground">
-                  {observation.observedText || "(đoạn giới thiệu được chép nguyên văn)"}
-                </blockquote>
-                {observation.issues.length ? (
-                  <p className="mt-1 text-red-700 dark:text-red-400">{observation.issues.map((issue) => describeOcrCode(issue)).join("; ")}</p>
-                ) : null}
-              </li>
-            ))}
+            {observations.map((observation, index) => {
+              const visual = visualByObservation.find((entry) => entry.source === observation.source);
+              const visualMeta = visual ? OCR_VISUAL_STATUS_META[visual.status] : null;
+              return (
+                <li key={`${observation.source}-${index}`} className="rounded-lg bg-muted/50 p-2.5">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="font-medium text-foreground">{ocrSourceLabel(observation.source)} {observation.valid ? "" : "· không dùng"}</p>
+                    {visualMeta ? (
+                      <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${TONE_CHIP[visualMeta.tone] ?? TONE_CHIP.neutral}`}>
+                        {visualMeta.label}
+                      </span>
+                    ) : null}
+                  </div>
+                  <blockquote className="mt-1 whitespace-pre-wrap break-words border-l-2 border-primary/40 pl-2 text-muted-foreground">
+                    {observation.observedText || "(đoạn giới thiệu được chép nguyên văn)"}
+                  </blockquote>
+                  {observation.issues.length ? (
+                    <p className="mt-1 text-red-700 dark:text-red-400">{observation.issues.map((issue) => describeOcrCode(issue)).join("; ")}</p>
+                  ) : null}
+                  {visual?.readText ? (
+                    <p className="mt-1 break-words text-muted-foreground">
+                      Model xác minh đọc lại độc lập: <span className="text-foreground">“{visual.readText}”</span>
+                    </p>
+                  ) : null}
+                  {visual?.boxes.length && onShowLocation ? (
+                    <button
+                      type="button"
+                      onClick={() => onShowLocation({ kind: observation.source as OcrImageKind, boxes: visual.boxes, fieldLabel: label, readText: visual.readText })}
+                      className="mt-1.5 inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-card px-2 text-[12px] font-medium text-primary hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      <Eye className="h-3.5 w-3.5" aria-hidden="true" /> Xem vị trí trên ảnh
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </details>
       ) : null}
@@ -221,7 +258,7 @@ export function OcrReviewPanel({
   onApplySingleSource: () => void;
   onDismiss: () => void;
 }) {
-  const [viewing, setViewing] = useState<OcrImageKind | null>(null);
+  const [viewing, setViewing] = useState<ImageView | null>(null);
   const rows = ROW_ORDER.map((field) => result.proposals[field]).filter(Boolean);
   const shown = rows.filter((proposal) => proposal.status !== "MISSING" || proposal.options.length);
   const missing = rows.filter((proposal) => !shown.includes(proposal)).map((proposal) => OCR_FIELD_LABELS[proposal.formField]);
@@ -232,12 +269,15 @@ export function OcrReviewPanel({
     .filter((proposal) => form[proposal.formField as keyof EditableBookForm] !== proposal.value);
   const extras = EXTRA_READINGS.map((field) => [field, result.metadata[field]] as const).filter(([, value]) => value);
   const { usage } = result;
-  const viewingSlot = viewing ? slots[viewing] : undefined;
+  const viewingSlot = viewing ? slots[viewing.kind] : undefined;
+  const viewingLabel = OCR_SLOTS.find((slot) => slot.kind === viewing?.kind)?.label ?? "";
+  const showLocation = stale ? undefined : (view: ImageView) => { if (slots[view.kind]) setViewing(view); };
   const corroborated = shown.filter((proposal) => proposal.status === "CORROBORATED").length;
 
   const renderRow = (proposal: OcrProposal) => (
     <ProposalRow key={proposal.formField} proposal={proposal} result={result} form={form}
-      edited={fieldsForApply(proposal.formField).some((field) => userEdited.has(field))} disabled={stale} onApply={onApply} />
+      edited={fieldsForApply(proposal.formField).some((field) => userEdited.has(field))} disabled={stale} onApply={onApply}
+      onShowLocation={showLocation} />
   );
 
   return (
@@ -269,6 +309,8 @@ export function OcrReviewPanel({
         </div>
       </dl>
 
+      <AnomalyDashboard anomalies={result.anomalies} />
+
       {stale ? (
         <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -279,7 +321,7 @@ export function OcrReviewPanel({
       {stale ? null : (
         <div className="flex flex-wrap gap-2">
           {OCR_SLOTS.filter(({ kind }) => slots[kind] && result.images.some((image) => image.kind === kind)).map(({ kind, label }) => (
-            <button key={kind} type="button" onClick={() => setViewing(kind)} className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border p-1.5 pr-3 text-[12px] text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <button key={kind} type="button" onClick={() => setViewing({ kind, boxes: [] })}className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-border p-1.5 pr-3 text-[12px] text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
               <img src={slots[kind]!.url} alt="" className="h-10 w-8 rounded object-cover" />
               <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" aria-hidden="true" /> Xem lại {label.toLowerCase()}</span>
             </button>
@@ -369,9 +411,32 @@ export function OcrReviewPanel({
 
       <Dialog open={viewing !== null} onOpenChange={(open) => { if (!open) setViewing(null); }}>
         <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-3xl">
-          <DialogTitle>{OCR_SLOTS.find((slot) => slot.kind === viewing)?.label}</DialogTitle>
-          <DialogDescription>Ảnh đã gửi cho AI — so sánh với các giá trị đề xuất.</DialogDescription>
-          {viewingSlot ? <img src={viewingSlot.url} alt={`Ảnh ${OCR_SLOTS.find((slot) => slot.kind === viewing)?.label.toLowerCase()}`} className="max-h-[70vh] w-full rounded-lg object-contain" /> : null}
+          <DialogTitle>{viewing?.fieldLabel ? `${viewing.fieldLabel} — ${viewingLabel.toLowerCase()}` : viewingLabel}</DialogTitle>
+          <DialogDescription>
+            {viewing?.boxes.length
+              ? "Khung vàng là vị trí do model xác minh tự chỉ ra khi đọc lại ảnh — đây là ước lượng của model, không phải vị trí đã được kiểm chứng. Hãy tự so chữ trong khung với giá trị đề xuất."
+              : "Ảnh đã gửi cho AI — so sánh với các giá trị đề xuất."}
+          </DialogDescription>
+          {viewing?.readText ? (
+            <p className="text-[12.5px] text-muted-foreground">Model xác minh đọc được: <span className="text-foreground">“{viewing.readText}”</span></p>
+          ) : null}
+          {viewingSlot ? (
+            <div className="flex justify-center">
+              {/* inline-block shrinks to the rendered image, so % boxes land on the image itself. */}
+              <div className="relative inline-block" data-testid="ocr-image-view">
+                <img src={viewingSlot.url} alt={`Ảnh ${viewingLabel.toLowerCase()}`} className="block max-h-[65vh] max-w-full rounded-lg" />
+                {viewing?.boxes.map((box, index) => (
+                  <span
+                    key={index}
+                    aria-hidden="true"
+                    data-testid="ocr-location-box"
+                    className="pointer-events-none absolute rounded-sm border-2 border-amber-500 bg-amber-400/15 shadow-[0_0_0_1px_rgba(255,255,255,0.7)]"
+                    style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.width * 100}%`, height: `${box.height * 100}%` }}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </section>
