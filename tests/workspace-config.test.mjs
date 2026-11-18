@@ -30,7 +30,8 @@ test("CI installs dependencies reproducibly", () => {
 test("every CI stack job uses isolated secrets and a raised test-only rate limit", () => {
   const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
   assert.equal((workflow.match(/run: pnpm test:stack setup/g) ?? []).length, 2);
-  assert.equal((workflow.match(/run: pnpm test:stack down/g) ?? []).length, 2);
+  assert.equal((workflow.match(/run: pnpm test:stack stop/g) ?? []).length, 2);
+  assert.doesNotMatch(workflow, /run: pnpm test:stack down/);
   const environment = readFileSync(resolve(repositoryRoot, 'scripts/testing/environment.mjs'), 'utf8');
   assert.match(environment, /AUTH_LOGIN_RATE_LIMIT_MAX: '5000'/);
   assert.match(environment, /randomBytes/);

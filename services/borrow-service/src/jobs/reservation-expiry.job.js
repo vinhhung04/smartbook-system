@@ -3,9 +3,10 @@ const { runExpiredReservationSweep } = require('../controllers/reservation.contr
 
 let timer = null;
 let running = false;
+let stopping = false;
 
 async function executeReservationExpirySweep() {
-  if (running) {
+  if (running || stopping) {
     return;
   }
 
@@ -23,6 +24,7 @@ async function executeReservationExpirySweep() {
 }
 
 function startReservationExpiryJob() {
+  if (timer || stopping) return;
   const enabled = String(process.env.ENABLE_RESERVATION_EXPIRY_JOB || 'true').toLowerCase() === 'true';
   if (!enabled) {
     console.log('[borrow-service][job] reservation expiry disabled by env');
@@ -43,10 +45,15 @@ function startReservationExpiryJob() {
 }
 
 function stopReservationExpiryJob() {
+  stopping = true;
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
+  return new Promise((resolve) => {
+    const drained = () => running ? setTimeout(drained, 10) : resolve();
+    drained();
+  });
 }
 
 module.exports = {

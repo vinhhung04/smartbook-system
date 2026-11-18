@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { root, testEnvironment } from './environment.mjs';
+import { qaSecretValues } from './sanitize-artifacts.mjs';
+import { sanitizeCapturedStreams } from './redacted-command.mjs';
 
 const env = testEnvironment();
 const flows = JSON.parse(readFileSync(new URL('./integration-flows.json', import.meta.url), 'utf8'));
@@ -15,9 +17,10 @@ for (const flow of flows) {
   const result = spawnSync(process.execPath, [resolve(root, 'scripts', flow)], {
     cwd: root, env, encoding: 'utf8', timeout: 180_000, maxBuffer: 16 * 1024 * 1024,
   });
-  const log = `${result.stdout || ''}\n${result.stderr || ''}`;
+  const safe = sanitizeCapturedStreams(result, qaSecretValues(env));
+  const log = `${safe.stdout}\n${safe.stderr}`;
   writeFileSync(resolve(output, `${flow}.log`), log);
-  const status = result.status === 0 && !result.error ? 'PASS' : 'FAIL';
+  const status = result.status === 0 && !result.error && !result.signal ? 'PASS' : 'FAIL';
   results.push({ flow, status, exitCode: result.status, durationMs: Date.now() - start, error: result.error?.code });
   console.log(`${status} ${flow}`);
   if (status === 'FAIL') console.error(log.slice(-5000));

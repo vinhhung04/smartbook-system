@@ -80,6 +80,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
   const reservationId = crypto.randomUUID();
   const loanId = crypto.randomUUID();
   const runTag = Date.now();
+  const expiresAt = new Date(Date.now() + 3600_000).toISOString();
 
   await t.test('POST reservations/reserve (201) matches schema', async () => {
     const res = await request('POST', '/api/borrow-integration/reservations/reserve', {
@@ -88,7 +89,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
       variant_id: target.variant_id,
       warehouse_id: target.warehouse_id,
       quantity: 1,
-      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      expires_at: expiresAt,
       idempotency_key: `ct-reserve-${runTag}`,
     });
     assert.equal(res.status, 201, JSON.stringify(res.data));
@@ -104,7 +105,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
       variant_id: target.variant_id,
       warehouse_id: target.warehouse_id,
       quantity: 1,
-      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      expires_at: expiresAt,
       idempotency_key: `ct-reserve-${runTag}`,
     });
     assert.equal(res.status, 200, JSON.stringify(res.data));

@@ -50,7 +50,7 @@ test('SmartBook audit: migrated PostgreSQL business invariants', { skip: !url },
       const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(payload) { this.body = payload; return this; } };
       await fn({ body, user: { id: actor.userId } }, res); return res;
     }
-    let receiptRequest;
+    let receiptRequest, receiptLines;
     await t.test('SB-16: incomplete count is refused and an explicit zero creates a shortage outcome', async () => {
       await prisma.purchase_orders.update({ where: { id: orders[0].id }, data: { status: 'SUPPLIER_CONFIRMED' } });
       const second = await prisma.book_variants.create({ data: { book_id: book.id, sku: `AUD-${randomUUID().slice(0, 8)}` } });
@@ -63,6 +63,7 @@ test('SmartBook audit: migrated PostgreSQL business invariants', { skip: !url },
         await createGoodsReceiptFromInvoice({ params: { id: delivery.id }, body: { warehouse_id: wh.id, items }, user: { id: userId }, get: () => `audit-receipt-${tag}` }, res); return res;
       };
       const lines = delivery.supplier_delivery_invoice_items.map((item) => ({ invoice_item_id: item.id, delivered_qty: item.variant_id === variant.id ? 10 : 0 }));
+      receiptLines = lines;
       assert.equal((await receiptRequest(lines.slice(0, 1))).statusCode, 400);
       const result = await receiptRequest(lines);
       assert.equal(result.statusCode, 201, JSON.stringify(result.body));
@@ -81,7 +82,8 @@ test('SmartBook audit: migrated PostgreSQL business invariants', { skip: !url },
       const replay = await receiptRequest([{ invoice_item_id: randomUUID(), delivered_qty: 1 }], randomUUID());
       assert.equal(replay.statusCode, 403);
       assert.equal(replay.body.data, undefined);
-      assert.equal((await receiptRequest([{ invoice_item_id: randomUUID(), delivered_qty: 1 }])).statusCode, 200);
+      assert.equal((await receiptRequest(receiptLines)).statusCode, 200);
+      assert.equal((await receiptRequest([{ invoice_item_id: randomUUID(), delivered_qty: 1 }])).statusCode, 409);
     });
     await t.test('SB-08: simultaneous GRNs with distinct keys for one delivery create one draft', async () => {
       const po = await prisma.purchase_orders.create({ data: { po_number: `AUD-${randomUUID().slice(0, 8)}`, supplier_id: suppliers[0].id, warehouse_id: wh.id, ordered_by_user_id: actor.userId, status: 'SUPPLIER_CONFIRMED', purchase_order_items: { create: { variant_id: variant.id, ordered_qty: 10 } } }, include: { purchase_order_items: true } });

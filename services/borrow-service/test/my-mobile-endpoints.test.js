@@ -11,9 +11,11 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 function matches(row, where = {}) {
   return Object.entries(where).every(([key, expected]) => {
+    if (key === 'OR') return expected.some(clause => matches(row, clause));
     if (expected && typeof expected === 'object' && !Array.isArray(expected) && !(expected instanceof Date)) {
       if ('in' in expected) return expected.in.includes(row[key]);
       if ('gt' in expected) return row[key] > expected.gt;
+      if ('lte' in expected) return row[key] <= expected.lte;
     }
     return row[key] === expected;
   });
@@ -27,6 +29,8 @@ function table(rows) {
     async findUnique({ where }) { const r = rows.find((row) => matches(row, where)); return r ? { ...r } : null; },
     async count({ where } = {}) { return rows.filter((r) => matches(r, where)).length; },
     async create({ data }) { const row = { id: id(rows.length + 900), ...data }; rows.push(row); return row; },
+    async update({ where, data }) { const row = rows.find(r => matches(r, where)); Object.assign(row, data); return { ...row }; },
+    async updateMany({ where, data }) { const found = rows.filter(r => matches(r, where)); found.forEach(r => Object.assign(r, data)); return { count: found.length }; },
   };
 }
 
@@ -64,6 +68,7 @@ function basePrisma() {
       { id: id(12), customer_id: CUSTOMER, status: 'RETURNED', loan_number: 'L-12', borrow_date: new Date(), due_date: new Date(), loan_items: [] },
     ]),
     customer_notifications: table([]),
+    customers: table([{ id: CUSTOMER, total_fine_balance: 0 }]),
     fines: table([]),
     fine_payment_intents: table([]),
     $transaction: async (fn) => fn(prisma),

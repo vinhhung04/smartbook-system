@@ -2,23 +2,57 @@
 `python -m unittest discover` van chay duoc tren may khong dung Docker.
 
 Chay co Postgres:
-    TEST_PG_DSN=postgresql+asyncpg://user:pass@localhost:5432/ai_db \
+    TEST_PG_DSN=postgresql+asyncpg://user:pass@127.0.0.1:25432/ai_pg_audit_<8hex> \
         python -m unittest test_pgvector_store -v
 """
 from __future__ import annotations
 
 import asyncio
 import os
+import re
 import unittest
+from urllib.parse import urlsplit
 
 import embeddings
 
 TEST_DSN = os.getenv("TEST_PG_DSN", "")
+_VERIFIED_EMPTY_TARGETS: set[str] = set()
+
+
+def validate_disposable_pg_target(dsn: str) -> None:
+    """Catalog sync intentionally removes documents; never aim it at a user DB."""
+    target = urlsplit(dsn)
+    if (target.scheme != "postgresql+asyncpg"
+            or target.hostname not in {"127.0.0.1", "localhost"}
+            or target.port not in {5432, 15432, 25432}
+            or not re.fullmatch(r"/ai_pg_audit_[a-f0-9]{8}", target.path)
+            or target.query or target.fragment):
+        raise RuntimeError("AI PG tests require a fresh loopback ai_pg_audit_<8hex> database")
+
+
+async def verify_empty_audit_database(db) -> None:
+    validate_disposable_pg_target(TEST_DSN)
+    if TEST_DSN in _VERIFIED_EMPTY_TARGETS:
+        return
+    from sqlalchemy import text
+    async with db.engine.connect() as connection:
+        tables = list((await connection.execute(text(
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema='public' AND table_type='BASE TABLE'"))).scalars())
+        if not {"ai_documents", "ai_pending_actions", "ai_inference_leases"}.issubset(tables):
+            raise RuntimeError("Run the explicit AI schema owner migration before PG tests")
+        for table in tables:
+            # Names come from server metadata, quoted as SQL identifiers.
+            quoted = '"' + table.replace('"', '""') + '"'
+            if await connection.scalar(text(f'SELECT EXISTS (SELECT 1 FROM public.{quoted})')):
+                raise RuntimeError("AI PG tests refuse a populated database; create a new audit target")
+    _VERIFIED_EMPTY_TARGETS.add(TEST_DSN)
 
 
 @unittest.skipUnless(TEST_DSN, "TEST_PG_DSN khong duoc set — bo qua integration test")
 class PgVectorStoreTest(unittest.TestCase):
     def setUp(self):
+        validate_disposable_pg_target(TEST_DSN)
         os.environ["DATABASE_URL"] = TEST_DSN
         import importlib
         import db, vector_store
@@ -36,16 +70,15 @@ class PgVectorStoreTest(unittest.TestCase):
             # at the END of the coroutine that owns the engine for this loop,
             # while the loop is still alive — not at the start of the next
             # one trying to clean up after an already-dead loop.
+            await verify_empty_audit_database(db)
             await db.init_db()
             await db.engine.dispose()
 
         self.store = PgVectorStore()
         asyncio.run(_init_and_dispose())
         asyncio.run(self._clean())
-        # Don dep ca SAU moi test: truoc day chi don o setUp nen hang 'test-b2' cua
-        # test cuoi cung con nam lai trong corpus BOOK_METADATA that cua ai_db
-        # (tim thay khi doi chieu corpus voi catalog). Nen tro TEST_PG_DSN vao mot
-        # DB rieng cho test, khong phai ai_db dang phuc vu.
+        # The strict fresh-target guard above ensures these cleanup operations
+        # can only affect fixtures created by this test process.
         self.addCleanup(lambda: asyncio.run(self._clean()))
 
     async def _clean(self):

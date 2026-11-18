@@ -2,11 +2,13 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRateLimiter, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createServiceLifecycle, createCorsOptions, createRateLimiter, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const analyticsRoutes = require('./routes/analytics.routes');
 const { closePools, pingDatabases } = require('./lib/db');
 
 const app = express();
+let lifecycle;
+app.use((req, res, next) => lifecycle ? lifecycle.middleware(req, res, next) : next());
 const port = Number(process.env.PORT || 3006);
 
 requireEnv(process.env, ['INVENTORY_DATABASE_URL', 'BORROW_DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
@@ -28,6 +30,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/ready', async (_req, res) => {
+  if (lifecycle && !lifecycle.isReady()) return res.status(503).json({ status: 'draining' });
   try {
     await pingDatabases();
     return res.json({ service: 'analytics-service', status: 'ready' });
@@ -56,12 +59,6 @@ const server = app.listen(port, () => {
   console.log(`Analytics service listening on port ${port}`);
 });
 
-async function shutdown() {
-  server.close(async () => {
-    await closePools();
-    process.exit(0);
-  });
-}
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+lifecycle = createServiceLifecycle({ server, closeResources: [closePools, () => require('./telemetry').shutdown?.()] });
+process.on('SIGINT', lifecycle.shutdown);
+process.on('SIGTERM', lifecycle.shutdown);

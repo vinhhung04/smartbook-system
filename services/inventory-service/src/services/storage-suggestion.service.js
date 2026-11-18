@@ -488,6 +488,7 @@ async function generateAIExplanation(bookInfo, suggestions, requestId) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '',
         ...(requestId ? { 'x-request-id': requestId } : {}),
       },
       body: JSON.stringify(payload),

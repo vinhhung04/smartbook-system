@@ -1,0 +1,11 @@
+# Same Caddy release rebuilt with the patched Go toolchain already present in
+# its official builder. Keep plugin/API major versions; no third-party plugins.
+FROM caddy:2.11.9-builder-alpine@sha256:646fee578e680989ca5c7fd1ce6f1de574d19fd71ef2221810cc0510a9f40c86 AS builder
+ENV GOTOOLCHAIN=local GOMAXPROCS=2 GOFLAGS=-p=2
+RUN xcaddy build v2.11.9 \
+    --replace golang.org/x/net=golang.org/x/net@v0.62.0 \
+    --output /usr/bin/caddy
+
+FROM caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+RUN apk upgrade --no-cache
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

@@ -1,7 +1,7 @@
 """AI Action Center claim under REAL concurrency (separate Postgres connections).
-Skipped without TEST_PG_DSN - point it at a throwaway database, not ai_db:
+Skipped without TEST_PG_DSN - requires a fresh loopback audit database:
 
-    TEST_PG_DSN=postgresql+asyncpg://user:pass@localhost:5432/ai_test python -m pytest test_agent_store_pg.py
+    TEST_PG_DSN=postgresql+asyncpg://user:pass@127.0.0.1:25432/ai_pg_audit_<8hex> python -m unittest test_agent_store_pg -v
 """
 from __future__ import annotations
 
@@ -13,10 +13,15 @@ from unittest import mock
 
 TEST_DSN = os.getenv("TEST_PG_DSN", "")
 
+# Both modules share one initial empty-target check, so subsequent tests may
+# observe only fixtures created by this process, never a pre-existing corpus.
+from test_pgvector_store import validate_disposable_pg_target, verify_empty_audit_database
+
 
 @unittest.skipUnless(TEST_DSN, "TEST_PG_DSN khong duoc set - bo qua integration test")
 class AgentStoreConcurrencyPgTest(unittest.TestCase):
     def setUp(self):
+        validate_disposable_pg_target(TEST_DSN)
         os.environ["DATABASE_URL"] = TEST_DSN
         import db
         importlib.reload(db)
@@ -27,6 +32,7 @@ class AgentStoreConcurrencyPgTest(unittest.TestCase):
     def _run(self, scenario):
         async def wrapped():
             try:
+                await verify_empty_audit_database(self.db)
                 await self.db.init_db()
                 return await scenario()
             finally:

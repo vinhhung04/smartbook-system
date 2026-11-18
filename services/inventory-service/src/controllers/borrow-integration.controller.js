@@ -1,3 +1,4 @@
+const { RequestBindingError, reserveIdentity, assertReserveReplay } = require('../services/request-binding.service');
 const { releaseReservedStock, consumeReservedStock } = require('../services/borrow-reservation-guard.service');
 const { reservationCreatedCounter, reservationConflictCounter, recordStockMutation } = require('../lib/metrics');
 const { isPublicPickupWarehouse } = require('../utils/public-pickup-warehouse');
@@ -264,7 +265,7 @@ async function reserveFromBorrow(req, res) {
     reservation_channel,
   } = req.body;
 
-  const normalizedQuantity = parsePositiveInteger(quantity, 1);
+  const normalizedQuantity = Number(quantity ?? 1);
 
   if (!reservation_id || !reservation_number || !variant_id || !warehouse_id || !normalizedQuantity || !expires_at) {
     return res.status(400).json({
@@ -280,33 +281,34 @@ async function reserveFromBorrow(req, res) {
   if (!movementIdempotency) return undefined;
 
   try {
+    if (movementIdempotency.length > 100) throw new RequestBindingError('idempotency_key tối đa 100 ký tự', 400, 'INVALID_REQUEST_PAYLOAD');
+    const binding = reserveIdentity(req);
     const result = await prisma.$transaction(async (tx) => {
-      const existing = await tx.stock_reservations.findFirst({
-        where: {
-          source_service: 'BORROW',
-          source_reference_id: reservation_id,
-          status: 'ACTIVE',
-        },
-      });
-
-      if (existing) {
-        return { alreadyReserved: true, reservation: existing };
-      }
-
+      // Select a scalar from the locking function so Prisma never deserializes
+      // PostgreSQL's void return value. Same key and same external reference
+      // serialize independently, including retries with changed payloads.
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`reserve-key:${movementIdempotency}`}, 0))`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`reserve-reference:${binding.identity.reservation_id}`}, 0))`;
       const movementByKey = await tx.stock_movements.findUnique({ where: { idempotency_key: movementIdempotency } });
       if (movementByKey) {
-        const reservationByReference = await tx.stock_reservations.findFirst({
-          where: {
-            source_service: 'BORROW',
-            source_reference_id: reservation_id,
-          },
-          orderBy: [{ created_at: 'desc' }],
-        });
-
-        if (reservationByReference) {
-          return { alreadyReserved: true, reservation: reservationByReference };
-        }
+        assertReserveReplay(movementByKey, binding.identity);
+        const reservation = await tx.stock_reservations.findFirst({ where: { source_service: 'BORROW', source_reference_id: binding.identity.reservation_id }, orderBy: [{ created_at: 'desc' }] });
+        if (!reservation) throw new RequestBindingError('Không tìm thấy phiếu giữ gốc để đối soát');
+        return { alreadyReserved: true, reservation };
       }
+      const existing = await tx.stock_reservations.findFirst({
+        where: { source_service: 'BORROW', source_reference_id: binding.identity.reservation_id },
+        orderBy: [{ created_at: 'desc' }],
+      });
+      if (existing) {
+        const movement = await tx.stock_movements.findFirst({ where: { source_service: 'BORROW_SERVICE',
+          movement_type: 'RESERVE', reference_type: 'LOAN_RESERVATION', reference_id: binding.identity.reservation_id } });
+        assertReserveReplay(movement, binding.identity);
+        // A different key cannot claim the same physical hold and then be reused
+        // later for a second resource. The caller must retry its original key.
+        throw new RequestBindingError('Phiếu giữ đã thuộc một key khác; gửi lại key ban đầu');
+      }
+      if (binding.invalidDelegation) throw new RequestBindingError('Không được thay người thực hiện bằng created_by_user_id', 403, 'ACTOR_DELEGATION_FORBIDDEN');
 
       if (isCustomerReservation(reservation_channel) && !(await isValidPickupWarehouse(tx, warehouse_id))) {
         throw new Error('INVALID_PICKUP_WAREHOUSE');
@@ -392,6 +394,7 @@ async function reserveFromBorrow(req, res) {
           metadata: {
             reservation_number,
             customer_id: customer_id || null,
+            borrow_request: binding.identity,
           },
         },
       });
@@ -423,6 +426,7 @@ async function reserveFromBorrow(req, res) {
       idempotent: Boolean(result.alreadyReserved),
     });
   } catch (error) {
+    if (error instanceof RequestBindingError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     if (error.message === 'INVALID_PICKUP_WAREHOUSE') {
       return res.status(409).json({ message: INVALID_PICKUP_WAREHOUSE_MESSAGE });
     }

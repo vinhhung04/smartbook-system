@@ -8,6 +8,7 @@ class RedisClient {
   }
 
   async connect() {
+    if (this.closing) return null;
     if (this.isConnected) return this.client;
 
     const redisUrl = process.env.REDIS_URL || 'redis://redis:6379';
@@ -83,8 +84,9 @@ class RedisClient {
   }
 
   async disconnect() {
-    if (this.client) {
-      await this.client.quit();
+    this.closing = true;
+    if (this.client?.isOpen) {
+      if (this.client.isReady) await this.client.quit(); else await this.client.disconnect();
       this.isConnected = false;
     }
   }

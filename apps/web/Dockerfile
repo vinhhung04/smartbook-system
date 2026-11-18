@@ -1,4 +1,13 @@
-FROM node:20-alpine AS builder
+FROM node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS base
+
+# Supported LTS runtime and current vendor security patches. Release images are
+# recorded/deployed by digest; no owner credentials or workspace .env is copied.
+RUN apt-get update -y \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM base AS builder
 
 WORKDIR /workspace
 RUN corepack enable
@@ -32,7 +41,8 @@ ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_PACKING_RECORD_DELAY_SECONDS=$VITE_PACKING_RECORD_DELAY_SECONDS
 RUN pnpm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.30.6-alpine3.24@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a AS runtime
+RUN apk upgrade --no-cache
 
 # Origins allowed by the Content-Security-Policy connect-src; overridden at runtime by docker-compose.
 ENV API_ORIGIN=http://localhost:3000 \
@@ -40,5 +50,11 @@ ENV API_ORIGIN=http://localhost:3000 \
     NGINX_ENVSUBST_FILTER=^API_
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=builder /workspace/apps/web/dist /usr/share/nginx/html
+
+# Envsubst writes conf.d at startup; Nginx needs only its cache and /tmp PID.
+# Compose allows low-port binding inside this container's network namespace.
+RUN sed -i '/^user[[:space:]]/d; s@^[[:space:]]*pid[[:space:]].*;@pid /tmp/nginx.pid;@' /etc/nginx/nginx.conf \
+    && chown -R nginx:nginx /var/cache/nginx /etc/nginx/conf.d
+USER nginx
 
 EXPOSE 80

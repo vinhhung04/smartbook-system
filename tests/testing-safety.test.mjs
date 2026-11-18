@@ -2,13 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve, delimiter } from 'node:path';
 import { readFileSync, readdirSync } from 'node:fs';
-import { root, envFile, assertIsolated } from '../scripts/testing/environment.mjs';
+import { root, envFile, assertIsolated, buildTestEnvironment } from '../scripts/testing/environment.mjs';
 
 const valid = {
   COMPOSE_PROJECT_NAME: 'smartbook-qa-aabbccdd', SMARTBOOK_TEST_ISOLATED: '1',
   COMPOSE_FILE: [resolve(root, 'docker-compose.yml'), resolve(root, 'docker-compose.test.yml')].join(delimiter),
   COMPOSE_ENV_FILES: envFile, DB_HOST: 'db', GATEWAY_URL: 'http://localhost:13000',
   OPENROUTER_API_KEY: '', GOOGLE_BOOKS_API_KEY: '',
+  SMTP_HOST: 'mailpit', SMTP_PORT: '1025', SMTP_USER: '', SMTP_PASS: '',
+  SMTP_FROM: 'syntheticqa@example.invalid',
 };
 test('the disposable QA project is allowed', () => assert.doesNotThrow(() => assertIsolated(valid)));
 for (const [field, value] of [
@@ -16,7 +18,34 @@ for (const [field, value] of [
   ['COMPOSE_FILE', resolve(root, 'compose.prod.yml')], ['COMPOSE_ENV_FILES', resolve(root, '.env')],
   ['DB_HOST', 'production-db'], ['GATEWAY_URL', 'https://example.com'],
   ['OPENROUTER_API_KEY', 'unexpected-credential'],
+  ['SMTP_HOST', 'outside.example.invalid'], ['SMTP_PORT', '465'],
+  ['SMTP_USER', 'synthetic-outside-user'], ['SMTP_PASS', 'synthetic-outside-password'],
+  ['SMTP_FROM', 'outside@example.invalid'],
 ]) test(`QA refuses an unsafe ${field}`, () => assert.throws(() => assertIsolated({ ...valid, [field]: value })));
+
+test('legacy QA environments pin Mailpit after the host merge and discard SMTP provider secrets', () => {
+  const legacy = { ...valid };
+  for (const key of Object.keys(legacy)) if (key.startsWith('SMTP_')) delete legacy[key];
+  const inherited = {
+    SMTP_HOST: 'outside.example.invalid', SMTP_PORT: '465', SMTP_USER: 'outside-user',
+    SMTP_PASS: 'synthetic-outside-secret', SMTP_FROM: 'outside@example.invalid',
+    SMTP_URL: 'synthetic-provider-url', SMTP_API_KEY: 'synthetic-provider-key', SMTP_SECURE: 'true',
+    smtp_password: 'synthetic-lowercase-secret',
+    OPENROUTER_API_KEY: 'synthetic-provider-key', GOOGLE_BOOKS_API_KEY: 'synthetic-provider-key',
+    DATABASE_URL: 'postgresql://synthetic:synthetic@outside.example.invalid/audit',
+  };
+  const env = buildTestEnvironment(legacy, inherited);
+  assert.deepEqual(Object.fromEntries(Object.entries(env).filter(([key]) => /^SMTP_/i.test(key))), {
+    SMTP_HOST: 'mailpit', SMTP_PORT: '1025', SMTP_USER: '', SMTP_PASS: '',
+    SMTP_FROM: 'syntheticqa@example.invalid',
+  });
+  assert.equal(env.OPENROUTER_API_KEY, '');
+  assert.equal(env.GOOGLE_BOOKS_API_KEY, '');
+  assert.equal(env.DATABASE_URL, undefined);
+  assert.equal(inherited.SMTP_HOST, 'outside.example.invalid', 'host environment must remain unchanged');
+  assert.equal(legacy.SMTP_HOST, undefined, 'private QA values must not be rewritten');
+  assert.doesNotThrow(() => assertIsolated(env));
+});
 test('CI retains all branch triggers and adds manual execution', () => {
   const ci = readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8');
   assert.match(ci, /push:\s*branches: \[main, hungg, khoa\]/);

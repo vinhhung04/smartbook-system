@@ -1,3 +1,6 @@
+const { assertDeliveryReceiptAvailable } = require('../services/delivery-receipt-guard.service');
+const { receiveTransfer } = require('../services/transfer-receiving.service');
+const { toSerializableError } = require('../utils/inventory');
 
 const { prisma } = require("../lib/prisma");
 
@@ -634,6 +637,8 @@ async function createGoodsReceipt(req, res) {
         throw new Error("WAREHOUSE_ACCESS_DENIED");
       }
 
+      if (supplierInvoice) await assertDeliveryReceiptAvailable(tx, supplierInvoice.id);
+
       const normalizedItems = [];
       for (const item of items) {
         const rawVariantId = parseId(item?.variant_id);
@@ -787,6 +792,9 @@ async function createGoodsReceipt(req, res) {
       data: result,
     });
   } catch (error) {
+    if (error instanceof ProcurementError) {
+      return res.status(error.statusCode).json({ message: error.message, code: error.code, existing_goods_receipt_id: error.existingReceiptId });
+    }
     if (error.message === "WAREHOUSE_NOT_FOUND") {
       return res.status(404).json({ message: "Không tìm thấy kho" });
     }
@@ -1030,119 +1038,6 @@ async function postDraftGoodsReceipt(tx, goodsReceipt, userId) {
   }
 }
 
-async function postTransferReceiptToReceiving(tx, goodsReceipt, userId) {
-  const existingMovementCount = await tx.stock_movements.count({
-    where: {
-      reference_type: "GOODS_RECEIPT",
-      reference_id: goodsReceipt.id,
-      reverted: false,
-    },
-  });
-
-  if (existingMovementCount > 0) {
-    return;
-  }
-
-  const receivingLocation = await resolveOrCreateReceivingLocation(
-    tx,
-    goodsReceipt.warehouse_id,
-  );
-
-  const items = await tx.goods_receipt_items.findMany({
-    where: { goods_receipt_id: goodsReceipt.id },
-    select: {
-      variant_id: true,
-      quantity: true,
-      unit_cost: true,
-    },
-  });
-
-  if (items.length === 0) {
-    return;
-  }
-
-  const aggregateMap = new Map();
-  items.forEach((item) => {
-    const key = String(item.variant_id);
-    const current = aggregateMap.get(key);
-    if (!current) {
-      aggregateMap.set(key, {
-        variant_id: item.variant_id,
-        quantity: Number(item.quantity || 0),
-      });
-      return;
-    }
-    current.quantity += Number(item.quantity || 0);
-  });
-
-  const aggregatedItems = Array.from(aggregateMap.values());
-
-  for (const item of aggregatedItems) {
-    await tx.stock_balances.upsert({
-      where: {
-        variant_id_location_id: {
-          variant_id: item.variant_id,
-          location_id: receivingLocation.id,
-        },
-      },
-      update: {
-        on_hand_qty: { increment: item.quantity },
-        available_qty: 0,
-        version: { increment: 1 },
-        last_movement_at: new Date(),
-      },
-      create: {
-        warehouse_id: goodsReceipt.warehouse_id,
-        variant_id: item.variant_id,
-        location_id: receivingLocation.id,
-        on_hand_qty: item.quantity,
-        available_qty: 0,
-        version: 1,
-        last_movement_at: new Date(),
-      },
-    });
-  }
-
-  const baseTimestamp = Date.now();
-  await tx.stock_movements.createMany({
-    data: items.map((item, index) => ({
-      movement_number: createMovementNumber(baseTimestamp, index),
-      movement_type: "INBOUND",
-      movement_status: "POSTED",
-      warehouse_id: goodsReceipt.warehouse_id,
-      variant_id: item.variant_id,
-      to_location_id: receivingLocation.id,
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-      source_service: "INVENTORY_SERVICE",
-      reference_type: "GOODS_RECEIPT",
-      reference_id: goodsReceipt.id,
-      created_by_user_id: userId,
-      metadata: {
-        source_type: "TRANSFER",
-        bucket: "RECEIVING_HOLD",
-      },
-    })),
-  });
-
-  await tx.integration_outbox.createMany({
-    data: aggregatedItems.map((item) => ({
-      aggregate_type: "STOCK_BALANCE",
-      aggregate_id: item.variant_id,
-      event_type: "inventory.stock.changed",
-      payload: {
-        variant_id: item.variant_id,
-        location_id: receivingLocation.id,
-        warehouse_id: goodsReceipt.warehouse_id,
-        delta_qty: item.quantity,
-        reason_code: "TRANSFER_RECEIPT",
-        source_reference_type: "GOODS_RECEIPT",
-        source_reference_id: goodsReceipt.id,
-      },
-    })),
-  });
-}
-
 async function cancelStockMovements(tx, goodsReceiptId) {
   await reverseReceiptPutaway(tx, goodsReceiptId);
   const movements = await tx.stock_movements.findMany({
@@ -1170,7 +1065,7 @@ async function cancelStockMovements(tx, goodsReceiptId) {
         ? movement.metadata
         : null;
     const bucket =
-      meta && meta.movement_bucket ? String(meta.movement_bucket) : null;
+      meta && (meta.movement_bucket || meta.bucket) ? String(meta.movement_bucket || meta.bucket) : null;
     // available_qty was incremented only for PUTAWAY bucket and for items with location in postDraftGoodsReceipt
     const hasAvailableQty =
       bucket === "PUTAWAY" ||
@@ -1271,6 +1166,38 @@ async function cancelStockMovements(tx, goodsReceiptId) {
     });
   }
 }
+async function recordGoodsReceiptPosted(tx, updated, userId, requestId) {
+  await tx.inventory_audit_logs.create({
+    data: {
+      actor_user_id: userId,
+      action_name: "GOODS_RECEIPT_POSTED",
+      entity_type: "GOODS_RECEIPT",
+      entity_id: updated.id,
+      after_data: {
+        receipt_number: updated.receipt_number,
+        purchase_order_id: updated.purchase_order_id,
+        supplier_delivery_invoice_id: updated.supplier_delivery_invoice_id,
+        source_type: updated.source_type,
+      },
+    },
+  });
+
+  await tx.integration_outbox.create({
+    data: {
+      aggregate_type: "GOODS_RECEIPT",
+      aggregate_id: updated.id,
+      event_type: "goods_receipt.posted",
+      payload: {
+        goods_receipt_id: updated.id,
+        receipt_number: updated.receipt_number,
+        source_type: updated.source_type,
+        purchase_order_id: updated.purchase_order_id ?? null,
+      },
+      headers: { correlation_id: requestId || null },
+    },
+  });
+}
+
 async function updateGoodsReceipt(req, res) {
   const id = parseId(req.params.id);
   const { status, note } = req.body;
@@ -1290,9 +1217,18 @@ async function updateGoodsReceipt(req, res) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      if (status === 'CANCELLED') {
-        // Read the current state after the lock: two cancellations must not
-        // reverse PO quantities twice, or race receipt-scoped putaway.
+      const source = await tx.goods_receipts.findUnique({ where: { id } });
+      if (source?.source_type === 'TRANSFER' && source.source_reference_id) {
+        // Count-only saves also serialize with confirmation; otherwise item edits
+        // could race the snapshot used to receive the same physical shipment.
+        await tx.$queryRawUnsafe('SELECT id FROM transfer_orders WHERE id = $1::uuid FOR UPDATE', source.source_reference_id);
+      }
+      if (status === 'POSTED' && source?.supplier_delivery_invoice_id && source.status === 'DRAFT') {
+        await tx.$queryRawUnsafe('SELECT id FROM supplier_delivery_invoices WHERE id = $1::uuid FOR UPDATE', source.supplier_delivery_invoice_id);
+      }
+      if (status === 'CANCELLED' || status === 'POSTED') {
+        // Read after locking: a posting retry must not resurrect a receipt that
+        // was concurrently cancelled, and cancellation must reverse only once.
         await tx.$queryRawUnsafe('SELECT id FROM goods_receipts WHERE id = $1::uuid FOR UPDATE', id);
       }
       const existing = await tx.goods_receipts.findUnique({ where: { id } });
@@ -1350,8 +1286,11 @@ async function updateGoodsReceipt(req, res) {
         };
       }
 
+      if (targetStatus === 'POSTED' && existing.status === 'DRAFT' && existing.supplier_delivery_invoice_id) {
+        await assertDeliveryReceiptAvailable(tx, existing.supplier_delivery_invoice_id, id);
+      }
       let postingClaimed = false;
-      if (targetStatus === "POSTED" && existing.status === "DRAFT") {
+      if (targetStatus === "POSTED" && existing.status === "DRAFT" && existing.source_type !== "TRANSFER") {
         postingClaimed = await claimDraftReceiptForPosting(tx, id);
         if (!postingClaimed) {
           const current = await tx.goods_receipts.findUnique({ where: { id } });
@@ -1396,6 +1335,17 @@ async function updateGoodsReceipt(req, res) {
         }
       }
 
+      if (status === 'POSTED' && existing.source_type === 'TRANSFER') {
+        const outcome = await receiveTransfer(tx, {
+          transferId: existing.source_reference_id, actorUserIdRequired: userId, actorUserIdOptional: userId,
+          user: req.user, genericReceiptId: id,
+        });
+        if (outcome.invalid) throw new ProcurementError('TRANSFER_RECEIVING_INVALID', outcome.message, outcome.statusCode || 400);
+        const data = await tx.goods_receipts.update({ where: { id }, data: { ...(note !== undefined ? { note } : {}) } });
+        if (existing.status === 'DRAFT') await recordGoodsReceiptPosted(tx, data, userId, req.requestId);
+        return { data };
+      }
+
       const updated = await tx.goods_receipts.update({
         where: { id },
         data: {
@@ -1411,9 +1361,7 @@ async function updateGoodsReceipt(req, res) {
       });
 
       if (postingClaimed) {
-        if (existing.source_type === "TRANSFER") {
-          await postTransferReceiptToReceiving(tx, updated, userId);
-        } else if (isSupplierReceipt(updated)) {
+        if (isSupplierReceipt(updated)) {
           // Post only the ACCEPTED quantity (count - damaged - rejected), then record what was
           // missing / damaged / rejected against the supplier's delivery note.
           const outcomes = await settleSupplierReceiptQuantities(tx, updated);
@@ -1426,39 +1374,15 @@ async function updateGoodsReceipt(req, res) {
           await postDraftGoodsReceipt(tx, updated, userId);
         }
 
-        await tx.inventory_audit_logs.create({
-          data: {
-            actor_user_id: userId,
-            action_name: "GOODS_RECEIPT_POSTED",
-            entity_type: "GOODS_RECEIPT",
-            entity_id: updated.id,
-            after_data: {
-              receipt_number: updated.receipt_number,
-              purchase_order_id: updated.purchase_order_id,
-              supplier_delivery_invoice_id: updated.supplier_delivery_invoice_id,
-              source_type: updated.source_type,
-            },
-          },
-        });
-
-        await tx.integration_outbox.create({
-          data: {
-            aggregate_type: "GOODS_RECEIPT",
-            aggregate_id: updated.id,
-            event_type: "goods_receipt.posted",
-            payload: {
-              goods_receipt_id: updated.id,
-              receipt_number: updated.receipt_number,
-              source_type: updated.source_type,
-              purchase_order_id: updated.purchase_order_id ?? null,
-            },
-            headers: { correlation_id: req.requestId || null },
-          },
-        });
+        await recordGoodsReceiptPosted(tx, updated, userId, req.requestId);
       }
 
       if (targetStatus === "CANCELLED" && existing.status === "POSTED") {
         await cancelStockMovements(tx, id);
+        if (existing.source_type === 'TRANSFER' && existing.source_reference_id) {
+          await tx.transfer_order_items.updateMany({ where: { transfer_order_id: existing.source_reference_id }, data: { received_qty: 0 } });
+          await tx.transfer_orders.update({ where: { id: existing.source_reference_id }, data: { status: 'IN_TRANSIT', received_at: null } });
+        }
         await reversePurchaseOrderReceipt(tx, updated, userId);
         if (isSupplierReceipt(updated)) {
           await revertSupplierReceiptOutcome(tx, updated, userId);
@@ -1486,6 +1410,7 @@ async function updateGoodsReceipt(req, res) {
       data: result.data,
     });
   } catch (error) {
+    if (toSerializableError(error)) return res.status(409).json({ message: 'Dữ liệu đã thay đổi. Vui lòng thử lại.', code: 'CONCURRENCY_CONFLICT' });
     if (error instanceof ProcurementError) {
       return res.status(error.statusCode).json({ message: error.message, code: error.code });
     }

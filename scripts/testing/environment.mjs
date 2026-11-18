@@ -7,6 +7,10 @@ export const root = resolve(import.meta.dirname, '../..');
 export const stateDir = resolve(root, '.git/qa-testing');
 export const envFile = resolve(stateDir, 'test.env');
 const composeFiles = [resolve(root, 'docker-compose.yml'), resolve(root, 'docker-compose.test.yml')].join(delimiter);
+const qaSmtp = Object.freeze({
+  SMTP_HOST: 'mailpit', SMTP_PORT: '1025', SMTP_USER: '', SMTP_PASS: '',
+  SMTP_FROM: 'syntheticqa@example.invalid',
+});
 
 export function assertIsolated(values) {
   if (!/^smartbook-qa-[a-f0-9]{8}$/.test(values.COMPOSE_PROJECT_NAME) || values.SMARTBOOK_TEST_ISOLATED !== '1') {
@@ -17,6 +21,9 @@ export function assertIsolated(values) {
   }
   if (values.GATEWAY_URL !== 'http://localhost:13000' || values.OPENROUTER_API_KEY || values.GOOGLE_BOOKS_API_KEY) {
     throw new Error('QA must use the loopback gateway and no paid provider credentials.');
+  }
+  if (Object.entries(qaSmtp).some(([key, value]) => values[key] !== value)) {
+    throw new Error('QA mail must use the isolated Mailpit receiver without provider credentials.');
   }
 }
 
@@ -52,6 +59,7 @@ export function createEnvironment() {
     VNPAY_RETURN_URL: 'http://localhost:13000/webhooks/vnpay/return',
     VNPAY_SIMULATOR_PORT: '18099', VNPAY_SIMULATOR: '1',
     SMARTBOOK_TEST_ISOLATED: '1',
+    ...qaSmtp,
   };
   // Secrets stay under .git and are never uploaded as test artifacts.
   writeFileSync(envFile, Object.entries(values).map(([k, v]) => `${k}=${v}`).join('\n') + '\n', { mode: 0o600, flag: 'wx' });
@@ -60,15 +68,29 @@ export function createEnvironment() {
 
 export function testEnvironment() {
   const values = parse(readFileSync(envFile, 'utf8'));
-  assertIsolated(values);
+  return buildTestEnvironment(values);
+}
+
+export function buildTestEnvironment(values, inherited = process.env) {
   // Do not inherit developer .env values, database URLs or paid provider keys.
-  const env = { ...process.env, ...values, DOTENV_CONFIG_PATH: envFile };
+  const env = { ...inherited, ...values, DOTENV_CONFIG_PATH: envFile };
+  // Older private QA env files have no SMTP settings. Normalize after the merge
+  // without rewriting them, and remove unknown provider-specific SMTP options.
+  for (const key of Object.keys(env)) if (/^SMTP_/i.test(key)) delete env[key];
+  Object.assign(env, qaSmtp);
+  assertIsolated(env);
   env.RABBITMQ_URL = `amqp://${values.RABBITMQ_USER}:${values.RABBITMQ_PASSWORD}@localhost:15674`;
   delete env.DATABASE_URL;
   delete env.DEPOSIT_TEST_DATABASE_URL;
   delete env.BORROW_TEST_DATABASE_URL;
   delete env.TEST_PG_DSN;
   delete env.ANALYTICS_TEST_PG_URL;
+  delete env.BORROW_POLICY_DATABASE_URL;
+  delete env.INVENTORY_AUDIT_TEST_DATABASE_URL;
+  delete env.AUTH_AUDIT_DATABASE_URL;
+  delete env.BORROW_AUDIT_PRISMA_CLIENT;
+  delete env.INVENTORY_AUDIT_PRISMA_CLIENT;
+  delete env.AUTH_AUDIT_PRISMA_CLIENT;
   delete env.VNPAY_SANDBOX;
   delete env.E2E_LIVE_BOOK_SOURCES;
   return env;

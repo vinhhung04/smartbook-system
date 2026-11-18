@@ -3,13 +3,21 @@ const { getMeter } = require('@smartbook/shared/metrics');
 const { prisma } = require('./prisma');
 const meter = getMeter('inventory-service');
 
-let lastOutboxPending = 0;
-meter.createObservableGauge('outbox_pending_total').addCallback((result) => {
-  result.observe(lastOutboxPending);
-});
-function setOutboxPending(count) {
-  lastOutboxPending = count;
+// Query durable state at scrape time; worker batch size is not queue depth.
+function observable(name, read) {
+  meter.createObservableGauge(name).addCallback(async result => {
+    try { result.observe(await read()); }
+    catch { console.warn('[inventory-service][metrics] collection failed', name); }
+  });
 }
+observable('outbox_pending_total', () => prisma.integration_outbox.count({ where: { status: 'PENDING' } }));
+observable('outbox_oldest_pending_age_seconds', async () => {
+  const row = await prisma.integration_outbox.aggregate({ where: { status: 'PENDING' }, _min: { occurred_at: true } });
+  return row._min.occurred_at ? Math.max(0, (Date.now() - row._min.occurred_at) / 1000) : 0;
+});
+observable('outbox_failed_records', () => prisma.integration_outbox.count({ where: { status: 'FAILED' } }));
+// Kept for worker API compatibility; the gauge no longer trusts sampled batches.
+function setOutboxPending() {}
 
 const outboxFailedCounter = meter.createCounter('outbox_failed_total');
 const rabbitmqPublishFailCounter = meter.createCounter('rabbitmq_publish_fail_total');

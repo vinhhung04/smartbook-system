@@ -35,6 +35,7 @@ model customers {
   fines              fines[]
   loan_reservations  loan_reservations[]
   loan_transactions  loan_transactions[]
+  provider_payment_settlements provider_payment_settlements[]
 
   @@index([status], map: "idx_customers_status")
 }
@@ -155,7 +156,7 @@ model loan_return_requests {
   unresolved_item_ids Json          @default("[]")
   started_at      DateTime          @default(now()) @db.Timestamptz(6)
   updated_at      DateTime          @default(now()) @db.Timestamptz(6)
-  loan_transactions loan_transactions @relation(fields: [loan_id], references: [id], onUpdate: NoAction)
+  loan_transactions loan_transactions @relation(fields: [loan_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([loan_id], map: "idx_loan_return_requests_loan")
 }
@@ -221,6 +222,8 @@ model fines {
   loan_items        loan_items?    @relation(fields: [loan_item_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   fine_payments     fine_payments[]
   fine_payment_intents fine_payment_intents[]
+  provider_payment_settlements provider_payment_settlements[]
+  fine_payment_requests fine_payment_requests[]
 
   @@index([customer_id, status], map: "idx_fines_customer_status")
   @@index([loan_item_id], map: "idx_fines_loan_item_id")
@@ -256,6 +259,7 @@ model fine_payment_intents {
   expires_at         DateTime  @db.Timestamptz(6)
   finalized_at       DateTime? @db.Timestamptz(6)
   fines              fines     @relation(fields: [fine_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  settlement         provider_payment_settlements?
 
   @@unique([txn_ref], map: "uq_fine_payment_intents_txn_ref")
   @@index([customer_id, status], map: "idx_fine_payment_intents_customer_status")
@@ -274,6 +278,39 @@ model fine_payments {
   fines                 fines     @relation(fields: [fine_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([fine_id], map: "idx_fine_payments_fine_id")
+}
+
+// Verified provider receipts are immutable. Unapplied money is a liability for
+// reconciliation; it is not silently refunded, waived or credited to a wallet.
+model provider_payment_settlements {
+  id                      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  intent_id               String @unique @db.Uuid
+  provider                String @db.VarChar(20)
+  txn_ref                 String @db.VarChar(50)
+  provider_transaction_no String @db.VarChar(50)
+  customer_id             String @db.Uuid
+  fine_id                 String @db.Uuid
+  fine_payment_id         String? @db.Uuid
+  received_amount         Decimal @db.Decimal(10, 2)
+  applied_amount          Decimal @db.Decimal(10, 2)
+  unapplied_amount        Decimal @db.Decimal(10, 2)
+  raw_callback            Json
+  received_at             DateTime @default(now()) @db.Timestamptz(6)
+  intent                  fine_payment_intents @relation(fields: [intent_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  customer                customers @relation(fields: [customer_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  fine                    fines @relation(fields: [fine_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([provider, provider_transaction_no], map: "uq_provider_settlement_transaction")
+  @@index([customer_id, received_at], map: "idx_provider_settlements_customer_received")
+}
+
+model fine_payment_requests {
+  idempotency_key String @id @db.VarChar(255)
+  fingerprint     String @db.VarChar(64)
+  fine_id         String @db.Uuid
+  response        Json
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  fine            fines @relation(fields: [fine_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 }
 
 model customer_notifications {
@@ -388,6 +425,7 @@ model account_ledger {
   @@index([customer_id, created_at], map: "idx_account_ledger_customer_created")
   @@index([entry_type], map: "idx_account_ledger_entry_type")
   @@unique([customer_id, idempotency_key], map: "uniq_account_ledger_customer_idempotency")
+  @@index([idempotency_key], map: "idx_account_ledger_request_key")
 }
 
 // One deposit per borrowed book, held in customer_accounts.held_balance until the
@@ -485,8 +523,12 @@ model integration_outbox {
   retry_count    Int      @default(0)
   occurred_at    DateTime @default(now()) @db.Timestamptz(6)
   published_at   DateTime? @db.Timestamptz(6)
+  next_attempt_at DateTime @default(now()) @db.Timestamptz(6)
+  lease_until     DateTime? @db.Timestamptz(6)
+  last_error_code String? @db.VarChar(64)
 
   @@index([status, occurred_at], map: "idx_integration_outbox_status_occurred")
+  @@index([status, event_type, next_attempt_at], map: "idx_integration_outbox_retry_due")
 }
 
 model integration_inbox {

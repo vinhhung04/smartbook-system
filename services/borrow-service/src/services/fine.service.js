@@ -1,6 +1,7 @@
 const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
 const { accrueOverdueFine } = require('./overdue-accrual.service');
+const { lockCustomerFineBalance, lockFineCustomer } = require('./fine-lock.service');
 
 function normalizeMoney(value) {
   const parsed = Number(value || 0);
@@ -35,6 +36,8 @@ async function upsertFine(tx, input) {
   if (finalAmount <= 0) {
     return null;
   }
+
+  await lockCustomerFineBalance(tx, customerId);
 
   // Serialize concurrent upserts for the same (loan_item, fine_type) — e.g. the overdue sweep
   // and a manual return happening at the same moment — so the findFirst-then-create below can't
@@ -96,6 +99,7 @@ async function upsertFine(tx, input) {
 }
 
 async function recomputeCustomerFineBalance(tx, customerId) {
+  await lockCustomerFineBalance(tx, customerId);
   const fines = await tx.fines.findMany({
     where: { customer_id: customerId },
     include: { fine_payments: true },
@@ -120,22 +124,36 @@ async function recomputeCustomerFineBalance(tx, customerId) {
 }
 
 async function lockFineAccrual(tx, fineId) {
+  await lockFineCustomer(tx, fineId);
   const fine = await tx.fines.findUnique({ where: { id: fineId }, select: { loan_item_id: true, fine_type: true } });
   if (fine?.loan_item_id && fine.fine_type === 'OVERDUE') {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`fine:${fine.loan_item_id}:OVERDUE`}, 0))`;
   }
 }
 
+// Accrued debt keeps the sweep's established ACTIVE-card policy, including an
+// expired card still marked ACTIVE. Checkout eligibility is a separate rule.
+async function resolveOverdueFineRate(db, customerId, now = new Date()) {
+  const membership = await db.customer_memberships.findFirst({ where: { customer_id: customerId,
+    status: 'ACTIVE', start_date: { lte: toStartOfUtcDay(now) } }, include: { membership_plans: true },
+    orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }] });
+  return normalizeMoney(membership?.membership_plans?.fine_per_day || process.env.DEFAULT_FINE_PER_DAY || 0);
+}
+
 // Refresh an open period before accepting a settlement. Payment of an older
 // displayed amount is then partial if additional days have elapsed meanwhile.
 async function refreshFineAccrual(tx, fine, now = new Date()) {
   if (fine?.fine_type !== 'OVERDUE' || ['PAID', 'WAIVED'].includes(fine.status) || fine.accrual_daily_rate == null) return;
+  await lockCustomerFineBalance(tx, fine.customer_id);
   const item = await tx.loan_items.findUnique({ where: { id: fine.loan_item_id } });
   if (!item || !['BORROWED', 'OVERDUE'].includes(item.status) || item.return_date) return;
+  // Use the same current policy as the sweep. A historical period's saved rate
+  // prices its already covered days, not newly elapsed days after a rate change.
+  const dailyRate = await resolveOverdueFineRate(tx, fine.customer_id, now);
   await upsertFine(tx, {
     customerId: fine.customer_id, loanItemId: item.id, fineType: 'OVERDUE',
-    amount: daysOverdue(item.due_date, now) * Number(fine.accrual_daily_rate),
-    overdueDays: daysOverdue(item.due_date, now), dailyRate: Number(fine.accrual_daily_rate),
+    amount: daysOverdue(item.due_date, now) * dailyRate,
+    overdueDays: daysOverdue(item.due_date, now), dailyRate,
     note: 'Cập nhật tiền phạt đến ngày thanh toán/miễn giảm',
   });
 }
@@ -150,8 +168,8 @@ function computeReturnFineAmounts({ item, returnedAt, membershipLimits, markLost
   const normalizedCondition = String(itemConditionOnReturn || 'GOOD').trim().toUpperCase();
   const finePerDay = normalizeMoney(membershipLimits?.fine_per_day || 0);
   const lostMultiplier = Number(membershipLimits?.lost_item_fee_multiplier || 1);
-  const baseLostFee = normalizeMoney(process.env.LOST_ITEM_BASE_FEE || 100000);
-  const baseDamageFee = normalizeMoney(process.env.DAMAGED_ITEM_FEE || 50000);
+  const baseLostFee = normalizeMoney(membershipLimits?.lost_item_base_fee ?? (process.env.LOST_ITEM_BASE_FEE || 100000));
+  const baseDamageFee = normalizeMoney(membershipLimits?.damaged_item_fee ?? (process.env.DAMAGED_ITEM_FEE || 50000));
 
   const charges = [];
   const overdueDays = daysOverdue(item.due_date, returnedAt);
@@ -285,24 +303,16 @@ async function runOverdueSweep(prisma, options = {}) {
         continue;
       }
 
-      const membership = await prisma.customer_memberships.findFirst({
-        where: {
-          customer_id: loan.customer_id,
-          status: 'ACTIVE',
-          start_date: { lte: toStartOfUtcDay(now) },
-        },
-        include: { membership_plans: true },
-        orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }],
-      });
+      const finePerDay = await resolveOverdueFineRate(prisma, loan.customer_id, now);
 
       const processed = await prisma.$transaction(async (tx) => {
+        await lockCustomerFineBalance(tx, loan.customer_id);
         // A return may commit after the page was scanned. Lock the same item row
         // that returnLoan updates, then make every decision from its current state.
         await tx.$executeRaw`SELECT id FROM loan_items WHERE id = ${item.id}::uuid FOR UPDATE`;
         const current = await tx.loan_items.findUnique({ where: { id: item.id } });
         if (!current || !['BORROWED', 'OVERDUE'].includes(current.status)
           || current.return_date || new Date(current.due_date) >= now) return false;
-        const finePerDay = normalizeMoney(membership?.membership_plans?.fine_per_day || process.env.DEFAULT_FINE_PER_DAY || 0);
         const overdueDayCount = daysOverdue(current.due_date, now);
         const amount = normalizeMoney(overdueDayCount * finePerDay);
         if (current.status !== 'OVERDUE') {
@@ -386,6 +396,7 @@ async function runOverdueSweep(prisma, options = {}) {
 }
 
 module.exports = {
+  resolveOverdueFineRate,
   normalizeMoney,
   daysOverdue,
   upsertFine,

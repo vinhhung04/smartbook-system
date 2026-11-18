@@ -244,11 +244,18 @@ async function findAuthenticatedDispatch(req, poId) {
   return { supplier, dispatch, token };
 }
 
+function logSupplierFailure(label, error, requestId) {
+  // Prisma invocation messages/meta can contain the token used in JSON lookup.
+  // Log only a controlled error code and correlation; never the raw exception.
+  console.error(label, { request_id: requestId || null,
+    error_code: /^P\d{4}$/.test(error?.code || '') ? error.code : 'UNEXPECTED_ERROR' });
+}
+
 function handleSupplierAccountError(res, error, label) {
   if (error?.statusCode) {
     return res.status(error.statusCode).json({ message: error.message });
   }
-  console.error(label, error);
+  logSupplierFailure(label, error, res.req?.requestId);
   return res.status(500).json({ message: "Internal server error" });
 }
 
@@ -261,7 +268,7 @@ async function getPortalOrder(req, res) {
     if (!dispatch) return res.status(404).json({ message: "Không tìm thấy đơn trên cổng nhà cung cấp" });
     return res.json({ data: mapPortalOrder(dispatch) });
   } catch (error) {
-    console.error("Error while loading supplier portal order:", error);
+    logSupplierFailure("Error while loading supplier portal order:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -306,7 +313,7 @@ async function confirmPortalOrder(req, res) {
     if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
     return res.json({ message: "Supplier order confirmed", data: result.data });
   } catch (error) {
-    console.error("Error while confirming supplier portal order:", error);
+    logSupplierFailure("Error while confirming supplier portal order:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -492,7 +499,7 @@ async function createPortalInvoice(req, res) {
     return res.status(201).json({ message: "Supplier invoice created", data: result.data });
   } catch (error) {
     if (error.code === "P2002") return res.status(409).json({ message: "Số hóa đơn này đã tồn tại với nhà cung cấp" });
-    console.error("Error while creating supplier portal invoice:", error);
+    logSupplierFailure("Error while creating supplier portal invoice:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -539,7 +546,7 @@ async function acknowledgeShortageReport(req, res) {
     if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
     return res.json({ message: "Shortage report acknowledged", data: result.data });
   } catch (error) {
-    console.error("Error while acknowledging supplier shortage report:", error);
+    logSupplierFailure("Error while acknowledging supplier shortage report:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -588,7 +595,7 @@ async function cannotFulfillShortageReport(req, res) {
     if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
     return res.json({ message: "Shortage report updated", data: result.data });
   } catch (error) {
-    console.error("Error while marking supplier shortage cannot fulfill:", error);
+    logSupplierFailure("Error while marking supplier shortage cannot fulfill:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
   }
 }

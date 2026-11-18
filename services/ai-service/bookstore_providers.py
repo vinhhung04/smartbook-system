@@ -596,7 +596,7 @@ async def refresh_code_index(store: SitemapStore, user_agent: str | None = None)
             "truncated": built.get("truncated", False)}
 
 
-async def refresh_code_indexes_forever(user_agent: str | None, logger) -> None:
+async def refresh_code_indexes_forever(user_agent: str | None, logger, stop_event=None) -> None:
     """Background task started with the service: build every store index (stores
     in parallel - each host is still read one page at a time), then refresh
     daily. A store that blocks or fails keeps its previous index and is retried
@@ -612,9 +612,10 @@ async def refresh_code_indexes_forever(user_agent: str | None, logger) -> None:
             logger.warning("bookstore code index %s not refreshed: %s", store.name, exc)
             return False
 
-    while True:
+    while stop_event is None or not stop_event.is_set():
         results = await asyncio.gather(*(refresh(store) for store in CODE_INDEX_STORES))
-        await asyncio.sleep(CODE_INDEX_TTL_SECONDS if all(results) else 3600)
+        from ai_core.lifecycle import wait_for_next
+        await wait_for_next(stop_event, CODE_INDEX_TTL_SECONDS if all(results) else 3600)
 
 
 def code_index_status() -> dict:

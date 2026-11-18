@@ -1,7 +1,8 @@
+require('./lib/metrics');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createServiceLifecycle, createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders, safeLogPath } = require('@smartbook/shared/runtime');
 const { prisma } = require('./lib/prisma');
 const redis = require('./lib/redis');
 const { authenticateToken, authorizeCustomerSelf } = require('./middlewares/auth.middleware');
@@ -19,16 +20,19 @@ const publicMembershipRoutes = require('./routes/public-membership.routes');
 const auditRoutes = require('./routes/audit.routes');
 const membershipPlanRoutes = require('./routes/membership-plan.routes');
 const notificationAdminRoutes = require('./routes/notification-admin.routes');
-const { startOverdueSweepJob } = require('./jobs/overdue.job');
-const { startReservationExpiryJob } = require('./jobs/reservation-expiry.job');
-const { startDueSoonReminderJob } = require('./jobs/due-soon-reminder.job');
-const { startReservationReconciliationJob } = require('./jobs/reservation-reconciliation.job');
+const { startOverdueSweepJob, stopOverdueSweepJob } = require('./jobs/overdue.job');
+const { startReservationExpiryJob, stopReservationExpiryJob } = require('./jobs/reservation-expiry.job');
+const { startDueSoonReminderJob, stopDueSoonReminderJob } = require('./jobs/due-soon-reminder.job');
+const { startReservationReconciliationJob, stopReservationReconciliationJob } = require('./jobs/reservation-reconciliation.job');
 const { startAvailabilityAlertConsumer } = require('./lib/rabbitmq-consumer');
 const { dispatchAvailabilityAlerts } = require('./services/availability-alert.service');
 const { getVariantPublicAvailability } = require('./services/inventory-integration.service');
 const { createNotificationRecord } = require('./lib/notifications');
 
 const app = express();
+let lifecycle;
+app.use((req, res, next) => lifecycle ? lifecycle.middleware(req, res, next) : next());
+let availabilityConsumer;
 const PORT = process.env.PORT || 3005;
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '4mb';
 
@@ -56,7 +60,7 @@ app.use((req, _res, next) => {
   console.log('[borrow-service] request', {
     requestId: req.requestId,
     method: req.method,
-    path: req.originalUrl,
+    path: safeLogPath(req.originalUrl),
     actor: req.user?.id || null,
   });
   next();
@@ -71,6 +75,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/ready', async (_req, res) => {
+  if (lifecycle && !lifecycle.isReady()) return res.status(503).json({ status: 'draining' });
   try {
     await prisma.$queryRaw`SELECT 1`;
     return res.json({ service: 'borrow-service', status: 'ready' });
@@ -81,6 +86,7 @@ app.get('/ready', async (_req, res) => {
 
 app.use('/internal/customers', customerInternalRoutes);
 app.use('/internal/recommendation', recommendationInternalRoutes);
+app.use('/webhooks/vnpay', require('./lib/metrics').recordPaymentCallback);
 app.use('/webhooks/vnpay', vnpayWebhookRoutes);
 // Read-only, anonymised reviews for the public website (no JWT; see routes/public-review.routes.js).
 app.use('/public/reviews', publicReviewRoutes);
@@ -112,7 +118,7 @@ app.use((err, req, res, next) => {
   console.error('[borrow-service] unhandled error', {
     requestId: req.requestId || null,
     method: req.method,
-    path: req.originalUrl,
+    path: safeLogPath(req.originalUrl),
     status,
     message: err?.message,
     stack: err?.stack,
@@ -124,20 +130,24 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Borrow Service running on http://localhost:${PORT}`);
   startOverdueSweepJob();
   startReservationExpiryJob();
   startDueSoonReminderJob();
   startReservationReconciliationJob();
-  startAvailabilityAlertConsumer((envelope) => dispatchAvailabilityAlerts(envelope, {
+  availabilityConsumer = startAvailabilityAlertConsumer((envelope) => dispatchAvailabilityAlerts(envelope, {
     prisma,
     getAvailability: (variantId) => getVariantPublicAvailability({ variantId, requestId: envelope.correlation_id || undefined }),
     createNotification: createNotificationRecord,
   }));
 });
 
-process.on('SIGTERM', async () => {
-  await redis.disconnect();
-  process.exit(0);
+
+lifecycle = createServiceLifecycle({
+  server,
+  stopWork: [stopOverdueSweepJob, stopReservationExpiryJob, stopDueSoonReminderJob, stopReservationReconciliationJob, () => availabilityConsumer?.stop?.()],
+  closeResources: [() => redis.disconnect(), () => prisma.$disconnect(), () => require('./telemetry').shutdown?.()],
 });
+process.on('SIGINT', lifecycle.shutdown);
+process.on('SIGTERM', lifecycle.shutdown);

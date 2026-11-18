@@ -13,9 +13,9 @@ function sleep(ms) {
  * log line nobody watches. Reuses integration_outbox — already modeled in
  * schema.prisma for exactly this "reliable eventual delivery" purpose, but
  * never actually written to or read from anywhere in this codebase. */
-async function queueReconciliation({ aggregateId, eventType, payload }) {
-  try {
-    await prisma.integration_outbox.create({
+async function queueReconciliation({ aggregateId, eventType, payload, db = prisma }) {
+  // Propagate persistence failure: a log message is not a durable queue.
+  return db.integration_outbox.create({
       data: {
         aggregate_type: 'LOAN_RESERVATION',
         aggregate_id: aggregateId || null,
@@ -24,12 +24,6 @@ async function queueReconciliation({ aggregateId, eventType, payload }) {
         status: 'PENDING',
       },
     });
-  } catch (error) {
-    // The outbox write itself failing must never mask the original error or
-    // crash the caller's request — this is a best-effort durability upgrade
-    // over a bare console.error, not a new failure mode of its own.
-    console.error('Failed to queue reconciliation record (falling back to log only):', error);
-  }
 }
 
 /** Retries a compensating call a few times with backoff before giving up and
@@ -40,11 +34,15 @@ async function queueReconciliation({ aggregateId, eventType, payload }) {
  * that the failed local transaction never created; those should call
  * queueReconciliation directly instead so a human reviews them rather than
  * an automated retry guessing at an undo. */
-async function compensateWithRetry(compensationFn, { aggregateId, eventType, payload, maxAttempts = DEFAULT_MAX_ATTEMPTS, backoffMs = DEFAULT_BACKOFF_MS } = {}) {
+async function compensateWithRetry(compensationFn, { aggregateId, eventType, payload, db = prisma, maxAttempts = DEFAULT_MAX_ATTEMPTS, backoffMs = DEFAULT_BACKOFF_MS } = {}) {
+  // Persist before the first attempt, including when the process dies after
+  // Inventory commits but before its response arrives.
+  const record = await queueReconciliation({ aggregateId, eventType, payload, db });
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       await compensationFn();
+      await db.integration_outbox.update({ where: { id: record.id }, data: { status: 'PUBLISHED', published_at: new Date() } });
       return { ok: true };
     } catch (error) {
       lastError = error;
@@ -54,8 +52,7 @@ async function compensateWithRetry(compensationFn, { aggregateId, eventType, pay
     }
   }
 
-  await queueReconciliation({ aggregateId, eventType, payload });
-  console.error(`Compensation failed after ${maxAttempts} attempts, queued for reconciliation (${eventType}):`, lastError);
+  console.error(`Compensation failed after ${maxAttempts} attempts; durable reconciliation remains pending (${eventType})`);
   return { ok: false, error: lastError };
 }
 

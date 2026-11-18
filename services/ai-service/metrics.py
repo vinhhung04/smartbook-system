@@ -1,5 +1,8 @@
 from prometheus_client import Counter, Gauge, Histogram
 
+ai_llm_calls_total = Counter("ai_llm_calls_total", "Provider call outcomes", ["feature", "outcome"])
+ai_budget_admission_total = Counter("ai_budget_admission_total", "Paid AI admission failures", ["feature", "outcome"])
+
 ai_request_duration = Histogram(
     "ai_request_duration_seconds",
     "LLM chat/assistant call duration",

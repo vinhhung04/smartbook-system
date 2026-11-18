@@ -75,7 +75,12 @@ from agent_store import (
     resolve_reconciliation,
 )
 from ai_core import capabilities as ai_capabilities, policy as ai_policy, prompts as ai_prompts, tools as ai_tools
+from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from ai_core.lifecycle import AiServiceLifecycle, AiLifecycleMiddleware
 from ai_core.observability import RequestIdMiddleware
+from ai_core.inference_boundary import InferenceBoundaryMiddleware
+import image_input
 from ai_core.policy import get_user_context, is_admin, can_confirm_action, require_can_confirm_action, require_verified_session
 from user_personal_context import build_user_personal_context, get_primary_role
 from agent_executor import execute_agent_action
@@ -132,7 +137,32 @@ from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provi
 
 logger = logging.getLogger("uvicorn.error")
 
-app = FastAPI(title="SmartBook AI Service")
+lifecycle_state = SimpleNamespace(current=None)
+
+
+@asynccontextmanager
+async def lifespan(application):
+    state = AiServiceLifecycle(timeout_seconds=min(40, max(1, float(os.getenv('SHUTDOWN_TIMEOUT_SECONDS', '35')))))
+    lifecycle_state.current = state
+    application.state.lifecycle = state
+    try:
+        for startup in (_startup_init_db, _startup_warmup_cover_model, _startup_nightly_briefing,
+                        _startup_release_stale_actions, _startup_bookstore_code_index, _startup_ingest_corpus):
+            if state.stop_event.is_set():
+                break
+            await startup()
+        state.mark_ready()
+        yield
+    finally:
+        async def close_database():
+            import db
+            await db.engine.dispose()
+        await state.shutdown([close_database])
+
+
+app = FastAPI(title="SmartBook AI Service", lifespan=lifespan)
+app.add_middleware(InferenceBoundaryMiddleware)
+app.add_middleware(AiLifecycleMiddleware, registry=lifecycle_state)
 # Request correlation (ai_core.observability): the gateway's x-request-id on every log line.
 app.add_middleware(RequestIdMiddleware)
 
@@ -157,7 +187,6 @@ app.include_router(public_discover_router)
 Instrumentator().instrument(app).expose(app)
 
 
-@app.on_event("startup")
 async def _startup_init_db() -> None:
     await init_db()
 
@@ -269,16 +298,15 @@ VIZ_SNAPSHOT_MAX_AGE_SECONDS = int(os.getenv("VIZ_SNAPSHOT_MAX_AGE_SECONDS", "18
 COPILOT_SEMANTIC_CLAIMS = os.getenv("COPILOT_SEMANTIC_CLAIMS", "off").strip().lower() in ("on", "1", "true")
 
 
-@app.on_event("startup")
 async def _startup_warmup_cover_model() -> None:
     """Best-effort: load the CLIP image-embedding model before the first
     /find-book-by-cover request pays that ~600MB download/load cost."""
     import cover_embeddings
 
-    asyncio.create_task(cover_embeddings.warm_up())
+    if os.getenv('ENABLE_COVER_MODEL_WARMUP', 'true').lower() == 'true':
+        lifecycle_state.current.track(cover_embeddings.warm_up(), 'cover-model-warmup')
 
 
-@app.on_event("startup")
 async def _startup_nightly_briefing() -> None:
     """Autonomous "Thu thu AI" agent: reviews the system every night and leaves a
     CREATE_REPORT_DRAFT pending action for staff to confirm in the morning — see
@@ -288,10 +316,9 @@ async def _startup_nightly_briefing() -> None:
         return
     import nightly_briefing
 
-    asyncio.create_task(nightly_briefing.nightly_briefing_loop())
+    lifecycle_state.current.track(nightly_briefing.nightly_briefing_loop(lifecycle_state.current.stop_event), 'nightly-briefing')
 
 
-@app.on_event("startup")
 async def _startup_release_stale_actions() -> None:
     """An action left CONFIRMED by a run that died with the previous process
     must not stay "executing" forever (agent_store.release_stale_confirmed_actions)."""
@@ -303,7 +330,6 @@ async def _startup_release_stale_actions() -> None:
         logger.warning("startup: stale action sweep failed: %s", type(exc).__name__)
 
 
-@app.on_event("startup")
 async def _startup_bookstore_code_index() -> None:
     """Build the barcode index of Nhã Nam / Văn Lang / Thái Hà in the background
     (bookstore_providers) so those stores can identify a scanned code in Round 1.
@@ -311,10 +337,10 @@ async def _startup_bookstore_code_index() -> None:
     import bookstore_providers
     if not bookstore_providers.CODE_INDEX_ENABLED or not ENABLE_MARKETPLACE_LOOKUP:
         return
-    asyncio.create_task(bookstore_providers.refresh_code_indexes_forever(BOOK_LOOKUP_USER_AGENT, logger))
+    lifecycle_state.current.track(bookstore_providers.refresh_code_indexes_forever(BOOK_LOOKUP_USER_AGENT, logger,
+        stop_event=lifecycle_state.current.stop_event), 'bookstore-code-index')
 
 
-@app.on_event("startup")
 async def _startup_ingest_corpus() -> None:
     """Dong bo vector store nen o background. Khong chan startup: service phai
     len duoc ngay ca khi OpenRouter/inventory chua san sang — retrieval se
@@ -350,9 +376,9 @@ async def _startup_ingest_corpus() -> None:
             await ingestion.ingest_internal_docs()
         except Exception as exc:
             logger.warning("startup ingest that bai: %s", type(exc).__name__)
-        await catalog_sync.sync_loop()
+        await catalog_sync.sync_loop(stop_event=lifecycle_state.current.stop_event)
 
-    asyncio.create_task(_run())
+    lifecycle_state.current.track(_run(), 'corpus-sync')
 
 
 @app.get("/internal/catalog-sync/status")
@@ -431,14 +457,24 @@ def _extract_json(raw: str) -> dict:
     return {"title": raw.strip(), "author": None, "isbn": None, "publisher": None}
 
 
-def _validate_and_read_image(file: UploadFile) -> bytes:
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File phải là ảnh (image/*).")
+async def _validate_and_read_image(file: UploadFile) -> bytes:
+    raw = await image_input.read_upload(file)
+    image_input.validate(raw)
+    return image_input.normalize(raw)
 
-    image_bytes = file.file.read()
-    if len(image_bytes) == 0:
-        raise HTTPException(status_code=400, detail="File ảnh rỗng.")
-    return image_bytes
+
+@app.get('/ready')
+async def ready():
+    state = lifecycle_state.current
+    if state is None or not state.is_ready():
+        raise HTTPException(503, 'draining')
+    try:
+        from sqlalchemy import text
+        async with get_session() as session:
+            await asyncio.wait_for(session.execute(text('SELECT 1')), timeout=3)
+        return {'status': 'ready'}
+    except Exception:
+        raise HTTPException(503, 'not_ready')
 
 
 @app.get("/health")
@@ -496,7 +532,7 @@ async def _verify_packing_photo_from_bytes(image_bytes: bytes) -> dict:
 
 @app.post("/verify-packing-photo")
 async def verify_packing_photo(file: UploadFile = File(...)):
-    image_bytes = _validate_and_read_image(file)
+    image_bytes = await _validate_and_read_image(file)
 
     try:
         return await _verify_packing_photo_from_bytes(image_bytes)
@@ -577,7 +613,7 @@ async def scan_receipt(file: UploadFile = File(...)):
             detail=f"File type không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}"
         )
 
-    image_bytes = _validate_and_read_image(file)
+    image_bytes = await _validate_and_read_image(file)
 
     try:
         with ocr_request_duration.time():

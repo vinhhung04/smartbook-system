@@ -16,10 +16,11 @@ test('SB23: opt-in consume timeout aborts an unresponsive remote boundary', asyn
   try { await assert.rejects(consumeReservation({ authHeader, timeoutMs: 20 }), { name: 'TimeoutError' }); }
   finally { clearTimeout(keepAlive); global.fetch = original; }
 });
-test('legacy consume callers retain the existing payload without an opt-in timeout', async () => {
+test('legacy consume callers retain the existing payload with the default bounded timeout', async () => {
   const original = global.fetch;
   global.fetch = async (url, options) => {
-    assert.equal(options.signal, undefined);
+    assert.ok(options.signal instanceof AbortSignal);
+    assert.equal(options.signal.aborted, false);
     assert.equal(JSON.parse(options.body).reservation_id, 'reservation');
     return { ok: true, json: async () => ({ data: { reservation_id: 'reservation' } }) };
   };

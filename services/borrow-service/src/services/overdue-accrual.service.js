@@ -2,6 +2,7 @@ const money = value => Math.round((Number(value) || 0) * 100) / 100;
 const OPEN_STATUSES = new Set(['UNPAID', 'PARTIALLY_PAID']);
 const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
+const { lockCustomerFineBalance } = require('./fine-lock.service');
 
 // Period boundaries are elapsed UTC overdue days: (from, through]. A settled
 // period remains immutable; a changed daily rate always starts a new period.
@@ -29,6 +30,7 @@ function planOverdueAccrual({ episode, fines = [], overdueDays, dailyRate, dueDa
 
 async function accrueOverdueFine(tx, input) {
   const { customerId, loanItemId, overdueDays, dailyRate, actorUserId, note } = input;
+  await lockCustomerFineBalance(tx, customerId);
   // upsertFine holds the episode advisory lock. Lock existing rows too so cash,
   // VNPay and deposit settlement cannot settle the stale amount we just read.
   await tx.$executeRaw`SELECT id FROM fines WHERE loan_item_id = ${loanItemId}::uuid AND fine_type = 'OVERDUE' ORDER BY id FOR UPDATE`;

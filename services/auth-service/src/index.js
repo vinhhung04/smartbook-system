@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createServiceLifecycle, createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const authRoutes = require('./routes/auth.routes');
 const iamRoutes = require('./routes/iam.routes');
 const { createInternalRouter } = require('./routes/internal.routes');
@@ -9,6 +9,8 @@ const redis = require('./lib/redis');
 const prisma = require('./lib/prisma');
 
 const app = express();
+let lifecycle;
+app.use((req, res, next) => lifecycle ? lifecycle.middleware(req, res, next) : next());
 const PORT = process.env.PORT || 3002;
 
 requireEnv(process.env, ['DATABASE_URL', 'JWT_SECRET', 'INTERNAL_SERVICE_KEY']);
@@ -34,6 +36,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.get('/ready', async (_req, res) => {
+  if (lifecycle && !lifecycle.isReady()) return res.status(503).json({ status: 'draining' });
   try {
     await prisma.$queryRaw`SELECT 1`;
     return res.json({ service: 'auth-service', status: 'ready' });
@@ -42,13 +45,15 @@ app.get('/ready', async (_req, res) => {
   }
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('[Auth] Shutting down...');
-  await redis.disconnect();
-  process.exit(0);
-});
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Auth Service running on http://localhost:${PORT}`);
 });
+
+lifecycle = createServiceLifecycle({
+  server,
+  stopWork: [],
+  closeResources: [() => redis.disconnect(), () => prisma.$disconnect(), () => require('./telemetry').shutdown?.()],
+});
+process.on('SIGINT', lifecycle.shutdown);
+process.on('SIGTERM', lifecycle.shutdown);

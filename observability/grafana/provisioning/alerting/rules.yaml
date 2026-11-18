@@ -16,7 +16,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: (sum(rate(http_server_duration_count{http_status_code=~"5.."}[5m])) / sum(rate(http_server_duration_count[5m]))) > 0.05
+              expr: (sum(rate(http_server_request_duration_count{http_response_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_count[5m]))) > 0.05
         noDataState: OK
         execErrState: Error
         for: 2m
@@ -35,7 +35,7 @@ groups:
             model:
               refId: A
               instant: true
-              expr: increase(outbox_failed_total[5m]) > 0
+              expr: outbox_failed_records > 0
         noDataState: OK
         execErrState: Error
         for: 0m
@@ -100,3 +100,171 @@ groups:
           severity: warning
         annotations:
           summary: One or more variants are at or below their reorder point.
+
+      - uid: smartbook-backlog-age
+        title: Outbox pending age exceeds 5m
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: outbox_oldest_pending_age_seconds > 300
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: critical
+          owner_role: operations
+        annotations:
+          summary: Outbox pending age exceeds 5m
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-manual-reconciliation
+        title: Unresolved reconciliation requires review
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: reconciliation_manual_pending > 0
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: critical
+          owner_role: operations
+        annotations:
+          summary: Unresolved reconciliation requires review
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-automatic-reconciliation-age
+        title: Automatic reconciliation stuck
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: reconciliation_oldest_automatic_age_seconds > 300
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: critical
+          owner_role: operations
+        annotations:
+          summary: Automatic reconciliation stuck
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-payment-unapplied
+        title: Provider money needs allocation or refund
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: payment_unapplied_pending > 0
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: critical
+          owner_role: operations
+        annotations:
+          summary: Provider money needs allocation or refund
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-metrics-unavailable
+        title: Service metrics unavailable
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: up == 0
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: critical
+          owner_role: operations
+        annotations:
+          summary: Service metrics unavailable
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-ai-provider-errors
+        title: AI provider requests failing
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(rate(ai_llm_calls_total{outcome="error"}[5m])) > 0
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: warning
+          owner_role: operations
+        annotations:
+          summary: AI provider requests failing
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-callback-failure
+        title: Payment callback processing failure
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(payment_callback_outcomes_total{outcome="failed"}[5m])) > 0
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: warning
+          owner_role: operations
+        annotations:
+          summary: Payment callback processing failure
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+
+      - uid: smartbook-ai-budget-denied
+        title: AI quota or budget storage unavailable
+        condition: A
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(ai_budget_admission_total[5m])) > 0
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 1m
+        labels:
+          severity: warning
+          owner_role: operations
+        annotations:
+          summary: AI quota or budget storage unavailable
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md

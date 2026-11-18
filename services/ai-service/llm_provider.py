@@ -36,7 +36,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
-from metrics import ai_request_duration, ai_llm_cost_usd_total, ai_llm_tokens_total
+from metrics import ai_request_duration, ai_llm_cost_usd_total, ai_llm_tokens_total, ai_llm_calls_total
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -122,6 +122,7 @@ class VisionImage:
 
 
 def _log_call(usage: ChatUsage) -> None:
+    ai_llm_calls_total.labels(feature=usage.feature or "unknown", outcome="error" if usage.error else "success").inc()
     ai_request_duration.labels(endpoint=usage.feature or usage.provider).observe(usage.latency_ms / 1000)
     if usage.prompt_tokens is not None:
         ai_llm_tokens_total.labels(feature=usage.feature, model=usage.model, kind="prompt").inc(usage.prompt_tokens)

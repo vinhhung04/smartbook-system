@@ -8,7 +8,7 @@ x-logging: &default-logging
 
 services:
   db:
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:0.8.7-pg15-bookworm@sha256:e0b617fffc06dd37323ee99873c7a8683f19f1dce34633670262b0113ce32638
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.12-alpine3.22@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     restart: unless-stopped
     volumes:
       - redis_data:/data
@@ -533,6 +533,10 @@ services:
     logging: *default-logging
 
   smartbook-ui:
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     build:
       context: .
       dockerfile: apps/web/Dockerfile

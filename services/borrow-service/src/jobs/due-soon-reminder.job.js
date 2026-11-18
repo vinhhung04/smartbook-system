@@ -18,6 +18,7 @@ const BATCH_SIZE = Math.min(200, Math.max(1, Number(process.env.DUE_SOON_REMINDE
 
 let timer = null;
 let running = false;
+let stopping = false;
 
 /** Risk-ranked open items due within WINDOW_DAYS. Empty array (not a throw) on failure - the caller degrades. */
 async function fetchRiskRankedDueSoonItems() {
@@ -120,6 +121,7 @@ async function executeDueSoonReminderSweep() {
 }
 
 function startDueSoonReminderJob() {
+  if (timer || stopping) return;
   const enabled = String(process.env.ENABLE_DUE_SOON_REMINDER_JOB || 'true').toLowerCase() === 'true';
   if (!enabled) {
     console.log('[borrow-service][job] due-soon reminder disabled by env');
@@ -140,10 +142,15 @@ function startDueSoonReminderJob() {
 }
 
 function stopDueSoonReminderJob() {
+  stopping = true;
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
+  return new Promise((resolve) => {
+    const drained = () => running ? setTimeout(drained, 10) : resolve();
+    drained();
+  });
 }
 
 module.exports = {

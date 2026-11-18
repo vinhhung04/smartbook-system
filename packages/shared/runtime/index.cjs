@@ -61,6 +61,15 @@ function createRequestContext(serviceName) {
   };
 }
 
+function safeLogPath(value) {
+  try {
+    // Exclude userinfo/query/hash even for an absolute-form request target.
+    const pathname = new URL(String(value || '/'), 'http://request-log.invalid').pathname;
+    const path = decodeURIComponent(pathname).split(/[?#]/, 1)[0];
+    return path.replace(/(\/supplier-portal\/orders\/)[^/]+/gi, '$1[REDACTED]');
+  } catch (_error) { return '[invalid-path]'; }
+}
+
 function createRequestLogger(serviceName, { log = console.log, now = Date.now } = {}) {
   return (req, res, next) => {
     const startedAt = now();
@@ -71,8 +80,8 @@ function createRequestLogger(serviceName, { log = console.log, now = Date.now } 
         service: serviceName,
         request_id: req.requestId || null,
         method: req.method,
-        route: req.route?.path ? `${req.baseUrl}${req.route.path}` : undefined,
-        path: req.originalUrl || req.url,
+        route: req.route?.path ? safeLogPath(`${req.baseUrl || ''}${req.route.path}`) : undefined,
+        path: safeLogPath(req.originalUrl || req.url),
         status: res.statusCode,
         latency_ms: Math.max(0, now() - startedAt),
         user_id: req.user?.id || req.user?.sub || null,
@@ -150,6 +159,7 @@ function securityHeaders(_req, res, next) {
 }
 
 module.exports = {
+  createServiceLifecycle: require('./lifecycle.cjs').createServiceLifecycle,
   createCorsOptions,
   createRateLimiter,
   createRequestContext,
@@ -158,4 +168,5 @@ module.exports = {
   requireEnv,
   resolveClientIp,
   securityHeaders,
+  safeLogPath,
 };

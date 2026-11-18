@@ -38,7 +38,7 @@ async function verifyPackingPhoto(storageRef, expectedCount, requestId) {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(20000),
-      headers: requestId ? { 'x-request-id': requestId } : undefined,
+      headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY || '', ...(requestId ? { 'x-request-id': requestId } : {}) },
     });
 
     if (!response.ok) {

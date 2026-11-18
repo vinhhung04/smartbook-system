@@ -6,6 +6,7 @@ const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
 const { AccountError, getCustomerAccountSnapshot, creditAccount, listAccountLedger } = require('../services/account.service');
 const { recomputeCustomerFineBalance } = require('../services/fine.service');
+const { lockCustomerFineBalance } = require('../services/fine-lock.service');
 const { getVariantDetails } = require('../services/inventory-integration.service');
 
 function parsePagination(query) {
@@ -583,6 +584,7 @@ async function payMyFine(req, res) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      await lockCustomerFineBalance(tx, customer.id);
       const fine = await tx.fines.findUnique({
         where: { id: fineId },
         include: { fine_payments: true },

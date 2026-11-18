@@ -201,17 +201,11 @@ def _merge_candidates(books: list[dict], ocr_matches: list[dict], visual_matches
 
 @router.post("/find-book-by-cover")
 async def find_book_by_cover(request: Request, file: UploadFile = File(...)):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File phải là ảnh (image/*).")
-    image_bytes = file.file.read(image_input.MAX_IMAGE_BYTES + 1)
-    if not image_bytes:
-        raise HTTPException(status_code=400, detail="File ảnh rỗng.")
-    # Phase F hardening: the declared type is not trusted. Raster signatures
-    # only (GIF kept for existing scan clients); SVG/HTML and oversize files are refused.
-    if len(image_bytes) > image_input.MAX_IMAGE_BYTES:
-        raise HTTPException(status_code=413, detail="Ảnh quá lớn.")
-    if image_input.sniff_format(image_bytes) is None and image_bytes[:6] not in (b"GIF87a", b"GIF89a"):
-        raise HTTPException(status_code=415, detail="File không phải ảnh JPEG/PNG/WebP/GIF hợp lệ.")
+    raw = await image_input.read_upload(file)
+    # Legacy cover clients may send GIF; safely decode its first frame rather
+    # than accepting a signature alone. All provider input is normalized JPEG.
+    image_input.validate(raw, allow_gif=True)
+    image_bytes = image_input.normalize(raw)
 
     auth_header = request.headers.get("authorization")
 

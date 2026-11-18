@@ -1,3 +1,5 @@
+const { RequestBindingError, receiptIdentity, assertReceiptReplay } = require('../services/request-binding.service');
+const { findActiveDeliveryReceipt } = require('../services/delivery-receipt-guard.service');
 
 const { prisma } = require("../lib/prisma");
 
@@ -294,12 +296,10 @@ async function createGoodsReceiptFromInvoice(req, res) {
 
       // One delivery note = one goods receipt. A second (non-cancelled) receipt for the same
       // delivery would let the same goods be counted twice.
-      const existing = await tx.goods_receipts.findFirst({
-        where: { supplier_delivery_invoice_id: invoice.id, status: { not: "CANCELLED" } },
-        select: { id: true, receipt_number: true, status: true, idempotency_key: true, purchase_order_id: true },
-      });
+      const existing = await findActiveDeliveryReceipt(tx, invoice.id);
       if (existing) {
         if (idempotencyKey && existing.idempotency_key === idempotencyKey) {
+          await assertReceiptReplay(tx, req, existing, invoice);
           return { data: { receipt: existing }, idempotent: true };
         }
         return {
@@ -398,6 +398,7 @@ async function createGoodsReceiptFromInvoice(req, res) {
         total_accepted_qty: receiptItems.reduce((sum, item) => sum + item.quantity, 0),
         total_damaged_qty: receiptItems.reduce((sum, item) => sum + item.damaged_qty, 0),
         total_rejected_qty: receiptItems.reduce((sum, item) => sum + item.rejected_qty, 0),
+        request_identity: receiptIdentity(req, invoice),
       });
 
       return { data: { receipt } };
@@ -415,6 +416,7 @@ async function createGoodsReceiptFromInvoice(req, res) {
       ...(result.idempotent ? { idempotent: true } : {}),
     });
   } catch (error) {
+    if (error instanceof RequestBindingError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     if (error.code === "P2002" && idempotencyKey) {
       const previous = await prisma.goods_receipts.findUnique({ where: { idempotency_key: idempotencyKey } });
       if (previous) return await replayCreatedReceipt(req, res, previous, invoiceId, warehouseId);
@@ -433,13 +435,19 @@ async function replayCreatedReceipt(req, res, receipt, invoiceId, warehouseId) {
   if (receipt.supplier_delivery_invoice_id !== invoiceId) {
     return res.status(409).json({ message: "Idempotency-Key đã được dùng cho một phiếu giao khác" });
   }
-  const invoice = await prisma.supplier_delivery_invoices.findUnique({ where: { id: invoiceId }, include: { purchase_orders: true } });
+  const invoice = await prisma.supplier_delivery_invoices.findUnique({ where: { id: invoiceId }, include: { purchase_orders: true, supplier_delivery_invoice_items: true } });
   const po = invoice?.purchase_orders;
   if (!po || !(await canWriteWarehouse(req.user, po.warehouse_id))) {
     return res.status(403).json({ message: "Bạn không có quyền thao tác trên kho này" });
   }
   if (warehouseId !== po.warehouse_id || receipt.warehouse_id !== po.warehouse_id || receipt.purchase_order_id !== po.id) {
     return res.status(409).json({ message: "Idempotency-Key không khớp chứng từ và kho của yêu cầu" });
+  }
+  try {
+    await assertReceiptReplay(prisma, req, receipt, invoice);
+  } catch (error) {
+    if (error instanceof RequestBindingError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
+    throw error;
   }
   return res.status(200).json({ message: "Goods receipt already created for this request", data: mapCreatedReceipt(receipt, invoiceId), idempotent: true });
 }

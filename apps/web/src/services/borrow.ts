@@ -478,8 +478,10 @@ export const borrowService = {
     return response.data as { data: Fine };
   },
 
-  recordFinePayment: async (id: string, payload: { amount: number; payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET'; transaction_reference?: string; note?: string }) => {
-    const response = await gatewayAPI.post(`/borrow/fines/${id}/payments`, payload);
+  recordFinePayment: async (id: string, payload: { amount: number; payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET'; transaction_reference?: string; note?: string }, idempotencyKey?: string) => {
+    const response = await gatewayAPI.post(`/borrow/fines/${id}/payments`, payload, {
+      headers: createIdempotencyHeaders(idempotencyKey),
+    });
     return response.data as {
       message: string;
       data: {

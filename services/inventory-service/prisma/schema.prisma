@@ -31,7 +31,7 @@ model author_aliases {
   reviewed_by_user_id String? @db.Uuid
   reviewed_at DateTime? @db.Timestamptz(6)
   created_at DateTime @default(now()) @db.Timestamptz(6)
-  authors authors @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  authors authors @relation(fields: [author_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@unique([author_id, normalized_alias])
   @@index([normalized_alias, status])
 }
@@ -117,6 +117,7 @@ model book_variants {
 
   @@index([book_id], map: "idx_book_variants_book_id")
   @@index([isbn13], map: "idx_book_variants_isbn13")
+  transfer_discrepancy_items transfer_discrepancy_items[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -145,6 +146,7 @@ model books {
   book_work_groups  book_work_groups? @relation(fields: [work_group_id], references: [id], onUpdate: NoAction)
 
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_books_title_trgm", type: Gin)
+  @@index([work_group_id], map: "books_work_group_id_idx")
 }
 
 model categories {
@@ -216,6 +218,7 @@ model goods_receipts {
 
   @@index([status, received_at], map: "idx_goods_receipts_status")
   @@index([supplier_delivery_invoice_id, status], map: "idx_goods_receipts_delivery_status")
+  transfer_discrepancies transfer_discrepancies[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -324,6 +327,7 @@ model locations {
   @@unique([warehouse_id, location_code])
   @@unique([warehouse_id, zone, aisle, shelf, bin])
   @@index([warehouse_id], map: "idx_locations_warehouse_id")
+  stock_audit_sessions stock_audit_location_sessions[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -577,7 +581,7 @@ model publisher_aliases {
   reviewed_by_user_id String? @db.Uuid
   reviewed_at DateTime? @db.Timestamptz(6)
   created_at DateTime @default(now()) @db.Timestamptz(6)
-  publishers publishers @relation(fields: [publisher_id], references: [id], onDelete: Cascade)
+  publishers publishers @relation(fields: [publisher_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@unique([publisher_id, normalized_alias])
   @@index([normalized_alias, status])
 }
@@ -609,7 +613,7 @@ model metadata_reconciliation_field_decisions {
   status String @default("PENDING") @db.VarChar(20)
   reviewed_by_user_id String? @db.Uuid
   reviewed_at DateTime? @db.Timestamptz(6)
-  draft metadata_reconciliation_drafts @relation(fields: [draft_id], references: [id], onDelete: Cascade)
+  draft metadata_reconciliation_drafts @relation(fields: [draft_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   @@unique([draft_id, field])
 }
 
@@ -727,6 +731,8 @@ model stock_audit_location_sessions {
   released_at           DateTime? @db.Timestamptz(6)
 
   @@index([stock_audit_id], map: "idx_stock_audit_location_audit")
+  stock_audits stock_audits @relation(fields: [stock_audit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  locations locations @relation(fields: [location_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -749,6 +755,7 @@ model stock_audits {
   warehouses          warehouses          @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
 
   @@index([status, created_at], map: "idx_stock_audits_status")
+  location_sessions stock_audit_location_sessions[]
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -1010,6 +1017,7 @@ model transfer_order_items {
   locations_transfer_order_items_to_location_idTolocations   locations?      @relation("transfer_order_items_to_location_idTolocations", fields: [to_location_id], references: [id], onUpdate: NoAction)
   transfer_orders                                            transfer_orders @relation(fields: [transfer_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   book_variants                                              book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  discrepancy_item transfer_discrepancy_items?
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -1037,6 +1045,8 @@ model transfer_orders {
   warehouses_transfer_orders_to_warehouse_idTowarehouses   warehouses             @relation("transfer_orders_to_warehouse_idTowarehouses", fields: [to_warehouse_id], references: [id], onUpdate: NoAction)
 
   @@index([status, requested_at], map: "idx_transfer_orders_status")
+  transfer_discrepancy transfer_discrepancies? @relation("TransferDiscrepancyOrder")
+  discrepancy_redeliveries transfer_discrepancy_resolutions[] @relation("TransferDiscrepancyRedelivery")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -1092,6 +1102,8 @@ model warehouses {
   staff_tasks                                                   staff_tasks[]
   picking_tasks                                                 picking_tasks[]
   packing_tasks                                                 packing_tasks[]
+  discrepancies_from transfer_discrepancies[] @relation("TransferDiscrepancyFromWarehouse")
+  discrepancies_to transfer_discrepancies[] @relation("TransferDiscrepancyToWarehouse")
 }
 
 /// This table stores AI-assisted smart receiving drafts created from OCR-scanned invoices/receiving notes.
@@ -1324,10 +1336,10 @@ model supplier_returns {
   resolved_at            DateTime?              @db.Timestamptz(6)
   created_at             DateTime               @default(now()) @db.Timestamptz(6)
   updated_at             DateTime               @default(now()) @db.Timestamptz(6)
-  purchase_orders        purchase_orders        @relation(fields: [purchase_order_id], references: [id], onUpdate: NoAction)
-  goods_receipts         goods_receipts         @relation(fields: [goods_receipt_id], references: [id], onUpdate: NoAction)
-  suppliers              suppliers              @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
-  warehouses             warehouses             @relation(fields: [warehouse_id], references: [id], onUpdate: NoAction)
+  purchase_orders        purchase_orders        @relation(fields: [purchase_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  goods_receipts         goods_receipts         @relation(fields: [goods_receipt_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  suppliers              suppliers              @relation(fields: [supplier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouses             warehouses             @relation(fields: [warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   supplier_return_items  supplier_return_items[]
 
   @@index([goods_receipt_id, status], map: "idx_supplier_returns_grn_status")
@@ -1344,8 +1356,8 @@ model supplier_return_items {
   unit_cost              Decimal                @default(0) @db.Decimal(12, 2)
   note                   String?
   supplier_returns       supplier_returns       @relation(fields: [supplier_return_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  goods_receipt_items    goods_receipt_items    @relation(fields: [goods_receipt_item_id], references: [id], onUpdate: NoAction)
-  purchase_order_items   purchase_order_items?  @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
+  goods_receipt_items    goods_receipt_items    @relation(fields: [goods_receipt_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchase_order_items   purchase_order_items?  @relation(fields: [purchase_order_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([goods_receipt_item_id], map: "idx_supplier_return_items_grn_item")
 }
@@ -1493,6 +1505,12 @@ model transfer_discrepancies {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   resolved_at DateTime? @db.Timestamptz(6)
   @@index([to_warehouse_id, status], map: "idx_transfer_discrepancies_destination_status")
+  transfer_orders transfer_orders @relation("TransferDiscrepancyOrder", fields: [transfer_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  goods_receipts goods_receipts @relation(fields: [goods_receipt_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  from_warehouse warehouses @relation("TransferDiscrepancyFromWarehouse", fields: [from_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  to_warehouse warehouses @relation("TransferDiscrepancyToWarehouse", fields: [to_warehouse_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  items transfer_discrepancy_items[]
+  resolutions transfer_discrepancy_resolutions[]
 }
 
 model transfer_discrepancy_items {
@@ -1510,6 +1528,10 @@ model transfer_discrepancy_items {
   remaining_rejected_qty Int
   remaining_missing_qty Int
   @@index([discrepancy_id], map: "idx_transfer_discrepancy_items_case")
+  discrepancy transfer_discrepancies @relation(fields: [discrepancy_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  transfer_order_item transfer_order_items @relation(fields: [transfer_order_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  variant book_variants @relation(fields: [variant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  resolutions transfer_discrepancy_resolutions[]
 }
 
 model transfer_discrepancy_resolutions {
@@ -1527,4 +1549,7 @@ model transfer_discrepancy_resolutions {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   @@index([discrepancy_id], map: "idx_transfer_resolution_case")
   @@index([redelivery_transfer_id], map: "idx_transfer_resolution_replacement")
+  discrepancy transfer_discrepancies @relation(fields: [discrepancy_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  discrepancy_item transfer_discrepancy_items @relation(fields: [discrepancy_item_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  redelivery_transfer transfer_orders? @relation("TransferDiscrepancyRedelivery", fields: [redelivery_transfer_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }

@@ -3,7 +3,7 @@ const test = require('node:test');
 const { finalizeVnpayPayment } = require('../src/services/vnpay-payment.service');
 
 function makeFakePrisma({ intent, fine, customer }) {
-  const state = { intent: { ...intent }, fine: { ...fine }, customer: { ...customer }, payments: [], notifications: [], audits: [] };
+  const state = { intent: { ...intent }, fine: { ...fine }, customer: { ...customer }, payments: [], notifications: [], audits: [], settlements: [], outbox: [] };
   const tx = {
     // Row lock taken before the fine is read (SELECT ... FOR UPDATE); nothing to model here.
     $executeRaw: async () => 1,
@@ -31,6 +31,12 @@ function makeFakePrisma({ intent, fine, customer }) {
     fine_payments: {
       create: async ({ data }) => { const row = { id: `payment-${state.payments.length + 1}`, ...data }; state.payments.push(row); return row; },
     },
+    provider_payment_settlements: {
+      findUnique: async ({ where }) => state.settlements.find(row => where.intent_id ? row.intent_id === where.intent_id
+        : row.provider === where.provider_provider_transaction_no.provider && row.provider_transaction_no === where.provider_provider_transaction_no.provider_transaction_no) || null,
+      create: async ({ data }) => { const row = { id: `settlement-${state.settlements.length + 1}`, ...data }; state.settlements.push(row); return row; },
+    },
+    integration_outbox: { create: async ({ data }) => { state.outbox.push(data); return data; } },
     customers: {
       update: async ({ data }) => { Object.assign(state.customer, data); return state.customer; },
     },
@@ -94,13 +100,16 @@ test('finalizeVnpayPayment returns NOT_FOUND for an unknown txn_ref instead of t
   assert.equal(result.outcome, 'NOT_FOUND');
 });
 
-test('finalizeVnpayPayment fails safe when the fine was already settled another way before VNPay confirmed', async () => {
+test('finalizeVnpayPayment records the whole provider receipt as unapplied when the fine was already settled', async () => {
   const fixtures = baseFixtures();
   fixtures.fine.status = 'PAID';
   const fakePrisma = makeFakePrisma(fixtures);
   // Simulate a staff counter payment already covering the fine before this transaction's payments are visible here.
   fakePrisma._state.payments.push({ id: 'staff-payment', fine_id: 'fine-1', amount: 50000, payment_method: 'CASH' });
-  const result = await finalizeVnpayPayment(fakePrisma, { vnp_TxnRef: 'TXN1', vnp_ResponseCode: '00', vnp_Amount: '5000000' });
-  assert.equal(result.outcome, 'STALE_REMAINING_BALANCE');
+  const result = await finalizeVnpayPayment(fakePrisma, { vnp_TxnRef: 'TXN1', vnp_ResponseCode: '00', vnp_Amount: '5000000', vnp_TransactionNo: 'VNP456' });
+  assert.equal(result.outcome, 'SUCCESS');
+  assert.equal(result.settlement.received_amount, 50000);
+  assert.equal(result.settlement.unapplied_amount, 50000);
+  assert.equal(fakePrisma._state.outbox[0].event_type, 'PAYMENT_UNAPPLIED');
   assert.equal(fakePrisma._state.payments.length, 1, 'must not add a second fine_payments row on top of the already-settled balance');
 });

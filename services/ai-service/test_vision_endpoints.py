@@ -12,6 +12,7 @@ from fastapi import HTTPException
 
 import llm_provider
 import main
+from PIL import Image
 
 
 def _run(coro):
@@ -26,9 +27,16 @@ def _fake_usage() -> llm_provider.ChatUsage:
 
 
 class _FakeUploadFile:
-    def __init__(self, content: bytes = b"fake-image-bytes", content_type: str = "image/jpeg"):
+    def __init__(self, content: bytes = None, content_type: str = "image/jpeg"):
         self.content_type = content_type
+        if content is None:
+            data = io.BytesIO()
+            Image.new("RGB", (80, 80), "white").save(data, "JPEG")
+            content = data.getvalue()
         self.file = io.BytesIO(content)
+
+    async def read(self, size):
+        return self.file.read(size)
 
 
 def _mock_provider(parsed=None, side_effect=None):

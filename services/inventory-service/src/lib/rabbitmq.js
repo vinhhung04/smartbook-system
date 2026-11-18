@@ -19,6 +19,7 @@ class RabbitMqPublisher {
   }
 
   connect() {
+    if (this.closing) throw new Error("publisher is stopping");
     if (this.channelWrapper) return this.channelWrapper;
 
     const url = process.env.RABBITMQ_URL || 'amqp://rabbitmq:5672';
@@ -47,6 +48,19 @@ class RabbitMqPublisher {
    * outbox publisher job) treat that the same as any other publish failure
    * and retry on the next poll tick.
    */
+  close() {
+    if (this.closePromise) return this.closePromise;
+    this.closing = true;
+    this.closePromise = (async () => {
+      const errors = [];
+      for (const close of [() => this.channelWrapper?.close(), () => this.connection?.close()]) {
+        try { await close(); } catch (error) { errors.push(error); }
+      }
+      if (errors.length) throw errors[0];
+    })();
+    return this.closePromise;
+  }
+
   async publishEvent(routingKey, envelope) {
     try {
       const channelWrapper = this.connect();

@@ -13,7 +13,8 @@ const {
 } = require('../services/inventory-integration.service');
 const { AccountError, debitBorrowFee, getCustomerAccountSnapshot, toMoney } = require('../services/account.service');
 const { queueReconciliation } = require('../services/reconciliation.service');
-const { applyReturnFines, recomputeCustomerFineBalance, runOverdueSweep } = require('../services/fine.service');
+const { applyReturnFines, recomputeCustomerFineBalance, runOverdueSweep, daysOverdue, normalizeMoney, resolveOverdueFineRate } = require('../services/fine.service');
+const { lockCustomerFineBalance } = require('../services/fine-lock.service');
 const {
   getDepositPerItem,
   settlementNeedsReason,
@@ -24,6 +25,8 @@ const {
 const { normalizePickupCode } = require('../utils/pickup-code');
 const { ReturnRequestError, normalizeReturnRequest, selectReturnItems, returnFingerprint } = require('../services/return-request.service');
 const { claimReturnOperation, finishReturnOperation } = require('../services/return-operation.service');
+const { readBorrowOperation, prepareBorrowOperation, approvedRecovery, markBorrowRemoteStarted,
+  completeBorrowOperation, deferBorrowOperation, sendBorrowReplay, boundedBorrowKey, recordBorrowCompletionContext } = require('../services/borrow-operation.service');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 const {
   requireWarehouseReadAccess,
@@ -208,6 +211,7 @@ async function createDirectLoan(req, res) {
   if (pickup_location_id && !isUuid(pickup_location_id)) {
     return res.status(400).json({ message: 'pickup_location_id phải là UUID hợp lệ (nếu có)' });
   }
+  if (notes != null && typeof notes !== 'string') return res.status(400).json({ message: 'notes phải là chuỗi' });
 
   const normalizedQuantity = Number.parseInt(String(quantity || '1'), 10);
   if (!Number.isInteger(normalizedQuantity) || normalizedQuantity <= 0) {
@@ -220,64 +224,73 @@ async function createDirectLoan(req, res) {
   }
 
   // Never trust warehouse_id from the client: it must be a branch this caller can write.
-  if (!(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
+  if (!approvedRecovery(req) && !(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
 
   const reservationId = deterministicUuid(`direct-loan:reservation:${idempotencyKey}`);
   const loanId = deterministicUuid(`direct-loan:loan:${idempotencyKey}`);
+  const operationRequest = { params: {}, body: { customer_id, variant_id, warehouse_id,
+    pickup_location_id: pickup_location_id || null, quantity: normalizedQuantity, source_channel: normalizedSource, notes: notes || null } };
+  let operation;
+  let reservationAccepted = false;
 
   try {
+    const previousOperation = approvedRecovery(req) || await readBorrowOperation(prisma, 'DIRECT_LOAN', loanId, { request: operationRequest, user: req.user });
+    const approved = previousOperation?.payload.plan;
     const existingLoan = await prisma.loan_transactions.findUnique({ where: { id: loanId } });
     if (existingLoan) {
-      return res.json({ data: existingLoan, idempotent: true });
+      return replayDirectLoan(req, res, existingLoan, { customer_id, variant_id, warehouse_id,
+        pickup_location_id, quantity: normalizedQuantity, source_channel: normalizedSource, notes });
     }
 
     const customer = await prisma.customers.findUnique({ where: { id: customer_id } });
-    if (!customer || customer.status !== 'ACTIVE') {
+    if (!approved && (!customer || customer.status !== 'ACTIVE')) {
       return res.status(409).json({ message: 'Bạn đọc không đủ điều kiện mượn trực tiếp' });
     }
 
-    if (Number(customer.total_fine_balance) > 0) {
+    if (!approved && Number(customer.total_fine_balance) > 0) {
       return res.status(409).json({
         message: 'Khách còn tiền phạt chưa thanh toán',
         detail: { total_fine_balance: Number(customer.total_fine_balance) },
       });
     }
 
-    const membershipInfo = await resolveActiveMembership(prisma, customer_id);
+    let membershipInfo = approved?.membershipInfo || await resolveActiveMembership(prisma, customer_id);
     if (!membershipInfo) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
-    const activeLoanCount = await countActiveBorrowedItems(prisma, customer_id);
+    if (!approved) {
+      const activeLoanCount = await countActiveBorrowedItems(prisma, customer_id);
 
-    const activeReservedCount = await countActiveReservedItems(prisma, customer_id);
+      const activeReservedCount = await countActiveReservedItems(prisma, customer_id);
 
-    if (activeLoanCount + activeReservedCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
-      return res.status(409).json({
-        message: 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên',
-        detail: {
-          max_active_loans: membershipInfo.limits.max_active_loans,
-          active_loan_count: activeLoanCount,
-          active_reservation_count: activeReservedCount,
-        },
+      if (activeLoanCount + activeReservedCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
+        return res.status(409).json({
+          message: 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên',
+          detail: {
+            max_active_loans: membershipInfo.limits.max_active_loans,
+            active_loan_count: activeLoanCount,
+            active_reservation_count: activeReservedCount,
+          },
+        });
+      }
+
+      await checkAvailability({
+        variant_id,
+        warehouse_id,
+        quantity: normalizedQuantity,
+        authHeader,
+        requestId: req.requestId,
       });
     }
 
-    await checkAvailability({
-      variant_id,
-      warehouse_id,
-      quantity: normalizedQuantity,
-      authHeader,
-      requestId: req.requestId,
-    });
-
     const reservationNumber = `DLR-${reservationId.slice(0, 8).toUpperCase()}`;
-    const loanNumber = createLoanNumber();
-    const borrowDate = new Date();
-    const dueDate = new Date(borrowDate.getTime() + membershipInfo.limits.max_loan_days * 24 * 60 * 60 * 1000);
-    const borrowFeeAmount = Number((normalizedQuantity * getBorrowFeePerItem()).toFixed(2));
+    let loanNumber = approved?.loanNumber || createLoanNumber();
+    let borrowDate = approved ? new Date(approved.borrowDate) : new Date();
+    let dueDate = approved ? new Date(approved.dueDate) : new Date(borrowDate.getTime() + membershipInfo.limits.max_loan_days * 24 * 60 * 60 * 1000);
+    let borrowFeeAmount = approved?.borrowFeeAmount ?? Number((normalizedQuantity * getBorrowFeePerItem()).toFixed(2));
 
-    if (borrowFeeAmount > 0) {
+    if (!approved && borrowFeeAmount > 0) {
       const accountSnapshot = await prisma.$transaction((tx) => getCustomerAccountSnapshot(tx, customer_id));
       const projectedBalance = Number((accountSnapshot.availableBalance - borrowFeeAmount).toFixed(2));
 
@@ -300,11 +313,21 @@ async function createDirectLoan(req, res) {
       }
     }
 
-    const depositShortfall = await checkDepositFunds(customer_id, normalizedQuantity, membershipInfo.limits, borrowFeeAmount);
+    const depositShortfall = !approved && await checkDepositFunds(customer_id, normalizedQuantity, membershipInfo.limits, borrowFeeAmount);
     if (depositShortfall) {
       return res.status(409).json(depositShortfall);
     }
 
+    operation = await prepareBorrowOperation(prisma, { kind: 'DIRECT_LOAN', reference: loanId, key: idempotencyKey,
+      request: operationRequest, user: req.user, req, plan: { reservationId, loanId, loanNumber, borrowDate, dueDate,
+        membershipInfo, borrowFeeAmount, loanItems: Array.from({ length: normalizedQuantity }, (_, index) => ({
+          id: crypto.randomUUID(), loan_id: loanId, variant_id, inventory_unit_id: null,
+          item_barcode: `${loanNumber}-ITEM-${index + 1}`, due_date: dueDate, status: 'BORROWED', item_condition_on_checkout: 'GOOD',
+        })) } });
+    if (operation.status === 'PUBLISHED') return sendBorrowReplay(res, operation);
+    ({ loanNumber, membershipInfo, borrowFeeAmount } = operation.payload.plan);
+    borrowDate = new Date(operation.payload.plan.borrowDate); dueDate = new Date(operation.payload.plan.dueDate);
+    await markBorrowRemoteStarted(prisma, operation);
     await reserveStock({
       reservation_id: reservationId,
       reservation_number: reservationNumber,
@@ -314,17 +337,18 @@ async function createDirectLoan(req, res) {
       quantity: normalizedQuantity,
       expires_at: dueDate.toISOString(),
       created_by_user_id: actorUserId,
-      idempotency_key: `direct-reserve:${idempotencyKey}`,
+      idempotency_key: boundedBorrowKey('direct-reserve:', idempotencyKey),
       authHeader,
       requestId: req.requestId,
     });
+    reservationAccepted = true;
 
     await consumeReservation({
       reservation_id: reservationId,
       loan_id: loanId,
       loan_number: loanNumber,
       warehouse_id,
-      idempotency_key: `direct-consume:${idempotencyKey}`,
+      idempotency_key: boundedBorrowKey('direct-consume:', idempotencyKey),
       handled_by_user_id: actorUserId,
       authHeader,
       requestId: req.requestId,
@@ -342,7 +366,7 @@ async function createDirectLoan(req, res) {
         const recheckLoanCount = await countActiveBorrowedItems(tx, customer_id);
         const recheckReservedCount = await countActiveReservedItems(tx, customer_id);
         if (recheckLoanCount + recheckReservedCount + normalizedQuantity > membershipInfo.limits.max_active_loans) {
-          throw new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK');
+          throw Object.assign(new Error('MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK'), { code: 'MEMBERSHIP_LIMIT_EXCEEDED_ON_RECHECK' });
         }
 
         let debitResult = null;
@@ -351,7 +375,7 @@ async function createDirectLoan(req, res) {
             customerId: customer_id,
             actorUserId,
             amount: borrowFeeAmount,
-            idempotencyKey: `direct-loan:${idempotencyKey}`,
+            idempotencyKey: boundedBorrowKey('direct-loan:', idempotencyKey, 120),
             referenceType: 'LOAN_TRANSACTION',
             referenceId: loanId,
             note: `Auto debit borrow fee for direct loan ${loanNumber}`,
@@ -396,16 +420,7 @@ async function createDirectLoan(req, res) {
           },
         });
 
-        const loanItems = Array.from({ length: normalizedQuantity }).map((_, index) => ({
-          id: crypto.randomUUID(),
-          loan_id: loan.id,
-          variant_id,
-          inventory_unit_id: null,
-          item_barcode: `${loan.loan_number}-ITEM-${index + 1}`,
-          due_date: dueDate,
-          status: 'BORROWED',
-          item_condition_on_checkout: 'GOOD',
-        }));
+        const loanItems = operation.payload.plan.loanItems;
 
         await tx.loan_items.createMany({ data: loanItems });
 
@@ -445,17 +460,25 @@ async function createDirectLoan(req, res) {
           reference_id: loan.id,
         });
 
-        return {
+        const response = {
           ...loan,
           borrow_fee_amount: borrowFeeAmount,
           borrow_fee_ledger_entry_id: debitResult?.entry?.id || null,
           borrow_fee_remaining_wallet_balance: debitResult?.remainingBalance ?? null,
           ...depositSummary,
         };
+        await completeBorrowOperation(tx, operation, { status: 201, body: { data: response } });
+        return response;
       });
 
       return res.status(201).json({ data: created });
     } catch (error) {
+      if (error?.code === 'P2002') {
+        const winner = await prisma.loan_transactions.findUnique({ where: { id: loanId } });
+        if (winner) return replayDirectLoan(req, res, winner, { customer_id, variant_id, warehouse_id,
+          pickup_location_id, quantity: normalizedQuantity, source_channel: normalizedSource, notes });
+      }
+      await deferBorrowOperation(prisma, operation, error, req);
       await queueReconciliation({
         aggregateId: loanId,
         eventType: 'DIRECT_LOAN_CONSUME_UNRESOLVED',
@@ -464,24 +487,45 @@ async function createDirectLoan(req, res) {
       if (error instanceof AccountError) {
         return res.status(409).json({ message: error.message, detail: error.detail || undefined });
       }
-      // Inventory already moved reserved_qty -> borrowed_qty for this stock.
-      // Not auto-reversed here: the correct undo (returnBorrowedStock) needs
-      // loan_item/inventory_unit ids that only exist once loan_items rows are
-      // created — which is exactly the step that just failed. Queuing instead
-      // of guessing keeps a human in the loop for the one case this repo
-      // can't safely self-heal, rather than risking a wrong stock adjustment.
+      // The approved plan already contains stable loan/item IDs. Retry that
+      // operation through its durable record; do not guess a compensating stock
+      // return when the remote outcome or local commit is uncertain.
       console.error('Direct loan DB transaction failed after inventory consume:', error);
       return res.status(502).json({
-        message: 'Direct loan creation failed after inventory consume. Queued for manual reconciliation.',
+        message: 'Direct loan creation is pending durable reconciliation. Retry with the same key.',
       });
     }
   } catch (error) {
+    if (operation && error.status === 409 && !reservationAccepted && !operation.payload.remote_started) {
+      const response = { status: 409, body: { message: error.message, code: 'BORROW_RESERVE_REFUSED' } };
+      await prisma.$transaction(tx => completeBorrowOperation(tx, operation, response));
+      return res.status(409).json(response.body);
+    }
+    await deferBorrowOperation(prisma, operation, error, req);
     if (error?.status === 409) {
       return res.status(409).json({ message: error.message });
     }
+    if (operation) return res.status(502).json({ message: 'Lượt mượn đã được lưu để tiếp tục đối soát; hãy thử lại với cùng key.' });
     console.error('Error while creating direct loan:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
+}
+
+async function replayDirectLoan(req, res, loan, payload) {
+  // A caller-supplied warehouse is not authorization for the stored object.
+  if (!approvedRecovery(req) && !(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
+  const source = loan.source_reservation_id
+    ? await prisma.loan_reservations.findUnique({ where: { id: loan.source_reservation_id } }) : null;
+  const sameId = (a, b) => String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  const originalActor = source?.created_by_user_id || loan.handled_by_user_id;
+  const matches = source && originalActor && sameId(originalActor, req.user?.id)
+    && sameId(loan.customer_id, payload.customer_id) && sameId(source.customer_id, payload.customer_id)
+    && sameId(loan.warehouse_id, payload.warehouse_id) && sameId(source.warehouse_id, payload.warehouse_id)
+    && sameId(source.variant_id, payload.variant_id) && Number(loan.total_items) === payload.quantity
+    && Number(source.quantity) === payload.quantity && sameId(source.pickup_location_id, payload.pickup_location_id)
+    && source.source_channel === payload.source_channel && (loan.notes || null) === (payload.notes || null);
+  if (!matches) return res.status(409).json({ message: 'Idempotency-Key không khớp người thực hiện hoặc nội dung phiếu mượn', code: 'IDEMPOTENCY_KEY_REUSED' });
+  return res.json({ data: loan, idempotent: true });
 }
 
 async function listRenewalRequests(req, res) {
@@ -826,7 +870,7 @@ async function previewLoanReturn(req, res) {
     if (!(await requireWarehouseReadAccess(req, res, loan.warehouse_id))) return;
 
     const plans = selectReturnItems(request, loan.loan_items);
-    const membershipInfo = await resolveActiveMembership(prisma, loan.customer_id);
+    const membershipInfo = await resolveReturnFinePolicy(prisma, loan.customer_id);
     const returnedAt = new Date();
     const previews = [];
     for (const plan of plans) {
@@ -861,13 +905,17 @@ async function convertReservationToLoan(req, res) {
     return res.status(400).json({ message: 'Cần header Idempotency-Key khi chuyển thành phiếu mượn' });
   }
 
+  const operationRequest = { params: { id: reservationId }, body: {} };
+  let operation;
   try {
     const reservation = await prisma.loan_reservations.findUnique({ where: { id: reservationId } });
     if (!reservation) {
       return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
     }
 
-    if (!(await requireWarehouseWriteAccess(req, res, reservation.warehouse_id))) return;
+    if (!approvedRecovery(req) && !(await requireWarehouseWriteAccess(req, res, reservation.warehouse_id))) return;
+    const previousOperation = approvedRecovery(req) || await readBorrowOperation(prisma, 'CONVERT_RESERVATION', reservationId, { request: operationRequest, user: req.user });
+    const approved = previousOperation?.payload.plan;
 
     if (reservation.status === 'CONVERTED_TO_LOAN') {
       const existingLoan = await prisma.loan_transactions.findFirst({ where: { source_reservation_id: reservationId } });
@@ -877,7 +925,7 @@ async function convertReservationToLoan(req, res) {
       return res.json({ data: existingLoan, idempotent: true });
     }
 
-    if (!CONVERTIBLE_RESERVATION_STATUSES.includes(reservation.status)) {
+    if (!approved && !CONVERTIBLE_RESERVATION_STATUSES.includes(reservation.status)) {
       return res.status(409).json({
         message: reservation.status === 'PENDING'
           ? 'Reservation must be confirmed by staff before conversion'
@@ -885,7 +933,7 @@ async function convertReservationToLoan(req, res) {
       });
     }
 
-    if (reservation.status === 'READY_FOR_PICKUP') {
+    if (!approved && reservation.status === 'READY_FOR_PICKUP') {
       if (!reservation.pickup_code) {
         return res.status(409).json({ message: 'Đặt trước này chưa được cấp mã nhận sách' });
       }
@@ -907,30 +955,30 @@ async function convertReservationToLoan(req, res) {
       }
     }
 
-    if (new Date(reservation.expires_at).getTime() <= Date.now()) {
+    if (!approved && new Date(reservation.expires_at).getTime() <= Date.now()) {
       return res.status(409).json({ message: 'Đặt trước đã hết hạn, không thể chuyển thành phiếu mượn' });
     }
 
     const customer = await prisma.customers.findUnique({ where: { id: reservation.customer_id } });
-    if (!customer || customer.status !== 'ACTIVE') {
+    if (!approved && (!customer || customer.status !== 'ACTIVE')) {
       return res.status(409).json({ message: 'Bạn đọc không đủ điều kiện chuyển đặt trước thành phiếu mượn' });
     }
 
-    if (Number(customer.total_fine_balance) > 0) {
+    if (!approved && Number(customer.total_fine_balance) > 0) {
       return res.status(409).json({
         message: 'Khách còn tiền phạt chưa thanh toán',
         detail: { total_fine_balance: Number(customer.total_fine_balance) },
       });
     }
 
-    const membershipInfo = await resolveActiveMembership(prisma, reservation.customer_id);
+    let membershipInfo = approved?.membershipInfo || await resolveActiveMembership(prisma, reservation.customer_id);
     if (!membershipInfo) {
       return res.status(409).json({ message: 'Bạn đọc chưa có thẻ thành viên còn hiệu lực' });
     }
 
     const activeLoanCount = await countActiveBorrowedItems(prisma, reservation.customer_id);
 
-    if (activeLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
+    if (!approved && activeLoanCount + reservation.quantity > membershipInfo.limits.max_active_loans) {
       return res.status(409).json({
         message: 'Bạn đọc đã đạt số sách mượn tối đa theo gói thành viên',
         detail: {
@@ -940,11 +988,11 @@ async function convertReservationToLoan(req, res) {
       });
     }
 
-    const loanId = crypto.randomUUID();
-    const loanNumber = createLoanNumber();
-    const borrowFeeAmount = Number((reservation.quantity * getBorrowFeePerItem()).toFixed(2));
+    let loanId = approved?.loanId || crypto.randomUUID();
+    let loanNumber = approved?.loanNumber || createLoanNumber();
+    let borrowFeeAmount = approved?.borrowFeeAmount ?? Number((reservation.quantity * getBorrowFeePerItem()).toFixed(2));
 
-    if (borrowFeeAmount > 0) {
+    if (!approved && borrowFeeAmount > 0) {
       const accountSnapshot = await prisma.$transaction((tx) => getCustomerAccountSnapshot(tx, reservation.customer_id));
       const projectedBalance = Number((accountSnapshot.availableBalance - borrowFeeAmount).toFixed(2));
 
@@ -969,13 +1017,23 @@ async function convertReservationToLoan(req, res) {
       }
     }
 
-    const depositShortfall = await checkDepositFunds(reservation.customer_id, reservation.quantity, membershipInfo.limits, borrowFeeAmount);
+    const depositShortfall = !approved && await checkDepositFunds(reservation.customer_id, reservation.quantity, membershipInfo.limits, borrowFeeAmount);
     if (depositShortfall) {
       return res.status(409).json(depositShortfall);
     }
 
-    const borrowDate = new Date();
-    const dueDate = new Date(borrowDate.getTime() + membershipInfo.limits.max_loan_days * 24 * 60 * 60 * 1000);
+    let borrowDate = approved ? new Date(approved.borrowDate) : new Date();
+    let dueDate = approved ? new Date(approved.dueDate) : new Date(borrowDate.getTime() + membershipInfo.limits.max_loan_days * 24 * 60 * 60 * 1000);
+    operation = await prepareBorrowOperation(prisma, { kind: 'CONVERT_RESERVATION', reference: reservationId,
+      key: idempotencyKey, request: operationRequest, user: req.user, req, plan: { reservationId, loanId, loanNumber,
+        borrowDate, dueDate, membershipInfo, borrowFeeAmount, pickupCodeVerified: Boolean(req.pickupCodeVerified),
+        loanItems: Array.from({ length: reservation.quantity }, (_, index) => ({ id: crypto.randomUUID(), loan_id: loanId,
+          variant_id: reservation.variant_id, inventory_unit_id: reservation.inventory_unit_id,
+          item_barcode: reservation.inventory_unit_id || `${loanNumber}-ITEM-${index + 1}`, due_date: dueDate,
+          status: 'BORROWED', item_condition_on_checkout: 'GOOD' })) } });
+    if (operation.status === 'PUBLISHED') return sendBorrowReplay(res, operation);
+    ({ loanId, loanNumber, membershipInfo, borrowFeeAmount } = operation.payload.plan);
+    borrowDate = new Date(operation.payload.plan.borrowDate); dueDate = new Date(operation.payload.plan.dueDate);
 
     let inventoryConsumeAttempted = false;
     let replayedConversion = false;
@@ -993,7 +1051,7 @@ async function convertReservationToLoan(req, res) {
           }
         }
         if (!currentReservation || !CONVERTIBLE_RESERVATION_STATUSES.includes(currentReservation.status)
-          || new Date(currentReservation.expires_at).getTime() <= Date.now()) {
+          || (!approved && new Date(currentReservation.expires_at).getTime() <= Date.now())) {
           throw Object.assign(new Error('Reservation is no longer convertible'), { status: 409, code: 'RESERVATION_STATE_CHANGED' });
         }
 
@@ -1013,7 +1071,7 @@ async function convertReservationToLoan(req, res) {
             customerId: reservation.customer_id,
             actorUserId,
             amount: borrowFeeAmount,
-            idempotencyKey: `loan-convert:${idempotencyKey}`,
+            idempotencyKey: boundedBorrowKey('loan-convert:', operation.payload.key, 120),
             referenceType: 'LOAN_TRANSACTION',
             referenceId: loanId,
             note: `Auto debit borrow fee for reservation ${reservation.reservation_number}`,
@@ -1041,16 +1099,7 @@ async function convertReservationToLoan(req, res) {
           },
         });
 
-        const loanItems = Array.from({ length: reservation.quantity }).map((_, index) => ({
-          id: crypto.randomUUID(),
-          loan_id: loan.id,
-          variant_id: reservation.variant_id,
-          inventory_unit_id: reservation.inventory_unit_id,
-          item_barcode: reservation.inventory_unit_id || `${loan.loan_number}-ITEM-${index + 1}`,
-          due_date: dueDate,
-          status: 'BORROWED',
-          item_condition_on_checkout: 'GOOD',
-        }));
+        const loanItems = operation.payload.plan.loanItems;
 
         await tx.loan_items.createMany({ data: loanItems });
 
@@ -1068,7 +1117,7 @@ async function convertReservationToLoan(req, res) {
           where: { id: reservation.id },
           data: {
             status: 'CONVERTED_TO_LOAN',
-            ...(req.pickupCodeVerified ? { pickup_code_used_at: new Date() } : {}),
+            ...(operation.payload.plan.pickupCodeVerified ? { pickup_code_used_at: new Date() } : {}),
             updated_at: new Date(),
           },
         });
@@ -1112,31 +1161,35 @@ async function convertReservationToLoan(req, res) {
         // Local monetary validation and writes have succeeded. Inventory is a
         // separate transaction: an uncertain response or a later commit failure
         // still uses the existing durable reconciliation path below.
+        await markBorrowRemoteStarted(prisma, operation);
         inventoryConsumeAttempted = true;
         await consumeReservation({
           reservation_id: reservationId,
           loan_id: loanId,
           loan_number: loanNumber,
           warehouse_id: reservation.warehouse_id,
-          idempotency_key: idempotencyKey,
+          idempotency_key: boundedBorrowKey('', operation.payload.key),
           handled_by_user_id: actorUserId,
           authHeader,
           requestId: req.requestId,
           timeoutMs: 10000,
         });
 
-        return {
+        const response = {
           ...loan,
           borrow_fee_amount: borrowFeeAmount,
           borrow_fee_ledger_entry_id: debitResult?.entry?.id || null,
           borrow_fee_remaining_wallet_balance: debitResult?.remainingBalance ?? null,
           ...depositSummary,
         };
+        await completeBorrowOperation(tx, operation, { status: 201, body: { data: response } });
+        return response;
       }, { timeout: 30000 });
 
       if (replayedConversion) return res.json({ data: created, idempotent: true });
       return res.status(201).json({ data: created });
     } catch (error) {
+      await deferBorrowOperation(prisma, operation, error, req);
       if (error?.code === 'RESERVATION_STATE_CHANGED') {
         return res.status(409).json({ message: error.message });
       }
@@ -1156,9 +1209,8 @@ async function convertReservationToLoan(req, res) {
         });
       }
 
-      // Same shape as createDirectLoan's catch below: not auto-reversed
-      // because the correct undo needs loan_item ids that only exist once
-      // loan_items rows are created — the step that just failed.
+      // The committed operation plan retains exact remote/local identities;
+      // recovery resumes that plan instead of guessing an inverse mutation.
       console.error('Borrow DB transaction failed after inventory consume:', error);
       await queueReconciliation({
         aggregateId: loanId,
@@ -1173,7 +1225,7 @@ async function convertReservationToLoan(req, res) {
         },
       });
       return res.status(502).json({
-        message: 'Loan creation failed after inventory consume. Queued for manual reconciliation.',
+        message: 'Loan creation is pending durable reconciliation. Retry with the same key.',
       });
     }
   } catch (error) {
@@ -1209,8 +1261,53 @@ async function convertReservationPickupCodeToLoan(req, res) {
 
     return convertReservationToLoan(req, res);
   } catch (error) {
+    await deferBorrowOperation(prisma, operation, error, req);
     console.error('Error while converting reservation by pickup code:', error);
     return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function resolveReturnFinePolicy(db, customerId, now = new Date()) {
+  const membership = await resolveActiveMembership(db, customerId);
+  return { ...membership, limits: { ...membership?.limits,
+    fine_per_day: await resolveOverdueFineRate(db, customerId, now) } };
+}
+
+function returnPricing(membershipInfo) {
+  return { fine_per_day: normalizeMoney(membershipInfo?.limits?.fine_per_day || 0),
+    lost_item_fee_multiplier: Number(membershipInfo?.limits?.lost_item_fee_multiplier || 1),
+    lost_item_base_fee: normalizeMoney(process.env.LOST_ITEM_BASE_FEE || 100000),
+    damaged_item_fee: normalizeMoney(process.env.DAMAGED_ITEM_FEE || 50000) };
+}
+async function returnCoverage(db, plans) {
+  const rows = await db.fines.findMany({ where: { loan_item_id: { in: plans.map(plan => plan.item.id) }, fine_type: 'OVERDUE' },
+    select: { loan_item_id: true, accrual_due_date: true, accrual_through_days: true, accrual_daily_rate: true } });
+  return rows.filter(row => {
+    const item = plans.find(plan => plan.item.id === row.loan_item_id)?.item;
+    return item && (!row.accrual_due_date || new Date(row.accrual_due_date).getTime() === new Date(item.due_date).getTime());
+  });
+}
+function coveredDays(rows) {
+  const result = {};
+  for (const row of rows) result[row.loan_item_id] = Math.max(result[row.loan_item_id] || 0, Number(row.accrual_through_days || 0));
+  return result;
+}
+function requireReturnEvidence(plans, currentItems, rows, cutoff, pricing, baselineCoverage, verifyNewPricing = false) {
+  for (const plan of plans) {
+    const current = currentItems.find(item => item.id === plan.item.id);
+    if (!current || new Date(current.due_date).getTime() !== new Date(plan.item.due_date).getTime()) {
+      throw new ReturnRequestError('Ngày đến hạn đã thay đổi; cần đối soát trước khi quyết toán lượt trả này', 409);
+    }
+  }
+  for (const row of rows) {
+    const item = plans.find(plan => plan.item.id === row.loan_item_id).item;
+    if (row.accrual_through_days != null && row.accrual_through_days > daysOverdue(item.due_date, cutoff)) {
+      throw new ReturnRequestError('Tiền phạt đã ghi nhận vượt mốc trả sách; cần đối soát lịch sử, không tự điều chỉnh tiền', 409);
+    }
+    if (verifyNewPricing && row.accrual_through_days > (baselineCoverage?.[row.loan_item_id] || 0)
+      && row.accrual_daily_rate != null && normalizeMoney(row.accrual_daily_rate) !== pricing.fine_per_day) {
+      throw new ReturnRequestError('Đơn giá của ngày phạt mới đã thay đổi; cần đối soát trước khi quyết toán', 409);
+    }
   }
 }
 
@@ -1238,6 +1335,7 @@ async function returnLoan(req, res) {
   let attemptedItemId = null;
   let plans = [];
   let operationId = null;
+  let durableOperation;
   let fingerprint;
 
   try {
@@ -1255,7 +1353,7 @@ async function returnLoan(req, res) {
 
     // Returns always post stock at loan.warehouse_id (see returnBorrowedStock call
     // below) - that is the warehouse this write must be scoped against.
-    if (!(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
+    if (!approvedRecovery(req) && !(await requireWarehouseWriteAccess(req, res, loan.warehouse_id))) return;
 
     const findReplay = db => db.borrow_audit_logs.findFirst({ where: {
       action_name: 'RETURN_LOAN_ITEMS', after_data: { path: ['idempotency_key'], equals: idempotencyKey },
@@ -1273,8 +1371,15 @@ async function returnLoan(req, res) {
       return res.status(409).json({ message: `Không thể trả sách khi phiếu mượn ở trạng thái ${loan.status}` });
     }
 
-    plans = selectReturnItems(request, loan.loan_items);
-    const targets = plans.map(plan => plan.item);
+    const toBody = row => ({ loan_item_id: row.loan_item_id, item_condition_on_return: row.condition,
+      mark_lost: row.markLost, returned_to_location_id: row.locationId, notes: row.notes, settlement_reason: row.reason });
+    const normalizedBody = request.batch ? { items: [...request.rows].sort((a, b) => a.loan_item_id.localeCompare(b.loan_item_id)).map(toBody) } : toBody(request.rows[0]);
+    const operationRequest = { params: { id: loanId }, body: normalizedBody };
+    const reference = deterministicUuid(`return-operation:${idempotencyKey}`);
+    const previousOperation = approvedRecovery(req) || await readBorrowOperation(prisma, 'RETURN_LOAN', reference, { request: operationRequest, user: req.user });
+    const approved = previousOperation?.payload.plan;
+    plans = approved?.plans || selectReturnItems(request, loan.loan_items);
+    let targets = plans.map(plan => plan.item);
 
     // A deposit is only used to pay for damage or loss on an explicit, explained
     // staff decision. Checked before any stock moves.
@@ -1292,16 +1397,44 @@ async function returnLoan(req, res) {
       }
     }
     const locationIds = plans.filter(plan => !plan.markLost && plan.locationId).map(plan => plan.locationId);
-    if (locationIds.length) {
+    if (!approved && locationIds.length) {
       const locations = await getReturnLocations({ locationIds, requestId: req.requestId });
       if (locations.length !== new Set(locationIds).size || locations.some(location => location.warehouse_id !== loan.warehouse_id || location.is_active === false)) {
         throw new ReturnRequestError('Vị trí trả sách không hợp lệ hoặc không thuộc kho của phiếu mượn');
       }
     }
+    const initialMembershipInfo = approved ? approved.membershipInfo : await resolveReturnFinePolicy(prisma, loan.customer_id);
+    const legacyRequest = approved ? null : await prisma.loan_return_requests.findUnique({ where: { idempotency_key: idempotencyKey } });
+    durableOperation = await prepareBorrowOperation(prisma, { kind: 'RETURN_LOAN', reference, aggregateId: loanId,
+      key: idempotencyKey, request: operationRequest, user: req.user, req,
+      plan: { loanId, plans, requestedAt: new Date(), membershipInfo: initialMembershipInfo,
+        pricing: approved?.pricing || returnPricing(initialMembershipInfo),
+        coverage: coveredDays(await returnCoverage(prisma, plans)), legacyUnresolved: Boolean(legacyRequest && legacyRequest.status !== 'COMPLETED') } });
+    if (durableOperation.status === 'PUBLISHED') return sendBorrowReplay(res, durableOperation);
+    plans = durableOperation.payload.plan.plans;
+    targets = plans.map(plan => plan.item);
+    let completion = durableOperation.payload.completion;
+    if (durableOperation.payload.plan.legacyUnresolved || (durableOperation.payload.remote_started && !completion && !durableOperation.payload.plan.pricing)) {
+      throw new ReturnRequestError('Lượt trả cũ chưa có bằng chứng thời điểm/đơn giá hoàn tất; cần đối soát thủ công', 409);
+    }
+    const currentCoverage = await returnCoverage(prisma, plans);
+    if (durableOperation.payload.remote_started && !completion) {
+      const requestedAt = new Date(durableOperation.payload.plan.requestedAt || durableOperation.payload.plan.returnedAt || durableOperation.occurred_at);
+      const currentPricing = returnPricing(await resolveReturnFinePolicy(prisma, loan.customer_id));
+      if (plans.some(plan => daysOverdue(plan.item.due_date, requestedAt) !== daysOverdue(plan.item.due_date, new Date()))
+        || Object.entries(currentPricing).some(([key, value]) => value !== (durableOperation.payload.plan.pricing || returnPricing(durableOperation.payload.plan.membershipInfo))[key])) {
+        throw new ReturnRequestError('Lượt trả chưa rõ thời điểm hoàn tất và đã đổi kỳ phạt/đơn giá; cần đối soát thủ công', 409);
+      }
+      requireReturnEvidence(plans, loan.loan_items, currentCoverage, new Date(), currentPricing, durableOperation.payload.plan.coverage, true);
+    } else {
+      requireReturnEvidence(plans, loan.loan_items, currentCoverage, completion ? new Date(completion.completedAt) : new Date(),
+        completion?.pricing || durableOperation.payload.plan.pricing, completion?.coverage, Boolean(completion));
+    }
     const operation = await claimReturnOperation(prisma, { loanId, key: idempotencyKey, fingerprint });
     operationId = operation.id;
     if (operation.replay) return res.json({ data: operation.replay, idempotent: true });
 
+    await markBorrowRemoteStarted(prisma, durableOperation);
     for (let index = 0; index < targets.length; index += 1) {
       const item = targets[index];
       const plan = plans[index];
@@ -1330,15 +1463,25 @@ async function returnLoan(req, res) {
       returnedLoanItemIds.push(item.id);
       attemptedItemId = null;
     }
-    const returnedAt = new Date();
+    if (!completion) {
+      // Preserve the original single batch cutoff AFTER all Inventory ACKs.
+      // Persist it outside the local business transaction before any settlement,
+      // so a later commit failure cannot choose a different financial date/rate.
+      const completedAt = new Date();
+      const membershipInfo = await resolveReturnFinePolicy(prisma, loan.customer_id, completedAt);
+      completion = await recordBorrowCompletionContext(prisma, durableOperation, { completedAt,
+        pricing: returnPricing(membershipInfo), coverage: coveredDays(await returnCoverage(prisma, plans)) });
+    }
+    const returnedAt = new Date(completion.completedAt);
 
     const updated = await prisma.$transaction(async (tx) => {
+      await lockCustomerFineBalance(tx, loan.customer_id);
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`loan-return:${loan.id}`}, 0))`;
       const replay = await findReplay(tx);
       if (replay?.after_data?.return_response) return { ...replayResponse(replay), idempotent: true };
       const currentItems = await tx.loan_items.findMany({ where: { id: { in: targets.map(item => item.id) } } });
       if (currentItems.some(item => !['BORROWED', 'OVERDUE'].includes(item.status))) throw new ReturnRequestError('Trạng thái sách đã thay đổi trong lúc trả', 409);
-      const membershipInfo = await resolveActiveMembership(tx, loan.customer_id);
+      requireReturnEvidence(plans, currentItems, await returnCoverage(tx, plans), returnedAt, completion.pricing, completion.coverage, true);
       const targetIds = targets.map((item) => item.id);
       const fineResult = { fines: [], totalFineBalance: 0 };
       const depositSettlements = [];
@@ -1361,7 +1504,7 @@ async function returnLoan(req, res) {
           items: [returnedItem],
           returnedAt,
           actorUserId,
-          membershipLimits: membershipInfo?.limits,
+          membershipLimits: completion.pricing,
           markLost: plan.markLost,
           itemConditionOnReturn: plan.condition,
         });
@@ -1406,6 +1549,7 @@ async function returnLoan(req, res) {
           deposit_settlement: depositSettlements.find(row => row.loan_item_id === plan.item.id) || null })),
       };
       await finishReturnOperation(tx, operationId, { key: idempotencyKey, fingerprint, response });
+      await completeBorrowOperation(tx, durableOperation, { status: 200, body: { data: response } });
       await tx.integration_outbox.updateMany({ where: {
         aggregate_id: loan.id, event_type: 'LOAN_RETURN_UNRESOLVED', status: 'PENDING',
         payload: { path: ['idempotency_key'], equals: idempotencyKey },
@@ -1481,6 +1625,7 @@ async function returnLoan(req, res) {
 
     return res.json({ data: updated, ...(updated.idempotent ? { idempotent: true } : {}) });
   } catch (error) {
+    await deferBorrowOperation(prisma, durableOperation, error, req);
     console.error('Error while returning loan:', error);
 
     // Some items in the loop above may have already succeeded in inventory-service before

@@ -85,6 +85,7 @@ export function BorrowFinesPage() {
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
 
   const [paymentDialogFine, setPaymentDialogFine] = useState<Fine | null>(null);
+  const [paymentRequestKey, setPaymentRequestKey] = useState('');
   const [paymentForm, setPaymentForm] = useState({ amount: '', method: 'CASH' as 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET', reference: '' });
   const [submittingPayment, setSubmittingPayment] = useState(false);
 
@@ -140,6 +141,9 @@ export function BorrowFinesPage() {
 
   const openPaymentDialog = (fine: Fine) => {
     const remaining = Number(fine.summary?.remaining_balance || 0);
+    // A failed/unknown response may already have committed. Keep this key for
+    // every retry in the dialog; only opening a new payment starts a new key.
+    setPaymentRequestKey(crypto.randomUUID());
     setPaymentForm({ amount: remaining > 0 ? String(remaining) : '', method: 'CASH', reference: '' });
     setPaymentDialogFine(fine);
   };
@@ -169,7 +173,7 @@ export function BorrowFinesPage() {
         amount,
         payment_method: paymentForm.method,
         transaction_reference: paymentForm.reference.trim() || undefined,
-      });
+      }, paymentRequestKey);
       toast.success('Đã ghi nhận thanh toán tiền phạt');
       setPaymentDialogFine(null);
       await refresh();

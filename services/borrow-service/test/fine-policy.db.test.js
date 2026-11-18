@@ -21,7 +21,7 @@ const opts = { skip: !url && 'BORROW_POLICY_DATABASE_URL not set' };
 const actor = { id: randomUUID(), is_superuser: true, permissions: ['borrow.fines.manage'] };
 async function invoke(handler, fineId, body, user = actor) {
   const response = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
-  await handler({ params: { id: fineId }, body, user }, response);
+  await handler({ params: { id: fineId }, body, user, headers: { 'idempotency-key': randomUUID() } }, response);
   return response;
 }
 async function fixture() {

@@ -2,7 +2,9 @@ const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { resolveActiveMembership, countActiveBorrowedItems, countActiveReservedItems } = require('../services/membership.service');
 const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
-const { compensateWithRetry } = require('../services/reconciliation.service');
+const { queueReconciliation } = require('../services/reconciliation.service');
+const { readBorrowOperation, prepareBorrowOperation, prepareBorrowOperationInTransaction, approvedRecovery,
+  markBorrowRemoteStarted, completeBorrowOperation, deferBorrowOperation, sendBorrowReplay, boundedBorrowKey } = require('../services/borrow-operation.service');
 const { writeAuditLog } = require('../lib/audit');
 const { createNotificationRecord } = require('../lib/notifications');
 const { createPickupQrValue, generateUniquePickupCode } = require('../utils/pickup-code');
@@ -268,6 +270,7 @@ async function createReservation(req, res) {
   if (pickup_location_id && !isUuid(pickup_location_id)) {
     return res.status(400).json({ message: 'pickup_location_id phải là UUID hợp lệ (nếu có)' });
   }
+  if (notes != null && typeof notes !== 'string') return res.status(400).json({ message: 'notes phải là chuỗi' });
 
   const normalizedQuantity = Number.parseInt(String(quantity || '1'), 10);
   if (!Number.isInteger(normalizedQuantity) || normalizedQuantity <= 0) {
@@ -281,11 +284,16 @@ async function createReservation(req, res) {
 
   // Staff creating a reservation on a customer's behalf must hold write scope on
   // that branch; a customer reserving for themself is not warehouse-scoped at all.
-  if (!isCustomerCaller(req) && !(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
+  if (!approvedRecovery(req) && !isCustomerCaller(req) && !(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
 
   const fingerprint = { customer_id, variant_id, warehouse_id, quantity: normalizedQuantity };
   const ids = { ...reservationIdsFor(actorUserId, idempotencyKey), actorUserId };
   const { reservationId } = ids;
+  const operationRequest = { params: {}, body: { customer_id, variant_id, warehouse_id,
+    quantity: normalizedQuantity, pickup_location_id: pickup_location_id || null, source_channel: normalizedSource, notes: notes || null },
+    channel: req.reservationChannel || null };
+  let operation;
+  let reservationAccepted = false;
 
   try {
     // Idempotency BEFORE the business rules: a retry of a request that already
@@ -297,7 +305,9 @@ async function createReservation(req, res) {
       return replayReservation(res, existingByIdempotency, fingerprint);
     }
 
-    const precheck = await reservationRefusal(fingerprint);
+    const previousOperation = approvedRecovery(req) || await readBorrowOperation(prisma, 'CREATE_RESERVATION', reservationId, { request: operationRequest, user: req.user });
+    const approved = previousOperation?.payload.plan;
+    const precheck = approved ? { membershipInfo: approved.membershipInfo } : await reservationRefusal(fingerprint);
     if (precheck.status) {
       // A concurrent request with this key may have committed since the lookup
       // above - its reservation is then exactly what refused this one.
@@ -307,7 +317,7 @@ async function createReservation(req, res) {
     }
     const { membershipInfo } = precheck;
 
-    await checkAvailability({
+    if (!approved) await checkAvailability({
       variant_id,
       warehouse_id,
       quantity: normalizedQuantity,
@@ -317,8 +327,14 @@ async function createReservation(req, res) {
     });
 
     const reservationNumber = `RSV-${reservationId.slice(0, 8).toUpperCase()}`;
-    const reservedAt = new Date();
-    const expiresAt = new Date(reservedAt.getTime() + membershipInfo.limits.reservation_hold_hours * 60 * 60 * 1000);
+    let reservedAt = approved ? new Date(approved.reservedAt) : new Date();
+    let expiresAt = approved ? new Date(approved.expiresAt) : new Date(reservedAt.getTime() + membershipInfo.limits.reservation_hold_hours * 60 * 60 * 1000);
+    operation = await prepareBorrowOperation(prisma, { kind: 'CREATE_RESERVATION', reference: reservationId,
+      key: idempotencyKey, request: operationRequest, user: req.user, req,
+      plan: { reservationId, reservationNumber, reservedAt, expiresAt, membershipInfo } });
+    if (operation.status === 'PUBLISHED') return sendBorrowReplay(res, operation);
+    reservedAt = new Date(operation.payload.plan.reservedAt); expiresAt = new Date(operation.payload.plan.expiresAt);
+    await markBorrowRemoteStarted(prisma, operation);
 
     // Inventory dedups on reservation_id, so a concurrent request with the same key
     // ends up with the same single stock hold, not two.
@@ -336,6 +352,7 @@ async function createReservation(req, res) {
       authHeader,
       requestId: req.requestId,
     });
+    reservationAccepted = true;
 
     try {
       const created = await prisma.$transaction(async (tx) => {
@@ -414,6 +431,7 @@ async function createReservation(req, res) {
           },
         });
 
+        await completeBorrowOperation(tx, operation, { status: 201, body: { data: reservation } });
         return { reservation };
       });
 
@@ -428,31 +446,33 @@ async function createReservation(req, res) {
         if (winner) return replayReservation(res, winner, fingerprint);
       }
 
-      const rollbackReason = 'ROLLBACK_AFTER_BORROW_TX_FAIL';
-      const compensation = await compensateWithRetry(
-        () => releaseReservation({
-          reservation_id: reservationId,
-          reason: rollbackReason,
-          idempotency_key: `rollback:${reservationId}`,
-          authHeader,
-          requestId: req.requestId,
-        }),
-        {
-          aggregateId: reservationId,
-          eventType: 'RELEASE_RESERVATION',
-          payload: { reservation_id: reservationId, reason: rollbackReason },
-        },
-      );
-
-      if (!compensation.ok) {
-        return res.status(502).json({
-          message: 'Reservation persistence failed; compensation queued for automatic retry (reconciliation job).',
-        });
+      // Only a known local validation refusal is safe to compensate. A lost DB
+      // commit response is ambiguous: retain the approved create plan and retry.
+      if (error.status !== 409) {
+        await deferBorrowOperation(prisma, operation, error, req);
+        return res.status(502).json({ message: 'Đặt trước đang được đối soát; hãy thử lại với cùng key.' });
       }
-
-      throw error;
+      const response = { status: 409, body: { message: error.message } };
+      const undo = await prisma.$transaction(async tx => {
+        const record = await queueReconciliation({ db: tx, aggregateId: reservationId, eventType: 'RELEASE_RESERVATION',
+          payload: { reservation_id: reservationId, reason: 'ROLLBACK_AFTER_BORROW_TX_FAIL', idempotency_key: `rollback:${reservationId}` } });
+        await completeBorrowOperation(tx, operation, response);
+        return record;
+      });
+      try {
+        await releaseReservation({ reservation_id: reservationId, reason: 'ROLLBACK_AFTER_BORROW_TX_FAIL',
+          idempotency_key: `rollback:${reservationId}`, authHeader, requestId: req.requestId });
+        await prisma.integration_outbox.update({ where: { id: undo.id }, data: { status: 'PUBLISHED', published_at: new Date() } });
+      } catch { /* The independent undo record is durable and retryable. */ }
+      return res.status(409).json(response.body);
     }
   } catch (error) {
+    if (operation && error.status === 409 && !reservationAccepted && !operation.payload.remote_started) {
+      const response = { status: 409, body: { message: error.message, code: 'BORROW_RESERVE_REFUSED' } };
+      await prisma.$transaction(tx => completeBorrowOperation(tx, operation, response));
+      return res.status(409).json(response.body);
+    }
+    await deferBorrowOperation(prisma, operation, error, req);
     // e.g. inventory refused availability because a concurrent request with this
     // key just took the last copy: that request's reservation is the answer.
     const replay = await findIdempotentReservation(prisma, ids).catch(() => null);
@@ -461,6 +481,8 @@ async function createReservation(req, res) {
     if (error?.status === 409) {
       return res.status(409).json({ message: error.message });
     }
+
+    if (operation) return res.status(502).json({ message: 'Đặt trước đang được đối soát; hãy thử lại với cùng key.' });
 
     console.error('Error while creating reservation:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -485,7 +507,7 @@ async function cancelReservation(req, res) {
     return res.status(400).json({ message: 'Cần header Idempotency-Key khi hủy đặt trước' });
   }
 
-  if (!isCustomerCaller(req)) {
+  if (!approvedRecovery(req) && !isCustomerCaller(req)) {
     const target = await prisma.loan_reservations.findUnique({ where: { id }, select: { warehouse_id: true } });
     if (!target) {
       return res.status(404).json({ message: 'Không tìm thấy đặt trước' });
@@ -493,6 +515,8 @@ async function cancelReservation(req, res) {
     if (!(await requireWarehouseWriteAccess(req, res, target.warehouse_id))) return;
   }
 
+  let operation;
+  const operationRequest = { params: { id }, body: {} };
   try {
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`reservation-state:${id}`}, 0))`;
@@ -503,6 +527,8 @@ async function cancelReservation(req, res) {
       }
 
       if (existing.status === 'CANCELLED') {
+        operation = await prepareBorrowOperationInTransaction(tx, { kind: 'CANCEL_RESERVATION', reference: id,
+          key: idempotencyKey, request: operationRequest, user: req.user, ownedOperation: approvedRecovery(req), plan: { reservationId: id, warehouseId: existing.warehouse_id } });
         return { data: existing, idempotent: true, previous_status: existing.status };
       }
 
@@ -513,6 +539,10 @@ async function cancelReservation(req, res) {
       if (new Date(existing.expires_at).getTime() <= Date.now()) {
         return { conflict: true, message: 'Cannot cancel reservation because it is already expired' };
       }
+      const converting = await readBorrowOperation(tx, 'CONVERT_RESERVATION', id);
+      if (converting && converting.status !== 'PUBLISHED' && converting.payload.remote_started) {
+        return { conflict: true, message: 'Đặt trước có lượt chuyển mượn đang chờ đối soát, chưa thể giải phóng sách' };
+      }
 
       const reservation = await tx.loan_reservations.update({
         where: { id },
@@ -520,6 +550,8 @@ async function cancelReservation(req, res) {
           status: 'CANCELLED',
         },
       });
+      operation = await prepareBorrowOperationInTransaction(tx, { kind: 'CANCEL_RESERVATION', reference: id,
+        key: idempotencyKey, request: operationRequest, user: req.user, ownedOperation: approvedRecovery(req), plan: { reservationId: id, warehouseId: existing.warehouse_id } });
 
       await writeAuditLog(tx, {
         actor_user_id: actorUserId,
@@ -554,42 +586,25 @@ async function cancelReservation(req, res) {
       return res.status(409).json({ message: updated.message });
     }
 
-    if (!updated.idempotent) {
+    if (operation?.status === 'PUBLISHED') return sendBorrowReplay(res, operation);
+    if (operation) {
       try {
+        await markBorrowRemoteStarted(prisma, operation);
         await releaseReservation({
           reservation_id: id,
           reason: 'CANCELLED',
-          idempotency_key: idempotencyKey,
+          idempotency_key: boundedBorrowKey('', operation.payload.key),
           authHeader,
           requestId: req.requestId,
         });
       } catch (error) {
-        await prisma.$transaction(async (tx) => {
-          const rollbackTarget = await tx.loan_reservations.findUnique({ where: { id } });
-          if (rollbackTarget && rollbackTarget.status === 'CANCELLED') {
-            const restored = await tx.loan_reservations.update({
-              where: { id },
-              data: { status: updated.previous_status },
-            });
-
-            await writeAuditLog(tx, {
-              actor_user_id: actorUserId,
-              action_name: 'ROLLBACK_CANCEL_RESERVATION',
-              entity_type: 'LOAN_RESERVATION',
-              entity_id: id,
-              before_data: rollbackTarget,
-              after_data: {
-                ...restored,
-                reason: 'inventory_release_failed',
-              },
-            });
-          }
-        });
+        await deferBorrowOperation(prisma, operation, error, req);
 
         return res.status(502).json({
-          message: 'Reservation cancellation failed because inventory release failed. State has been rolled back.',
+          message: 'Đã hủy đặt trước; lượt giải phóng tồn kho đang chờ xác nhận và được đối soát tự động.',
         });
       }
+      await prisma.$transaction(tx => completeBorrowOperation(tx, operation, { status: 200, body: { data: updated.data } }));
     }
 
     return res.json({ data: updated.data, idempotent: Boolean(updated.idempotent) });
@@ -725,61 +740,47 @@ async function confirmReservation(req, res) {
 }
 
 async function releaseExpiredReservation(reservation, options = {}) {
+  const now = options.now || new Date();
   const idempotencyKey = `expire:${reservation.id}:${new Date(reservation.expires_at).getTime()}`;
-
-  await releaseReservation({
-    reservation_id: reservation.id,
-    reason: 'EXPIRED',
-    idempotency_key: idempotencyKey,
-    authHeader: options.authHeader,
-  });
-
-  return prisma.$transaction(async (tx) => {
+  const reference = deterministicUuid(idempotencyKey);
+  const request = { params: { id: reservation.id }, body: { expires_at: new Date(reservation.expires_at).toISOString() } };
+  const user = options.operation?.payload.actor || { id: options.actorUserId || null, is_superuser: true, roles: [], permissions: [] };
+  let operation;
+  const result = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`reservation-state:${reservation.id}`}, 0))`;
     const current = await tx.loan_reservations.findUnique({ where: { id: reservation.id } });
-    if (!current) {
-      return { skipped: true, reason: 'NOT_FOUND' };
+    if (!current) return { skipped: true, reason: 'NOT_FOUND' };
+    if (!ACTIVE_RESERVATION_STATUSES.includes(current.status) && current.status !== 'EXPIRED') return { skipped: true, reason: `STATUS_${current.status}` };
+    if (new Date(current.expires_at).getTime() !== new Date(reservation.expires_at).getTime()
+      || new Date(current.expires_at) > now) return { skipped: true, reason: 'EXPIRY_CHANGED' };
+    const converting = await readBorrowOperation(tx, 'CONVERT_RESERVATION', current.id);
+    if (converting && converting.status !== 'PUBLISHED' && converting.payload.remote_started) {
+      throw Object.assign(new Error('Reservation conversion requires reconciliation before expiry release'), { status: 409 });
     }
-
-    if (!ACTIVE_RESERVATION_STATUSES.includes(current.status)) {
-      return { skipped: true, reason: `STATUS_${current.status}`, data: current };
-    }
-
-    const expired = await tx.loan_reservations.update({
-      where: { id: current.id },
-      data: {
-        status: 'EXPIRED',
-        updated_at: new Date(),
-      },
-    });
-
-    await writeAuditLog(tx, {
-      actor_user_id: options.actorUserId || null,
-      action_name: 'EXPIRE_RESERVATION',
-      entity_type: 'LOAN_RESERVATION',
-      entity_id: expired.id,
-      before_data: current,
-      after_data: {
-        ...expired,
-        idempotency_key: idempotencyKey,
-      },
-    });
-
-    await createNotificationRecord(tx, {
-      customer_id: expired.customer_id,
-      channel: 'IN_APP',
-      template_code: 'RESERVATION_EXPIRED',
-      subject: 'Đặt trước đã hết hạn',
-      body: `Đặt trước ${expired.reservation_number} đã hết hạn và sách giữ chỗ đã được trả về kho.`,
-      reference_type: 'LOAN_RESERVATION',
-      reference_id: expired.id,
-      metadata: {
-        reservation_number: expired.reservation_number,
-        expires_at: expired.expires_at,
-      },
-    });
-
+    operation = await prepareBorrowOperationInTransaction(tx, { kind: 'EXPIRE_RESERVATION', reference,
+      aggregateId: current.id, key: idempotencyKey, request, user, ownedOperation: options.operation, plan: { reservation: current } });
+    if (current.status === 'EXPIRED') return { data: current, idempotent: true };
+    const expired = await tx.loan_reservations.update({ where: { id: current.id }, data: { status: 'EXPIRED', updated_at: new Date() } });
+    await writeAuditLog(tx, { actor_user_id: options.actorUserId || null, action_name: 'EXPIRE_RESERVATION',
+      entity_type: 'LOAN_RESERVATION', entity_id: expired.id, before_data: current,
+      after_data: { ...expired, idempotency_key: idempotencyKey } });
+    await createNotificationRecord(tx, { customer_id: expired.customer_id, channel: 'IN_APP', template_code: 'RESERVATION_EXPIRED',
+      subject: 'Đặt trước đã hết hạn', body: `Đặt trước ${expired.reservation_number} đã hết hạn.`,
+      reference_type: 'LOAN_RESERVATION', reference_id: expired.id,
+      metadata: { reservation_number: expired.reservation_number, expires_at: expired.expires_at } });
     return { data: expired };
   });
+  if (result.skipped || operation.status === 'PUBLISHED') return result;
+  try {
+    await markBorrowRemoteStarted(prisma, operation);
+    await releaseReservation({ reservation_id: reservation.id, reason: 'EXPIRED',
+      idempotency_key: operation.payload.key, authHeader: options.authHeader });
+    await prisma.$transaction(tx => completeBorrowOperation(tx, operation, { status: 200, body: result }));
+    return result;
+  } catch (error) {
+    if (!options.operation) await deferBorrowOperation(prisma, operation, error);
+    throw error;
+  }
 }
 
 async function runExpiredReservationSweep(prismaClient = prisma, options = {}) {
@@ -809,6 +810,7 @@ async function runExpiredReservationSweep(prismaClient = prisma, options = {}) {
   for (const reservation of expiredReservations) {
     try {
       const released = await releaseExpiredReservation(reservation, {
+        now,
         authHeader: options.authHeader,
         actorUserId: options.actorUserId || null,
       });
@@ -855,6 +857,7 @@ module.exports = {
   createReservation,
   cancelReservation,
   confirmReservation,
+  releaseExpiredReservation,
   runExpiredReservationSweep,
   runExpiredReservationSweepNow,
 };

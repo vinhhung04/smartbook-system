@@ -20,6 +20,8 @@ x-app: &app-defaults
   restart: unless-stopped
   logging: *default-logging
   networks: [app, data]
+  init: true
+  stop_grace_period: 45s
 
 x-node-healthcheck: &node-healthcheck
   interval: 10s
@@ -30,7 +32,7 @@ x-node-healthcheck: &node-healthcheck
 
 services:
   db:
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:0.8.7-pg15-bookworm@sha256:e0b617fffc06dd37323ee99873c7a8683f19f1dce34633670262b0113ce32638
     restart: unless-stopped
     shm_size: 256m
     command:
@@ -51,6 +53,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-inventory}
       ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:-analytics_reader}
       ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Set ANALYTICS_DB_PASSWORD in .env}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD}
+      BORROW_DB_PASSWORD: ${BORROW_DB_PASSWORD:?Set BORROW_DB_PASSWORD}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -68,7 +74,7 @@ services:
     networks: [data]
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.12-alpine3.22@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
@@ -107,12 +113,11 @@ services:
 
   inventory-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
-    command: sh -c "npx prisma migrate deploy && node -r ./src/telemetry.js src/index.js"
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/inventory_db?schema=public
+      - DATABASE_URL=postgresql://inventory_runtime:${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD}@db:5432/inventory_db?schema=public
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
       - REDIS_URL=redis://redis:6379
@@ -137,7 +142,7 @@ services:
       redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -145,12 +150,11 @@ services:
 
   auth-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
-    command: sh -c "npx prisma migrate deploy && npm run start"
+    image: ${AUTH_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3002
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth_db?schema=public
+      - DATABASE_URL=postgresql://auth_runtime:${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD}@db:5432/auth_db?schema=public
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
@@ -175,7 +179,7 @@ services:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3002/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -183,12 +187,11 @@ services:
 
   borrow-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
-    command: sh -c "npx prisma migrate deploy && npm run start"
+    image: ${BORROW_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3005
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/borrow_db?schema=public
+      - DATABASE_URL=postgresql://borrow_runtime:${BORROW_DB_PASSWORD:?Set BORROW_DB_PASSWORD}@db:5432/borrow_db?schema=public
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
@@ -210,7 +213,7 @@ services:
       db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3005/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -218,7 +221,7 @@ services:
 
   analytics-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-analytics-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${ANALYTICS_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-analytics-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3006
@@ -236,7 +239,7 @@ services:
       inventory-service: { condition: service_healthy }
       borrow-service: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3006/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -244,12 +247,13 @@ services:
 
   ai-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${AI_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     depends_on:
       db: { condition: service_healthy }
       inventory-service: { condition: service_healthy }
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/ai_db
+      - AI_SCHEMA_MANAGED_EXTERNALLY=true
+      - DATABASE_URL=postgresql+asyncpg://ai_runtime:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD}@db:5432/ai_db
       - SMARTBOOK_GATEWAY_URL=http://api-gateway:3000
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - BORROW_SERVICE_URL=http://borrow-service:3005
@@ -341,8 +345,8 @@ services:
       - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
       - NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS:-180}
     volumes:
-      - ai_model_cache:/root/.cache/huggingface
-      - ai_cloakbrowser_cache:/root/.cloakbrowser
+      - ai_model_cache:/app/.cache/huggingface
+      - ai_cloakbrowser_cache:/app/.cloakbrowser
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
       interval: 15s
@@ -356,7 +360,7 @@ services:
 
   api-gateway:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${API_GATEWAY_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     networks: [edge, app, data]
     environment:
       - NODE_ENV=production
@@ -378,7 +382,7 @@ services:
       analytics-service: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -388,8 +392,12 @@ services:
         limits: { cpus: "1", memory: 512m }
 
   web:
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-web:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${WEB_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-web:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     restart: unless-stopped
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     environment:
       # CSP connect-src (apps/web/nginx.conf); the API origins themselves are baked into the bundle at CI build time
       - API_ORIGIN=${PUBLIC_API_ORIGIN:-https://api.smartbook.io.vn}
@@ -407,7 +415,7 @@ services:
     networks: [edge]
 
   caddy:
-    image: caddy:2.8.4-alpine
+    image: ${CADDY_IMAGE:-ghcr.io/vinhhung04/smartbook-caddy:${IMAGE_TAG:-latest}}
     restart: unless-stopped
     ports:
       - "80:80"
@@ -432,6 +440,92 @@ services:
     logging: *default-logging
     networks: [edge]
 
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks: [data]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m }
+    logging: *default-logging
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    ports: ["127.0.0.1:3100:3000"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./observability/production/contact-points.yaml:/etc/grafana/provisioning/alerting/contact-points.yaml:ro
+    networks: [app, data]
+    depends_on: [prometheus]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m }
+    logging: *default-logging
+
+  # Explicit owner jobs: never part of default application startup.
+  migrate-auth:
+    profiles: ["operations"]
+    image: ${AUTH_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth_db?schema=public
+    networks: [data]
+  migrate-inventory:
+    profiles: ["operations"]
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/inventory_db?schema=public
+    networks: [data]
+  migrate-borrow:
+    profiles: ["operations"]
+    image: ${BORROW_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/borrow_db?schema=public
+    networks: [data]
+  migrate-ai:
+    profiles: ["operations"]
+    image: ${AI_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    entrypoint: ["python", "migrate.py"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/ai_db
+    networks: [data]
+  backup-files:
+    profiles: ["operations"]
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    volumes:
+      - packing_evidence_data:/recovery/packing:ro
+      - procurement_document_data:/recovery/procurement:ro
+  prepare-volumes:
+    profiles: ["operations"]
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["chown", "--no-dereference", "-R", "-P", "--", "1000:1000", "/recovery/packing", "/recovery/procurement", "/models", "/browser"]
+    command: []
+    volumes:
+      - packing_evidence_data:/recovery/packing
+      - procurement_document_data:/recovery/procurement
+      - ai_model_cache:/models
+      - ai_cloakbrowser_cache:/browser
+
 networks:
   # Caddy <-> web, api-gateway
   edge:
@@ -451,3 +545,5 @@ volumes:
   ai_cloakbrowser_cache:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  grafana_data:

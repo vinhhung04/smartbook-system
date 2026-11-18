@@ -16,6 +16,11 @@ gen() { openssl rand -hex "${1:-32}"; }
 sed \
   -e "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(gen 24)/" \
   -e "s/^ANALYTICS_DB_PASSWORD=.*/ANALYTICS_DB_PASSWORD=$(gen 24)/" \
+  -e "s/^AUTH_DB_PASSWORD=.*/AUTH_DB_PASSWORD=$(gen 24)/" \
+  -e "s/^INVENTORY_DB_PASSWORD=.*/INVENTORY_DB_PASSWORD=$(gen 24)/" \
+  -e "s/^BORROW_DB_PASSWORD=.*/BORROW_DB_PASSWORD=$(gen 24)/" \
+  -e "s/^AI_DB_PASSWORD=.*/AI_DB_PASSWORD=$(gen 24)/" \
+  -e "s/^GRAFANA_ADMIN_PASSWORD=.*/GRAFANA_ADMIN_PASSWORD=$(gen 24)/" \
   -e "s/^RABBITMQ_PASSWORD=.*/RABBITMQ_PASSWORD=$(gen 24)/" \
   -e "s/^JWT_SECRET=.*/JWT_SECRET=$(gen 48)/" \
   -e "s/^INTERNAL_SERVICE_KEY=.*/INTERNAL_SERVICE_KEY=$(gen 32)/"   -e "s/^OTP_HMAC_SECRET=.*/OTP_HMAC_SECRET=$(gen 32)/" \

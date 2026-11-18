@@ -10,6 +10,9 @@ services:
     ports: !override ["127.0.0.1:13000:3000"]
   smartbook-ui:
     ports: !override ["127.0.0.1:15173:80"]
+  ai-service:
+    environment:
+      AI_SCHEMA_MANAGED_EXTERNALLY: "true"
   demo-seed-auth:
     environment:
       DEMO_PASSWORD: ${DEMO_PASSWORD:?Create the isolated test environment first}

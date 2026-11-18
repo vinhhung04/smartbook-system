@@ -7,24 +7,25 @@
 const { metrics } = require('@opentelemetry/api');
 const { MeterProvider } = require('@opentelemetry/sdk-metrics');
 const { PrometheusExporter } = require('@opentelemetry/exporter-prometheus');
-const { Resource } = require('@opentelemetry/resources');
+const { resourceFromAttributes } = require('@opentelemetry/resources');
 const { registerInstrumentations } = require('@opentelemetry/instrumentation');
 const { HttpInstrumentation } = require('@opentelemetry/instrumentation-http');
 
 const DEFAULT_METRICS_PORT = 9464;
 
 function initTelemetry(serviceName, { port = DEFAULT_METRICS_PORT } = {}) {
-  const exporter = new PrometheusExporter({ port }, (error) => {
+  // Preserve the existing Prometheus label contract while upgrading the SDK.
+  const exporter = new PrometheusExporter({ port, withoutScopeInfo: true }, (error) => {
     if (error) console.error(`[${serviceName}][metrics] exporter failed to start:`, error.message);
   });
   const meterProvider = new MeterProvider({
-    resource: new Resource({ 'service.name': serviceName }),
+    resource: resourceFromAttributes({ 'service.name': serviceName }),
     readers: [exporter],
   });
   metrics.setGlobalMeterProvider(meterProvider);
 
-  // HTTP server/client duration histograms (http_server_duration, http_client_duration):
-  // request rate, p95 latency and 5xx error rate on the dashboards and alerts.
+  // Stable HTTP semantic conventions: request_duration is in seconds with
+  // http_response_status_code. Dashboard/alert queries use this same contract.
   registerInstrumentations({ meterProvider, instrumentations: [new HttpInstrumentation()] });
 
   console.log(`[${serviceName}][metrics] Prometheus endpoint on :${port}/metrics`);

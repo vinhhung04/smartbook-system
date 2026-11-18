@@ -193,7 +193,8 @@ async function scenarioInboxDedup() {
     second.stderr?.trim().split('\n').pop(),
   );
 
-  psql(borrowDbName, `DELETE FROM integration_inbox WHERE source_service = '${sourceService}';`);
+  // Retain the UUID-scoped synthetic inbox record as deduplication evidence.
+  // A shared source_service must never delete evidence from earlier runs.
 }
 
 async function run() {

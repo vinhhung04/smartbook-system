@@ -149,17 +149,20 @@ def _next_run_at(now_vn: datetime, hour: int) -> datetime:
     return next_run
 
 
-async def nightly_briefing_loop() -> None:
+async def nightly_briefing_loop(stop_event=None) -> None:
     """Sleeps until the next configured Vietnam-time hour, runs the briefing, repeats.
     Vietnam time is computed via an explicit UTC+7 offset rather than the server's own
     clock — containers default to UTC, and using local time directly would run this
     7 hours off from what NIGHTLY_BRIEFING_HOUR_VN actually means (same lesson learned
     building VNPay's formatVnpDate in services/borrow-service)."""
     hour = int(os.getenv("NIGHTLY_BRIEFING_HOUR_VN", "2"))
-    while True:
+    while stop_event is None or not stop_event.is_set():
         now_vn = datetime.now(VN_TZ)
         next_run = _next_run_at(now_vn, hour)
-        await asyncio.sleep((next_run - now_vn).total_seconds())
+        from ai_core.lifecycle import wait_for_next
+        await wait_for_next(stop_event, (next_run - now_vn).total_seconds())
+        if stop_event is not None and stop_event.is_set():
+            return
         try:
             await run_nightly_briefing()
         except Exception:

@@ -132,6 +132,7 @@ function createRes() {
 async function reserve(warehouseId, reservationChannel = 'CUSTOMER') {
   const res = createRes();
   await reserveFromBorrow({
+    user: { id: '88888888-8888-4888-8888-888888888888' },
     body: {
       reservation_id: RESERVATION_ID,
       reservation_number: 'RSV-TEST',

@@ -128,7 +128,7 @@ test('ai-service runs without the OpenTelemetry agent but keeps its /metrics end
   assert.doesNotMatch(read('services/ai-service/Dockerfile'), /opentelemetry-instrument/);
   const requirements = read('services/ai-service/requirements.txt');
   assert.doesNotMatch(requirements, /opentelemetry/);
-  assert.match(requirements, /^prometheus-fastapi-instrumentator\r?$/m);
-  assert.match(requirements, /^prometheus-client\r?$/m);
+  assert.match(requirements, /^prometheus-fastapi-instrumentator==\d+\.\d+\.\d+\r?$/m);
+  assert.match(requirements, /^prometheus-client==\d+\.\d+\.\d+\r?$/m);
   assert.match(read('services/ai-service/main.py'), /Instrumentator\(\)\.instrument\(app\)\.expose\(app\)/);
 });

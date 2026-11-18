@@ -10,11 +10,12 @@ function createServiceAuthHeader() {
       sub: SERVICE_ACTOR_ID,
       email: 'borrow-service@smartbook.local',
       full_name: 'Borrow Service',
+      service: 'borrow-service',
       is_superuser: true,
       permissions: ['borrow.read', 'borrow.write', 'inventory.stock.read', 'inventory.stock.write'],
     },
     process.env.JWT_SECRET,
-    { expiresIn: '10m' }
+    { expiresIn: '10m', issuer: 'borrow-service', audience: 'inventory-service' }
   );
 
   return `Bearer ${token}`;
@@ -39,7 +40,10 @@ function getInventoryAuthHeader(authHeader) {
 }
 
 async function requestInventory(path, options = {}) {
-  const response = await fetch(`${INVENTORY_SERVICE_URL}${path}`, options);
+  const response = await fetch(`${INVENTORY_SERVICE_URL}${path}`, {
+    ...options,
+    signal: options.signal || AbortSignal.timeout(10_000),
+  });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -233,7 +237,27 @@ async function getReturnLocations({ locationIds, requestId }) {
   })));
 }
 
+async function getBorrowReconciliationState({ reservationId, loanId }) {
+  if (!process.env.INTERNAL_SERVICE_KEY) throw new Error('Internal reconciliation key is required');
+  const query = new URLSearchParams({ external_reservation_id: reservationId });
+  if (loanId) query.set('external_loan_id', loanId);
+  const result = await requestInventory(`/internal/borrow-reconciliation?${query}`, {
+    method: 'GET', headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY },
+  });
+  return result.data;
+}
+async function getBorrowReconciliationCandidates({ after, limit = 25 } = {}) {
+  if (!process.env.INTERNAL_SERVICE_KEY) throw new Error('Internal reconciliation key is required');
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (after) query.set('after', after);
+  return requestInventory(`/internal/borrow-reconciliation/candidates?${query}`, {
+    method: 'GET', headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY },
+  });
+}
+
 module.exports = {
+  getBorrowReconciliationState,
+  getBorrowReconciliationCandidates,
   getReturnLocations,
   getVariantPublicAvailability,
   getBookPublicAvailability,

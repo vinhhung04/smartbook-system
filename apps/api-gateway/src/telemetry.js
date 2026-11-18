@@ -1,1 +1,1 @@
-require('@smartbook/shared/telemetry').initTelemetry('api-gateway');
+module.exports = require('@smartbook/shared/telemetry').initTelemetry('api-gateway');
