@@ -25,6 +25,8 @@ interface ConfirmDialogProps {
   variant?: "default" | "destructive";
   onConfirm: () => void | Promise<void>;
   loading?: boolean;
+  /** Extra classes for the dialog box, e.g. a wider or height-capped layout for long content. */
+  className?: string;
 }
 
 export function ConfirmDialog({
@@ -38,6 +40,7 @@ export function ConfirmDialog({
   variant = "default",
   onConfirm,
   loading = false,
+  className,
 }: ConfirmDialogProps) {
   const [internalLoading, setInternalLoading] = useState(false);
   const isLoading = loading || internalLoading;
@@ -54,7 +57,7 @@ export function ConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-[400px]">
+      <AlertDialogContent className={cn("max-w-[400px]", className)}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {description && (

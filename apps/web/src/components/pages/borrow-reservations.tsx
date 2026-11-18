@@ -18,6 +18,7 @@ import { getApiErrorMessage } from '@/services/api';
 import { type StageTab } from './borrow-shared/stage-tabs';
 import { ListFooter } from './borrow-shared/list-footer';
 import { BorrowFormDialog, type BorrowFormMode } from './borrow-shared/borrow-form-dialog';
+import { ReadyPickDialog } from './borrow-shared/ready-pick-dialog';
 import { sumCounts, useServerList } from './borrow-shared/use-server-list';
 import { useBookTitles } from './borrow-shared/use-book-titles';
 
@@ -88,6 +89,7 @@ export function BorrowReservationsPage() {
   const [pickupConverting, setPickupConverting] = useState(false);
   const [pickupScannerOpen, setPickupScannerOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<Reservation | null>(null);
+  const [readyTarget, setReadyTarget] = useState<Reservation | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const counts = list.meta.status_counts;
@@ -411,7 +413,7 @@ export function BorrowReservationsPage() {
                                   ) : null}
                                   {reservation.status === 'CONFIRMED' ? (
                                     <Button size="sm" disabled={busy}
-                                      onClick={() => void confirmReservation(reservation.id, 'READY_FOR_PICKUP')}
+                                      onClick={() => setReadyTarget(reservation)}
                                       data-testid="mark-ready-button"
                                     >
                                       Sẵn sàng
@@ -456,6 +458,12 @@ export function BorrowReservationsPage() {
         mode={formMode ?? 'RESERVATION'}
         onOpenChange={(open) => { if (!open) setFormMode(null); }}
         onCreated={() => void list.reload()}
+      />
+      <ReadyPickDialog
+        reservation={readyTarget}
+        bookTitle={readyTarget ? bookTitle(readyTarget.variant_id) : ''}
+        onOpenChange={(open) => { if (!open) setReadyTarget(null); }}
+        onDone={() => void list.reload()}
       />
       <BarcodeScanModal
         isOpen={pickupScannerOpen}

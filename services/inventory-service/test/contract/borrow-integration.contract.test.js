@@ -127,6 +127,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     assert.ok(valid, ajv.errorsText(ajv.errors));
   });
 
+  let lentFromLocationId = null;
   await t.test('POST reservations/consume (201) matches schema', async () => {
     const res = await request('POST', '/api/borrow-integration/reservations/consume', {
       reservation_id: reservationId,
@@ -139,6 +140,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     const valid = ajv.validate(schemas.consume, res.data);
     assert.ok(valid, ajv.errorsText(ajv.errors));
     assert.equal(res.data.idempotent, false);
+    lentFromLocationId = res.data.data?.from_location_id;
   });
 
   await t.test('POST loans/return (201) matches schema', async () => {
@@ -147,6 +149,8 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
       variant_id: target.variant_id,
       warehouse_id: target.warehouse_id,
       quantity: 1,
+      // Put back where it was lent from.
+      location_id: lentFromLocationId,
       idempotency_key: `ct-return-${runTag}`,
     });
     assert.equal(res.status, 201, JSON.stringify(res.data));

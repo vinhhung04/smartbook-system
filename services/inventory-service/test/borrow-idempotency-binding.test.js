@@ -7,6 +7,7 @@ function model(name) {
   return {
     async findUnique({ where }) { return state[name].find((r) => matches(r, where)) || null; },
     async findFirst({ where }) { return state[name].find((r) => matches(r, where)) || null; },
+    async findMany({ where }) { return state[name].filter((r) => matches(r, where)); },
     async create({ data }) { const row = { id: `${name}-${state[name].length}`, ...data }; state[name].push(row); return row; },
     async update({ where, data }) { const row = state[name].find((r) => matches(r, where)); Object.assign(row, data); return row; },
     async updateMany({ where, data }) {
@@ -24,7 +25,7 @@ class FakePrismaClient {
 require.cache[require.resolve('@prisma/client')] = { id: require.resolve('@prisma/client'), filename: require.resolve('@prisma/client'), loaded: true, exports: { PrismaClient: FakePrismaClient } };
 const { releaseBorrowReservation, consumeBorrowReservation, returnBorrowedLoan } = require('../src/controllers/borrow-integration.controller');
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
-const base = { reservation_id: id(1), loan_id: id(2), loan_number: 'LN-1', variant_id: id(3), warehouse_id: id(4), quantity: 1, idempotency_key: 'same-key' };
+const base = { reservation_id: id(1), loan_id: id(2), loan_number: 'LN-1', variant_id: id(3), warehouse_id: id(4), quantity: 1, location_id: id(6), idempotency_key: 'same-key' };
 function reset() {
   state = {
     stock_reservations: [{ id: id(5), source_service: 'BORROW', source_reference_id: id(1), status: 'ACTIVE', variant_id: id(3), warehouse_id: id(4), location_id: id(6), quantity: 1 }],

@@ -14,6 +14,7 @@ import { availableStockFixture } from './testing/stock-fixture.mjs';
 //
 // Usage: node scripts/borrow-renewal-fine-concurrency-integration.mjs
 import crypto from 'node:crypto';
+import { shelfPicks } from './lib/borrow-shelves.mjs';
 import { execFileSync } from 'node:child_process';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
@@ -91,6 +92,7 @@ async function main() {
   // ---------- P1.4a: two managers approving the same PENDING request at once ----------
   const loan1 = await ok('POST', '/borrow/loans/direct', {
     customer_id: customerId, variant_id: stock.variant_id, warehouse_id: stock.default_warehouse_id, quantity: 1,
+    picks: await shelfPicks((path) => ok('GET', path, undefined, managerToken), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 1 }),
   }, managerToken, { 'Idempotency-Key': crypto.randomUUID() });
   await ok('POST', `/borrow/my/loans/${loan1.data.id}/renew-request`, {}, customerToken);
 
@@ -119,6 +121,7 @@ async function main() {
   // ---------- P1.4b: two concurrent renewal REQUESTS for the same loan ----------
   const loan2 = await ok('POST', '/borrow/loans/direct', {
     customer_id: customerId, variant_id: stock.variant_id, warehouse_id: stock.default_warehouse_id, quantity: 1,
+    picks: await shelfPicks((path) => ok('GET', path, undefined, managerToken), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 1 }),
   }, managerToken, { 'Idempotency-Key': crypto.randomUUID() });
   const [reqA, reqB] = await Promise.all([
     request('POST', `/borrow/my/loans/${loan2.data.id}/renew-request`, {}, customerToken),

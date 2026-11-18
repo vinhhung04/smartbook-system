@@ -7,10 +7,13 @@ const { resolveActiveMembership, countActiveBorrowedItems, countActiveReservedIt
 const {
   checkAvailability,
   reserveStock,
+  releaseReservation,
+  reallocateReservationStock,
   consumeReservation,
   returnBorrowedStock,
   getReturnLocations,
 } = require('../services/inventory-integration.service');
+const { parsePicks } = require('../utils/picks');
 const { AccountError, debitBorrowFee, getCustomerAccountSnapshot, toMoney } = require('../services/account.service');
 const { queueReconciliation } = require('../services/reconciliation.service');
 const { applyReturnFines, recomputeCustomerFineBalance, runOverdueSweep } = require('../services/fine.service');
@@ -219,6 +222,15 @@ async function createDirectLoan(req, res) {
     return res.status(400).json({ message: 'source_channel không hợp lệ' });
   }
 
+  // Shelves the librarian took the copies from (required). `pickup_location_id`
+  // alone means every copy came from that one shelf.
+  const parsedPicks = parsePicks(
+    req.body?.picks ?? (pickup_location_id ? [{ location_id: pickup_location_id, quantity: normalizedQuantity }] : undefined),
+    normalizedQuantity,
+  );
+  if (parsedPicks.error) return res.status(400).json({ message: parsedPicks.error });
+  const { picks } = parsedPicks;
+
   // Never trust warehouse_id from the client: it must be a branch this caller can write.
   if (!(await requireWarehouseWriteAccess(req, res, warehouse_id))) return;
 
@@ -318,6 +330,29 @@ async function createDirectLoan(req, res) {
       authHeader,
       requestId: req.requestId,
     });
+
+    try {
+      await reallocateReservationStock({
+        reservation_id: reservationId,
+        warehouse_id,
+        picks,
+        idempotency_key: `direct-pick:${idempotencyKey}`,
+        handled_by_user_id: actorUserId,
+        authHeader,
+        requestId: req.requestId,
+      });
+    } catch (error) {
+      // The hold just taken would otherwise stay until the due date. Give it back.
+      await releaseReservation({
+        reservation_id: reservationId,
+        reason: 'CANCELLED',
+        idempotency_key: `direct-pick-cancel:${idempotencyKey}`,
+        authHeader,
+        requestId: req.requestId,
+      }).catch((releaseError) => console.error('Direct loan: releasing hold after a rejected pick failed:', releaseError));
+      if (error.status >= 400 && error.status < 500) return res.status(409).json({ message: error.message });
+      throw error;
+    }
 
     await consumeReservation({
       reservation_id: reservationId,
@@ -911,6 +946,15 @@ async function convertReservationToLoan(req, res) {
       return res.status(409).json({ message: 'Đặt trước đã hết hạn, không thể chuyển thành phiếu mượn' });
     }
 
+    // A READY reservation recorded its shelves when it was marked ready. A CONFIRMED
+    // one skips that step, so the shelves the copies were taken from come with this call.
+    let picks = null;
+    if (reservation.status === 'CONFIRMED') {
+      const parsed = parsePicks(req.body?.picks, reservation.quantity);
+      if (parsed.error) return res.status(400).json({ message: parsed.error });
+      picks = parsed.picks;
+    }
+
     const customer = await prisma.customers.findUnique({ where: { id: reservation.customer_id } });
     if (!customer || customer.status !== 'ACTIVE') {
       return res.status(409).json({ message: 'Bạn đọc không đủ điều kiện chuyển đặt trước thành phiếu mượn' });
@@ -972,6 +1016,25 @@ async function convertReservationToLoan(req, res) {
     const depositShortfall = await checkDepositFunds(reservation.customer_id, reservation.quantity, membershipInfo.limits, borrowFeeAmount);
     if (depositShortfall) {
       return res.status(409).json(depositShortfall);
+    }
+
+    if (picks) {
+      // Move the hold to the shelves really picked before anything is written here;
+      // a retry with the same key replays it.
+      try {
+        await reallocateReservationStock({
+          reservation_id: reservation.id,
+          warehouse_id: reservation.warehouse_id,
+          picks,
+          idempotency_key: `convert-pick:${idempotencyKey}`,
+          handled_by_user_id: actorUserId,
+          authHeader,
+          requestId: req.requestId,
+        });
+      } catch (error) {
+        if (error.status >= 400 && error.status < 500) return res.status(409).json({ message: error.message });
+        throw error;
+      }
     }
 
     const borrowDate = new Date();
@@ -1275,6 +1338,15 @@ async function returnLoan(req, res) {
 
     plans = selectReturnItems(request, loan.loan_items);
     const targets = plans.map(plan => plan.item);
+
+    // Staff say where each returned copy was put back (any shelf of the branch,
+    // not necessarily the one it was lent from). Only a lost copy has no place.
+    if (plans.some(plan => !plan.markLost && !plan.locationId)) {
+      return res.status(400).json({
+        message: 'Cần nhập vị trí trả sách về (returned_to_location_id) cho từng cuốn, trừ sách mất',
+        code: 'RETURN_LOCATION_REQUIRED',
+      });
+    }
 
     // A deposit is only used to pay for damage or loss on an explicit, explained
     // staff decision. Checked before any stock moves.

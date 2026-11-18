@@ -27,11 +27,12 @@ test('staff returns three copies with separate GOOD, DAMAGED and LOST outcomes',
     v AS (INSERT INTO book_variants(book_id,sku) SELECT id,'MIX-${tag}' FROM b RETURNING id),
     l AS (INSERT INTO locations(warehouse_id,location_code,location_type,is_pickable) SELECT id,'MIX-${tag}','COMPARTMENT',true FROM w RETURNING id,warehouse_id),
     s AS (INSERT INTO stock_balances(warehouse_id,location_id,variant_id,on_hand_qty,available_qty) SELECT l.warehouse_id,l.id,v.id,3,3 FROM l,v)
-    SELECT json_build_object('variant_id',v.id,'default_warehouse_id',l.warehouse_id) FROM v,l`;
+    SELECT json_build_object('variant_id',v.id,'default_warehouse_id',l.warehouse_id,'location_id',l.id) FROM v,l`;
   const book = JSON.parse(execFileSync('docker', ['compose','exec','-T','db','psql','-U',process.env.DB_USER!,'-d','inventory_db','-v','ON_ERROR_STOP=1','-At','-c',inventorySql],
     { cwd: resolve(import.meta.dirname, '../../..'), encoding: 'utf8' }).trim());
   const created = await request.post(`${gateway}/borrow/loans/direct`, { headers: { ...headers, 'Idempotency-Key': crypto.randomUUID() },
-    data: { customer_id: fixture.customerId, variant_id: book.variant_id, warehouse_id: book.default_warehouse_id, quantity: 3, source_channel: 'COUNTER' } });
+    data: { customer_id: fixture.customerId, variant_id: book.variant_id, warehouse_id: book.default_warehouse_id, quantity: 3, source_channel: 'COUNTER',
+      picks: [{ location_id: book.location_id, quantity: 3 }] } });
   expect(created.status(), await created.text()).toBe(201);
   const loan = (await created.json()).data;
   const detail = await (await request.get(`${gateway}/borrow/loans/${loan.id}`, { headers })).json();
@@ -44,6 +45,8 @@ test('staff returns three copies with separate GOOD, DAMAGED and LOST outcomes',
     await page.getByLabel(`Tình trạng trả ${item.id}`, { exact: true }).selectOption(['GOOD', 'DAMAGED', 'LOST'][index]);
     await page.getByLabel(`Ghi chú trả ${item.id}`, { exact: true }).fill(`copy ${index}`);
     if (index) await page.getByLabel(`Lý do xử lý ${item.id}`, { exact: true }).fill('Đã kiểm tra tình trạng cuốn sách');
+    // GOOD and DAMAGED copies go back on a shelf; the lost one has none.
+    if (index < 2) await page.getByLabel(`Vị trí trả về ${item.id}`, { exact: true }).selectOption(book.location_id);
   }
   await expect(page.getByText('Đang tính tiền cọc và tiền phạt…')).toBeHidden({ timeout: 15000 });
   const returned = page.waitForResponse(response => response.url().endsWith(`/borrow/loans/${loan.id}/return`) && response.request().method() === 'POST');
