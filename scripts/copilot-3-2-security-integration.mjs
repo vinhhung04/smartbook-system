@@ -141,6 +141,11 @@ await check('7. a role change ends the user\'s existing sessions (same roles re-
     const r = await call(token, path);
     assert.equal(r.status, 401, `${path}: ${r.status}`);
   }
+  // Same 1-second cutoff resolution as above, now from the other side: a login whose
+  // iat lands in the exact same second as the cutoff is treated as not-after-the-cutoff
+  // too (ties go to revocation - see packages/shared/runtime/token-revocation.cjs), so
+  // give the clock a second to move on before this fresh login.
+  await new Promise((r) => setTimeout(r, 1100));
   const again = await login('curator01');
   assert.equal((await call(again, '/analytics/warehouse-stock-risk')).status, 200, 'a fresh login works');
 });

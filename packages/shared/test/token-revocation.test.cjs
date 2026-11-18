@@ -40,6 +40,12 @@ test('Redis answering: valid, logged out (jti), and issued before the cutoff', a
   assert.equal((await checker.check({ jti: 'u1-3', sub: 'u1', iat: 1600 })).state, VALID);
 });
 
+test('a token issued in the same second as the cutoff is revoked too (iat === cutoff)', async () => {
+  const redis = fakeRedis({ 'user:tokens-valid-after:u1': '1500' });
+  const checker = createRevocationChecker({ get: redis.get });
+  assert.equal((await checker.check({ jti: 'u1-same-second', sub: 'u1', iat: 1500 })).state, REVOKED);
+});
+
 test('a Redis error is UNKNOWN, never "not revoked"', async () => {
   const redis = fakeRedis();
   redis.state.down = true;

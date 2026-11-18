@@ -10,6 +10,13 @@
 // — consistent with how other scripts in this repo leave demo data behind).
 //
 // Usage: node scripts/warehouse-stock-data-scope-integration.mjs
+//
+// This script temporarily overwrites manager01's real warehouse_scopes for its test
+// window (see `main()`'s try/finally below) - scripts/lib/manager01-scope-lock.mjs
+// serializes that window against warehouse-assignment-integration.mjs, which assumes
+// manager01's real scope is stable throughout its own run.
+import { withManager01ScopeLock } from './lib/manager01-scope-lock.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const adminName = process.env.PURCHASE_TEST_USERNAME || 'hung';
@@ -80,6 +87,7 @@ async function main() {
   const bookId = book.id;
   const variantId = book.variant_id;
 
+  await withManager01ScopeLock(async () => {
   const originalScopes = (await ok('GET', `/iam/users/${mgrA.user.id}/warehouse-scopes`, admin.token)).data.scopes
     .map((s) => ({ warehouse_id: s.warehouse_id, access_level: s.access_level }));
 
@@ -154,6 +162,7 @@ async function main() {
     await ok('PUT', `/iam/users/${mgrA.user.id}/warehouse-scopes`, admin.token, { scopes: originalScopes });
     console.log(`restored ${managerName} original scopes`);
   }
+  });
 
   const failed = results.filter((r) => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
