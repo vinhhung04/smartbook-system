@@ -8,7 +8,8 @@ import { caddyImage } from './helpers/runtime-images.mjs';
 test('release includes a separately pulled Caddy digest without making edge an application writer', () => {
   const lib = readFileSync(resolve(root, 'deploy/scripts/lib.sh'), 'utf8');
   assert.doesNotMatch(lib.match(/^APP_SERVICES=.*$/m)[0], /caddy/);
-  assert.match(lib, /IMAGE_SERVICES=\("\$\{APP_SERVICES\[@\]\}" caddy\)/);
+  assert.match(lib, /IMAGE_SERVICES=\("\$\{APP_SERVICES\[@\]\}" caddy monitoring-service\)/);
+  assert.doesNotMatch(lib.match(/^APP_SERVICES=.*$/m)[0], /monitoring/, 'monitoring is never part of the application rollout gate');
   const result = runShellSandbox('deploy.sh', { args: ['b'.repeat(40)] });
   assert.match(result.trace, /pull --quiet [^\n]* web caddy/);
   assert.match(result.trace, /smartbook-caddy@sha256:/);
@@ -50,11 +51,12 @@ test('Caddy runtime regressions require the explicit SHA-tagged local custom ima
   }
 });
 
-test('release build publishes all eight verified component artifacts including Caddy', () => {
+test('release build publishes all nine verified component artifacts including Caddy and monitoring-service', () => {
   const workflow = readFileSync(resolve(root, '.github/workflows/deploy-production.yml'), 'utf8');
   const names = [...workflow.matchAll(/^          - name: ([a-z-]+)$/gm)].map(match => match[1]);
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 9);
   assert.ok(names.includes('caddy'));
+  assert.ok(names.includes('monitoring-service'));
   assert.match(workflow, /file: deploy\/Dockerfile\.caddy/);
   assert.match(workflow, /caddy\) docker run.*--entrypoint caddy/);
 });

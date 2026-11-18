@@ -81,3 +81,22 @@ test('every AI proxy hands ai-service the client IP the gateway resolved, never 
   const resolved = source.indexOf('req.aiClientIp = resolveClientIp(req, AI_TRUSTED_PROXY_HOPS)');
   assert.ok(resolved > 0 && resolved < source.indexOf('createProxyMiddleware({'));
 });
+
+test('monitoring: only /monitoring/* is proxied, its outage degrades instead of failing readiness', () => {
+  assert.match(source, /pathFilter: \(path\) => path === "\/monitoring" \|\| path\.startsWith\("\/monitoring\/"\)/);
+  assert.match(source, /on: \{ error: handleMonitoringProxyError \}/);
+  assert.match(source, /MONITORING_UNAVAILABLE/);
+  // monitoring-service's /internal alert ingestion is never forwarded.
+  assert.doesNotMatch(source, /pathFilter: ["']\/internal/);
+  assert.match(source, /id: "monitoring-service"[^\n]*path: "\/ready", critical: false/);
+});
+
+test('incident notifications go only to the permission-gated "monitoring" room', () => {
+  assert.match(source, /"incident:notification"/);
+  assert.match(source, /\|monitoring\)\$\//);
+  const join = source.match(/if \(([^\n]*)\) \{\r?\n\s*socket\.join\("monitoring"\)/);
+  assert.ok(join, 'monitoring room join must be guarded');
+  assert.match(join[1], /roles\.includes\("ADMIN"\)/);
+  assert.match(join[1], /MONITORING_PERMISSIONS/);
+  assert.doesNotMatch(join[1], /CUSTOMER/);
+});

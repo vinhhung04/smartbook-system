@@ -164,6 +164,8 @@ jobs:
             path: services/inventory-service
           - name: borrow-service
             path: services/borrow-service
+          - name: monitoring-service
+            path: services/monitoring-service
     steps:
       - uses: actions/checkout@v4
         with:
@@ -204,7 +206,74 @@ jobs:
       - run: |
           services="$(docker compose config --services)"
           echo "$services"
-          ! echo "$services" | grep -Ex 'prometheus|grafana'
+          ! echo "$services" | grep -Ex 'prometheus|grafana|node-exporter|cadvisor|postgres-exporter|redis-exporter'
+
+      # Production stack renders with the documented example environment, and no
+      # business service depends on a monitoring container.
+      - name: Production compose validation
+        run: |
+          IMAGE_TAG="$(printf 'a%.0s' $(seq 40))" docker compose -f compose.prod.yml --env-file .env.production.example config > /tmp/prod.yml
+          python3 - <<'PY'
+          import yaml
+          c = yaml.safe_load(open('/tmp/prod.yml'))
+          mon = {'monitoring-service', 'prometheus', 'grafana', 'node-exporter', 'cadvisor', 'postgres-exporter', 'redis-exporter'}
+          bad = [n for n, s in c['services'].items() if n not in mon and set((s.get('depends_on') or {})) & mon]
+          assert not bad, f'business services depend on monitoring: {bad}'
+          published = [n for n, s in c['services'].items() if s.get('ports') and n not in ('caddy', 'grafana')]
+          assert not published, f'unexpected published ports: {published}'
+          assert all(p.get('host_ip') == '127.0.0.1' for p in c['services']['grafana']['ports']), 'Grafana must bind loopback only'
+          PY
+
+  monitoring:
+    name: Monitoring service (Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg15-bookworm@sha256:e0b617fffc06dd37323ee99873c7a8683f19f1dce34633670262b0113ce32638
+        env:
+          POSTGRES_USER: monitoring_ci
+          POSTGRES_PASSWORD: monitoring_ci_password
+          POSTGRES_DB: monitoring_test
+        ports: ['127.0.0.1:5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U monitoring_ci -d monitoring_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_sha || github.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Migrate and check schema drift
+        working-directory: services/monitoring-service
+        env:
+          DATABASE_URL: postgresql://monitoring_ci:monitoring_ci_password@127.0.0.1:5432/monitoring_test
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
+      # Unit + database lifecycle/delivery tests; the DB suite must not skip here.
+      - name: Monitoring service tests
+        working-directory: services/monitoring-service
+        env:
+          MONITORING_TEST_DATABASE_URL: postgresql://monitoring_ci:monitoring_ci_password@127.0.0.1:5432/monitoring_test
+          NODE_ENV: test
+        run: |
+          set -o pipefail
+          npx prisma generate
+          node --test --test-concurrency=1 test/*.test.js | tee monitoring-tests.log
+          ! grep -E '^# skipped [1-9]' monitoring-tests.log
 
   integration:
     name: Integration flows (Docker)

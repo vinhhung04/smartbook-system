@@ -109,6 +109,8 @@ services:
     # falling back to admin/admin.
     environment:
       - GRAFANA_ADMIN_PASSWORD
+      # Bearer token of the contact point to monitoring-service (must match it).
+      - MONITORING_INGEST_TOKEN=${MONITORING_INGEST_TOKEN:-local-dev-monitoring-ingest-token-0001}
     entrypoint:
       - sh
       - -c
@@ -127,6 +129,93 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
+    logging: *default-logging
+
+  # Exporters for the monitoring profile. On Docker Desktop node-exporter and
+  # cAdvisor see the Docker VM, not the Windows/macOS host.
+  node-exporter:
+    profiles: ["monitoring"]
+    image: prom/node-exporter:v1.8.2@sha256:4032c6d5bfd752342c3e631c2f1de93ba6b86c41db6b167b9a35372c139e7706
+    command: [--path.rootfs=/host]
+    pid: host
+    volumes:
+      # no `rslave` here: Docker Desktop's VM root is not a shared mount (compose.prod.yml keeps it)
+      - /:/host:ro
+    logging: *default-logging
+
+  cadvisor:
+    profiles: ["monitoring"]
+    image: gcr.io/cadvisor/cadvisor:v0.49.1@sha256:3cde6faf0791ebf7b41d6f8ae7145466fed712ea6f252c935294d2608b1af388
+    command: [--housekeeping_interval=30s, --docker_only=true, --store_container_labels=false]
+    devices: [/dev/kmsg]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    logging: *default-logging
+
+  postgres-exporter:
+    profiles: ["monitoring"]
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0@sha256:386b12d19eab2a37d7cd8ca8b4c7491cc7a830d9581f49af6c98a393da9605e6
+    environment:
+      DATA_SOURCE_URI: db:5432/postgres?sslmode=disable
+      DATA_SOURCE_USER: ${DB_USER}
+      DATA_SOURCE_PASS: ${DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *default-logging
+
+  redis-exporter:
+    profiles: ["monitoring"]
+    image: oliver006/redis_exporter:v1.62.0@sha256:c5a968ba5f30bab5e12181cceb89c4ed37cb4fe4d85490b5b66c7cfe4750b5e8
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    logging: *default-logging
+
+  # Incidents and alert delivery. Part of the default stack (the admin Incident
+  # Center needs it); nothing depends on it, and its port is not published.
+  monitoring-service:
+    build:
+      context: .
+      dockerfile: services/monitoring-service/Dockerfile
+    command: sh -c "npx prisma migrate deploy && npm run start"
+    environment:
+      - PORT=3007
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-db}:${DB_PORT:-5432}/${MONITORING_DB_NAME:-monitoring_db}?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      - MONITORING_INGEST_TOKEN=${MONITORING_INGEST_TOKEN:-local-dev-monitoring-ingest-token-0001}
+      - MONITORING_SECRET_KEY=${MONITORING_SECRET_KEY:-}
+      - MONITORING_WEBHOOK_ALLOW_PUBLIC=${MONITORING_WEBHOOK_ALLOW_PUBLIC:-false}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
+      - PUBLIC_WEB_URL=${FRONTEND_URL:-http://localhost:5173}
+      - REDIS_URL=redis://redis:6379
+      - GATEWAY_URL=http://api-gateway:3000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${MONITORING_SMTP_FROM:-SmartBook Monitoring <noreply@smartbook.io.vn>}
+    volumes:
+      - monitoring_spool:/app/spool
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3007/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     logging: *default-logging
 
   inventory-service:
@@ -507,6 +596,7 @@ services:
       - BORROW_SERVICE_URL=http://borrow-service:3005
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AI_SERVICE_URL=http://ai-service:8000
+      - MONITORING_SERVICE_URL=http://monitoring-service:3007
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5173}
@@ -595,3 +685,4 @@ volumes:
   rabbitmq_data:
   packing_evidence_data:
   procurement_document_data:
+  monitoring_spool:

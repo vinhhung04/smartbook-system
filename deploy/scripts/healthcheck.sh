@@ -64,6 +64,10 @@ if queues="$(dc exec -T rabbitmq rabbitmqctl list_queues name messages_ready --f
   dlq="$(printf '%s' "$queues" | jq '[.[] | select(.name|endswith(".dlq")) | .messages_ready] | add // 0')"
   [[ "$dlq" =~ ^[0-9]+$ && "$dlq" == 0 ]] || problems+=("dead-letter queue pending ($dlq)")
 else problems+=("broker queue monitoring unavailable"); fi
+# The alerting pipeline itself: notifications monitoring-service gave up on.
+if [[ "$(dc exec -T db psql -X -U "$pg_user" -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname='monitoring_db'" 2>/dev/null)" == 1 ]]; then
+  check_count monitoring_db "SELECT count(*) FROM alert_deliveries WHERE status='DEAD' AND updated_at > now()-interval '1 hour'" 'alert notifications failed in the last hour' 0
+fi
 for container in $(dc ps -aq); do
   state="$(docker inspect "$container" --format '{{.State.OOMKilled}} {{.RestartCount}}')"
   [[ "$state" =~ ^false\ [0-3]$ ]] || problems+=("container OOM/restart threshold exceeded ($container)")
@@ -91,8 +95,24 @@ for kind in local offsite; do
   fi
 done
 
+# Incident tracking: every run reports the complete current problem list (an
+# empty list resolves earlier healthcheck incidents and sends recovery notices).
+# Best effort; the direct webhook below remains the path that works without
+# monitoring-service, Grafana or Prometheus.
+if [[ -n "$(dc ps --status running -q monitoring-service 2>/dev/null)" ]]; then
+  report="$(jq -n --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{observed_at: $at, problems: $ARGS.positional}' --args "${problems[@]}")"
+  printf '%s' "$report" | dc exec -T monitoring-service node src/cli/ingest-healthcheck.js >/dev/null 2>&1 \
+    || logger -t smartbook-health -p user.err 'monitoring-service did not accept the healthcheck report'
+fi
+
 if [[ ${#problems[@]} -eq 0 ]]; then
   info "all checks passed"
+  # Dead-man's switch: an external monitor (e.g. healthchecks.io) alerts when
+  # these pings stop - the only signal that still works when the VPS is down.
+  heartbeat="$(env_value EXTERNAL_HEARTBEAT_URL)"
+  if [[ -n "$heartbeat" ]]; then
+    curl -fsS --max-time 10 "$heartbeat" >/dev/null || logger -t smartbook-health -p user.err 'external heartbeat ping failed'
+  fi
   exit 0
 fi
 

@@ -112,12 +112,15 @@ checks before production approval.
 
 ## Monitoring and incident ownership
 
-Set a strong independent `GRAFANA_ADMIN_PASSWORD` and a real `ALERT_WEBHOOK_URL`.
+Set a strong independent `GRAFANA_ADMIN_PASSWORD` and the monitoring secrets
+(`MONITORING_DB_PASSWORD`, `MONITORING_INGEST_TOKEN`, `MONITORING_SECRET_KEY`).
 Grafana is bound to loopback port 3100; access through a controlled tunnel.
-Prometheus has no public host port. Contact-point provisioning uses Grafana's
-`$ALERT_WEBHOOK_URL` expansion ([official documentation](https://grafana.com/docs/grafana/latest/alerting/set-up/provision-alerting-resources/file-provisioning/)).
-Confirm the receiver accepts Grafana webhook payloads as well as the shell
-healthcheck's text payload, or configure separate compatible destinations.
+Prometheus and the exporters have no public host port. Grafana's only contact
+point is monitoring-service on the internal network (bearer token); it owns
+incidents, deduplication, routing and delivery (email, in-app, Slack/Discord)
+with retries and history. `ALERT_WEBHOOK_URL` is now only the healthcheck's
+direct fallback path. See `docs/MONITORING.md` and the runbooks in
+`docs/runbooks/MONITORING_RUNBOOKS.md`.
 
 The current Node HTTP exporter uses `http_server_request_duration_*` in seconds,
 with `http_response_status_code` and `http_request_method` labels. The dashboard

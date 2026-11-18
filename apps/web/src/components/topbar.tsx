@@ -15,6 +15,7 @@ import { useWarehouseTaskRealtime } from "@/hooks/useWarehouseTaskRealtime";
 import { useAIActionRealtime } from "@/hooks/useAIActionRealtime";
 import { navGroups } from "@/lib/nav-groups";
 import { openCommandPalette } from "@/lib/command-palette-bus";
+import { canSeeSystemNotifications, useSystemNotifications } from "@/lib/use-system-notifications";
 
 type Crumb = { labelKey: string; to?: string };
 
@@ -51,6 +52,7 @@ function resolveBreadcrumb(pathname: string): { crumbs: Crumb[]; color: string }
   if (pathname.startsWith("/putaway/")) return { crumbs: [{ labelKey: "sidebar.putaway", to: "/putaway" }, { labelKey: "breadcrumb.putaway_detail" }], color: "text-violet-600" };
   if (pathname.startsWith("/stock-audits/")) return { crumbs: [{ labelKey: "sidebar.stock_audits", to: "/stock-audits" }, { labelKey: "breadcrumb.stock_audit_detail" }], color: "text-violet-700" };
   if (pathname.startsWith("/borrow/loans/")) return { crumbs: [{ labelKey: "sidebar.loans", to: "/borrow/loans" }, { labelKey: "breadcrumb.loan_detail" }], color: "text-emerald-600" };
+  if (pathname.startsWith("/admin/monitor/incidents/")) return { crumbs: [{ labelKey: "sidebar.system_monitor", to: "/admin/monitor?tab=incidents" }, { labelKey: "breadcrumb.incident_detail" }], color: "text-cyan-700" };
   if (pathname.startsWith("/supplier-deliveries/")) return { crumbs: [{ labelKey: "sidebar.supplier_deliveries" }], color: "text-sky-700" };
   if (sidebarBreadcrumbMap[pathname]) return sidebarBreadcrumbMap[pathname];
   return { crumbs: [{ labelKey: "breadcrumb.dashboard" }], color: "text-indigo-600" };
@@ -163,6 +165,8 @@ export function Topbar({ onMenuClick, menuOpen = false }: { onMenuClick?: () => 
 
   useAIActionRealtime((event, data) => handleAdminEvent(event)(data));
 
+  const system = useSystemNotifications(canSeeSystemNotifications(user));
+
   const initials = (user?.full_name || user?.username || "AD")
     .split(" ")
     .filter(Boolean)
@@ -224,7 +228,7 @@ export function Topbar({ onMenuClick, menuOpen = false }: { onMenuClick?: () => 
         <div className="relative">
           <button onClick={() => setNotifOpen(!notifOpen)} className="relative w-8 h-8 flex items-center justify-center rounded-[8px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-140 text-slate-500 dark:text-slate-400" aria-label={t('topbar.notifications')}>
             <Bell className="w-4 h-4" />
-            {adminNotifs.some((n) => n.unread) && (
+            {(adminNotifs.some((n) => n.unread) || system.unread > 0) && (
               <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute top-1 right-1 w-2.5 h-2.5 bg-gradient-to-br from-red-500 to-rose-500 rounded-full ring-2 ring-white" />
             )}
             <span className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-white ${connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -240,10 +244,32 @@ export function Topbar({ onMenuClick, menuOpen = false }: { onMenuClick?: () => 
                     <MorphIcon icon={connected ? Wifi : WifiOff} className={`w-3 h-3 ${connected ? 'text-emerald-500' : 'text-slate-400'}`} />
                   </div>
                   <span className="text-[11px] text-indigo-600 cursor-pointer hover:underline" style={{ fontWeight: 550 }}
-                    onClick={() => setAdminNotifs((prev) => prev.map((n) => ({ ...n, unread: false })))}
+                    onClick={() => { setAdminNotifs((prev) => prev.map((n) => ({ ...n, unread: false }))); if (system.unread > 0) void system.markAllRead(); }}
                   >{t('topbar.mark_all_read')}</span>
                 </div>
                 <div className="max-h-72 overflow-y-auto">
+                  {system.items.length > 0 ? (
+                    <div className="border-b border-border">
+                      <div className="flex items-center justify-between px-4 pt-2.5 pb-1">
+                        <span className="text-[11px] text-slate-500" style={{ fontWeight: 600 }}>Sự cố hệ thống{system.unread ? ` · ${system.unread} chưa đọc` : ''}</span>
+                        <NavLink to="/admin/monitor?tab=incidents" onClick={() => setNotifOpen(false)} className="text-[11px] text-indigo-600 hover:underline">Xem tất cả</NavLink>
+                      </div>
+                      {system.items.map((item) => (
+                        <button key={item.id} type="button"
+                          onClick={() => { void system.markRead(item.id); setNotifOpen(false); navigate(`/admin/monitor/incidents/${item.incident_id}`); }}
+                          className={`block w-full px-4 py-2.5 text-left hover:bg-muted/50 transition-colors ${item.read_at ? '' : 'bg-red-50/40 dark:bg-red-500/5'}`}>
+                          <span className="flex items-start gap-2.5">
+                            <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.severity === 'CRITICAL' ? 'bg-red-600' : item.severity === 'HIGH' ? 'bg-orange-500' : item.severity === 'WARNING' ? 'bg-amber-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12px]" style={{ fontWeight: item.read_at ? 450 : 600 }}>{item.title}</span>
+                              {item.body ? <span className="block truncate text-[11px] text-slate-500">{item.body}</span> : null}
+                              <span className="block text-[10px] text-slate-400 mt-0.5">{new Date(item.created_at).toLocaleString('vi-VN')}</span>
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   {adminNotifs.length === 0 ? (
                     <div className="px-4 py-6 text-center">
                       <p className="text-[12px] text-slate-500">{t('topbar.no_events')}</p>

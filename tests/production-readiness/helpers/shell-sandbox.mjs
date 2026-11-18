@@ -29,7 +29,7 @@ export function runShellSandbox(script, { scenario = 'success', args = [], prepa
   mkdirSync(resolve(directory, 'state'));
   mkdirSync(resolve(directory, 'state/images'));
   writeFileSync(resolve(directory, `state/images/${'b'.repeat(40)}.env`),
-    ['inventory-service', 'auth-service', 'borrow-service', 'analytics-service', 'ai-service', 'api-gateway', 'web', 'caddy']
+    ['inventory-service', 'auth-service', 'borrow-service', 'analytics-service', 'ai-service', 'api-gateway', 'web', 'caddy', 'monitoring-service']
       .map(service => `${service.toUpperCase().replaceAll('-', '_')}_IMAGE=ghcr.io/vinhhung04/smartbook-${service}@sha256:${'c'.repeat(64)}`).join('\n') + '\n');
   mkdirSync(resolve(directory, 'backups'));
   writeFileSync(resolve(directory, '.env'), '# Sandbox sentinel; contains no credentials.\n');

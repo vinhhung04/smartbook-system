@@ -68,6 +68,9 @@ jobs:
           - name: caddy
             context: .
             file: deploy/Dockerfile.caddy
+          - name: monitoring-service
+            context: .
+            file: services/monitoring-service/Dockerfile
     steps:
       - uses: actions/checkout@v4
 

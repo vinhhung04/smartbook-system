@@ -581,6 +581,36 @@ importers:
         specifier: ^8.17.1
         version: 8.20.0
 
+  services/monitoring-service:
+    dependencies:
+      '@prisma/client':
+        specifier: 5.21.0
+        version: 5.21.0(prisma@5.21.0)
+      '@smartbook/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.3.1
+      express:
+        specifier: ^5.1.0
+        version: 5.2.1
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.3
+      nodemailer:
+        specifier: 10.1.4
+        version: 10.1.4
+      prisma:
+        specifier: 5.21.0
+        version: 5.21.0
+      redis:
+        specifier: ^4.6.12
+        version: 4.7.1
+
 packages:
 
   2g@1.0.1:

@@ -54,7 +54,19 @@ done
 # Include current and future tables (e.g. AI quota leases), with no runtime DDL.
 dc exec -T db bash /docker-entrypoint-initdb.d/04-runtime-roles.sh
 IMAGE_TAG="$TAG" bash "$APP_DIR/deploy/scripts/prepare-volumes.sh"
-rollout() { IMAGE_TAG="$1" dc up -d --wait --wait-timeout 600 "${APP_SERVICES[@]}" prometheus grafana caddy; }
+rollout() { IMAGE_TAG="$1" dc up -d --wait --wait-timeout 600 "${APP_SERVICES[@]}" caddy; }
+# Monitoring is outside the release gate: started only after the business release
+# is healthy, and a failure here is logged (and seen by healthcheck.sh) but never
+# stops, fails or rolls back the release. Skipped until .env configures it.
+start_monitoring() {
+  if [[ -z "$(env_value MONITORING_DB_PASSWORD)" || -z "$(env_value MONITORING_INGEST_TOKEN)" ]]; then
+    log "monitoring not configured (MONITORING_DB_PASSWORD/MONITORING_INGEST_TOKEN); skipped"
+    return 0
+  fi
+  dc exec -T db bash /docker-entrypoint-initdb.d/05-monitoring-db.sh \
+    && IMAGE_TAG="$TAG" dc run --rm --no-deps -T migrate-monitoring \
+    && IMAGE_TAG="$TAG" dc up -d --wait --wait-timeout 300 "${MONITORING_SERVICES[@]}"
+}
 smoke() {
   curl -fsS --max-time 10 --resolve api.smartbook.io.vn:443:127.0.0.1 https://api.smartbook.io.vn/ready >/dev/null \
     && curl -fsS --max-time 10 --resolve smartbook.io.vn:443:127.0.0.1 https://smartbook.io.vn/ >/dev/null
@@ -64,6 +76,7 @@ if rollout "$TAG" && smoke; then
   mv "$RELEASE_ENV.tmp" "$RELEASE_ENV"
   printf '%s %s deployed\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TAG" >>"$RELEASES_LOG"
   log "release healthy"
+  start_monitoring || log "WARNING: monitoring stack did not start; the business release is unaffected (see healthcheck.sh / dc logs)"
 else
   # Do not leave a partially healthy new fleet accepting writes.
   IMAGE_TAG="$TAG" dc stop --timeout 45 "${APP_SERVICES[@]}" || true

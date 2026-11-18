@@ -1,270 +1,1191 @@
 apiVersion: 1
 
+# SmartBook alert rules. Every rule is query A (instant PromQL) -> threshold B.
+# Semantics chosen per rule, never by default:
+# - noDataState OK: an empty result means healthy. Counters that may not exist yet
+#   use "or vector(0)". Missing metrics are covered by dedicated rules
+#   (Service metrics unavailable, Business metrics not collected) instead of every
+#   rule firing "NoData" while the system is healthy.
+# - execErrState OK on all rules except the Prometheus canary, so a Prometheus
+#   outage raises ONE incident instead of one per rule.
+# Labels: severity (critical|high|warning|info), category (technical|business),
+# alert_kind (availability inhibits other alerts of the same service in
+# monitoring-service), service_name (from the query or set here).
+# Thresholds marked "initial" have no production baseline yet; adjust here (Git
+# reviewed), notification routing is configured in the admin Incident Center.
+
 groups:
+  # Service, dependency and monitoring-pipeline availability.
   - orgId: 1
-    name: smartbook-alerts
+    name: smartbook-availability
+    folder: SmartBook
+    interval: 1m
+    rules:
+      - uid: smartbook-metrics-unavailable
+        title: "Service metrics unavailable"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max by (service_name, job) (1 - up)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: Alerting
+        execErrState: OK
+        for: 2m
+        labels:
+          severity: critical
+          category: technical
+          alert_kind: availability
+          owner_role: operations
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.service_name }}: the service is down or its metrics endpoint stopped answering."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#service-metrics-unavailable
+      - uid: smartbook-db-unavailable
+        title: "Database unavailable"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max by (service_name) (1 - db_up)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 1m
+        labels:
+          severity: critical
+          category: technical
+          alert_kind: availability
+          owner_role: operations
+        annotations:
+          summary: "{{ $labels.service_name }} cannot reach PostgreSQL (its SELECT 1 probe fails)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#database-unavailable
+      - uid: smartbook-postgres-down
+        title: "PostgreSQL unreachable"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: 1 - max(pg_up)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 1m
+        labels:
+          severity: critical
+          category: technical
+          alert_kind: availability
+          owner_role: operations
+          service_name: postgres
+        annotations:
+          summary: "postgres-exporter cannot connect to PostgreSQL."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#database-unavailable
+      - uid: smartbook-redis-down
+        title: "Redis unreachable"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: 1 - max(redis_up)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 1m
+        labels:
+          severity: critical
+          category: technical
+          alert_kind: availability
+          owner_role: operations
+          service_name: redis
+        annotations:
+          summary: "redis-exporter cannot reach Redis (token revocation, rate limits and caches are affected)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#redis-unavailable
+      - uid: smartbook-rabbitmq-no-consumer
+        title: "RabbitMQ queue has no consumer"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max by (queue) (rabbitmq_queue_consumers{queue!~".+\\.dlq"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: messaging
+          owner_role: operations
+          service_name: rabbitmq
+        annotations:
+          summary: "Queue {{ $labels.queue }} has no consumer for 5 minutes; its events are not processed."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#rabbitmq-consumers
+      - uid: smartbook-prometheus-unreachable
+        title: "Monitoring pipeline: Prometheus query failing"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: vector(1)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1] }
+        noDataState: OK
+        execErrState: Alerting
+        for: 2m
+        labels:
+          severity: critical
+          category: technical
+          alert_kind: pipeline
+          owner_role: operations
+          service_name: prometheus
+        annotations:
+          summary: "Grafana cannot query Prometheus, so every other alert rule is blind. This canary only fires on query errors; the other rules stay quiet instead of all failing at once."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#monitoring-pipeline
+      - uid: smartbook-alert-delivery-failing
+        title: "Alert delivery failing"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(monitoring_delivery_attempts_total{outcome="DEAD"}[30m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: pipeline
+          owner_role: operations
+          service_name: monitoring-service
+        annotations:
+          summary: "monitoring-service gave up delivering at least one notification in the last 30 minutes (see delivery history in the Incident Center)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#alert-delivery-failing
+      - uid: smartbook-alert-delivery-backlog
+        title: "Alert delivery backlog"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(monitoring_deliveries{status=~"pending|retry"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [20] }
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: pipeline
+          owner_role: operations
+          service_name: monitoring-service
+        annotations:
+          summary: "More than 20 notifications are waiting or retrying for 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#alert-delivery-failing
+
+  # Request errors and latency (initial thresholds: no production baseline yet).
+  - orgId: 1
+    name: smartbook-performance
     folder: SmartBook
     interval: 1m
     rules:
       - uid: smartbook-error-rate-high
-        title: Error rate high
-        condition: A
+        title: "Error rate high"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: (sum(rate(http_server_request_duration_count{http_response_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_count[5m]))) > 0.05
-        noDataState: OK
-        execErrState: Error
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: HTTP error rate is above 5% over the last 5 minutes.
-
-      - uid: smartbook-outbox-failed
-        title: Outbox publish giving up
-        condition: A
-        data:
-          - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
-            datasourceUid: prometheus-ds
+              expr: (sum(rate(http_server_request_duration_count{http_response_status_code=~"5.."}[5m])) / sum(rate(http_server_request_duration_count[5m])))
+          - refId: B
+            datasourceUid: __expr__
             model:
-              refId: A
-              instant: true
-              expr: outbox_failed_records > 0
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.05] }
         noDataState: OK
-        execErrState: Error
-        for: 0m
-        labels:
-          severity: critical
-        annotations:
-          summary: An outbox event gave up retrying and is now FAILED.
-
-      - uid: smartbook-reservation-conflict-spike
-        title: Reservation conflict rate abnormal
-        condition: A
-        data:
-          - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
-            datasourceUid: prometheus-ds
-            model:
-              refId: A
-              instant: true
-              expr: sum(rate(reservation_conflict_total[5m])) * 60 > 5
-        noDataState: OK
-        execErrState: Error
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Reservation conflicts exceed 5/min (demo threshold, not tuned from a real baseline)."
-
-      - uid: smartbook-db-unavailable
-        title: Database unavailable
-        condition: A
-        data:
-          - refId: A
-            relativeTimeRange: { from: 60, to: 0 }
-            datasourceUid: prometheus-ds
-            model:
-              refId: A
-              instant: true
-              expr: db_up == bool 0
-        noDataState: OK
-        execErrState: Error
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "inventory-service's SELECT 1 healthcheck failed — the database is unreachable (no postgres_exporter installed; /health and Prometheus's own `up` don't touch the DB, so db_up is a dedicated gauge for this)."
-
-      - uid: smartbook-low-stock-critical
-        title: Low stock critical
-        condition: A
-        data:
-          - refId: A
-            relativeTimeRange: { from: 60, to: 0 }
-            datasourceUid: prometheus-ds
-            model:
-              refId: A
-              instant: true
-              expr: inventory_low_stock_variant_count > 0
-        noDataState: OK
-        execErrState: Error
+        execErrState: OK
         for: 5m
         labels:
           severity: warning
+          category: technical
+          alert_kind: errors
+          owner_role: operations
+          service_name: system
         annotations:
-          summary: One or more variants are at or below their reorder point.
+          summary: "More than 5% of HTTP requests across all services returned 5xx over 5 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#error-rate-high
+      - uid: smartbook-service-error-rate-high
+        title: "Service error rate high"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: (sum by (service_name) (rate(http_server_request_duration_count{http_response_status_code=~"5.."}[5m])) / sum by (service_name) (rate(http_server_request_duration_count[5m]))) and on (service_name) (sum by (service_name) (rate(http_server_request_duration_count[5m])) > 0.05)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.1] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: errors
+          owner_role: operations
+        annotations:
+          summary: "More than 10% of {{ $labels.service_name }} requests returned 5xx over 5 minutes (only evaluated with at least 3 requests/min)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#error-rate-high
+      - uid: smartbook-latency-p95-high
+        title: "Service p95 latency high"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: 1000 * histogram_quantile(0.95, sum by (le, service_name) (rate(http_server_request_duration_bucket{service_name!="api-gateway"}[5m])))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2000] }
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: latency
+          owner_role: operations
+        annotations:
+          summary: "{{ $labels.service_name }} p95 latency is above 2 s for 10 minutes. api-gateway is excluded because it proxies slow AI/LLM calls by design."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#latency-high
 
+  # VPS (node-exporter), containers (cAdvisor), PostgreSQL, RabbitMQ.
+  - orgId: 1
+    name: smartbook-infrastructure
+    folder: SmartBook
+    interval: 1m
+    rules:
+      - uid: smartbook-host-cpu-high
+        title: "VPS CPU saturated"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: capacity
+          owner_role: operations
+          service_name: vps
+        annotations:
+          summary: "CPU usage above 90% for 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#host-resources
+      - uid: smartbook-host-memory-high
+        title: "VPS memory pressure"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [90] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: capacity
+          owner_role: operations
+          service_name: vps
+        annotations:
+          summary: "Less than 10% of RAM available for 5 minutes (same threshold family as healthcheck.sh)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#host-resources
+      - uid: smartbook-host-disk-high
+        title: "VPS disk almost full"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: 100 * (1 - max(node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}) / max(node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [85] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: capacity
+          owner_role: operations
+          service_name: vps
+        annotations:
+          summary: "Root filesystem above 85% (healthcheck.sh uses the same threshold)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#host-resources
+      - uid: smartbook-container-memory-near-limit
+        title: "Container memory near limit"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: label_replace(max by (name) (container_memory_working_set_bytes{name!=""} / (container_spec_memory_limit_bytes{name!=""} > 0)), "service_name", "$1", "name", "(?:smartbook-)?(.+?)(?:-[0-9]+)?")
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: capacity
+          owner_role: operations
+        annotations:
+          summary: "{{ $labels.service_name }} uses more than 90% of its memory limit for 10 minutes; the next spike may OOM-kill it."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#container-resources
+      - uid: smartbook-container-oom
+        title: "Container OOM-killed"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: label_replace(sum by (name) (increase(container_oom_events_total{name!=""}[10m])), "service_name", "$1", "name", "(?:smartbook-)?(.+?)(?:-[0-9]+)?")
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: capacity
+          owner_role: operations
+        annotations:
+          summary: "{{ $labels.service_name }} was killed for exceeding its memory limit in the last 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#container-resources
+      - uid: smartbook-postgres-connections-high
+        title: "PostgreSQL connection pressure"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(pg_stat_activity_count) / max(pg_settings_max_connections)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.8] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: database
+          owner_role: operations
+          service_name: postgres
+        annotations:
+          summary: "More than 80% of max_connections in use for 5 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#database-pressure
+      - uid: smartbook-postgres-deadlocks
+        title: "PostgreSQL deadlocks"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(pg_stat_database_deadlocks[10m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: database
+          owner_role: operations
+          service_name: postgres
+        annotations:
+          summary: "PostgreSQL detected deadlocks in the last 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#database-pressure
+      - uid: smartbook-rabbitmq-dlq
+        title: "RabbitMQ dead-letter queue not empty"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max by (queue) (rabbitmq_queue_messages_ready{queue=~".+\\.dlq"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: messaging
+          owner_role: operations
+          service_name: rabbitmq
+        annotations:
+          summary: "{{ $labels.queue }} holds dead-lettered messages: events failed processing and need review."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#rabbitmq-dlq
+      - uid: smartbook-rabbitmq-backlog
+        title: "RabbitMQ queue backlog"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max by (queue) (rabbitmq_queue_messages_ready{queue!~".+\\.dlq"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1000] }
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: messaging
+          owner_role: operations
+          service_name: rabbitmq
+        annotations:
+          summary: "{{ $labels.queue }} has more than 1000 ready messages for 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#rabbitmq-consumers
+      - uid: smartbook-rabbitmq-publish-failures
+        title: "RabbitMQ publish failures"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(rabbitmq_publish_fail_total[10m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: messaging
+          owner_role: operations
+          service_name: inventory-service
+        annotations:
+          summary: "inventory-service failed to publish to RabbitMQ in the last 10 minutes (the outbox retries; watch outbox age)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#rabbitmq-consumers
+
+  # Business anomalies (category=business). Not system failures: routed in-app first by default.
+  - orgId: 1
+    name: smartbook-business
+    folder: SmartBook
+    interval: 1m
+    rules:
+      - uid: smartbook-outbox-failed
+        title: "Outbox publish giving up"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max(outbox_failed_records)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: critical
+          category: business
+          alert_kind: outbox
+          owner_role: operations
+          service_name: inventory-service
+        annotations:
+          summary: "An inventory outbox event gave up retrying and is now FAILED."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#outbox
       - uid: smartbook-backlog-age
-        title: Outbox pending age exceeds 5m
-        condition: A
+        title: "Outbox pending age exceeds 5m"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: outbox_oldest_pending_age_seconds > 300
-        noDataState: Alerting
-        execErrState: Alerting
+              expr: max(outbox_oldest_pending_age_seconds)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [300] }
+        noDataState: OK
+        execErrState: OK
         for: 1m
         labels:
           severity: critical
+          category: business
+          alert_kind: outbox
           owner_role: operations
+          service_name: inventory-service
         annotations:
-          summary: Outbox pending age exceeds 5m
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
-
+          summary: "The oldest pending inventory outbox event is older than 5 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#outbox
       - uid: smartbook-manual-reconciliation
-        title: Unresolved reconciliation requires review
-        condition: A
+        title: "Unresolved reconciliation requires review"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: reconciliation_manual_pending > 0
-        noDataState: Alerting
-        execErrState: Alerting
+              expr: max(reconciliation_manual_pending)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
         for: 1m
         labels:
           severity: critical
+          category: business
+          alert_kind: reconciliation
           owner_role: operations
+          service_name: borrow-service
         annotations:
-          summary: Unresolved reconciliation requires review
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
-
+          summary: "Borrow reconciliation records are waiting for manual review."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#reconciliation
       - uid: smartbook-automatic-reconciliation-age
-        title: Automatic reconciliation stuck
-        condition: A
+        title: "Automatic reconciliation stuck"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: reconciliation_oldest_automatic_age_seconds > 300
-        noDataState: Alerting
-        execErrState: Alerting
+              expr: max(reconciliation_oldest_automatic_age_seconds)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [300] }
+        noDataState: OK
+        execErrState: OK
         for: 1m
         labels:
           severity: critical
+          category: business
+          alert_kind: reconciliation
           owner_role: operations
+          service_name: borrow-service
         annotations:
-          summary: Automatic reconciliation stuck
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
-
+          summary: "The oldest automatic reconciliation is older than 5 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#reconciliation
       - uid: smartbook-payment-unapplied
-        title: Provider money needs allocation or refund
-        condition: A
+        title: "Provider money needs allocation or refund"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: payment_unapplied_pending > 0
-        noDataState: Alerting
-        execErrState: Alerting
+              expr: max(payment_unapplied_pending)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
         for: 1m
         labels:
           severity: critical
+          category: business
+          alert_kind: payment
           owner_role: operations
+          service_name: borrow-service
         annotations:
-          summary: Provider money needs allocation or refund
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
-
-      - uid: smartbook-metrics-unavailable
-        title: Service metrics unavailable
-        condition: A
-        data:
-          - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
-            datasourceUid: prometheus-ds
-            model:
-              refId: A
-              instant: true
-              expr: up == 0
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
-        labels:
-          severity: critical
-          owner_role: operations
-        annotations:
-          summary: Service metrics unavailable
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
-
-      - uid: smartbook-ai-provider-errors
-        title: AI provider requests failing
-        condition: A
-        data:
-          - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
-            datasourceUid: prometheus-ds
-            model:
-              refId: A
-              instant: true
-              expr: sum(rate(ai_llm_calls_total{outcome="error"}[5m])) > 0
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
-        labels:
-          severity: warning
-          owner_role: operations
-        annotations:
-          summary: AI provider requests failing
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
-
+          summary: "Money received from the payment provider is not applied to any fine/top-up yet."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#payment
       - uid: smartbook-callback-failure
-        title: Payment callback processing failure
-        condition: A
+        title: "Payment callback processing failure"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: sum(increase(payment_callback_outcomes_total{outcome="failed"}[5m])) > 0
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
+              expr: sum(increase(payment_callback_outcomes_total{outcome="failed"}[10m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
         labels:
           severity: warning
+          category: business
+          alert_kind: payment
+          owner_role: operations
+          service_name: borrow-service
+        annotations:
+          summary: "VNPay callbacks were rejected or failed in the last 10 minutes (includes invalid signatures)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#payment
+      - uid: smartbook-reservation-conflict-spike
+        title: "Reservation conflict rate abnormal"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: (sum(rate(reservation_conflict_total[5m])) * 60) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+          alert_kind: reservation
+          owner_role: operations
+          service_name: inventory-service
+        annotations:
+          summary: "Reservation conflicts exceed 5/min for 5 minutes (initial threshold, not tuned from a production baseline)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#reservation-conflicts
+      - uid: smartbook-low-stock-critical
+        title: "Low stock critical"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max(inventory_low_stock_variant_count)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 30m
+        labels:
+          severity: warning
+          category: business
+          alert_kind: stock
+          owner_role: operations
+          service_name: inventory-service
+        annotations:
+          summary: "{{ $values.A }} active variants are at or below their reorder point."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#low-stock
+      - uid: smartbook-goods-receipt-stuck
+        title: "Goods receipts stuck in draft"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max(goods_receipt_stuck_total)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 15m
+        labels:
+          severity: warning
+          category: business
+          alert_kind: warehouse
+          owner_role: operations
+          service_name: inventory-service
+        annotations:
+          summary: "Goods receipts have stayed in DRAFT for more than 24 hours (GOODS_RECEIPT_STUCK_HOURS)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#warehouse-flow
+      - uid: smartbook-warehouse-exceptions-high
+        title: "Warehouse exceptions high"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: max by (task_type) (warehouse_exceptions_recent{window="24h"})
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [5] }
+        noDataState: OK
+        execErrState: OK
+        for: 15m
+        labels:
+          severity: warning
+          category: business
+          alert_kind: warehouse
+          owner_role: operations
+          service_name: inventory-service
+        annotations:
+          summary: "More than 5 {{ $labels.task_type }} exception reports in 24 hours (initial threshold)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#warehouse-flow
+      - uid: smartbook-business-metrics-missing
+        title: "Business metrics not collected"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: (label_replace(max(up{service_name="inventory-service"}) == 1, "service_name", "inventory-service", "", "") unless on () max(outbox_pending_total)) or (label_replace(max(up{service_name="borrow-service"}) == 1, "service_name", "borrow-service", "", "") unless on () max(payment_unapplied_pending))
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 5m
+        labels:
+          severity: high
+          category: technical
+          alert_kind: pipeline
           owner_role: operations
         annotations:
-          summary: Payment callback processing failure
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+          summary: "{{ $labels.service_name }} answers scrapes but its database-backed business gauges are missing: business alerts for it are blind."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#business-metrics-missing
 
-      - uid: smartbook-ai-budget-denied
-        title: AI quota or budget storage unavailable
-        condition: A
+  # AI service: provider errors, OCR, budget and cost.
+  - orgId: 1
+    name: smartbook-ai
+    folder: SmartBook
+    interval: 1m
+    rules:
+      - uid: smartbook-ai-provider-errors
+        title: "AI provider requests failing"
+        condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: { from: 600, to: 0 }
             datasourceUid: prometheus-ds
             model:
               refId: A
               instant: true
-              expr: sum(increase(ai_budget_admission_total[5m])) > 0
-        noDataState: Alerting
-        execErrState: Alerting
-        for: 1m
+              expr: sum(increase(ai_llm_calls_total{outcome="error"}[10m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [3] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
         labels:
           severity: warning
+          category: technical
+          alert_kind: ai
           owner_role: operations
+          service_name: ai-service
         annotations:
-          summary: AI quota or budget storage unavailable
-          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/PRODUCTION_OPERATIONS.md
+          summary: "More than 3 OpenRouter calls failed in the last 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#ai-provider
+      - uid: smartbook-ai-budget-denied
+        title: "AI quota or budget storage unavailable"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(ai_budget_admission_total[10m])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: ai
+          owner_role: operations
+          service_name: ai-service
+        annotations:
+          summary: "Paid AI requests were refused by the quota/budget admission in the last 10 minutes."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#ai-provider
+      - uid: smartbook-ai-ocr-failures
+        title: "Book OCR failure rate high"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: (sum(increase(ai_book_ocr_scans_total{outcome!~"success|partial|no_data"}[30m])) / sum(increase(ai_book_ocr_scans_total[30m]))) and on () (sum(increase(ai_book_ocr_scans_total[30m])) >= 5)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0.3] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: ai
+          owner_role: operations
+          service_name: ai-service
+        annotations:
+          summary: "More than 30% of book OCR scans failed over 30 minutes (evaluated with at least 5 scans)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#ai-ocr
+      - uid: smartbook-ai-cost-budget
+        title: "LLM cost above daily budget"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: sum(increase(ai_llm_cost_usd_total[24h])) or vector(0)
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2] }
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        labels:
+          severity: warning
+          category: business
+          alert_kind: ai-cost
+          owner_role: operations
+          service_name: ai-service
+        annotations:
+          summary: "OpenRouter spend over the last 24 hours exceeds 2 USD (edit the threshold here to match the approved budget)."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#ai-cost
+      - uid: smartbook-ai-catalog-sync-stale
+        title: "AI catalog sync stale"
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus-ds
+            model:
+              refId: A
+              instant: true
+              expr: (time() - max(ai_catalog_sync_last_success_timestamp_seconds)) / 60
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [60] }
+        noDataState: OK
+        execErrState: OK
+        for: 10m
+        labels:
+          severity: warning
+          category: technical
+          alert_kind: ai
+          owner_role: operations
+          service_name: ai-service
+        annotations:
+          summary: "Book search has not synced the catalog for more than 60 minutes; new titles are not searchable."
+          runbook_url: https://github.com/vinhhung04/smartbook-system/blob/hungg/docs/runbooks/MONITORING_RUNBOOKS.md#ai-catalog-sync

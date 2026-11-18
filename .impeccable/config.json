@@ -8,6 +8,12 @@
         "value": "inter",
         "createdAt": "2026-11-15T22:03:56.347Z",
         "reason": "brand decision: assets/branding/brand-tokens.json names Inter as the ui-web face (and Fraunces as the wordmark); pre-existing app-wide token, not introduced by the chatbox work"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-11-18T21:03:15.454Z",
+        "reason": "Claude: HTML email template (monitoring-service alerts) must use a web-safe font stack; email clients do not load web fonts"
       }
     ]
   }

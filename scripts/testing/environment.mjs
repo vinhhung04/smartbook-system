@@ -33,6 +33,8 @@ export function createEnvironment() {
   const secret = () => randomBytes(36).toString('base64url');
   const fixturePassword = secret();
   let template = readFileSync(resolve(root, '.env.example'), 'utf8');
+  // AES-256-GCM key format (64 hex chars), unlike the other generated secrets.
+  template = template.replaceAll('GENERATE_MONITORING_SECRET_KEY', randomBytes(32).toString('hex'));
   for (const placeholder of new Set(template.match(/GENERATE_[A-Z_]+/g))) {
     template = template.replaceAll(placeholder, secret());
   }

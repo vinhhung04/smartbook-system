@@ -102,7 +102,8 @@ Toàn bộ nằm trong `/opt/smartbook/.env`, tạo bằng `deploy/scripts/init-
 | `GOOGLE_BOOKS_API_KEY` | | Tra cứu ISBN |
 | `SMTP_*` | ✔ cho đăng ký | Mã xác thực khi đăng ký (thiếu SMTP thì `/auth/register` trả 503), quên mật khẩu, thông báo. Cấu hình SPF/DKIM/DMARC: [EMAIL_OTP.md](SERVICES/EMAIL_OTP.md) §7 |
 | `VNPAY_*` | | Mặc định dùng URL sandbox |
-| `BACKUP_KEEP_DAYS`, `BACKUP_RCLONE_REMOTE`, `ALERT_WEBHOOK_URL` | | Vận hành |
+| `BACKUP_KEEP_DAYS`, `BACKUP_RCLONE_REMOTE`, `ALERT_WEBHOOK_URL`, `EXTERNAL_HEARTBEAT_URL` | | Vận hành |
+| `MONITORING_DB_PASSWORD`, `MONITORING_INGEST_TOKEN`, `MONITORING_SECRET_KEY` | ✔ cho monitoring | Thiếu thì deploy bỏ qua stack monitoring (nghiệp vụ không ảnh hưởng). Xem [MONITORING.md](MONITORING.md) |
 
 Sửa `.env` xong thì áp dụng bằng: `cd /opt/smartbook && deploy/scripts/dc up -d` (chỉ các service dùng biến đó được tạo lại).
 
@@ -247,7 +248,7 @@ Bộ dữ liệu demo được nạp bằng `deploy/scripts/seed-demo.sh --i-und
 | **Deploy fail trên GitHub** | Mở job lỗi trong Actions. Bước *Pull images and roll out* in kèm `dc ps` và log khi rollback. Trên VPS: `cat state/releases.log`. |
 | **Hết RAM** | `docker stats --no-stream`; `free -h`. `ai-service` bị giới hạn 3 GB, Postgres 2 GB. |
 
-Healthcheck tự động ghi vào syslog: `journalctl -t smartbook-health --since today`. Nếu đặt `ALERT_WEBHOOK_URL` (Discord/Slack) thì cảnh báo sẽ được gửi ra ngoài. Nên đăng ký thêm một dịch vụ uptime miễn phí (UptimeRobot, Better Stack, …) theo dõi `https://api.smartbook.io.vn/ready` và `https://smartbook.io.vn`, vì healthcheck chạy ngay trên VPS sẽ không báo được khi chính VPS sập.
+Healthcheck tự động ghi vào syslog: `journalctl -t smartbook-health --since today`, đồng thời đẩy toàn bộ trạng thái vào monitoring-service (sự cố + thông báo phục hồi). Nếu đặt `ALERT_WEBHOOK_URL` (Discord/Slack) thì cảnh báo còn được gửi trực tiếp, độc lập với monitoring-service. Healthcheck chạy ngay trên VPS sẽ không báo được khi chính VPS sập: đặt `EXTERNAL_HEARTBEAT_URL` (healthchecks.io) và thêm monitor uptime (UptimeRobot, Better Stack, …) cho `https://api.smartbook.io.vn/ready` và `https://smartbook.io.vn` — xem [MONITORING.md](MONITORING.md) §7.
 
 ## 16. Ứng dụng mobile
 
@@ -255,7 +256,7 @@ App Expo (`apps/mobile`) build và phát hành riêng qua EAS, không đi qua pi
 
 ## 17. Mở rộng VPS
 
-Phân bổ hiện tại (giới hạn tối đa): Postgres 2 GB/2 CPU, ai-service 3 GB/2 CPU, rabbitmq 768 MB, inventory/borrow 768 MB, các service còn lại 512 MB, web 128 MB, Caddy 256 MB. Tổng khoảng 9 GB trên 12 GB RAM.
+Phân bổ hiện tại (giới hạn tối đa): Postgres 2 GB/2 CPU, ai-service 3 GB/2 CPU, rabbitmq 768 MB, inventory/borrow 768 MB, các service còn lại 512 MB, web 128 MB, Caddy 256 MB; monitoring: Prometheus 384 MB, Grafana 256 MB, monitoring-service 256 MB, cAdvisor 192 MB, các exporter 32–64 MB. Tổng khoảng 10,9 GB trên 12 GB RAM (đây là trần, không phải mức dùng thực tế).
 
 - Nâng gói VPS: sau khi reboot, stack tự chạy lại. Tăng `limits` trong `compose.prod.yml` và `shared_buffers` / `effective_cache_size` của Postgres (khoảng 25% / 50–75% RAM), rồi deploy.
 - Ổ đĩa: theo dõi `df -h`. Healthcheck cảnh báo khi quá 85%. Dọn image cũ: `docker image prune -f`.

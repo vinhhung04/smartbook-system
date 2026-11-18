@@ -97,7 +97,8 @@ test('Grafana provisions only Prometheus, and every panel and alert uses it', ()
     }
   }
   const rules = read('observability/grafana/provisioning/alerting/rules.yaml');
-  const uids = [...rules.matchAll(/datasourceUid: (\S+)/g)].map((m) => m[1]);
+  // __expr__ is Grafana's built-in expression engine (the threshold step), not a datasource.
+  const uids = [...rules.matchAll(/datasourceUid: (\S+)/g)].map((m) => m[1]).filter((uid) => uid !== '__expr__');
   assert.ok(uids.length > 0);
   assert.deepEqual([...new Set(uids)], ['prometheus-ds']);
 });

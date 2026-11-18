@@ -1,0 +1,31 @@
+apiVersion: 1
+
+# Grafana only detects. Every alert goes to monitoring-service on the internal
+# Docker network, which owns incidents, deduplication, routing (email, in-app,
+# Slack/Discord), retries and delivery history. The URL is fixed, so this file
+# provisions identically in development and production; the bearer token comes
+# from MONITORING_INGEST_TOKEN (Grafana refuses to start without it, see compose).
+contactPoints:
+  - orgId: 1
+    name: smartbook-monitoring
+    receivers:
+      - uid: smartbook-monitoring-service
+        type: webhook
+        settings:
+          url: http://monitoring-service:3007/internal/alerts/grafana
+          httpMethod: POST
+          authorization_scheme: Bearer
+          authorization_credentials: $MONITORING_INGEST_TOKEN
+          maxAlerts: 100
+        # monitoring-service tracks recovery itself; Grafana's resolved message is the trigger.
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: smartbook-monitoring
+    # One notification per rule and service; monitoring-service deduplicates per alert fingerprint.
+    group_by: [alertname, service_name]
+    group_wait: 30s
+    group_interval: 5m
+    # A still-firing alert is re-sent this often; monitoring-service only refreshes last_seen_at.
+    repeat_interval: 1h

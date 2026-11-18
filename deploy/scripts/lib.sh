@@ -9,9 +9,11 @@ RELEASES_LOG="$STATE_DIR/releases.log"
 
 # Only application writers are quiesced for a consistent recovery capture.
 APP_SERVICES=(inventory-service auth-service borrow-service analytics-service ai-service api-gateway web)
-# Caddy is a versioned release artifact, but never an application writer.
-# Other infrastructure remains outside release pulls.
-IMAGE_SERVICES=("${APP_SERVICES[@]}" caddy)
+# Caddy and monitoring-service are versioned release artifacts, but never
+# application writers. Other infrastructure remains outside release pulls.
+IMAGE_SERVICES=("${APP_SERVICES[@]}" caddy monitoring-service)
+# Started after a healthy rollout and never part of the release gate (deploy.sh).
+MONITORING_SERVICES=(monitoring-service prometheus grafana node-exporter cadvisor postgres-exporter redis-exporter)
 
 log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }

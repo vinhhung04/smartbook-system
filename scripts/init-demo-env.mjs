@@ -21,6 +21,9 @@ const replacements = {
   GENERATE_PGADMIN_PASSWORD: secret(24),
   GENERATE_RABBITMQ_PASSWORD: secret(24),
   GENERATE_GRAFANA_PASSWORD: secret(24),
+  GENERATE_MONITORING_INGEST_TOKEN: secret(36),
+  // AES-256-GCM key: exactly 32 bytes as hex
+  GENERATE_MONITORING_SECRET_KEY: randomBytes(32).toString("hex"),
 };
 
 let contents = readFileSync(resolve(root, ".env.example"), "utf8");

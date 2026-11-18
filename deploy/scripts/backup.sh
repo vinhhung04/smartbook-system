@@ -55,6 +55,14 @@ dc exec -T db pg_dumpall -U "$pg_user" --globals-only | encrypt "$dest/globals.s
 for database in auth_db inventory_db borrow_db ai_db; do
   dc exec -T db pg_dump -U "$pg_user" -Fc "$database" | encrypt "$dest/$database.dump.gpg"
 done
+# Incident history (optional, outside the writer-stopped boundary: monitoring-service
+# keeps running). pg_dump is still a consistent snapshot of that one database.
+# Not restored automatically by restore.sh - see docs/MONITORING.md.
+optional_databases='[]'
+if [[ "$(dc exec -T db psql -X -U "$pg_user" -d postgres -Atqc "SELECT 1 FROM pg_database WHERE datname='monitoring_db'")" == 1 ]]; then
+  dc exec -T db pg_dump -U "$pg_user" -Fc monitoring_db | encrypt "$dest/monitoring_db.dump.gpg"
+  optional_databases='["monitoring_db"]'
+fi
 for kind in packing procurement; do
   dc run --rm --no-deps -T --entrypoint tar backup-files -czf - -C "/recovery/$kind" . | encrypt "$dest/${kind}_evidence.tar.gz.gpg"
 done
@@ -62,7 +70,7 @@ config=(compose.prod.yml deploy/Caddyfile deploy/scripts .env)
 [[ ! -f "$RELEASE_ENV" ]] || config+=(state/release.env)
 tar -czf - "${config[@]}" | encrypt "$dest/configuration.tar.gz.gpg"
 tag="$(current_tag)"
-printf '{"format":2,"boundary":"writers-stopped","created_at":"%s","release":"%s","encrypted":true,"databases":["auth_db","inventory_db","borrow_db","ai_db"],"files":["packing_evidence.tar.gz.gpg","procurement_evidence.tar.gz.gpg","configuration.tar.gz.gpg"],"restore_verified":false}\n' "$stamp" "${tag:-none}" >"$dest/manifest.json"
+printf '{"format":2,"boundary":"writers-stopped","created_at":"%s","release":"%s","encrypted":true,"databases":["auth_db","inventory_db","borrow_db","ai_db"],"optional_databases":%s,"files":["packing_evidence.tar.gz.gpg","procurement_evidence.tar.gz.gpg","configuration.tar.gz.gpg"],"restore_verified":false}\n' "$stamp" "${tag:-none}" "$optional_databases" >"$dest/manifest.json"
 (cd "$dest" && sha256sum -- *.gpg manifest.json >SHA256SUMS)
 (cd "$dest" && sha256sum -c --quiet SHA256SUMS) || die "local checksum verification failed"
 date -u +%s >"$STATE_DIR/last_local_backup"

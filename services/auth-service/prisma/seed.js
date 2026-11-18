@@ -34,6 +34,12 @@ async function main() {
     { code: 'auth.audit.read', module_name: 'auth', action_name: 'read', description: 'View authentication audit logs' },
     { code: 'audit.read', module_name: 'audit', action_name: 'read', description: 'View system audit trail' },
 
+    // Monitoring & incident management (monitoring-service). ADMIN receives them
+    // with every other permission; grant them explicitly to other roles if needed.
+    { code: 'monitoring.incidents.read', module_name: 'monitoring', action_name: 'read', description: 'View incidents, alert activity and monitoring analytics' },
+    { code: 'monitoring.incidents.manage', module_name: 'monitoring', action_name: 'write', description: 'Acknowledge, resolve and annotate incidents' },
+    { code: 'monitoring.settings.manage', module_name: 'monitoring', action_name: 'write', description: 'Configure alert notification channels and routing policies' },
+
     // Catalog module (Inventory)
     { code: 'inventory.catalog.read', module_name: 'inventory', action_name: 'read', description: 'View catalog, books, and variants' },
     { code: 'inventory.catalog.write', module_name: 'inventory', action_name: 'write', description: 'Create or update catalog items' },

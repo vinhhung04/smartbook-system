@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { Activity, AlertTriangle, CheckCircle2, ChevronDown, RefreshCw, XCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { incidentService, type MonitoringCapabilities, type MonitoringOverview } from '@/services/incidents';
+import { getApiErrorCode, getApiErrorMessage } from '@/services/http-clients';
+import { useSocketEvent } from '@/lib/socket';
+import { OverviewTab } from './admin-monitor/overview-tab';
+import { IncidentsTab } from './admin-monitor/incidents-tab';
+import { SettingsTab } from './admin-monitor/settings-tab';
+import { AnalyticsTab } from './admin-monitor/analytics-tab';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { PageWrapper, FadeItem } from '@/components/motion-utils';
 import { Button } from '@/components/ui/button';
@@ -15,6 +24,14 @@ import { toast } from 'sonner';
 
 const AUTO_REFRESH_MS = 30000;
 const HISTORY_LENGTH = 30;
+const TABS = [
+  { value: 'overview', label: 'Tổng quan' },
+  { value: 'services', label: 'Dịch vụ' },
+  { value: 'incidents', label: 'Sự cố' },
+  { value: 'settings', label: 'Cài đặt thông báo' },
+  { value: 'analytics', label: 'Thống kê' },
+] as const;
+type TabValue = (typeof TABS)[number]['value'];
 
 type Check = MonitorCheck;
 
@@ -103,16 +120,30 @@ function HistoryStrip({ checks, name }: { checks: Check[]; name: string }) {
   );
 }
 
-function ServiceRow({ service, checks, expanded, onToggle }: {
+type ServiceMetrics = NonNullable<MonitoringOverview['prometheus']['services']>[string];
+
+function metricRows(metrics: ServiceMetrics | undefined, openIncidents: number | undefined) {
+  const rows: Array<{ label: string; value: string; healthy: boolean | null }> = [];
+  if (typeof metrics?.request_rate === 'number') rows.push({ label: 'Yêu cầu / phút', value: (metrics.request_rate * 60).toLocaleString('vi-VN', { maximumFractionDigits: 1 }), healthy: null });
+  if (typeof metrics?.error_rate === 'number') rows.push({ label: 'Tỷ lệ lỗi 5xx', value: `${(metrics.error_rate * 100).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%`, healthy: metrics.error_rate < 0.05 });
+  if (typeof metrics?.p95_ms === 'number') rows.push({ label: 'Độ trễ p95', value: `${Math.round(metrics.p95_ms).toLocaleString('vi-VN')} ms`, healthy: metrics.p95_ms < 2000 });
+  if (typeof metrics?.up === 'number') rows.push({ label: 'Prometheus thu thập', value: metrics.up === 1 ? 'Bình thường' : 'Mất kết nối', healthy: metrics.up === 1 });
+  if (typeof openIncidents === 'number') rows.push({ label: 'Sự cố đang mở', value: String(openIncidents), healthy: openIncidents === 0 });
+  return rows;
+}
+
+function ServiceRow({ service, checks, expanded, onToggle, metrics, openIncidents }: {
   service: MonitorServiceHealth;
   checks: Check[];
   expanded: boolean;
   onToggle: () => void;
+  metrics?: ServiceMetrics;
+  openIncidents?: number;
 }) {
   const shouldReduceMotion = useReducedMotion();
   const meta = STATUS_META[service.status];
   const Icon = meta.icon;
-  const dependencies = getDependencyRows(service);
+  const dependencies = [...getDependencyRows(service), ...metricRows(metrics, openIncidents)];
   const panelId = `monitor-detail-${service.id}`;
 
   return (
@@ -204,6 +235,33 @@ export function AdminMonitorPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const { connected } = useSocket();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = TABS.some((t) => t.value === searchParams.get('tab')) ? (searchParams.get('tab') as TabValue) : 'overview';
+  const setTab = (value: string) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('tab', value); return next; }, { replace: true });
+  // null = still loading; false = monitoring-service unavailable or no rights.
+  const [can, setCan] = useState<MonitoringCapabilities | null | false>(null);
+  const [monitoringError, setMonitoringError] = useState<string | null>(null);
+  const [overview, setOverview] = useState<MonitoringOverview | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const loadOverview = useCallback(async () => {
+    try {
+      const capabilities = await incidentService.capabilities();
+      setCan(capabilities);
+      if (!capabilities.read) { setMonitoringError('Bạn chưa có quyền xem sự cố (cần monitoring.incidents.read).'); return; }
+      setOverview(await incidentService.overview());
+      setMonitoringError(null);
+    } catch (err) {
+      setCan(false);
+      setMonitoringError(getApiErrorCode(err) === 'MONITORING_UNAVAILABLE'
+        ? 'Dịch vụ giám sát (monitoring-service) đang không khả dụng.'
+        : getApiErrorMessage(err, 'Không tải được dữ liệu sự cố.'));
+    }
+  }, []);
+
+  useEffect(() => { void loadOverview(); }, [loadOverview, refreshKey]);
+  // A persisted incident notification arrived: refresh every incident view.
+  useSocketEvent('incident:notification', () => setRefreshKey((key) => key + 1));
 
   const toggleExpanded = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -251,7 +309,7 @@ export function AdminMonitorPage() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const intervalId = window.setInterval(() => void loadSnapshot(), AUTO_REFRESH_MS);
+    const intervalId = window.setInterval(() => { void loadSnapshot(); setRefreshKey((key) => key + 1); }, AUTO_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, [autoRefresh, loadSnapshot]);
 
@@ -275,7 +333,7 @@ export function AdminMonitorPage() {
                 <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} aria-label="Tự động kiểm tra mỗi 30 giây" />
                 Tự động mỗi 30 giây
               </label>
-              <Button type="button" variant="outline" size="sm" onClick={() => void loadSnapshot(true)} loading={refreshing} loadingLabel="Đang kiểm tra lại" className="gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => { void loadSnapshot(true); setRefreshKey((key) => key + 1); }} loading={refreshing} loadingLabel="Đang kiểm tra lại" className="gap-2">
                 <RefreshCw className="h-4 w-4" />
                 Kiểm tra ngay
               </Button>
@@ -284,6 +342,40 @@ export function AdminMonitorPage() {
         />
       </FadeItem>
 
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
+        <div className="overflow-x-auto">
+          <TabsList className="w-max">
+            {TABS.map((item) => (
+              <TabsTrigger key={item.value} value={item.value} className="px-3 text-[13px]">
+                {item.label}
+                {item.value === 'incidents' && overview?.incidents.open ? (
+                  <span className="ml-1.5 rounded-full bg-red-600 px-1.5 text-[11px] font-semibold tabular-nums text-white">{overview.incidents.open}</span>
+                ) : null}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview" className="min-w-0">
+          <OverviewTab snapshot={snapshot} overview={overview} overviewError={monitoringError} />
+        </TabsContent>
+
+        {(['incidents', 'settings', 'analytics'] as const).map((value) => (
+          <TabsContent key={value} value={value} className="min-w-0">
+            {can === null ? (
+              <SectionCard><LoadingOverlay /></SectionCard>
+            ) : !can || !can.read ? (
+              <SectionCard>
+                <EmptyState variant="error" title="Chưa xem được dữ liệu sự cố" description={monitoringError || 'Không có quyền xem sự cố.'}
+                  action={<Button type="button" variant="outline" onClick={() => void loadOverview()}><RefreshCw className="h-4 w-4" />Thử lại</Button>} />
+              </SectionCard>
+            ) : value === 'incidents' ? <IncidentsTab refreshKey={refreshKey} />
+              : value === 'settings' ? <SettingsTab editable={can.settings} />
+              : <AnalyticsTab refreshKey={refreshKey} />}
+          </TabsContent>
+        ))}
+
+        <TabsContent value="services" className="min-w-0">
       {loading ? (
         <SectionCard>
           <LoadingOverlay />
@@ -334,6 +426,8 @@ export function AdminMonitorPage() {
                   checks={history[service.id] || []}
                   expanded={expandedIds.has(service.id)}
                   onToggle={() => toggleExpanded(service.id)}
+                  metrics={overview?.prometheus.services?.[service.id]}
+                  openIncidents={overview ? overview.incidents.open_by_service[service.id] || 0 : undefined}
                 />
               ))}
             </ul>
@@ -363,6 +457,8 @@ export function AdminMonitorPage() {
           <EmptyState variant="no-data" title="Chưa có dữ liệu giám sát" description="Bấm “Kiểm tra ngay” để kiểm tra các dịch vụ." />
         </SectionCard>
       )}
+        </TabsContent>
+      </Tabs>
     </PageWrapper>
   );
 }

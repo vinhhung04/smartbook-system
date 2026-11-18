@@ -39,6 +39,7 @@ const borrowTarget =
 const analyticsTarget =
   process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3006";
 const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
+const monitoringTarget = process.env.MONITORING_SERVICE_URL || "http://monitoring-service:3007";
 
 // ai-service rate-limits anonymous callers by client IP, but sees every request
 // from this gateway's address. The gateway resolves the client IP the same way
@@ -62,6 +63,17 @@ function handleAiProxyError(_error, req, res) {
   res.end(JSON.stringify({
     message: "AI tạm thời không khả dụng",
     code: "AI_UNAVAILABLE",
+    request_id: req.requestId || null,
+  }));
+}
+
+// Monitoring is optional: its outage must not look like a gateway failure.
+function handleMonitoringProxyError(_error, req, res) {
+  if (res.headersSent) return;
+  res.writeHead(503, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({
+    message: "Dịch vụ giám sát tạm thời không khả dụng",
+    code: "MONITORING_UNAVAILABLE",
     request_id: req.requestId || null,
   }));
 }
@@ -93,11 +105,15 @@ const ALLOWED_EVENTS = new Set([
   "exception_report:created", "exception_report:resolved",
   "ai_action:created", "ai_action:confirmed", "ai_action:executed",
   "ai_action:failed", "ai_action:cancelled", "ai_action:reconciled",
+  // monitoring-service -> room "monitoring" only (internal incidents, never customers)
+  "incident:notification",
 ]);
 
 // Matches: user:{uuid}, customer:{uuid}, supplier:{uuid}, warehouse:{uuid},
-//          admin, warehouse_manager, warehouse_staff, librarian
-const ROOM_PATTERN = /^(user|customer|supplier|warehouse):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^(admin|warehouse_manager|warehouse_staff|librarian)$/;
+//          admin, warehouse_manager, warehouse_staff, librarian, monitoring
+const ROOM_PATTERN = /^(user|customer|supplier|warehouse):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^(admin|warehouse_manager|warehouse_staff|librarian|monitoring)$/;
+// Same audience as monitoring-service's read authorization.
+const MONITORING_PERMISSIONS = ["monitoring.incidents.read", "monitoring.incidents.manage", "monitoring.settings.manage"];
 
 const MAX_PAYLOAD_BYTES = 65536; // 64 KB
 
@@ -168,6 +184,12 @@ io.on("connection", async (socket) => {
   if (roles.includes("LIBRARIAN")) {
     socket.join("librarian");
     joinedRooms.push("librarian");
+  }
+
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  if (user.is_superuser === true || roles.includes("ADMIN") || MONITORING_PERMISSIONS.some((p) => permissions.includes(p))) {
+    socket.join("monitoring");
+    joinedRooms.push("monitoring");
   }
 
   if (roles.includes("WAREHOUSE_MANAGER")) {
@@ -311,6 +333,8 @@ const DEPENDENCIES = [
   { id: "borrow-service", name: "Borrow Service", description: "Khách hàng, đặt trước, mượn trả và tiền phạt", target: borrowTarget, path: "/ready", critical: true },
   { id: "analytics-service", name: "Analytics Service", description: "Báo cáo và số liệu tổng quan", target: analyticsTarget, path: "/ready", critical: true },
   { id: "ai-service", name: "AI Service", description: "Trợ lý AI, OCR và gợi ý metadata qua OpenRouter", target: aiTarget, path: "/health", critical: false },
+  // Optional like AI: its outage degrades monitoring, never gateway readiness.
+  { id: "monitoring-service", name: "Monitoring Service", description: "Sự cố, cảnh báo và gửi thông báo vận hành", target: monitoringTarget, path: "/ready", critical: false },
 ];
 
 const ADMIN_PERMISSIONS = ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"];
@@ -572,6 +596,18 @@ app.use(
     target: analyticsTarget,
     changeOrigin: true,
     xfwd: true,
+  }),
+);
+
+// Admin Incident Center API. Only /monitoring/* is forwarded: monitoring-service's
+// /internal/* alert ingestion is never reachable through the gateway.
+app.use(
+  createProxyMiddleware({
+    pathFilter: (path) => path === "/monitoring" || path.startsWith("/monitoring/"),
+    target: monitoringTarget,
+    changeOrigin: true,
+    xfwd: true,
+    on: { error: handleMonitoringProxyError },
   }),
 );
 

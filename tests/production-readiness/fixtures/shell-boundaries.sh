@@ -7,7 +7,8 @@ BACKUP_DIR="$APP_DIR/backups"
 RELEASE_ENV="$STATE_DIR/release.env"
 RELEASES_LOG="$STATE_DIR/releases.log"
 APP_SERVICES=(inventory-service auth-service borrow-service analytics-service ai-service api-gateway web)
-IMAGE_SERVICES=("${APP_SERVICES[@]}" caddy)
+IMAGE_SERVICES=("${APP_SERVICES[@]}" caddy monitoring-service)
+MONITORING_SERVICES=(monitoring-service prometheus grafana node-exporter cadvisor postgres-exporter redis-exporter)
 : > "$APP_DIR/calls.log"
 trace() { printf '%s\n' "$*" >> "$APP_DIR/calls.log"; }
 log() { printf '%s\n' "$*"; }
@@ -31,6 +32,9 @@ dc() {
     'ps -aq') return 0 ;;
     'ps --status running -q db') return 0 ;;
     'ps --status running -q inventory-service') printf '%s\n' 'sandbox-inventory' ;;
+    'ps --status running -q monitoring-service') printf '%s\n' 'sandbox-monitoring' ;;
+    'exec -T monitoring-service node src/cli/ingest-healthcheck.js') cat >/dev/null ;;
+    'exec -T db bash /docker-entrypoint-initdb.d/05-monitoring-db.sh') return 0 ;;
     'ps -a --format '*) printf 'inventory-service\trunning\tunhealthy\n' ;;
     'exec -T db pg_dumpall '*) printf '%s\n' '-- opaque fake globals; not a real dump' ;;
     'exec -T db pg_dump '*) printf '%s\n' 'opaque fake dump; not a restore proof' ;;

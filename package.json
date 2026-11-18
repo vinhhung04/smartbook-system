@@ -10,7 +10,7 @@
     "lint": "pnpm -r --filter \"./apps/*\" lint",
     "lint:ci": "pnpm lint",
     "typecheck": "pnpm --filter web exec tsc --noEmit && pnpm --filter @smartbook/mobile typecheck",
-    "test:node": "pnpm -r --workspace-concurrency=1 --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service test",
+    "test:node": "pnpm -r --workspace-concurrency=1 --filter @smartbook/shared --filter api-gateway --filter auth-service --filter inventory-service --filter borrow-service --filter analytics-service --filter monitoring-service test",
     "test:ai": "python -m pytest services/ai-service -q",
     "test:web": "pnpm --filter web test:unit",
     "test:mobile": "pnpm --filter @smartbook/mobile test --ci --runInBand",
