@@ -113,8 +113,8 @@ async function main() {
   ]);
   const succeeded = [resA, resB].filter((r) => r.response.ok);
   check(
-    'concurrent invoices: not both 60-unit notes accepted on a 100-unit line (combined would be 120)',
-    succeeded.length < 2,
+    'concurrent invoices: exactly one 60-unit note is accepted on a 100-unit line',
+    succeeded.length === 1,
     `A=${resA.response.status} B=${resB.response.status}`,
   );
 

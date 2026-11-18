@@ -1,3 +1,4 @@
+import { availableStockFixture } from './testing/stock-fixture.mjs';
 // P1.1 check: membership borrow limits (max_active_loans) must be enforced by counting BOOKS
 // (loan_items), not loan/receipt rows (loan_transactions) or reservation rows. One receipt can
 // hold several books, so counting receipts undercounts and lets a customer exceed their plan's
@@ -54,12 +55,7 @@ function check(name, condition, detail = '') {
 }
 
 async function findStockTarget(minimumQuantity) {
-  const books = await ok('GET', '/api/books');
-  const candidates = (Array.isArray(books) ? books : [])
-    .filter((b) => b?.variant_id && b?.default_warehouse_id && Number(b?.quantity || 0) >= minimumQuantity)
-    .sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0));
-  if (candidates.length === 0) throw new Error(`No book with >= ${minimumQuantity} in stock`);
-  return candidates[0];
+  return availableStockFixture(minimumQuantity);
 }
 
 async function main() {

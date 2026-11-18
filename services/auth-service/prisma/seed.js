@@ -370,7 +370,7 @@ async function main() {
 
   console.log('✅ Legacy role migration complete');
 
-  const passwordHash = await bcrypt.hash('123456', 12);
+  const passwordHash = await bcrypt.hash(process.env.DEMO_PASSWORD || '123456', 12);
 
   const users = await Promise.all([
     // Admin user
@@ -732,7 +732,7 @@ async function main() {
   console.log(`   • ${warehouseScopes.length} User Warehouse Scopes`);
   console.log(`   • Sample audit logs`);
   console.log('');
-  console.log('🔑 Default Password for all users: 123456');
+  console.log(process.env.DEMO_PASSWORD ? '🔑 Test password supplied through DEMO_PASSWORD (not logged).' : '🔑 Default demo password is configured in the seed.');
   console.log('═══════════════════════════════════════════════════════════════════════\n');
 }
 

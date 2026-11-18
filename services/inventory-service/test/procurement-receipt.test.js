@@ -13,6 +13,14 @@ const {
 } = require('../src/services/procurement-receipt.service');
 const { createFakeDb } = require('./helpers/procurement-fake-db');
 
+for (const value of [true, false, [], [1], {}]) {
+  test(`supplier receipt rejects JSON ${JSON.stringify(value)} as a count`, () => {
+    for (const field of ['delivered', 'damaged', 'rejected']) {
+      assert.throws(() => computeLineOutcome({ noteQty: 5, poRemainingQty: 5, delivered: 5, [field]: value }), ProcurementError);
+    }
+  });
+}
+
 // ── P1.2 Close Remaining Quantity guard ─────────────────────────────────────
 
 test('assertLineNotClosed blocks a line that was closed with a remainder', () => {

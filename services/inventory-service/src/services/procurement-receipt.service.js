@@ -22,6 +22,7 @@ class ProcurementError extends Error {
 
 function toNonNegativeInt(value, fallback = 0) {
   if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const n = Number(value);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
   return n;

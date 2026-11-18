@@ -45,8 +45,21 @@ async function check(name, fn) {
 
 const rowsOf = (body) => (Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data
   : Array.isArray(body?.tasks) ? body.tasks : Array.isArray(body?.items) ? body.items : []);
-const warehouseRefs = (rows) => rows.flatMap((r) => [r.warehouse_id, r.warehouses?.id, r.from_warehouse_id, r.to_warehouse_id,
-  r.source_warehouse_id, r.target_warehouse_id].filter(Boolean));
+const warehouseRefs = (rows, path) => rows.flatMap((r) => {
+  // Transfer counterparties are labels on an authorised task, not its owner:
+  // receiving is scoped to the destination; picking/outbound to the source.
+  if (path === '/api/transfer-receiving') {
+    assert.ok(r.to_warehouse_id, 'receiving task must declare its destination');
+    return [r.to_warehouse_id];
+  }
+  if (path === '/api/picking/tasks' || path === '/api/picking/picking-tasks' || path === '/api/outbound/orders') {
+    const owner = r.warehouse_id || r.source_warehouse_id || r.from_warehouse_id;
+    assert.ok(owner, 'source task must declare its owning warehouse');
+    return [owner];
+  }
+  return [r.warehouse_id, r.warehouses?.id, r.from_warehouse_id, r.to_warehouse_id,
+    r.source_warehouse_id, r.target_warehouse_id].filter(Boolean);
+});
 
 const admin = await login('hung');
 const curator = await login('curator01');   // HCM, READ
@@ -74,7 +87,7 @@ for (const [who, token, scope] of [['curator01', curator, curatorScope], ['manag
       const r = await call(token, path);
       if (r.status === 403) continue; // role without that read: refused outright, also no leak
       assert.equal(r.status, 200, `${path} ${r.status}`);
-      const outside = warehouseRefs(rowsOf(r.body)).filter((id) => !scope.has(id));
+      const outside = warehouseRefs(rowsOf(r.body), path).filter((id) => !scope.has(id));
       assert.deepEqual(outside, [], `${path} returned rows of another warehouse`);
     }
   });
@@ -105,9 +118,15 @@ await check('4. naming another warehouse cannot bypass the scope', async () => {
 
 await check('5. a purchase request of another warehouse can be neither read nor decided', async () => {
   const all = await call(admin, '/api/purchase-requests?limit=200');
-  const foreign = all.body.data.find((x) => !managerScope.has(x.warehouse_id) && x.status === 'PENDING')
+  let foreign = all.body.data.find((x) => !managerScope.has(x.warehouse_id) && x.status === 'PENDING')
     || all.body.data.find((x) => !managerScope.has(x.warehouse_id));
-  if (!foreign) { console.log('       (no request outside manager01\'s scope in this database - skipped)'); return; }
+  if (!foreign) {
+    const warehouse = list.find(w => !managerScope.has(w.id));
+    assert.ok(warehouse, 'seed must include a warehouse outside the manager scope');
+    const created = await call(admin, '/api/purchase-requests', { method: 'POST', body: JSON.stringify({ warehouse_id: warehouse.id, book_title_hint: 'QA scoped purchase request', quantity_requested: 1, reason: 'OTHER' }) });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    foreign = created.body.data;
+  }
   const detail = await call(manager, `/api/purchase-requests/${foreign.id}`);
   assert.equal(detail.status, 403);
   assert.ok(!JSON.stringify(detail.body).includes(foreign.request_number || foreign.id));

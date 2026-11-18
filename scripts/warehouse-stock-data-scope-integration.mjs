@@ -23,9 +23,9 @@ const adminName = process.env.PURCHASE_TEST_USERNAME || 'hung';
 const managerName = process.env.SCOPE_TEST_MANAGER || 'manager01';
 
 // WH-HCM-01 (A, FULL), WH-HN-01 (B, READ_ONLY), WH-DN-01 (C, no grant).
-const A = process.env.SCOPE_TEST_WAREHOUSE_A || '2f4acebd-d433-4cee-a2e0-d985024a0bfa';
-const B = process.env.SCOPE_TEST_WAREHOUSE_B || '10fab1b4-6a76-43d8-ba6d-d647c2a6d8c1';
-const C = process.env.SCOPE_TEST_WAREHOUSE_C || '9dd7de0f-6295-5c17-80e8-214ed2bce031';
+let A = process.env.SCOPE_TEST_WAREHOUSE_A;
+let B = process.env.SCOPE_TEST_WAREHOUSE_B;
+let C = process.env.SCOPE_TEST_WAREHOUSE_C;
 
 async function request(method, path, token, body) {
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -82,6 +82,11 @@ async function ensureStockEverywhere(adminToken) {
 
 async function main() {
   const admin = await login(adminName);
+  const directory = await ok('GET', '/api/warehouses', admin.token);
+  A ||= directory.find(w => w.code === 'WH-HCM-01')?.id;
+  B ||= directory.find(w => w.code === 'WH-HN-01')?.id;
+  C ||= directory.find(w => w.code === 'BR-HCM-02')?.id;
+  if (!A || !B || !C) throw new Error('Need three seeded warehouses for the scope fixture');
   const mgrA = await login(managerName);
   const book = await ensureStockEverywhere(admin.token);
   const bookId = book.id;
@@ -102,6 +107,9 @@ async function main() {
     const expectedTotal = (book.locations || [])
       .filter((l) => l.warehouse_id === A || l.warehouse_id === B)
       .reduce((sum, l) => sum + Number(l.quantity || 0), 0);
+    const expectedAvailable = (book.locations || [])
+      .filter(l => l.warehouse_id === A || l.warehouse_id === B)
+      .reduce((sum, l) => sum + Number(l.available_quantity || 0), 0);
 
     // ── T1: GET /api/books ──────────────────────────────────────────────────
     const books = await ok('GET', '/api/books', mgrA.token);
@@ -110,7 +118,7 @@ async function main() {
     check('T1: book list includes warehouse A stock', whIds.has(A));
     check('T1: book list includes warehouse B stock (READ_ONLY)', whIds.has(B));
     check('T1: book list excludes warehouse C stock (no grant)', !whIds.has(C), JSON.stringify([...whIds]));
-    check('T1: quantity/available recomputed from A+B only, never C', listed?.quantity === expectedTotal && listed?.available_quantity === expectedTotal, `quantity=${listed?.quantity} expected=${expectedTotal}`);
+    check('T1: quantity/available recomputed from A+B only, never C', listed?.quantity === expectedTotal && listed?.available_quantity === expectedAvailable, `quantity=${listed?.quantity}/${expectedTotal} available=${listed?.available_quantity}/${expectedAvailable}`);
 
     // ── T2: GET /api/books/:id ──────────────────────────────────────────────
     const detail = await ok('GET', `/api/books/${bookId}`, mgrA.token);

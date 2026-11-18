@@ -65,7 +65,9 @@ async function writeRevocation(key, value, ttlSeconds) {
 // from ACTIVE (lock/deactivate).
 async function revokeUserTokensIssuedBefore(userId) {
   if (!userId) return true;
-  const nowSeconds = Math.floor(Date.now() / 1000);
+  // NumericDate allows fractional seconds. Flooring loses the ordering of a
+  // login and a later account lock/role change in the same second.
+  const nowSeconds = Date.now() / 1000;
   return writeRevocation(`user:tokens-valid-after:${userId}`, String(nowSeconds), REVOCATION_CUTOFF_TTL_SECONDS);
 }
 

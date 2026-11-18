@@ -28,6 +28,14 @@ function fakeRes() {
 
 const token = { jti: 'u1-1', sub: 'u1', iat: 1000 };
 
+test('same-second revocation rejects earlier NumericDates but allows a fresh login after the cutoff', async () => {
+  const redis = fakeRedis({ 'user:tokens-valid-after:u1': '1000.750' });
+  const checker = createRevocationChecker({ get: redis.get });
+  assert.equal((await checker.check({ sub: 'u1', iat: 1000.125 })).state, REVOKED);
+  assert.equal((await checker.check({ sub: 'u1', iat: 1000 })).state, REVOKED);
+  assert.equal((await checker.check({ sub: 'u1', iat: 1000.875 })).state, VALID);
+});
+
 test('Redis answering: valid, logged out (jti), and issued before the cutoff', async () => {
   const redis = fakeRedis();
   const checker = createRevocationChecker({ get: redis.get });

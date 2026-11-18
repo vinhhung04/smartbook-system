@@ -59,7 +59,8 @@ function generateToken(user, expiresIn = process.env.JWT_EXPIRES_IN || '2h') {
         email: user.email,
         roles: user.roles,
         is_superuser: user.is_superuser,
-        jti: jti
+        jti: jti,
+        iat: Date.now() / 1000
       },
       JWT_SECRET,
       { expiresIn }

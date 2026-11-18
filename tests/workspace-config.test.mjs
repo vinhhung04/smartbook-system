@@ -27,18 +27,14 @@ test("CI installs dependencies reproducibly", () => {
   assert.doesNotMatch(workflow, /test_stock_request\.py is excluded/);
 });
 
-test("every CI job that boots the stack lifts the login rate limit", () => {
-  // The production default is 10 logins per 15 minutes. The Docker jobs log in far more
-  // often than that (7 integration scripts; a Playwright suite with a login per test),
-  // so each job that generates a .env must also raise it, or logins start returning 429.
-  const workflow = readFileSync(
-    resolve(repositoryRoot, ".github/workflows/ci.yml"),
-    "utf8",
-  );
-  const stacks = workflow.match(/node scripts\/init-demo-env\.mjs/g) ?? [];
-  const lifted = workflow.match(/AUTH_LOGIN_RATE_LIMIT_MAX=\d+" >> \.env/g) ?? [];
-  assert.ok(stacks.length >= 2, "expected the integration and e2e jobs to generate a .env");
-  assert.equal(lifted.length, stacks.length);
+test("every CI stack job uses isolated secrets and a raised test-only rate limit", () => {
+  const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+  assert.equal((workflow.match(/run: pnpm test:stack setup/g) ?? []).length, 2);
+  assert.equal((workflow.match(/run: pnpm test:stack down/g) ?? []).length, 2);
+  const environment = readFileSync(resolve(repositoryRoot, 'scripts/testing/environment.mjs'), 'utf8');
+  assert.match(environment, /AUTH_LOGIN_RATE_LIMIT_MAX: '5000'/);
+  assert.match(environment, /randomBytes/);
+  assert.match(environment, /OPENROUTER_API_KEY: ''/);
 });
 
 test("workspace exposes one complete verification command", () => {

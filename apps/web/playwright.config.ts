@@ -11,10 +11,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }], ['junit', { outputFile: 'test-results/junit.xml' }], ['json', { outputFile: 'test-results/results.json' }]] : 'list',
   timeout: 60_000,
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    // Local offline fallback, e.g. PLAYWRIGHT_CHANNEL=msedge. CI installs Chromium.
+    channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

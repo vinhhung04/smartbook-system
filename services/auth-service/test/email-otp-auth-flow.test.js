@@ -123,6 +123,14 @@ test.beforeEach(() => {
   delete process.env.REGISTRATION_EMAIL_VERIFICATION;
 });
 
+test('access tokens retain issuance ordering within the same second as an account lock', async (t) => {
+  t.mock.method(Date, 'now', () => 1800000000125);
+  await seedUser({ username: 'precision-reader', roles: ['CUSTOMER'], email_verified_at: new Date() });
+  const result = await call(controller.login, { identifier: 'precision-reader', password: PASSWORD });
+  assert.equal(result.statusCode, 200, JSON.stringify(result.body));
+  assert.equal(require('jsonwebtoken').decode(result.body.token).iat, 1800000000.125);
+});
+
 // ---- Phase 1: registration -----------------------------------------------------
 
 test('register creates a pending account and returns a challenge, never a token', async () => {
