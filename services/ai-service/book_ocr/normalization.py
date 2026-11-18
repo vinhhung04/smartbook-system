@@ -11,6 +11,7 @@ import unicodedata
 
 from metadata_intelligence.normalization import clean, normalize as mi_normalize
 from metadata_intelligence.verification import canonical_isbn
+from isbn_matching import ean13_valid
 
 LIST_FIELDS = {"authors", "translators"}
 YEAR_FIELDS = {"publicationYear", "printYear", "copyrightYear"}
@@ -101,11 +102,22 @@ def isbn_issue(raw) -> str | None:
     digits = isbn_digits(raw)
     if canonical_isbn(digits):
         return None
-    if len(digits) == 13 and digits.isdigit() and not digits.startswith(("978", "979")):
+    if len(digits) == 13 and digits.isdigit() and not digits.startswith(("978", "979")) and ean13_valid(digits):
         return "NOT_ISBN_PREFIX"  # e.g. an 893... retail EAN printed under the barcode
     if len(digits) not in (10, 13):
         return "INVALID_FORMAT"
     return "INVALID_CHECKSUM"
+
+
+def code_kind(raw) -> str:
+    """ISBN | EAN13 (valid check digit, not an ISBN - e.g. a 893... retail barcode) |
+    INVALID_CHECKSUM (13 digits, wrong check digit) | OTHER."""
+    digits = isbn_digits(raw)
+    if canonical_isbn(digits):
+        return "ISBN"
+    if len(digits) == 13 and digits.isdigit():
+        return "EAN13" if ean13_valid(digits) else "INVALID_CHECKSUM"
+    return "OTHER"
 
 
 def normalize_observation(field: str, value) -> tuple[object, list[str]]:

@@ -6,8 +6,10 @@ from cache import isbn_lookup_cache
 from isbn_rounds import BookProvider
 from main import IsbnLookupRequest, _fetch_marketplace_provider, lookup_book_by_isbn
 
-# 13 digits with an invalid ISBN/EAN checksum -> the legacy "barcode mode" branch.
-NON_ISBN_BARCODE = "1234567890123"
+# A valid retail EAN-13 that is not an ISBN (893...) -> the "barcode mode" branch.
+NON_ISBN_BARCODE = "8935235226272"
+# 13 digits with a wrong check digit: neither an ISBN nor an EAN, never looked up.
+BAD_CHECKSUM_CODE = "1234567890123"
 
 
 class BarcodeModeCharacterizationTests(unittest.IsolatedAsyncioTestCase):
@@ -35,6 +37,20 @@ class BarcodeModeCharacterizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["title"], "Sách từ barcode")
         self.assertEqual(result["authors"], ["Tác giả A"])
         self.assertEqual(result["publisher"], "NXB Trẻ")
+        self.assertEqual(result["codeKind"], "EAN13")
+        self.assertIsNone(result["isbn13"])  # the EAN is never reported as an ISBN
+        self.assertEqual(result["crossLookup"]["status"], "NOT_FOUND")
+
+    async def test_bad_checksum_code_is_not_looked_up(self):
+        by_code = AsyncMock()
+        store = BookProvider("dinhTi", by_code=by_code, round1=True, accepts_raw_barcode=True, retries=0)
+        with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), \
+             patch("main._book_providers", return_value=[store]), patch("main.ISBN_ROUND1_ORDER", "dinhTi"):
+            result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=BAD_CHECKSUM_CODE))
+        by_code.assert_not_awaited()
+        self.assertFalse(result["found"])
+        self.assertTrue(result["manualEntryRequired"])
+        self.assertEqual(result["codeKind"], "INVALID")
 
 
 class MarketplaceProviderTests(unittest.IsolatedAsyncioTestCase):

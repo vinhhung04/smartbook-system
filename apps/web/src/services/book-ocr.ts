@@ -110,11 +110,14 @@ export interface BookOcrScanResult {
   anomalies: Anomaly[];
   missingFields: string[];
   conflictedFields: string[];
-  otherCodes: Array<{ source: string; label: string | null; value: string; observedText?: string | null }>;
+  /** kind: EAN13 = valid retail EAN-13 (not an ISBN), INVALID_CHECKSUM = wrong check digit. */
+  otherCodes: Array<{ source: string; label: string | null; value: string; observedText?: string | null; kind?: 'ISBN' | 'EAN13' | 'INVALID_CHECKSUM' | 'OTHER' }>;
   warnings: string[];
   isbnLookup: {
     status: 'FOUND' | 'NOT_FOUND' | 'SKIPPED_NO_VALID_ISBN' | 'SKIPPED_ISBN_CONFLICT' | 'TIMEOUT' | 'ERROR' | 'DISABLED';
     isbn: string | null;
+    /** Set when no ISBN was read and the lookup ran on the book's retail EAN-13. */
+    ean13?: string | null;
     editionMatches: boolean | null;
     lookup: LookupBookByIsbnResponse | null;
   };

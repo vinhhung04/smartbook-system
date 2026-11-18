@@ -26,6 +26,7 @@ from .config import IMAGE_KINDS, BookOcrSettings, load_settings
 from .errors import BookOcrError
 from .extractor import Attempt, call_model, default_provider_factory, fallback_budget
 from .images import prepare_image
+from .normalization import isbn_digits
 from .prompts import build_prompt
 from .reconcile import FORM_FIELDS, build_proposals, lookup_mismatch
 from .schemas import (OCR_FIELDS, PROMPT_VERSION, FieldResult, IsbnLookupOutcome, ScanResponse, ScanUsage)
@@ -100,23 +101,36 @@ async def _extract(prepared, settings: BookOcrSettings, provider_factory, upload
     return chosen.raw, used_model, calls, fallback_used, warnings
 
 
-async def _lookup(isbn_field: FieldResult, lookup_isbn: LookupFn | None, timeout: float) -> IsbnLookupOutcome:
+def scanned_ean(other_codes: list[dict]) -> str | None:
+    """The one retail EAN-13 (valid check digit) the barcode / images show; None
+    when there is none or two different ones."""
+    eans = {isbn_digits(c.get("value")) for c in other_codes if c.get("kind") == "EAN13"}
+    return eans.pop() if len(eans) == 1 else None
+
+
+async def _lookup(isbn_field: FieldResult, lookup_isbn: LookupFn | None, timeout: float,
+                  ean: str | None = None) -> IsbnLookupOutcome:
+    """Looks the book up by its ISBN; with no ISBN read, by its retail EAN-13
+    (the lookup links an ISBN to it only from records that state both codes)."""
     if isbn_field.status == "CONFLICTED":
         return IsbnLookupOutcome(status="SKIPPED_ISBN_CONFLICT")
     isbn = canonical_isbn(_usable(isbn_field))
-    if not isbn:
+    if not isbn and not ean:
         return IsbnLookupOutcome(status="SKIPPED_NO_VALID_ISBN")
+    code, ids = (isbn, {"isbn": isbn}) if isbn else (ean, {"ean13": ean})
     if lookup_isbn is None:
-        return IsbnLookupOutcome(status="DISABLED", isbn=isbn)
+        return IsbnLookupOutcome(status="DISABLED", **ids)
     try:
-        lookup = await asyncio.wait_for(lookup_isbn(isbn), timeout=timeout)
+        lookup = await asyncio.wait_for(lookup_isbn(code), timeout=timeout)
     except asyncio.TimeoutError:
-        return IsbnLookupOutcome(status="TIMEOUT", isbn=isbn)
+        return IsbnLookupOutcome(status="TIMEOUT", **ids)
     except Exception as exc:  # noqa: BLE001 - the OCR result stays usable without it
         logger.warning("book_ocr isbn lookup failed: %s", type(exc).__name__)
-        return IsbnLookupOutcome(status="ERROR", isbn=isbn)
+        return IsbnLookupOutcome(status="ERROR", **ids)
     if not isinstance(lookup, dict) or not lookup.get("found"):
-        return IsbnLookupOutcome(status="NOT_FOUND", isbn=isbn, lookup=lookup if isinstance(lookup, dict) else None)
+        return IsbnLookupOutcome(status="NOT_FOUND", lookup=lookup if isinstance(lookup, dict) else None, **ids)
+    if not isbn:
+        return IsbnLookupOutcome(status="FOUND", lookup=lookup, **ids)  # the edition is checked by its title
     lookup_isbn13 = canonical_isbn(lookup.get("isbn13") or lookup.get("isbn"))
     return IsbnLookupOutcome(status="FOUND", isbn=isbn, lookup=lookup,
                              editionMatches=lookup_isbn13 == isbn if lookup_isbn13 else None)
@@ -203,7 +217,8 @@ async def scan_book_images(uploads: dict[str, bytes], *, barcode: str | None = N
         verify_coro = (read_images(prepared, settings, provider_factory or default_provider_factory)
                        if settings.visual_verification_enabled else _verification_off())
         isbn_lookup, (readings, verify_calls, verify_warnings) = await asyncio.gather(
-            _lookup(fields["isbn"], lookup_isbn, settings.lookup_timeout_seconds), verify_coro)
+            _lookup(fields["isbn"], lookup_isbn, settings.lookup_timeout_seconds,
+                    scanned_ean(validated["otherCodes"])), verify_coro)
         calls = [*calls, *verify_calls]
         warnings.extend(verify_warnings)
         if isbn_lookup.status in ("TIMEOUT", "ERROR", "NOT_FOUND"):
@@ -213,7 +228,7 @@ async def scan_book_images(uploads: dict[str, bytes], *, barcode: str | None = N
             if problem:
                 warnings.append("ISBN_" + problem)
         proposals = build_proposals(fields, isbn_lookup.lookup if isbn_lookup.status == "FOUND" else None,
-                                    isbn_lookup.editionMatches)
+                                    isbn_lookup.editionMatches, validated["otherCodes"])
         if any(fields[f].status == "CONFLICTED" for f in ("title", "isbn")):
             # The photos may be of two different books: nothing is safe to fill on its own.
             warnings.append("IMAGES_MAY_SHOW_DIFFERENT_BOOKS")
@@ -226,7 +241,7 @@ async def scan_book_images(uploads: dict[str, bytes], *, barcode: str | None = N
         ocr_names = {form: ocr for form, (ocr, _) in FORM_FIELDS.items()}
         conflicted = {_name(f) for f, r in fields.items() if r.status == "CONFLICTED"}
         conflicted |= {_name(ocr_names[p.formField]) for p in proposals.values()
-                       if p.status == "CONFLICTED" and ocr_names[p.formField]}
+                       if p.status == "CONFLICTED" and ocr_names.get(p.formField)}
         status = "SUCCESS" if metadata["title"] or metadata["isbn13"] else \
             "PARTIAL" if any(v for k, v in metadata.items() if k != "language") else "NO_DATA"
         outcome = status.lower()

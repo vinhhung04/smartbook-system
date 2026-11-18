@@ -149,7 +149,7 @@ export function unresolvedOcrFields(proposals: Record<string, OcrProposal>, user
 }
 
 export const OCR_FIELD_LABELS: Record<string, string> = {
-  isbn: 'ISBN', isbn13: 'ISBN-13', isbn10: 'ISBN-10', title: 'Tên sách', subtitle: 'Tựa phụ',
+  isbn: 'ISBN', isbn13: 'ISBN-13', isbn10: 'ISBN-10', internalBarcode: 'Mã vạch EAN-13', title: 'Tên sách', subtitle: 'Tựa phụ',
   authorsText: 'Tác giả', translatorText: 'Dịch giả', publisher: 'Nhà xuất bản', publishedDate: 'Năm xuất bản',
   pageCount: 'Số trang', description: 'Mô tả', language: 'Ngôn ngữ', categoriesText: 'Thể loại',
 };
@@ -164,7 +164,7 @@ export const OCR_READING_LABELS: Record<string, string> = {
 
 /** Form field -> the OCR field whose readings are its evidence. */
 export const OCR_FIELD_FOR_FORM: Record<string, string | null> = {
-  isbn: 'isbn', isbn13: 'isbn', isbn10: 'isbn', title: 'title', subtitle: 'subtitle', authorsText: 'authors',
+  isbn: 'isbn', isbn13: 'isbn', isbn10: 'isbn', internalBarcode: null, title: 'title', subtitle: 'subtitle', authorsText: 'authors',
   translatorText: 'translators', publisher: 'publisher', publishedDate: 'publicationYear', pageCount: 'pageCount',
   description: 'description', language: 'language', categoriesText: null,
 };
@@ -244,6 +244,24 @@ const CODE_LABELS: Record<string, string> = {
   FALLBACK_BUDGET_EXHAUSTED: 'đã hết ngân sách model dự phòng hôm nay',
   FALLBACK_USED: 'đã dùng model dự phòng',
   IMAGES_MAY_SHOW_DIFFERENT_BOOKS: 'các ảnh có thể là của hai cuốn sách khác nhau (tên sách/ISBN không khớp) — không tự điền trường nào',
+  EAN_CROSS_LOOKUP: 'ISBN này do nguồn tra cứu ghi cùng mã EAN-13 của sách, không đọc từ ảnh — xem bằng chứng rồi bấm áp dụng',
+  ISBN_CROSS_LOOKUP: 'mã EAN-13 này do nguồn tra cứu ghi cùng ISBN của sách, không đọc từ ảnh — xem bằng chứng rồi bấm áp dụng',
+  CROSS_VERIFIED: 'đã đối chiếu: hai nguồn trở lên hoặc catalog SmartBook ghi cùng cặp mã',
+  CROSS_REVIEW_REQUIRED: 'chỉ một nguồn ghi cặp mã này hoặc NXB/năm khác nhau — cần kiểm tra',
+  CROSS_CONFLICTED: 'các nguồn ghi ISBN khác nhau cho cùng mã EAN-13 — không đề xuất giá trị nào',
+  MULTI_SOURCE_AGREEMENT: 'nhiều nguồn ghi cùng cặp mã',
+  CATALOG_RECORD: 'catalog SmartBook đã lưu cặp mã này',
+  PUBLISHER_DIFFERS: 'NXB của bản ghi khác sách đã xác định',
+  YEAR_DIFFERS: 'năm xuất bản của bản ghi khác sách đã xác định',
+  TITLE_MISMATCH: 'bản ghi mang tên sách khác',
+  AUTHOR_MISMATCH: 'bản ghi mang tác giả khác',
+  LOOKUP_EAN_DIFFERS: 'nguồn tra cứu ghi mã EAN-13 khác mã in trên sách — giữ mã in trên sách',
+  LEGAL_DEPOSIT_TITLE_MATCH: 'ISBN lấy từ sổ lưu chiểu của Cục Xuất bản theo tên sách — không nguồn nào ghi ISBN cùng mã vạch, cần đối chiếu với sách thật',
+  PUBLISHER_MATCH: 'cùng nhà xuất bản',
+  AUTHOR_MATCH: 'cùng tác giả',
+  AUTHORS_UNCHECKED: 'chưa đối chiếu được tác giả',
+  REGISTRY_UNAVAILABLE: 'sổ lưu chiểu của Cục Xuất bản chưa phản hồi — tra lại sau ít phút',
+  LEGAL_DEPOSIT_SEVERAL_ISBNS: 'sổ lưu chiểu có nhiều ISBN cùng tên sách và NXB (tái bản / ấn bản khác) — không đề xuất mã nào',
 };
 
 /** "UNGROUNDED:title:front_cover" -> "Tên sách (Bìa trước): giá trị không khớp chữ AI đọc được". */

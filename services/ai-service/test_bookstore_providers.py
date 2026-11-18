@@ -476,5 +476,159 @@ class ProviderIsolationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("ConnectError", call["error"])
 
 
+class LabelledIsbnTests(unittest.TestCase):
+    """A store page that shows the retail EAN-13 as its barcode and "Mã ISBN ..." in
+    its description states both codes of one edition (isbn_matching.cross_identify)."""
+
+    def test_labelled_isbn_forms(self):
+        self.assertEqual(bp.labelled_isbn("Mã code 8935325011894\nMã ISBN 9786043927436\nLoại bìa Bìa mềm"), "9786043927436")
+        self.assertEqual(bp.labelled_isbn("ISBN: 978-604-392-743-6"), "9786043927436")
+        self.assertEqual(bp.labelled_isbn("isbn-10: 0-13-235088-2"), "9780132350884")  # ISBN-10 -> its ISBN-13
+
+    def test_no_label_bad_check_digit_or_several_isbns_give_none(self):
+        self.assertIsNone(bp.labelled_isbn("Mã sản phẩm 9786043927436"))           # not labelled ISBN
+        self.assertIsNone(bp.labelled_isbn("Mã ISBN 9786043927435"))               # wrong check digit
+        self.assertIsNone(bp.labelled_isbn("ISBN 8935325011894"))                 # a retail EAN is not an ISBN
+        self.assertIsNone(bp.labelled_isbn("Tập 1 ISBN 9786043927436, tập 2 ISBN 9786043757903"))  # a series
+        self.assertEqual(bp.labelled_isbn("ISBN 9786043927436 ... ISBN: 978-604-392-743-6"), "9786043927436")  # repeated
+
+    def test_store_record_carries_the_barcode_and_the_labelled_isbn(self):
+        product = {"title": "Đắc Nhân Tâm", "variants": [{"barcode": "8935325011894"}],
+                   "body_html": "<p>Mã code 8935325011894</p><p>Mã ISBN 9786043927436</p>"}
+        data = bp.parse_feed_store_product(product, "https://store.test/p")
+        self.assertEqual(data["identifiers"], ["8935325011894", "9786043927436"])
+        no_isbn = bp.parse_feed_store_product({**product, "body_html": "<p>Sách hay</p>"}, "https://store.test/p")
+        self.assertEqual(no_isbn["identifiers"], ["8935325011894"])
+
+    def test_dinhti_and_bizbooks_records_read_it_too(self):
+        biz = bp.parse_bizbooks_product({"name": "X", "sku": "8935325011894", "description": "<p>ISBN: 9786043927436</p>"})
+        self.assertEqual(biz["identifiers"], ["8935325011894", "9786043927436"])
+
+
+class CrossLookupFromStoreTextTests(unittest.IsolatedAsyncioTestCase):
+    """End to end through main.lookup_book_by_isbn with one store stating both codes."""
+
+    async def test_scanned_ean_gets_the_isbn_the_store_page_labels(self):
+        from cache import isbn_lookup_cache
+        from main import IsbnLookupRequest, lookup_book_by_isbn
+        product = {"title": "Đắc Nhân Tâm", "variants": [{"barcode": "8935325011894"}],
+                   "body_html": "<p>Mã code 8935325011894</p><p>Mã ISBN 9786043927436</p>"}
+
+        async def by_code(_client, code):
+            return bp.parse_feed_store_product(product, "https://store.test/p") if code == "8935325011894" else None
+        store = isbn_rounds.BookProvider("azVietnam", by_code=by_code, round1=True, accepts_raw_barcode=True, retries=0)
+        isbn_lookup_cache.clear()
+        try:
+            with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), patch("main._book_providers", return_value=[store]), \
+                 patch("main.ISBN_ROUND1_ORDER", "azVietnam"), patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False):
+                result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="8935325011894"))
+        finally:
+            isbn_lookup_cache.clear()
+        self.assertIsNone(result["isbn13"])  # still offered only, never filled in as the ISBN
+        cross = result["crossLookup"]
+        self.assertEqual((cross["status"], cross["value"]), ("REVIEW_REQUIRED", "9786043927436"))
+        self.assertEqual(cross["evidence"][0]["source"], "azVietnam")
+
+    async def test_ean_no_page_links_gets_the_register_isbn_by_title_publisher_and_author(self):
+        import library_providers
+        from cache import isbn_lookup_cache
+        from main import IsbnLookupRequest, lookup_book_by_isbn
+        product = {"title": "[Phiên chợ sách cũ] NVIDIA - Cỗ Máy Tư Duy Vĩ Đại", "variants": [{"barcode": "8936230471834"}],
+                   "body_html": "<p>Tác giả: Stephen Witt</p><p>Nhà xuất bản: Công Thương</p>"}
+
+        async def by_code(_client, code):
+            return bp.parse_feed_store_product(product, "https://store.test/p") if code == "8936230471834" else None
+        queries = []
+
+        nvidia = {"title": "NVIDIA: Cỗ máy tư duy vĩ đại: Jensen Huang và cuộc cách mạng chip AI toàn cầu",
+                  "publisher": "NXB Công Thương", "authors": ["Stephen Witt"], "identifiers": ["9786326120363"],
+                  "sourceUrl": "https://ppdvn.test"}
+        other_book = {**nvidia, "title": "NVIDIA và những điều chưa kể", "identifiers": ["9786043927436"]}
+
+        async def search(_client, query):
+            # The register answers the listing title with another book; only the main part finds this one.
+            queries.append(query)
+            return [nvidia] if query == "Cỗ Máy Tư Duy Vĩ Đại" else [other_book] if query.startswith("[") else []
+
+        async def register(_client, _title, _author):
+            return []
+        providers = [isbn_rounds.BookProvider("azVietnam", by_code=by_code, round1=True, accepts_raw_barcode=True, retries=0),
+                     isbn_rounds.BookProvider("ppdvn", by_title=register, retries=0)]
+        isbn_lookup_cache.clear()
+        try:
+            with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), patch("main._book_providers", return_value=providers), \
+                 patch("main.ISBN_ROUND1_ORDER", "azVietnam"), patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), \
+                 patch.object(library_providers, "ppdvn_search", search):
+                result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="8936230471834"))
+        finally:
+            isbn_lookup_cache.clear()
+        self.assertEqual(queries[-1], "Cỗ Máy Tư Duy Vĩ Đại")  # an answer about another book did not stop the search
+        cross = result["crossLookup"]
+        self.assertIsNone(result["isbn13"])
+        self.assertEqual((cross["status"], cross["value"]), ("REVIEW_REQUIRED", "9786326120363"))
+        self.assertEqual(cross["evidence"][0]["basis"], "TITLE_PUBLISHER_AUTHOR")
+        self.assertIn("LEGAL_DEPOSIT_TITLE_MATCH", cross["reasons"])
+
+    async def test_scanned_isbn_gets_the_ean_a_store_lists_the_same_edition_under(self):
+        from cache import isbn_lookup_cache
+        from main import IsbnLookupRequest, lookup_book_by_isbn
+        isbn, ean = "9786043757903", "8935325018732"
+        identity = {"title": "Hoàng Tử Bé", "subtitle": None, "authors": ["Antoine de Saint-Exupéry"], "translator": [],
+                    "publisher": "NXB Phụ Nữ Việt Nam", "publishedDate": "2022", "description": None, "categories": [],
+                    "language": "vi", "pageCount": 104, "thumbnail": None, "sourceUrl": "https://vanlang.test/p"}
+
+        async def by_isbn(_client, code):
+            return {**identity, "identifiers": [isbn]} if code == isbn else None
+
+        async def by_title(_client, _title, _author):  # the store sells it under its retail EAN-13
+            return [{**identity, "identifiers": [ean], "sourceUrl": "https://store.test/hoang-tu-be"}]
+        providers = [isbn_rounds.BookProvider("vanLang", by_code=by_isbn, round1=True, accepts_raw_barcode=True, retries=0),
+                     isbn_rounds.BookProvider("tiki", by_title=by_title, retries=0)]
+        isbn_lookup_cache.clear()
+        try:
+            with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), patch("main._book_providers", return_value=providers), \
+                 patch("main.ISBN_ROUND1_ORDER", "vanLang"), patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False):
+                result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=isbn))
+        finally:
+            isbn_lookup_cache.clear()
+        cross = result["crossLookup"]
+        self.assertEqual(result["isbn13"], isbn)
+        self.assertEqual((cross["direction"], cross["status"], cross["value"]), ("ISBN_TO_EAN", "REVIEW_REQUIRED", ean))
+        self.assertEqual(cross["candidates"][0]["sources"], ["tiki"])
+
+    async def test_an_unreachable_register_is_reported_and_cached_briefly_not_as_not_found(self):
+        import library_providers
+        from cache import isbn_lookup_cache
+        from main import ISBN_INCOMPLETE_CACHE_TTL_SECONDS, IsbnLookupRequest, _isbn_cache_ttl, lookup_book_by_isbn
+        product = {"title": "NVIDIA - Cỗ Máy Tư Duy Vĩ Đại", "variants": [{"barcode": "8936230471834"}],
+                   "body_html": "<p>Tác giả: Stephen Witt</p><p>Nhà xuất bản: Công Thương</p>"}
+
+        async def by_code(_client, code):
+            return bp.parse_feed_store_product(product, "https://store.test/p") if code == "8936230471834" else None
+        calls = []
+
+        async def overloaded(_client, query):
+            calls.append(query)
+            request = httpx.Request("GET", "https://ppdvn.test")
+            raise httpx.HTTPStatusError("busy", request=request, response=httpx.Response(429, request=request))
+        providers = [isbn_rounds.BookProvider("azVietnam", by_code=by_code, round1=True, accepts_raw_barcode=True, retries=0),
+                     isbn_rounds.BookProvider("ppdvn", by_title=None, retries=0)]
+        isbn_lookup_cache.clear()
+        isbn_rounds.reset_politeness_state()
+        try:
+            with patch("main.ENABLE_MARKETPLACE_LOOKUP", True), patch("main._book_providers", return_value=providers), \
+                 patch("main.ISBN_ROUND1_ORDER", "azVietnam"), patch("main.ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL", False), \
+                 patch.object(library_providers, "ppdvn_search", overloaded):
+                result = await lookup_book_by_isbn(IsbnLookupRequest(isbn="8936230471834"))
+        finally:
+            isbn_lookup_cache.clear()
+            isbn_rounds.reset_politeness_state()
+        cross = result["crossLookup"]
+        self.assertEqual(cross["status"], "NOT_FOUND")
+        self.assertIn("REGISTRY_UNAVAILABLE", cross["reasons"])
+        self.assertEqual(len(calls), 1)  # a 429 pauses the register: no further title variant is sent
+        self.assertEqual(_isbn_cache_ttl(result), ISBN_INCOMPLETE_CACHE_TTL_SECONDS)
+
+
 if __name__ == "__main__":
     unittest.main()

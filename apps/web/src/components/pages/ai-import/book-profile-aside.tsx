@@ -2,7 +2,7 @@ import { AlertTriangle, BadgeCheck, CheckCircle2, Circle, PencilLine, ScanText }
 import type { LookupBookByIsbnResponse } from "@/services/ai";
 import { CoverPreview } from "./field";
 import type { EditableBookForm, ReviewSignalData } from "./types";
-import { fieldLabel, normalizeIsbnInput, winningSourceName } from "./utils";
+import { fieldLabel, resolveBookCodes, winningSourceName } from "./utils";
 
 // Mirrors the backend's critical/high-value fields (isbn_coverage.FIELD_TIERS); supporting fields are not flagged here.
 const HIGH_VALUE_TIER: Record<string, string> = {
@@ -39,7 +39,10 @@ export function BookProfileAside({
         .map(fieldLabel)
     : [];
   const byline = [form.authorsText, form.publisher, form.publishedDate].filter((part) => part.trim()).join(" · ");
-  const isbn = normalizeIsbnInput(form.isbn || form.isbn13 || form.isbn10);
+  // Each code under its own name: a retail EAN-13 is never shown as an "ISBN".
+  const codes = resolveBookCodes(form);
+  const isbn = codes.isbn13 || codes.isbn10;
+  const ean = codes.ean13;
 
   return (
     <section aria-labelledby="book-profile-title" className="rounded-2xl border border-border bg-card p-4 sm:p-5">
@@ -64,6 +67,7 @@ export function BookProfileAside({
               </span>
             )}
             {isbn ? <span className="font-mono tabular-nums text-muted-foreground">ISBN {isbn}</span> : null}
+            {ean ? <span className="font-mono tabular-nums text-muted-foreground">EAN-13 {ean}</span> : null}
           </p>
           <h2
             id="book-profile-title"

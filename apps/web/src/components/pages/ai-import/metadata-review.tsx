@@ -3,13 +3,14 @@ import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Loader2, X } 
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { LookupBookByIsbnResponse, PostIsbnAiSuggestions } from "@/services/ai";
+import type { CrossLookup, LookupBookByIsbnResponse, PostIsbnAiSuggestions } from "@/services/ai";
+import { CrossLookupField } from "./cross-lookup-card";
 import { CoverPreview, type FieldOrigin } from "./field";
 import { FieldProvenance, FieldStateLabel } from "./field-provenance";
 import { FIELD_FILTERS, fieldState, type FieldFilter } from "./field-review-model";
 import { AiField, AiReviewStrip, AiSuggestionPanel, type AiFieldCopy, type AiReviewItem } from "./ai-suggestion";
 import { AI_FIELD_NOUN, AI_FORM_FIELD, qualityCheckBasis, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type EditableBookForm, type QualityCheckResult } from "./types";
-import { normalizeForCompare, normalizeIsbnInput, planBulkAiApply, splitCommaValues, type BulkHoldReason } from "./utils";
+import { normalizeForCompare, planBulkAiApply, resolveBookCodes, splitCommaValues, type BulkHoldReason } from "./utils";
 
 const AI_COPY: Record<AiFieldKey, AiFieldCopy> = {
   description: { noun: "mô tả", kind: "text" },
@@ -60,7 +61,14 @@ export function MetadataReview({
   aiFieldCandidates, aiFieldLoading, aiFieldErrors, aiApplied, aiDismissed, existingCategories, onRegenerateField, onApplyField, onApplyAllFields,
   onUndoAiField, onUndoAllAiFields, onDismissAiField,
   qualityCheckLoading, qualityCheckResult, onQualityCheck, onDismissQualityCheck, postIsbnSuggestions, hasPostIsbnSuggestions,
+  crossLookup, crossOpen = false, onCrossToggle, onCrossApply,
 }: {
+  /** EAN-13 <-> ISBN cross lookup, shown under the field it fills (ISBN-13, or the barcode). */
+  crossLookup?: CrossLookup | null;
+  crossOpen?: boolean;
+  onCrossToggle: () => void;
+  /** Puts a chosen code in its field: the page's explicit-choice handler. */
+  onCrossApply: (patch: Partial<EditableBookForm>, label: string) => void;
   form: EditableBookForm;
   /** The page's own field handler: marks the field as the user's and updates the form. */
   onFieldChange: (field: FormKey, value: string) => void;
@@ -98,11 +106,14 @@ export function MetadataReview({
     aiApplied: Boolean(AI_FIELD_FOR[field] && aiApplied[AI_FIELD_FOR[field]!]),
   });
   const visible = (field: FormKey) => filter === "all" || stateOf(field).filters.has(filter);
-  const allFields: FormKey[] = ["isbn", "isbn13", "isbn10", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate",
+  const allFields: FormKey[] = ["isbn", "isbn13", "isbn10", "internalBarcode", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate",
     "pageCount", "language", "description", "summaryVi", "categoriesText", "keywordsText", "thumbnail"];
   const counts = Object.fromEntries(FIELD_FILTERS.map(({ id }) => [id, allFields.filter((f) => id === "all" || stateOf(f).filters.has(id)).length])) as Record<FieldFilter, number>;
+  // A code typed into the field of another kind (e.g. an 893... EAN as ISBN-13) is flagged at once.
+  const codes = resolveBookCodes(form);
   const errors: Partial<Record<FormKey, string>> = {
-    ...(showRequired && !normalizeIsbnInput(form.isbn) ? { isbn: "Cần ISBN để lưu sách" } : {}),
+    ...codes.errors,
+    ...(showRequired && !codes.hasCode && !codes.errors.isbn ? { isbn: "Cần ISBN hoặc mã vạch EAN-13 để lưu sách" } : {}),
     ...(showRequired && noTitle ? { title: "Cần tên sách để lưu" } : {}),
   };
   // No model name and no self-rated score: neither helps a librarian decide; reading the text does.
@@ -110,9 +121,16 @@ export function MetadataReview({
     ? postIsbnSuggestions.provider === "none" ? "AI không khả dụng lúc tra cứu." : "AI viết từ metadata đã tra cứu; đọc lại trước khi dùng."
     : null;
 
+  // The EAN-13 <-> ISBN cross lookup under the field it fills, like a field's value comparison.
+  const renderCrossLookup = (direction: CrossLookup["direction"], current: string) => {
+    if (!crossLookup || crossLookup.direction !== direction) return null;
+    if (direction === "ISBN_TO_EAN" && crossLookup.status === "NOT_FOUND") return null; // the usual case: nothing to say
+    return <CrossLookupField cross={crossLookup} current={current} open={crossOpen} onToggle={onCrossToggle} onApply={onCrossApply} />;
+  };
+
   // A render helper, not a component: a component declared here would remount the inputs on every keystroke.
-  const renderRow = ({ field, id, label, required, mono, inputMode, hint }: {
-    field: FormKey; id: string; label: string; required?: boolean; mono?: boolean; inputMode?: "numeric" | "text"; hint?: string;
+  const renderRow =({ field, id, label, required, mono, inputMode, hint, extra }: {
+    field: FormKey; id: string; label: string; required?: boolean; mono?: boolean; inputMode?: "numeric" | "text"; hint?: string; extra?: ReactNode;
   }) => {
     const error = errors[field];
     const errorId = `${id}-error`;
@@ -129,6 +147,7 @@ export function MetadataReview({
             aria-required={required || undefined} aria-invalid={error ? true : undefined} aria-describedby={error ? errorId : undefined}
             className={`${inputClass} ${mono ? "font-mono tabular-nums" : ""} ${field === "title" ? "font-medium" : ""} ${error ? "border-red-400 dark:border-red-500/60" : ""}`} />
           {hint ? <p className="mt-1 text-[12px] text-muted-foreground">{hint}</p> : null}
+          {extra}
           {error ? (
             <p id={errorId} role="alert" className="mt-1 flex items-center gap-1 text-[12px] text-red-700 dark:text-red-400">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{error}
@@ -186,7 +205,7 @@ export function MetadataReview({
       </AiField>
     );
   };
-  const identityFields: FormKey[] = ["isbn", "isbn13", "isbn10", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate", "pageCount", "language"];
+  const identityFields: FormKey[] = ["isbn", "isbn13", "isbn10", "internalBarcode", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate", "pageCount", "language"];
   const contentFields: FormKey[] = ["description", "summaryVi", "categoriesText", "keywordsText"];
   const nothingVisible = !allFields.some(visible);
   const qualityOutdated = Boolean(qualityCheckResult && !qualityCheckResult.error && qualityCheckResult.basis !== qualityCheckBasis(form));
@@ -240,10 +259,12 @@ export function MetadataReview({
       {nothingVisible ? <p className="text-[13px] text-muted-foreground">Không có trường nào khớp bộ lọc này.</p> : null}
 
       <div hidden={!identityFields.some(visible)}>
-        <Group id="group-identity" title="Thông tin định danh" hint="ISBN và tên sách là bắt buộc; dùng để khớp ấn bản và kiểm tra trùng. Nhiều người thì cách nhau bằng dấu phẩy.">
-          {renderRow({ field: "isbn", id: "isbn", label: "ISBN", required: true, mono: true, hint: "Mã dùng để lưu và làm mã vạch nội bộ." })}
-          {renderRow({ field: "isbn13", id: "isbn13", label: "ISBN-13", mono: true })}
+        <Group id="group-identity" title="Thông tin định danh" hint="Cần ISBN hoặc mã vạch EAN-13, và tên sách; dùng để khớp ấn bản và kiểm tra trùng. Nhiều người thì cách nhau bằng dấu phẩy.">
+          {renderRow({ field: "isbn", id: "isbn", label: "ISBN / EAN-13", required: true, mono: true, hint: "Mã in trên sách dùng để tra cứu. Mã EAN-13 bán lẻ (vd. 893…) không phải ISBN: được lưu ở ô mã vạch." })}
+          {renderRow({ field: "isbn13", id: "isbn13", label: "ISBN-13", mono: true, extra: renderCrossLookup("EAN_TO_ISBN", form.isbn13) })}
           {renderRow({ field: "isbn10", id: "isbn10", label: "ISBN-10", mono: true })}
+          {renderRow({ field: "internalBarcode", id: "internalBarcode", label: "Mã vạch EAN-13", mono: true, hint: "EAN-13 bán lẻ in dưới mã vạch. Để trống thì ISBN-13 được dùng làm mã vạch.",
+            extra: renderCrossLookup("ISBN_TO_EAN", form.internalBarcode) })}
           {renderRow({ field: "title", id: "title", label: "Tên sách", required: true })}
           {renderRow({ field: "subtitle", id: "subtitle", label: "Tựa phụ" })}
           {renderRow({ field: "authorsText", id: "authors", label: "Tác giả" })}

@@ -29,7 +29,7 @@ import re
 from metadata_intelligence.evidence_validation import ROLE_LABELS
 from metadata_intelligence.verification import canonical_isbn
 
-from .normalization import (LIST_FIELDS, YEAR_FIELDS, clean, fold, fold_publisher, is_all_caps, isbn_digits,
+from .normalization import (LIST_FIELDS, YEAR_FIELDS, clean, code_kind, fold, fold_publisher, is_all_caps, isbn_digits,
                             isbn_issue, key, normalize_observation, strict, strict_publisher,
                             vietnamese_letter_count, words)
 from .schemas import OCR_FIELDS, FieldResult, ModelImageNote, ModelObservation, ModelOtherCode, Observation
@@ -220,7 +220,8 @@ def parse_observations(raw: dict, allowed_sources: set[str]) -> tuple[dict[str, 
 def barcode_observation(barcode: str | None) -> tuple[Observation | None, dict | None]:
     """A barcode the client decoded deterministically from the back cover.
     An ISBN (978/979 + checksum) becomes an independent ISBN observation;
-    any other EAN (e.g. 893...) is reported as a non-ISBN code."""
+    any other EAN (e.g. 893...) is reported as a non-ISBN code, with its `kind`
+    (EAN13 when its check digit is right)."""
     digits = isbn_digits(barcode)
     if not digits:
         return None, None
@@ -228,7 +229,7 @@ def barcode_observation(barcode: str | None) -> tuple[Observation | None, dict |
         return Observation(source="barcode", value=digits, normalizedValue=canonical_isbn(digits),
                            observedText=digits, valid=True), None
     return None, {"source": "barcode", "label": "Mã vạch không phải ISBN", "value": digits[:64],
-                  "reason": isbn_issue(digits)}
+                  "reason": isbn_issue(digits), "kind": code_kind(digits)}
 
 
 def aggregate(field: str, observations: list[Observation]) -> FieldResult:
@@ -290,7 +291,7 @@ def parse_other_codes(raw: dict, allowed_sources: set[str]) -> list[dict]:
         # A "code" without digits is a name or a word the model misfiled (e.g. an illustrator).
         if code.source in allowed_sources and len(re.sub(r"\D", "", code.value)) >= 4:
             codes.append({"source": code.source, "label": code.label, "value": code.value,
-                          "observedText": code.observedText})
+                          "observedText": code.observedText, "kind": code_kind(code.value)})
     return codes[:10]
 
 

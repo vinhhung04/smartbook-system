@@ -1,6 +1,6 @@
 const { Prisma } = require('@prisma/client');
 const { canonicalKey, reconcileMetadata, exactAuthorityFields } = require('../services/authority-normalization.service');
-const { normalizeIsbn13, normalizeIsbn10, normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, normalizePageCount, normalizeKeywords } = require('../services/catalog-metadata.validation');
+const { normalizeIsbn13, normalizeIsbn10, normalizeInternalBarcode, normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, normalizePageCount, normalizeKeywords } = require('../services/catalog-metadata.validation');
 
 const { prisma } = require('../lib/prisma');
 const { FIELDS, validateBundle, validateField, validIsbn, partialDate, reviewEvent, assertReady, initialDecisionStatuses } = require('../services/metadata-provenance.service');
@@ -232,13 +232,21 @@ async function applyDraft(req, res) {
       const isbn10 = finalMetadata.isbn10 === undefined ? undefined : normalizeIsbn10(finalMetadata.isbn10);
       const publishYear = finalMetadata.publishYear === undefined ? undefined : normalizePublishYear(finalMetadata.publishYear);
       const pageCount = finalMetadata.pageCount === undefined ? undefined : normalizePageCount(finalMetadata.pageCount);
-      if ((finalMetadata.isbn13 !== undefined && !isbn13) || (finalMetadata.isbn10 !== undefined && !isbn10) || (publishYear === undefined && finalMetadata.publishYear !== undefined) || (pageCount === undefined && finalMetadata.pageCount !== undefined)) { const error = new Error('Siêu dữ liệu cuối cùng không hợp lệ'); error.statusCode = 400; throw error; }
+      // Each code is checked for its own kind: isbn13 = 978/979 + check digit (never a retail
+      // EAN-13), isbn10 = its check digit, internalBarcode = a valid EAN-13 or an internal code.
+      const internalBarcode = finalMetadata.internalBarcode === undefined ? undefined : normalizeInternalBarcode(finalMetadata.internalBarcode);
+      if (finalMetadata.isbn13 !== undefined && !isbn13) { const error = new Error('ISBN-13 không hợp lệ: cần tiền tố 978/979 và số kiểm tra đúng (mã EAN-13 bán lẻ được lưu ở mã vạch)'); error.statusCode = 400; throw error; }
+      if (finalMetadata.isbn10 !== undefined && !isbn10) { const error = new Error('ISBN-10 sai số kiểm tra'); error.statusCode = 400; throw error; }
+      if (finalMetadata.internalBarcode !== undefined && internalBarcode === undefined) { const error = new Error('Mã vạch sai số kiểm tra EAN-13'); error.statusCode = 400; throw error; }
+      if ((publishYear === undefined && finalMetadata.publishYear !== undefined) || (pageCount === undefined && finalMetadata.pageCount !== undefined)) { const error = new Error('Siêu dữ liệu cuối cùng không hợp lệ'); error.statusCode = 400; throw error; }
       let book = bookId ? await tx.books.findUnique({ where: { id: bookId }, include: { book_authors: true, book_categories: true, book_variants: true } }) : null;
       if (!book && !bookId) {
         const title = String(finalMetadata.title || accepted.title || '').trim();
-        if (!title || !isbn13) { const error = new Error('Cần có title và isbn13 hợp lệ để tạo sách trong danh mục'); error.statusCode = 400; throw error; }
+        // A book with no ISBN (only its retail EAN-13) can be catalogued under that barcode.
+        const code = isbn13 || internalBarcode;
+        if (!title || !code) { const error = new Error('Cần có title và ISBN-13 hoặc mã vạch hợp lệ để tạo sách trong danh mục'); error.statusCode = 400; throw error; }
         const createdBook = await tx.books.create({ data: { title, default_language: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi', metadata: { is_incomplete: false, metadataProvenance: { title: accepted.title ? 'STAFF_APPROVED' : 'STAFF_APPROVED' } } } });
-        const createdVariant = await tx.book_variants.create({ data: { book_id: createdBook.id, sku: `IMPORT-${isbn13}`, isbn13, language_code: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi' } });
+        const createdVariant = await tx.book_variants.create({ data: { book_id: createdBook.id, sku: `IMPORT-${code}`, ...(isbn13 ? { isbn13 } : {}), language_code: normalizeLanguageCode(finalMetadata.language || accepted.language) || 'vi' } });
         bookId = createdBook.id;
         book = { ...createdBook, book_authors: [], book_categories: [], book_variants: [createdVariant] };
       }
@@ -289,7 +297,7 @@ async function applyDraft(req, res) {
           metadata: { ...(variant.metadata || {}), bibliographic: accepted, metadataProvenance },
           ...(isbn13 !== undefined ? { isbn13 } : {}),
           ...(isbn10 !== undefined ? { isbn10 } : {}),
-          ...(finalMetadata.internalBarcode !== undefined ? { internal_barcode: String(finalMetadata.internalBarcode || '').trim() || null } : {}),
+          ...(internalBarcode !== undefined ? { internal_barcode: internalBarcode } : {}),
           ...(finalMetadata.coverImageUrl !== undefined ? { cover_image_url: normalizeCoverImageUrl(finalMetadata.coverImageUrl) } : {}),
           ...(accepted.language ? { language_code: normalizeLanguageCode(accepted.language) || 'vi' } : {}),
           ...(publishYear !== undefined ? { publish_year: publishYear } : {}),

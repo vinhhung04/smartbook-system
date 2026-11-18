@@ -1,5 +1,6 @@
 const { canonicalKey } = require('../services/authority-normalization.service');
-const { checkDuplicates, normalizeIsbn } = require('../services/duplicate-intelligence.service');
+const { checkDuplicates, inputCodes } = require('../services/duplicate-intelligence.service');
+const { normalizeIsbn13, normalizeIsbn10, normalizeInternalBarcode } = require('../services/catalog-metadata.validation');
 
 const { prisma } = require('../lib/prisma');
 const ACTIONS = ['LINK_EXISTING_VARIANT', 'CREATE_VARIANT_FOR_EDITION', 'CREATE_NEW_EDITION', 'CREATE_NEW_TITLE', 'DISMISS_WARNING'];
@@ -15,12 +16,12 @@ const bookInclude = {
 };
 
 async function findCandidates(metadata) {
-  const isbn = normalizeIsbn(metadata.isbn || metadata.isbn13 || metadata.isbn10);
-  const barcode = String(metadata.barcode || metadata.sku || '').trim();
-  const exact = (isbn || barcode) ? await prisma.books.findMany({
+  // Codes are classified first (see inputCodes): the same columns signalsFor compares.
+  const { isbns, barcodes } = inputCodes(metadata);
+  const exact = (isbns.length || barcodes.length) ? await prisma.books.findMany({
     where: { book_variants: { some: { OR: [
-      ...(isbn ? [{ isbn13: isbn }, { isbn10: isbn }] : []),
-      ...(barcode ? [{ sku: barcode }, { internal_barcode: barcode }] : []),
+      ...isbns.flatMap((code) => [{ isbn13: code }, { isbn10: code }, { internal_barcode: code }]),
+      ...barcodes.flatMap((code) => [{ sku: code }, { internal_barcode: code }, { isbn13: code }]),
     ] } } },
     include: bookInclude,
   }) : [];
@@ -51,14 +52,17 @@ async function getReview(req, res) {
 }
 
 function variantData(input, values = {}) {
-  const isbn13 = normalizeIsbn(values.isbn13 || input.isbn13 || input.isbn);
-  const isbn10 = normalizeIsbn(values.isbn10 || input.isbn10);
-  const sku = String(values.sku || input.sku || `ISBN-${isbn13 || Date.now()}`).slice(0, 50);
+  // Each column only holds its own kind: a retail EAN-13 sent as an ISBN is not stored as one.
+  const isbn13 = normalizeIsbn13(values.isbn13 || input.isbn13 || input.isbn);
+  const isbn10 = normalizeIsbn10(values.isbn10 || input.isbn10);
+  const internalBarcode = normalizeInternalBarcode(values.internalBarcode || input.barcode);
+  if (internalBarcode === undefined) { const error = new Error('Mã vạch sai số kiểm tra EAN-13'); error.statusCode = 400; throw error; }
+  const sku = String(values.sku || input.sku || `ISBN-${isbn13 || internalBarcode || Date.now()}`).slice(0, 50);
   return {
     sku,
-    ...(isbn13.length === 13 ? { isbn13 } : {}),
-    ...(isbn10.length === 10 ? { isbn10 } : {}),
-    ...(values.internalBarcode || input.barcode ? { internal_barcode: String(values.internalBarcode || input.barcode).slice(0, 50) } : {}),
+    ...(isbn13 ? { isbn13 } : {}),
+    ...(isbn10 ? { isbn10 } : {}),
+    ...(internalBarcode ? { internal_barcode: internalBarcode } : {}),
     cover_type: String(values.coverType || input.coverFormat || 'PAPERBACK').toUpperCase(),
     language_code: String(values.languageCode || input.language || 'vi').toLowerCase(),
     ...(Number.isInteger(values.publishYear) ? { publish_year: values.publishYear } : {}),

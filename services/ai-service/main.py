@@ -738,11 +738,24 @@ def _normalize_and_validate_isbn(raw_isbn: str) -> tuple[str | None, str | None,
         return _isbn10_to_isbn13(normalized), normalized, None
 
     if len(normalized) == 13:
-        if not _is_valid_isbn13(normalized):
+        if not _is_valid_isbn13(normalized):  # the EAN-13 check digit, which an ISBN-13 shares
             return None, None, "invalid ISBN-13 checksum"
+        if not normalized.startswith(("978", "979")):
+            return None, None, NOT_ISBN_EAN13  # e.g. a 893... retail barcode
         return normalized, _isbn13_to_isbn10(normalized), None
 
     return None, None, "isbn must be ISBN-10 or ISBN-13"
+
+
+NOT_ISBN_EAN13 = "EAN-13 is not an ISBN"
+
+
+def _code_kind(raw_code: str) -> str:
+    """ISBN10 | ISBN13 | EAN13 (a valid EAN-13 that is not an ISBN) | INVALID."""
+    _isbn13, _isbn10, error = _normalize_and_validate_isbn(raw_code)
+    if error is None:
+        return "ISBN10" if len(_normalize_isbn(raw_code)) == 10 else "ISBN13"
+    return "EAN13" if error == NOT_ISBN_EAN13 else "INVALID"
 
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -1435,7 +1448,8 @@ async def _catalog_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
         "description": book.get("description"), "categories": book.get("categories") or [],
         "language": book.get("language"), "pageCount": book.get("page_count"),
         "thumbnail": book.get("cover_image_url"),
-        "identifiers": [c for c in (book.get("isbn13"), book.get("isbn10")) if c],
+        # The saved retail EAN-13 too: a librarian-approved record linking it to the ISBN.
+        "identifiers": [c for c in (book.get("isbn13"), book.get("isbn10"), book.get("internal_barcode")) if c],
         "catalogBookId": book.get("book_id"),
         "sourceUrl": None, "sourceFetchMode": "catalog",
     }
@@ -1504,7 +1518,8 @@ async def _fahasa_page(client: httpx.AsyncClient, url: str) -> dict | None:
     # The attribute table is more complete than JSON-LD (translator, NXB, year, pages).
     table = _parse_fahasa_attributes(page)
     metadata = {**metadata, **{k: v for k, v in table.items() if v}}
-    return {**metadata, "identifiers": list(dict.fromkeys(codes)), "sourceUrl": url, "sourceFetchMode": "httpx"}
+    codes = bookstore_providers.record_codes(list(dict.fromkeys(codes)), metadata.get("description"))
+    return {**metadata, "identifiers": codes, "sourceUrl": url, "sourceFetchMode": "httpx"}
 
 
 async def _fahasa_by_code(client: httpx.AsyncClient, code: str) -> dict | None:
@@ -2370,10 +2385,11 @@ async def _lookup_book_by_isbn_legacy(req: IsbnLookupRequest):
     raw_isbn = str(req.isbn or "").strip()
     isbn13, isbn10, validation_error = _normalize_and_validate_isbn(raw_isbn)
 
-    # A 10/13-digit code that fails the ISBN checksum may still be a store barcode:
-    # only providers that search raw barcodes (and verify them) are asked.
+    # A valid EAN-13 that is not an ISBN (e.g. 893...) is a store barcode: only
+    # providers that search raw barcodes (and verify them) are asked. A code with a
+    # wrong check digit is neither an ISBN nor an EAN and is never looked up.
     raw_barcode = re.sub(r"[^0-9]", "", raw_isbn)
-    is_barcode_candidate = len(raw_barcode) in (10, 13)
+    is_barcode_candidate = validation_error == NOT_ISBN_EAN13
     if validation_error and not (is_barcode_candidate and ENABLE_MARKETPLACE_LOOKUP):
         isbn_progress.stage("validate", "failed", kind="INVALID", length=len(raw_barcode))
         return _manual_entry_response(raw_isbn, None, validation_error)
@@ -2417,7 +2433,9 @@ def _book_providers() -> list[isbn_rounds.BookProvider]:
         Provider("dnb", by_code=library_providers.dnb_by_code, by_title=library_providers.dnb_by_title,
                  round1=True, **common),
         # Legal-deposit register: searches titles only, so Round 2 (rows carry the ISBN to verify).
-        Provider("ppdvn", by_title=library_providers.ppdvn_by_title, **common),
+        # Up to four title variants (ppdvn_queries), ~3 s each on the slow register.
+        Provider("ppdvn", by_title=library_providers.ppdvn_by_title,
+                 **{**common, "timeout": max(ISBN_PROVIDER_TIMEOUT_SECONDS, 25.0)}),
         Provider("dinhTi", by_code=bookstore_providers.dinhti_by_code, by_title=bookstore_providers.dinhti_by_title,
                  round1=True, accepts_raw_barcode=True, **common),
         Provider("bizbooks", by_code=bookstore_providers.bizbooks_by_code, by_title=bookstore_providers.bizbooks_by_title,
@@ -2540,10 +2558,11 @@ async def _two_round_lookup(raw_isbn: str, code: str, isbn10: str | None, valid_
     overall = max(active, default=0.0)
     if len(active) >= 2:
         overall = max(overall, min(1.0, sum(active) / len(active) + 0.1))
-    identity_isbn13 = next((c for c in targets if len(c) == 13 and c[:3] in ("978", "979")), None)
     return {
         "success": True, "found": True, "isbn": code,
-        "isbn13": code if valid_isbn else identity_isbn13,
+        # A scanned EAN has no ISBN of its own: the linked ISBN, if any, is offered by
+        # `crossLookup` with its evidence, for staff to apply (lookup_book_by_isbn).
+        "isbn13": code if valid_isbn else None,
         "isbn10": isbn10,
         **{field: identity.get(field) for field in ("title", "subtitle", "publisher", "publishedDate", "description",
                                                      "language", "pageCount", "thumbnail")},
@@ -2628,16 +2647,29 @@ def _isbn_lookup_cache_key(req: IsbnLookupRequest) -> str | None:
     """None for an ISBN that fails validation - never cache those, let normal
     error handling run every time."""
     isbn13, _isbn10, error = _normalize_and_validate_isbn(str(req.isbn or ""))
+    # Two-round search; v2: an ISBN's result also carries its retail EAN-13 candidates
+    # (store_ean_link), absent from results cached before.
+    mode = "fl1" if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL else "r2v2"
+    if error == NOT_ISBN_EAN13:
+        # Own namespace: entries cached before EAN-13s were told apart from ISBNs
+        # carried the EAN as isbn13 and must not be served again. v2: store pages'
+        # labelled "Mã ISBN" became evidence for the EAN -> ISBN cross lookup; v3: the
+        # legal-deposit register (registry_link) too; v4: register
+        # title variants are tried until one matches; v5: register error pages no longer
+        # read as "no such ISBN"; v6: several ISBNs come as candidates with deposit dates;
+        # v7: an author spelt with other spacing ("Mc Gregor") no longer rejects a register row.
+        return f"ean7:{re.sub(r'[^0-9]', '', str(req.isbn))}:{bool(req.generateVietnameseSummary)}:{mode}"
     if error or not isbn13:
         return None
-    mode = "fl1" if ENABLE_FIELD_LEVEL_ISBN_RETRIEVAL else "r2v1"  # two-round search, v1
     return f"{isbn13}:{bool(req.generateVietnameseSummary)}:{mode}"
 
 
 def _isbn_cache_ttl(result: dict) -> int | None:
     """None = the cache's default (long) TTL; a short TTL when the result is incomplete."""
     provider_failed = any(s.get("status") in ("TIMEOUT", "ERROR", "PAUSED") for s in result.get("sources") or [])
-    if result.get("needsEnrichment") or provider_failed:
+    # An EAN whose ISBN could not be checked in the legal-deposit register is retried soon.
+    registry_unavailable = "REGISTRY_UNAVAILABLE" in ((result.get("crossLookup") or {}).get("reasons") or [])
+    if result.get("needsEnrichment") or provider_failed or registry_unavailable:
         return ISBN_INCOMPLETE_CACHE_TTL_SECONDS
     return None
 
@@ -2718,22 +2750,55 @@ def _log_isbn_lookup(result: dict, trace: dict | None) -> None:
         logger.debug("isbn metrics update failed", exc_info=True)
 
 
+REGISTRY_MAX_QUERIES = 6
+
+
+async def _registry_cross_lookup(cross: dict, identity: dict, titles: list[str] | None = None) -> dict:
+    """A scanned EAN no record linked to an ISBN: ask the legal-deposit register (PPDVN)
+    by the identified book's title(s), and accept a row only on title + publisher
+    (+ authors) - isbn_matching.registry_link. Each title variant is tried until one
+    gives a MATCHING row (an answer about other books does not stop the search), at
+    most REGISTRY_MAX_QUERIES; variants Round 2 already asked come from
+    library_providers' short PPDVN cache."""
+    if cross.get("direction") != "EAN_TO_ISBN" or cross.get("status") != "NOT_FOUND" or not identity.get("title"):
+        return cross
+    provider = next((p for p in _book_providers() if p.name == "ppdvn"), None)
+    if provider is None or provider.disabled_reason:
+        return cross
+    queries = list(dict.fromkeys(q for title in [identity["title"], *(titles or [])] if title
+                                 for q in library_providers.ppdvn_queries(title)))[:REGISTRY_MAX_QUERIES]
+    unavailable = False
+    for query in queries:
+        call = await isbn_rounds.call_with_retry(provider, lambda client, q=query: library_providers.ppdvn_search(client, q))
+        if call["status"] != "OK":
+            unavailable = True
+            if call["status"] == "PAUSED":
+                break  # the register asked us to slow down: no further query this time
+            continue  # one failed query (a slow register) does not end the search
+        linked = isbn_matching.registry_link(cross, identity, call["value"] or [])
+        if linked["status"] != "NOT_FOUND":
+            return linked
+    # "Not found" only when the register answered: otherwise it was not asked at all.
+    return {**cross, "reasons": [*cross.get("reasons", []), "REGISTRY_UNAVAILABLE"]} if unavailable else cross
+
+
 async def lookup_book_by_isbn(req: IsbnLookupRequest):
     """Compatibility wrapper that adds deterministic ISBN Intelligence fields."""
     if ENABLE_METADATA_INTELLIGENCE_V2:
         from metadata_intelligence.schemas import ExtractionInput
         return await metadata_extraction_service(ExtractionInput(type='isbn', value=req.isbn))
     cache_key = _isbn_lookup_cache_key(req)
+    code_kind = _code_kind(str(req.isbn or ""))
     if cache_key:
         cached = isbn_lookup_cache.get(cache_key)
         if cached is not None:
             isbn_progress.stage("cache", "done", hit=True, store="memory")
-            return cached
+            return {"codeKind": code_kind, **cached}  # entries cached before codeKind existed
     stored, stored_fresh = await isbn_cache_store.get(cache_key) if cache_key else (None, False)
     if stored is not None and stored_fresh:
         isbn_lookup_cache.set(cache_key, stored, ttl_seconds=_isbn_cache_ttl(stored))
         isbn_progress.stage("cache", "done", hit=True, store="persistent")
-        return stored
+        return {"codeKind": code_kind, **stored}
 
     started_at = time.perf_counter()
     result = await _lookup_book_by_isbn_legacy(req)
@@ -2741,6 +2806,11 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
     trace = result.pop("_retrievalTrace", None)
     round_statuses = result.pop("_roundStatuses", None)
     rounds = result.pop("_rounds", None)
+    result["codeKind"] = code_kind
+    if rounds is not None:
+        # EAN-13 -> ISBN (or ISBN -> retail EAN-13) only from records that state both codes.
+        result["crossLookup"] = isbn_matching.cross_identify(result.get("isbn") or "", provider_metadata,
+                                                             (rounds[0] or {}).get("data"))
     source_statuses = (_round_source_statuses(round_statuses) if round_statuses is not None
                        else _build_source_statuses(result, started_at, trace))
     isbn_progress.stage("fusion", "started", sources=sum(1 for data in provider_metadata.values() if data))
@@ -2759,6 +2829,16 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         result.update(intelligence["metadata"])
         result["authors"] = result["authors"] or []
         result["categories"] = result["categories"] or []
+        if rounds is not None and result.get("crossLookup"):
+            first_record = (rounds[0] or {}).get("data") or {}
+            identity = {**first_record, **{key: result[key] for key in ("title", "publisher", "authors") if result.get(key)}}
+            # The year of the edition the code identified (its own record first): prefers, among
+            # several ISBNs / EANs, the one of that year (isbn_matching._offer_candidates).
+            identity["publishedDate"] = first_record.get("publishedDate") or result.get("publishedDate")
+            result["crossLookup"] = await _registry_cross_lookup(result["crossLookup"], identity,
+                                                                 [first_record.get("title")])
+            # ISBN scanned: its retail EAN-13 from stores Round 2 found by title (no extra request).
+            result["crossLookup"] = isbn_matching.store_ean_link(result["crossLookup"], identity, provider_metadata)
     result.update({key: value for key, value in intelligence.items() if key != "metadata"})
     _attach_coverage_fields(result, intelligence, trace)
     result["processingTimeMs"] = int((time.perf_counter() - started_at) * 1000)
@@ -2776,7 +2856,7 @@ async def lookup_book_by_isbn(req: IsbnLookupRequest):
         # Re-lookup found nothing (sources down or blocking): keep the last verified result.
         logger.info("ISBN %s: re-lookup found nothing, serving the stored result", req.isbn)
         isbn_progress.stage("cache", "done", hit=True, store="persistent", fallback=True)
-        return {**stored, "servedFromStore": True}
+        return {"codeKind": code_kind, **stored, "servedFromStore": True}
     return result
 
 

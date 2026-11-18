@@ -47,7 +47,8 @@ SAFE_OCR_STATUSES = {"EXTRACTED", "CORROBORATED"}
 ISBN_FORM_FIELDS = ("isbn", "isbn13", "isbn10")
 # A wrong value here mis-files the book (identity, duplicate detection, citation)
 # or puts unverifiable model text in the catalog: one model reading is not enough.
-CRITICAL_FORM_FIELDS = {*ISBN_FORM_FIELDS, "title", "subtitle", "authorsText", "publisher", "publishedDate", "description"}
+CRITICAL_FORM_FIELDS = {*ISBN_FORM_FIELDS, "internalBarcode", "title", "subtitle", "authorsText", "publisher",
+                        "publishedDate", "description"}
 _LIST_FORM_FIELDS = ("authorsText", "translatorText", "categoriesText")
 _TEXT_FORM_FIELDS = {"title", "subtitle", "publisher", "language", *_LIST_FORM_FIELDS}
 
@@ -198,7 +199,8 @@ def _reading_options(result: FieldResult) -> list[ProposalOption]:
     return options
 
 
-def build_proposals(fields: dict[str, FieldResult], lookup: dict | None, edition_matches: bool | None) -> dict[str, Proposal]:
+def build_proposals(fields: dict[str, FieldResult], lookup: dict | None, edition_matches: bool | None,
+                    other_codes: list[dict] | None = None) -> dict[str, Proposal]:
     flagged = set((lookup or {}).get("conflictedFields") or []) | set((lookup or {}).get("lowConfidenceFields") or [])
     lookup_problem = lookup_mismatch(fields, lookup, edition_matches)
     usable_lookup = bool(lookup and lookup.get("found")) and lookup_problem is None
@@ -207,7 +209,8 @@ def build_proposals(fields: dict[str, FieldResult], lookup: dict | None, edition
         ocr_result, ocr_text = _ocr_value(form_field, ocr_field, fields)
         lookup_text = form_text((lookup or {}).get(lookup_key)) if lookup and lookup.get("found") else None
         if form_field == "isbn" and not lookup_text and lookup and lookup.get("found"):
-            lookup_text = form_text(lookup.get("isbn"))
+            # Only an ISBN: a lookup run on a retail EAN-13 echoes that EAN in "isbn".
+            lookup_text = canonical_isbn(isbn_digits(lookup.get("isbn")))
         ocr_status = ocr_result.status if ocr_result else "MISSING"
         reasons = list(ocr_result.reasons) if ocr_result else []
         options = []
@@ -279,12 +282,84 @@ def build_proposals(fields: dict[str, FieldResult], lookup: dict | None, edition
 
         proposals[form_field] = Proposal(**base, status="INVALID" if ocr_status == "INVALID" else "MISSING",
                                          reasons=reasons)
+    cross = (lookup or {}).get("crossLookup") or {}
+    if lookup_problem not in ("LOOKUP_TITLE_MISMATCH", "LOOKUP_DIFFERENT_EDITION"):
+        _offer_cross_isbn(proposals, cross, lookup_problem)
+    proposals["internalBarcode"] = barcode_proposal(
+        other_codes or [], cross if lookup_problem not in ("LOOKUP_TITLE_MISMATCH", "LOOKUP_DIFFERENT_EDITION") else {})
     autofill_policy(proposals, identity_verified=usable_lookup)
     return proposals
 
 
+_CROSS_OFFERED = ("VERIFIED", "REVIEW_REQUIRED")
+
+
+def _offer_cross_isbn(proposals: dict[str, Proposal], cross: dict, lookup_problem: str | None) -> None:
+    """With no ISBN read, the ISBN the lookup linked to the scanned retail EAN-13
+    (isbn_matching.cross_identify) is offered - never safe to apply on its own,
+    never in place of a reading. A conflict lists the candidates without a value
+    and does not block saving: the book can be saved under its EAN alone."""
+    if cross.get("direction") != "EAN_TO_ISBN" or cross.get("status") in (None, "NOT_FOUND"):
+        return
+    status = cross["status"]
+    reasons = ["EAN_CROSS_LOOKUP", f"CROSS_{status}", *cross.get("reasons", [])]
+    if lookup_problem:
+        reasons.append(lookup_problem)
+    for form_field in ISBN_FORM_FIELDS:
+        current = proposals[form_field]
+        if current.ocrValue or current.status not in ("MISSING", "INVALID"):
+            continue
+        value = cross.get("isbn10") if form_field == "isbn10" else cross.get("value")
+        if status in _CROSS_OFFERED and value:
+            proposals[form_field] = Proposal(formField=form_field, value=value, status="LOOKUP_ONLY",
+                                             source="isbn_lookup", lookupValue=value, reasons=reasons,
+                                             options=[ProposalOption(source="isbn_lookup", value=value)])
+        elif status == "CONFLICTED" and form_field != "isbn10":
+            # In the lookup's candidate order: the one matching the edition's year first.
+            candidates = [c["value"] for c in cross.get("candidates") or []] or \
+                sorted({code for item in cross.get("evidence", []) for code in item.get("codes", [])})
+            current.options = [ProposalOption(source="isbn_lookup", value=code) for code in candidates]
+            current.reasons = [*current.reasons, *reasons]
+
+
+def barcode_proposal(other_codes: list[dict], cross: dict) -> Proposal:
+    """`internalBarcode` (book_variants.internal_barcode): the retail EAN-13 the
+    barcode / images show - only codes with a valid EAN-13 check digit that are
+    not ISBNs. A scanned ISBN's retail EAN stated by the lookup's records is
+    offered when nothing was read. Never converted from an ISBN's digits."""
+    sources: dict[str, set[str]] = {}
+    for code in other_codes:
+        if code.get("kind") == "EAN13":
+            sources.setdefault(isbn_digits(code.get("value")), set()).add(code.get("source"))
+    linked = cross.get("value") if cross.get("direction") == "ISBN_TO_EAN" and cross.get("status") in _CROSS_OFFERED \
+        else None
+    linked_reasons = ["ISBN_CROSS_LOOKUP", f"CROSS_{cross.get('status')}", *cross.get("reasons", [])] if linked else []
+    if len(sources) > 1:
+        return Proposal(formField="internalBarcode", status="CONFLICTED", reasons=["SOURCES_DISAGREE"],
+                        options=[ProposalOption(source="barcode" if s == {"barcode"} else "images", value=v)
+                                 for v, s in sorted(sources.items())])
+    if not sources:
+        if linked:
+            return Proposal(formField="internalBarcode", value=linked, status="LOOKUP_ONLY", source="isbn_lookup",
+                            lookupValue=linked, reasons=linked_reasons,
+                            options=[ProposalOption(source="isbn_lookup", value=linked)])
+        return Proposal(formField="internalBarcode", status="MISSING")
+    value, seen = next(iter(sources.items()))
+    origin = "barcode" if seen == {"barcode"} else "images"
+    options = [ProposalOption(source=origin, value=value)]
+    status = "CORROBORATED" if len(seen) >= 2 else "EXTRACTED"
+    reasons = []
+    if linked == value:
+        status, reasons = "CORROBORATED", ["LOOKUP_AGREES"]
+    elif linked:
+        reasons = ["LOOKUP_EAN_DIFFERS"]  # the printed barcode is kept; the record's code is shown
+        options.append(ProposalOption(source="isbn_lookup", value=linked))
+    return Proposal(formField="internalBarcode", value=value, status=status, source=origin, ocrValue=value,
+                    lookupValue=linked, reasons=reasons, options=options)
+
+
 _LOOKUP_BLOCKERS = {"LOOKUP_DIFFERENT_EDITION", "LOOKUP_TITLE_MISMATCH", "LOOKUP_IDENTITY_UNVERIFIED",
-                    "LOOKUP_FLAGGED_FIELD", "OCR_READING_INVALID"}
+                    "LOOKUP_FLAGGED_FIELD", "OCR_READING_INVALID", "EAN_CROSS_LOOKUP", "ISBN_CROSS_LOOKUP"}
 
 
 def autofill_policy(proposals: dict[str, Proposal], *, identity_verified: bool) -> None:

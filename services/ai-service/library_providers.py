@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import html as html_module
 import re
+import time
 import unicodedata
 import xml.etree.ElementTree as ET
 
@@ -245,15 +246,74 @@ def parse_ppdvn_results(page: str, source_url: str) -> list[dict]:
             "pageCount": None, "thumbnail": None,
             "identifiers": [code] if code else [],
             "sourceUrl": source_url, "sourceFetchMode": "html",
+            # Which printing a row is: the distributor that partnered the NXB and the
+            # deposit dates (one row per printing) - shown to staff choosing among a
+            # book's several ISBNs, and the year compared with the edition's.
+            "partner": cells[6] or None,
+            "depositDates": [cells[8]] if cells[8] else [],
         })
-    # Reprints repeat the same ISBN row once per printing: keep one per code.
-    unique = {}
+    # Reprints repeat the same ISBN row once per printing: keep one per code, with every deposit date.
+    unique: dict = {}
     for item in results:
-        unique.setdefault(tuple(item["identifiers"]) or (item["title"],), item)
+        key = tuple(item["identifiers"]) or (item["title"],)
+        if key in unique:
+            unique[key]["depositDates"] += [d for d in item["depositDates"] if d not in unique[key]["depositDates"]]
+        else:
+            unique[key] = item
     return list(unique.values())
 
 
-async def ppdvn_by_title(client: httpx.AsyncClient, title: str, author: str | None) -> list[dict]:
-    resp = await client.get(PPDVN_SEARCH_URL, params={"query": title})
+def ppdvn_queries(title: str) -> list[str]:
+    """The register matches the query as written, so a store's listing title
+    ("[Phiên chợ sách cũ] NVIDIA - Cỗ Máy Tư Duy Vĩ Đại") finds nothing while the
+    registered "NVIDIA: Cỗ máy tư duy vĩ đại: ..." exists. Tried in order: the title,
+    without bracketed listing prefixes / trailing "(...)", then its longest part and
+    its first part - the main title before a subtitle ("Trên Đỉnh Phố Wall - Cách
+    Bạn ...", registered as "Trên Đỉnh Phố Wall/Cách bạn ...") - split at " - ", ":"
+    or "/", each only with two words or more. At most four."""
+    queries = [_clean(title) or ""]
+    bare = re.sub(r"^\s*(?:\[[^\]]*\]\s*)+", "", queries[0])
+    bare = re.sub(r"\s*\([^)]*\)\s*$", "", bare).strip()
+    queries.append(bare)
+    parts = [part.strip() for part in re.split(r"\s+[-–—]\s+|\s*[:/]\s*", bare) if part.strip()]
+    if len(parts) > 1:
+        queries += [part for part in (max(parts, key=len), parts[0]) if len(part.split()) >= 2]
+    return [q for q in dict.fromkeys(queries) if q][:4]
+
+
+# Round 2 and the EAN -> ISBN registry check ask the same titles within one lookup:
+# keep each answer briefly so the government register is asked once.
+_PPDVN_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_PPDVN_CACHE_SECONDS = 600
+
+
+class PpdvnUnavailable(RuntimeError):
+    """The register answered without its result table (an overloaded or error page)."""
+
+
+async def ppdvn_search(client: httpx.AsyncClient, query: str) -> list[dict]:
+    """One register query, answered from the short cache when asked again. Only answers
+    WITH rows are kept: an empty answer is asked again next time, and a page without
+    the result table is an error (the register is struggling), never "no such book" -
+    seen live on 2026-11-18, when such pages hid a registered ISBN for ten minutes."""
+    now = time.monotonic()
+    cached = _PPDVN_CACHE.get(query)
+    if cached and now - cached[0] < _PPDVN_CACHE_SECONDS:
+        return cached[1]
+    resp = await client.get(PPDVN_SEARCH_URL, params={"query": query})
     resp.raise_for_status()
-    return parse_ppdvn_results(resp.text, str(resp.url))
+    if "<table" not in resp.text:
+        raise PpdvnUnavailable("PPDVN answered without its result table")
+    rows = parse_ppdvn_results(resp.text, str(resp.url))
+    if rows:
+        _PPDVN_CACHE[query] = (now, rows)
+    return rows
+
+
+async def ppdvn_by_title(client: httpx.AsyncClient, title: str, author: str | None) -> list[dict]:
+    """Round 2 candidates: the first query variant the register answers."""
+    for query in ppdvn_queries(title):
+        rows = await ppdvn_search(client, query)
+        if rows:
+            return rows
+    return []

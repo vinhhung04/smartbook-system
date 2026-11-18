@@ -139,6 +139,9 @@ class IsbnLookupOutcome(BaseModel):
     status: Literal["FOUND", "NOT_FOUND", "SKIPPED_NO_VALID_ISBN", "SKIPPED_ISBN_CONFLICT",
                     "TIMEOUT", "ERROR", "DISABLED"]
     isbn: str | None = None
+    # Set when no ISBN was read and the lookup ran on the one retail EAN-13 the
+    # images / barcode show instead (its ISBN, if any, comes from crossLookup).
+    ean13: str | None = None
     editionMatches: bool | None = None
     lookup: dict | None = None
 

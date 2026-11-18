@@ -13,7 +13,7 @@ import type { EditableBookForm } from "./types";
 import type { OcrSlots } from "./use-book-ocr";
 
 // "isbn13" mirrors "isbn" (same canonical value) and is applied together with it.
-const ROW_ORDER = ["isbn", "isbn10", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate",
+const ROW_ORDER = ["isbn", "isbn10", "internalBarcode", "title", "subtitle", "authorsText", "translatorText", "publisher", "publishedDate",
   "pageCount", "language", "categoriesText", "description"] as const;
 const EXTRA_READINGS = ["distributor", "editionStatement", "printYear", "copyrightYear", "coverPrice"] as const;
 const DECISION_STATUSES: OcrFieldStatus[] = ["CONFLICTED", "REVIEW_REQUIRED", "INVALID"];
@@ -376,7 +376,8 @@ export function OcrReviewPanel({
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
             {extras.map(([field, value]) => <li key={field}>{OCR_READING_LABELS[field]}: {String(value)}</li>)}
             {result.otherCodes.map((code) => (
-              <li key={`${code.source}-${code.value}`}>Mã khác ISBN ({ocrSourceLabel(code.source)}{code.label ? `, ${code.label}` : ""}): {code.value}</li>
+              <li key={`${code.source}-${code.value}`}>Mã khác ISBN ({ocrSourceLabel(code.source)}{code.label ? `, ${code.label}` : ""}): {code.value}
+                {code.kind === "EAN13" ? " — EAN-13 hợp lệ (mã vạch bán lẻ)" : code.kind === "INVALID_CHECKSUM" ? " — sai số kiểm tra EAN-13, không dùng" : ""}</li>
             ))}
           </ul>
         </div>

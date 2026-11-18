@@ -1,7 +1,30 @@
 const { canonicalKey, similarity } = require('./authority-normalization.service');
+const { classifyBookCode } = require('./catalog-metadata.validation');
 
 function normalizeIsbn(value) {
   return String(value || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+}
+
+/**
+ * The input's codes, each classified before it is compared:
+ * isbns    - valid ISBN-13 / ISBN-10: matched against isbn13 / isbn10, and against
+ *            internal_barcode (an ISBN-13 is also printed as the Bookland barcode);
+ * barcodes - valid retail EAN-13s and internal codes / SKUs: matched against
+ *            internal_barcode / sku, and against isbn13, where variants created before
+ *            EAN-13s were told apart from ISBNs still hold a retail EAN.
+ * A code with a wrong check digit matches nothing.
+ */
+function inputCodes(input) {
+  const isbns = new Set();
+  const barcodes = new Set();
+  for (const value of [input.isbn, input.isbn13, input.isbn10, input.barcode, input.internal_barcode, input.internalBarcode]) {
+    const { kind, code } = classifyBookCode(value);
+    if (kind === 'ISBN13' || kind === 'ISBN10') isbns.add(code);
+    else if (kind === 'EAN13' || kind === 'OTHER') barcodes.add(code);
+  }
+  const sku = String(input.sku || '').trim();
+  if (sku) barcodes.add(sku);
+  return { isbns: [...isbns], barcodes: [...barcodes] };
 }
 
 function sameAuthors(inputAuthors = [], candidateAuthors = []) {
@@ -13,10 +36,11 @@ function sameAuthors(inputAuthors = [], candidateAuthors = []) {
 
 function signalsFor(input, candidate) {
   const variants = candidate.book_variants || candidate.variants || [];
-  const isbn = normalizeIsbn(input.isbn || input.isbn13 || input.isbn10);
-  const barcode = String(input.barcode || input.sku || '').trim();
-  const isbnMatch = Boolean(isbn && variants.some((variant) => [variant.isbn13, variant.isbn10].map(normalizeIsbn).includes(isbn)));
-  const barcodeMatch = Boolean(barcode && variants.some((variant) => [variant.internal_barcode, variant.sku].includes(barcode)));
+  const { isbns, barcodes } = inputCodes(input);
+  const isbnMatch = variants.some((variant) => [variant.isbn13, variant.isbn10, variant.internal_barcode]
+    .map(normalizeIsbn).some((code) => code && isbns.includes(code)));
+  const barcodeMatch = variants.some((variant) => [variant.internal_barcode, variant.sku, variant.isbn13]
+    .some((code) => code && barcodes.includes(String(code).trim())));
   const titleScore = similarity(input.title, candidate.title);
   const candidateAuthors = (candidate.book_authors || []).map((entry) => entry.authors?.full_name || entry.full_name).filter(Boolean);
   const authorMatch = sameAuthors(input.authors, candidateAuthors);
@@ -58,4 +82,4 @@ function checkDuplicates(input, candidates) {
   return { classification: primary.classification, similarityScore: primary.score, candidates: classified, explanation: primary.explanation };
 }
 
-module.exports = { normalizeIsbn, signalsFor, classifyCandidate, checkDuplicates };
+module.exports = { normalizeIsbn, inputCodes, signalsFor, classifyCandidate, checkDuplicates };

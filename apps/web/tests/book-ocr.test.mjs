@@ -117,6 +117,9 @@ test('warning codes become readable Vietnamese', () => {
   assert.equal(ocr.describeOcrCode('UNGROUNDED:title:front_cover'), 'Tên sách (Bìa trước): giá trị không khớp chữ AI đọc được');
   assert.equal(ocr.describeOcrCode('NOT_ISBN_PREFIX:isbn:back_cover'), 'ISBN (Bìa sau): mã vạch không phải ISBN (không bắt đầu 978/979)');
   assert.equal(ocr.describeOcrCode('ONLY_PRINT_YEAR_FOUND'), 'Chỉ thấy năm in / nộp lưu chiểu, không phải năm xuất bản');
+  assert.match(ocr.describeOcrCode('EAN_CROSS_LOOKUP'), /không đọc từ ảnh/);
+  assert.match(ocr.describeOcrCode('CROSS_CONFLICTED'), /ISBN khác nhau/);
+  assert.equal(ocr.OCR_FIELD_LABELS.internalBarcode, 'Mã vạch EAN-13');
   assert.equal(ocr.describeOcrCode('FALLBACK_USED:UPSTREAM_ERROR'), 'đã dùng model dự phòng');
   assert.equal(ocr.ocrSourceLabel('images:copyright_page'), 'Trang xuất bản');
   assert.equal(ocr.formatUsd(0.000412), '$0.00041');

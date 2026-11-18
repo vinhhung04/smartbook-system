@@ -2,6 +2,8 @@ export interface EditableBookForm {
   isbn: string;
   isbn13: string;
   isbn10: string;
+  /** book_variants.internal_barcode: the retail EAN-13 (e.g. 893...), never an ISBN field. */
+  internalBarcode: string;
   title: string;
   subtitle: string;
   authorsText: string;
@@ -17,10 +19,27 @@ export interface EditableBookForm {
   keywordsText: string;
 }
 
+/** A code the EAN-13 <-> ISBN cross lookup offers for one field (never applied by itself). */
+export interface CodeSuggestion {
+  /** The code scanned: "mã EAN-13" (offering an ISBN) or "ISBN" (offering a barcode). */
+  from: string;
+  /** "ISBN" or "mã vạch": what the buttons apply. */
+  noun: string;
+  /** The single linked code, or the candidate matching the edition's year; null = none preferred. */
+  value: string | null;
+  /** Every candidate: the suggestion is done once the field holds one of them. */
+  values: string[];
+  statusLabel: string;
+  sourceLabel: string;
+  onApply: (() => void) | null;
+  onShowEvidence: () => void;
+}
+
 export const EMPTY_FORM: EditableBookForm = {
   isbn: "",
   isbn13: "",
   isbn10: "",
+  internalBarcode: "",
   title: "",
   subtitle: "",
   authorsText: "",
