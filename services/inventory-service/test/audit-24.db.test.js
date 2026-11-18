@@ -128,7 +128,8 @@ test('SmartBook audit: migrated PostgreSQL business invariants', { skip: !url },
         const reservationId = randomUUID();
         await prisma.stock_balances.create({ data: { warehouse_id: wh.id, variant_id: v.id, location_id: loc.id, on_hand_qty: 1, reserved_qty: op === 'return' ? 0 : 1, borrowed_qty: op === 'return' ? 1 : 0 } });
         await prisma.stock_reservations.create({ data: { reservation_code: `AUD-${randomUUID().slice(0, 8)}`, source_service: 'BORROW', source_reference_id: reservationId, warehouse_id: wh.id, variant_id: v.id, location_id: loc.id, quantity: 1, status: 'ACTIVE', expires_at: new Date(Date.now() + 3600000) } });
-        const b = { reservation_id: reservationId, loan_id: randomUUID(), loan_number: `AUD-${tag}`, warehouse_id: wh.id, variant_id: v.id, quantity: 1, idempotency_key: `audit-${op}-${randomUUID()}` };
+        // A returned copy is put back on a named shelf (khoa: location_id).
+        const b = { reservation_id: reservationId, loan_id: randomUUID(), loan_number: `AUD-${tag}`, warehouse_id: wh.id, variant_id: v.id, quantity: 1, idempotency_key: `audit-${op}-${randomUUID()}`, ...(op === 'return' ? { location_id: loc.id } : {}) };
         const results = await Promise.all([request(fn, b), request(fn, b)]);
         assert.ok(results.every((r) => [200, 201].includes(r.statusCode)), JSON.stringify(results));
         assert.equal(await prisma.stock_movements.count({ where: { idempotency_key: b.idempotency_key } }), 1);
@@ -144,7 +145,7 @@ test('SmartBook audit: migrated PostgreSQL business invariants', { skip: !url },
       const loc = await prisma.locations.create({ data: { warehouse_id: wh.id, location_code: `AUD-${randomUUID().slice(0, 8)}` } });
       const v = await prisma.book_variants.create({ data: { book_id: book.id, sku: `AUD-${randomUUID().slice(0, 8)}` } });
       await prisma.stock_balances.create({ data: { warehouse_id: wh.id, variant_id: v.id, location_id: loc.id, on_hand_qty: 2, borrowed_qty: 2 } });
-      const b = { loan_id: randomUUID(), loan_item_id: randomUUID(), warehouse_id: wh.id, variant_id: v.id, quantity: 1 };
+      const b = { loan_id: randomUUID(), loan_item_id: randomUUID(), warehouse_id: wh.id, variant_id: v.id, quantity: 1, location_id: loc.id };
       const responses = await Promise.all([1, 2].map(() => request(returnBorrowedLoan, { ...b, idempotency_key: `audit-item-return-${randomUUID()}` })));
       assert.deepEqual(responses.map((r) => r.statusCode).sort(), [201, 409], JSON.stringify(responses));
       const balance = await prisma.stock_balances.findUnique({ where: { variant_id_location_id: { variant_id: v.id, location_id: loc.id } } });

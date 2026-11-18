@@ -7,7 +7,8 @@ const url = process.env.BORROW_TEST_DATABASE_URL;
 const opts = { skip: !url && 'BORROW_TEST_DATABASE_URL not set' };
 let prisma, loans, reservations;
 let failIntentWrite = false, failCompletion = false;
-const boundary = { reserve: [], consume: [], release: [], returned: [], onReserve: null, onConsume: null, onRelease: null, onReturn: null };
+const shelves = new Map();
+const boundary = { reserve: [], consume: [], release: [], returned: [], reallocate: [], onReserve: null, onConsume: null, onRelease: null, onReturn: null };
 test.before(() => {
   if (!url) return;
   const target = new URL(url); assert.equal(target.hostname, '127.0.0.1'); assert.equal(target.pathname, '/borrow_audit'); assert.ok(['25432', '5432'].includes(target.port));
@@ -24,7 +25,10 @@ test.before(() => {
   mock('../src/lib/prisma', { prisma });
   mock('../src/lib/socket-emitter', { pushEvents: async () => {} });
   mock('../src/services/inventory-integration.service', {
-    checkAvailability: async () => {}, getReturnLocations: async () => [],
+    checkAvailability: async () => {},
+    // Staff name the shelves (khoa: picks / returned_to_location_id); every fixture shelf belongs to its fixture warehouse.
+    getReturnLocations: async ({ locationIds }) => [...new Set(locationIds)].map(id => ({ id, warehouse_id: shelves.get(id), is_active: true })),
+    reallocateReservationStock: async input => { boundary.reallocate.push(input); },
     reserveStock: async input => { boundary.reserve.push(input); if (boundary.onReserve) await boundary.onReserve(input); },
     consumeReservation: async input => { boundary.consume.push(input); if (boundary.onConsume) await boundary.onConsume(input); },
     releaseReservation: async input => { boundary.release.push(input); if (boundary.onRelease) await boundary.onRelease(input); },
@@ -33,7 +37,7 @@ test.before(() => {
   loans = require('../src/controllers/loan.controller'); reservations = require('../src/controllers/reservation.controller');
 });
 test.after(async () => prisma?.$disconnect());
-test.beforeEach(() => { for (const key of ['reserve', 'consume', 'release', 'returned']) boundary[key] = []; boundary.onReserve = boundary.onConsume = boundary.onRelease = boundary.onReturn = null; failIntentWrite = failCompletion = false; });
+test.beforeEach(() => { for (const key of ['reserve', 'consume', 'release', 'returned', 'reallocate']) boundary[key] = []; boundary.onReserve = boundary.onConsume = boundary.onRelease = boundary.onReturn = null; failIntentWrite = failCompletion = false; });
 const actor = { id: randomUUID(), is_superuser: true, roles: ['ADMIN'], permissions: ['borrow.write'] };
 async function call(handler, id, body = {}, key = randomUUID()) {
   const res = { statusCode: 200, status(n) { this.statusCode = n; return this; }, json(body) { this.body = body; return this; } };
@@ -43,7 +47,8 @@ async function fixture() {
   const customer = await prisma.customers.create({ data: { customer_code: `DUR-${randomUUID().slice(0, 12)}`, full_name: 'Isolated durability fixture' } });
   const plan = await prisma.membership_plans.create({ data: { code: `DUR-${randomUUID().slice(0, 12)}`, name: 'Durability', max_active_loans: 10, fine_per_day: 0 } });
   await prisma.customer_memberships.create({ data: { customer_id: customer.id, plan_id: plan.id, card_number: randomUUID(), start_date: new Date(Date.now() - 86400000) } });
-  return { customer, warehouse: randomUUID(), variant: randomUUID() };
+  const warehouse = randomUUID(); const shelf = randomUUID(); shelves.set(shelf, warehouse);
+  return { customer, warehouse, variant: randomUUID(), shelf };
 }
 async function pendingOperation(kind, aggregateId) {
   return prisma.integration_outbox.findFirst({ where: { event_type: 'BORROW_OPERATION', aggregate_id: aggregateId, payload: { path: ['kind'], equals: kind } } });
@@ -77,7 +82,7 @@ test('PRA07: direct reserve/consume cannot run before a restartable approved pla
     assert.equal(input.loan_number, stored.payload.plan.loanNumber);
     throw Object.assign(new Error('remote response lost after committing consume'), { status: 502 });
   };
-  const response = await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 });
+  const response = await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf });
   assert.equal(response.statusCode, 502);
   assert.ok(stored);
   const durable = await prisma.integration_outbox.findUnique({ where: { id: stored.id } });
@@ -113,7 +118,7 @@ test('PRA07: consume response loss rolls back Borrow writes but keeps stable con
     assert.ok(record); assert.equal(record.payload.plan.loanId, input.loan_id);
     throw Object.assign(new Error('consume response lost'), { status: 502 });
   };
-  assert.equal((await call(loans.convertReservationToLoan, reservation.id)).statusCode, 502);
+  assert.equal((await call(loans.convertReservationToLoan, reservation.id, { picks: [{ location_id: f.shelf, quantity: 1 }] })).statusCode, 502);
   const record = await pendingOperation('CONVERT_RESERVATION', reservation.id);
   assert.equal(await prisma.loan_transactions.count({ where: { source_reservation_id: reservation.id } }), 0);
   boundary.onConsume = null;
@@ -129,7 +134,7 @@ test('PRA07: return response loss preserves per-copy plan and replays exactly it
   const loan = await prisma.loan_transactions.create({ data: { loan_number: `DUR-${randomUUID()}`, customer_id: f.customer.id, warehouse_id: f.warehouse, handled_by_user_id: actor.id, due_date: new Date(Date.now() + 86400000), total_items: 1 } });
   const item = await prisma.loan_items.create({ data: { loan_id: loan.id, variant_id: f.variant, due_date: loan.due_date } });
   boundary.onReturn = async () => { assert.ok(await pendingOperation('RETURN_LOAN', loan.id)); throw Object.assign(new Error('return response lost'), { status: 502 }); };
-  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id })).statusCode, 502);
+  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf })).statusCode, 502);
   const record = await pendingOperation('RETURN_LOAN', loan.id); boundary.onReturn = null;
   assert.deepEqual(await recover(record), { resolved: true });
   assert.equal(boundary.returned[0].idempotency_key, boundary.returned[1].idempotency_key);
@@ -151,12 +156,12 @@ test('PRA07: expiry commits a release intent with local expiry and recovers lost
 });
 test('PRA07: intent storage failure prevents every direct remote mutation', opts, async () => {
   const f = await fixture(); failIntentWrite = true;
-  const response = await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 });
+  const response = await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf });
   assert.equal(response.statusCode, 500); assert.equal(boundary.reserve.length, 0); assert.equal(boundary.consume.length, 0);
 });
 test('PRA07: failure publishing local completion rolls back local loan and can replay remote success', opts, async () => {
   const f = await fixture(); failCompletion = true;
-  assert.equal((await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 })).statusCode, 502);
+  assert.equal((await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf })).statusCode, 502);
   const record = await prisma.integration_outbox.findFirst({ where: { event_type: 'BORROW_OPERATION', payload: { path: ['plan', 'loanId'], equals: boundary.consume[0].loan_id } } });
   assert.equal(await prisma.loan_transactions.count({ where: { id: record.payload.plan.loanId } }), 0);
   assert.deepEqual(await recover(record), { resolved: true });
@@ -164,7 +169,7 @@ test('PRA07: failure publishing local completion rolls back local loan and can r
 });
 test('PRA07: actual process death at mocked Inventory response boundary leaves a recoverable plan', opts, async () => {
   const f = await fixture();
-  const input = { body: { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 }, key: randomUUID(), actor };
+  const input = { body: { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf }, key: randomUUID(), actor };
   const child = fork(path.join(__dirname, 'helpers/borrow-crash-child.cjs'), [JSON.stringify(input)], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
   const timer = setTimeout(() => child.kill('SIGKILL'), 20000);
   let message;
@@ -182,7 +187,7 @@ test('PRA07: actual process death at mocked Inventory response boundary leaves a
 test('PRA07: stale lease owners cannot mark, complete or defer a newer claim', opts, async () => {
   const f = await fixture();
   boundary.onConsume = async () => { throw Object.assign(new Error('uncertain consume'), { status: 502 }); };
-  await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 });
+  await call(loans.createDirectLoan, null, { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf });
   const service = require('../src/services/borrow-operation.service');
   const old = await prisma.integration_outbox.findFirst({ where: { event_type: 'BORROW_OPERATION', payload: { path: ['plan', 'loanId'], equals: boundary.consume[0].loan_id } } });
   const newLease = new Date(Date.now() + 1800000);
@@ -206,13 +211,13 @@ test('PRA07: a valid long client key keeps bounded stable Inventory identities a
   const f = await fixture(); const key = 'long-client-key-' + randomUUID().repeat(5);
   boundary.onReserve = async input => assert.ok(input.idempotency_key.length <= 100, 'Inventory movement key column is varchar100');
   boundary.onConsume = async input => assert.ok(input.idempotency_key.length <= 100);
-  const body = { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 };
+  const body = { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf };
   const first = await call(loans.createDirectLoan, null, body, key); assert.equal(first.statusCode, 201);
   const replay = await call(loans.createDirectLoan, null, body, key); assert.equal(replay.statusCode, 200); assert.equal(replay.body.data.id, first.body.data.id);
 });
 test('PRA07: a definitive reserve refusal cannot silently become a new loan after restart', opts, async () => {
   const f = await fixture(); boundary.onReserve = async () => { throw Object.assign(new Error('no stock available'), { status: 409 }); };
-  const body = { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 };
+  const body = { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf };
   assert.equal((await call(loans.createDirectLoan, null, body)).statusCode, 409);
   const record = await prisma.integration_outbox.findFirst({ where: { event_type: 'BORROW_OPERATION', payload: { path: ['plan', 'reservationId'], equals: boundary.reserve[0].reservation_id } } });
   assert.equal(record.status, 'PUBLISHED'); assert.equal(record.payload.response.status, 409);
@@ -222,7 +227,7 @@ test('PRA07: a definitive reserve refusal cannot silently become a new loan afte
 });
 test('PRA07: reserve conflict after an earlier unknown attempt remains manual, never falsely aborted', opts, async () => {
   const f = await fixture(), key = randomUUID();
-  const body = { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1 };
+  const body = { customer_id: f.customer.id, warehouse_id: f.warehouse, variant_id: f.variant, quantity: 1, pickup_location_id: f.shelf };
   boundary.onReserve = async () => { throw Object.assign(new Error('unknown initial reserve'), { status: 502 }); };
   assert.equal((await call(loans.createDirectLoan, null, body, key)).statusCode, 502);
   boundary.onReserve = async () => { throw Object.assign(new Error('conflict on replay'), { status: 409 }); };
@@ -235,7 +240,7 @@ test('PRA07: reserve conflict after an earlier unknown attempt remains manual, n
 test('PRA07: fresh batch cutoff remains after the final Inventory acknowledgement', opts, async () => {
   const f = await fixture(); const { loan, item } = await makeLoan(f); let acknowledgedAt;
   boundary.onReturn = async () => { await new Promise(resolve => setTimeout(resolve, 30)); acknowledgedAt = Date.now(); };
-  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id })).statusCode, 200);
+  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf })).statusCode, 200);
   const stored = await prisma.loan_items.findUnique({ where: { id: item.id } });
   assert.ok(stored.return_date.getTime() >= acknowledgedAt, 'preserve the original after-ACK batch cutoff');
 });
@@ -243,7 +248,7 @@ test('PRA07: unknown return across an accrual boundary needs review instead of c
   const f = await fixture(); const { loan, item } = await makeLoan(f);
   await prisma.loan_items.update({ where: { id: item.id }, data: { due_date: new Date(Date.now() - 2 * 86400000) } });
   boundary.onReturn = async () => { throw Object.assign(new Error('unknown return'), { status: 502 }); };
-  await call(loans.returnLoan, loan.id, { loan_item_id: item.id });
+  await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf });
   const record = await pendingOperation('RETURN_LOAN', loan.id);
   // Simulate an approved request retained from the previous accrual day; only
   // isolated test metadata is moved in time, never a financial/history row.
@@ -255,7 +260,7 @@ test('PRA07: unknown return across an accrual boundary needs review instead of c
 });
 test('PRA07: completion cutoff and prices survive a local failure and later policy change', opts, async () => {
   const f = await fixture(); const { loan, item } = await makeLoan(f); failCompletion = true;
-  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id })).statusCode, 502);
+  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf })).statusCode, 502);
   const record = await pendingOperation('RETURN_LOAN', loan.id);
   assert.ok(record.payload.completion?.completedAt, 'persist completion context before local business commit');
   const oldPolicy = record.payload.completion.pricing;
@@ -268,7 +273,7 @@ test('PRA07: completion cutoff and prices survive a local failure and later poli
 test('PRA07: an exact due-date change within the same accrual day is reviewed, not overwritten', opts, async () => {
   const f = await fixture(); const { loan, item } = await makeLoan(f);
   boundary.onReturn = async () => { throw Object.assign(new Error('unknown return'), { status: 502 }); };
-  await call(loans.returnLoan, loan.id, { loan_item_id: item.id });
+  await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf });
   const record = await pendingOperation('RETURN_LOAN', loan.id);
   await prisma.loan_items.update({ where: { id: item.id }, data: { due_date: new Date(item.due_date.getTime() + 1000) } });
   boundary.onReturn = null;
@@ -286,7 +291,7 @@ test('PRA07: fresh return spanning UTC midnight retains the baseline after-ACK a
   global.Date = FixtureDate;
   try {
     boundary.onReturn = async () => { clock = today + 86400000 + 100; };
-    const response = await call(loans.returnLoan, loan.id, { loan_item_id: item.id });
+    const response = await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf });
     assert.equal(response.statusCode, 200, JSON.stringify(response.body));
   } finally { global.Date = RealDate; }
   const fine = await prisma.fines.findFirst({ where: { loan_item_id: item.id, fine_type: 'OVERDUE' } });
@@ -297,7 +302,7 @@ test('PRA07: unknown return with changed pricing is manual even within the same 
   const f = await fixture(); const { loan, item } = await makeLoan(f);
   await prisma.loan_items.update({ where: { id: item.id }, data: { due_date: new Date(Date.now() - 2 * 86400000) } });
   boundary.onReturn = async () => { throw Object.assign(new Error('unknown return'), { status: 502 }); };
-  await call(loans.returnLoan, loan.id, { loan_item_id: item.id }); const record = await pendingOperation('RETURN_LOAN', loan.id);
+  await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf }); const record = await pendingOperation('RETURN_LOAN', loan.id);
   await prisma.membership_plans.updateMany({ where: { customer_memberships: { some: { customer_id: f.customer.id } } }, data: { fine_per_day: 7000 } });
   boundary.onReturn = null;
   assert.equal((await recover(record)).manual, true);
@@ -308,7 +313,7 @@ test('PRA07: accrual beyond a persisted completion cutoff is preserved for manua
   const due = new Date(Date.now() - 2 * 86400000);
   await prisma.loan_items.update({ where: { id: item.id }, data: { due_date: due } });
   await prisma.membership_plans.updateMany({ where: { customer_memberships: { some: { customer_id: f.customer.id } } }, data: { fine_per_day: 5000 } });
-  failCompletion = true; assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id })).statusCode, 502);
+  failCompletion = true; assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf })).statusCode, 502);
   const record = await pendingOperation('RETURN_LOAN', loan.id); assert.ok(record.payload.completion);
   const fineService = require('../src/services/fine.service');
   await prisma.$transaction(async tx => {
@@ -324,7 +329,7 @@ test('PRA07: accrual beyond a persisted completion cutoff is preserved for manua
 });
 test('PRA07: legacy incomplete returns without financial completion evidence require review', opts, async () => {
   const f = await fixture(); const { loan, item } = await makeLoan(f); const key = randomUUID();
-  const body = { loan_item_id: item.id };
+  const body = { loan_item_id: item.id, returned_to_location_id: f.shelf };
   const { normalizeReturnRequest, returnFingerprint } = require('../src/services/return-request.service');
   await prisma.loan_return_requests.create({ data: { loan_id: loan.id, idempotency_key: key,
     fingerprint: returnFingerprint(normalizeReturnRequest(body)), status: 'RETRYABLE', unresolved_item_ids: [item.id] } });

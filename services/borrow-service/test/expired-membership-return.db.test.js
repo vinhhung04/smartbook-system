@@ -10,15 +10,18 @@ test.before(() => {
   process.env.DATABASE_URL = url; const { PrismaClient } = require('@prisma/client'); prisma = new PrismaClient();
   const mock = (path, exports) => { const id = require.resolve(path); require.cache[id] = { id, filename: id, loaded: true, exports }; };
   mock('../src/lib/prisma', { prisma }); mock('../src/lib/socket-emitter', { pushEvents: async () => {} });
-  mock('../src/services/inventory-integration.service', { returnBorrowedStock: async () => ({}), getReturnLocations: async () => [] });
+  // Copies go back to a named shelf of the loan's branch (khoa: returned_to_location_id).
+  mock('../src/services/inventory-integration.service', { returnBorrowedStock: async () => ({}),
+    getReturnLocations: async ({ locationIds }) => [...new Set(locationIds)].map(id => ({ id, warehouse_id: shelves.get(id), is_active: true })) });
   loans = require('../src/controllers/loan.controller'); ({ runOverdueSweep: sweep } = require('../src/services/fine.service'));
   ({ resolveActiveMembership } = require('../src/services/membership.service'));
 });
 test.after(async () => prisma?.$disconnect());
 const actor = { id: randomUUID(), is_superuser: true };
+const shelves = new Map();
 async function invoke(handler, loan, item) {
   const response = { statusCode: 200, status(n) { this.statusCode = n; return this; }, json(body) { this.body = body; return this; } };
-  await handler({ params: { id: loan.id }, method: 'POST', query: {}, body: { loan_item_id: item.id }, user: actor, headers: { 'idempotency-key': randomUUID() } }, response);
+  await handler({ params: { id: loan.id }, method: 'POST', query: {}, body: { loan_item_id: item.id, returned_to_location_id: loan.shelf }, user: actor, headers: { 'idempotency-key': randomUUID() } }, response);
   assert.equal(response.statusCode, 200, JSON.stringify(response.body)); return response;
 }
 async function fixture() {
@@ -31,6 +34,7 @@ async function fixture() {
   const loan = await prisma.loan_transactions.create({ data: { loan_number: `EXP-${randomUUID()}`, customer_id: customer.id, warehouse_id: randomUUID(), handled_by_user_id: actor.id,
     due_date: new Date(Date.now() - 3 * 86400000), total_items: 1 } });
   const item = await prisma.loan_items.create({ data: { loan_id: loan.id, variant_id: randomUUID(), due_date: loan.due_date } });
+  loan.shelf = randomUUID(); shelves.set(loan.shelf, loan.warehouse_id);
   return { customer, loan, item };
 }
 async function sweepOnly(item) {

@@ -8,6 +8,7 @@ let prisma, controller;
 const warehouseA = randomUUID(), warehouseB = randomUUID();
 const actorA = { id: randomUUID(), roles: ['ADMIN'], permissions: ['borrow.write'] };
 const actorB = { id: randomUUID(), roles: ['ADMIN'], permissions: ['borrow.write'] };
+const SHELF = randomUUID();
 const otherB = { id: randomUUID(), roles: ['ADMIN'], permissions: ['borrow.write'] };
 test.before(() => {
   if (!url) return;
@@ -15,7 +16,8 @@ test.before(() => {
   process.env.DATABASE_URL = url; const { PrismaClient } = require('@prisma/client'); prisma = new PrismaClient();
   const mock = (path, exports) => { const id = require.resolve(path); require.cache[id] = { id, filename: id, loaded: true, exports }; };
   mock('../src/lib/prisma', { prisma }); mock('../src/lib/socket-emitter', { pushEvents: async () => {} });
-  mock('../src/services/inventory-integration.service', { checkAvailability: async () => {}, reserveStock: async () => {}, consumeReservation: async () => {} });
+  mock('../src/services/inventory-integration.service', { checkAvailability: async () => {}, reserveStock: async () => {}, consumeReservation: async () => {},
+    reallocateReservationStock: async () => {}, releaseReservation: async () => {} });
   require('../src/utils/warehouse-scope.utils').setWarehouseScopeResolver({ canWrite: async (user, warehouse) =>
     (user.id === actorA.id && warehouse === warehouseA) || ([actorB.id, otherB.id].includes(user.id) && warehouse === warehouseB) });
   controller = require('../src/controllers/loan.controller');
@@ -30,11 +32,12 @@ async function legacy() {
   const key = randomUUID(), variant = randomUUID();
   const reservation = await prisma.loan_reservations.create({ data: { id: deterministicUuid(`direct-loan:reservation:${key}`),
     reservation_number: `LEG-${randomUUID()}`, customer_id: customer.id, variant_id: variant, warehouse_id: warehouseB,
-    quantity: 1, source_channel: 'COUNTER', status: 'CONVERTED_TO_LOAN', created_by_user_id: actorB.id, expires_at: new Date(Date.now() + 86400000) } });
+    quantity: 1, pickup_location_id: SHELF, source_channel: 'COUNTER', status: 'CONVERTED_TO_LOAN', created_by_user_id: actorB.id, expires_at: new Date(Date.now() + 86400000) } });
   const loan = await prisma.loan_transactions.create({ data: { id: deterministicUuid(`direct-loan:loan:${key}`), loan_number: `LEG-${randomUUID()}`,
     customer_id: customer.id, warehouse_id: warehouseB, handled_by_user_id: actorB.id, source_reservation_id: reservation.id,
     due_date: new Date(Date.now() + 86400000), total_items: 1 } });
-  return { key, loan, body: { customer_id: customer.id, variant_id: variant, warehouse_id: warehouseB, quantity: 1 } };
+  // pickup_location_id: the shelf the copies were taken from (khoa); part of the bound request.
+  return { key, loan, body: { customer_id: customer.id, variant_id: variant, warehouse_id: warehouseB, quantity: 1, pickup_location_id: SHELF } };
 }
 test('PRA04: legacy direct replay authorizes the stored warehouse before returning any loan data', opts, async () => {
   const f = await legacy(); const response = await call({ ...f.body, warehouse_id: warehouseA }, f.key, actorA);

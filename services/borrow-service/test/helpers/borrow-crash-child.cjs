@@ -7,7 +7,7 @@ function mock(path, exports) { const id = require.resolve(path); require.cache[i
 mock('../../src/lib/prisma', { prisma });
 mock('../../src/lib/socket-emitter', { pushEvents: async () => {} });
 mock('../../src/services/inventory-integration.service', {
-  checkAvailability: async () => {}, reserveStock: async () => {},
+  checkAvailability: async () => {}, reserveStock: async () => {}, reallocateReservationStock: async () => {},
   consumeReservation: async call => {
     const record = await prisma.integration_outbox.findFirst({ where: { event_type: 'BORROW_OPERATION',
       payload: { path: ['plan', 'loanId'], equals: call.loan_id } } });

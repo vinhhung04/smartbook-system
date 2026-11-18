@@ -6,6 +6,8 @@ const {
   reserveFromBorrow,
   releaseBorrowReservation,
   consumeBorrowReservation,
+  reallocateBorrowReservation,
+  getBorrowPickOptions,
   returnBorrowedLoan,
   getVariantDetails,
   getVariantPublicAvailability,
@@ -23,6 +25,8 @@ router.get('/books/:bookId/public-availability', authorizeAnyPermission(['borrow
 router.get('/books/:bookId/variant-ids', authorizeAnyPermission(['borrow.read', 'borrow.write', 'inventory.stock.read']), getBookVariantIds);
 router.get('/warehouses', authorizeAnyPermission(['borrow.read', 'borrow.write', 'inventory.stock.read']), listBorrowWarehouses);
 router.get('/availability', authorizeAnyPermission(['borrow.read', 'borrow.write', 'inventory.stock.read']), getAvailability);
+router.get('/pick-options', authorizeAnyPermission(['borrow.read', 'borrow.write', 'inventory.stock.read']), getBorrowPickOptions);
+router.post('/reservations/reallocate', authorizeAnyPermission(['borrow.write', 'inventory.stock.write']), reallocateBorrowReservation);
 router.post('/reservations/reserve', authorizeAnyPermission(['borrow.write', 'inventory.stock.write']), reserveFromBorrow);
 router.post('/reservations/release', authorizeAnyPermission(['borrow.write', 'inventory.stock.write']), releaseBorrowReservation);
 router.post('/reservations/consume', authorizeAnyPermission(['borrow.write', 'inventory.stock.write']), consumeBorrowReservation);

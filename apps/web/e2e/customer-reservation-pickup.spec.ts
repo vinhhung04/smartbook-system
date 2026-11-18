@@ -45,7 +45,9 @@ async function settleOpenCustomerState(request: APIRequestContext) {
   const loans = (await (await request.get(`${GATEWAY}/my/loans`, { headers: customer, params: { pageSize: '100' } })).json()).data ?? [];
   for (const loan of loans) {
     if (!['BORROWED', 'OVERDUE', 'RESERVED'].includes(loan.status)) continue;
-    const res = await request.post(`${GATEWAY}/borrow/loans/${loan.id}/return`, { headers: { ...staff, ...idempotency('return') }, data: {} });
+    const locations = (await (await request.get(`${GATEWAY}/api/warehouses/${loan.warehouse_id}/locations`, { headers: staff })).json()).locations ?? [];
+    const shelf = locations.find((location: { is_active: boolean }) => location.is_active);
+    const res = await request.post(`${GATEWAY}/borrow/loans/${loan.id}/return`, { headers: { ...staff, ...idempotency('return') }, data: { returned_to_location_id: shelf?.id } });
     expect(res.ok(), `return leftover ${loan.loan_number}`).toBeTruthy();
   }
 }
@@ -128,6 +130,9 @@ test('customer reservation through pickup and return', async ({ page, request })
   await expect(toast(page, 'Đã xác nhận đặt trước')).toBeVisible();
 
   await row.getByTestId('mark-ready-button').click();
+  // The pick dialog starts on the shelf the system holds the copy on; the librarian took it from there.
+  await expect(page.getByTestId('confirm-ready-pick-button')).toBeEnabled({ timeout: 10_000 });
+  await page.getByTestId('confirm-ready-pick-button').click();
   await expect(toast(page, 'Đặt trước sẵn sàng lấy sách')).toBeVisible();
 
   const pickupCodeCell = row.locator('p.font-mono');
@@ -151,6 +156,10 @@ test('customer reservation through pickup and return', async ({ page, request })
   // Open exactly the loan this test created.
   await page.goto(`/borrow/loans/${loan.id}`);
   await page.getByTestId('return-loan-button').click();
+  // Say where each copy was put back: the first shelf of the branch.
+  const shelves = page.locator('select[aria-label^="Vị trí trả về "]');
+  await expect.poll(() => shelves.first().locator('option').count(), { timeout: 10_000 }).toBeGreaterThan(1);
+  for (const shelf of await shelves.all()) await shelf.selectOption({ index: 1 });
   await page.getByTestId('confirm-dialog-action').click();
   await expect(toast(page, 'Đã trả sách thành công')).toBeVisible();
 

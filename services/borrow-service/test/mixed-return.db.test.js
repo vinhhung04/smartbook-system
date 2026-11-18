@@ -5,6 +5,8 @@ const url = process.env.BORROW_TEST_DATABASE_URL;
 if (url) process.env.DATABASE_URL = url;
 let prisma, controller;
 const inventory = { calls: [], failAt: 0, onReturn: null };
+// Copies go back to a named shelf of the loan's branch (khoa: returned_to_location_id).
+const shelves = new Map();
 const integrationPath = require.resolve('../src/services/inventory-integration.service');
 require.cache[integrationPath] = { id: integrationPath, filename: integrationPath, loaded: true, exports: {
   returnBorrowedStock: async input => {
@@ -12,7 +14,7 @@ require.cache[integrationPath] = { id: integrationPath, filename: integrationPat
     if (inventory.onReturn) await inventory.onReturn(input);
     if (inventory.calls.length === inventory.failAt) throw Object.assign(new Error('Uncertain remote return'), { status: 502 });
   },
-  getReturnLocations: async () => [],
+  getReturnLocations: async ({ locationIds }) => [...new Set(locationIds)].map(id => ({ id, warehouse_id: shelves.get(id), is_active: true })),
 } };
 test.before(() => {
   if (!url) return;
@@ -32,13 +34,14 @@ async function fixture() {
   const loan = await prisma.loan_transactions.create({ data: { loan_number: `MIX-${randomUUID()}`, customer_id: customer.id, handled_by_user_id: randomUUID(), warehouse_id: randomUUID(), due_date: new Date(Date.now() + 86400000), total_items: 3 } });
   await prisma.loan_items.createMany({ data: [1, 2, 3].map(() => ({ id: randomUUID(), loan_id: loan.id, variant_id: randomUUID(), due_date: loan.due_date })) });
   const items = await prisma.loan_items.findMany({ where: { loan_id: loan.id }, orderBy: { id: 'asc' } });
+  const shelf = randomUUID(); shelves.set(shelf, loan.warehouse_id);
   const { creditAccount } = require('../src/services/account.service');
   const { holdLoanItemDeposits } = require('../src/services/deposit.service');
   await prisma.$transaction(async tx => {
     await creditAccount(tx, { customerId: customer.id, amount: 90000, entryType: 'TOPUP', idempotencyKey: `mixed-credit-${randomUUID()}` });
     await holdLoanItemDeposits(tx, { customerId: customer.id, loanId: loan.id, loanNumber: loan.loan_number, items, amountPerItem: 30000 });
   });
-  const payload = { items: items.map((item, index) => ({ loan_item_id: item.id, item_condition_on_return: ['GOOD', 'DAMAGED', 'LOST'][index], notes: `copy ${index}`, settlement_reason: index ? 'Staff verified condition' : '' })) };
+  const payload = { items: items.map((item, index) => ({ loan_item_id: item.id, item_condition_on_return: ['GOOD', 'DAMAGED', 'LOST'][index], ...(index < 2 ? { returned_to_location_id: shelf } : {}), notes: `copy ${index}`, settlement_reason: index ? 'Staff verified condition' : '' })) };
   return { customer, loan, items, payload };
 }
 async function call(handler, loan, body, key = randomUUID(), method = 'POST') {

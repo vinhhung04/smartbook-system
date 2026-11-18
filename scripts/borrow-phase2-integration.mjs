@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { shelfPicks, returnToShelf } from './lib/borrow-shelves.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
@@ -85,6 +86,10 @@ async function resolveStockTarget() {
   warehouseId = candidate.default_warehouse_id;
 }
 
+const getAs = (tokenOverride) => async (path) => (await request('GET', path, undefined, {}, tokenOverride)).data;
+const get = getAs(token);
+const picksFor = (quantity, extra = {}) => shelfPicks(get, { variantId, warehouseId, quantity, ...extra });
+
 const results = [];
 function add(name, ok, detail) {
   results.push({ name, ok, detail });
@@ -147,6 +152,7 @@ async function run() {
         variant_id: variantId,
         warehouse_id: warehouseId,
         quantity: 1,
+        picks: await picksFor(1),
         source_channel: 'COUNTER',
         notes: 'deposit check: empty wallet',
       },
@@ -169,6 +175,7 @@ async function run() {
       variant_id: variantId,
       warehouse_id: warehouseId,
       quantity: 1,
+      picks: await picksFor(1),
       source_channel: 'COUNTER',
       notes: 'direct loan integration test',
     },
@@ -215,7 +222,7 @@ async function run() {
       const converted = await request(
         'POST',
         `/borrow/reservations/${reservationId}/convert-to-loan`,
-        {},
+        { picks: await picksFor(1, { reservationId }) },
         { 'Idempotency-Key': crypto.randomUUID() }
       );
       if (converted.ok) {
@@ -242,7 +249,7 @@ async function run() {
   }
 
   if (reservationLoanId) {
-    const returnNormal = await request('POST', `/borrow/loans/${reservationLoanId}/return`, {}, { 'Idempotency-Key': crypto.randomUUID() });
+    const returnNormal = await request('POST', `/borrow/loans/${reservationLoanId}/return`, await returnToShelf(get, reservationLoanId), { 'Idempotency-Key': crypto.randomUUID() });
     add('6.return normal', returnNormal.ok, JSON.stringify(returnNormal.data));
     if (deposit > 0) {
       const returnedLoan = await request('GET', `/borrow/loans/${reservationLoanId}`);
@@ -261,6 +268,7 @@ async function run() {
       variant_id: variantId,
       warehouse_id: warehouseId,
       quantity: 1,
+      picks: await picksFor(1),
       source_channel: 'COUNTER',
       notes: 'lost flow integration test',
     },
@@ -304,6 +312,7 @@ async function run() {
       variant_id: damagedTarget?.variant_id || variantId,
       warehouse_id: damagedTarget?.default_warehouse_id || warehouseId,
       quantity: 1,
+      picks: await shelfPicks(getAs(damagedActorToken), { variantId: damagedTarget?.variant_id || variantId, warehouseId: damagedTarget?.default_warehouse_id || warehouseId, quantity: 1 }),
       source_channel: 'COUNTER',
       notes: 'damaged flow integration test',
     },
@@ -315,7 +324,7 @@ async function run() {
     const damaged = await request(
       'POST',
       `/borrow/loans/${damagedLoanId}/return`,
-      { item_condition_on_return: 'DAMAGED', settlement_reason: 'integration test: cover torn' },
+      { item_condition_on_return: 'DAMAGED', settlement_reason: 'integration test: cover torn', ...(await returnToShelf(getAs(damagedActorToken), damagedLoanId)) },
       { 'Idempotency-Key': crypto.randomUUID() },
       damagedActorToken
     );

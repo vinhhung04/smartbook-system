@@ -113,6 +113,26 @@ async function releaseReservation({ reservation_id, reason, idempotency_key, aut
   });
 }
 
+// Move a reservation's stock hold to the shelves the librarian actually took the copies from.
+async function reallocateReservationStock({ reservation_id, warehouse_id, picks, idempotency_key, handled_by_user_id, authHeader, requestId }) {
+  return requestInventory('/api/borrow-integration/reservations/reallocate', {
+    method: 'POST',
+    signal: AbortSignal.timeout(10000),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: getInventoryAuthHeader(authHeader),
+      ...correlationHeader(requestId),
+    },
+    body: JSON.stringify({
+      reservation_id,
+      warehouse_id,
+      picks,
+      idempotency_key,
+      handled_by_user_id,
+    }),
+  });
+}
+
 async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader, requestId, timeoutMs }) {
   return requestInventory('/api/borrow-integration/reservations/consume', {
     method: 'POST',
@@ -265,6 +285,7 @@ module.exports = {
   checkAvailability,
   reserveStock,
   releaseReservation,
+  reallocateReservationStock,
   consumeReservation,
   returnBorrowedStock,
   getVariantDetails,

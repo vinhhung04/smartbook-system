@@ -77,6 +77,24 @@ export interface Reservation {
   };
 }
 
+/** How many copies the librarian took from one shelf. */
+export interface PickLine {
+  location_id: string;
+  quantity: number;
+}
+
+/** A shelf of the warehouse holding the book: free copies plus copies this reservation already holds there. */
+export interface PickOption {
+  location_id: string;
+  location_code: string;
+  zone: string | null;
+  aisle: string | null;
+  shelf: string | null;
+  bin: string | null;
+  available_qty: number;
+  held_qty: number;
+}
+
 export interface ReservationPayload {
   customer_id: string;
   variant_id: string;
@@ -85,6 +103,8 @@ export interface ReservationPayload {
   quantity: number;
   source_channel?: ReservationSource;
   notes?: string;
+  /** Direct loans only: the shelves the copies were taken from. */
+  picks?: PickLine[];
 }
 
 export interface VariantLookupItem {
@@ -371,7 +391,12 @@ export const borrowService = {
     return response.data as { data: Reservation };
   },
 
-  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }, idempotencyKey?: string) => {
+  getPickOptions: async (params: { variant_id: string; warehouse_id: string; reservation_id?: string }) => {
+    const response = await gatewayAPI.get('/api/borrow-integration/pick-options', { params });
+    return response.data as { data: PickOption[] };
+  },
+
+  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string; picks?: PickLine[] }, idempotencyKey?: string) => {
     const response = await gatewayAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {}, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });

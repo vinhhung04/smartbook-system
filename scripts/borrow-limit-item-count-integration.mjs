@@ -6,6 +6,7 @@ import { availableStockFixture } from './testing/stock-fixture.mjs';
 //
 // Usage: node scripts/borrow-limit-item-count-integration.mjs
 import crypto from 'node:crypto';
+import { shelfPicks } from './lib/borrow-shelves.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
@@ -83,6 +84,7 @@ async function main() {
     variant_id: stock.variant_id,
     warehouse_id: stock.default_warehouse_id,
     quantity: 2,
+    picks: await shelfPicks((path) => ok('GET', path), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 2 }),
   }, { 'Idempotency-Key': crypto.randomUUID() });
   check('first loan: 2 books in a single receipt accepted', Boolean(firstLoan.data?.id));
 
@@ -100,6 +102,7 @@ async function main() {
     variant_id: stock.variant_id,
     warehouse_id: stock.default_warehouse_id,
     quantity: overQty,
+    picks: [{ location_id: (await shelfPicks((path) => ok('GET', path), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 1 }))[0]?.location_id, quantity: overQty }],
   }, { 'Idempotency-Key': crypto.randomUUID() });
   check(
     `borrowing ${overQty} more (2 + ${overQty} = ${2 + overQty} > limit ${limit}) is rejected for the membership limit, not allowed or rejected for an unrelated reason`,
@@ -115,6 +118,7 @@ async function main() {
       variant_id: stock.variant_id,
       warehouse_id: stock.default_warehouse_id,
       quantity: exactQty,
+      picks: await shelfPicks((path) => ok('GET', path), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: exactQty }),
     }, { 'Idempotency-Key': crypto.randomUUID() });
     check(`borrowing exactly up to the limit (2 + ${exactQty} = ${limit}) is accepted`, Boolean(exactAttempt.data?.id));
 
@@ -126,6 +130,7 @@ async function main() {
       variant_id: stock.variant_id,
       warehouse_id: stock.default_warehouse_id,
       quantity: 1,
+      picks: await shelfPicks((path) => ok('GET', path), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 1 }),
     }, { 'Idempotency-Key': crypto.randomUUID() });
     check('one more book past the exact limit is rejected', oneMore.status === 409, `status=${oneMore.status}`);
   }

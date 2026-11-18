@@ -1,7 +1,8 @@
 const { deterministicUuid } = require('@smartbook/shared/runtime');
 const { prisma } = require('../lib/prisma');
 const { resolveActiveMembership, countActiveBorrowedItems, countActiveReservedItems } = require('../services/membership.service');
-const { checkAvailability, reserveStock, releaseReservation } = require('../services/inventory-integration.service');
+const { checkAvailability, reserveStock, releaseReservation, reallocateReservationStock } = require('../services/inventory-integration.service');
+const { parsePicks } = require('../utils/picks');
 const { queueReconciliation } = require('../services/reconciliation.service');
 const { readBorrowOperation, prepareBorrowOperation, prepareBorrowOperationInTransaction, approvedRecovery,
   markBorrowRemoteStarted, completeBorrowOperation, deferBorrowOperation, sendBorrowReplay, boundedBorrowKey } = require('../services/borrow-operation.service');
@@ -676,6 +677,29 @@ async function confirmReservation(req, res) {
         };
       }
 
+      // "Ready" means the librarian has the copies in hand: record the shelves they
+      // came from, so inventory holds (and later lends out) stock from those shelves.
+      let picks = null;
+      if (nextStatus === 'READY_FOR_PICKUP') {
+        const parsed = parsePicks(req.body?.picks, existing.quantity);
+        if (parsed.error) return { code: 400, payload: { message: parsed.error } };
+        picks = parsed.picks;
+        try {
+          await reallocateReservationStock({
+            reservation_id: existing.id,
+            warehouse_id: existing.warehouse_id,
+            picks,
+            idempotency_key: boundedBorrowKey('ready-pick:', idempotencyKey),
+            handled_by_user_id: actorUserId,
+            authHeader: req.headers.authorization,
+            requestId: req.requestId,
+          });
+        } catch (error) {
+          if (error.status >= 400 && error.status < 500) return { code: 409, payload: { message: error.message } };
+          throw error;
+        }
+      }
+
       const pickupCode = nextStatus === 'READY_FOR_PICKUP'
         ? existing.pickup_code || await generateUniquePickupCode(tx)
         : null;
@@ -707,6 +731,7 @@ async function confirmReservation(req, res) {
         after_data: {
           ...reservation,
           idempotency_key: idempotencyKey,
+          ...(picks ? { picks } : {}),
         },
       });
 
@@ -730,7 +755,7 @@ async function confirmReservation(req, res) {
       });
 
       return { code: 200, payload: { data: reservation } };
-    });
+    }, { timeout: 30000 }); // the "ready" step waits on inventory (10s cap) under the row lock
 
     return res.status(result.code).json(result.payload);
   } catch (error) {

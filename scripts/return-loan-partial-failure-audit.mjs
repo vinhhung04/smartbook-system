@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { shelfPicks, returnToShelf } from './lib/borrow-shelves.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
@@ -75,9 +76,13 @@ async function main() {
   // loan_transactions row, 3 loan_items), then corrupt the SECOND loan_item's variant_id so
   // its own remote return call fails while item 1's succeeds first.
   const bulk = { variant_id: variantId, default_warehouse_id: warehouseId };
+  const get = (path) => ok('GET', path);
   const bulkLoan = await ok('POST', '/borrow/loans/direct', {
     customer_id: customerId, variant_id: bulk.variant_id, warehouse_id: bulk.default_warehouse_id, quantity: 3,
+    picks: await shelfPicks(get, { variantId: bulk.variant_id, warehouseId: bulk.default_warehouse_id, quantity: 3 }),
   }, { 'Idempotency-Key': crypto.randomUUID() });
+  // Same body on the retry below (same key must carry the same request).
+  const returnBody = await returnToShelf(get, bulkLoan.data.id);
   const loanDetail = await ok('GET', `/borrow/loans/${bulkLoan.data.id}`);
   const items = [...(loanDetail.data.loan_items || loanDetail.loan_items)].sort((a, b) => a.id.localeCompare(b.id));
   console.log(`3-book loan ${bulkLoan.data.id}, items: ${items.map((i) => i.id).join(', ')}`);
@@ -89,7 +94,7 @@ async function main() {
 
   try {
     const returnKey = crypto.randomUUID();
-    const returnResp = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, {}, { 'Idempotency-Key': returnKey });
+    const returnResp = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, returnBody, { 'Idempotency-Key': returnKey });
     console.log(`\nreturn all 3 -> status=${returnResp.status}`);
     console.log(`  body: ${JSON.stringify(returnResp.data).slice(0, 300)}`);
 
@@ -108,7 +113,7 @@ async function main() {
     if (outboxRows.length > 0) console.log(`  ${JSON.stringify(outboxRows)}`);
 
     sqlBorrow(`UPDATE loan_items SET variant_id = '${variantId}' WHERE id = '${targetItem.id}'`);
-    const recovered = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, {}, { 'Idempotency-Key': returnKey });
+    const recovered = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, returnBody, { 'Idempotency-Key': returnKey });
     assert.equal(recovered.status, 200, JSON.stringify(recovered.data));
     const final = sqlBorrow(`SELECT status FROM loan_items WHERE loan_id = '${bulkLoan.data.id}'`);
     assert.ok(final.every(([status]) => status === 'RETURNED'));
