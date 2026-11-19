@@ -143,10 +143,27 @@ function authorizeTaskProgress(permissions = ['inventory.task.progress']) {
   return authorizeTaskRead(permissions);
 }
 
+/**
+ * Branch locations: warehouse roles as before, plus a LIBRARIAN who handles loans,
+ * because the loan return dialog asks which shelf each copy was put back on
+ * (ADR-001). The controller still enforces the caller's warehouse scope.
+ */
+function authorizeLocationRead(permissions) {
+  const warehouseRead = authorizeTaskProgress(permissions);
+  return (req, res, next) => {
+    const user = req.user || {};
+    const isLibrarian = getUserRoles(user).includes('LIBRARIAN');
+    const canHandleLoans = Array.isArray(user.permissions) && user.permissions.includes('borrow.loans.write');
+    if (isLibrarian && canHandleLoans) return next();
+    return warehouseRead(req, res, next);
+  };
+}
+
 module.exports = {
   authenticateToken,
   authorizeAnyPermission,
   authorizeAnyRole,
+  authorizeLocationRead,
   authorizeManagerDecision,
   authorizeManagerRead,
   authorizePurchaseManager,
