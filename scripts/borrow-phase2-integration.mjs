@@ -127,6 +127,8 @@ async function topUpWallet(customerId, needed) {
 let customerId = '00000000-0000-0000-0000-000000000809';
 let directLoanId = null;
 let reservationLoanId = null;
+// One logical operation per run: a retry inside this run must reuse its key.
+const runId = crypto.randomUUID();
 let firstFine = null;
 let secondFine = null;
 
@@ -349,7 +351,7 @@ async function run() {
       amount: payAmount,
       payment_method: 'CASH',
       note: 'integration payment',
-    });
+    }, { 'Idempotency-Key': `phase2-fine-payment:${firstFine.id}:${runId}` });
     add('10.fine payment', pay.ok, JSON.stringify(pay.data));
   } else {
     add('10.fine payment', false, 'Skipped: no unpaid fine');
@@ -386,8 +388,9 @@ async function run() {
     const e4 = await request('POST', `/borrow/fines/${firstFine.id}/payments`, {
       amount: Number(firstFine.summary.remaining_balance) + 999,
       payment_method: 'CASH',
-    });
-    add('E4.overpay fine', e4.status >= 400, `status=${e4.status}`);
+    }, { 'Idempotency-Key': `phase2-fine-overpay:${firstFine.id}:${runId}` });
+    // Must be rejected by the balance rule, not by the idempotency-key guard.
+    add('E4.overpay fine', e4.status === 409 && e4.data?.detail?.remaining_balance != null, `status=${e4.status} body=${JSON.stringify(e4.data)}`);
   } else {
     add('E4.overpay fine', false, 'Skipped: no unpaid fine');
   }

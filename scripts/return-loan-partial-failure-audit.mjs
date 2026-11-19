@@ -112,14 +112,31 @@ async function main() {
     console.log(`\nintegration_outbox rows for LOAN_RETURN_UNRESOLVED on this loan: ${outboxRows.length}`);
     if (outboxRows.length > 0) console.log(`  ${JSON.stringify(outboxRows)}`);
 
+    // ADR-001: Inventory's 409 is a known terminal business conflict after item 1's
+    // stock already moved, so the operation is MANUAL_REVIEW. Even after the data is
+    // repaired, a same-key retry must not settle automatically; recovery is an
+    // operator decision with evidence, never a replay that guesses stock or money.
+    const operationRow = () => sqlBorrow(`SELECT status, last_error_code FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'BORROW_OPERATION' AND payload->>'kind' = 'RETURN_LOAN'`);
+    const operationRows = operationRow();
+    assert.equal(operationRows.length, 1, 'exactly one approved RETURN_LOAN operation');
+    const [[operationStatus]] = operationRows;
+    assert.equal(operationStatus, 'MANUAL_REVIEW', 'a definitive remote conflict after partial success must be held for review');
+    const movementCount = () => sqlInventory(`SELECT count(*) FROM stock_movements WHERE variant_id = '${variantId}' AND warehouse_id = '${warehouseId}'`)[0][0];
+    const balanceBefore = sqlInventory(`SELECT available_qty, borrowed_qty FROM stock_balances WHERE variant_id = '${variantId}' AND warehouse_id = '${warehouseId}' ORDER BY location_id`);
+    const movementsBefore = movementCount();
+
     sqlBorrow(`UPDATE loan_items SET variant_id = '${variantId}' WHERE id = '${targetItem.id}'`);
-    const recovered = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, returnBody, { 'Idempotency-Key': returnKey });
-    assert.equal(recovered.status, 200, JSON.stringify(recovered.data));
-    const final = sqlBorrow(`SELECT status FROM loan_items WHERE loan_id = '${bulkLoan.data.id}'`);
-    assert.ok(final.every(([status]) => status === 'RETURNED'));
-    const resolved = sqlBorrow(`SELECT status FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
-    assert.ok(resolved.every(([status]) => status === 'PUBLISHED'));
-    console.log('PASS partial remote success is queued; same-key retry recovers all copies and closes reconciliation.');
+    const retried = await request('POST', `/borrow/loans/${bulkLoan.data.id}/return`, returnBody, { 'Idempotency-Key': returnKey });
+    console.log(`\nsame-key retry -> status=${retried.status} body=${JSON.stringify(retried.data).slice(0, 300)}`);
+    assert.equal(retried.status, 409, JSON.stringify(retried.data));
+    const retryItems = sqlBorrow(`SELECT status FROM loan_items WHERE loan_id = '${bulkLoan.data.id}'`);
+    assert.ok(retryItems.every(([status]) => status === 'BORROWED'), 'no copy may be settled locally by an unapproved replay');
+    assert.deepEqual(sqlInventory(`SELECT available_qty, borrowed_qty FROM stock_balances WHERE variant_id = '${variantId}' AND warehouse_id = '${warehouseId}' ORDER BY location_id`), balanceBefore, 'retry must not move stock');
+    assert.equal(movementCount(), movementsBefore, 'retry must not post another stock movement');
+    assert.equal(operationRow()[0][0], 'MANUAL_REVIEW');
+    const pending = sqlBorrow(`SELECT status FROM integration_outbox WHERE aggregate_id = '${bulkLoan.data.id}' AND event_type = 'LOAN_RETURN_UNRESOLVED'`);
+    assert.ok(pending.length === 1 && pending[0][0] === 'PENDING', 'reconciliation evidence stays open for the operator');
+    console.log('PASS partial remote success is queued; operation held in MANUAL_REVIEW; same-key retry is refused without moving stock or settling copies.');
   } finally {
     sqlBorrow(`UPDATE loan_items SET variant_id = '${variantId}' WHERE id = '${targetItem.id}'`);
   }

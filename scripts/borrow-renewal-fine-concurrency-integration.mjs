@@ -143,7 +143,7 @@ async function main() {
   sql(`INSERT INTO fines (id, customer_id, fine_type, amount, status) VALUES ('${fineId}', '${customerId}', 'LATE_RETURN', 100000, 'UNPAID')`);
 
   const [payResp, waiveResp] = await Promise.all([
-    request('POST', `/borrow/fines/${fineId}/payments`, { amount: 80000, payment_method: 'CASH' }, managerToken),
+    request('POST', `/borrow/fines/${fineId}/payments`, { amount: 80000, payment_method: 'CASH' }, managerToken, { 'Idempotency-Key': `p15-fine-payment:${fineId}` }),
     request('PATCH', `/borrow/fines/${fineId}/waive`, { amount: 50000 }, managerToken),
   ]);
   const financialSucceeded = [payResp, waiveResp].filter((r) => r.ok);
@@ -151,6 +151,11 @@ async function main() {
     'P1.5: not both an 80k payment and a 50k waiver succeed on a 100k fine (80k+50k > 100k)',
     financialSucceeded.length === 1,
     `payment=${payResp.status} waiver=${waiveResp.status}`,
+  );
+  check(
+    'P1.5: neither racer is rejected by the idempotency-key guard (race really reached the fine)',
+    ![payResp, waiveResp].some((r) => r.data?.code === 'IDEMPOTENCY_KEY_REQUIRED'),
+    `payment=${JSON.stringify(payResp.data?.code)} waiver=${JSON.stringify(waiveResp.data?.code)}`,
   );
   const [[finePaid], [fineWaived], [fineAmount]] = [
     sql(`SELECT COALESCE(SUM(amount),0) FROM fine_payments WHERE fine_id = '${fineId}'`)[0],
