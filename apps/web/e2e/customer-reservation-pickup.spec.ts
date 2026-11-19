@@ -1,4 +1,4 @@
-import { DEMO_PASSWORD } from './helpers';
+import { DEMO_PASSWORD, confirmShelfReturn } from './helpers';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 
@@ -15,15 +15,30 @@ import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:3000';
 const CUSTOMER = { identifier: 'customer01', password: DEMO_PASSWORD };
 const LIBRARIAN = { identifier: 'librarian01', password: DEMO_PASSWORD };
-// auth/inventory seeds give librarian01 OPERATOR access only at BR-HCM-01.
-const PICKUP_BRANCH_ID = '00000000-0000-0000-0000-000000000004';
-const PICKUP_BRANCH_NAME = 'Chi Nhanh District 1';
-
-async function apiToken(request: APIRequestContext, identifier: string, password: string) {
+async function apiLogin(request: APIRequestContext, identifier: string, password: string) {
   const response = await request.post(`${GATEWAY}/auth/login`, { data: { identifier, password } });
   expect(response.ok(), `login ${identifier}`).toBeTruthy();
-  const body = await response.json();
+  return response.json();
+}
+
+async function apiToken(request: APIRequestContext, identifier: string, password: string) {
+  const body = await apiLogin(request, identifier, password);
   return String(body.token || body.data?.token);
+}
+
+/**
+ * The branch librarian01 can operate, read from its real warehouse scope (the
+ * auth seed gives it OPERATOR at BR-HCM-01; warehouse ids differ per database).
+ */
+async function librarianPickupBranch(request: APIRequestContext) {
+  const librarianId = (await apiLogin(request, LIBRARIAN.identifier, LIBRARIAN.password)).user.id;
+  const admin = { Authorization: `Bearer ${await apiToken(request, 'hung', DEMO_PASSWORD)}` };
+  const response = await request.get(`${GATEWAY}/iam/users/${librarianId}/warehouse-scopes`, { headers: admin });
+  expect(response.ok(), 'read librarian01 warehouse scopes').toBeTruthy();
+  const scopes: Array<{ warehouse_id: string; access_level: string; warehouse: { name: string; is_active: boolean } | null }> = (await response.json()).data.scopes;
+  const scope = scopes.find((s) => ['OPERATOR', 'FULL'].includes(s.access_level) && s.warehouse?.is_active);
+  expect(scope, 'librarian01 needs an OPERATOR/FULL warehouse scope (auth seed: BR-HCM-01)').toBeTruthy();
+  return { id: scope!.warehouse_id, name: scope!.warehouse!.name };
 }
 
 const idempotency = (prefix: string) => ({ 'Idempotency-Key': `e2e-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
@@ -92,9 +107,10 @@ test('customer reservation through pickup and return', async ({ page, request })
     return (await response.json()).data;
   };
   const beforeWallet = await account();
+  const branch = await librarianPickupBranch(request);
   await loginAsCustomer(page, CUSTOMER);
 
-  await page.goto(`/books?branch=${PICKUP_BRANCH_ID}&availability=available`);
+  await page.goto(`/books?branch=${branch.id}&availability=available`);
   const reserveButton = page.locator('[data-testid="reserve-book-button"]:not([disabled])').first();
   await reserveButton.waitFor();
   await reserveButton.click();
@@ -105,16 +121,16 @@ test('customer reservation through pickup and return', async ({ page, request })
   await expect(dialog).toBeVisible();
   const branchOptions = dialog.locator('button').filter({ hasText: 'cuốn sẵn sàng' });
   if (await branchOptions.count() > 1) {
-    await branchOptions.filter({ hasText: PICKUP_BRANCH_NAME }).click();
+    await branchOptions.filter({ hasText: branch.name }).click();
   } else {
-    await expect(dialog.getByText(PICKUP_BRANCH_NAME, { exact: true })).toBeVisible();
+    await expect(dialog.getByText(branch.name, { exact: true })).toBeVisible();
   }
 
   const createdResponse = page.waitForResponse((r) => r.request().method() === 'POST' && /\/my\/reservations$/.test(new URL(r.url()).pathname));
   await page.getByTestId('confirm-reserve-button').click();
   const created = await (await createdResponse).json();
   const reservationNumber: string = created.data.reservation_number;
-  expect(created.data.warehouse_id).toBe(PICKUP_BRANCH_ID);
+  expect(created.data.warehouse_id).toBe(branch.id);
   expect(reservationNumber).toMatch(/^RSV-/);
   await expect(toast(page, 'Đặt trước thành công!')).toBeVisible();
 
@@ -156,12 +172,7 @@ test('customer reservation through pickup and return', async ({ page, request })
   // Open exactly the loan this test created.
   await page.goto(`/borrow/loans/${loan.id}`);
   await page.getByTestId('return-loan-button').click();
-  // Say where each copy was put back: the first shelf of the branch.
-  const shelves = page.locator('select[aria-label^="Vị trí trả về "]');
-  await expect.poll(() => shelves.first().locator('option').count(), { timeout: 10_000 }).toBeGreaterThan(1);
-  for (const shelf of await shelves.all()) await shelf.selectOption({ index: 1 });
-  await page.getByTestId('confirm-dialog-action').click();
-  await expect(toast(page, 'Đã trả sách thành công')).toBeVisible();
+  await confirmShelfReturn(page);
 
   await expect(page.getByTestId('loan-status-badge')).toContainText('Đã trả');
   const afterWallet = await account();

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginStaff, loginCustomer, DEMO_PASSWORD } from './helpers';
+import { loginStaff, loginCustomer, DEMO_PASSWORD, confirmShelfReturn } from './helpers';
 import { createCustomerFixture } from '../../../scripts/testing/customer-fixture.mjs';
 
 /**
@@ -88,13 +88,7 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
     await expect(loanRow).toBeVisible({ timeout: 15_000 });
     // "Trả sách" opens the loan page with the return dialog.
     await loanRow.getByRole('button', { name: 'Trả sách' }).click();
-    // Say where each copy was put back: the first shelf of the branch.
-    const shelves = staffPage.locator('select[aria-label^="Vị trí trả về "]');
-    await expect.poll(() => shelves.first().locator('option').count(), { timeout: 10_000 }).toBeGreaterThan(1);
-    for (const shelf of await shelves.all()) await shelf.selectOption({ index: 1 });
-    await staffPage.getByRole('alertdialog').getByRole('button', { name: 'Xác nhận' }).click();
-
-    await expect(staffPage.getByText('Đã trả sách thành công')).toBeVisible({ timeout: 10_000 });
+    await confirmShelfReturn(staffPage);
     await staffPage.goto('/borrow/loans');
     await staffPage.getByPlaceholder('Tìm phiếu mượn...').fill(loanNumber);
     // The list opens on "Đang mượn"; a returned loan moves to the "Đã trả" tab.
