@@ -172,3 +172,15 @@ test('the copy leaves the shelf it was lent from, not the shelf lending the most
   assert.deepEqual([shelfB.borrowed_qty, shelfB.available_qty], [0, 1]);
   assert.equal(state.stock_movements.at(-1).from_location_id, SHELF_B);
 });
+
+test('a return without a shelf is refused unless Borrow marks a pre-shelf approved operation', async () => {
+  resetState();
+  assert.equal((await returnLoan({ location_id: undefined })).statusCode, 400);
+  assert.equal(state.stock_movements.length, 0);
+
+  resetState();
+  const res = await returnLoan({ location_id: undefined, return_to_lent_from_shelf: true });
+  assert.equal(res.statusCode, 201);
+  assert.equal(state.stock_balances[0].available_qty, 1, 'goes back to the shelf it was lent from');
+  assert.equal(state.stock_movements[0].to_location_id, LOCATION_ID);
+});

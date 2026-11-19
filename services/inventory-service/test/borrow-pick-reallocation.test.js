@@ -253,3 +253,16 @@ test('pick options list free and held copies per shelf of the warehouse', async 
     ['KE-05', 1, 0],
   ]);
 });
+
+test('a 100-char Borrow key still fits every per-shelf movement key (VarChar(100))', async () => {
+  reset(2);
+  const longKey = 'k'.repeat(100);
+  assert.equal((await reallocate([{ location_id: SHELF.K03, quantity: 1 }, { location_id: SHELF.K05, quantity: 1 }], longKey)).statusCode, 200);
+  assert.equal((await consume(longKey.replace(/k$/, 'c'))).statusCode, 201);
+  const keys = state.stock_movements.map((row) => row.idempotency_key);
+  assert.ok(keys.length >= 3);
+  assert.ok(keys.every((key) => key.length <= 100), JSON.stringify(keys));
+  assert.equal(new Set(keys).size, keys.length);
+  const replay = await consume(longKey.replace(/k$/, 'c'));
+  assert.equal(replay.body.idempotent, true);
+});

@@ -366,22 +366,27 @@ async function createDirectLoan(req, res) {
         requestId: req.requestId,
       });
     } catch (error) {
-      // The hold just taken would otherwise stay until the due date. Give it back.
-      await releaseReservation({
-        reservation_id: reservationId,
-        reason: 'CANCELLED',
-        idempotency_key: boundedBorrowKey('direct-pick-cancel:', idempotencyKey),
-        authHeader,
-        requestId: req.requestId,
-      }).catch((releaseError) => console.error('Direct loan: releasing hold after a rejected pick failed:', releaseError));
-      if (error.status >= 400 && error.status < 500) {
-        // Settle the durable operation with the refusal, like BORROW_RESERVE_REFUSED:
-        // a retry with the same key replays it and recovery never resumes this plan.
-        const response = { status: 409, body: { message: error.message, code: 'BORROW_PICK_REFUSED' } };
-        await prisma.$transaction((tx) => completeBorrowOperation(tx, operation, response));
-        return res.status(409).json(response.body);
-      }
-      throw error;
+      // An ambiguous failure (timeout/5xx) may have moved the hold: keep it and let
+      // the deferred operation retry the same pick key.
+      if (!(error.status >= 400 && error.status < 500)) throw error;
+      // Definitive refusal: the hold just taken would otherwise stay until the due
+      // date. The release intent is committed with the settled refusal (ADR-001),
+      // so reconciliation retries it if the immediate release below fails.
+      // Settle like BORROW_RESERVE_REFUSED: a same-key retry replays the refusal.
+      const response = { status: 409, body: { message: error.message, code: 'BORROW_PICK_REFUSED' } };
+      const releaseKey = boundedBorrowKey('direct-pick-cancel:', idempotencyKey);
+      const undo = await prisma.$transaction(async (tx) => {
+        const record = await queueReconciliation({ db: tx, aggregateId: reservationId, eventType: 'RELEASE_RESERVATION',
+          payload: { reservation_id: reservationId, reason: 'CANCELLED', idempotency_key: releaseKey } });
+        await completeBorrowOperation(tx, operation, response);
+        return record;
+      });
+      try {
+        await releaseReservation({ reservation_id: reservationId, reason: 'CANCELLED', idempotency_key: releaseKey,
+          authHeader, requestId: req.requestId });
+        await prisma.integration_outbox.update({ where: { id: undo.id }, data: { status: 'PUBLISHED', published_at: new Date() } });
+      } catch { /* The release intent is durable; reconciliation retries it. */ }
+      return res.status(409).json(response.body);
     }
 
     await consumeReservation({
@@ -1454,7 +1459,9 @@ async function returnLoan(req, res) {
 
     // Staff say where each returned copy was put back (any shelf of the branch,
     // not necessarily the one it was lent from). Only a lost copy has no place.
-    if (plans.some(plan => !plan.markLost && !plan.locationId)) {
+    // An operation approved before shelf returns keeps its approved plan: those
+    // copies go back to the shelf they were lent from (see return_to_lent_from_shelf).
+    if (!approved && plans.some(plan => !plan.markLost && !plan.locationId)) {
       return res.status(400).json({
         message: 'Cần nhập vị trí trả sách về (returned_to_location_id) cho từng cuốn, trừ sách mất',
         code: 'RETURN_LOCATION_REQUIRED',
@@ -1527,6 +1534,7 @@ async function returnLoan(req, res) {
         warehouse_id: loan.warehouse_id,
         quantity: 1,
         location_id: plan.markLost ? null : plan.locationId,
+        return_to_lent_from_shelf: Boolean(approved) && !plan.markLost && !plan.locationId,
         inventory_unit_id: item.inventory_unit_id || null,
         item_condition_on_return: plan.condition,
         mark_lost: plan.markLost,

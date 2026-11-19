@@ -356,3 +356,33 @@ test('PRA07: cancelled local reservation retains a release intent across lost re
   assert.equal(boundary.release.length, 2);
   assert.equal((await pendingOperation('CANCEL_RESERVATION', reservation.id)).status, 'PUBLISHED');
 });
+test('shelf upgrade: a return approved before shelf returns (no locationId) recovers to the shelf it was lent from', opts, async () => {
+  const f = await fixture();
+  const { loan, item } = await makeLoan(f);
+  boundary.onReturn = async () => { throw Object.assign(new Error('return response lost'), { status: 502 }); };
+  assert.equal((await call(loans.returnLoan, loan.id, { loan_item_id: item.id, returned_to_location_id: f.shelf })).statusCode, 502);
+  const record = await pendingOperation('RETURN_LOAN', loan.id); boundary.onReturn = null;
+  // Rewrite the persisted operation into its pre-shelf shape (43ed99f stored null places).
+  const payload = JSON.parse(JSON.stringify(record.payload));
+  for (const plan of payload.plan.plans) plan.locationId = null;
+  payload.request.body.returned_to_location_id = null;
+  // A real pre-shelf operation was bound to that placeless request (same hashing as borrow-operation.service).
+  const stable = v => Array.isArray(v) ? v.map(stable) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])])) : v;
+  payload.fingerprint = require('node:crypto').createHash('sha256').update(JSON.stringify(stable({ kind: 'RETURN_LOAN', actor_id: null, request: payload.request }))).digest('hex');
+  await prisma.integration_outbox.update({ where: { id: record.id }, data: { payload } });
+  const { normalizeReturnRequest, returnFingerprint } = require('../src/services/return-request.service');
+  await prisma.loan_return_requests.update({ where: { idempotency_key: payload.key },
+    data: { fingerprint: returnFingerprint(normalizeReturnRequest(payload.request.body)) } });
+  assert.deepEqual(await recover(await prisma.integration_outbox.findUnique({ where: { id: record.id } })), { resolved: true });
+  const resumed = boundary.returned.at(-1);
+  assert.equal(resumed.location_id ?? null, null);
+  assert.equal(resumed.return_to_lent_from_shelf, true);
+  assert.equal((await prisma.loan_items.findUnique({ where: { id: item.id } })).status, 'RETURNED');
+});
+test('shelf upgrade: a new return without a place is still refused before any stock call', opts, async () => {
+  const f = await fixture();
+  const { loan, item } = await makeLoan(f);
+  const response = await call(loans.returnLoan, loan.id, { loan_item_id: item.id });
+  assert.equal(response.statusCode, 400); assert.equal(response.body.code, 'RETURN_LOCATION_REQUIRED');
+  assert.equal(boundary.returned.length, 0);
+});

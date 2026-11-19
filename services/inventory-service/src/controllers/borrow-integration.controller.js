@@ -111,8 +111,14 @@ function findActiveBorrowHolds(db, reservationId) {
 
 // One request writes one movement per shelf line. The first keeps the caller's
 // key, so replay lookups by that key keep working; the rest get a suffix.
-function lineIdempotencyKey(key, index) {
-  return index === 0 ? key : `${key}#${index + 1}`;
+function lineIdempotencyKey(key, index, tag = '') {
+  return index === 0 && !tag ? key : boundedLineKey(`${key}#${tag}${index + 1}`);
+}
+
+// Borrow keys may already be 100 chars (VarChar(100)); a suffixed key that would
+// overflow is hashed deterministically. Keys that fit stay unchanged for replays.
+function boundedLineKey(key) {
+  return key.length <= 100 ? key : `line:${require('node:crypto').createHash('sha256').update(key).digest('hex')}`;
 }
 
 const MAX_PICK_LINES = 20;
@@ -796,7 +802,8 @@ async function returnBorrowedLoan(req, res) {
   }
 
   // The librarian says where the returned copy was put back; only a lost copy has no place.
-  if (!isLost && !location_id) {
+  // Borrow operations approved before shelf returns had no place: they return to the shelf lent from.
+  if (!isLost && !location_id && req.body.return_to_lent_from_shelf !== true) {
     return res.status(400).json({ message: 'Cần location_id: vị trí sách được trả về' });
   }
 
@@ -1086,7 +1093,7 @@ async function reallocateBorrowReservation(req, res) {
             source_service: 'BORROW_SERVICE',
             reference_type: 'LOAN_RESERVATION',
             reference_id: reservation_id,
-            idempotency_key: `${movementIdempotency}#release-${index + 1}`,
+            idempotency_key: lineIdempotencyKey(movementIdempotency, index, 'release-'),
             created_by_user_id: actorUserId,
             metadata: { ...metadata, reservation_code: row.reservation_code },
           },
@@ -1141,7 +1148,7 @@ async function reallocateBorrowReservation(req, res) {
             reference_type: 'LOAN_RESERVATION',
             reference_id: reservation_id,
             // The first new line carries the caller's key: it is the replay marker.
-            idempotency_key: index === 0 ? movementIdempotency : `${movementIdempotency}#reserve-${index + 1}`,
+            idempotency_key: index === 0 ? movementIdempotency : lineIdempotencyKey(movementIdempotency, index, 'reserve-'),
             created_by_user_id: actorUserId,
             metadata: { ...metadata, reservation_code: line.reservation_code },
           },

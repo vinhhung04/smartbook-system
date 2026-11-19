@@ -165,6 +165,7 @@ async function returnBorrowedStock({
   mark_lost,
   idempotency_key,
   handled_by_user_id,
+  return_to_lent_from_shelf,
   authHeader,
   requestId,
 }) {
@@ -188,6 +189,7 @@ async function returnBorrowedStock({
       mark_lost,
       idempotency_key,
       handled_by_user_id,
+      ...(return_to_lent_from_shelf ? { return_to_lent_from_shelf: true } : {}),
     }),
   });
 }
