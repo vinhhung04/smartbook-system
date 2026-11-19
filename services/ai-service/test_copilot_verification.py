@@ -206,6 +206,21 @@ class ComparativeClaimTests(unittest.TestCase):
         self.assertEqual(bad("Tại Kho HCM Chinh, Norwegian Wood còn tồn 5 bản.", data), [("SCOPE", "UNSUPPORTED")])
 
 
+    def test_self_summed_warehouse_total_is_contradicted_and_repaired(self):
+        # audit 2026-11-19: "Tổng cộng có 263 đầu sách dưới ngưỡng" for a real total of 301 went out unchecked
+        data = {"get_warehouse_stock_risk": RISK}  # low_stock_variants 7 + 1 + 1 = 9
+        for text in ("Tổng cộng có 12 đầu sách đang dưới ngưỡng tồn tại các chi nhánh và kho.",
+                     "Tổng cộng có 12 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống."):
+            rep = check(text, data)
+            self.assertEqual(sorted({(c.category, c.verdict) for c in rep.problems}), [("COUNT", "CONTRADICTED")])
+            fixed, repaired = v.repair(text, rep)
+            self.assertEqual(len(repaired), 1)
+            self.assertIn("có 9 đầu sách", fixed)
+        self.assertEqual(bad("Tổng cộng có 9 đầu sách dưới ngưỡng tại các kho.", data), [])
+        # a named warehouse's own "tổng cộng" is that warehouse's count, not the sum
+        self.assertEqual(bad("Kho HCM Chinh có tổng cộng 7 đầu sách dưới ngưỡng.", data), [])
+
+
 class DecisionClaimTests(unittest.TestCase):
     def test_recommendation_order(self):
         self.assertEqual(bad("Nên nhập Kafka on the Shore trước tiên.", {"get_reorder_suggestions": REORDER}),

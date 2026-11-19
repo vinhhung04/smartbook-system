@@ -1,0 +1,63 @@
+{
+ "manifest_version": 1,
+ "timestamp_utc": "2026-11-19T15:49:00Z",
+ "dataset": {
+  "file": "rag_dataset.json",
+  "cases": 226,
+  "sha256": "3f908dff4f5b77b4e62625b0ed8a55dc89950e7751b83ff071d16b0c08934429"
+ },
+ "review_file_sha256": "45166e6c63c7878d3abbb8f7500be7110dcbeb143cc608911b9a918b0ede444d",
+ "catalog": {
+  "books": 137,
+  "sha256": "f686e822b501fcf5690368a16c0c1f23928de381d8bdbd600f99dce23cb1e17c"
+ },
+ "corpus": {
+  "documents": 22,
+  "sha256": "457a9d81b83b74e8a90131522e28b20e5aeab33b218f2e3a419166c192023de5"
+ },
+ "embedding": {
+  "model": "qwen/qwen3-embedding-8b",
+  "dimensions": 768
+ },
+ "git": {
+  "commit": null,
+  "ai_service_dirty": null
+ },
+ "config": {
+  "abstention": "on",
+  "split": "all",
+  "label": "audit-20261119",
+  "embed_cache": true,
+  "embed_cache_stats": {
+   "hits": 221,
+   "misses": 0,
+   "retries": 0,
+   "failures": 0
+  },
+  "book_confidence": {
+   "cos_floor": 0.3,
+   "cos_ceil": 0.6,
+   "tau_confident": 0.66,
+   "tau_evidence": 0.25,
+   "w_semantic": 0.5,
+   "w_keyword": 0.4,
+   "w_agree": 0.1,
+   "min_focus_coverage": 0.0
+  },
+  "doc_confidence": {
+   "cos_floor": 0.3,
+   "cos_ceil": 0.55,
+   "tau_confident": 0.66,
+   "tau_evidence": 0.4,
+   "w_semantic": 0.5,
+   "w_keyword": 0.4,
+   "w_agree": 0.1,
+   "min_focus_coverage": 0.01
+  },
+  "book_semantic_threshold": 0.3,
+  "faq_match_threshold": 0.3,
+  "faq_top_k": 3,
+  "search_books_limit": 8,
+  "rrf_k": 60
+ }
+}

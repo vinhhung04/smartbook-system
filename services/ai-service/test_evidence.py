@@ -40,6 +40,18 @@ def test_warehouse_stock_risk_ranks_by_severity():
     assert items[0]["label"].startswith("Kho B")
 
 
+def test_warehouse_stock_risk_adds_the_all_warehouse_totals():
+    result = [
+        {"warehouse_name": "Kho A", "low_stock_variants": 2, "out_of_stock_variants": 0},
+        {"warehouse_name": "Kho B", "low_stock_variants": 1, "out_of_stock_variants": 5},
+    ]
+    totals = {i["metric"]: i["value"] for i in extract_evidence("get_warehouse_stock_risk", result)
+              if i["label"].startswith("Tổng 2 kho")}
+    assert totals == {"low_stock_variants": 3, "out_of_stock_variants": 5}
+    one = extract_evidence("get_warehouse_stock_risk", result[:1])
+    assert not any(i["label"].startswith("Tổng") for i in one)
+
+
 def test_reorder_suggestions_extracts_summary_and_items():
     result = {
         "summary": {"total_candidates": 3},

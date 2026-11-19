@@ -343,10 +343,17 @@ def _render_top_books(r: list) -> str:
 
 def _render_stock_risk(r: list) -> str:
     rows = [x for x in r if isinstance(x, dict)]
-    return "Rủi ro tồn kho theo kho:\n" + "\n".join(
+    text = "Rủi ro tồn kho theo kho:\n" + "\n".join(
         f"- {x.get('warehouse_name')}: {_f(x.get('out_of_stock_variants'))} đầu sách hết hàng, "
         f"{_f(x.get('low_stock_variants'))} dưới ngưỡng; tồn khả dụng {_f(x.get('total_available_qty'))}, "
         f"đang giữ {_f(x.get('total_reserved_qty'))}, đang cho mượn {_f(x.get('total_borrowed_qty'))}" for x in rows)
+    if len(rows) >= 2:
+        # the model added these up itself and got them wrong (audit 2026-11-19: 263/267/241/239 for 301)
+        oos, low, avail = (sum(x.get(k) or 0 for x in rows)
+                           for k in ("out_of_stock_variants", "low_stock_variants", "total_available_qty"))
+        text += (f"\nTổng {len(rows)} kho (cộng theo từng kho): {_f(oos)} đầu sách hết hàng, "
+                 f"{_f(low)} đầu sách dưới ngưỡng, tồn khả dụng {_f(avail)}")
+    return text
 
 
 def _render_low_items(r: dict) -> str:

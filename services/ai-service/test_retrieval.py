@@ -8,7 +8,7 @@ import faq_retrieval
 import retrieval
 import retrieval_confidence as confidence
 from faq_retrieval import FAQMatch
-from intent import GENERAL_QUERY
+from intent import BOOK_SEARCH_QUERY, GENERAL_QUERY
 from rag import LIVE_DATA_LEAD, RAG_SYSTEM_RULES, UNCERTAIN_FALLBACK_REPLY, UNCERTAIN_FAQ_LEAD, build_fallback_reply
 
 
@@ -148,6 +148,67 @@ class GeneralQueryRetrievalTests(unittest.TestCase):
         self.assertIn("Giờ mở cửa?", reply)
         self.assertNotIn("8:00", reply)
         self.assertNotIn("Nguồn dữ liệu", reply)
+
+
+ATOMIC = {"id": "b-1", "variant_id": "v-1", "title": "Atomic Habits", "author": "James Clear", "isbn": "9780735211292",
+          "available_quantity": 11, "availability_status": "AVAILABLE",
+          "pickup_branches": [{"warehouse_id": "w-d1", "warehouse_name": "Chi Nhanh District 1", "available_quantity": 4},
+                              {"warehouse_id": "w-hk", "warehouse_name": "Chi nhánh Hà Nội – Hoàn Kiếm", "available_quantity": 7}]}
+
+
+class BookSearchTests(unittest.TestCase):
+    """Audit 2026-11-19 (P0-1): /chat book search read /api/books, whose counts are the
+    caller's warehouse scope (a reader: 0 -> "hết hàng" for every book), and was
+    refused outright without a token."""
+
+    def _search(self, query, pages, auth_header):
+        calls = []
+
+        async def fetch(_client, endpoint, auth, params=None):
+            calls.append((endpoint, auth, dict(params or {})))
+            payload = pages(params or {})
+            return {"name": "Catalog Books", "endpoint": endpoint, "status": "ok"}, payload, None
+
+        with mock.patch.object(retrieval, "_fetch", new=fetch):
+            result = asyncio.run(retrieval.retrieve_context(
+                {"intent": BOOK_SEARCH_QUERY, "query": query}, auth_header=auth_header))
+        return result, calls
+
+    def test_public_catalog_is_used_with_or_without_a_token(self):
+        for auth in (None, "Bearer reader-token"):
+            result, calls = self._search("atomic habits", lambda p: {"data": [ATOMIC], "meta": {"totalPages": 1}}, auth)
+            self.assertEqual(calls, [(retrieval.PUBLIC_BOOKS_ENDPOINT, None, {"pageSize": 10, "search": "atomic habits"})])
+            self.assertIn("con 11 ban co the muon (Chi Nhanh District 1 4, Chi nhánh Hà Nội – Hoàn Kiếm 7)", result["summary"])
+            self.assertNotIn("Authorization", result["summary"])
+            book = result["raw"]["Catalog Books"][0]
+            self.assertEqual((book["quantity"], book["pickup_warehouse_id"]), (11, "w-hk"))  # most copies
+
+    def test_no_copies_says_none_can_be_borrowed(self):
+        gone = {**ATOMIC, "available_quantity": 0, "pickup_branches": []}
+        result, _ = self._search("atomic habits", lambda p: {"data": [gone]}, None)
+        self.assertIn("hien khong con ban nao co the muon", result["summary"])
+        self.assertIsNone(result["raw"]["Catalog Books"][0]["pickup_warehouse_id"])
+
+    def test_no_direct_hit_token_matches_the_catalog_pages(self):
+        other = {"id": "b-2", "title": "Clean Code", "author": "Robert C. Martin", "available_quantity": 2}
+
+        def pages(p):
+            if "search" in p:
+                return {"data": [], "meta": {"totalPages": 1}}
+            return {"data": [ATOMIC] if p["page"] == 1 else [other], "meta": {"totalPages": 2}}
+
+        result, calls = self._search("sach atomic cua james", pages, None)
+        self.assertEqual([c[2].get("page") for c in calls], [None, 1, 2])  # stops at totalPages
+        self.assertEqual([b["title"] for b in result["raw"]["Catalog Books"]], ["Atomic Habits"])
+        self.assertEqual(len(result["sources"]), 1)  # cited once, not once per page
+
+    def test_anonymous_data_question_context_has_no_technical_auth_words(self):
+        # audit E-11: the prompt said "khong co Authorization token" and the model repeated it
+        result = asyncio.run(retrieval.retrieve_context({"intent": "OVERDUE_LOAN_QUERY", "query": "qua han"}, None))
+        text = result["summary"] + " ".join(result["warnings"])
+        self.assertNotIn("Authorization", text)
+        self.assertNotIn("token", text)
+        self.assertIn("dang nhap", result["summary"])
 
 
 if __name__ == "__main__":

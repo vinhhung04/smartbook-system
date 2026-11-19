@@ -1,0 +1,1286 @@
+[
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn! ✅ **SmartBook** hiện có sách **\"Atomic Habits\"** của tác giả **James Clear**.\n\n📚 **Thông tin chi tiết:**\n- **Số lượng còn lại:** **11 bản** có thể mượn ngay.\n- **Phân bố tại các chi nhánh:**\n  - Chi nhánh Quận 1: **4 bản**\n  - Chi nhánh Thủ Đức: **4 bản**\n  - Chi nhánh Hà Nội – Hoàn Kiếm: **3 bản**\n\nBạn có thể đặt mượn hoặc đến trực tiếp các chi nhánh trên để đọc/ngay. Nếu cần hỗ trợ đặt trước, vui lòng truy cập mục **Borrow** trên hệ thống.\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": null,
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** với số lượng bản còn trống khá tốt. Dưới đây là một số tựa sách nổi bật mà bạn có thể tham khảo:\n\n- **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (Chi nhánh Hà Nội – Hoàn Kiếm 4, Chi nhánh Đà Nẵng 4).\n- **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (Chi nhánh Hà Nội – Cầu Giấy 4, Chi nhánh Thủ Đức 3).\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (Chi nhánh Thủ Đức 4, Chi nhánh Hà Nội – Cầu Giấy 2).\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (Chi nhánh Hà Nội – Cầu Giấy 4, Chi nhánh Thủ Đức 2).\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (Chi nhánh Thủ Đức 3, Chi nhánh Hà Nội – Cầu Giấy 2).\n- **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (Chi nhánh Hà Nội – Cầu Giấy 2, Chi nhánh Hà Nội – Hoàn Kiếm 2).\n\n📚 Bạn có thể tìm kiếm chi tiết hoặc đặt mượn các đầu sách này ngay trên trang **Catalog**. Nếu cần hỗ trợ thêm về vị trí cụ thể, hãy cho mình biết nhé!\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, sau khi tra cứu kỹ danh mục sách hiện có tại **SmartBook**, tôi xin thông báo rằng hệ thống **chưa tìm thấy** cuốn sách nào chuyên về lập trình **Rust** cho người mới. 📚❌\n\nTuy nhiên, nếu bạn đang quan tâm đến các đầu sách về **Lập trình & Kỹ thuật CNTT** hoặc **Kỹ năng mềm** liên quan đến tư duy làm việc, thư viện hiện có sẵn các tựa sách phổ biến sau:\n\n- ✅ **Clean Code** (Robert C. Martin) – Còn **11 bản** (Hà Nội – Cầu Giấy, District 3, Đà Nẵng).\n- ✅ **Nghệ Thuật Giao Tiếp Đỉnh Cao** (Cốc Vũ) – Còn **6 bản**.\n- ✅ **Những Quy Luật Của Bản Chất Con Người** (Robert Greene) – Còn **7 bản**.\n\n👉 **Gợi ý hành động:**\nNếu bạn muốn đặt mua hoặc yêu cầu nhập thêm sách Rust, vui lòng truy cập trang **Hỗ trợ & Liên hệ** để gửi yêu cầu hoặc liên hệ trực tiếp với thủ thư. Bạn cũng có thể xem chi tiết các đầu sách kỹ thuật khác trong thẻ **Catalog**.\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn! 📚\n\nThư viện **SmartBook** hiện có sách **\"Atomic Habits\"** của tác giả **James Clear**. Sách đang trong tình trạng sẵn sàng để mượn ngay tại các chi nhánh.\n\n📊 **Thông tin chi tiết:**\n- **Tổng số bản còn lại:** **11** bản.\n- **Phân bổ theo chi nhánh:**\n  - Chi nhánh **District 1**: **4** bản.\n  - Chi nhánh **Thủ Đức**: **4** bản.\n  - Chi nhánh **Hà Nội – Hoàn Kiếm**: **3** bản.\n\n✅ Bạn có thể đặt mượn hoặc đến trực tiếp các chi nhánh trên để đọc nhé! Nếu cần hỗ trợ tạo phiếu mượn, vui lòng truy cập trang **Borrow** (Mượn sách).\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "customer01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** đang sẵn sàng để mượn. Dưới đây là một số tựa sách nổi bật mà bạn có thể tham khảo:\n\n- **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (tại Chi nhánh Hà Nội – Hoàn Kiếm và Đà Nẵng).\n- **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (tại Chi nhánh Hà Nội – Cầu Giấy và Thủ Đức).\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (tại Chi nhánh Hà Nội – Cầu Giấy và Thủ Đức).\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (tại Chi nhánh Thủ Đức và Hà Nội – Cầu Giấy).\n- **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (tại Chi nhánh Hà Nội – Cầu Giấy và Hoàn Kiếm).\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (tại Chi nhánh Thủ Đức và Hà Nội – Cầu Giấy).\n\n📚 Bạn có thể truy cập trang **Catalog** để xem chi tiết hoặc đặt trước các đầu sách này. Nếu cần hỗ trợ thêm về vị trí cụ thể, hãy cho mình biết nhé!\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, sau khi tra cứu kỹ danh mục sách hiện có tại SmartBook, tôi xin thông báo rằng **thư viện chưa có sách nào về lập trình Rust** trong hệ thống. 📚\n\nTuy nhiên, nếu bạn đang tìm hiểu về lập trình hoặc kỹ năng mềm liên quan đến công nghệ, thư viện hiện đang có sẵn các đầu sách phổ biến như:\n- **Clean Code** (Robert C. Martin) – *Kỹ thuật - CNTT*\n- **30 Tuổi - Mọi Thứ Chỉ Mới Bắt Đầu** (Lý Thượng Long) – *Kỹ năng sống*\n- **Nghệ Thuật Giao Tiếp Đỉnh Cao** (Cốc Vũ) – *Kỹ năng sống*\n\nNếu bạn cần hỗ trợ đặt mua hoặc tìm kiếm sách khác, vui lòng truy cập trang **Catalog** để xem chi tiết hoặc liên hệ quầy thủ thư nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "✅ **Có**, thư viện hiện có sách **\"Atomic Habits\"** của tác giả James Clear.\n\n📚 Sách đang trong tình trạng sẵn sàng mượn với tổng cộng **11 bản** tại các chi nhánh:\n- **Chi Nhanh District 1**: 4 bản\n- **Chi nhánh Thủ Đức**: 4 bản\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản\n\nBạn có thể đặt trước hoặc đến trực tiếp các chi nhánh trên để mượn. Nếu cần hỗ trợ đặt sách, vui lòng vào trang **Borrow** hoặc **Catalog**.\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** với số lượng bản còn khá tốt để bạn mượn. Dưới đây là một số cuốn nổi bật đang có sẵn:\n\n- **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (Hà Nội – Hoàn Kiếm 4, Đà Nẵng 4).\n- **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (Hà Nội – Cầu Giấy 4, Thủ Đức 3).\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (Thủ Đức 4, Hà Nội – Cầu Giấy 2).\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (Hà Nội – Cầu Giấy 4, Thủ Đức 2).\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (Thủ Đức 3, Hà Nội – Cầu Giấy 2).\n- **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (Hà Nội – Cầu Giấy 2, Hà Nội – Hoàn Kiếm 2).\n\nBạn có thể tra cứu chi tiết hoặc đặt mượn các đầu sách này ngay trên trang **Catalog**. Nếu cần hỗ trợ tạo phiếu mượn, hãy cho mình biết nhé! 📚✅\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, sau khi kiểm tra danh mục sách hiện có tại **SmartBook**, tôi xin thông báo rằng hệ thống **chưa có sách nào** chuyên về lập trình **Rust** cho người mới. 📚\n\nTuy nhiên, nếu bạn quan tâm đến các đầu sách kỹ thuật và lập trình khác đang rất phổ biến, thư viện hiện có:\n- **Clean Code** của Robert C. Martin (11 bản sẵn có) – Rất hữu ích để rèn luyện tư duy viết code sạch. ✅\n\nBạn có muốn tìm kiếm sách về ngôn ngữ lập trình khác (như Python, JavaScript) hay cần gợi ý từ bộ phận hỗ trợ không? 👤\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Có, thư viện đang có sách **Atomic Habits** của tác giả **James Clear**. 📚\n\nHiện tại còn **11 bản** sẵn sàng để bạn mượn ngay tại các chi nhánh sau:\n- **Chi nhánh District 1**: 4 bản\n- **Chi nhánh Thủ Đức**: 4 bản\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản\n\nBạn có thể đến trực tiếp chi nhánh gần nhất hoặc đặt sách qua mục **Catalog** trên hệ thống. ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": null,
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** và hiện còn sẵn để mượn. Dưới đây là một số cuốn phổ biến:\n\n📚 **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (Hà Nội – Hoàn Kiếm 4, Đà Nẵng 4).\n📚 **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (Hà Nội – Cầu Giấy 4, Thủ Đức 3).\n📚 **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (Hà Nội – Cầu Giấy 4, Thủ Đức 2).\n📚 **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (Thủ Đức 4, Hà Nội – Cầu Giấy 2).\n📚 **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (Thủ Đức 3, Hà Nội – Cầu Giấy 2).\n📚 **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (Hà Nội – Cầu Giấy 2, Hà Nội – Hoàn Kiếm 2).\n\nBạn có thể tìm kiếm chi tiết hơn hoặc đặt trước các đầu sách này tại trang **Catalog** 📚.\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại hệ thống **chưa có thông tin** về sách dạy lập trình Rust cho người mới trong danh mục công khai của SmartBook. 📚\n\nTuy nhiên, nếu bạn quan tâm đến các đầu sách về **Kỹ thuật - CNTT**, thư viện hiện đang có sẵn cuốn:\n- **Clean Code** (Robert C. Martin) với **11 bản** còn khả dụng tại Chi nhánh Hà Nội – Cầu Giấy, District 3 và Đà Nẵng. ✅\n\nNếu bạn cần tìm sách chuyên biệt hơn hoặc muốn đặt hàng nhập thêm, vui lòng liên hệ quầy thủ thư hoặc truy cập trang **Hỗ trợ & Liên hệ**.\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn, **SmartBook AI** đây! 📚\n\nDạ có ạ, thư viện hiện đang còn sách **\"Atomic Habits\"** của tác giả **James Clear**. Sách thuộc thể loại **Kỹ năng sống** và có tổng cộng **11 bản** sẵn sàng để bạn mượn ngay tại các chi nhánh sau:\n\n- **Chi Nhanh District 1**: Còn **4** bản\n- **Chi nhánh Thủ Đức**: Còn **4** bản\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: Còn **3** bản\n\nBạn có thể đặt mượn hoặc đến trực tiếp các chi nhánh trên để lấy sách nhé! ✅\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "customer01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** và còn sẵn để mượn ngay tại các chi nhánh. 📚\n\nDưới đây là một số cuốn nổi bật mà bạn có thể tham khảo:\n\n*   **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (tại Hà Nội – Hoàn Kiếm và Đà Nẵng).\n*   **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (tại Hà Nội – Cầu Giấy và Thủ Đức).\n*   **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (tại Hà Nội – Cầu Giấy và Thủ Đức).\n*   **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (tại Thủ Đức và Hà Nội – Cầu Giấy).\n*   **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (tại Thủ Đức và Hà Nội – Cầu Giấy).\n*   **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (tại Hà Nội – Cầu Giấy và Hoàn Kiếm).\n\nBạn có thể tìm kiếm chi tiết hoặc đặt sách qua trang **Catalog**. Nếu cần hỗ trợ cụ thể hơn về vị trí chi nhánh gần nhất, hãy cho mình biết nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại hệ thống **chưa có sách nào** về chủ đề lập trình Rust trong danh mục công khai. 📚\n\nTuy nhiên, nếu bạn quan tâm đến các đầu sách kỹ thuật hoặc lập trình khác, thư viện đang còn sẵn nhiều bản như:\n- **Clean Code** (Robert C. Martin) - còn 11 bản.\n- **Luy-Xiêng Và Chú Người Tuyết Cô Độc** - còn 14 bản.\n\nBạn có thể tham khảo thêm các đầu sách này hoặc ghé trực tiếp quầy thủ thư để đặt mua sách mới nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn, tôi đã kiểm tra danh mục sách và xác nhận **Thư viện SmartBook** hiện có sẵn sách **\"Atomic Habits\"** của tác giả **James Clear**. 📚\n\nDưới đây là thông tin chi tiết về tình trạng tồn kho:\n- Tổng số bản còn lại để mượn ngay: **11 bản**.\n- Phân bổ tại các chi nhánh:\n    - **Chi Nhanh District 1**: 4 bản.\n    - **Chi nhánh Thủ Đức**: 4 bản.\n    - **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản.\n\nSách thuộc thể loại **Kỹ năng sống** và đang ở trạng thái **AVAILABLE** (có thể mượn). Bạn vui lòng truy cập trang **Catalog** hoặc **Borrow** để thực hiện đặt chỗ hoặc mượn sách nếu cần hỗ trợ thêm. ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** đang sẵn sàng để mượn. Dưới đây là một số tựa sách nổi bật còn tồn kho:\n\n- **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (tại Chi nhánh Hà Nội – Hoàn Kiếm và Đà Nẵng).\n- **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (tại Chi nhánh Hà Nội – Cầu Giấy và Thủ Đức).\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (tại Chi nhánh Hà Nội – Cầu Giấy và Thủ Đức).\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (tại Chi nhánh Thủ Đức và Hà Nội – Cầu Giấy).\n- **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (tại Chi nhánh Hà Nội – Cầu Giấy và Hoàn Kiếm).\n\nBạn vui lòng truy cập trang **Catalog** để xem chi tiết tất cả các đầu sách hoặc thực hiện đặt chỗ/mượn sách trực tiếp nếu muốn. 📚✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, sau khi tra cứu kỹ danh mục sách hiện có tại **SmartBook**, tôi xin thông báo rằng hệ thống **chưa tìm thấy** đầu sách nào về lập trình **Rust** cho người mới.\n\nTuy nhiên, nếu bạn đang quan tâm đến các môn học lập trình hoặc kỹ năng công nghệ khác, thư viện hiện đang có sẵn các đầu sách chất lượng cao như:\n- 📚 **Clean Code** (Robert C. Martin) - Chuyên sâu về tư duy viết code sạch, còn **11 bản** có thể mượn.\n- 📚 **30 Tuổi - Mọi Thứ Chỉ Mới Bắt Đầu** - Hỗ trợ phát triển tư duy và kỹ năng mềm cho người trẻ.\n\n👉 **Gợi ý hành động:** Bạn có thể truy cập trang **Catalog** để tìm kiếm với từ khóa \"Lập trình\" hoặc \"Python/Java\" nếu muốn, hoặc gửi yêu cầu đề xuất mua sách mới qua mục **Hỗ trợ & Liên hệ** nhé!\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "✅ **Có**, thư viện đang có sách **\"Atomic Habits\"** của tác giả James Clear.\n\nHiện tại còn **11 bản** có thể mượn ngay tại các chi nhánh:\n- **Chi Nhanh District 1**: 4 bản\n- **Chi nhánh Thủ Đức**: 4 bản\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản\n\n📚 Bạn có thể đặt mượn hoặc đến trực tiếp các chi nhánh trên để lấy sách. Nếu cần hỗ trợ đặt giữ sách, hãy vào mục **Borrow**.\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": null,
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** với số lượng bản đọc khả dụng tốt. Dưới đây là một số cuốn nổi bật đang còn hàng:\n\n- **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (Hà Nội – Hoàn Kiếm 4, Đà Nẵng 4).\n- **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (Hà Nội – Cầu Giấy 4, Thủ Đức 3).\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (Hà Nội – Cầu Giấy 4, Thủ Đức 2).\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (Thủ Đức 4, Hà Nội – Cầu Giấy 2).\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (Thủ Đức 3, Hà Nội – Cầu Giấy 2).\n- **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (Hà Nội – Cầu Giấy 2, Hà Nội – Hoàn Kiếm 2).\n\nBạn có thể tra cứu chi tiết hoặc đặt mượn ngay tại mục **Catalog** trên hệ thống. Nếu cần hỗ trợ thêm về vị trí cụ thể, hãy cho mình biết nhé! 📚\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, dựa trên dữ liệu hiện tại của SmartBook, thư viện **chưa có sách nào về lập trình Rust** trong danh mục tìm kiếm.\n\nTuy nhiên, nếu bạn đang quan tâm đến các đầu sách kỹ thuật hoặc lập trình khác, hệ thống hiện có sẵn:\n- **Clean Code** (Robert C. Martin) với **11 bản** còn trống tại Hà Nội – Cầu Giấy, District 3 và Đà Nẵng.\n- Các sách về kỹ năng mềm và phát triển bản thân như **Nghệ Thuật Giao Tiếp Đỉnh Cao**, **Những Quy Luật Của Bản Chất Con Người**.\n\nBạn có muốn tra cứu thêm các sách thuộc nhóm **Kỹ thuật - CNTT** hoặc đặt lịch hẹn để tham khảo trực tiếp không?\n\nNguồn dữ liệu: Catalog Books\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn customer01,\n\n✅ **Có**, thư viện hiện đang có sách **\"Atomic Habits\"** của tác giả **James Clear**.\n\n📚 **Chi tiết tồn kho:**\n- Tổng số bản còn lại: **11** bản.\n- Có thể mượn tại các chi nhánh:\n  - **Chi Nhanh District 1**: 4 bản.\n  - **Chi nhánh Thủ Đức**: 4 bản.\n  - **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản.\n\nBạn có thể đặt mượn ngay qua trang **Catalog** hoặc đến trực tiếp các chi nhánh trên để nhận sách. Nếu cần hỗ trợ thêm, hãy cho mình biết nhé! 📖✨\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "customer01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** với số lượng tồn kho tốt. Dưới đây là một số cuốn nổi bật mà bạn có thể tham khảo:\n\n- 📚 **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (tại Hà Nội – Hoàn Kiếm và Đà Nẵng).\n- 📚 **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ**: Còn **6** bản (tại Thủ Đức và Hà Nội – Cầu Giấy).\n- 📚 **Cho Tôi Xin Một Vé Đi Tuổi Thơ**: Còn **6** bản (tại Hà Nội – Cầu Giấy và Thủ Đức).\n- 📚 **Hạ Đỏ**: Còn **7** bản (tại Hà Nội – Cầu Giấy và Thủ Đức).\n- 📚 **Tôi Thấy Hoa Vàng Trên Cỏ Xanh**: Còn **5** bản (tại Thủ Đức và Hà Nội – Cầu Giấy).\n- 📚 **Mắt Biếc**: Còn **4** bản (tại Hà Nội – Cầu Giấy và Hoàn Kiếm).\n\nBạn có thể xem chi tiết danh mục hoặc đặt mượn ngay các đầu sách này trên trang **Catalog**. Nếu cần hỗ trợ thêm về vị trí cụ thể, hãy cho mình biết nhé! ✅\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại hệ thống **chưa có thông tin** về sách dạy lập trình Rust cho người mới trong danh mục công khai của SmartBook. 📚\n\nTuy nhiên, bạn có thể tham khảo các đầu sách kỹ thuật và lập trình đang có sẵn như:\n- **Clean Code** (Robert C. Martin) - còn **11 bản** tại Hà Nội – Cầu Giấy, District 3 và Đà Nẵng.\n- **Luy-Xiêng Và Chú Người Tuyết Cô Độc** - còn **14 bản** (tuy thuộc thể loại khác nhưng số lượng tồn kho cao).\n\nNếu bạn cần tìm kiếm chuyên sâu hơn hoặc muốn đặt mua đầu sách này, vui lòng liên hệ quầy thủ thư hoặc vào trang **Hỗ trợ & Liên hệ** để được tư vấn thêm nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn, thư viện hiện có sách **Atomic Habits** của tác giả James Clear. 📚\n\nTheo dữ liệu hệ thống, đầu sách này còn **11 bản** có thể mượn ngay tại các chi nhánh:\n- **Chi nhánh Quận 1**: 4 bản\n- **Chi nhánh Thủ Đức**: 4 bản\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản\n\nBạn vui lòng truy cập trang **Catalog** để xem chi tiết hoặc đặt chỗ (reservation) nếu muốn giữ sách trước khi đến nhận. ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện SmartBook hiện có rất nhiều đầu sách của tác giả **Nguyễn Nhật Ánh** trong danh mục công khai. Dưới đây là một số tựa sách nổi bật còn sẵn để mượn:\n\n- **Còn Chút Gì Để Nhớ (2022)**: Còn **8** bản (Chi nhánh Hà Nội – Hoàn Kiếm 4, Đà Nẵng 4).\n- **Hạ Đỏ (Tái Bản 2022)**: Còn **7** bản (Chi nhánh Hà Nội – Cầu Giấy 4, Thủ Đức 3).\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**: Còn **6** bản (Chi nhánh Hà Nội – Cầu Giấy 4, Thủ Đức 2).\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**: Còn **6** bản (Chi nhánh Thủ Đức 4, Hà Nội – Cầu Giấy 2).\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**: Còn **5** bản (Chi nhánh Thủ Đức 3, Hà Nội – Cầu Giấy 2).\n- **Mắt Biếc (Tái Bản 2022)**: Còn **4** bản (Chi nhánh Hà Nội – Cầu Giấy 2, Hoàn Kiếm 2).\n\n📚 Bạn có thể tìm kiếm chi tiết hơn hoặc đặt trước các cuốn này qua trang **Catalog**. Nếu cần hỗ trợ tạo phiếu mượn, vui lòng truy cập thẻ **Borrow**.\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại **SmartBook chưa có thông tin** về sách dạy lập trình Rust cho người mới trong danh mục tra cứu này. 📚\n\nTuy nhiên, hệ thống ghi nhận các đầu sách thuộc lĩnh vực **Kỹ thuật - CNTT** và kỹ năng lập trình khác đang có sẵn với số lượng lớn, ví dụ như:\n- **Clean Code** (Robert C. Martin): còn **11 bản** có thể mượn tại Chi nhánh Hà Nội – Cầu Giấy, District 3 và Đà Nẵng.\n- **Luy-Xiêng Và Chú Người Tuyết Cô Độc**: còn **14 bản** (tuy nhiên đây là thể loại truyện, không phải kỹ thuật).\n\nNếu bạn cần tìm sách chuyên sâu về Rust, bạn vui lòng kiểm tra kỹ hơn trên trang **Catalog** hoặc liên hệ trực tiếp quầy thủ thư để được hỗ trợ đặt mua hoặc tra cứu kho ẩn nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books, Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=10&search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=1",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=2",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/public/catalog/books?pageSize=48&page=3",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Hiện có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Hiện có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "conversation_id": "6816e326-f957-4b27-95de-1dc526210963"
+ },
+ {
+  "rep": 0,
+  "system": "assistant",
+  "message": "Toàn hệ thống có bao nhiêu đầu sách dưới ngưỡng tồn tối thiểu?",
+  "status": 200,
+  "answer": "Toàn hệ thống có 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Toàn hệ thống có 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "conversation_id": "549d821f-cc97-4246-bd7d-87c192fcb1c9"
+ },
+ {
+  "rep": 1,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Hiện tại có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Hiện tại có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "conversation_id": "bf051653-3c1a-4178-8f3c-26f3cd8f6c03"
+ },
+ {
+  "rep": 1,
+  "system": "assistant",
+  "message": "Toàn hệ thống có bao nhiêu đầu sách dưới ngưỡng tồn tối thiểu?",
+  "status": 200,
+  "answer": "Toàn hệ thống có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Toàn hệ thống có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "conversation_id": "c107e62e-cbd4-48cf-a2ca-5aa6b2ec3e8c"
+ },
+ {
+  "rep": 2,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Tổng cộng có 301 đầu sách đang dưới ngưỡng tồn tại các kho của thư viện. Trong đó, chi nhánh Đà Nẵng có số lượng nhiều nhất với 77 đầu sách, tiếp theo là chi nhánh Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Tổng cộng có 301 đầu sách đang dưới ngưỡng tồn tại các kho của thư viện. Trong đó, chi nhánh Đà Nẵng có số lượng nhiều nhất với 77 đầu sách, tiếp theo là chi nhánh Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "conversation_id": "6d8672ec-0478-4157-8f60-6798285f8859"
+ },
+ {
+  "rep": 2,
+  "system": "assistant",
+  "message": "Toàn hệ thống có bao nhiêu đầu sách dưới ngưỡng tồn tối thiểu?",
+  "status": 200,
+  "answer": "Toàn hệ thống hiện có 301 đầu sách dưới ngưỡng tồn tối thiểu.",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Toàn hệ thống hiện có 301 đầu sách dưới ngưỡng tồn tối thiểu.",
+  "conversation_id": "d4c6f287-0629-4f8a-995e-fec69a6e9d24"
+ },
+ {
+  "rep": 3,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Tổng số đầu sách đang dưới ngưỡng tồn tại là 301.",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Tổng số đầu sách đang dưới ngưỡng tồn tại là 301.",
+  "conversation_id": "764d3679-cb6c-49c9-b120-1de65b1cec6e"
+ },
+ {
+  "rep": 3,
+  "system": "assistant",
+  "message": "Toàn hệ thống có bao nhiêu đầu sách dưới ngưỡng tồn tối thiểu?",
+  "status": 200,
+  "answer": "Toàn hệ thống hiện có 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Toàn hệ thống hiện có 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "conversation_id": "b09db82a-5e6f-47fb-b37e-8ba14c63684b"
+ },
+ {
+  "rep": 4,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Hiện có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tại các kho của hệ thống. Trong đó, chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Hiện có tổng cộng 301 đầu sách đang dưới ngưỡng tồn tại các kho của hệ thống. Trong đó, chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Thủ Đức (71), Hà Nội – Hoàn Kiếm (61) và Hà Nội – Cầu Giấy (59).",
+  "conversation_id": "832a643f-91ee-4551-b11c-16d8d1a64a2c"
+ },
+ {
+  "rep": 4,
+  "system": "assistant",
+  "message": "Toàn hệ thống có bao nhiêu đầu sách dưới ngưỡng tồn tối thiểu?",
+  "status": 200,
+  "answer": "Toàn hệ thống có 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 1,
+  "draft_answer": "Toàn hệ thống có 301 đầu sách đang dưới ngưỡng tồn tối thiểu.",
+  "conversation_id": "67cef12f-9a2b-4f3b-81b8-84c1e66085c6"
+ }
+]

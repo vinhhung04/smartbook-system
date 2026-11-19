@@ -83,6 +83,13 @@ def _evidence_warehouse_stock_risk(result: list) -> list[dict]:
                 f"{name} — sách tồn thấp", "get_warehouse_stock_risk", "low_stock_variants",
                 row.get("low_stock_variants"), "đầu sách", description=row.get("reasoning", ""),
             ))
+    if len(ranked) >= 2:
+        # the totals the prompt shows (copilot_response._render_stock_risk) - grounded like any tool value
+        for metric, label in (("low_stock_variants", "dưới ngưỡng"), ("out_of_stock_variants", "hết hàng")):
+            items.append(_item(
+                f"Tổng {len(ranked)} kho — đầu sách {label}", "get_warehouse_stock_risk", metric,
+                sum(row.get(metric) or 0 for row in ranked), "đầu sách", description="Cộng theo từng kho",
+            ))
     return items
 
 

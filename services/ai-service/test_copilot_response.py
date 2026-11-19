@@ -55,6 +55,13 @@ class RenderTests(unittest.TestCase):
         self.assertIn("-92,2%", text)
         self.assertIn("5,54", text)
 
+    def test_stock_risk_is_rendered_with_its_all_warehouse_totals(self):
+        rows = [{"warehouse_name": "Kho A", "out_of_stock_variants": 1, "low_stock_variants": 77, "total_available_qty": 248},
+                {"warehouse_name": "Kho B", "out_of_stock_variants": 0, "low_stock_variants": 224, "total_available_qty": 40}]
+        self.assertIn("Tổng 2 kho (cộng theo từng kho): 1 đầu sách hết hàng, 301 đầu sách dưới ngưỡng, tồn khả dụng 288",
+                      cr.render("get_warehouse_stock_risk", rows))
+        self.assertNotIn("Tổng", cr.render("get_warehouse_stock_risk", rows[:1]))
+
     def test_unknown_tool_or_shape_falls_back(self):
         self.assertIsNone(cr.render("get_fine_summary", {"total_unpaid": 1}))
         self.assertIsNone(cr.render("compare_warehouses", ["not", "a", "dict"]))

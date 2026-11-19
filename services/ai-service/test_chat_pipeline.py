@@ -248,3 +248,25 @@ class CustomerPolicyQuestionTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(auth)                                       # no analytics call with the reader's token
         self.assertEqual(body["intent"], "FINE_SUMMARY_QUERY")       # so the GENERAL_QUERY abstention cannot fire
         self.assertIn("5.000", body["reply"])
+
+
+class AnonymousActionHintTests(unittest.IsolatedAsyncioTestCase):
+    """Audit 2026-11-19 (E-11): "lập trình" matched the substring keyword "lap", so
+    an anonymous book question got "…gửi Authorization token" appended."""
+
+    def _turn(self, message, action_type=None):
+        return {"user_ctx": None, "is_action_request": main._wants_agent_action(message),
+                "intent_info": {"intent": "BOOK_SEARCH_QUERY", "action_type": action_type}}
+
+    async def test_question_with_action_like_substring_gets_no_login_hint(self):
+        reply, action = await main._apply_chat_agent_layer(
+            self._turn("Thư viện có sách dạy lập trình Rust cho người mới không?"), "Chưa có sách phù hợp.")
+        self.assertEqual((reply, action), ("Chưa có sách phù hợp.", None))
+
+    async def test_real_action_request_asks_to_sign_in_without_technical_words(self):
+        reply, action = await main._apply_chat_agent_layer(
+            self._turn("Đặt sách Atomic Habits giúp tôi", "CREATE_RESERVATION_DRAFT"), "OK.")
+        self.assertIsNone(action)
+        self.assertIn("đăng nhập", reply)
+        self.assertNotIn("Authorization", reply)
+        self.assertNotIn("token", reply)

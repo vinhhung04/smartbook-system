@@ -46,7 +46,7 @@ from rag import (
     merge_grounding_context,
     verify_numeric_grounding,
 )
-from retrieval import retrieve_context
+from retrieval import MISSING_AUTH_WARNING, retrieve_context
 from assistant_tools import GATEWAY_URL
 from tool_registry import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 import assistant_tools
@@ -3832,7 +3832,7 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
-    missing_auth = any("Missing Authorization" in warning for warning in warnings)
+    missing_auth = MISSING_AUTH_WARNING in warnings
     used_legacy_context = False
 
     # RAG is the primary path. Legacy frontend system_context remains only as a
@@ -3936,8 +3936,10 @@ def _chat_cached_payload(turn: dict) -> dict:
 async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dict | None]:
     """Try to plan an agent action and append a confirmation hint to the reply."""
     user_ctx = turn["user_ctx"]
-    if turn["is_action_request"] and user_ctx is None:
-        return reply_text + "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.", None
+    # The keyword gate alone is substring-based ("lap" also matches "lập trình"); the
+    # NLU's validated action_type is what says an action was actually asked for.
+    if turn["is_action_request"] and user_ctx is None and turn["intent_info"].get("action_type"):
+        return reply_text + "\n\nĐể thực hiện thao tác này, bạn vui lòng đăng nhập tài khoản SmartBook.", None
     if user_ctx is None:
         return reply_text, None
 
