@@ -150,6 +150,66 @@ class GeneralQueryRetrievalTests(unittest.TestCase):
         self.assertNotIn("Nguồn dữ liệu", reply)
 
 
+class MultiPartQuestionTests(unittest.TestCase):
+    """Audit E-7: "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?" -
+    the half without documents pulled the WHOLE question to NO_EVIDENCE, so the
+    answerable half was refused too."""
+
+    def _retrieve(self, question, decisions):
+        entry = {"id": "roles-permissions", "question": "Thủ thư làm được gì?", "answer": "Quản lý mượn trả, đặt trước."}
+
+        def find(query):
+            decision = next((d for part, d in decisions.items() if part in query), confidence.NO_EVIDENCE)
+            matches = [] if decision == confidence.NO_EVIDENCE else [FAQMatch(entry=entry, score=0.8)]
+            return matches, _confidence(decision, 0.8 if matches else 0.1)
+
+        with mock.patch.object(faq_retrieval, "find_relevant_with_confidence", side_effect=find),              mock.patch.object(retrieval, "_live_policy_data", new=mock.AsyncMock(return_value="")):
+            return asyncio.run(retrieval.retrieve_context({"intent": GENERAL_QUERY, "query": question}, auth_header=None))
+
+    def test_the_answerable_part_is_retrieved_and_the_gap_is_named(self):
+        q = "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?"
+        result = self._retrieve(q, {q: confidence.NO_EVIDENCE, "Thủ thư có những quyền gì": confidence.CONFIDENT_MATCH})
+        self.assertNotEqual(result["retrieval_status"], confidence.NO_EVIDENCE)
+        self.assertIn("Quản lý mượn trả", result["summary"])
+        self.assertIn("được nghỉ phép bao nhiêu ngày một năm", result["summary"])  # the part with no document, named
+        self.assertIn("chưa có tài liệu", result["summary"])
+
+    def test_no_part_answerable_still_abstains(self):
+        q = "Lương nhân viên kho trả ngày nào và có thưởng Tết không?"
+        self.assertEqual(self._retrieve(q, {})["retrieval_status"], confidence.NO_EVIDENCE)
+
+    def test_a_single_question_is_not_split(self):
+        q = "Có được mang thú cưng vào thư viện không?"
+        calls = []
+        with mock.patch.object(faq_retrieval, "find_relevant_with_confidence",
+                               side_effect=lambda query: calls.append(query) or ([], _confidence(confidence.NO_EVIDENCE, 0.1))):
+            asyncio.run(retrieval.retrieve_context({"intent": GENERAL_QUERY, "query": q}, auth_header=None))
+        self.assertEqual(calls, [q])
+
+
+class FilterBooksTests(unittest.TestCase):
+    def test_function_words_do_not_match_titles(self):
+        # "dạy lập trình Rust CHO người mới" matched "CHO Tôi Xin Một Vé Đi Tuổi Thơ"
+        books = [{"title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ", "author": "Nguyễn Nhật Ánh"},
+                 {"title": "Clean Code", "author": "Robert C. Martin", "category": "Lập trình"}]
+        self.assertEqual(retrieval._filter_books(books, "day lap trinh rust cho nguoi moi")[0]["title"], "Clean Code")
+        self.assertEqual(len(retrieval._filter_books(books, "day lap trinh rust cho nguoi moi")), 1)
+        self.assertEqual(retrieval._filter_books(books, "cua nguyen nhat anh")[0]["title"], "Cho Tôi Xin Một Vé Đi Tuổi Thơ")
+
+
+class FetchWarningTests(unittest.TestCase):
+    def test_http_errors_become_plain_vietnamese(self):
+        # audit E-4: the warning text reaches the prompt verbatim
+        class Client:
+            def __init__(self, code): self.code = code
+            async def get(self, *a, **k): return mock.Mock(status_code=self.code)
+        for code, words in ((403, "không có quyền xem"), (401, "không có quyền xem"), (502, "lỗi máy chủ")):
+            source, payload, warning = asyncio.run(retrieval._fetch(Client(code), "/analytics/overdue-summary", "Bearer t"))
+            self.assertEqual(source["status"], f"error:{code}")  # machine status unchanged
+            self.assertIn(words, warning)
+            self.assertNotIn("HTTP", warning)
+
+
 ATOMIC = {"id": "b-1", "variant_id": "v-1", "title": "Atomic Habits", "author": "James Clear", "isbn": "9780735211292",
           "available_quantity": 11, "availability_status": "AVAILABLE",
           "pickup_branches": [{"warehouse_id": "w-d1", "warehouse_name": "Chi Nhanh District 1", "available_quantity": 4},

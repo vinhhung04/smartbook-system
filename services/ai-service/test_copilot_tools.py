@@ -321,3 +321,57 @@ class PositionCoveredLinesTests(unittest.TestCase):
         s = r["scenarios"][0]
         self.assertEqual((s["unfunded_high_priority"], s["lines_covered_by_position"]), (0, 1))
         self.assertEqual(r["full_need"]["need_with_position_vnd"], 200_000)
+
+
+class ReorderWarehouseScopeTests(unittest.TestCase):
+    """2026-11-20: asked about one warehouse, the "Đề xuất có căn cứ" cards were the top of
+    the LIBRARY-wide reorder list - books absent from that warehouse's low-stock table."""
+
+    def _gateway(self):
+        reorder = {"summary": {"total_candidates": 106, "high_priority": 0, "medium_priority": 0, "low_priority": 106,
+                               "estimated_total_reorder_qty": 9, "estimated_total_cost": 900_000},
+                   "budget": None,
+                   "items": [reorder_item("v-x", "Sắc Lời Đắc Thế", priority="LOW", suggested_reorder_qty=3, estimated_cost=300_000),
+                             reorder_item("v-nw", "Norwegian Wood", priority="MEDIUM", suggested_reorder_qty=2,
+                                          estimated_cost=200_000, available_qty=12),
+                             reorder_item("v-ph", "Project Hail Mary", priority="LOW", suggested_reorder_qty=4, estimated_cost=400_000)]}
+        low = {"counts": {"low_stock_including_out": 2, "out_of_stock": 0}, "truncated": False,
+               "items": [{"variant_id": "v-nw", "title": "Norwegian Wood", "status": "LOW_STOCK", "available_qty": 2,
+                          "reorder_point": 5},
+                         {"variant_id": "v-oh", "title": "One Hundred Years of Solitude", "status": "LOW_STOCK",
+                          "available_qty": 1, "reorder_point": 15}]}
+        return FakeGateway({"/analytics/reorder-suggestions": reorder, "/api/warehouses": WAREHOUSES,
+                            "/analytics/warehouse-stock-items": low})
+
+    def _run(self, **kw):
+        import assistant_tools as at
+        gw = self._gateway()
+        with patch.object(at, "_get", new=lambda e, a, p=None, truncate=True: gw(e, a, p)), \
+             patch.object(ct, "_cached_get", gw):
+            return run(at.get_reorder_suggestions("Bearer t", **kw)), gw
+
+    def test_a_named_warehouse_keeps_only_its_low_stock_books(self):
+        r, gw = self._run(warehouse="Kho HCM Chinh")
+        self.assertEqual([i["title"] for i in r["items"]], ["Norwegian Wood"])
+        item = r["items"][0]
+        self.assertEqual((item["warehouse_available_qty"], item["warehouse_reorder_point"], item["available_qty"]), (2, 5, 12))
+        self.assertEqual(r["summary"]["total_candidates"], 1)          # the warehouse's, so a "1 đầu sách" claim checks out
+        self.assertEqual(r["summary"]["estimated_total_cost"], 200_000)
+        self.assertEqual(r["system_summary"]["total_candidates"], 106)
+        scope = r["warehouse_scope"]
+        self.assertEqual((scope["warehouse_name"], scope["low_stock_titles"]), ("Kho HCM Chinh", 2))
+        self.assertEqual(scope["without_suggestion"], ["One Hundred Years of Solitude"])
+        self.assertIn("toàn thư viện", scope["note"])
+        self.assertEqual([c[1].get("limit") for c in gw.calls if c[0] == "/analytics/reorder-suggestions"], [100])
+
+    def test_no_warehouse_or_a_budget_keeps_the_library_list(self):
+        r, _ = self._run()
+        self.assertEqual(len(r["items"]), 3)
+        self.assertNotIn("warehouse_scope", r)
+        r, _ = self._run(warehouse="Kho HCM Chinh", budget_vnd=1_000_000)  # a budget allocation is library-wide
+        self.assertEqual(len(r["items"]), 3)
+
+    def test_unknown_warehouse_is_an_error_not_the_library_list(self):
+        r, _ = self._run(warehouse="Kho Mặt Trăng")
+        self.assertIn("error", r)
+        self.assertNotIn("items", r)

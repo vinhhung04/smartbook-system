@@ -189,6 +189,51 @@ def few_shot(plan: QueryPlan) -> str:
             "của ví dụ)\n" + text)
 
 
+BRIEF_MAX_SENTENCES = 3
+
+
+def enforce_brief(answer: str, plan: QueryPlan) -> str:
+    """"Nói ngắn gọn": at most three sentences (the conclusion comes first by the
+    prompt's rule). The model answered as long as before (audit E-15)."""
+    if not (getattr(plan, "style", None) or {}).get("brief") or not answer:
+        return answer
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", answer.strip()) if s.strip()]
+    return " ".join(s.strip() for s in sentences[:BRIEF_MAX_SENTENCES]) if len(sentences) > BRIEF_MAX_SENTENCES else answer
+
+
+def strip_example_copies(answer: str, plan: QueryPlan, grounded: str) -> tuple[str, list[str]]:
+    """Drops the sentences the model copied from this turn's few-shot example WITH
+    the example's invented figures (audit E-5: "3 đầu sách cần 30 ngày để hàng về... 6
+    bản đang giữ"). Following the example's wording is the point of the example, so a
+    sentence goes only when it shares a 5-word span with it and carries an example
+    figure the data lacks - or shares 8 words and any example figure."""
+    from number_grounding import numbers_match, parse_number_candidates, parse_numbers
+
+    example = few_shot(plan)
+    if not example or not answer:
+        return answer, []
+    ex_words = normalize_query(example).split()
+    grams = {n: {tuple(ex_words[i:i + n]) for i in range(len(ex_words) - n + 1)} for n in (5, 8)}
+    ex_numbers = parse_numbers(example)
+    data_numbers = parse_numbers(grounded)
+    removed: list[str] = []
+    lines = []
+    for line in answer.split("\n"):
+        kept = []
+        for sentence in re.split(r"(?<=[.!?])\s+", line):
+            words = normalize_query(sentence).split()
+            shares = {n: any(tuple(words[i:i + n]) in grams[n] for i in range(len(words) - n + 1)) for n in (5, 8)}
+            figures = [g for g in parse_number_candidates(sentence) if any(numbers_match(v, ex_numbers) for v in g)]
+            invented = [g for g in figures if not any(numbers_match(v, data_numbers) for v in g)]
+            if figures and (shares[8] or (shares[5] and invented)):
+                removed.append(sentence)
+                continue
+            kept.append(sentence)
+        if kept or not line.strip():
+            lines.append(" ".join(kept))
+    return ("\n".join(lines).strip(), removed) if removed else (answer, [])
+
+
 def style_request(plan: QueryPlan) -> str:
     """The style instructions repeated next to the user's message: placed only
     in the system prompt, "giải thích kỹ hơn" was sometimes answered with the
@@ -204,6 +249,10 @@ _WEEKDAYS = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "
 def _vn_date(iso: str) -> str:
     y, m, d = iso[:10].split("-")
     return f"{d}/{m}/{y}"
+
+
+_SNAPSHOT_LABEL = {OVERDUE: "số phiếu quá hạn", FINES: "tiền phạt", WAREHOUSE_RISK: "tồn kho theo kho",
+                   LOW_STOCK_ITEMS: "sách tồn thấp", KPI: "chỉ số tổng quan"}
 
 
 def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
@@ -222,6 +271,11 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
     if plan.time_range:
         tr = plan.time_range
         lines.append(f"- Kỳ phân tích: {tr['label']} ({_vn_date(tr['start'])}–{_vn_date(tr['end'])}).")
+        snapshot = [_SNAPSHOT_LABEL[c] for c in plan.capabilities if c in _SNAPSHOT_LABEL]
+        if snapshot:
+            # audit E-13: "Tuần này có 446 phiếu quá hạn" - that count is today's, not the week's
+            lines.append(f"- Kỳ trên chỉ áp dụng cho lượt mượn/top sách. {', '.join(snapshot).capitalize()} là số hiện tại "
+                         f"(lúc truy xuất), không thuộc kỳ đó: không gắn \"{tr['label']}\" cho các số này.")
     if plan.comparison_period:
         cp = plan.comparison_period
         lines.append(f"- Kỳ so sánh: {cp['label']} ({_vn_date(cp['start'])}–{_vn_date(cp['end'])}).")
@@ -299,7 +353,10 @@ _LEAD_SOURCE = {"LEARNED": "học từ lịch sử giao", "SUPPLIER_DECLARED": "
 def _reorder_line(i: int, x: dict) -> str:
     trend = x.get("demand_trend_pct")
     parts = [f"{i}. {x.get('title')} — ưu tiên {x.get('priority')}"]
-    if x.get("available_qty") is not None:
+    if x.get("warehouse_available_qty") is not None:  # a warehouse-scoped list: that warehouse's stock first
+        parts.append(f"tồn tại kho {_f(x['warehouse_available_qty'])} (ngưỡng tại kho {_f(x.get('warehouse_reorder_point'))}); "
+                     f"tồn toàn thư viện {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
+    elif x.get("available_qty") is not None:
         parts.append(f"tồn khả dụng {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
     if x.get("borrow_count") is not None:
         parts.append(f"{_f(x.get('borrow_count'))} lượt mượn trong kỳ (kỳ trước {_f(x.get('previous_borrow_count'))}"
@@ -334,6 +391,14 @@ def _render_reorder(r: dict) -> str:
     if totals and totals.get("lines"):
         lines.append(f"Cộng {totals['lines']} dòng được trả về: {_f(totals['suggested_reorder_qty'])} bản, "
                      f"{_f(totals['estimated_cost'], 'đ')}.")
+    scope = r.get("warehouse_scope")
+    if scope:
+        lines.insert(0, f"Phạm vi: {scope.get('warehouse_name')} - {_f(scope.get('with_suggestion'))}/"
+                        f"{_f(scope.get('low_stock_titles'))} đầu sách đang hết hàng/dưới ngưỡng tại kho này có đề xuất "
+                        f"nhập. {scope.get('note')}")
+        if scope.get("without_suggestion"):
+            lines.append("Đầu sách tồn thấp tại kho nhưng hệ thống chưa đề xuất nhập: "
+                         + "; ".join(str(t) for t in scope["without_suggestion"]) + ".")
     return "\n".join(lines)
 
 
@@ -341,7 +406,9 @@ def _render_top_books(r: list) -> str:
     rows = [x for x in r if isinstance(x, dict) and x.get("title")]
     if not rows:
         return "Không có lượt mượn nào trong kỳ đã chọn."
-    return "Sách được mượn nhiều nhất:\n" + "\n".join(
+    # copies borrowed, not loan tickets: their sum can exceed the period's loans (audit D-2)
+    return ("Sách được mượn nhiều nhất (lượt = số bản sách được mượn; một phiếu mượn có thể gồm nhiều cuốn, "
+            "nên không cộng các số này để so với tổng phiếu mượn):\n") + "\n".join(
         f"{i}. {x['title']} — {_f(x.get('borrow_count'))} lượt" for i, x in enumerate(rows, start=1))
 
 
@@ -583,9 +650,15 @@ def render(tool_name: str, result) -> str | None:
 
 # ── structured extras ────────────────────────────────────────────────────────
 
-def _reorder_recommendation(x: dict, source: str, retrieved_at: str) -> dict:
+def _reorder_recommendation(x: dict, source: str, retrieved_at: str, warehouse_name: str | None = None) -> dict:
+    # A warehouse-scoped line carries two stocks: that warehouse's (what its table shows)
+    # and the library's (what analytics computed the suggestion from).
+    stock = ([{"label": f"Tồn tại {warehouse_name or 'kho'}", "value": x["warehouse_available_qty"], "unit": "bản"},
+              {"label": "Tồn toàn thư viện", "value": x.get("available_qty"), "unit": "bản"}]
+             if x.get("warehouse_available_qty") is not None
+             else [{"label": "Tồn khả dụng", "value": x.get("available_qty"), "unit": "bản"}])
     metrics = [
-        {"label": "Tồn khả dụng", "value": x.get("available_qty"), "unit": "bản"},
+        *stock,
         {"label": "Lượt mượn trong kỳ", "value": x.get("borrow_count"), "unit": "lượt"},
         {"label": "Đề xuất nhập", "value": x.get("suggested_reorder_qty"), "unit": "bản"},
         {"label": "Chi phí ước tính", "value": x.get("estimated_cost"), "unit": "đ"},
@@ -622,8 +695,9 @@ def _recommendations(collected: dict, now_iso: str) -> list[dict]:
         items = [x for x in r.get("items") or [] if isinstance(x, dict) and x.get("title")]
         if "budget" in r and r.get("budget"):
             items = [x for x in items if x.get("within_budget")]
+        scope = r.get("warehouse_scope") or {}
         for x in items[:3]:
-            recs.append(_reorder_recommendation(x, "analytics/reorder-suggestions", now_iso))
+            recs.append(_reorder_recommendation(x, "analytics/reorder-suggestions", now_iso, scope.get("warehouse_name")))
     r = collected.get("simulate_reorder_budget")
     if isinstance(r, dict) and not r.get("error") and not recs:
         scenario = next((s for s in r.get("scenarios") or [] if not s.get("error")), None)

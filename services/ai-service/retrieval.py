@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 import os
 import re
@@ -10,7 +11,7 @@ import httpx
 
 import faq_retrieval
 import retrieval_confidence
-from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD
+from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD, status_text
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -29,6 +30,7 @@ from intent import (
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 RETRIEVAL_TIMEOUT = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "8"))
+logger = logging.getLogger("uvicorn.error")
 MISSING_AUTH_WARNING = "Chua dang nhap: khong truy xuat du lieu nghiep vu."
 
 
@@ -104,15 +106,17 @@ async def _fetch(client: httpx.AsyncClient, endpoint: str, auth_header: str | No
         response = await client.get(f"{GATEWAY_URL}{endpoint}", params=params, headers=headers)
         if response.status_code >= 400:
             source["status"] = f"error:{response.status_code}"
-            return source, None, f"{source['name']} returned HTTP {response.status_code}"
+            # the warning text reaches the prompt: plain Vietnamese, no HTTP code (audit E-4)
+            return source, None, f"{source['name']}: {status_text(source['status'])}"
         source["status"] = "ok"
         return source, response.json(), None
     except httpx.TimeoutException:
         source["status"] = "timeout"
-        return source, None, f"{source['name']} timed out"
+        return source, None, f"{source['name']}: {status_text('timeout')}"
     except Exception as exc:
         source["status"] = "error"
-        return source, None, f"{source['name']} retrieval failed: {type(exc).__name__}"
+        logger.warning("retrieval %s failed: %s", endpoint, type(exc).__name__)
+        return source, None, f"{source['name']}: {status_text('error')}"
 
 
 def _book_quantity(book: dict) -> int:
@@ -186,9 +190,18 @@ def _time_params(intent_info: dict, default_30_days: bool = False) -> dict:
     return params
 
 
+# Function words of a book question: "dạy lập trình Rust CHO người mới" matched
+# "CHO Tôi Xin Một Vé Đi Tuổi Thơ" (audit). Whole words only, these never count.
+_QUERY_STOPWORDS = {
+    "co", "cho", "cua", "va", "khong", "nao", "ve", "day", "sach", "cuon", "quyen", "nguoi", "moi", "cac",
+    "nhung", "mot", "la", "o", "tai", "voi", "thu", "vien", "tim", "giup", "toi", "minh", "ban", "hay", "the",
+}
+
+
 def _filter_books(books: list[dict], query: str, limit: int = 10, compact_fn=None) -> list[dict]:
     normalized_query = normalize_text(query)
-    tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
+    tokens = [token for token in re.split(r"\s+", normalized_query)
+              if len(token) >= 2 and token not in _QUERY_STOPWORDS]
     if not tokens:
         return []
 
@@ -201,7 +214,8 @@ def _filter_books(books: list[dict], query: str, limit: int = 10, compact_fn=Non
             str(compact.get("category") or ""),
             str(compact.get("isbn") or ""),
         ]))
-        score = sum(1 for token in tokens if token in haystack)
+        words = set(re.split(r"[^\w]+", haystack))
+        score = sum(1 for token in tokens if token in words)
         if normalized_query and normalized_query in haystack:
             score += 3
         if score > 0:
@@ -209,6 +223,17 @@ def _filter_books(books: list[dict], query: str, limit: int = 10, compact_fn=Non
 
     scored.sort(key=lambda item: (-item[0], item[1]["title"]))
     return [item[1] for item in scored[:limit]]
+
+
+_PART_SPLIT = re.compile(r"\s*(?:[,;?]|\s(?:và|va|còn|con|đồng thời|dong thoi)\s)\s*", re.IGNORECASE)
+
+
+def _question_parts(question: str) -> list[str]:
+    """The parts of a question asking two things ("X và Y?"); fewer than 2 parts of
+    at least 3 words each means it is one question."""
+    parts = [p.strip(" ?.!") for p in _PART_SPLIT.split(question or "")]
+    parts = [p for p in parts if len(p.split()) >= 3]
+    return parts if len(parts) >= 2 else []
 
 
 def _filter_by_warehouse_hint(wh_groups: dict, warehouse_hint: str | None) -> tuple[dict, str | None]:
@@ -265,6 +290,21 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             # belt-and-braces so a bug in the embedding layer can never turn
             # /chat into a 500.
             return empty_envelope
+        unanswered_parts: list[str] = []
+        if not faq_matches or confidence_result.decision == retrieval_confidence.NO_EVIDENCE:
+            # A question of several parts: the part with no document must not drag the
+            # answerable one down with it (audit E-7) - each part is looked up alone.
+            parts = _question_parts(intent_info.get("query") or "")
+            if len(parts) >= 2:
+                looked = [(part, *(await asyncio.to_thread(faq_retrieval.find_relevant_with_confidence, part)))
+                          for part in parts]
+                answered = [(m, c) for _p, m, c in looked if m and c.decision != retrieval_confidence.NO_EVIDENCE]
+                if answered:
+                    seen: set = set()
+                    faq_matches = [m for ms, _c in answered for m in ms
+                                   if m.entry["id"] not in seen and not seen.add(m.entry["id"])]
+                    confidence_result = max((c for _m, c in answered), key=lambda c: c.confidence)
+                    unanswered_parts = [p for p, m, c in looked if not m or c.decision == retrieval_confidence.NO_EVIDENCE]
         # NO_EVIDENCE: do not hand the LLM "the nearest thing we have" for a
         # question the corpus has no real answer to (see retrieval_confidence.py) -
         # same empty envelope as today, just reached via the confidence decision
@@ -300,6 +340,10 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             else f"{CONFIDENT_FAQ_LEAD}\n"
         )
         summary = summary_lead + "\n".join(faq_lines)
+        if unanswered_parts:
+            summary += ("\n\nCâu hỏi gồm nhiều ý; tài liệu của thư viện chưa có tài liệu cho: "
+                        + "; ".join(f"\"{p}\"" for p in unanswered_parts)
+                        + ". Trả lời phần có căn cứ ở trên và nói rõ phần này chưa có thông tin, không suy đoán.")
 
         # Hybrid: a policy document explains the rule, but the values it quotes
         # are configuration that can change - read them live; the live value wins.

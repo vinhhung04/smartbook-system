@@ -374,6 +374,11 @@ async def _call_llm(message: str, history: str) -> tuple[dict, bool]:
         return {}, False
 
 
+# A book lookup is keyword-matched at 0.82 - under the default bar, so every one paid a
+# ~2.4 s LLM classification for nothing (audit E-16); /assistant already trusts it here.
+_FAST_PATH_MIN_CONFIDENCE = {BOOK_SEARCH_QUERY: 0.82}
+
+
 async def _with_rewrite(shape: dict, message: str, conversation_history: list | None) -> dict:
     """RAG Phase 3: on the paths whose `query` is the raw message, a context-dependent
     document question gets a standalone query (query_rewrite.py; falls back to the
@@ -427,7 +432,7 @@ async def classify_user_message(
     # Fast path: ONLY when confidence is high, message is simple, AND there is
     # no surface action signal (action messages need LLM for entity extraction).
     if (
-        rule_confidence >= 0.85
+        rule_confidence >= _FAST_PATH_MIN_CONFIDENCE.get(rule_result.get("intent"), 0.85)
         and not _is_complex_message(message)
         and not _has_action_surface(normalized)
     ):

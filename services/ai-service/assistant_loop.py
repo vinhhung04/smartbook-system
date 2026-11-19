@@ -22,7 +22,10 @@ is harder to follow and to debug. See docs/superpowers/specs (or ask before
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, Awaitable, Callable
+
+logger = logging.getLogger("uvicorn.error")
 
 # Identical give-up text both endpoints used when ASSISTANT_MAX_TOOL_ROUNDS is
 # exhausted without the model producing a final answer. Was duplicated as a
@@ -189,7 +192,13 @@ async def retry_once_if_ungrounded(
         ),
     })
 
-    result = await call_model(messages, tools, num_predict=num_predict, timeout=timeout)
+    try:
+        result = await call_model(messages, tools, num_predict=num_predict, timeout=timeout)
+    except Exception as exc:  # noqa: BLE001 - the draft was already checked; a failed retry must not fail the turn
+        # audit E-17: a malformed provider body here became HTTP 500 and the draft was lost
+        logger.warning("grounding retry failed (%s); keeping the checked draft", type(exc).__name__)
+        del messages[-2:]
+        return answer, None
     messages.append(result.assistant_message)
     if result.tool_calls:
         return answer, result.usage.as_dict()

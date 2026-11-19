@@ -245,11 +245,15 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
   };
 }
 
-// Display / budget order of reorder candidates: priority, then demand score,
-// then quantity, then title.
+// Display / budget order of reorder candidates: priority, then lines that need
+// copies before watch-only ones, then demand score, then quantity, then title.
 const PRIORITY_RANK = { HIGH: 0, MEDIUM: 1, LOW: 2 };
 function compareReorderCandidates(a, b) {
+  // Within a priority, a line that needs copies comes before a watch-only one (suggested 0):
+  // wishlist-driven demand scores had put four 0-copy lines above the only real order.
+  const needs = (item) => (Number(item.suggested_reorder_qty) > 0 ? 0 : 1);
   return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+    || needs(a) - needs(b)
     || b.demand_score - a.demand_score
     || b.suggested_reorder_qty - a.suggested_reorder_qty
     || a.title.localeCompare(b.title);

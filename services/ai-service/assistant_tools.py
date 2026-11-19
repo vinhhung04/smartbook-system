@@ -117,19 +117,24 @@ async def get_reorder_suggestions(
     lead_time_days: int | None = None,
     priority: str | None = None,
     budget_vnd: float | None = None,
+    warehouse: str | None = None,
 ) -> dict:
+    # A budget allocation is library-wide by definition: only a plain list is scoped.
+    scoped = bool(warehouse) and budget_vnd is None
     result = await _get(
         "/analytics/reorder-suggestions",
         auth_header,
         {
             "days": days,
-            "limit": limit,
+            "limit": 100 if scoped else limit,
             "leadTimeDays": lead_time_days,
             "priority": priority,
             "budgetVnd": budget_vnd,
         },
         truncate=False,
     )
+    if scoped and isinstance(result, dict) and isinstance(result.get("items"), list):
+        result = await _scope_reorder_to_warehouse(result, warehouse, auth_header, limit or 20)
     if isinstance(result, dict) and isinstance(result.get("items"), list):
         # Totals of exactly the lines returned (e.g. "chỉ lấy 3 cuốn đầu"), so
         # the model quotes a computed sum instead of adding the lines itself.
@@ -140,6 +145,43 @@ async def get_reorder_suggestions(
             "estimated_cost": round(sum(i.get("estimated_cost") or 0 for i in items), 2),
         }
     return _truncate(result)
+
+
+async def _scope_reorder_to_warehouse(result: dict, warehouse: str, auth_header: str | None, limit: int) -> dict:
+    """The library-wide reorder list cut to the books out of stock / under their
+    reorder point at ONE warehouse (joined on variant_id), with that warehouse's
+    own stock on each line. Analytics computes demand and suggested quantities for
+    the whole library; the scope note says so. An unknown warehouse is an error,
+    never the unscoped list (which is what put other books on the cards)."""
+    import copilot_tools  # deferred: copilot_tools builds on this module
+
+    low = await copilot_tools.get_warehouse_low_stock_items(auth_header, warehouse, limit=100)
+    if not isinstance(low, dict) or low.get("error"):
+        return low if isinstance(low, dict) else {"error": "không đọc được tồn kho của kho"}
+    here = {i["variant_id"]: i for i in low.get("items") or [] if isinstance(i, dict) and i.get("variant_id")}
+    # shortcut: the 100-row list is analytics' cap; a low-stock book ranked below it reads as "no suggestion".
+    suggested = {i.get("variant_id") for i in result["items"] if isinstance(i, dict)}
+    rows = [{**i, "warehouse_available_qty": here[i["variant_id"]].get("available_qty"),
+             "warehouse_reorder_point": here[i["variant_id"]].get("reorder_point"),
+             "warehouse_status": here[i["variant_id"]].get("status")}
+            for i in result["items"] if isinstance(i, dict) and i.get("variant_id") in here]
+    by_priority = {p: sum(1 for i in rows if i.get("priority") == p) for p in ("HIGH", "MEDIUM", "LOW")}
+    return {
+        **result,
+        "items": rows[:limit],
+        "summary": {"total_candidates": len(rows), "high_priority": by_priority["HIGH"],
+                    "medium_priority": by_priority["MEDIUM"], "low_priority": by_priority["LOW"],
+                    "estimated_total_reorder_qty": sum(i.get("suggested_reorder_qty") or 0 for i in rows),
+                    "estimated_total_cost": round(sum(i.get("estimated_cost") or 0 for i in rows), 2)},
+        "system_summary": result.get("summary"),
+        "warehouse_scope": {
+            "warehouse_name": low.get("warehouse_name"), "warehouse_id": low.get("warehouse_id"),
+            "low_stock_titles": low.get("total_items"), "with_suggestion": len(rows),
+            "without_suggestion": [i.get("title") for v, i in here.items() if v not in suggested][:10],
+            "note": ("Chỉ gồm các đầu sách đang hết hàng/dưới ngưỡng tại kho này. Lượt mượn, nhu cầu và số lượng đề "
+                     "xuất nhập do hệ thống tính trên toàn thư viện, không riêng kho này."),
+        },
+    }
 
 
 async def get_reservation_funnel(auth_header: str | None = None) -> dict:
@@ -589,6 +631,7 @@ ANALYTICS_TOOLS: list[dict] = [
                         "description": "Lọc theo mức độ ưu tiên, mặc định ALL",
                     },
                     "budget_vnd": {"type": "number", "description": "Ngân sách nhập hàng (VNĐ). Nếu người hỏi nêu một số tiền cụ thể, truyền vào đây để biết sách nào nằm trong ngân sách"},
+                    "warehouse": {"type": "string", "description": "Tên hoặc mã MỘT kho người hỏi nêu: chỉ giữ đề xuất cho các đầu sách đang hết hàng/dưới ngưỡng tại kho đó (không dùng cùng budget_vnd)"},
                 },
                 "required": [],
             },

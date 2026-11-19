@@ -152,6 +152,17 @@ class ChatPipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Cập nhật tại thời điểm", system_prompt)
         self.assertEqual(body["context_sources"][0]["name"], "Legacy Frontend System Context")
 
+    def test_client_page_sample_counts_are_not_presented_as_totals(self):
+        # audit S-3: the web client counts overdue loans / unpaid fines in ONE page (30 loans,
+        # 20 fines) and sends them as library totals
+        block = main._build_context_block({"summary": {"totalBooks": 137, "activeLoans": 12, "overdueLoans": 9,
+                                                       "totalFines": 50000},
+                                           "recentLoans": [{"loan_number": "L1", "status": "OVERDUE"}]})
+        self.assertNotIn("Phiếu mượn quá hạn: **9**", block)
+        self.assertNotIn("Tổng tiền phạt chưa thu", block)
+        self.assertIn("Tổng đầu sách: **137**", block)
+        self.assertIn("mẫu", block)
+
     async def test_chat_llm_call_never_offers_tools(self):
         provider = SimpleNamespace(name="openrouter", chat=AsyncMock(return_value=SimpleNamespace(text="Được.")))
         with patch("main.rate_limiter.acquire", new=AsyncMock(return_value=(True, ""))), \

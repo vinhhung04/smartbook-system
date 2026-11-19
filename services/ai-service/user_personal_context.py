@@ -398,7 +398,8 @@ def _fmt_borrow_loans_all(data: Any) -> str:
     if isinstance(counts, dict) and counts:
         n_overdue = int(counts.get("OVERDUE") or 0)
         n_active = int(counts.get("BORROWED") or 0) + n_overdue
-        lines = [f"📚 Loan toàn hệ thống: {n_active} đang mượn, trong đó {n_overdue} quá hạn."]
+        # borrow-service counts within the CALLER's scope (a librarian: their branches), never "toàn hệ thống"
+        lines = [f"📚 Phiếu mượn trong phạm vi bạn được xem: {n_active} đang mượn, trong đó {n_overdue} quá hạn."]
     else:
         n_overdue = sum(1 for l in items if str(l.get("status", "")).upper() == "OVERDUE")
         n_active = sum(1 for l in items if str(l.get("status", "")).upper() in ("BORROWED", "OVERDUE"))
@@ -423,8 +424,16 @@ def _fmt_borrow_fines_all(data: Any) -> str:
         return "Không có dữ liệu phạt trong hệ thống."
     unpaid = [f for f in items if str(f.get("status", "")).upper() not in ("PAID", "WAIVED")]
     total = sum(_n(f.get("amount")) for f in unpaid)
-    return (f"💸 Phạt hệ thống: {len(items)} khoản tổng, "
-            f"{len(unpaid)} chưa thanh toán (tổng {total:,.0f} VND).")
+    meta = data.get("meta") if isinstance(data, dict) else None
+    counts = (meta or {}).get("status_counts")
+    if isinstance(counts, dict) and (meta or {}).get("total") is not None:
+        # the list is one page: the service's totals are the counts; amounts exist for the page only
+        open_count = int(counts.get("UNPAID") or 0) + int(counts.get("PARTIALLY_PAID") or 0)
+        return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong. "
+                f"Số tiền chỉ có cho {len(items)} khoản gần nhất ({total:,.0f} VND chưa thu trong các khoản đó), "
+                "không phải tổng tiền.")
+    return (f"💸 Phạt trong {len(items)} khoản gần nhất (không phải toàn bộ): "
+            f"{len(unpaid)} chưa thanh toán ({total:,.0f} VND).")
 
 
 def _fmt_reservations_all(data: Any) -> str:
@@ -432,8 +441,14 @@ def _fmt_reservations_all(data: Any) -> str:
     items = _normalise_to_items(data)
     if not items:
         return "Không có dữ liệu đặt sách."
-    pending = [r for r in items if str(r.get("status", "")).upper() in ("PENDING", "WAITING", "READY", "CONFIRMED")]
-    return f"📋 Đặt sách hệ thống: {len(items)} tổng, {len(pending)} đang chờ xử lý."
+    waiting = ("PENDING", "WAITING", "READY", "CONFIRMED", "READY_FOR_PICKUP")
+    meta = data.get("meta") if isinstance(data, dict) else None
+    counts = (meta or {}).get("status_counts")
+    if isinstance(counts, dict) and (meta or {}).get("total") is not None:
+        pending_count = sum(int(counts.get(s) or 0) for s in waiting)
+        return f"📋 Đặt sách trong phạm vi bạn được xem: {int(meta['total'])} lượt, {pending_count} đang chờ xử lý."
+    pending = [r for r in items if str(r.get("status", "")).upper() in waiting]
+    return f"📋 Đặt sách trong {len(items)} lượt gần nhất (không phải toàn bộ): {len(pending)} đang chờ xử lý."
 
 
 def _fmt_wallet(data: Any) -> str:
@@ -556,6 +571,9 @@ async def build_user_personal_context(
     if warnings and not summaries:
         # Asked about their own data but it could not be read: say so, never invent it.
         summaries.append("⚠️ Không tải được dữ liệu cá nhân lúc này; không được suy đoán số liệu của người dùng.")
+    # Only the user's OWN records are "personal": a librarian's /borrow/loans is the
+    # circulation data of their branches (audit E-3: answered as "dữ liệu cá nhân của bạn").
+    own = {ep for c in capabilities.CAPABILITIES if c.data_scope in ("self", "supplier_self") for ep in c.endpoints}
     return {
         "role": role,
         "persona": persona,
@@ -563,4 +581,5 @@ async def build_user_personal_context(
         "sources": sources,
         "warnings": warnings,
         "topics": sorted(topics),
+        "data_scope": "self" if all(ep in own for ep in endpoints) else "role",
     }

@@ -38,6 +38,7 @@ from intent import (
 import retrieval_confidence
 from nlu import _has_action_surface, _is_complex_message, classify_user_message
 from rag import (
+    sanitize_reply,
     RAG_SYSTEM_RULES,
     build_fallback_reply,
     build_no_data_context,
@@ -3514,9 +3515,8 @@ def _build_context_block(system_context: dict | None) -> str:
         parts.append(f"- Tổng số bản (units): **{summary.get('totalUnits', '?')}**")
         parts.append(f"- Sách tồn kho thấp (≤10): **{summary.get('lowStock', '?')}**")
         parts.append(f"- Sách hết hàng: **{summary.get('outOfStock', '?')}**")
-        parts.append(f"- Phiếu mượn đang mở: **{summary.get('activeLoans', '?')}**")
-        parts.append(f"- Phiếu mượn quá hạn: **{summary.get('overdueLoans', '?')}**")
-        parts.append(f"- Tổng tiền phạt chưa thu: **{summary.get('totalFines', '?')}**đ")
+        # activeLoans / overdueLoans / totalFines are counted by the client in ONE page
+        # (30 loans, 20 fines) - not totals, so not stated as such (audit S-3).
         parts.append("")
 
     books = system_context.get("books")
@@ -3535,7 +3535,7 @@ def _build_context_block(system_context: dict | None) -> str:
 
     loans = system_context.get("recentLoans")
     if loans and isinstance(loans, list):
-        parts.append(f"### Phiếu mượn gần đây ({len(loans)} phiếu)")
+        parts.append(f"### Phiếu mượn gần đây (mẫu {len(loans)} phiếu, không phải tổng số)")
         for l in loans[:15]:
             num = l.get("loan_number", "?")
             cust = l.get("customer_name", "?")
@@ -3547,7 +3547,7 @@ def _build_context_block(system_context: dict | None) -> str:
 
     fines = system_context.get("recentFines")
     if fines and isinstance(fines, list) and len(fines) > 0:
-        parts.append(f"### Phạt gần đây ({len(fines)} khoản)")
+        parts.append(f"### Phạt gần đây (mẫu {len(fines)} khoản, không phải tổng số)")
         for f in fines[:10]:
             cust = f.get("customer_name", "?")
             amount = f.get("amount", 0)
@@ -3870,7 +3870,10 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
 
     persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
     if personal.get("summary"):
-        persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
+        heading = ("Dữ liệu cá nhân người dùng" if personal.get("data_scope", "self") == "self" else
+                   "Dữ liệu nghiệp vụ trong phạm vi được phân quyền của người dùng (chi nhánh/kho họ phụ trách; "
+                   "không phải số liệu toàn hệ thống, không phải dữ liệu cá nhân của họ)")
+        persona_block += f"\n## {heading}\n{personal['summary']}\n"
     system_content = (CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
                       + image_prompt_block(image_ctx)
                       + (DRAFT_BY_SYSTEM_RULE if user_ctx and is_action_request
@@ -4002,6 +4005,10 @@ async def _finish_chat_reply(turn: dict, text: str, provider: str) -> dict:
     """Source line, numeric grounding (model replies only), the agent-action
     layer and the cache write - the final body of /chat and of /chat/stream's
     `done` event."""
+    if provider != "fallback":
+        # "SmartBook chưa hỗ trợ X" with no such statement in the documents, or a reason why
+        # the user's wrong figure "applies in special cases": dropped (rag.sanitize_reply).
+        text, _removed = sanitize_reply(text, turn["message"], turn["grounding_context"])
     # An uncertain FAQ near-miss is not a citation the reply necessarily used.
     uncertain = turn["retrieval"].get("retrieval_status") == retrieval_confidence.UNCERTAIN
     reply_with_sources = text if uncertain else ensure_source_line(text, turn["retrieval"].get("sources") or [])
@@ -4812,6 +4819,10 @@ async def _finalize_assistant_turn(
     # every check below - no business tool is called again.
     sheet = copilot_verification.build_sheet(collected_data, explanation, visualizations[0])
     answer, label_issues = copilot_faithfulness.strip_internal_labels(answer)
+    # The few-shot example's invented figures, copied into the answer (audit E-5).
+    example_grounding = f"{json.dumps(collected_data, ensure_ascii=False, default=str)}\n{grounded_context}\n{message_text}"
+    answer, _copied = copilot_response.strip_example_copies(answer, plan, example_grounding)
+    answer = copilot_response.enforce_brief(answer, plan)  # "nói ngắn gọn" (audit E-15)
     # Figures a turn without tool data may repeat: the question and the earlier
     # (already checked) answers. Only assistant messages BEFORE the current
     # question count - by now `messages` also holds this turn's own draft, and
@@ -4899,6 +4910,8 @@ async def _finalize_assistant_turn(
             answer = RAW_JSON_REFUSAL
         answer, more_labels = copilot_faithfulness.strip_internal_labels(answer)
         label_issues += more_labels
+        answer, _copied = copilot_response.strip_example_copies(answer, plan, example_grounding)
+        answer = copilot_response.enforce_brief(answer, plan)
         # the retried text is checked from scratch: every layer, every rule
         grounding_warning, language_flags, semantic, report = await full_check(answer)
         checked_text = answer
@@ -5155,6 +5168,7 @@ async def assistant(request: Request, req: AssistantRequest):
                 answered_normally = answer != TOOL_LOOP_EXHAUSTED_MESSAGE
     except Exception:
         logger.exception("Assistant tool-calling failed")
+        await _record_failed_turn(conversation)
         raise HTTPException(
             status_code=503,
             detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi).",
@@ -5169,6 +5183,19 @@ async def assistant(request: Request, req: AssistantRequest):
         plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"), image_ctx=turn.get("image_ctx"),
     )
     return AssistantResponse(**payload)
+
+
+ASSISTANT_UNAVAILABLE_REPLY = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
+
+
+async def _record_failed_turn(conversation) -> None:
+    """The question was already stored: store what the user was told too, so the
+    next prompt never holds two user turns in a row (audit S-2). Best effort."""
+    try:
+        await conversation_store.append_message(conversation.id, role="assistant", content=ASSISTANT_UNAVAILABLE_REPLY,
+                                                metadata={"failed": True})
+    except Exception:  # noqa: BLE001 - the user-facing error is already being returned
+        logger.warning("could not record the failed assistant turn", exc_info=True)
 
 
 def _validated_payload(payload: dict) -> dict:
@@ -5240,17 +5267,19 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     yield _sse("token", {"text": answer})
                     break
                 final_chunk = None
+                round_text = ""
                 async for chunk in provider.chat_stream(
                     messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
                     feature="assistant",
                 ):
                     if chunk.delta:
-                        answer += chunk.delta
+                        round_text += chunk.delta
                         yield _sse("token", {"text": chunk.delta})
                     if chunk.done:
                         final_chunk = chunk
 
                 if final_chunk is None or final_chunk.assistant_message is None:
+                    answer = round_text
                     break
 
                 call_usage.append(final_chunk.usage.as_dict())
@@ -5258,8 +5287,11 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 tool_calls = final_chunk.tool_calls
 
                 if not tool_calls:
+                    answer = round_text
                     answered_normally = True
                     break
+                # Text the model wrote while calling tools is not the answer (audit S-1):
+                # only the final round's text is, like /assistant's result.text.
 
                 await execute_tool_round(
                     tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
@@ -5276,7 +5308,8 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
-            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
+            answer = ASSISTANT_UNAVAILABLE_REPLY
+            await _record_failed_turn(conversation)
             yield _sse("token", {"text": answer})
             yield _sse("done", _assistant_payload(
                 answer=answer, tools_used=tools_used, collected_data=collected_data,

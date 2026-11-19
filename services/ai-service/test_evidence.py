@@ -204,3 +204,21 @@ def test_empty_containers_return_empty():
     assert extract_evidence("get_top_books", []) == []
     assert extract_evidence("get_warehouse_stock_risk", []) == []
     assert extract_evidence("get_reorder_suggestions", {}) == []
+
+
+def test_reservation_conversions_are_not_read_as_books_shipped():
+    # audit E-14: "5.268 đầu sách/bản sao đã được xuất kho" for 5268 reservations turned into loans
+    from tool_context import render_tool_result
+    text = render_tool_result("get_reservation_funnel", {"total": 8288, "converted_to_loan": 5268, "conversion_rate": 63.6})
+    assert "5.268 lượt đặt chỗ" in text
+    assert "không phải số sách" in text
+
+
+def test_loan_counts_and_top_book_counts_name_their_unit():
+    # audit D-2: top books (13+5+4 = 22 "lượt") exceeded the week's 19 "lượt mượn" - copies vs loan tickets
+    from tool_context import render_tool_result
+    import copilot_response as cr
+    trends = render_tool_result("get_borrow_trends", [{"date": "2026-11-19", "loans": 19, "returns": 0}])
+    assert "phiếu mượn" in trends
+    top = cr.render("get_top_books", [{"title": "Truyện Kiều", "borrow_count": 13}])
+    assert "bản sách được mượn" in top

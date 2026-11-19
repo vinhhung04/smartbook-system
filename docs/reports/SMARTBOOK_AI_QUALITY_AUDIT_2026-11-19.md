@@ -331,3 +331,40 @@ Bằng chứng: `ai-quality-audit-2026-11-19/probes/probe_after_fix.json` (scrip
 **E-11 (đã sửa sau P0):** câu nhắc đăng nhập cho khách chỉ nối khi NLU đã xác định `action_type` (trước đây chỉ dựa vào từ khóa chuỗi con: `"lap"` khớp "lập trình"), và câu nhắc không còn chữ "Authorization token" (`main.py` `_apply_chat_agent_layer`). Context cho khách hỏi dữ liệu nội bộ cũng không còn chuỗi kỹ thuật ("…khong co Authorization token", "Missing Authorization header…") — thay bằng hằng `retrieval.MISSING_AUTH_WARNING` và một câu tiếng Việt mời đăng nhập (`retrieval.py`). Test: `AnonymousActionHintTests` (2), `test_anonymous_data_question_context_has_no_technical_auth_words`. pytest **1719 pass / 0 fail**. Live (khách, 5 câu × 2): 0/10 câu có "Authorization/token/HTTP 40x"; câu hỏi tra sách không còn bị nối câu nhắc; yêu cầu thao tác / dữ liệu nội bộ đều được mời đăng nhập. Hạn chế: khi classifier NLU lỗi (không có `action_type`), câu nhắc nối thêm bị bỏ qua — câu trả lời của LLM vẫn nói cần đăng nhập nhờ context mới.
 
 **Còn lại:** fallback token-match vẫn có thể đưa sách không liên quan làm "gợi ý thay thế" khi không có kết quả; gateway giới hạn `/public` 300 lượt / 5 phút / IP — toàn bộ lượt tra sách của chatbot đi từ một IP (container ai-service).
+
+---
+
+## K. Trạng thái xử lý toàn bộ phát hiện E-1 → N-1 (2026-11-20)
+
+Mỗi mục: nguyên nhân gốc được tái hiện trước khi sửa, có test thất bại trước rồi pass sau, chạy toàn bộ suite, build lại container và kiểm tra live.
+Kết quả cuối: **ai-service 1763 pass / 0 fail**, **analytics-service 162 pass / 0 fail**; probe live `probes/fixes_live.json` **24/26** lượt đạt (2 lượt còn lại giải thích bên dưới).
+
+| Mục | Trạng thái | Sửa ở đâu | Kiểm chứng |
+|---|---|---|---|
+| E-1, E-1b | Đã sửa (`48b3540`) | `retrieval.py` tra `/public/catalog/books` cho mọi vai trò | live 27/27 |
+| E-2 | Đã sửa (`48b3540`) | tổng các kho trong prompt + evidence; verification sửa tổng sai | live 10/10 = 301 |
+| E-3 | Đã sửa | `user_personal_context.py`: 3 formatter của thủ thư dùng `meta.total`/`status_counts`, ghi "trong phạm vi bạn được xem" (trước: "Loan toàn hệ thống", "Phạt hệ thống: 20 khoản" là 1 trang); `main.py` đặt tiêu đề theo `data_scope` | test + live 2/2 |
+| E-4 | Đã sửa | `rag.status_text()`: nguồn/cảnh báo lỗi diễn đạt bằng tiếng Việt ("không có quyền xem… theo phân quyền"), không còn "HTTP 403" | test + live 2/2 |
+| E-5 | Đã sửa | `copilot_response.strip_example_copies()`: bỏ câu chép ví dụ few-shot kèm số của ví dụ mà dữ liệu không có | test + live 2/2 |
+| E-6 | Đã sửa | `get_reorder_suggestions(warehouse=…)` giới hạn theo kho; planner truyền kho (kể cả kho kế thừa lượt trước) | test + live (`reorder_after3.json`, `cards_after2.json`) |
+| E-7 | Đã sửa | `retrieval.py`: câu nhiều ý NO_EVIDENCE → tìm từng ý, trả lời ý có tài liệu và nêu ý chưa có | test + live 2/2 |
+| E-8 | Đã sửa | `copilot_plan._SQL`: câu lệnh SQL là ngoài phạm vi, không phải yêu cầu bảng/biểu đồ | test + live 2/2 |
+| E-9 | Đã sửa | `rag.sanitize_reply()`: bỏ câu "chưa/không hỗ trợ…" mà context không nói, thêm câu hướng dẫn liên hệ | test + live 2/2 |
+| E-10 | Đã sửa | `rag.sanitize_reply()`: với câu hỏi giả định ("vì sao…"), bỏ câu lặp lại con số sai của người hỏi mà không bác bỏ | test + live 2/2 |
+| E-11 | Đã sửa (`48b3540`) | câu nhắc đăng nhập cần `action_type` của NLU | live 10/10 |
+| E-12 | Đã sửa | quy tắc trong `ROLE_BASED_RULES` | live: không còn chấp nhận vai trò tự xưng/nhắc "context"; 1/2 lượt vẫn gọi tên "ADMIN" khi từ chối (vai trò thật xác định đúng) |
+| E-13 | Đã sửa | `plan_note`: chỉ số snapshot (quá hạn, phạt, tồn kho, KPI) không gắn kỳ | test + live 2/2 |
+| E-14 | Đã sửa | `evidence.py`: đơn vị "lượt đặt chỗ", mô tả "không phải số sách xuất kho" | test + live: đơn vị đúng 2/2 (1 lượt diễn đạt "xuất kho cho bạn đọc" = đã giao sách, không sai nghĩa) |
+| E-15 | Đã sửa | `copilot_response.enforce_brief()`: "ngắn gọn" ≤ 3 câu. Gọi lại tool là có chủ đích (cùng căn cứ, cache 60 s) | test + live 2/2 |
+| E-16 | Đã sửa | `nlu.py`: BOOK_SEARCH tin luật ở 0,82 (như /assistant); `retrieval._filter_books` bỏ từ chức năng, khớp nguyên từ | test + live 2,5–2,7 s (trước 5,3–5,5 s) |
+| E-17 | Đã sửa | `assistant_loop.retry_once_if_ungrounded`: retry lỗi → giữ bản nháp đã kiểm tra (cả 2 endpoint) | test (giả lập body hỏng) |
+| E-18 | Đã sửa | `copilot_plan`: "không sinh ra lượt mượn"/"chiếm vốn" → tồn lâu | test + live 2/2 |
+| S-1 | Đã sửa | `/assistant/stream` chỉ giữ text của vòng cuối | test endpoint |
+| S-2 | Đã sửa | `_record_failed_turn`: lỗi model vẫn lưu câu trả lời báo lỗi sau câu hỏi | test endpoint (cả 2 endpoint) |
+| S-3 | Đã sửa | `_build_context_block` không còn nêu 3 số mẫu 1 trang như tổng; danh sách ghi "mẫu" | test |
+| S-4 | Đã sửa một phần | `eval_assistant_tools.py`: thêm `import asyncio`, dùng `ASSISTANT_NUM_PREDICT` như production | round-1 exact 0,412 → **0,618**; phần còn lại: eval không tái tạo câu nhắc "chưa có dữ liệu → gọi tool" của production (đường production đo bằng eval Copilot: recall 0,994) |
+| D-1 | Đã sửa (phần code) | analytics `compareReorderCandidates`: trong cùng mức ưu tiên, dòng cần nhập (> 0 bản) đứng trước dòng chỉ theo dõi | test analytics + live: dòng 4 bản lên hạng 1. Phần "ngân sách duyệt 0 ₫" là dữ liệu dev lệch giữa borrow và inventory, không phải code |
+| D-2 | Đã sửa | top sách ghi rõ "lượt = số bản được mượn", xu hướng ghi "số phiếu mượn" | test |
+| N-1 | Không phải lỗi | — | — |
+
+Ảnh hưởng prompt version: `chat.role_rules` (E-12) đổi nội dung; `chat.rag_rules`, `assistant.system` không đổi. Image cũ giữ ở tag `smartbook-system-ai-service:pre-audit-p0-fix` và `smartbook-system-analytics-service:pre-audit-fixes`.

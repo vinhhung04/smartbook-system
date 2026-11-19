@@ -195,3 +195,13 @@ test('SMARTBOOK with no demand history suggests nothing', () => {
   assert.equal(decision.qty, 0);
   assert.equal(decision.candidate.priority, 'LOW');
 });
+
+test('a line that needs copies ranks above a watch-only line of the same priority', () => {
+  // audit D-1: wishlist-driven demand_score put four 0-copy lines above the only line that needed 4 copies
+  const { compareReorderCandidates } = require('../src/utils/reorder-suggestion');
+  const watch = { priority: 'LOW', demand_score: 171, suggested_reorder_qty: 0, title: 'Sắc Lời Đắc Thế' };
+  const order = { priority: 'LOW', demand_score: 151.5, suggested_reorder_qty: 4, title: 'One Hundred Years of Solitude' };
+  const high = { priority: 'HIGH', demand_score: 10, suggested_reorder_qty: 0, title: 'Z' };
+  assert.deepEqual([watch, order, high].sort(compareReorderCandidates).map((x) => x.title),
+    ['Z', 'One Hundred Years of Solitude', 'Sắc Lời Đắc Thế']);
+});

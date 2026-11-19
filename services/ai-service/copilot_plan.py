@@ -105,7 +105,7 @@ CAP_KEYWORDS: dict[str, list] = {
               "luong nhap", "de xuat nhap", "nhap uu tien", _R(r"\bnhap (du|het|toan bo)\b"),
               _R(r"\bsach (duoc )?de xuat\b"), _R(r"\b(dau sach|sach) (co )?uu tien (cao|trung binh|thap)\b")],
     AGING: ["ton lau", "ton kho lau", "khong ai muon", "lau khong ai", _R(r"\be ton\b"), _R(r"\bsach e\b"), "hang chet",
-            "dead stock", "nam kho", "khong ai dung", "khong hoat dong"],
+            "dead stock", "nam kho", "khong ai dung", "khong hoat dong", "chiem von", "ton dong von", "von ton dong"],
     WEEDING: ["thanh ly", "chon von", "chuyen kho", "dieu chuyen", "weeding"],
     BOOK_SEARCH: [_R(r"\bco sach (?!nao)\S.* (khong|ko)\b"), "tim sach", "sach cua tac gia", "tac gia", "isbn", "sach ve chu de"],
     PRIORITY: ["uu tien xu ly", "viec gi", "thu tu uu tien", "uu tien cong viec", "nen lam gi truoc",
@@ -303,6 +303,8 @@ def detect_capabilities(text: str) -> list[str]:
     """All capabilities a normalized question touches, in table order."""
     # "phạt quá hạn" is a fine type, not a question about overdue loans.
     scan = re.sub(r"\bphat qua han\b", "phat loai tre", text)
+    # "không sinh ra lượt mượn nào" describes idle stock, it does not ask for borrow trends (audit E-18).
+    scan = re.sub(r"\bkhong (sinh ra |phat sinh |co |tao ra )?(luot muon|ai muon)\b", "khong ai muon", scan)
     return [cap for cap, keywords in CAP_KEYWORDS.items() if any(_matches(scan, kw) for kw in keywords)]
 
 
@@ -600,6 +602,9 @@ _ORDINAL_BOOK = _R(r"(?<!\d )\b(cuon|quyen|sach|dau sach)\s*(dau tien|thu nhat|s
 # Personal data the copilot never hands out, whatever the role.
 _SENSITIVE = _R(r"so dien thoai|\bsdt\b|dia chi nha|\bemail\b|\bcccd\b|\bcmnd\b|mat khau|password|"
                 r"so tai khoan|the tin dung")
+# A database statement: never run, never a chart ("DROP TABLE" read as a table request, audit E-8).
+_SQL = _R(r"\bsql\b|\bselect\b.{1,80}\bfrom\b|\b(drop|truncate|alter) table\b|\bdelete from\b|\binsert into\b|"
+          r"\bupdate\s+\w+\s+set\b")
 _ALL_WAREHOUSES = _R(r"\b(tat ca|cac|tung|moi|nhung|toan bo) kho\b|\bkho nao\b")
 # Words after "kho" that are not a warehouse name.
 _HINT_STOP = {"nay", "do", "kia", "ay", "nao", "thap", "cao", "lau", "hang", "sach", "va", "voi", "vs", "thi",
@@ -875,11 +880,12 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     deictic_warehouse = bool(_DEICTIC_WAREHOUSE.search(text))
     deictic_book = bool(_DEICTIC_BOOK.search(text))
     deictic_generic = bool(_DEICTIC_GENERIC.search(text))
-    sensitive = bool(_SENSITIVE.search(text))
+    sql = bool(_SQL.search(text))
+    sensitive = bool(_SENSITIVE.search(text)) or sql
     ordinal_book = _ORDINAL_BOOK.search(text)
     book_title = _book_title_in(text, message)
     style = detect_style(text)
-    viz = detect_visualization(text)
+    viz = detect_visualization("" if sql else text)
     budget_delta = parse_budget_delta(text)
     book_ref = _DEICTIC_BOOK.search(text)
     subset_ref = _SUBSET_REF.search(text)
@@ -1293,6 +1299,9 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
                 args["priority"] = priority
             if lead_time:
                 args["lead_time_days"] = lead_time
+            if len(named_warehouses) == 1:
+                # the cards and the list must be about the books short at THAT warehouse
+                args["warehouse"] = named_warehouses[0]["name"]
             add("get_reorder_suggestions", args)
         capset.discard(REORDER)
     if AGING in capset or WEEDING in capset:
