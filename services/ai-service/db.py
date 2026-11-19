@@ -56,8 +56,10 @@ async def init_db() -> None:
             await connection.execute(text("SELECT 1 FROM ai_conversations LIMIT 0"))
             await connection.execute(text("SELECT 1 FROM ai_inference_leases LIMIT 0"))
         return
-    schema_path = Path(__file__).parent / "schema.sql"
-    statements = _load_statements(schema_path)
+    # Same files as migrate.py: the budget gate needs ai_inference_leases from migrations/.
+    root = Path(__file__).parent
+    statements = [stmt for path in [root / "schema.sql", *sorted((root / "migrations").glob("*.sql"))]
+                  for stmt in _load_statements(path)]
     async with engine.begin() as conn:
         for statement in statements:
             await conn.execute(text(statement))

@@ -31,8 +31,9 @@ jq(){ (unset MSYS_NO_PATHCONV; command jq "$@" | tr -d '\\r'); }
 dc(){
   trace "OWNER_DC $*"
   case "$*" in
-    'config --format json') cat "$APP_DIR/owner-config.json" ;;
-    'run --rm --no-deps -T prepare-volumes') trace OWNER_RUN ;;
+    'config --format json') jq 'del(.services["prepare-volumes"])' "$APP_DIR/owner-config.json" ;;
+    '--profile operations config --format json') cat "$APP_DIR/owner-config.json" ;;
+    '--profile operations run --rm --no-deps -T prepare-volumes') trace OWNER_RUN ;;
     *) trace "UNEXPECTED $*"; return 97 ;;
   esac
 }

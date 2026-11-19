@@ -3,6 +3,10 @@ const { Readable } = require('node:stream');
 // Proxy routes consume the raw request stream. Buffer only a bounded body before
 // letting a downstream service see it; a chunked overflow cannot partially apply
 // a business request or reach a multipart parser before being rejected.
+// Small declared bodies (ordinary JSON writes) are bounded by maxBytes and the
+// read timeout only; a shared slot cap on them made a burst of counter writes 429.
+const SLOT_FREE_DECLARED_BYTES = 64 * 1024;
+
 function actualBodyLimit({ maxBytes = () => 16 * 1024 * 1024,
   maxConcurrent = () => Number(process.env.GATEWAY_BODY_MAX_CONCURRENT || 4),
   readTimeoutMs = () => Number(process.env.GATEWAY_BODY_READ_TIMEOUT_MS || 30_000) } = {}) {
@@ -32,8 +36,10 @@ function actualBodyLimit({ maxBytes = () => 16 * 1024 * 1024,
     if (!Number.isSafeInteger(slots) || slots < 1 || !Number.isSafeInteger(timeout) || timeout < 1) {
       return reject(503, 'BODY_LIMIT_UNAVAILABLE');
     }
-    if (activeBodies >= slots) return reject(429, 'BODY_UPLOAD_BUSY');
-    activeBodies++; permit = true;
+    if (req.headers['transfer-encoding'] || Number(declared) > SLOT_FREE_DECLARED_BYTES) {
+      if (activeBodies >= slots) return reject(429, 'BODY_UPLOAD_BUSY');
+      activeBodies++; permit = true;
+    }
     timer = setTimeout(() => { if (!readComplete && !stopped) reject(408, 'BODY_READ_TIMEOUT'); }, timeout);
     timer.unref();
     res.once('finish', release);

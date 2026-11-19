@@ -22,6 +22,14 @@ read-only. Keep each runtime password separate from the owner credential.
 `AI_SCHEMA_MANAGED_EXTERNALLY=true` makes runtime initialization check the schema
 without creating it. Runtime containers use non-root users; the explicit volume
 preparation job grants their fixed UID access to the named upload/model volumes.
+The deployment invokes `prepare-volumes.sh` before application rollout. It
+explicitly selects the operations profile and checks four fixed named-volume
+mounts, Compose project/volume labels, local drivers and empty driver options.
+External volumes, host binds, unexpected paths/commands and unsafe recursive
+chown options are refused. With the reviewed release environment loaded,
+`bash deploy/scripts/prepare-volumes.sh --check` verifies those boundaries
+without changing ownership. The explicit owner operation changes UID/GID only,
+uses physical traversal with no symlink dereference, and does not reset volumes.
 
 Deployment drains/stops application writers before capture and migration. A
 failure retains maintenance and the existing database. Prefer a reviewed forward
@@ -158,3 +166,7 @@ Browser gates use zero retries and tracing disabled. Upload only the sanitizer's
 curated artifacts, not raw Playwright reports/network traces/storage state or
 environment files. All local evidence describes the tested runtime version;
 repeat the mandatory gates and runtime/image proofs after dependency upgrades.
+Browser command output is captured and sanitized before either console stream
+is written. Integration per-flow logs/failure tails and mandatory runner logs
+use the same capture boundary. Incomplete captures from timeout, overflow or a
+signal are discarded because partial secrets cannot safely be matched.

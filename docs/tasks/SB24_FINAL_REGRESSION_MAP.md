@@ -4,7 +4,7 @@ Status: **PASS —24/24 selected SB regressions verified** on2026-11-19 (Asia/Sa
 
 Paths below are relative to the repository root. `B` = `services/borrow-service/test/`; `I` = `services/inventory-service/test/`; `A` = `services/analytics-service/test/`. DB tests require the explicit isolated audit targets and matching migrations/clients. Mandatory execution must fail when required DSNs are missing; a skipped database test is not a PASS.
 
-| ID | Current invariant | Exact existing test file and name selected for final execution | Status  TAP evidence |
+| ID | Current invariant | Exact existing test file and name selected for final execution | Status | TAP evidence |
 |---|---|---|---|---|
 | SB01 | Borrowed plus active reserved quantity obey the membership cap | B `business-logic-audit.db.test.js` — `SB01: direct loans count active reserved quantities as well as borrowed items` | PASS | `B:553` |
 | SB02 | Future membership is excluded; established accrued-fine policy is consistent | B `business-logic-audit.db.test.js` — `SB02: future renewal cannot supersede membership active today`; `SB02: overdue sweep preserves the rate of an expired but still ACTIVE membership`; B `expired-membership-return.db.test.js` — `expired ACTIVE fine policy is independent of sweep-before-return ordering and never enables checkout` | PASS | `B:562,605,816` |

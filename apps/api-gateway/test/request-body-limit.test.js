@@ -66,6 +66,34 @@ test('gateway counts actual streamed bytes before any proxy forwards the request
       assert.equal(upstreamCalls, before);
       assert.equal((await request(['after-timeout'])).status, 200);
     });
+    await t.test('small declared JSON bodies are not starved by a busy upload slot', async () => {
+      let slow;
+      const waiting = new Promise(resolve => {
+        slow = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST' }, res => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode));
+        });
+        slow.on('error', () => {});
+        slow.write('incomplete');
+      });
+      await new Promise(resolve => setTimeout(resolve, 20));
+      const burst = await Promise.all(Array.from({ length: 6 }, (_, i) => request([`{"n":${i}}`], { 'content-type': 'application/json', 'content-length': String(`{"n":${i}}`.length) })));
+      assert.deepEqual(burst.map(r => r.status), [200, 200, 200, 200, 200, 200]);
+      assert.equal(await waiting, 408);
+    });
+    await t.test('small declared body that stalls still times out and is not forwarded', async () => {
+      const before = upstreamCalls;
+      const status = await new Promise(resolve => {
+        const stalled = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST', headers: { 'content-length': 20 } }, res => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode));
+        });
+        stalled.on('error', () => {});
+        stalled.write('partial');
+      });
+      assert.equal(status, 408);
+      assert.equal(upstreamCalls, before);
+    });
     await t.test('client abort releases a partially received body without forwarding', async () => {
       const before = upstreamCalls;
       const aborted = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST' });
