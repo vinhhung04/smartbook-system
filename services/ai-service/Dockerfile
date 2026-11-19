@@ -1,4 +1,8 @@
-FROM python:3.10-slim
+FROM python:3.12.16-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+
+# The reviewed CPU wheel/hash closure targets the production Linux amd64 image.
+ARG TARGETARCH
+RUN test "$TARGETARCH" = "amd64"
 
 WORKDIR /app
 
@@ -21,22 +25,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 \
     && rm -rf /var/lib/apt/lists/*
 
-# CPU-only torch wheel — installed separately so pip doesn't resolve the
-# multi-GB default CUDA build (this service has no GPU access). --extra-index-url
-# (not --index-url): torch's own pure-Python deps (typing-extensions, fsspec,
-# jinja2, networkx, sympy, filelock) aren't hosted on download.pytorch.org, so
-# --index-url alone breaks resolution for those; --extra-index-url still prefers
-# the CPU wheel for torch itself while falling back to PyPI for the rest.
-RUN pip install --no-cache-dir torch --extra-index-url https://download.pytorch.org/whl/cpu
-
-# Cài đặt các thư viện cần thiết
-COPY requirements.txt .
-# Generous timeout + retries: slow or flaky links to PyPI otherwise abort the whole build
-# mid-download, leaving the previous (stale) image running.
-RUN pip install --no-cache-dir --default-timeout=120 --retries 10 -r requirements.txt
+# Bootstrap fixed installation tooling, then install the complete hashed graph.
+# Torch uses one explicit official CPU wheel; other dependencies come from PyPI.
+COPY requirements.txt requirements-build.lock requirements-linux-amd64-py312.lock ./
+RUN python -m pip install --no-cache-dir --default-timeout=120 --retries 10 \
+    --require-hashes --only-binary=:all: -r requirements-build.lock \
+    && python -m pip install --no-cache-dir --default-timeout=120 --retries 10 \
+    --require-hashes --only-binary=:all: -r requirements-linux-amd64-py312.lock \
+    && python -m pip check
 
 COPY . .
+RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --home-dir /app app \
+    && mkdir -p /app/.cache/huggingface /app/.cloakbrowser \
+    && chown -R app:app /app
+ENV HOME=/app HF_HOME=/app/.cache/huggingface XDG_CACHE_HOME=/app/.cache \
+    XDG_CONFIG_HOME=/tmp/smartbook-config
+USER app
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "run.py"]

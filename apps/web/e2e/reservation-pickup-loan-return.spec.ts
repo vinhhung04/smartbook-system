@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { loginStaff, loginCustomer } from './helpers';
+import { loginStaff, loginCustomer, DEMO_PASSWORD, confirmShelfReturn } from './helpers';
+import { createCustomerFixture } from '../../../scripts/testing/customer-fixture.mjs';
 
 /**
  * The core library golden path, driven entirely through the UI (mirrors
@@ -20,7 +21,10 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
 
   try {
     // 1. Customer: find any reservable book on the catalog and reserve it.
-    await loginCustomer(customerPage);
+    const fixture = process.env.SMARTBOOK_TEST_ISOLATED === '1'
+      ? await createCustomerFixture({ baseUrl: process.env.GATEWAY_URL || 'http://localhost:13000', password: DEMO_PASSWORD })
+      : null;
+    await loginCustomer(customerPage, fixture?.username || 'customer01');
     await customerPage.goto('/customer/books');
 
     const bookCard = customerPage
@@ -58,6 +62,9 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
     await staffRow.getByRole('button', { name: 'Xác nhận' }).click();
     await expect(staffRow.getByRole('button', { name: 'Sẵn sàng' })).toBeVisible({ timeout: 10_000 });
     await staffRow.getByRole('button', { name: 'Sẵn sàng' }).click();
+    // Pick dialog: prefilled with the shelf holding the copy; confirm it was taken from there.
+    await expect(staffPage.getByTestId('confirm-ready-pick-button')).toBeEnabled({ timeout: 10_000 });
+    await staffPage.getByTestId('confirm-ready-pick-button').click();
 
     const pickupCodeCell = staffRow.locator('p.font-mono');
     await expect(pickupCodeCell).toHaveText(/^PU-[A-Z0-9]{4}-[A-Z0-9]{4}$/, { timeout: 10_000 });
@@ -79,10 +86,11 @@ test('customer reserves a book, staff hands it out via pickup code, then returns
 
     const loanRow = staffPage.getByRole('row').filter({ hasText: loanNumber });
     await expect(loanRow).toBeVisible({ timeout: 15_000 });
+    // "Trả sách" opens the loan page with the return dialog.
     await loanRow.getByRole('button', { name: 'Trả sách' }).click();
-    await staffPage.getByRole('alertdialog').getByRole('button', { name: 'Xác nhận' }).click();
-
-    await expect(staffPage.getByText('Đã trả sách thành công')).toBeVisible({ timeout: 10_000 });
+    await confirmShelfReturn(staffPage);
+    await staffPage.goto('/borrow/loans');
+    await staffPage.getByPlaceholder('Tìm phiếu mượn...').fill(loanNumber);
     // The list opens on "Đang mượn"; a returned loan moves to the "Đã trả" tab.
     await staffPage.getByRole('group', { name: 'Lọc theo tình trạng' }).getByRole('button', { name: /Đã trả/ }).click();
     await expect(loanRow).toContainText('Đã trả', { timeout: 10_000 });

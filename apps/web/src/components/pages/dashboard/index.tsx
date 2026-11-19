@@ -4,10 +4,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowRight, Bell, RefreshCw, ShieldOff } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/page-header';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PageWrapper } from '@/components/motion-utils';
 import { cn } from '@/components/ui/utils';
 import { analyticsService } from '@/services/analytics';
-import { getApiErrorMessage, hasAnyPermission, hasPermission } from '@/services/http-clients';
+import { gatewayAPI, getApiErrorMessage, hasAnyPermission, hasPermission } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { authService } from '@/services/auth';
 import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
@@ -17,6 +19,9 @@ import { useBorrowRealtime } from '@/hooks/useBorrowRealtime';
 import { useInventoryRealtime } from '@/hooks/useInventoryRealtime';
 import { DashboardSkeleton } from './dashboard-skeleton';
 import { DecisionCenter } from './decision-center';
+import { AI_RISK_LIMIT, AiRiskSection } from './ai-risk-section';
+import { ActivityFeed, FEED_SIZE, type AuditLogEntry, type LiveEvent } from './activity-feed';
+import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodParams, type Period } from './period';
 import { buildDecisionItems, type ActionItem } from './decision-items';
 import { KpiGrid } from './kpi-grid';
 import { GroupHeading, Panel } from './panel';
@@ -68,20 +73,36 @@ function routeAccess() {
     exceptions: canAccess(user, ROUTE_ACCESS.exceptionReportManage),
     reorder: canAccess(user, ROUTE_ACCESS.reports),
     reports: canAccess(user, ROUTE_ACCESS.reports),
+    audit: canAccess(user, ROUTE_ACCESS.admin),
   };
 }
 
 type FetchResult = { state: DashboardState } | { error: string };
 
 /** Every block is requested at once and settles on its own; only a total failure is an error. */
-async function fetchDashboard(borrow: boolean): Promise<FetchResult> {
-  const { purchaseRequests: canSeePR, exceptions: canSeeER, reorder: canSeeReorder } = routeAccess();
+async function fetchActivity(): Promise<AuditLogEntry[]> {
+  const response = await gatewayAPI.get('/borrow/audit-logs', { params: { page: 1, pageSize: FEED_SIZE } });
+  return response.data?.data ?? [];
+}
+
+/** The two period-scoped reads; also reloaded on their own when the period changes. */
+function fetchPeriodBlocks(period: Period) {
+  const { from, granularity } = periodParams(period);
+  return [
+    analyticsService.getBorrowTrends({ granularity, from }),
+    analyticsService.getTopBooks({ limit: TOP_BOOKS_LIMIT, from }),
+  ] as const;
+}
+
+async function fetchDashboard(borrow: boolean, period: Period): Promise<FetchResult> {
+  const { borrow: canSeeAudit, purchaseRequests: canSeePR, exceptions: canSeeER, reorder: canSeeReorder } = routeAccess();
   const skip = Promise.resolve(undefined);
+  const [trendsRequest, topBooksRequest] = borrow ? fetchPeriodBlocks(period) : [skip, skip];
 
   const results = await Promise.allSettled([
     analyticsService.getDashboardKpis(),
-    borrow ? analyticsService.getBorrowTrends({ granularity: 'day' }) : skip,
-    borrow ? analyticsService.getTopBooks({ limit: TOP_BOOKS_LIMIT }) : skip,
+    trendsRequest,
+    topBooksRequest,
     borrow ? analyticsService.getOverdueSummary() : skip,
     borrow ? analyticsService.getFineSummary() : skip,
     analyticsService.getWarehouseStockRisk(),
@@ -89,9 +110,12 @@ async function fetchDashboard(borrow: boolean): Promise<FetchResult> {
     canSeePR ? purchaseRequestService.getAll({ status: 'PENDING', limit: 1 }) : skip,
     canSeeER ? exceptionReportService.getAll({ status: 'OPEN', limit: 1 }) : skip,
     canSeeReorder ? analyticsService.getReorderSuggestions({ priority: 'ALL', limit: 1 }) : skip,
+    borrow ? analyticsService.getLateReturnRisk({ limit: AI_RISK_LIMIT }) : skip,
+    borrow ? analyticsService.getReservationNoShowRisk({ limit: AI_RISK_LIMIT }) : skip,
+    borrow && canSeeAudit ? fetchActivity() : skip,
   ]);
-  const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel, pr, er, reorder] = results;
-  const requested = [true, borrow, borrow, borrow, borrow, true, borrow, canSeePR, canSeeER, canSeeReorder];
+  const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel, pr, er, reorder, lateRisk, noShowRisk, activity] = results;
+  const requested = [true, borrow, borrow, borrow, borrow, true, borrow, canSeePR, canSeeER, canSeeReorder, borrow, borrow, borrow && canSeeAudit];
   const failures = results.filter((result, index) => requested[index] && result.status === 'rejected') as PromiseRejectedResult[];
   if (failures.length === requested.filter(Boolean).length) {
     return { error: getApiErrorMessage(failures[0]?.reason, 'Không tải được bảng điều khiển.') };
@@ -113,6 +137,9 @@ async function fetchDashboard(borrow: boolean): Promise<FetchResult> {
       pendingPR: count(pr, canSeePR),
       openER: count(er, canSeeER),
       reorder: canSeeReorder && reorder.status === 'fulfilled' ? (reorder.value?.summary || emptyReorderSummary) : null,
+      lateRisk: borrow && lateRisk.status === 'fulfilled' ? lateRisk.value ?? null : null,
+      noShowRisk: borrow && noShowRisk.status === 'fulfilled' ? noShowRisk.value ?? null : null,
+      activity: borrow && canSeeAudit ? settledList(activity) : null,
     },
   };
 }
@@ -136,7 +163,13 @@ export function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardState | null>(null);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [changes, setChanges] = useState<ChangeSource[]>([]);
+  const [live, setLive] = useState<LiveEvent[]>([]);
+  const [period, setPeriod] = useState<Period>(DEFAULT_PERIOD);
+  const [periodLoading, setPeriodLoading] = useState(false);
   const hasData = useRef(false);
+  const liveSeq = useRef(0);
+  // Refresh keeps whatever period is on screen; changePeriod moves it.
+  const periodRef = useRef(period);
 
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
   // Borrow-domain analytics need analytics.borrow.read (warehouse managers don't have it).
@@ -162,6 +195,8 @@ export function DashboardPage() {
       setStatus('ready');
       setUpdatedAt(new Date());
       setChanges([]);
+      // The reloaded audit log now holds these events; keep only what arrives after this load.
+      setLive([]);
     }
     setRefreshing(false);
   }, []);
@@ -171,7 +206,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    void fetchDashboard(canViewBorrowAnalytics).then((result) => {
+    void fetchDashboard(canViewBorrowAnalytics, periodRef.current).then((result) => {
       if (!cancelled) applyResult(result);
     });
     return () => {
@@ -184,10 +219,16 @@ export function DashboardPage() {
     setChanges((current) => (current.includes(source) ? current : [...current, source]));
   }, [status]);
 
+  const pushLive = useCallback((name: string) => {
+    liveSeq.current += 1;
+    const event = { id: String(liveSeq.current), name, at: new Date().toISOString() };
+    setLive((current) => [event, ...current].slice(0, FEED_SIZE));
+  }, []);
+
   useBorrowRealtime({
-    onLoanEvent: () => markChanged('loans'),
-    onReservationEvent: () => markChanged('reservations'),
-    onFineEvent: () => markChanged('fines'),
+    onLoanEvent: (name) => { markChanged('loans'); pushLive(name); },
+    onReservationEvent: (name) => { markChanged('reservations'); pushLive(name); },
+    onFineEvent: (name) => { markChanged('fines'); pushLive(name); },
   });
   useInventoryRealtime({
     onStockEvent: () => markChanged('stock'),
@@ -219,26 +260,36 @@ export function DashboardPage() {
     if (!enabled) return;
     setRefreshing(true);
     setRefreshError(null);
-    void fetchDashboard(canViewBorrowAnalytics).then(applyResult);
+    void fetchDashboard(canViewBorrowAnalytics, periodRef.current).then(applyResult);
   };
+
+  /** Only the trend and the ranking depend on the period; the rest of the page stays as it is. */
+  const changePeriod = (next: Period) => {
+    if (next === period) return;
+    setPeriod(next);
+    periodRef.current = next;
+    setPeriodLoading(true);
+    void Promise.allSettled(fetchPeriodBlocks(next)).then(([trends, topBooks]) => {
+      if (periodRef.current !== next) return;
+      setDashboard((current) => (current ? { ...current, trends: settledList(trends), topBooks: settledList(topBooks) } : current));
+      setPeriodLoading(false);
+    });
+  };
+  const periodLabel = PERIOD_OPTIONS.find((option) => option.value === period)?.label ?? '';
 
   return (
     <PageWrapper className="@container space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
-        <div className="min-w-0 max-w-[72ch]">
-          <h1 className="text-[22px] font-semibold leading-8 tracking-tight text-foreground">Tổng quan vận hành</h1>
-          <p className="mt-1 text-[14px] leading-6 text-muted-foreground text-pretty">
-            {greeting} <span className="text-foreground">{finding}</span>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <p className="text-[12px] leading-5 text-muted-foreground @2xl:text-right">
-            <span className="block capitalize">{todayLabel}</span>
-            <span className="block tabular-nums" aria-live="polite">
-              {refreshing && dashboard ? 'Đang cập nhật…' : updatedAt ? `Cập nhật lúc ${formatTime(updatedAt)}` : ' '}
-            </span>
-          </p>
-          <div className="flex items-center gap-2">
+      <PageHeader
+        title="Tổng quan vận hành"
+        description={<>{greeting} <span className="text-foreground">{finding}</span></>}
+        actions={(
+          <>
+            <p className="mr-2 text-[12px] leading-5 text-muted-foreground sm:text-right">
+              <span className="block capitalize">{todayLabel}</span>
+              <span className="block tabular-nums" aria-live="polite">
+                {refreshing && dashboard ? 'Đang cập nhật…' : updatedAt ? `Cập nhật lúc ${formatTime(updatedAt)}` : ' '}
+              </span>
+            </p>
             <Button type="button" variant="outline" onClick={retry} disabled={!canViewAnalytics || refreshing} aria-busy={refreshing}>
               <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
               Làm mới
@@ -250,9 +301,9 @@ export function DashboardPage() {
                 </NavLink>
               </Button>
             ) : null}
-          </div>
-        </div>
-      </header>
+          </>
+        )}
+      />
 
       <AnimatePresence initial={false}>
         {changes.length > 0 && (
@@ -320,6 +371,13 @@ export function DashboardPage() {
             <KpiGrid canViewBorrow={canViewBorrowAnalytics} access={access} kpis={dashboard.kpis} stockRisk={dashboard.stockRisk} onRetry={retry} />
           </div>
 
+          {canViewBorrowAnalytics ? (
+            <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
+              <AiRiskSection late={dashboard.lateRisk} noShow={dashboard.noShowRisk} canOpen={access.reorder} onRetry={retry} />
+              <ActivityFeed logs={dashboard.activity} live={live} canOpenAudit={access.audit} onRetry={retry} />
+            </div>
+          ) : null}
+
           <StockRiskOverdueSection
             canViewBorrow={canViewBorrowAnalytics}
             access={access}
@@ -330,9 +388,20 @@ export function DashboardPage() {
 
           {canViewBorrowAnalytics ? (
             <section aria-labelledby="analytics-title" className="space-y-5">
-              <GroupHeading id="analytics-title" title="Phân tích & xu hướng" description="Lịch sử mượn trả, đặt trước và tiền phạt" />
-              <TrendFunnelSection trendData={dashboard.trends} funnel={dashboard.funnel} kpis={dashboard.kpis} onRetry={retry} />
-              <TopBooksFinesSection topBooks={dashboard.topBooks} topBooksLimit={TOP_BOOKS_LIMIT} fines={dashboard.fines} access={access} onRetry={retry} />
+              <GroupHeading
+                id="analytics-title"
+                title="Phân tích & xu hướng"
+                description="Lịch sử mượn trả, đặt trước và tiền phạt"
+                aside={(
+                  <div role="group" aria-label="Kỳ phân tích" aria-busy={periodLoading}>
+                    <SegmentedControl options={PERIOD_OPTIONS} value={period} onChange={changePeriod} layoutId="dashboard-period" />
+                  </div>
+                )}
+              />
+              <div className={cn('space-y-5 transition-opacity', periodLoading && 'opacity-60')}>
+                <TrendFunnelSection trendData={dashboard.trends} funnel={dashboard.funnel} kpis={dashboard.kpis} onRetry={retry} />
+                <TopBooksFinesSection topBooks={dashboard.topBooks} topBooksLimit={TOP_BOOKS_LIMIT} fines={dashboard.fines} periodLabel={periodLabel} access={access} onRetry={retry} />
+              </div>
             </section>
           ) : null}
         </>

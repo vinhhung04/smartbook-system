@@ -1,0 +1,190 @@
+// monitoring_db: incidents, alert policies, notification channels and the
+// database-backed delivery queue. Owned only by monitoring-service; user ids are
+// logical references to auth_db (different database, so no foreign key).
+//
+// SQL-only protections (see migrations): one open incident per fingerprint
+// (partial unique index) and CHECK constraints on the status/severity enums.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model system_incidents {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fingerprint          String    @db.VarChar(128)
+  source               String    @db.VarChar(20)
+  rule_uid             String?   @db.VarChar(100)
+  title                String    @db.VarChar(200)
+  category             String    @db.VarChar(20)
+  severity             String    @db.VarChar(20)
+  status               String    @default("OPEN") @db.VarChar(20)
+  service_name         String    @db.VarChar(80)
+  alert_kind           String?   @db.VarChar(40)
+  summary              String?
+  description          String?
+  runbook_url          String?   @db.VarChar(500)
+  labels               Json      @default("{}")
+  source_started_at    DateTime? @db.Timestamptz(6)
+  first_seen_at        DateTime  @default(now()) @db.Timestamptz(6)
+  last_seen_at         DateTime  @default(now()) @db.Timestamptz(6)
+  occurrence_count     Int       @default(1)
+  last_notified_at     DateTime? @db.Timestamptz(6)
+  acknowledged_at      DateTime? @db.Timestamptz(6)
+  acknowledged_by      String?   @db.VarChar(64)
+  acknowledged_by_name String?   @db.VarChar(150)
+  resolved_at          DateTime? @db.Timestamptz(6)
+  resolved_by          String?   @db.VarChar(64)
+  resolved_by_name     String?   @db.VarChar(150)
+  resolution_type      String?   @db.VarChar(20)
+  resolution_note      String?
+  version              Int       @default(1)
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime  @default(now()) @db.Timestamptz(6)
+  events               system_incident_events[]
+  deliveries           alert_deliveries[]
+  notifications        system_notifications[]
+
+  @@index([status, severity], map: "idx_system_incidents_status_severity")
+  @@index([service_name, first_seen_at], map: "idx_system_incidents_service_seen")
+  @@index([fingerprint, resolved_at], map: "idx_system_incidents_fingerprint_resolved")
+  @@index([first_seen_at], map: "idx_system_incidents_first_seen")
+}
+
+model system_incident_events {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incident_id String           @db.Uuid
+  event_type  String           @db.VarChar(40)
+  actor_id    String?          @db.VarChar(64)
+  actor_name  String?          @db.VarChar(150)
+  message     String?
+  payload     Json             @default("{}")
+  created_at  DateTime         @default(now()) @db.Timestamptz(6)
+  incident    system_incidents @relation(fields: [incident_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  deliveries  alert_deliveries[]
+
+  @@index([incident_id, created_at], map: "idx_system_incident_events_incident")
+}
+
+model alert_policies {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String   @db.VarChar(120)
+  description       String?
+  match_rule_uid    String?  @db.VarChar(100)
+  match_category    String?  @db.VarChar(20)
+  match_severity    String?  @db.VarChar(20)
+  email_enabled     Boolean  @default(false)
+  in_app_enabled    Boolean  @default(true)
+  webhook_enabled   Boolean  @default(false)
+  notify_on_resolve Boolean  @default(true)
+  cooldown_minutes  Int      @default(30)
+  enabled           Boolean  @default(true)
+  is_default        Boolean  @default(false)
+  updated_by        String?  @db.VarChar(64)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model alert_channel_configs {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel_type      String    @db.VarChar(20)
+  name              String    @db.VarChar(120)
+  enabled           Boolean   @default(true)
+  config            Json      @default("{}")
+  secret_ciphertext String?
+  secret_hint       String?   @db.VarChar(80)
+  max_attempts      Int       @default(6)
+  last_test_at      DateTime? @db.Timestamptz(6)
+  last_test_status  String?   @db.VarChar(20)
+  last_test_error   String?   @db.VarChar(300)
+  updated_by        String?   @db.VarChar(64)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+  deliveries        alert_deliveries[]
+}
+
+model alert_deliveries {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incident_id       String?                 @db.Uuid
+  event_id          String?                 @db.Uuid
+  channel_config_id String                  @db.Uuid
+  channel           String                  @db.VarChar(20)
+  kind              String                  @db.VarChar(20)
+  status            String                  @default("PENDING") @db.VarChar(20)
+  attempt_count     Int                     @default(0)
+  max_attempts      Int                     @default(6)
+  next_attempt_at   DateTime                @default(now()) @db.Timestamptz(6)
+  locked_until      DateTime?               @db.Timestamptz(6)
+  last_error        String?                 @db.VarChar(300)
+  last_status_code  Int?
+  sent_at           DateTime?               @db.Timestamptz(6)
+  created_at        DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime                @default(now()) @db.Timestamptz(6)
+  incident          system_incidents?       @relation(fields: [incident_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  event             system_incident_events? @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  channel_config    alert_channel_configs   @relation(fields: [channel_config_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  attempts          alert_delivery_attempts[]
+
+  @@unique([event_id, channel_config_id], map: "uq_alert_deliveries_event_channel")
+  @@index([status, next_attempt_at], map: "idx_alert_deliveries_due")
+  @@index([incident_id], map: "idx_alert_deliveries_incident")
+}
+
+model alert_delivery_attempts {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  delivery_id String           @db.Uuid
+  attempt_no  Int
+  outcome     String           @db.VarChar(20)
+  status_code Int?
+  error_code  String?          @db.VarChar(300)
+  duration_ms Int
+  created_at  DateTime         @default(now()) @db.Timestamptz(6)
+  delivery    alert_deliveries @relation(fields: [delivery_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([delivery_id], map: "idx_alert_delivery_attempts_delivery")
+}
+
+// In-app notifications are for the monitoring audience (ADMIN or a monitoring
+// permission), never customers. One row per incident event; read state per user.
+model system_notifications {
+  id          String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incident_id String                     @db.Uuid
+  event_id    String                     @unique(map: "uq_system_notifications_event") @db.Uuid
+  kind        String                     @db.VarChar(20)
+  severity    String                     @db.VarChar(20)
+  title       String                     @db.VarChar(250)
+  body        String?
+  created_at  DateTime                   @default(now()) @db.Timestamptz(6)
+  incident    system_incidents           @relation(fields: [incident_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reads       system_notification_reads[]
+
+  @@index([created_at], map: "idx_system_notifications_created")
+}
+
+model system_notification_reads {
+  notification_id String               @db.Uuid
+  user_id         String               @db.VarChar(64)
+  read_at         DateTime             @default(now()) @db.Timestamptz(6)
+  notification    system_notifications @relation(fields: [notification_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([notification_id, user_id])
+  @@index([user_id], map: "idx_system_notification_reads_user")
+}
+
+model monitoring_audit_logs {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_id    String?  @db.VarChar(64)
+  actor_name  String?  @db.VarChar(150)
+  action      String   @db.VarChar(60)
+  entity_type String   @db.VarChar(40)
+  entity_id   String?  @db.VarChar(64)
+  changes     Json     @default("{}")
+  request_id  String?  @db.VarChar(100)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entity_type, entity_id], map: "idx_monitoring_audit_logs_entity")
+}

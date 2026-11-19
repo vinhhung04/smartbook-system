@@ -74,9 +74,11 @@ function findCatalogBookByCode(db) {
 
     try {
       const variant = await db.book_variants.findFirst({
-        where: { is_active: true, books: { is: { is_active: true } }, OR: [{ isbn13: code }, { isbn10: code }] },
+        // internal_barcode: a retail EAN-13 (893...) is saved there, not as an ISBN.
+        where: { is_active: true, books: { is: { is_active: true } },
+          OR: [{ isbn13: code }, { isbn10: code }, { internal_barcode: code }] },
         select: {
-          id: true, book_id: true, isbn13: true, isbn10: true, language_code: true, publish_year: true,
+          id: true, book_id: true, isbn13: true, isbn10: true, internal_barcode: true, language_code: true, publish_year: true,
           cover_image_url: true,
           books: {
             select: {

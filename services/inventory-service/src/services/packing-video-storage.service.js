@@ -52,7 +52,10 @@ const videoUploadMiddleware = multer({
       cb(null, buildVideoFilename({ taskNumber: req.packingTaskNumber, outboundNumber: req.packingOutboundNumber }));
     },
   }),
-  limits: { fileSize: 300 * 1024 * 1024 },
+  limits: {
+    fileSize: 300 * 1024 * 1024,
+    fieldNameSize: 100, fieldNestingDepth: 4, fieldArrayIndexLimit: 100,
+  },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype || !file.mimetype.startsWith("video/")) {
       return cb(new Error("Only video uploads are accepted"));

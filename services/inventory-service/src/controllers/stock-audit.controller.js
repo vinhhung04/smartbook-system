@@ -1,6 +1,7 @@
 const { parseId, toInt, normalizeText, normalizeOptionalUserId } = require('../utils/validation');
 const { buildStockBalanceFilter, createAuditWithLines } = require('../services/stock-audit-creation.service');
 const { claimSubmittedAuditForApproval } = require('../services/stock-audit-approval.service');
+const { StockAuditCountError, countAdjustment, lockAuditLocations, confirmCountLocations, startAuditCount } = require('../services/stock-audit-count.service');
 const {
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
@@ -50,6 +51,9 @@ function lineSummary(line) {
     counted_qty: line.counted_qty,
     variance_qty: line.variance_qty,
     adjustment_posted: line.adjustment_posted,
+    counted_at: line.counted_at || null,
+    baseline_on_hand_qty: line.baseline_on_hand_qty,
+    baseline_borrowed_qty: line.baseline_borrowed_qty,
     note: line.note,
   };
 }
@@ -157,6 +161,7 @@ async function createStockAudit(req, res) {
   }
 
   try {
+    if (!(await requireWarehouseWriteAccess(req, res, warehouseId))) return undefined;
     const balances = await prisma.stock_balances.findMany({
       where: buildStockBalanceFilter(warehouseId, locationIds),
       select: { variant_id: true, location_id: true, on_hand_qty: true },
@@ -167,13 +172,23 @@ async function createStockAudit(req, res) {
     }
 
     const auditNumber = createAuditNumber(Date.now());
-    const result = await prisma.$transaction((tx) =>
-      createAuditWithLines(tx, { auditNumber, warehouseId, note, userId, balances }),
-    );
+    const result = await prisma.$transaction(async tx => {
+      const locations = [...new Set(balances.map(b => b.location_id))];
+      await lockAuditLocations(tx, locations);
+      const overlapping = await tx.stock_audit_lines.findFirst({ where: {
+        location_id: { in: locations }, stock_audits: { status: { in: ['DRAFT', 'IN_PROGRESS', 'SUBMITTED'] } },
+      } });
+      if (overlapping) throw new StockAuditCountError('STOCK_AUDIT_LOCATION_BUSY', 'Vị trí đã có phiên kiểm kê chưa kết thúc');
+      const fresh = await tx.stock_balances.findMany({ where: { warehouse_id: warehouseId, location_id: { in: locations } }, select: { variant_id: true, location_id: true, on_hand_qty: true, borrowed_qty: true } });
+      const audit = await createAuditWithLines(tx, { auditNumber, warehouseId, note, userId, balances: fresh });
+      await tx.stock_audit_location_sessions.createMany({ data: locations.map(location_id => ({ stock_audit_id: audit.id, location_id })) });
+      return audit;
+    });
 
     return res.status(201).json({ data: { id: result.id, audit_number: result.audit_number } });
   } catch (error) {
     console.error('createStockAudit error:', error);
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -192,15 +207,16 @@ async function assignStockAudit(req, res) {
     if (!(await requireWarehouseWriteAccess(req, res, existing.warehouse_id))) return undefined;
     if (!(await requireAssignableUser(res, assignedToUserId, existing.warehouse_id))) return undefined;
 
-    const updated = await prisma.stock_audits.update({
-      where: { id },
-      data: {
-        assigned_to_user_id: assignedToUserId,
-        assigned_at: new Date(),
+    const updated = await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_audits WHERE id = $1::uuid FOR UPDATE', id);
+      const current = await tx.stock_audits.findUnique({ where: { id } });
+      if (!current || !['DRAFT', 'IN_PROGRESS'].includes(current.status)) throw new StockAuditCountError('STOCK_AUDIT_NOT_ASSIGNABLE', 'Chỉ có thể giao việc khi phiếu đang đếm');
+      if (current.status === 'DRAFT') await startAuditCount(tx, id, current.warehouse_id);
+      return tx.stock_audits.update({ where: { id }, data: {
+        assigned_to_user_id: assignedToUserId, assigned_at: new Date(),
         assigned_by_user_id: req.user?.id || req.user?.sub || null,
-        status: 'IN_PROGRESS',
-        updated_at: new Date(),
-      },
+        status: 'IN_PROGRESS', updated_at: new Date(),
+      } });
     });
 
     await prisma.inventory_audit_logs.create({
@@ -218,6 +234,7 @@ async function assignStockAudit(req, res) {
     });
   } catch (error) {
     console.error('assignStockAudit error:', error);
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -243,7 +260,14 @@ async function submitLineCount(req, res) {
     const line = await prisma.stock_audit_lines.findFirst({ where: { id: lineId, stock_audit_id: id } });
     if (!line) return res.status(404).json({ message: 'Không tìm thấy dòng kiểm kê' });
 
-    const updated = await prisma.stock_audit_lines.update({
+    const updated = await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_audits WHERE id = $1::uuid FOR UPDATE', id);
+      const current = await tx.stock_audits.findUnique({ where: { id } });
+      if (!['DRAFT', 'IN_PROGRESS'].includes(current.status)) throw new StockAuditCountError('STOCK_AUDIT_NOT_COUNTABLE', 'Phiếu đã được nộp; không thể sửa số đếm');
+      const session = await tx.stock_audit_location_sessions.findFirst({ where: { stock_audit_id: id, location_id: line.location_id, released_at: null } });
+      if (!session?.started_at) throw new StockAuditCountError('STOCK_AUDIT_RECOUNT_REQUIRED', 'Phiếu cũ cần bắt đầu đếm lại trước khi nhập số đếm');
+      if (session.counting_completed_at) throw new StockAuditCountError('STOCK_AUDIT_LOCATION_COUNTED', 'Vị trí đã chốt số đếm; chọn đếm lại để thay đổi');
+      return tx.stock_audit_lines.update({
       where: { id: lineId },
       data: {
         counted_qty: countedQty,
@@ -253,11 +277,13 @@ async function submitLineCount(req, res) {
         locations: { select: { location_code: true } },
         book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
       },
+      });
     });
 
     return res.json({ data: lineSummary(updated) });
   } catch (error) {
     console.error('submitLineCount error:', error);
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -269,7 +295,7 @@ async function submitStockAudit(req, res) {
   try {
     const audit = await prisma.stock_audits.findUnique({
       where: { id },
-      include: { stock_audit_lines: { select: { counted_qty: true } } },
+      include: { stock_audit_lines: { select: { counted_qty: true, location_id: true } } },
     });
     if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
     if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
@@ -283,14 +309,18 @@ async function submitStockAudit(req, res) {
       return res.status(400).json({ message: `Còn ${uncounted} mục chưa nhập số lượng đếm được` });
     }
 
-    const updated = await prisma.stock_audits.update({
-      where: { id },
-      data: { status: 'SUBMITTED', updated_at: new Date() },
+    const updated = await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_audits WHERE id = $1::uuid FOR UPDATE', id);
+      const current = await tx.stock_audits.findUnique({ where: { id } });
+      if (!['DRAFT', 'IN_PROGRESS'].includes(current.status)) throw new StockAuditCountError('STOCK_AUDIT_NOT_COUNTABLE', 'Phiếu đã được nộp trước đó');
+      await confirmCountLocations(tx, id, audit.stock_audit_lines.map(line => line.location_id));
+      return tx.stock_audits.update({ where: { id }, data: { status: 'SUBMITTED', updated_at: new Date() } });
     });
 
     return res.json({ data: { id: updated.id, status: updated.status } });
   } catch (error) {
     console.error('submitStockAudit error:', error);
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -328,27 +358,27 @@ async function approveStockAudit(req, res) {
       const candidateLines = allLines.filter(
         (l) => l.counted_qty !== null && !l.adjustment_posted,
       );
+      if (allLines.some(line => !line.counted_at || line.counted_qty === null)) throw new StockAuditCountError('STOCK_AUDIT_RECOUNT_REQUIRED', 'Phiếu cũ chưa có mốc kiểm đếm; cần đếm lại trước khi duyệt');
 
       let adjustmentsPosted = 0;
       for (const [index, line] of candidateLines.entries()) {
-        // Recompute the delta against the CURRENT on-hand quantity rather than trusting
-        // the stored variance_qty, which was computed against a snapshot taken when this
-        // line was counted. If another audit covering the same variant/location was
-        // approved in between, that snapshot is stale — reapplying the old variance would
-        // double-post the same adjustment. Locking the row first also serializes this
-        // against a concurrent approval of an overlapping audit.
+        // One open audit owns this location through approval. Apply its confirmed
+        // physical discrepancy, preserving all transactions after counted_at.
+        await tx.$queryRawUnsafe('SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE', line.variant_id, line.location_id);
         const current = await tx.stock_balances.findFirst({
           where: { variant_id: line.variant_id, location_id: line.location_id },
         });
-        const currentOnHand = current?.on_hand_qty ?? 0;
-        const liveDelta = line.counted_qty - currentOnHand;
+        const location = await tx.locations.findUnique({ where: { id: line.location_id }, select: { location_type: true } });
+        const { delta: liveDelta, availableDelta } = countAdjustment(line, current, location?.location_type);
 
         if (liveDelta !== 0) {
           await tx.stock_balances.updateMany({
             where: { variant_id: line.variant_id, location_id: line.location_id },
             data: {
               on_hand_qty: { increment: liveDelta },
-              available_qty: { increment: liveDelta },
+              available_qty: { increment: availableDelta },
+              version: { increment: 1 },
+              last_movement_at: new Date(),
             },
           });
 
@@ -396,6 +426,13 @@ async function approveStockAudit(req, res) {
         });
       }
 
+      await tx.stock_audit_location_sessions.updateMany({ where: { stock_audit_id: id, released_at: null }, data: { released_at: new Date() } });
+
+      await tx.inventory_audit_logs.create({ data: {
+        actor_user_id: reviewerId, action_name: 'STOCK_AUDIT_APPROVED', entity_type: 'STOCK_AUDIT', entity_id: audit.id,
+        after_data: { audit_number: audit.audit_number, adjustments_posted: adjustmentsPosted },
+      } });
+
       return { data: audit, adjustments_posted: adjustmentsPosted };
     });
 
@@ -410,21 +447,12 @@ async function approveStockAudit(req, res) {
       });
     }
 
-    await prisma.inventory_audit_logs.create({
-      data: {
-        actor_user_id: reviewerId,
-        action_name: 'STOCK_AUDIT_APPROVED',
-        entity_type: 'STOCK_AUDIT',
-        entity_id: result.data.id,
-        after_data: { audit_number: result.data.audit_number, adjustments_posted: result.adjustments_posted },
-      },
-    });
-
     return res.json({
       data: { id: result.data.id, status: 'COMPLETED', adjustments_posted: result.adjustments_posted },
     });
   } catch (error) {
     console.error('approveStockAudit error:', error);
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -441,14 +469,66 @@ async function cancelStockAudit(req, res) {
       return res.status(400).json({ message: 'Phiếu kiểm kê đã kết thúc, không thể hủy' });
     }
 
-    const updated = await prisma.stock_audits.update({
-      where: { id },
-      data: { status: 'CANCELLED', updated_at: new Date() },
+    const updated = await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_audits WHERE id = $1::uuid FOR UPDATE', id);
+      const current = await tx.stock_audits.findUnique({ where: { id } });
+      if (['COMPLETED', 'CANCELLED'].includes(current.status)) throw new StockAuditCountError('STOCK_AUDIT_TERMINAL', 'Phiếu kiểm kê đã kết thúc');
+      await lockAuditLocations(tx, (await tx.stock_audit_location_sessions.findMany({ where: { stock_audit_id: id, released_at: null } })).map(s => s.location_id));
+      await tx.stock_audit_location_sessions.updateMany({ where: { stock_audit_id: id, released_at: null }, data: { released_at: new Date() } });
+      return tx.stock_audits.update({ where: { id }, data: { status: 'CANCELLED', updated_at: new Date() } });
     });
 
     return res.json({ data: { id: updated.id, status: updated.status } });
   } catch (error) {
     console.error('cancelStockAudit error:', error);
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function recountStockAudit(req, res) {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: 'Mã phiếu kiểm kê không hợp lệ' });
+  try {
+    const audit = await prisma.stock_audits.findUnique({ where: { id }, include: { stock_audit_lines: true } });
+    if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
+    if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Bạn không có quyền đếm lại phiếu này' });
+    if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
+    const updated = await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_audits WHERE id = $1::uuid FOR UPDATE', id);
+      const current = await tx.stock_audits.findUnique({ where: { id } });
+      if (!['DRAFT', 'IN_PROGRESS', 'SUBMITTED'].includes(current.status)) throw new StockAuditCountError('STOCK_AUDIT_TERMINAL', 'Phiếu đã kết thúc, không thể đếm lại');
+      await startAuditCount(tx, id, current.warehouse_id);
+      await tx.inventory_audit_logs.create({ data: { actor_user_id: req.user?.id || req.user?.sub, action_name: 'STOCK_AUDIT_RECOUNT_STARTED', entity_type: 'STOCK_AUDIT', entity_id: id } });
+      return tx.stock_audits.update({ where: { id }, data: { status: 'IN_PROGRESS', updated_at: new Date() } });
+    });
+    return res.json({ data: { id: updated.id, status: updated.status } });
+  } catch (error) {
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
+    console.error('recountStockAudit error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}
+
+async function confirmLocationCount(req, res) {
+  const id = parseId(req.params.id);
+  const locationId = parseId(req.params.locationId);
+  if (!id || !locationId) return res.status(400).json({ message: 'Mã phiếu hoặc vị trí không hợp lệ' });
+  try {
+    const audit = await prisma.stock_audits.findUnique({ where: { id } });
+    if (!audit) return res.status(404).json({ message: 'Không tìm thấy phiếu kiểm kê' });
+    if (!canEditLines(req, audit)) return res.status(403).json({ message: 'Bạn không có quyền chốt số đếm' });
+    if (!(await requireWarehouseWriteAccess(req, res, audit.warehouse_id))) return undefined;
+    await prisma.$transaction(async tx => {
+      await tx.$queryRawUnsafe('SELECT id FROM stock_audits WHERE id = $1::uuid FOR UPDATE', id);
+      const current = await tx.stock_audits.findUnique({ where: { id } });
+      if (!['DRAFT', 'IN_PROGRESS'].includes(current.status)) throw new StockAuditCountError('STOCK_AUDIT_NOT_COUNTABLE', 'Phiếu đã được nộp hoặc kết thúc');
+      await confirmCountLocations(tx, id, [locationId]);
+    });
+    return res.json({ data: { id, location_id: locationId, counting_completed: true } });
+  } catch (error) {
+    if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
+    console.error('confirmLocationCount error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
@@ -462,4 +542,6 @@ module.exports = {
   submitStockAudit,
   approveStockAudit,
   cancelStockAudit,
+  recountStockAudit,
+  confirmLocationCount,
 };

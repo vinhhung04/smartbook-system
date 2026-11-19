@@ -48,3 +48,6 @@ thesis/report-update/*.pdf
 
 # Real library loan data (Mendeley 10.17632/6rd45bvxjy.1) - personal fields, never commit
 research-inputs/library-loans-mendeley/
+
+# Disposable QA reports (never include generated test secrets)
+/test-results/

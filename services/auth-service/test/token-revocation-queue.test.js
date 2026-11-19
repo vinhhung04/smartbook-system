@@ -4,6 +4,14 @@ const assert = require('node:assert/strict');
 const redis = require('../src/lib/redis');
 const revocation = require('../src/lib/token-revocation');
 
+test('a cutoff preserves sub-second ordering so a same-second lock revokes earlier tokens', async (t) => {
+  t.mock.method(Date, 'now', () => 1000750);
+  const store = new Map();
+  t.mock.method(redis, 'setStrict', async (key, value) => { store.set(key, value); });
+  await revocation.revokeUserTokensIssuedBefore('same-second');
+  assert.equal(Number(store.get('user:tokens-valid-after:same-second')), 1000.75);
+});
+
 // Phase 5: a revocation written while Redis is down is retried, not lost.
 test('a logout during a Redis outage is queued and written once Redis answers', async () => {
   const store = new Map();

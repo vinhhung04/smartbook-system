@@ -30,3 +30,22 @@ test('returns new title with insufficient metadata', () => {
   const result = checkDuplicates({}, [candidate]);
   assert.equal(result.classification, 'NEW_TITLE');
 });
+
+test('a retail EAN-13 matches the barcode (or a legacy EAN-in-isbn13 row), never as an ISBN', () => {
+  const eanBook = { ...candidate, id: 'book-2', book_variants: [{ id: 'variant-2', isbn13: '9786043927436', internal_barcode: '8935325011894', sku: 'S2' }] };
+  const legacy = { ...candidate, id: 'book-3', book_variants: [{ id: 'variant-3', isbn13: '8935309501694', internal_barcode: '8935309501694', sku: 'S3' }] };
+  const byBarcode = checkDuplicates({ barcode: '8935325011894', title: 'Other' }, [eanBook]);
+  assert.equal(byBarcode.classification, 'SAME_EDITION');
+  assert.equal(byBarcode.candidates[0].signals.isbnMatch, false);
+  assert.equal(checkDuplicates({ isbn: '8935309501694', title: 'Other' }, [legacy]).classification, 'SAME_EDITION');
+});
+
+test('an ISBN-13 also matches a variant whose barcode is that ISBN (Bookland EAN)', () => {
+  const book = { ...candidate, id: 'book-4', book_variants: [{ id: 'variant-4', isbn13: null, internal_barcode: '9786043927436', sku: 'S4' }] };
+  assert.equal(checkDuplicates({ isbn13: '9786043927436', title: 'Other' }, [book]).classification, 'EXACT_DUPLICATE');
+});
+
+test('a code with a wrong check digit matches nothing', () => {
+  const result = checkDuplicates({ isbn: '9780132350885', barcode: '8935325011895', title: 'Other' }, [candidate]);
+  assert.equal(result.classification, 'NEW_TITLE');
+});

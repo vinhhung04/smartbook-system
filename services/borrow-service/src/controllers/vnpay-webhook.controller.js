@@ -49,7 +49,7 @@ function sendResultPage(res, httpStatus, status, detail = '') {
 }
 
 async function handleVnpayReturn(req, res) {
-  const verification = vnpayService.verifySignedParams(req.query);
+  const verification = verifyCallback(req.query);
   if (!verification.valid) {
     return sendResultPage(res, 400, 'failed', 'Chữ ký không hợp lệ.');
   }
@@ -59,7 +59,8 @@ async function handleVnpayReturn(req, res) {
     const succeeded = result.outcome === 'SUCCESS' || (result.outcome === 'ALREADY_FINALIZED' && result.intent?.status === 'SUCCESS');
     const detail = result.kind === 'TOPUP'
       ? (succeeded ? 'Tiền đã được nạp vào ví của bạn.' : 'Chưa nạp được tiền vào ví. Vui lòng thử lại hoặc nạp tại quầy thư viện.')
-      : '';
+      : (succeeded && Number(result.settlement?.unapplied_amount) > 0
+        ? 'Đã ghi nhận tiền thanh toán. Phần tiền chưa phân bổ đang chờ thư viện đối soát; vui lòng không thanh toán lại.' : '');
     return sendResultPage(res, 200, succeeded ? 'success' : 'failed', detail);
   } catch (error) {
     console.error('handleVnpayReturn error:', error);
@@ -72,7 +73,7 @@ async function handleVnpayReturn(req, res) {
 // shape, NOT a redirect. "00" here means "we processed this notification
 // correctly" — it is sent even when the underlying payment itself failed.
 async function handleVnpayIpn(req, res) {
-  const verification = vnpayService.verifySignedParams(req.query);
+  const verification = verifyCallback(req.query);
   if (!verification.valid) {
     return res.json({ RspCode: '97', Message: 'Invalid signature' });
   }
@@ -85,11 +86,11 @@ async function handleVnpayIpn(req, res) {
       case 'ALREADY_FINALIZED':
         return res.json({ RspCode: '02', Message: 'Order already confirmed' });
       case 'AMOUNT_MISMATCH':
+      case 'INVALID_TRANSACTION':
+      case 'TRANSACTION_CONFLICT':
         return res.json({ RspCode: '04', Message: 'Invalid amount' });
       case 'SUCCESS':
       case 'PAYMENT_FAILED':
-      case 'STALE_REMAINING_BALANCE':
-      case 'FINE_NOT_FOUND':
         return res.json({ RspCode: '00', Message: 'Confirm Success' });
       default:
         return res.json({ RspCode: '99', Message: 'Unknown error' });
@@ -98,6 +99,20 @@ async function handleVnpayIpn(req, res) {
     console.error('handleVnpayIpn error:', error);
     return res.json({ RspCode: '99', Message: 'Unknown error' });
   }
+}
+
+// Signature is necessary but the signed merchant and successful provider state
+// must also match the protocol. Finalizers accept legacy verified unit boundaries;
+// public callbacks require the complete provider contract.
+function verifyCallback(query) {
+  const result = vnpayService.verifySignedParams(query);
+  if (!result.valid) return result;
+  const cfg = vnpayService.getEnvConfig();
+  const p = result.params;
+  if (!cfg || p.vnp_TmnCode !== cfg.tmnCode) return { valid: false };
+  if (p.vnp_ResponseCode === '00' && (p.vnp_TransactionStatus !== '00'
+    || !p.vnp_TransactionNo || p.vnp_TransactionNo === '0')) return { valid: false };
+  return result;
 }
 
 module.exports = { handleVnpayReturn, handleVnpayIpn, finalizeVnpayCallback };

@@ -39,8 +39,9 @@ test('metrics are exported for Prometheus without any OTLP/trace backend', async
 
   const body = await (await fetch(`http://127.0.0.1:${METRICS_PORT}/metrics`)).text();
   // HTTP rate / p95 latency / 5xx error rate on the dashboards and alerts.
-  assert.match(body, /^http_server_duration_count\{[^}]*http_status_code="200"[^}]*\} 1$/m);
-  assert.match(body, /^http_server_duration_bucket\{/m);
+  assert.match(body, /^http_server_request_duration_count\{[^}]*http_response_status_code="200"[^}]*\} 1$/m);
+  assert.match(body, /^http_server_request_duration_bucket\{/m);
+  assert.match(body, /^# UNIT http_server_request_duration s$/m);
   // Business metrics created through @smartbook/shared/metrics share the same exporter.
   assert.match(body, /^telemetry_test_events_total\{kind="demo"\} 2$/m);
   assert.match(body, /^target_info\{[^}]*service_name="telemetry-test"/m);

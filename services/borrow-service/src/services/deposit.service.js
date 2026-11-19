@@ -1,7 +1,9 @@
 const { Prisma } = require('@prisma/client');
 const { writeAuditLog } = require('../lib/audit');
 const { toMoney, holdFunds, releaseHeldFunds, captureHeldFunds } = require('./account.service');
-const { computeReturnFineAmounts } = require('./fine.service');
+const { computeReturnFineAmounts, daysOverdue } = require('./fine.service');
+const { previewOverdueAccrual } = require('./overdue-accrual.service');
+const { lockCustomerFineBalance } = require('./fine-lock.service');
 
 // Per-book deposits. A deposit is held from the wallet's available balance when a
 // book is lent, and settled exactly once when it comes back (or is declared
@@ -109,11 +111,13 @@ async function holdLoanItemDeposits(tx, { customerId, loanId, loanNumber, items,
 
 /**
  * Settles one HELD deposit after the return's fines have been written. Locks the
- * deposit, then the book's open fines, then (inside capture/release) the wallet —
- * always in that order, so it cannot deadlock with fine payments or wallet writes.
+ * customer first, then deposit, the book's open fines, and finally the wallet.
+ * Return/accrual/payment writers share the same customer-first lock order.
  * A deposit that is no longer HELD is left alone: settling twice is a no-op.
  */
 async function settleLoanItemDeposit(tx, { depositId, actorUserId = null, returnCondition = null, reason = null }) {
+  const owner = await tx.loan_item_deposits.findUnique({ where: { id: depositId }, select: { customer_id: true } });
+  if (owner) await lockCustomerFineBalance(tx, owner.customer_id);
   const lockedRows = await tx.$queryRaw`SELECT * FROM loan_item_deposits WHERE id = ${depositId}::uuid FOR UPDATE`;
   const deposit = lockedRows[0];
   if (!deposit || deposit.status !== 'HELD') {
@@ -269,13 +273,22 @@ async function previewReturnSettlement(db, { items, returnedAt = new Date(), mem
   ]);
   const depositByItem = new Map(deposits.map((row) => [row.loan_item_id, row]));
 
-  const rows = items.map((item) => {
+  const rows = await Promise.all(items.map(async (item) => {
     const itemFines = existingFines.filter((fine) => fine.loan_item_id === item.id);
     const charges = computeReturnFineAmounts({ item, returnedAt, membershipLimits, markLost, itemConditionOnReturn });
     const chargedTypes = new Set(charges.map((charge) => charge.fineType));
     const lines = [];
 
+    if (charges.some(charge => charge.fineType === 'OVERDUE') || itemFines.some(fine => fine.fine_type === 'OVERDUE')) {
+      lines.push(...await previewOverdueAccrual(db, {
+        loanItemId: item.id, overdueDays: daysOverdue(item.due_date, returnedAt), dueDate: item.due_date,
+        dailyRate: Number(membershipLimits?.fine_per_day || 0), fines: itemFines,
+      }));
+      chargedTypes.add('OVERDUE');
+    }
+
     for (const charge of charges) {
+      if (charge.fineType === 'OVERDUE') continue;
       const existing = itemFines.find((fine) => fine.fine_type === charge.fineType);
       if (existing && (existing.status === 'PAID' || existing.status === 'WAIVED')) continue;
       const due = existing
@@ -306,7 +319,7 @@ async function previewReturnSettlement(db, { items, returnedAt = new Date(), mem
       deposit_refunded: split.refunded.toNumber(),
       additional_due: split.additionalDue.toNumber(),
     };
-  });
+  }));
 
   const sum = (key) => rows.reduce((total, row) => total.add(toMoney(row[key])), ZERO).toNumber();
   return {

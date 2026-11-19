@@ -1,9 +1,12 @@
 global:
   scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 1m
 
 # The Node exporter (packages/shared/telemetry) puts service.name only on
 # target_info, so each target gets a service_name label here - the dashboards
-# and alerts group and filter by it.
+# and alerts group and filter by it. Every target is on the internal network;
+# none of these ports is published to the host or through Caddy.
 scrape_configs:
   - job_name: node-services
     static_configs:
@@ -17,9 +20,46 @@ scrape_configs:
         labels: { service_name: borrow-service }
       - targets: [analytics-service:9464]
         labels: { service_name: analytics-service }
-  # Only up with `--profile ai`; without it this target simply shows as down.
+      - targets: [monitoring-service:9464]
+        labels: { service_name: monitoring-service }
+  # Development: only up with `--profile ai`; without it this target shows as down.
   - job_name: ai-service
     metrics_path: /metrics
     static_configs:
       - targets: [ai-service:8000]
         labels: { service_name: ai-service }
+  # rabbitmq:3.13-management ships rabbitmq_prometheus enabled on :15692.
+  # /metrics/per-object gives per-queue depth (needed for the DLQ rule); the
+  # broker has a handful of queues, so the series count stays small.
+  - job_name: rabbitmq
+    metrics_path: /metrics/per-object
+    scrape_interval: 30s
+    static_configs:
+      - targets: [rabbitmq:15692]
+        labels: { service_name: rabbitmq }
+  - job_name: postgres
+    static_configs:
+      - targets: [postgres-exporter:9187]
+        labels: { service_name: postgres }
+  - job_name: redis
+    static_configs:
+      - targets: [redis-exporter:9121]
+        labels: { service_name: redis }
+  - job_name: node
+    static_configs:
+      - targets: [node-exporter:9100]
+        labels: { service_name: vps }
+  - job_name: cadvisor
+    scrape_interval: 30s
+    static_configs:
+      - targets: [cadvisor:8080]
+        labels: { service_name: docker }
+    metric_relabel_configs:
+      # Keep only the container series the dashboards and alerts read.
+      - source_labels: [__name__]
+        regex: container_(cpu_usage_seconds_total|memory_working_set_bytes|spec_memory_limit_bytes|oom_events_total|last_seen|start_time_seconds)
+        action: keep
+  - job_name: prometheus
+    static_configs:
+      - targets: [localhost:9090]
+        labels: { service_name: prometheus }

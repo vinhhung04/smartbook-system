@@ -1,18 +1,18 @@
-// Audit/reproduction only (per the STT1/STT2/STT3 prompt) - does NOT assert pass/fail against
-// an assumed-correct behaviour; it just reports exactly what the current code does, so the
-// result can be classified CONFIRMED / NOT REPRODUCED / ALREADY FIXED against real evidence.
+// Regression assertions for STT1/STT2/STT3: forbidden writes return 403 and leave stock unchanged.
 //
-// Accounts used (from services/auth-service/prisma/seed.js, password 123456 for all):
+// Accounts used (from services/auth-service/prisma/seed.js, password from DEMO_PASSWORD):
 //   hung       - full access to WH-HCM-01 / WH-HN-01 / BR-HCM-01 (fixture setup only)
 //   curator01  - WAREHOUSE_MANAGER role, but only READ at WH-HCM-01, no scope at all at WH-HN-01
 //   staff01    - WAREHOUSE_STAFF-level, OPERATOR (write) only at WH-HCM-01, no scope at WH-HN-01
 //
 // Usage: node scripts/warehouse-scope-stt123-audit.mjs
 import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-const password = '123456';
+const password = process.env.DEMO_PASSWORD;
+if (!password) throw new Error('DEMO_PASSWORD is required for the disposable test fixture');
 
 async function request(method, path, token, body) {
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -96,6 +96,11 @@ async function main() {
   console.log(`STT2 — staff01 (write scope only at WH-HCM-01) POST .../receiving-putaway/transfer with warehouse_id=WH-HN-01 -> status=${sttTransfer.status}`);
   console.log(`  body: ${JSON.stringify(sttTransfer.data).slice(0, 300)}`);
   console.log(`  => ${sttTransfer.data?.code === 'WAREHOUSE_ACCESS_DENIED' ? 'BLOCKED by warehouse scope (protected)' : 'NOT blocked by warehouse scope (check the actual reason above)'}\n`);
+  assert.equal(sttLines.status, 403, 'out-of-scope transfer lines must be denied');
+  assert.equal(sttConfirm.status, 403, 'out-of-scope receiving must be denied');
+  assert.equal(orderStatusAfter, 'IN_TRANSIT', 'denied receiving must not change the transfer');
+  assert.equal(sttTransfer.status, 403);
+  assert.equal(sttTransfer.data.code, 'WAREHOUSE_ACCESS_DENIED');
 }
 
 main().catch((error) => {

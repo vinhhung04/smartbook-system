@@ -1,4 +1,4 @@
-import type { IsbnSourceName, LookupBookByIsbnResponse } from "@/services/ai";
+import type { CrossLookup, IsbnSourceName, LookupBookByIsbnResponse } from "@/services/ai";
 import type { FinalMetadata } from "@/services/metadata-intelligence";
 import type { CatalogBookLite, DuplicateMatch, EditableBookForm } from "./types";
 
@@ -85,6 +85,70 @@ export function classifyCode(raw: string): { kind: CodeKind; digits: string } {
   return { kind: "WRONG_LENGTH", digits };
 }
 
+/** ISBN-10 -> ISBN-13: the 978 prefix plus a recomputed check digit. */
+export function isbn10To13(isbn10: string): string {
+  const core = `978${isbn10.slice(0, 9)}`;
+  const sum = core.split("").reduce((acc, d, i) => acc + Number(d) * (i % 2 ? 3 : 1), 0);
+  return `${core}${(10 - (sum % 10)) % 10}`;
+}
+
+/** ISBN-13 -> ISBN-10, only for 978 (a 979 ISBN has no ISBN-10). */
+export function isbn13To10(isbn13: string): string {
+  if (!isbn13.startsWith("978")) return "";
+  const core = isbn13.slice(3, 12);
+  const check = (11 - (core.split("").reduce((acc, d, i) => acc + Number(d) * (10 - i), 0) % 11)) % 11;
+  return `${core}${check === 10 ? "X" : check}`;
+}
+
+export interface BookCodes {
+  isbn13: string;
+  isbn10: string;
+  /** A retail EAN-13 that is not an ISBN (e.g. 893...). */
+  ean13: string;
+  /** book_variants.internal_barcode: the retail EAN-13, else the ISBN-13 (its Bookland barcode). */
+  internalBarcode: string;
+  /** An ISBN or a retail EAN-13 the book can be saved under. */
+  hasCode: boolean;
+  /** Per field, why a code cannot be saved where it was typed. */
+  errors: Partial<Record<"isbn" | "isbn13" | "isbn10" | "internalBarcode", string>>;
+}
+
+/** The codes to save, each from the field of its own kind: an EAN-13 never becomes an
+ *  ISBN, an ISBN-10 gives its ISBN-13 (and a 978 ISBN-13 its ISBN-10) by the standard
+ *  conversion, and nothing is invented from an EAN. Same rules as the server. */
+export function resolveBookCodes(form: Pick<EditableBookForm, "isbn" | "isbn13" | "isbn10"> & { internalBarcode?: string }): BookCodes {
+  const main = classifyCode(form.isbn);
+  const i13 = classifyCode(form.isbn13);
+  const i10 = classifyCode(form.isbn10);
+  const barcode = classifyCode(form.internalBarcode || "");
+  const errors: BookCodes["errors"] = {};
+  if (!["EMPTY", "ISBN13", "ISBN10", "EAN13"].includes(main.kind)) errors.isbn = "Mã không phải ISBN hay EAN-13 hợp lệ (sai độ dài hoặc số kiểm tra)";
+  if (i13.kind === "EAN13") errors.isbn13 = "Đây là mã EAN-13 bán lẻ, không phải ISBN — nhập vào ô mã vạch EAN-13";
+  else if (!["EMPTY", "ISBN13"].includes(i13.kind)) errors.isbn13 = "ISBN-13 cần tiền tố 978/979 và số kiểm tra đúng";
+  if (!["EMPTY", "ISBN10"].includes(i10.kind)) errors.isbn10 = "ISBN-10 sai độ dài hoặc số kiểm tra";
+  if (barcode.kind !== "EMPTY" && barcode.kind !== "EAN13" && barcode.kind !== "ISBN13") errors.internalBarcode = "Mã vạch EAN-13 sai độ dài hoặc số kiểm tra";
+  const isbn13 = i13.kind === "ISBN13" ? i13.digits : main.kind === "ISBN13" ? main.digits
+    : i10.kind === "ISBN10" ? isbn10To13(i10.digits) : main.kind === "ISBN10" ? isbn10To13(main.digits) : "";
+  const isbn10 = i10.kind === "ISBN10" ? i10.digits : main.kind === "ISBN10" ? main.digits : isbn13 ? isbn13To10(isbn13) : "";
+  const ean13 = barcode.kind === "EAN13" ? barcode.digits : main.kind === "EAN13" ? main.digits : "";
+  const internalBarcode = barcode.kind === "EAN13" || barcode.kind === "ISBN13" ? barcode.digits : ean13 || isbn13;
+  return { isbn13, isbn10, ean13, internalBarcode, hasCode: Boolean(isbn13 || ean13), errors };
+}
+
+/** The form patch that puts one cross-looked-up code in its own field: an ISBN-13 (its
+ *  ISBN-10 follows, cleared for a 979 ISBN that has none) or a retail EAN-13 barcode. */
+export function crossLookupPatch(cross: Pick<CrossLookup, "direction">, value: string, isbn10: string | null): Partial<EditableBookForm> {
+  return cross.direction === "EAN_TO_ISBN" ? { isbn13: value, isbn10: isbn10 ?? "" } : { internalBarcode: value };
+}
+
+/** Applying an ISBN over a retail EAN-13 in the main code field keeps that EAN as the
+ *  barcode (when none is set yet), so linking the ISBN never loses the original code. */
+export function keepEanWhenApplying(prev: EditableBookForm, patch: Partial<EditableBookForm>): Partial<EditableBookForm> {
+  const before = classifyCode(prev.isbn);
+  if (patch.isbn === undefined || before.kind !== "EAN13" || prev.internalBarcode.trim() || patch.internalBarcode) return patch;
+  return classifyCode(patch.isbn).kind === "EAN13" ? patch : { ...patch, internalBarcode: before.digits };
+}
+
 export function parsePublishYear(publishedDate: string): number | undefined {
   const matched = String(publishedDate || "").match(/\b(\d{4})\b/);
   if (!matched) return undefined;
@@ -107,7 +171,7 @@ export function normalizeForCompare(value: string): string {
 /** Flags catalog books that look like the same title being entered again. */
 export function findDuplicateMatches(form: EditableBookForm, catalogBooks: CatalogBookLite[]): DuplicateMatch[] {
   const candidateIsbns = new Set(
-    [form.isbn, form.isbn13, form.isbn10].map((v) => normalizeIsbnInput(v)).filter(Boolean),
+    [form.isbn, form.isbn13, form.isbn10, form.internalBarcode].map((v) => normalizeIsbnInput(v || "")).filter(Boolean),
   );
   const normalizedTitle = normalizeForCompare(form.title);
   const firstAuthor = normalizeForCompare(form.authorsText.split(",")[0] || "");
@@ -134,10 +198,14 @@ export function findDuplicateMatches(form: EditableBookForm, catalogBooks: Catal
 }
 
 export function mapLookupToForm(data: LookupBookByIsbnResponse): EditableBookForm {
+  // A looked-up retail EAN-13 is the book's barcode, never its ISBN; the ISBN linked to
+  // it (crossLookup) is only offered, for staff to apply.
+  const looked = classifyCode(data.isbn || "");
   return {
     isbn: data.isbn || "",
-    isbn13: data.isbn13 || "",
-    isbn10: data.isbn10 || "",
+    isbn13: classifyCode(data.isbn13 || "").kind === "ISBN13" ? normalizeIsbnInput(data.isbn13 || "") : "",
+    isbn10: classifyCode(data.isbn10 || "").kind === "ISBN10" ? normalizeIsbnInput(data.isbn10 || "") : "",
+    internalBarcode: looked.kind === "EAN13" ? looked.digits : "",
     title: data.title || "",
     subtitle: data.subtitle || "",
     authorsText: (data.authors || []).join(", "),
@@ -160,15 +228,19 @@ export function splitCommaValues(value: string): string[] {
 
 export function buildDuplicateCheckMetadata({ lookup, normalizedMetadata, form }: { lookup: LookupBookByIsbnResponse; normalizedMetadata: Record<string, unknown>; form: EditableBookForm }): Record<string, unknown> {
   const pick = (formValue: string, normalizedKey: string, lookupValue: unknown) => formValue.trim() || normalizedMetadata[normalizedKey] || lookupValue || undefined;
-  const isbn13 = normalizeIsbnInput(form.isbn13 || "");
-  const isbn10 = normalizeIsbnInput(form.isbn10 || "");
-  const isbn = normalizeIsbnInput(form.isbn || "") || (isbn13.length === 13 ? isbn13 : isbn10);
+  // Each code is sent under its own kind: the server compares ISBNs with ISBN columns and
+  // the retail EAN-13 with the barcode (duplicate-intelligence inputCodes).
+  const codes = resolveBookCodes(form);
+  const isbnOnly = (value: unknown) => {
+    const { kind, digits } = classifyCode(String(value || ""));
+    return kind === "ISBN13" || kind === "ISBN10" ? digits : "";
+  };
   return {
-    isbn,
-    isbn13: isbn13.length === 13 ? isbn13 : normalizeIsbnInput(String(normalizedMetadata.isbn13 || lookup.isbn13 || "")),
-    isbn10: isbn10.length === 10 ? isbn10 : normalizeIsbnInput(String(normalizedMetadata.isbn10 || lookup.isbn10 || "")),
-    barcode: normalizeIsbnInput(form.isbn) || String(normalizedMetadata.barcode || normalizedMetadata.internal_barcode || lookup.isbn || ""),
-    internal_barcode: normalizeIsbnInput(form.isbn) || String(normalizedMetadata.internalBarcode || normalizedMetadata.internal_barcode || lookup.isbn || ""),
+    isbn: codes.isbn13 || codes.isbn10,
+    isbn13: codes.isbn13 || isbnOnly(normalizedMetadata.isbn13 || lookup.isbn13),
+    isbn10: codes.isbn10 || isbnOnly(normalizedMetadata.isbn10 || lookup.isbn10),
+    barcode: codes.internalBarcode || String(normalizedMetadata.barcode || normalizedMetadata.internal_barcode || ""),
+    internal_barcode: codes.internalBarcode || String(normalizedMetadata.internalBarcode || normalizedMetadata.internal_barcode || ""),
     title: pick(form.title, "title", lookup.title),
     authors: splitCommaValues(form.authorsText).length ? splitCommaValues(form.authorsText) : normalizedMetadata.authors || lookup.authors || [],
     publisher: pick(form.publisher, "publisher", lookup.publisher),
@@ -184,7 +256,7 @@ export function reconciliationValueFromForm(field: string, form: EditableBookFor
   switch (field) {
     case "title": return form.title.trim();
     case "subtitle": return form.subtitle.trim() || null;
-    case "isbn": return form.isbn13.trim() || form.isbn.trim() || null;
+    case "isbn": { const codes = resolveBookCodes(form); return codes.isbn13 || codes.isbn10 || null; }
     case "translator": return splitCommaValues(form.translatorText || '');
     case "authors": return splitCommaValues(form.authorsText);
     case "publisher": return form.publisher.trim();
@@ -198,15 +270,14 @@ export function reconciliationValueFromForm(field: string, form: EditableBookFor
 }
 
 export function finalMetadataFromForm(form: EditableBookForm): FinalMetadata {
-  const isbn13 = normalizeIsbnInput(form.isbn13 || form.isbn);
-  const isbn10 = normalizeIsbnInput(form.isbn10 || "");
+  const { isbn13, isbn10, internalBarcode } = resolveBookCodes(form);
   const keywords = [...new Set(splitCommaValues(form.keywordsText).filter((item) => item.length <= 50))].slice(0, 15);
   return {
     title: form.title.trim(), subtitle: form.subtitle.trim() || null, description: form.description.trim() || null,
     translator: splitCommaValues(form.translatorText || ''), publishedDate: form.publishedDate.trim() || null,
     summaryVi: form.summaryVi.trim() || null, language: form.language.trim() || "vi",
-    ...(isbn13.length === 13 ? { isbn13 } : {}), ...(isbn10.length === 10 ? { isbn10 } : {}),
-    internalBarcode: normalizeIsbnInput(form.isbn || "") || null, publishYear: parsePublishYear(form.publishedDate),
+    ...(isbn13 ? { isbn13 } : {}), ...(isbn10 ? { isbn10 } : {}),
+    internalBarcode: internalBarcode || null, publishYear: parsePublishYear(form.publishedDate),
     pageCount: form.pageCount.trim() ? Number(form.pageCount) : null, coverImageUrl: form.thumbnail.trim() || null, keywords,
   };
 }

@@ -3,9 +3,10 @@ const { runOverdueSweep } = require('../services/fine.service');
 
 let timer = null;
 let running = false;
+let stopping = false;
 
 async function executeOverdueSweep() {
-  if (running) {
+  if (running || stopping) {
     return;
   }
 
@@ -23,6 +24,7 @@ async function executeOverdueSweep() {
 }
 
 function startOverdueSweepJob() {
+  if (timer || stopping) return;
   const enabled = String(process.env.ENABLE_OVERDUE_SWEEP_JOB || 'true').toLowerCase() === 'true';
   if (!enabled) {
     console.log('[borrow-service][job] overdue sweep disabled by env');
@@ -43,10 +45,15 @@ function startOverdueSweepJob() {
 }
 
 function stopOverdueSweepJob() {
+  stopping = true;
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
+  return new Promise((resolve) => {
+    const drained = () => running ? setTimeout(drained, 10) : resolve();
+    drained();
+  });
 }
 
 module.exports = {

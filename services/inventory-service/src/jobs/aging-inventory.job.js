@@ -6,6 +6,7 @@ const THRESHOLD_DAYS = Number(process.env.AGING_INVENTORY_DAYS_THRESHOLD || 90);
 
 let timer = null;
 let running = false;
+let stopping = false;
 
 function resolveAlertLevel(daysSinceLastActivity, thresholdDays) {
   if (daysSinceLastActivity >= thresholdDays * 2) return 'HIGH';
@@ -28,7 +29,7 @@ async function fetchAgingInventory() {
 }
 
 async function executeAgingInventorySweep() {
-  if (running) {
+  if (running || stopping) {
     return;
   }
 
@@ -68,6 +69,7 @@ async function executeAgingInventorySweep() {
 }
 
 function startAgingInventoryJob() {
+  if (timer || stopping) return;
   const enabled = String(process.env.ENABLE_AGING_INVENTORY_JOB || 'true').toLowerCase() === 'true';
   if (!enabled) {
     console.log('[inventory-service][job] aging inventory sweep disabled by env');
@@ -88,10 +90,15 @@ function startAgingInventoryJob() {
 }
 
 function stopAgingInventoryJob() {
+  stopping = true;
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
+  return new Promise((resolve) => {
+    const drained = () => running ? setTimeout(drained, 10) : resolve();
+    drained();
+  });
 }
 
 module.exports = {

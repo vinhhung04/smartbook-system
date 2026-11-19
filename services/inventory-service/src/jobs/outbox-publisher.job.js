@@ -26,6 +26,7 @@ const MAX_RETRY_COUNT = 10;
 
 let timer = null;
 let running = false;
+let stopping = false;
 
 async function runOutboxPublishSweep(prismaClient = prisma, options = {}) {
   // Injectable (like prismaClient above) so tests can exercise the retry/
@@ -89,7 +90,7 @@ async function runOutboxPublishSweep(prismaClient = prisma, options = {}) {
 }
 
 async function executeOutboxPublishSweep() {
-  if (running) {
+  if (running || stopping) {
     return;
   }
 
@@ -109,6 +110,7 @@ async function executeOutboxPublishSweep() {
 }
 
 function startOutboxPublisherJob() {
+  if (timer || stopping) return;
   const enabled = String(process.env.ENABLE_OUTBOX_PUBLISHER_JOB || 'true').toLowerCase() === 'true';
   if (!enabled) {
     console.log('[inventory-service][job] outbox publisher disabled by env');
@@ -129,10 +131,15 @@ function startOutboxPublisherJob() {
 }
 
 function stopOutboxPublisherJob() {
+  stopping = true;
   if (timer) {
     clearInterval(timer);
     timer = null;
   }
+  return new Promise((resolve) => {
+    const drained = () => running ? setTimeout(drained, 10) : resolve();
+    drained();
+  });
 }
 
 module.exports = {

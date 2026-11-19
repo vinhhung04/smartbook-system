@@ -103,48 +103,73 @@ async function executeReturnStock(tx, supplierReturn, items, userId) {
   const baseTimestamp = now.getTime();
   let index = 0;
   for (const item of items) {
-    const locationId = item.goods_receipt_items?.location_id;
-    if (!locationId) {
+    const receiptItem = item.goods_receipt_items;
+    const allocations = new Map();
+    if (receiptItem?.location_id) allocations.set(receiptItem.location_id, Number(receiptItem.quantity ?? item.return_qty));
+    if (receiptItem?.goods_receipt_id) {
+      // Putaway already records the receipt and destination. Keep the return tied
+      // to that provenance rather than selecting unrelated stock in the warehouse.
+      await tx.$queryRawUnsafe('SELECT id FROM goods_receipt_items WHERE id = $1::uuid FOR UPDATE', item.goods_receipt_item_id);
+      const putaways = await tx.stock_movements.findMany({
+        where: { reference_type: 'RECEIVING_SHELF_PUTAWAY', reference_id: receiptItem.goods_receipt_id, variant_id: item.variant_id, movement_status: 'POSTED', reverted: false },
+        select: { from_location_id: true, to_location_id: true, quantity: true, metadata: true },
+      });
+      for (const move of putaways) {
+        if (move.metadata?.movement_bucket !== 'PUTAWAY') continue;
+        if (allocations.has(move.from_location_id)) allocations.set(move.from_location_id, allocations.get(move.from_location_id) - Number(move.quantity));
+        if (move.to_location_id) allocations.set(move.to_location_id, (allocations.get(move.to_location_id) || 0) + Number(move.quantity));
+      }
+      const priorReturns = await tx.stock_movements.findMany({
+        where: { reference_type: 'SUPPLIER_RETURN', variant_id: item.variant_id, reverted: false, metadata: { path: ['goods_receipt_item_id'], equals: item.goods_receipt_item_id } },
+        select: { from_location_id: true, quantity: true },
+      });
+      for (const move of priorReturns) if (allocations.has(move.from_location_id)) allocations.set(move.from_location_id, allocations.get(move.from_location_id) - Number(move.quantity));
+    }
+    if (allocations.size === 0) {
       throw new SupplierReturnError("Dòng hàng chưa có vị trí lưu kho nên không thể thực hiện xuất trả", 409);
     }
-    await tx.$queryRawUnsafe(
-      "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
-      item.variant_id,
-      locationId,
-    );
-    const balance = await tx.stock_balances.findFirst({ where: { variant_id: item.variant_id, location_id: locationId } });
-    const qty = Number(item.return_qty);
-    if (!balance || Number(balance.on_hand_qty || 0) < qty || Number(balance.available_qty || 0) < qty) {
-      throw new SupplierReturnError("Không đủ số lượng khả dụng tại vị trí lưu kho để xuất trả nhà cung cấp", 409);
+    let remaining = Number(item.return_qty);
+    for (const [locationId, allocated] of [...allocations].sort(([a], [b]) => a.localeCompare(b))) {
+      if (remaining === 0 || allocated <= 0) continue;
+      await tx.$queryRawUnsafe(
+        "SELECT id FROM stock_balances WHERE variant_id = $1::uuid AND location_id = $2::uuid FOR UPDATE",
+        item.variant_id,
+        locationId,
+      );
+      const balance = await tx.stock_balances.findFirst({ where: { variant_id: item.variant_id, location_id: locationId } });
+      const qty = Math.min(remaining, allocated, Number(balance?.on_hand_qty || 0), Number(balance?.available_qty || 0));
+      if (qty <= 0) continue;
+      await tx.stock_balances.update({
+        where: { id: balance.id },
+        data: {
+          on_hand_qty: { decrement: qty },
+          available_qty: { decrement: qty },
+          version: { increment: 1 },
+          last_movement_at: now,
+        },
+      });
+      await tx.stock_movements.create({
+        data: {
+          movement_number: createMovementNumber(baseTimestamp, index, "RTN"),
+          movement_type: "OUTBOUND",
+          movement_status: "POSTED",
+          warehouse_id: supplierReturn.warehouse_id,
+          variant_id: item.variant_id,
+          from_location_id: locationId,
+          quantity: qty,
+          unit_cost: item.unit_cost,
+          reason_code: "SUPPLIER_RETURN",
+          source_service: "inventory-service",
+          reference_type: "SUPPLIER_RETURN",
+          reference_id: supplierReturn.id,
+          created_by_user_id: userId,
+          metadata: { supplier_return_item_id: item.id, goods_receipt_item_id: item.goods_receipt_item_id },
+        },
+      });
+      remaining -= qty;
+      index += 1;
     }
-    await tx.stock_balances.update({
-      where: { id: balance.id },
-      data: {
-        on_hand_qty: { decrement: qty },
-        available_qty: { decrement: qty },
-        version: { increment: 1 },
-        last_movement_at: now,
-      },
-    });
-    await tx.stock_movements.create({
-      data: {
-        movement_number: createMovementNumber(baseTimestamp, index, "RTN"),
-        movement_type: "OUTBOUND",
-        movement_status: "POSTED",
-        warehouse_id: supplierReturn.warehouse_id,
-        variant_id: item.variant_id,
-        from_location_id: locationId,
-        quantity: qty,
-        unit_cost: item.unit_cost,
-        reason_code: "SUPPLIER_RETURN",
-        source_service: "inventory-service",
-        reference_type: "SUPPLIER_RETURN",
-        reference_id: supplierReturn.id,
-        created_by_user_id: userId,
-        metadata: { supplier_return_item_id: item.id, goods_receipt_item_id: item.goods_receipt_item_id },
-      },
-    });
-    index += 1;
+    if (remaining > 0) throw new SupplierReturnError("Không đủ số lượng khả dụng tại vị trí lưu kho để xuất trả nhà cung cấp", 409);
   }
 }
 

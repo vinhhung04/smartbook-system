@@ -25,6 +25,10 @@ function startGatewayRabbitMqConsumer(io) {
     return null;
   }
 
+  let stopping = false;
+  let consumerChannel, consumerTag;
+  let setupPromise = Promise.resolve(), stopPromise;
+  const inFlight = new Set();
   const url = process.env.RABBITMQ_URL || 'amqp://rabbitmq:5672';
   const connection = amqp.connect([url]);
 
@@ -34,7 +38,10 @@ function startGatewayRabbitMqConsumer(io) {
   });
 
   const channelWrapper = connection.createChannel({
-    setup: async (channel) => {
+    setup: (channel) => {
+      if (stopping) return Promise.resolve();
+      setupPromise = (async () => {
+      consumerChannel = channel;
       await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
       await channel.assertExchange(DLX, 'direct', { durable: true });
       await channel.assertQueue(DLQ, { durable: true });
@@ -47,11 +54,36 @@ function startGatewayRabbitMqConsumer(io) {
         },
       });
       await channel.bindQueue(QUEUE, EXCHANGE, ROUTING_KEY);
-      await channel.consume(QUEUE, (msg) => handleMessage(channel, io, msg));
+      if (stopping) return;
+      const consumed = await channel.consume(QUEUE, (msg) => {
+        if (stopping) { if (msg) { try { channel.nack(msg, false, true); } catch (_error) {} } return; }
+        const pending = Promise.resolve().then(() => handleMessage(channel, io, msg));
+        inFlight.add(pending);
+        pending.finally(() => inFlight.delete(pending)).catch(() => {});
+      });
+      consumerTag = consumed.consumerTag;
+      })();
+      return setupPromise;
     },
   });
 
   console.log('[api-gateway][rabbitmq] consumer started', { queue: QUEUE, routingKey: ROUTING_KEY });
+  channelWrapper.stop = () => {
+    if (stopPromise) return stopPromise;
+    stopping = true;
+    stopPromise = (async () => {
+      const errors = [];
+      try { await setupPromise; } catch (error) { errors.push(error); }
+      try { if (consumerChannel && consumerTag) await consumerChannel.cancel(consumerTag); } catch (error) { errors.push(error); }
+      const drained = await Promise.allSettled([...inFlight]);
+      errors.push(...drained.filter(result => result.status === 'rejected').map(result => result.reason));
+      for (const close of [() => channelWrapper.close(), () => connection.close()]) {
+        try { await close(); } catch (error) { errors.push(error); }
+      }
+      if (errors.length) throw errors[0];
+    })();
+    return stopPromise;
+  };
   return channelWrapper;
 }
 

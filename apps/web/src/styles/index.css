@@ -25,3 +25,55 @@
     display: none !important;
   }
 }
+
+/* StarBorder (components/public/star-border.tsx): lights sliding along a pill's edges. */
+@keyframes star-border-bottom {
+  0% { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(-100%, 0%); opacity: 0; }
+}
+@keyframes star-border-top {
+  0% { transform: translate(0%, 0%); opacity: 1; }
+  100% { transform: translate(100%, 0%); opacity: 0; }
+}
+
+/* ShinyText (idea from React Bits, github.com/DavidHDev/react-bits): a light sweep across a label while the AI works. */
+.ai-shiny-text {
+  background: linear-gradient(110deg, var(--foreground) 38%, var(--primary) 50%, var(--foreground) 62%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-shiny-sweep 2.4s linear infinite;
+}
+@keyframes ai-shiny-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+
+/* Indeterminate bar: work is running but the server reports no finer progress. */
+.ai-indeterminate {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+}
+.ai-indeterminate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  animation: ai-indeterminate 1.5s ease-in-out infinite;
+}
+@keyframes ai-indeterminate {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(260%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-shiny-text { animation: none; background: none; color: inherit; }
+  .ai-indeterminate::after { animation: none; width: 100%; opacity: 0.35; }
+}
+

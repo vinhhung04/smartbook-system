@@ -3,13 +3,21 @@ const { getMeter } = require('@smartbook/shared/metrics');
 const { prisma } = require('./prisma');
 const meter = getMeter('inventory-service');
 
-let lastOutboxPending = 0;
-meter.createObservableGauge('outbox_pending_total').addCallback((result) => {
-  result.observe(lastOutboxPending);
-});
-function setOutboxPending(count) {
-  lastOutboxPending = count;
+// Query durable state at scrape time; worker batch size is not queue depth.
+function observable(name, read) {
+  meter.createObservableGauge(name).addCallback(async result => {
+    try { result.observe(await read()); }
+    catch { console.warn('[inventory-service][metrics] collection failed', name); }
+  });
 }
+observable('outbox_pending_total', () => prisma.integration_outbox.count({ where: { status: 'PENDING' } }));
+observable('outbox_oldest_pending_age_seconds', async () => {
+  const row = await prisma.integration_outbox.aggregate({ where: { status: 'PENDING' }, _min: { occurred_at: true } });
+  return row._min.occurred_at ? Math.max(0, (Date.now() - row._min.occurred_at) / 1000) : 0;
+});
+observable('outbox_failed_records', () => prisma.integration_outbox.count({ where: { status: 'FAILED' } }));
+// Kept for worker API compatibility; the gauge no longer trusts sampled batches.
+function setOutboxPending() {}
 
 const outboxFailedCounter = meter.createCounter('outbox_failed_total');
 const rabbitmqPublishFailCounter = meter.createCounter('rabbitmq_publish_fail_total');
@@ -55,6 +63,27 @@ meter.createObservableGauge('db_up').addCallback(async (result) => {
   } catch {
     result.observe(0);
   }
+});
+
+// Business anomaly signals for the operations alerts (read-only, computed at
+// scrape time). task_type is folded into a fixed set so the label stays bounded.
+const GOODS_RECEIPT_STUCK_HOURS = Number(process.env.GOODS_RECEIPT_STUCK_HOURS || 24);
+const TASK_TYPES = ['RECEIVING', 'PUTAWAY', 'PICKING', 'PACKING', 'OUTBOUND', 'TRANSFER', 'AUDIT'];
+observable('goods_receipt_stuck_total', () => prisma.goods_receipts.count({
+  where: { status: 'DRAFT', created_at: { lt: new Date(Date.now() - GOODS_RECEIPT_STUCK_HOURS * 3_600_000) } },
+}));
+meter.createObservableGauge('warehouse_exceptions_recent').addCallback(async (result) => {
+  try {
+    const rows = await prisma.warehouse_exception_reports.groupBy({
+      by: ['task_type'], _count: { _all: true }, where: { created_at: { gte: new Date(Date.now() - 86_400_000) } },
+    });
+    const counts = Object.fromEntries([...TASK_TYPES, 'OTHER'].map(type => [type, 0]));
+    for (const row of rows) {
+      const type = TASK_TYPES.includes(String(row.task_type).toUpperCase()) ? String(row.task_type).toUpperCase() : 'OTHER';
+      counts[type] += row._count._all;
+    }
+    for (const [task_type, count] of Object.entries(counts)) result.observe(count, { task_type, window: '24h' });
+  } catch { console.warn('[inventory-service][metrics] collection failed', 'warehouse_exceptions_recent'); }
 });
 
 module.exports = {

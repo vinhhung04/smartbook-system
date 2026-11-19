@@ -2,16 +2,42 @@
 # certificates on its own (ACME state lives in the caddy_data volume) and redirects
 # HTTP to HTTPS for every site below.
 
+{
+	# Upstream error logs use the global logger, separately from access logs.
+	log {
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers delete
+				resp_headers delete
+			}
+		}
+	}
+}
+
 (common) {
 	encode zstd gzip
+	@ai_body path /ai /ai/* /api/ai /api/ai/* /public/discover
+	request_body @ai_body {
+		max_size 16777216
+	}
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		-Server
 	}
 	log {
 		output stdout
-		format json
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers delete
+				resp_headers delete
+			}
+		}
 	}
+	log_append request_id {http.request.header.X-Request-Id}
 }
 
 smartbook.io.vn {

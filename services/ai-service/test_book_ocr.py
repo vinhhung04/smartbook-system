@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import llm_provider
-from book_ocr import service
+from book_ocr import service, visual_verification
 from book_ocr.config import load_settings
 from book_ocr.errors import BookOcrError
 from book_ocr.extractor import FallbackBudget
@@ -74,10 +74,15 @@ class FakeProvider:
             self.analyze_images.return_value = (answer, usage(model))
 
 
+VERIFY_MODEL = "google/gemini-3.1-flash-lite"
+
+
 def settings(**overrides):
+    # The independent second-model check is off here so every test counts only the
+    # OCR model's calls; ExtractionTests.verified_scan turns it on explicitly.
     base = dataclasses.replace(load_settings(), enabled=True, model="qwen/qwen3.7-flash", fallback_model=None,
                                max_file_bytes=2 * 1024 * 1024, max_total_bytes=5 * 1024 * 1024, max_images=3,
-                               fallback_daily_budget_usd=0.5)
+                               fallback_daily_budget_usd=0.5, visual_verification_enabled=False)
     return dataclasses.replace(base, **overrides)
 
 
@@ -97,6 +102,8 @@ def http_status_error(code):
 class BookOcrTestCase(unittest.TestCase):
     def setUp(self):
         service.extraction_cache.clear()
+        visual_verification.verification_cache.clear()
+        visual_verification.verify_budget = visual_verification.FallbackBudget()
 
 
 class ExtractionTests(BookOcrTestCase):
@@ -302,6 +309,53 @@ class ExtractionTests(BookOcrTestCase):
         self.assertEqual(result["metadata"]["authors"], ["Ngô Tất Tố", "Phan Văn A"])
         self.assertFalse(result["proposals"]["authorsText"]["safeToApply"])
 
+    def verified_scan(self, answer, uploads, verifier_answer=None, verifier_error=None):
+        providers = {"qwen/qwen3.7-flash": FakeProvider("qwen/qwen3.7-flash", answer),
+                     VERIFY_MODEL: FakeProvider(VERIFY_MODEL, verifier_answer, verifier_error)}
+        cfg = settings(visual_verification_enabled=True, verify_model=VERIFY_MODEL)
+        return scan(uploads, answer, cfg=cfg, providers=providers)
+
+    def test_visual_verification_wired_into_the_scan_response(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")],
+                              authors=[obs("front_cover", ["Nguyễn Nhật Ánh"], "NGUYỄN NHẬT ÁNH")])
+        verifier = {"images": [{"source": "front_cover", "legible": True, "lines": [
+            {"text": "MẮT BIẾC", "box_2d": [350, 100, 440, 690]}, {"text": "Truyện dài"}]}]}
+        result, providers = self.verified_scan(answer, {"front_cover": jpeg()}, verifier)
+        self.assertEqual(result["visualEvidence"]["title"],
+                         [{"source": "front_cover", "status": "VERIFIED", "readText": "MẮT BIẾC",
+                           "boxes": [{"x": 0.1, "y": 0.35, "width": 0.59, "height": 0.09}]}])
+        # Read on the image by the OCR model, but not by the independent re-read.
+        self.assertEqual(result["visualEvidence"]["authors"][0]["status"], "UNVERIFIED")
+        # The verifier's call is paid for and reported with the scan's own cost.
+        self.assertEqual([c["trigger"] for c in result["usage"]["calls"]], ["primary", "verify"])
+        self.assertAlmostEqual(result["usage"]["costUsd"], 0.0008)
+        # Blind: the verifier is never shown the OCR model's readings.
+        verify_prompt = providers[VERIFY_MODEL].analyze_images.call_args.args[1]
+        self.assertNotIn("Mắt Biếc", verify_prompt)
+
+    def test_verifier_failure_keeps_the_scan_and_only_drops_the_evidence(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")])
+        result, _ = self.verified_scan(answer, {"front_cover": jpeg()}, verifier_error=http_status_error(503))
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["visualEvidence"], {})
+        self.assertIn("VISUAL_VERIFICATION_UNAVAILABLE", result["warnings"])
+
+    def test_anomalies_wired_into_the_scan_response(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")],
+                              isbn=[obs("front_cover", ISBN), obs("copyright_page", ISBN_OTHER)])
+        result, _ = scan({"front_cover": jpeg(), "copyright_page": jpeg()}, answer)
+        self.assertEqual(result["fields"]["isbn"]["status"], "CONFLICTED")
+        isbn_anomalies = [a for a in result["anomalies"] if a["anomalyType"] == "ISBN_ANOMALY"]
+        self.assertEqual(len(isbn_anomalies), 1)
+        self.assertEqual(isbn_anomalies[0]["severity"], "CRITICAL")
+        self.assertTrue(isbn_anomalies[0]["requiresHumanReview"])
+
+    def test_visual_verification_off_switch_makes_no_second_call(self):
+        answer = model_answer(title=[obs("front_cover", "Mắt Biếc")])
+        result, _ = scan({"front_cover": jpeg()}, answer, cfg=settings(visual_verification_enabled=False))
+        self.assertEqual(result["visualEvidence"], {})
+        self.assertEqual([c["trigger"] for c in result["usage"]["calls"]], ["primary"])
+
 
 class BarcodeTests(BookOcrTestCase):
     def test_decoded_barcode_corroborates_image_isbn(self):
@@ -315,6 +369,92 @@ class BarcodeTests(BookOcrTestCase):
         self.assertIsNone(result["metadata"]["isbn13"])
         self.assertIn("BARCODE_NOT_ISBN", result["warnings"])
         self.assertEqual(result["otherCodes"][0]["value"], "8934974184027")
+        self.assertEqual(result["otherCodes"][0]["kind"], "EAN13")
+
+
+class EanCrossLookupTests(BookOcrTestCase):
+    """A Vietnamese book whose photos show only its retail EAN-13 (893...)."""
+    EAN = "8935309501694"
+    ANSWER = model_answer(title=[obs("front_cover", "Tớ Đến Với Khoa Học: Đa Dạng Thực Vật")])
+
+    def lookup(self, cross, **overrides):
+        record = {"found": True, "isbn": self.EAN, "isbn13": None, "codeKind": "EAN13",
+                  "title": "Tớ Đến Với Khoa Học: Đa Dạng Thực Vật", "authors": [], "conflictedFields": [],
+                  "lowConfidenceFields": [], "crossLookup": cross}
+        record.update(overrides)
+        return AsyncMock(return_value=record)
+
+    @staticmethod
+    def cross(status, value=None, isbn10=None, codes=None):
+        evidence = [{"source": "fahasa", "codes": codes or ([value] if value else []), "sourceUrl": "https://f.test/p"}]
+        return {"direction": "EAN_TO_ISBN", "scannedCode": "8935309501694", "status": status, "value": value,
+                "isbn10": isbn10, "evidence": evidence if (value or codes) else [], "reasons": []}
+
+    def test_ean_only_book_is_looked_up_by_its_ean_and_kept_as_the_barcode(self):
+        lookup = self.lookup(self.cross("NOT_FOUND"))
+        result, _ = scan({"back_cover": jpeg(), "front_cover": jpeg()}, self.ANSWER, lookup=lookup, barcode=self.EAN)
+        lookup.assert_awaited_once_with(self.EAN)
+        self.assertEqual((result["isbnLookup"]["ean13"], result["isbnLookup"]["isbn"]), (self.EAN, None))
+        p = result["proposals"]
+        # The EAN is never an ISBN, and no ISBN is invented for it.
+        self.assertIsNone(result["metadata"]["isbn13"])
+        for field in ("isbn", "isbn13", "isbn10"):
+            self.assertIsNone(p[field]["value"], field)
+            self.assertEqual(p[field]["status"], "MISSING")
+        self.assertEqual((p["internalBarcode"]["value"], p["internalBarcode"]["source"]), (self.EAN, "barcode"))
+
+    def test_isbn_linked_to_the_ean_is_offered_with_its_evidence_but_never_applied_by_itself(self):
+        cross = self.cross("VERIFIED", "9786043927436", "6043927438")
+        result, _ = scan({"back_cover": jpeg(), "front_cover": jpeg()}, self.ANSWER, lookup=self.lookup(cross),
+                         barcode=self.EAN)
+        p = result["proposals"]
+        self.assertEqual((p["isbn13"]["value"], p["isbn13"]["status"], p["isbn13"]["safeToApply"]),
+                         ("9786043927436", "LOOKUP_ONLY", False))
+        self.assertIn("CROSS_VERIFIED", p["isbn13"]["reasons"])
+        self.assertEqual(p["isbn10"]["value"], "6043927438")
+        self.assertEqual(result["isbnLookup"]["lookup"]["crossLookup"]["evidence"][0]["sourceUrl"], "https://f.test/p")
+
+    def test_conflicting_isbns_are_listed_without_a_value_and_do_not_block_saving(self):
+        cross = self.cross("CONFLICTED", codes=["9786043927436", "9786043757903"])
+        result, _ = scan({"back_cover": jpeg(), "front_cover": jpeg()}, self.ANSWER, lookup=self.lookup(cross),
+                         barcode=self.EAN)
+        p = result["proposals"]["isbn13"]
+        self.assertEqual((p["value"], p["status"]), (None, "MISSING"))
+        self.assertEqual({o["value"] for o in p["options"]}, {"9786043927436", "9786043757903"})
+        self.assertIn("CROSS_CONFLICTED", p["reasons"])
+
+    def test_a_record_about_another_book_offers_nothing(self):
+        cross = self.cross("VERIFIED", "9786043927436")
+        result, _ = scan({"back_cover": jpeg(), "front_cover": jpeg()}, self.ANSWER,
+                         lookup=self.lookup(cross, title="Hoàng Tử Bé"), barcode=self.EAN)
+        self.assertIsNone(result["proposals"]["isbn13"]["value"])
+
+    def test_ean_with_a_wrong_check_digit_is_neither_looked_up_nor_proposed(self):
+        lookup = self.lookup(self.cross("NOT_FOUND"))
+        result, _ = scan({"back_cover": jpeg()}, self.ANSWER, lookup=lookup, barcode="8935309501695")
+        lookup.assert_not_awaited()
+        self.assertEqual(result["isbnLookup"]["status"], "SKIPPED_NO_VALID_ISBN")
+        self.assertEqual(result["otherCodes"][0]["kind"], "INVALID_CHECKSUM")
+        self.assertEqual(result["proposals"]["internalBarcode"]["status"], "MISSING")
+
+    def test_barcode_and_printed_ean_agreeing_corroborate_two_different_eans_conflict(self):
+        printed = {**self.ANSWER, "otherCodes": [{"source": "back_cover", "label": "EAN", "value": self.EAN}]}
+        result, _ = scan({"back_cover": jpeg(), "front_cover": jpeg()}, printed, barcode=self.EAN)
+        barcode = result["proposals"]["internalBarcode"]
+        self.assertEqual((barcode["status"], barcode["safeToApply"]), ("CORROBORATED", True))
+        misread = {**self.ANSWER, "otherCodes": [{"source": "back_cover", "label": "EAN", "value": "8935235226272"}]}
+        # Other photos: the same ones would re-use the cached model answer.
+        result, _ = scan({"back_cover": jpeg(color=(1, 2, 3)), "front_cover": jpeg()}, misread, barcode=self.EAN)
+        self.assertEqual(result["proposals"]["internalBarcode"]["status"], "CONFLICTED")
+        self.assertEqual(result["isbnLookup"]["status"], "SKIPPED_NO_VALID_ISBN")  # which EAN? none is looked up
+
+    def test_an_isbn_read_from_the_photos_is_looked_up_by_isbn_not_ean(self):
+        answer = model_answer(title=self.ANSWER["observations"]["title"],
+                              isbn=[obs("copyright_page", ISBN, "ISBN " + ISBN)])
+        lookup = AsyncMock(return_value={"found": False})
+        scan({"back_cover": jpeg(), "copyright_page": jpeg(), "front_cover": jpeg()}, answer,
+             lookup=lookup, barcode=self.EAN)
+        lookup.assert_awaited_once_with(ISBN)
 
 
 class LookupReconciliationTests(BookOcrTestCase):

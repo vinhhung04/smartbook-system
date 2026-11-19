@@ -87,6 +87,7 @@ function mapCatalogRecord(variant) {
     variant_id: variant.id,
     isbn13: variant.isbn13 || null,
     isbn10: variant.isbn10 || null,
+    internal_barcode: variant.internal_barcode || null,
     title: book.title || null,
     subtitle: book.subtitle || null,
     authors: (book.book_authors || []).map((item) => item.authors?.full_name).filter(Boolean),

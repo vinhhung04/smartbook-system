@@ -116,10 +116,32 @@ class ScanUsage(BaseModel):
     calls: list[UsageCall] = Field(default_factory=list)
 
 
+AnomalySeverity = Literal["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+AnomalyType = Literal["ISBN_ANOMALY", "AUTHOR_TRANSLATOR_ANOMALY", "PUBLICATION_ANOMALY",
+                      "PHYSICAL_METADATA_ANOMALY", "CROSS_SOURCE_ANOMALY"]
+
+
+class Anomaly(BaseModel):
+    """Feature B (rule-based v1) - see anomaly_detection.py. Never auto-applies
+    or rejects a value; recommendedAction is a suggestion for a human."""
+    anomalyType: AnomalyType
+    severity: AnomalySeverity
+    affectedFields: list[str]
+    detectedValue: Any = None
+    expectedValue: Any = None
+    explanation: str
+    evidence: list[str]
+    recommendedAction: str
+    requiresHumanReview: bool
+
+
 class IsbnLookupOutcome(BaseModel):
     status: Literal["FOUND", "NOT_FOUND", "SKIPPED_NO_VALID_ISBN", "SKIPPED_ISBN_CONFLICT",
                     "TIMEOUT", "ERROR", "DISABLED"]
     isbn: str | None = None
+    # Set when no ISBN was read and the lookup ran on the one retail EAN-13 the
+    # images / barcode show instead (its ISBN, if any, comes from crossLookup).
+    ean13: str | None = None
     editionMatches: bool | None = None
     lookup: dict | None = None
 
@@ -132,6 +154,12 @@ class ScanResponse(BaseModel):
     metadata: dict
     fields: dict[str, FieldResult]
     fieldEvidence: dict[str, list[dict]]
+    # Feature A: per observation, a second model's blind re-read of that image
+    # checked against the reading taken from it - {} when disabled, over budget
+    # or the verifier failed (see visual_verification.py), never missing.
+    visualEvidence: dict[str, list[dict]] = Field(default_factory=dict)
+    # Feature B: rule-based only in this version - see anomaly_detection.py.
+    anomalies: list[Anomaly] = Field(default_factory=list)
     missingFields: list[str]
     conflictedFields: list[str]
     otherCodes: list[dict]

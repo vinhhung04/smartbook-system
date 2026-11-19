@@ -188,3 +188,14 @@ test('executeReturnStock refuses a line whose GRN item has no putaway location',
   const items = [{ id: 'sri-1', goods_receipt_item_id: 'gri-1', variant_id: 'v1', return_qty: 1, unit_cost: 50000, goods_receipt_items: { location_id: null } }];
   await assert.rejects(() => executeReturnStock(stub, { id: 'ret-1', warehouse_id: 'wh-1' }, items, 'user-1'), SupplierReturnError);
 });
+
+test('SB13: supplier return follows the receipt-stamped putaway destinations', async () => {
+  const balance = { id: 'bal-shelf', on_hand_qty: 10, available_qty: 10, version: 1 };
+  const { stub, updates } = createExecuteStub({ balance });
+  stub.stock_movements.findMany = async ({ where }) => where.reference_type === 'SUPPLIER_RETURN' ? [] : [{ to_location_id: 'shelf', quantity: 10, metadata: { movement_bucket: 'PUTAWAY' } }];
+  const items = [{ id: 'sri-1', goods_receipt_item_id: 'gri-1', variant_id: 'v1', return_qty: 10, unit_cost: 5, goods_receipt_items: { goods_receipt_id: 'receipt', location_id: null } }];
+  await executeReturnStock(stub, { id: 'ret', warehouse_id: 'wh' }, items, 'manager');
+  assert.equal(balance.on_hand_qty, 0);
+  assert.equal(updates.movements[0].from_location_id, 'shelf');
+  assert.equal(updates.movements[0].metadata.goods_receipt_item_id, 'gri-1');
+});

@@ -388,7 +388,7 @@ async function executeSupplierReturn(req, res) {
 
       const items = await tx.supplier_return_items.findMany({
         where: { supplier_return_id: supplierReturn.id },
-        include: { goods_receipt_items: { select: { location_id: true } } },
+        include: { goods_receipt_items: { select: { location_id: true, goods_receipt_id: true, quantity: true } } },
       });
       await executeReturnStock(tx, supplierReturn, items, userId);
 

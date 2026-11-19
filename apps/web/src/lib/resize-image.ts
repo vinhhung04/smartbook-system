@@ -44,3 +44,15 @@ export function resizeImageFile(
     reader.readAsDataURL(file);
   });
 }
+
+/** A resized copy of `file` as a `data:image/jpeg` URL - small enough to store as a
+ *  book's cover_image_url (accepted by catalog-metadata.validation and the CSP's img-src). */
+export async function imageFileToDataUrl(file: File, options: { maxDimension?: number; quality?: number } = {}): Promise<string> {
+  const resized = await resizeImageFile(file, options);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Không đọc được file ảnh'));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(resized);
+  });
+}

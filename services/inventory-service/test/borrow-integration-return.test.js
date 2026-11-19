@@ -13,6 +13,7 @@ let state;
 function matches(row, where = {}) {
   return Object.entries(where).every(([key, cond]) => {
     if (cond !== null && typeof cond === 'object' && 'gte' in cond) return row[key] >= cond.gte;
+    if (cond !== null && typeof cond === 'object' && 'in' in cond) return cond.in.includes(row[key]);
     return row[key] === cond;
   });
 }
@@ -22,6 +23,7 @@ function model(name) {
   return {
     async findUnique({ where }) { return rows().find((row) => matches(row, where)) || null; },
     async findFirst({ where }) { return rows().find((row) => matches(row, where)) || null; },
+    async findMany({ where }) { return rows().filter((row) => matches(row, where)); },
     async create({ data }) {
       const row = { id: `${name}-${rows().length + 1}`, ...data };
       rows().push(row);
@@ -55,6 +57,8 @@ class FakePrismaClient {
   }
 
   async $transaction(fn) { return fn(this); }
+
+  async $queryRawUnsafe() { return []; }
 }
 
 require.cache[require.resolve('@prisma/client')] = {
@@ -92,7 +96,7 @@ function createRes() {
 async function returnLoan(extra = {}) {
   const res = createRes();
   await returnBorrowedLoan({
-    body: { loan_id: LOAN_ID, variant_id: VARIANT_ID, warehouse_id: BRANCH_ID, quantity: 1, idempotency_key: `ret-${Math.random()}`, ...extra },
+    body: { loan_id: LOAN_ID, variant_id: VARIANT_ID, warehouse_id: BRANCH_ID, quantity: 1, location_id: LOCATION_ID, idempotency_key: `ret-${Math.random()}`, ...extra },
     requestId: 'req-1',
   }, res);
   return res;
@@ -134,4 +138,49 @@ test('replaying the same idempotency key does not write a second event', async (
   const replay = await returnLoan({ idempotency_key: 'same-key' });
   assert.equal(replay.statusCode, 200);
   assert.equal(state.integration_outbox.length, 1);
+});
+
+test('a returned copy needs the place it was put back, unless it is lost', async () => {
+  resetState();
+  const res = await returnLoan({ location_id: undefined });
+  assert.equal(res.statusCode, 400);
+  assert.equal(state.stock_balances[0].borrowed_qty, 1);
+
+  resetState();
+  assert.equal((await returnLoan({ location_id: undefined, mark_lost: true })).statusCode, 201);
+});
+
+test('the copy leaves the shelf it was lent from, not the shelf lending the most', async () => {
+  const SHELF_A = '55555555-5555-4555-8555-555555555555';
+  const SHELF_B = '66666666-6666-4666-8666-666666666666';
+  resetState();
+  // Shelf A lends more copies overall, but this loan's copy came from shelf B.
+  state.stock_balances = [
+    { variant_id: VARIANT_ID, warehouse_id: BRANCH_ID, location_id: SHELF_A, on_hand_qty: 5, available_qty: 0, borrowed_qty: 5, damaged_qty: 0 },
+    { variant_id: VARIANT_ID, warehouse_id: BRANCH_ID, location_id: SHELF_B, on_hand_qty: 1, available_qty: 0, borrowed_qty: 1, damaged_qty: 0 },
+  ];
+  state.stock_movements = [{
+    source_service: 'BORROW_SERVICE', reference_type: 'LOAN_TRANSACTION', reference_id: LOAN_ID, variant_id: VARIANT_ID,
+    warehouse_id: BRANCH_ID, movement_type: 'BORROW', from_location_id: SHELF_B, quantity: 1, idempotency_key: 'lend',
+  }];
+
+  // Put back on shelf B (the fake has no upsert for other targets; that path is unchanged).
+  const res = await returnLoan({ location_id: SHELF_B });
+  assert.equal(res.statusCode, 201);
+  const [shelfA, shelfB] = state.stock_balances;
+  assert.deepEqual([shelfA.borrowed_qty, shelfA.available_qty], [5, 0]);
+  assert.deepEqual([shelfB.borrowed_qty, shelfB.available_qty], [0, 1]);
+  assert.equal(state.stock_movements.at(-1).from_location_id, SHELF_B);
+});
+
+test('a return without a shelf is refused unless Borrow marks a pre-shelf approved operation', async () => {
+  resetState();
+  assert.equal((await returnLoan({ location_id: undefined })).statusCode, 400);
+  assert.equal(state.stock_movements.length, 0);
+
+  resetState();
+  const res = await returnLoan({ location_id: undefined, return_to_lent_from_shelf: true });
+  assert.equal(res.statusCode, 201);
+  assert.equal(state.stock_balances[0].available_qty, 1, 'goes back to the shelf it was lent from');
+  assert.equal(state.stock_movements[0].to_location_id, LOCATION_ID);
 });

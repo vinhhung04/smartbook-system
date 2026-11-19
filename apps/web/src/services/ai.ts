@@ -171,6 +171,40 @@ export interface IsbnConflict {
   alternatives: Array<{ source: IsbnSourceName; value: unknown }>;
 }
 
+/** ai-service isbn_matching.cross_identify. */
+export interface CrossLookup {
+  direction: 'EAN_TO_ISBN' | 'ISBN_TO_EAN';
+  scannedCode: string;
+  status: 'VERIFIED' | 'REVIEW_REQUIRED' | 'CONFLICTED' | 'NOT_FOUND';
+  /** The linked ISBN-13 (EAN_TO_ISBN) or retail EAN-13 (ISBN_TO_EAN); null unless one code was linked. */
+  value: string | null;
+  isbn10: string | null;
+  /** basis absent = the record states both codes; set = a legal-deposit row matched by title + publisher (+ authors). */
+  evidence: Array<{ source: string; codes: string[]; sourceUrl?: string | null; title?: string | null; publisher?: string | null; publishedDate?: string | null;
+    basis?: 'TITLE_PUBLISHER_AUTHOR' | 'TITLE_PUBLISHER' }>;
+  /** Every linked code (a book reprinted under new ISBNs, or sold under several EANs), preferred first. */
+  candidates?: CrossLookupCandidate[];
+  /** The one candidate whose year is the edition's year: a hint for the reviewer, never applied by itself. */
+  preferred?: string | null;
+  reasons: string[];
+}
+
+export interface CrossLookupCandidate {
+  value: string;
+  isbn10: string | null;
+  sources: string[];
+  titles: string[];
+  publisher: string | null;
+  /** The distributor that partnered the NXB (legal-deposit register). */
+  partner: string | null;
+  /** Deposit years (register) or the listing's year (store). */
+  years: number[];
+  depositDates: string[];
+  sourceUrl: string | null;
+  basis: 'TITLE_PUBLISHER_AUTHOR' | 'TITLE_PUBLISHER';
+  preferred: boolean;
+}
+
 export interface LookupBookByIsbnResponse {
   intelligence?: import('./metadata-pipeline-types').MetadataPipeline;
   translator?: string[];
@@ -247,6 +281,10 @@ export interface LookupBookByIsbnResponse {
   keywords: string[];
   manualEntryRequired: boolean;
   reason?: string;
+  /** What the looked-up code is (ai-service `_code_kind`); absent on results cached before it existed. */
+  codeKind?: 'ISBN13' | 'ISBN10' | 'EAN13' | 'INVALID';
+  /** EAN-13 -> ISBN (or ISBN -> retail EAN-13) from source records that state both codes. */
+  crossLookup?: CrossLookup;
   /** Set when no source carries the code ("Không tìm thấy thông tin sách theo mã đã nhập."). */
   message?: string;
   verification?: IsbnSearchVerification;

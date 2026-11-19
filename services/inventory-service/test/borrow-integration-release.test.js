@@ -22,6 +22,7 @@ function model(name) {
   return {
     async findUnique({ where }) { return rows().find((row) => matches(row, where)) || null; },
     async findFirst({ where }) { return rows().find((row) => matches(row, where)) || null; },
+    async findMany({ where }) { return rows().filter((row) => matches(row, where)); },
     async create({ data }) {
       const row = { id: `${name}-${rows().length + 1}`, ...data };
       rows().push(row);

@@ -22,6 +22,7 @@ export function LookupSearchCard({
   onScanClick,
   lookupLoading,
   hasLookupData,
+  compact = false,
 }: {
   isbnInput: string;
   onIsbnInputChange: (value: string) => void;
@@ -29,11 +30,13 @@ export function LookupSearchCard({
   onScanClick: () => void;
   lookupLoading: boolean;
   hasLookupData: boolean;
+  /** A book is on screen: one row (field + buttons), no explanations. */
+  compact?: boolean;
 }) {
   const shape = isbnShape(isbnInput);
 
   return (
-    <div className="max-w-3xl space-y-2.5">
+    <div className={compact ? "space-y-2" : "max-w-3xl space-y-2.5"}>
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[14px] font-semibold text-foreground">Tra cứu ISBN</h3>
         <span className="text-[12px] text-muted-foreground">
@@ -41,7 +44,7 @@ export function LookupSearchCard({
         </span>
       </div>
       {/* Stacked in the narrow input column; a row on tablets where the panel spans the page. */}
-      <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+      <div className={compact ? "flex flex-col gap-2 sm:flex-row" : "flex flex-col gap-2 sm:flex-row lg:flex-col"}>
         <div className="relative min-w-0 flex-1">
           <label htmlFor="isbnLookup" className="sr-only">ISBN hoặc mã vạch sách (bắt buộc)</label>
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -63,7 +66,7 @@ export function LookupSearchCard({
             className="h-12 w-full rounded-xl border border-border bg-input-background pl-10 pr-4 font-mono text-[15px] tabular-nums tracking-wide text-foreground outline-none transition-[border-color,box-shadow] placeholder:font-sans placeholder:text-[13.5px] placeholder:tracking-normal placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/25"
           />
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex lg:grid">
+        <div className={compact ? "grid grid-cols-2 gap-2 sm:flex" : "grid grid-cols-2 gap-2 sm:flex lg:grid"}>
           <button
             type="button"
             onClick={onLookup}
@@ -93,7 +96,7 @@ export function LookupSearchCard({
           </span>
         ) : "Dấu gạch và khoảng trắng được bỏ tự động. Mã vạch bán lẻ cũng tra được qua nhà sách trực tuyến."}
       </p>
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t border-border pt-3 text-[12.5px]">
+      <dl hidden={compact} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t border-border pt-3 text-[12.5px]">
         <dt className="font-medium text-foreground">ISBN-13 / ISBN-10</dt><dd className="text-muted-foreground">Kiểm tra checksum, rồi hỏi từng nguồn theo đúng mã</dd>
         <dt className="font-medium text-foreground">Mã vạch EAN-13</dt><dd className="text-muted-foreground">Mã bán lẻ không phải ISBN — tra qua nhà sách trực tuyến</dd>
         <dt className="font-medium text-foreground">Quét camera</dt><dd className="text-muted-foreground">Đọc mã vạch in trên bìa sau rồi tra như gõ tay</dd>

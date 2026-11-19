@@ -47,8 +47,14 @@ async function pingDatabases() {
   };
 }
 
-async function closePools() {
-  await Promise.allSettled([inventoryPool.end(), borrowPool.end()]);
+let closePromise;
+function closePools() {
+  if (!closePromise) closePromise = (async () => {
+    const results = await Promise.allSettled([inventoryPool.end(), borrowPool.end()]);
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+  })();
+  return closePromise;
 }
 
 module.exports = {

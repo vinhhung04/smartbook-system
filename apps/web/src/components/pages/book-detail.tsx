@@ -11,6 +11,7 @@ import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
+import { classifyCode } from './ai-import/utils';
 
 interface BookLocation {
   warehouse_name: string;
@@ -246,9 +247,12 @@ export function BookDetailPage() {
     if (editForm.cover_image_url?.trim()) payload.cover_image_url = editForm.cover_image_url.trim();
     if (editForm.publish_year.trim()) payload.publish_year = Number(editForm.publish_year);
     if (isbnOrBarcode) {
-      if (/^\d{13}$/.test(isbnOrBarcode)) payload.isbn13 = isbnOrBarcode;
-      else if (/^\d{10}$/.test(isbnOrBarcode)) payload.isbn10 = isbnOrBarcode;
-      else payload.internal_barcode = isbnOrBarcode;
+      // Each code to the column of its own kind: a retail EAN-13 (893...) is the barcode, not an ISBN.
+      const { kind, digits } = /^[\dXx\s-]+$/.test(isbnOrBarcode) ? classifyCode(isbnOrBarcode) : { kind: "WRONG_LENGTH", digits: "" };
+      if (kind === "BAD_CHECKSUM_13" || kind === "BAD_CHECKSUM_10") { toast.error("Mã ISBN / EAN-13 sai số kiểm tra"); return; }
+      if (kind === "ISBN13") payload.isbn13 = digits;
+      else if (kind === "ISBN10") payload.isbn10 = digits;
+      else payload.internal_barcode = kind === "EAN13" ? digits : isbnOrBarcode;
     }
 
     try {

@@ -10,11 +10,12 @@ function createServiceAuthHeader() {
       sub: SERVICE_ACTOR_ID,
       email: 'borrow-service@smartbook.local',
       full_name: 'Borrow Service',
+      service: 'borrow-service',
       is_superuser: true,
       permissions: ['borrow.read', 'borrow.write', 'inventory.stock.read', 'inventory.stock.write'],
     },
     process.env.JWT_SECRET,
-    { expiresIn: '10m' }
+    { expiresIn: '10m', issuer: 'borrow-service', audience: 'inventory-service' }
   );
 
   return `Bearer ${token}`;
@@ -39,7 +40,10 @@ function getInventoryAuthHeader(authHeader) {
 }
 
 async function requestInventory(path, options = {}) {
-  const response = await fetch(`${INVENTORY_SERVICE_URL}${path}`, options);
+  const response = await fetch(`${INVENTORY_SERVICE_URL}${path}`, {
+    ...options,
+    signal: options.signal || AbortSignal.timeout(10_000),
+  });
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -109,9 +113,30 @@ async function releaseReservation({ reservation_id, reason, idempotency_key, aut
   });
 }
 
-async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader, requestId }) {
+// Move a reservation's stock hold to the shelves the librarian actually took the copies from.
+async function reallocateReservationStock({ reservation_id, warehouse_id, picks, idempotency_key, handled_by_user_id, authHeader, requestId }) {
+  return requestInventory('/api/borrow-integration/reservations/reallocate', {
+    method: 'POST',
+    signal: AbortSignal.timeout(10000),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: getInventoryAuthHeader(authHeader),
+      ...correlationHeader(requestId),
+    },
+    body: JSON.stringify({
+      reservation_id,
+      warehouse_id,
+      picks,
+      idempotency_key,
+      handled_by_user_id,
+    }),
+  });
+}
+
+async function consumeReservation({ reservation_id, loan_id, loan_number, warehouse_id, idempotency_key, handled_by_user_id, authHeader, requestId, timeoutMs }) {
   return requestInventory('/api/borrow-integration/reservations/consume', {
     method: 'POST',
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
@@ -140,11 +165,13 @@ async function returnBorrowedStock({
   mark_lost,
   idempotency_key,
   handled_by_user_id,
+  return_to_lent_from_shelf,
   authHeader,
   requestId,
 }) {
   return requestInventory('/api/borrow-integration/loans/return', {
     method: 'POST',
+    signal: AbortSignal.timeout(10000),
     headers: {
       'Content-Type': 'application/json',
       Authorization: getInventoryAuthHeader(authHeader),
@@ -162,6 +189,7 @@ async function returnBorrowedStock({
       mark_lost,
       idempotency_key,
       handled_by_user_id,
+      ...(return_to_lent_from_shelf ? { return_to_lent_from_shelf: true } : {}),
     }),
   });
 }
@@ -224,13 +252,42 @@ async function getBookVariantIds({ bookId, requestId }) {
   return Array.isArray(result?.data) ? result.data : [];
 }
 
+async function getReturnLocations({ locationIds, requestId }) {
+  return Promise.all([...new Set(locationIds)].map(id => requestInventory(`/api/locations/${encodeURIComponent(id)}`, {
+    method: 'GET', headers: { Authorization: createServiceAuthHeader(), ...correlationHeader(requestId) },
+    signal: AbortSignal.timeout(10000),
+  })));
+}
+
+async function getBorrowReconciliationState({ reservationId, loanId }) {
+  if (!process.env.INTERNAL_SERVICE_KEY) throw new Error('Internal reconciliation key is required');
+  const query = new URLSearchParams({ external_reservation_id: reservationId });
+  if (loanId) query.set('external_loan_id', loanId);
+  const result = await requestInventory(`/internal/borrow-reconciliation?${query}`, {
+    method: 'GET', headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY },
+  });
+  return result.data;
+}
+async function getBorrowReconciliationCandidates({ after, limit = 25 } = {}) {
+  if (!process.env.INTERNAL_SERVICE_KEY) throw new Error('Internal reconciliation key is required');
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (after) query.set('after', after);
+  return requestInventory(`/internal/borrow-reconciliation/candidates?${query}`, {
+    method: 'GET', headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY },
+  });
+}
+
 module.exports = {
+  getBorrowReconciliationState,
+  getBorrowReconciliationCandidates,
+  getReturnLocations,
   getVariantPublicAvailability,
   getBookPublicAvailability,
   getBookVariantIds,
   checkAvailability,
   reserveStock,
   releaseReservation,
+  reallocateReservationStock,
   consumeReservation,
   returnBorrowedStock,
   getVariantDetails,

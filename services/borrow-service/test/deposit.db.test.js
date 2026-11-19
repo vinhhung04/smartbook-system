@@ -369,7 +369,7 @@ describe('book deposits (PostgreSQL)', { skip }, () => {
     await prisma.fine_payment_intents.create({
       data: { fine_id: fine.id, customer_id: customer.id, txn_ref: txnRef, amount: 20000, expires_at: new Date(Date.now() + 900000) },
     });
-    const callback = { vnp_TxnRef: txnRef, vnp_ResponseCode: '00', vnp_Amount: '2000000', vnp_TransactionNo: 'VNP1' };
+    const callback = { vnp_TxnRef: txnRef, vnp_ResponseCode: '00', vnp_Amount: '2000000', vnp_TransactionNo: `VNP1-${txnRef}` };
     const first = await finalizeVnpayPayment(prisma, callback);
     const repeat = await finalizeVnpayPayment(prisma, callback);
 
@@ -409,7 +409,7 @@ describe('book deposits (PostgreSQL)', { skip }, () => {
     });
 
     await Promise.all([
-      finalizeVnpayPayment(prisma, { vnp_TxnRef: txnRef, vnp_ResponseCode: '00', vnp_Amount: '5000000', vnp_TransactionNo: 'VNP2' }),
+      finalizeVnpayPayment(prisma, { vnp_TxnRef: txnRef, vnp_ResponseCode: '00', vnp_Amount: '5000000', vnp_TransactionNo: `VNP2-${txnRef}` }),
       prisma.$transaction((tx) => settleLoanItemDeposits(tx, { loanItemIds: [items[0].id], actorUserId: STAFF, returnCondition: 'DAMAGED', reason: 'race' })),
     ]);
 

@@ -80,8 +80,17 @@ test('lookup rejects malformed codes, finds exact active editions and 404s other
   assert.equal(found.statusCode, 200);
   assert.equal(found.body.title, 'Bé ngoan học lễ phép');
   const where = db.calls[0].where;
-  assert.deepEqual(where.OR, [{ isbn13: '8935212359658' }, { isbn10: '8935212359658' }]);
+  assert.deepEqual(where.OR, [{ isbn13: '8935212359658' }, { isbn10: '8935212359658' }, { internal_barcode: '8935212359658' }]);
   assert.equal(where.is_active, true);
 
   assert.equal((await call(fakeDb(null), '9780132350884')).statusCode, 404);
+});
+
+test('a retail EAN-13 saved as internal_barcode is found and returned with the edition ISBN', async () => {
+  const db = fakeDb(variant({ isbn13: '9786043927436', internal_barcode: '8935325011894' }));
+  const found = await call(db, '8935325011894');
+  assert.equal(found.statusCode, 200);
+  assert.equal(found.body.isbn13, '9786043927436');
+  assert.equal(found.body.internal_barcode, '8935325011894');
+  assert.equal(db.calls[0].select.internal_barcode, true);
 });

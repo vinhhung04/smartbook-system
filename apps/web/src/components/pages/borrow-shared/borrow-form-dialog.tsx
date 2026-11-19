@@ -9,6 +9,8 @@ import { getBorrowLabel } from '@/lib/status-registry';
 import { borrowService, type ReservationSource } from '@/services/borrow';
 import { warehouseService } from '@/services/warehouse';
 import { getApiErrorMessage } from '@/services/api';
+import { PickLinesEditor } from './pick-lines-editor';
+import { pickCountsToLines, pickCountsTotal, type PickCounts } from './pick-counts';
 
 export type BorrowFormMode = 'RESERVATION' | 'DIRECT_LOAN';
 
@@ -174,6 +176,7 @@ export function BorrowFormDialog({
   const [book, setBook] = useState<Picked>(EMPTY_PICK);
   const [warehouse, setWarehouse] = useState<Picked>(EMPTY_PICK);
   const [pickup, setPickup] = useState<Picked>(EMPTY_PICK);
+  const [pickCounts, setPickCounts] = useState<PickCounts>({});
   const [pickupOptions, setPickupOptions] = useState<Option[]>([]);
   const [pickupLoading, setPickupLoading] = useState(false);
   const [quantity, setQuantity] = useState('1');
@@ -187,6 +190,7 @@ export function BorrowFormDialog({
     setBook(EMPTY_PICK);
     setWarehouse(EMPTY_PICK);
     setPickup(EMPTY_PICK);
+    setPickCounts({});
     setQuantity('1');
     setSource('WEB');
     setNotes('');
@@ -237,11 +241,17 @@ export function BorrowFormDialog({
       return;
     }
 
+    if (isDirectLoan && pickCountsTotal(pickCounts) !== qty) {
+      toast.error(`Nhập vị trí đã lấy cho đủ ${qty} cuốn (hiện ${pickCountsTotal(pickCounts)})`);
+      return;
+    }
+
     const payload = {
       customer_id: customer.id,
       variant_id: book.id,
       warehouse_id: warehouse.id,
-      pickup_location_id: pickup.id || undefined,
+      pickup_location_id: isDirectLoan ? undefined : pickup.id || undefined,
+      picks: isDirectLoan ? pickCountsToLines(pickCounts) : undefined,
       quantity: qty,
       source_channel: isDirectLoan ? 'COUNTER' as const : source,
       notes: notes.trim() || undefined,
@@ -313,21 +323,39 @@ export function BorrowFormDialog({
             selected={!!warehouse.id}
             onSelect={(option) => { setWarehouse({ id: option.id, query: `${option.title} (${option.subtitle})` }); setPickup(EMPTY_PICK); }}
           />
-          <SearchPicker
-            label="Vị trí lấy sách"
-            placeholder={warehouse.id ? 'Không bắt buộc' : 'Chọn kho trước'}
-            query={pickup.query}
-            onQueryChange={(value) => setPickup({ id: '', query: value })}
-            options={filteredPickupOptions}
-            loading={pickupLoading}
-            selected={!!pickup.id}
-            onSelect={(option) => setPickup({ id: option.id, query: option.title })}
-            disabled={!warehouse.id}
-          />
+          {!isDirectLoan && (
+            <SearchPicker
+              label="Vị trí lấy sách"
+              placeholder={warehouse.id ? 'Không bắt buộc' : 'Chọn kho trước'}
+              query={pickup.query}
+              onQueryChange={(value) => setPickup({ id: '', query: value })}
+              options={filteredPickupOptions}
+              loading={pickupLoading}
+              selected={!!pickup.id}
+              onSelect={(option) => setPickup({ id: option.id, query: option.title })}
+              disabled={!warehouse.id}
+            />
+          )}
           <label className="text-xs font-medium text-muted-foreground">
             Số lượng
             <input type="number" min={1} value={quantity} onChange={(event) => setQuantity(event.target.value)} className={cn(FIELD_CLASS, 'mt-1')} />
           </label>
+          {isDirectLoan && (
+            <div className="text-xs font-medium text-muted-foreground md:col-span-2">
+              <p className="mb-1">Vị trí đã lấy sách *</p>
+              {book.id && warehouse.id ? (
+                <PickLinesEditor
+                  variantId={book.id}
+                  warehouseId={warehouse.id}
+                  quantity={Number.parseInt(quantity, 10) || 0}
+                  value={pickCounts}
+                  onChange={setPickCounts}
+                />
+              ) : (
+                <p className="font-normal">Chọn sách và kho để xem các vị trí đang có sách.</p>
+              )}
+            </div>
+          )}
           {!isDirectLoan && (
             <label className="text-xs font-medium text-muted-foreground">
               Kênh đặt

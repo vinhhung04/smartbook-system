@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { isAxiosError } from 'axios';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, Check, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
@@ -7,7 +8,7 @@ import { StatusBadge } from '../status-badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { getBorrowLabel, getStatusVariant } from '@/lib/status-registry';
-import { borrowService, type Loan, type ReturnPreview } from '@/services/borrow';
+import { borrowService, type Loan, type ReturnPreview, type ReturnPayload, type ReturnItemResult } from '@/services/borrow';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api';
 import { LoanReceiptPrintSheet } from './loan-receipt-print-sheet';
@@ -15,7 +16,7 @@ import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
 import { LoadingOverlay } from '@/components/ui/loading-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/components/ui/utils';
-import { warehouseService } from '@/services/warehouse';
+import { warehouseService, type WarehouseLocation } from '@/services/warehouse';
 
 function daysOverdue(dueDate: string): number {
   const diffMs = Date.now() - new Date(dueDate).getTime();
@@ -25,11 +26,23 @@ function daysOverdue(dueDate: string): number {
 const formatVnd = (value: number | string | null | undefined) => `${Number(value || 0).toLocaleString('vi-VN')} VND`;
 
 type ReturnMode = 'return' | 'damage' | 'lost';
+// Return-dialog fields: filled and bordered so they read as inputs on the card (the theme's
+// --input colour is transparent), red when a required value is missing.
+const RETURN_FIELD_CLASS = 'h-9 w-full rounded-md border border-border bg-input-background px-2.5 text-[13px] text-foreground outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60 aria-[invalid=true]:border-red-600 aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-red-600/15';
+const RETURN_TEXTAREA_CLASS = 'min-h-9 w-full rounded-md border border-border bg-input-background px-2.5 py-1.5 text-[13px] text-foreground outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 aria-[invalid=true]:border-red-600 aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-red-600/15';
+
+const locationLabel = (location: WarehouseLocation) => {
+  const place = [location.zone, location.aisle, location.shelf, location.bin].filter(Boolean).join(' · ');
+  return place ? `${location.location_code} (${place})` : location.location_code;
+};
+
+// locationId: the shelf the copy was put back on (any shelf of the branch); not used for a lost copy.
+type ReturnRow = { condition: 'GOOD' | 'DAMAGED' | 'LOST'; notes: string; reason: string; locationId: string };
 
 const RETURN_DIALOG: Record<ReturnMode, { title: string; description: string; variant: 'default' | 'destructive'; success: string; failure: string }> = {
   return: {
     title: 'Xác nhận trả sách',
-    description: 'Trả tất cả sách đang mượn trong phiếu này? Hành động này không thể hoàn tác.',
+    description: 'Kiểm tra tình trạng, tiền phạt và tiền cọc của từng cuốn trước khi xác nhận.',
     variant: 'default',
     success: 'Đã trả sách thành công',
     failure: 'Trả sách thất bại',
@@ -61,6 +74,13 @@ export function BorrowLoanDetailPage() {
   );
   const [preview, setPreview] = useState<ReturnPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [returnRows, setReturnRows] = useState<Record<string, ReturnRow>>({});
+  const [returnKey, setReturnKey] = useState('');
+  const [returnLocked, setReturnLocked] = useState(false);
+  // Set by a confirm attempt with copies that have no shelf yet: those fields turn red.
+  const [showReturnErrors, setShowReturnErrors] = useState(false);
+  const [returnResults, setReturnResults] = useState<ReturnItemResult[]>([]);
+  const [previewError, setPreviewError] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -96,7 +116,48 @@ export function BorrowLoanDetailPage() {
     }
     // Lost is always one book (defaults to the first active one, as before).
     setReturnDialog({ open: true, mode, itemId: mode === 'lost' ? activeItems[0].id : '', reason: '' });
+    setReturnRows(Object.fromEntries(activeItems.map(item => [item.id, {
+      condition: mode === 'damage' ? 'DAMAGED' : mode === 'lost' ? 'LOST' : 'GOOD', notes: '', reason: '', locationId: '',
+    }])));
+    setReturnKey(crypto.randomUUID());
+    setReturnLocked(false);
+    setShowReturnErrors(false);
+    setReturnResults([]);
   };
+
+  const returnPayload = useMemo<ReturnPayload>(() => ({ items: (loan?.loan_items || [])
+    .filter(item => (item.status === 'BORROWED' || item.status === 'OVERDUE') && (!returnDialog.itemId || item.id === returnDialog.itemId))
+    .map(item => ({ loan_item_id: item.id, item_condition_on_return: returnRows[item.id]?.condition || 'GOOD',
+      notes: returnRows[item.id]?.notes || '', settlement_reason: returnRows[item.id]?.reason || '',
+      mark_lost: returnRows[item.id]?.condition === 'LOST',
+      ...(returnRows[item.id]?.condition !== 'LOST' && returnRows[item.id]?.locationId
+        ? { returned_to_location_id: returnRows[item.id].locationId } : {}) })) }), [loan, returnDialog.itemId, returnRows]);
+
+  // Shelves of the lending branch a returned copy can be put back on.
+  const [returnLocations, setReturnLocations] = useState<WarehouseLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  useEffect(() => {
+    if (!loan || !returnDialog.open) return;
+    let active = true;
+    setLocationsLoading(true);
+    warehouseService.getLocations(loan.warehouse_id)
+      .then((rows) => { if (active) setReturnLocations(rows.filter((row) => row.is_active).sort((a, b) => a.location_code.localeCompare(b.location_code))); })
+      .catch((error) => { if (active) toast.error(getApiErrorMessage(error, 'Không tải được danh sách vị trí của kho')); })
+      .finally(() => { if (active) setLocationsLoading(false); });
+    return () => { active = false; };
+  }, [loan, returnDialog.open]);
+
+  // Copies going back on a shelf, and those still without one.
+  const shelvedItems = (returnPayload.items || []).filter(item => !item.mark_lost);
+  const unshelvedIds = shelvedItems.filter(item => !item.returned_to_location_id).map(item => item.loan_item_id);
+  // The "all copies" picker shows a shelf only when every copy already sits on it.
+  const sharedShelf = shelvedItems.length > 0 && shelvedItems.every(item => item.returned_to_location_id === shelvedItems[0].returned_to_location_id)
+    ? shelvedItems[0].returned_to_location_id || '' : '';
+
+  // The shelf a copy goes back on changes no fine or deposit: leave it out of the preview
+  // request, so choosing a shelf does not reload the preview (and block "Xác nhận" meanwhile).
+  const previewKey = JSON.stringify((returnPayload.items || []).map(item => ({ ...item, returned_to_location_id: undefined })));
+  const previewPayload = useMemo<ReturnPayload>(() => ({ items: JSON.parse(previewKey) }), [previewKey]);
 
   // Deposit/fine preview for the current dialog inputs, so staff see what will be
   // refunded or still owed before they confirm.
@@ -105,38 +166,52 @@ export function BorrowLoanDetailPage() {
     let cancelled = false;
     setPreviewLoading(true);
     setPreview(null);
-    borrowService
-      .previewReturn(loan.id, {
-        ...(returnDialog.itemId ? { loan_item_id: returnDialog.itemId } : {}),
-        item_condition_on_return: returnDialog.mode === 'damage' ? 'DAMAGED' : returnDialog.mode === 'lost' ? 'LOST' : 'GOOD',
-        ...(returnDialog.mode === 'lost' ? { mark_lost: true } : {}),
-      })
+    setPreviewError('');
+    const timer = setTimeout(() => { void borrowService
+      .previewReturn(loan.id, previewPayload)
       .then((response) => { if (!cancelled) setPreview(response.data); })
-      .catch(() => { if (!cancelled) setPreview(null); })
-      .finally(() => { if (!cancelled) setPreviewLoading(false); });
-    return () => { cancelled = true; };
-  }, [loan, returnDialog.open, returnDialog.mode, returnDialog.itemId]);
+      .catch(error => { if (!cancelled) setPreviewError(getApiErrorMessage(error, 'Không tải được dự toán trả sách')); })
+      .finally(() => { if (!cancelled) setPreviewLoading(false); }); }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [loan, returnDialog.open, previewPayload]);
 
   const confirmReturn = async () => {
     if (!loan) return;
-    const { mode, itemId, reason } = returnDialog;
+    const { mode } = returnDialog;
     const copy = RETURN_DIALOG[mode];
-    if (preview?.requires_reason && !reason.trim()) {
-      toast.error('Nhập lý do khấu trừ tiền cọc trước khi xác nhận');
+    if (previewLoading || !preview) {
+      toast.error(previewError || 'Chờ tải dự toán tiền cọc và tiền phạt trước khi xác nhận');
       return;
     }
-    const payload = {
-      ...(itemId ? { loan_item_id: itemId } : {}),
-      ...(mode === 'damage' ? { item_condition_on_return: 'DAMAGED' } : {}),
-      ...(mode === 'lost' ? { mark_lost: true, item_condition_on_return: 'LOST' } : {}),
-      ...(reason.trim() ? { settlement_reason: reason.trim() } : {}),
-    };
+    const reasonMissingIds = preview.items
+      .filter(item => item.requires_reason && !returnRows[item.loan_item_id]?.reason.trim() && !returnRows[item.loan_item_id]?.notes.trim())
+      .map(item => item.loan_item_id);
+    if (reasonMissingIds.length > 0 || unshelvedIds.length > 0) {
+      // Mark the empty fields and bring the first one into view: it may sit below the fold.
+      setShowReturnErrors(true);
+      const first = document.querySelector<HTMLElement>(unshelvedIds.length > 0
+        ? `select[aria-label="Vị trí trả về ${unshelvedIds[0]}"]`
+        : `textarea[aria-label="Lý do xử lý ${reasonMissingIds[0]}"]`);
+      first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      first?.focus({ preventScroll: true });
+      toast.error([
+        unshelvedIds.length > 0 ? `${unshelvedIds.length} cuốn chưa chọn vị trí đặt sách về` : '',
+        reasonMissingIds.length > 0 ? `${reasonMissingIds.length} cuốn hỏng/mất chưa có lý do xử lý cọc` : '',
+      ].filter(Boolean).join('; '));
+      return;
+    }
     try {
-      await borrowService.returnLoan(loan.id, payload);
+      const response = await borrowService.returnLoan(loan.id, returnPayload, returnKey);
+      setReturnResults(response.data.item_results || []);
       toast.success(copy.success);
       setReturnDialog((s) => ({ ...s, open: false }));
       await load();
     } catch (error) {
+      if (isAxiosError(error) && error.response?.data?.detail?.reconciliation_queued) {
+        setReturnLocked(true);
+        const results = error.response.data.detail.item_results;
+        if (Array.isArray(results)) setReturnResults(results);
+      }
       toast.error(getApiErrorMessage(error, copy.failure));
     }
   };
@@ -144,6 +219,17 @@ export function BorrowLoanDetailPage() {
   const returnLoan = () => openReturnDialog('return');
   const reportDamage = () => openReturnDialog('damage');
   const markLost = () => openReturnDialog('lost');
+
+  // The loans list sends "Trả sách" / "Báo hư hỏng" here (?action=return|damage) to open the dialog.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedAction = searchParams.get('action');
+  useEffect(() => {
+    if (!loan || (requestedAction !== 'return' && requestedAction !== 'damage')) return;
+    setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('action'); return next; }, { replace: true });
+    if (activeItems.length > 0) openReturnDialog(requestedAction);
+    // Runs once per requested action, after the loan has loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loan, requestedAction]);
   const dialogCopy = RETURN_DIALOG[returnDialog.mode];
 
   const canAct = loan && (loan.status === 'BORROWED' || loan.status === 'OVERDUE' || loan.status === 'RESERVED');
@@ -372,15 +458,19 @@ export function BorrowLoanDetailPage() {
         description={dialogCopy.description}
         variant={dialogCopy.variant}
         onConfirm={confirmReturn}
+        confirmLabel={returnLocked ? 'Thử lại lượt trả' : 'Xác nhận'}
+        // Wider, capped to the screen height: title and buttons stay put, the body scrolls once.
+        className="max-h-[90dvh] max-w-[calc(100%-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-xl"
       >
-        <div className="space-y-3 text-[13px]">
+        <div className="-mx-6 min-h-0 space-y-3 overflow-y-auto px-6 text-[13px]">
           {returnDialog.mode !== 'return' && activeItems.length > 1 && (
             <label className="block space-y-1">
-              <span className="text-muted-foreground">Sách</span>
+              <span className="font-medium text-foreground">Sách</span>
               <select
                 value={returnDialog.itemId}
                 onChange={(e) => setReturnDialog((s) => ({ ...s, itemId: e.target.value }))}
-                className="h-9 w-full rounded-lg border border-input bg-card px-2 text-[12px] text-foreground"
+                disabled={returnLocked}
+                className={RETURN_FIELD_CLASS}
               >
                 {returnDialog.mode === 'damage' && <option value="">Tất cả sách đang mượn</option>}
                 {activeItems.map((item) => (
@@ -392,9 +482,97 @@ export function BorrowLoanDetailPage() {
             </label>
           )}
 
+          {shelvedItems.length > 1 && (
+            <label className="block space-y-1">
+              <span className="font-medium text-foreground">Đặt tất cả sách về cùng một vị trí</span>
+              <select
+                aria-label="Vị trí trả về cho tất cả"
+                value={sharedShelf}
+                disabled={returnLocked || locationsLoading}
+                onChange={(event) => {
+                  const locationId = event.target.value;
+                  if (!locationId) return;
+                  setReturnRows(rows => Object.fromEntries(Object.entries(rows).map(([id, row]) => [id, row.condition === 'LOST' ? row : { ...row, locationId }])));
+                }}
+                className={RETURN_FIELD_CLASS}
+              >
+                <option value="">{locationsLoading ? 'Đang tải vị trí…' : 'Chọn để áp dụng cho mọi cuốn…'}</option>
+                {returnLocations.map(location => <option key={location.id} value={location.id}>{locationLabel(location)}</option>)}
+              </select>
+              <span className="block text-[12px] text-muted-foreground">Hoặc chọn riêng cho từng cuốn bên dưới.</span>
+            </label>
+          )}
+
+          <div className="space-y-3" aria-label="Tình trạng từng cuốn trả">
+            {(returnPayload.items || []).map(row => {
+              const item = activeItems.find(item => item.id === row.loan_item_id)!;
+              const values = returnRows[item.id] || { condition: 'GOOD', notes: '', reason: '', locationId: '' };
+              const update = (patch: Partial<ReturnRow>) => setReturnRows(rows => ({ ...rows, [item.id]: { ...values, ...patch } }));
+              const itemPreview = preview?.items.find(value => value.loan_item_id === item.id);
+              const shelfMissing = showReturnErrors && values.condition !== 'LOST' && !values.locationId;
+              const shelfErrorId = `return-shelf-error-${item.id}`;
+              const reasonMissing = showReturnErrors && Boolean(itemPreview?.requires_reason) && !values.reason.trim() && !values.notes.trim();
+              const reasonErrorId = `return-reason-error-${item.id}`;
+              return <fieldset key={item.id} disabled={returnLocked} className="rounded-lg border border-border bg-card p-3" data-testid={`return-item-${item.id}`}>
+                {/* Floated legend: sits inside the card as its heading instead of cutting the border. */}
+                <legend className="float-left mb-2 w-full">
+                  <span className="block truncate font-medium text-foreground">{getBookTitle(item.variant_id)}</span>
+                  <span className="block truncate font-mono text-[12px] text-muted-foreground">{item.item_barcode || item.id.slice(0, 8)}</span>
+                </legend>
+                <div className="clear-both grid gap-2 sm:grid-cols-2">
+                  <label className="block space-y-1"><span className="font-medium text-foreground">Tình trạng trả</span>
+                    <select aria-label={`Tình trạng trả ${item.id}`} value={values.condition} onChange={event => update({ condition: event.target.value as ReturnRow['condition'] })} className={RETURN_FIELD_CLASS}>
+                      <option value="GOOD">Bình thường</option><option value="DAMAGED">Hư hỏng</option><option value="LOST">Mất sách</option>
+                    </select>
+                  </label>
+                  {values.condition !== 'LOST' ? (
+                    <label className="block space-y-1"><span className="font-medium text-foreground">Vị trí đặt sách về <span className="text-red-700 dark:text-red-400" aria-hidden="true">*</span></span>
+                      <select
+                        aria-label={`Vị trí trả về ${item.id}`}
+                        aria-required="true"
+                        aria-invalid={shelfMissing || undefined}
+                        aria-describedby={shelfMissing ? shelfErrorId : undefined}
+                        value={values.locationId}
+                        disabled={locationsLoading}
+                        onChange={event => update({ locationId: event.target.value })}
+                        className={RETURN_FIELD_CLASS}
+                      >
+                        <option value="">{locationsLoading ? 'Đang tải vị trí…' : 'Chọn vị trí…'}</option>
+                        {returnLocations.map(location => <option key={location.id} value={location.id}>{locationLabel(location)}</option>)}
+                      </select>
+                      {shelfMissing && <span id={shelfErrorId} className="block text-[12px] text-red-700 dark:text-red-400">Chọn vị trí đã đặt cuốn này về.</span>}
+                    </label>
+                  ) : (
+                    <p className="self-end pb-2 text-[12px] text-muted-foreground">Sách mất không cần vị trí trả về.</p>
+                  )}
+                </div>
+                <label className="mt-2 block space-y-1"><span className="font-medium text-foreground">Ghi chú</span><textarea aria-label={`Ghi chú trả ${item.id}`} value={values.notes} onChange={event => update({ notes: event.target.value })} maxLength={2000} rows={1} className={RETURN_TEXTAREA_CLASS} /></label>
+                {values.condition !== 'GOOD' && <label className="mt-2 block space-y-1">
+                  <span className="font-medium text-foreground">Lý do xử lý cọc{itemPreview?.requires_reason ? <span className="text-red-700 dark:text-red-400" aria-hidden="true"> *</span> : ''}</span>
+                  <textarea
+                    aria-label={`Lý do xử lý ${item.id}`}
+                    aria-required={itemPreview?.requires_reason || undefined}
+                    aria-invalid={reasonMissing || undefined}
+                    aria-describedby={reasonMissing ? reasonErrorId : undefined}
+                    value={values.reason}
+                    onChange={event => update({ reason: event.target.value })}
+                    maxLength={2000}
+                    rows={1}
+                    className={RETURN_TEXTAREA_CLASS}
+                  />
+                  {reasonMissing && <span id={reasonErrorId} className="block text-[12px] text-red-700 dark:text-red-400">Nhập lý do dùng tiền cọc cho cuốn hỏng hoặc mất này.</span>}
+                </label>}
+                {itemPreview && <p className="mt-2 text-[12px] text-muted-foreground">Phạt {formatVnd(itemPreview.penalty)} · Hoàn cọc {formatVnd(itemPreview.deposit_refunded)} · Còn phải trả {formatVnd(itemPreview.additional_due)}</p>}
+              </fieldset>;
+            })}
+          </div>
+          {previewError && <p role="alert" className="text-red-700">{previewError}</p>}
+          {returnLocked && <p role="alert">Một số cuốn cần đối soát. Thử lại giữ nguyên nội dung và mã yêu cầu; không tạo lượt trả mới.</p>}
+          {returnResults.length > 0 && <ul aria-label="Kết quả từng cuốn" className="space-y-1 text-[12px]">{returnResults.map(item => <li key={item.loan_item_id}>{item.loan_item_id.slice(0, 8)}: {{ RETURNED: 'Đã trả', LOST: 'Đã ghi nhận mất', RECONCILIATION_REQUIRED: 'Đã đổi tồn kho, chờ đối soát', UNKNOWN: 'Chưa xác nhận, chờ đối soát', NOT_PROCESSED: 'Chưa xử lý' }[item.status]}</li>)}</ul>}
+
           {previewLoading ? (
             <p className="text-muted-foreground">Đang tính tiền cọc và tiền phạt…</p>
-          ) : preview && preview.totals.deposit_amount > 0 ? (
+          ) : preview && (preview.totals.deposit_amount > 0 || preview.totals.penalty > 0) ? (
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-border bg-muted/40 p-3">
               <dt className="text-muted-foreground">Tiền cọc đang giữ</dt>
               <dd className="text-right tabular-nums">{formatVnd(preview.totals.deposit_amount)}</dd>
@@ -413,19 +591,6 @@ export function BorrowLoanDetailPage() {
             </dl>
           ) : null}
 
-          {preview?.requires_reason && (
-            <label className="block space-y-1">
-              <span className="text-muted-foreground">Lý do khấu trừ tiền cọc (bắt buộc)</span>
-              <textarea
-                value={returnDialog.reason}
-                onChange={(e) => setReturnDialog((s) => ({ ...s, reason: e.target.value }))}
-                rows={2}
-                maxLength={1000}
-                placeholder="Mô tả tình trạng sách"
-                className="w-full rounded-lg border border-input bg-card px-2 py-1.5 text-[12px] text-foreground"
-              />
-            </label>
-          )}
         </div>
       </ConfirmDialog>
     </PageWrapper>

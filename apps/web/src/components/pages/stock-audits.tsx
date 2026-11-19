@@ -13,6 +13,7 @@ import { useHardwareScanner } from "@/hooks/useHardwareScanner";
 import { BarcodeScanModal } from "@/components/barcode-scan-modal";
 import { PageWrapper, FadeItem } from "../motion-utils";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/status-badge";
 import { PageHeader } from "@/components/ui/page-header";
@@ -207,6 +208,7 @@ function StockAuditListView() {
           <section aria-labelledby="create-audit-title" className="rounded-2xl border border-border bg-card p-5">
             <h2 id="create-audit-title" className="text-[16px] font-semibold text-foreground">Tạo phiếu kiểm kê mới</h2>
             <p className="mt-0.5 text-[14px] text-muted-foreground">Phiếu lấy toàn bộ tồn kho hiện có của kho được chọn làm số liệu hệ thống để đối chiếu.</p>
+            <p className="mt-2 text-[13px] text-amber-700">Phiếu nháp giữ phạm vi kiểm kê. Khi giao việc hoặc bắt đầu đếm, hệ thống chụp lại số tồn và tạm khóa giao dịch tại các vị trí trong phiếu. Chốt số đếm hoặc hủy phiếu để mở lại giao dịch. Có thể chọn từng vị trí từ sơ đồ kho để kiểm kê phạm vi nhỏ.</p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label htmlFor="audit-warehouse" className="mb-1.5 block text-[14px] font-medium text-foreground">Kho cần kiểm kê</label>
@@ -415,6 +417,7 @@ function StockAuditDetailView({ id }: { id: string }) {
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [localCounts, setLocalCounts] = useState<Record<string, string>>({});
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const [recountOpen, setRecountOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -443,6 +446,28 @@ function StockAuditDetailView({ id }: { id: string }) {
   const isAssignedToMe = audit?.assigned_to_user_id && currentUser?.id === audit.assigned_to_user_id;
   const canCount = audit?.status === "IN_PROGRESS" && (isManager || isAssignedToMe);
   const allCounted = audit ? audit.items.every((item) => item.counted_qty !== null) : false;
+  const requiresRecount = Boolean(audit?.items.some(item => item.baseline_on_hand_qty == null));
+  const handleRecount = async () => {
+    if (!audit) return;
+    setSaving(true);
+    try {
+      await stockAuditService.recount(audit.id);
+      setRecountOpen(false);
+      toast.success('Đã bắt đầu đếm lại và khóa giao dịch tại các vị trí kiểm kê');
+      await load();
+    } catch (error) { toast.error(getApiErrorMessage(error, 'Không thể bắt đầu đếm lại')); }
+    finally { setSaving(false); }
+  };
+  const handleConfirmLocation = async (locationId: string) => {
+    if (!audit) return;
+    setSaving(true);
+    try {
+      await stockAuditService.confirmLocationCount(audit.id, locationId);
+      toast.success('Đã chốt số đếm; vị trí được mở lại giao dịch');
+      await load();
+    } catch (error) { toast.error(getApiErrorMessage(error, 'Không thể chốt số đếm')); }
+    finally { setSaving(false); }
+  };
 
   const handleAssign = async () => {
     if (!audit || !selectedStaffId) {
@@ -670,6 +695,21 @@ function StockAuditDetailView({ id }: { id: string }) {
         </FadeItem>
       )}
 
+      {['DRAFT', 'IN_PROGRESS', 'SUBMITTED'].includes(audit.status) && (
+        <FadeItem>
+          <section aria-label="Mốc kiểm đếm" className="space-y-3 rounded-2xl border border-border bg-card p-4 text-[14px]">
+            <p>Chỉ đếm sách thực sự có tại vị trí, không cộng sách bạn đọc đang mượn. Vị trí tạm khóa giao dịch trong lúc đếm; chốt số đếm hoặc nộp phiếu để mở lại giao dịch. Phiếu vẫn giữ vị trí cho đến khi duyệt hoặc hủy.</p>
+            {requiresRecount && <p className="font-medium text-amber-700">Phiếu chưa có mốc kiểm đếm; cần bắt đầu đếm trước khi nhập số lượng hoặc duyệt.</p>}
+            {(isManager || canCount) && <Button variant="outline" size="sm" onClick={() => setRecountOpen(true)} disabled={saving}>{audit.status === 'DRAFT' ? 'Bắt đầu kiểm đếm' : 'Bắt đầu đếm lại'}</Button>}
+            {canCount && !requiresRecount && <div className="flex flex-wrap gap-2">{[...new Set(audit.items.map(item => item.location_id))].map(locationId => {
+              const lines = audit.items.filter(item => item.location_id === locationId);
+              const complete = lines.every(item => Boolean(item.counted_at));
+              return <Button key={locationId} size="sm" variant="outline" disabled={complete || saving || lines.some(item => item.counted_qty === null)} onClick={() => void handleConfirmLocation(locationId)}>{complete ? 'Đã chốt' : 'Chốt số đếm'} {lines[0]?.location_code || locationId}</Button>;
+            })}</div>}
+          </section>
+        </FadeItem>
+      )}
+
       <FadeItem>
         <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-3">
           <div className="bg-card p-5">
@@ -743,6 +783,7 @@ function StockAuditDetailView({ id }: { id: string }) {
                     <button
                       type="button"
                       onClick={() => adjustLineCount(item, -1)}
+                      disabled={Boolean(item.counted_at) || requiresRecount}
                       aria-label={`Giảm 1, ${item.title || item.sku}`}
                       className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
                     >
@@ -754,6 +795,7 @@ function StockAuditDetailView({ id }: { id: string }) {
                       min={0}
                       aria-label={`Số đếm được, ${item.title || item.sku}`}
                       value={localCounts[item.id] ?? ""}
+                      disabled={Boolean(item.counted_at) || requiresRecount}
                       onChange={(e) => setLocalCounts((current) => ({ ...current, [item.id]: e.target.value }))}
                       onBlur={() => void handleLineBlur(item)}
                       className="h-10 w-16 text-center text-[15px] tabular-nums"
@@ -761,6 +803,7 @@ function StockAuditDetailView({ id }: { id: string }) {
                     <button
                       type="button"
                       onClick={() => adjustLineCount(item, 1)}
+                      disabled={Boolean(item.counted_at) || requiresRecount}
                       aria-label={`Tăng 1, ${item.title || item.sku}`}
                       className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
                     >
@@ -806,7 +849,7 @@ function StockAuditDetailView({ id }: { id: string }) {
           <p className="text-[14px] text-muted-foreground">
             {allCounted ? "Đã đếm đủ tất cả mục. Nộp phiếu để quản lý duyệt." : `Còn ${total - countedLines} mục chưa có số đếm. Cần đếm hết trước khi nộp.`}
           </p>
-          <Button onClick={() => void handleSubmitAudit()} disabled={!allCounted} loading={saving} className="shrink-0">
+          <Button onClick={() => void handleSubmitAudit()} disabled={!allCounted || requiresRecount} loading={saving} className="shrink-0">
             <ClipboardCheck className="h-4 w-4" /> Nộp phiếu kiểm kê
           </Button>
         </div>
@@ -821,12 +864,13 @@ function StockAuditDetailView({ id }: { id: string }) {
           </p>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => void handleCancel()} loading={saving} className="text-red-700 hover:text-red-800 dark:text-red-400">Hủy phiếu</Button>
-            <Button onClick={() => void handleApprove()} loading={saving}>
+            <Button onClick={() => void handleApprove()} loading={saving} disabled={requiresRecount}>
               <Check className="h-4 w-4" /> Duyệt và điều chỉnh tồn kho
             </Button>
           </div>
         </div>
       )}
+      <ConfirmDialog open={recountOpen} onOpenChange={setRecountOpen} title="Bắt đầu đếm lại" description="Số đếm chưa duyệt sẽ được làm mới. Các vị trí của phiếu tạm khóa giao dịch cho đến khi chốt số đếm hoặc hủy phiếu." confirmLabel="Bắt đầu đếm lại" onConfirm={handleRecount} loading={saving} />
     </PageWrapper>
   );
 }

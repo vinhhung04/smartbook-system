@@ -300,12 +300,16 @@ def next_delay_seconds(consecutive_failures: int) -> float:
     return min(CATALOG_SYNC_INTERVAL_SECONDS, 15.0 * (2 ** (consecutive_failures - 1)))
 
 
-async def sync_loop() -> None:
+async def sync_loop(stop_event=None) -> None:
     """Chay ngay mot lan, sau do dinh ky. CATALOG_SYNC_INTERVAL_SECONDS<=0 thi
     chi chay mot lan (con lai trigger qua POST /internal/catalog-sync)."""
-    while True:
+    while stop_event is None or not stop_event.is_set():
         status = await sync_book_corpus()
         if CATALOG_SYNC_INTERVAL_SECONDS <= 0 and status.get("last_outcome") != "failed":
             return
         delay = next_delay_seconds(status.get("consecutive_failures") or 0)
-        await _sleep(delay if delay > 0 else 15.0)
+        if stop_event is None:
+            await _sleep(delay if delay > 0 else 15.0)
+        else:
+            from ai_core.lifecycle import wait_for_next
+            await wait_for_next(stop_event, delay if delay > 0 else 15.0)

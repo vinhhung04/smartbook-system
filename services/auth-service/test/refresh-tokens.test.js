@@ -2,6 +2,12 @@
 // controller's handling of locked users and the per-user revocation cutoff.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+
+test('refresh token issuance retains millisecond ordering within a revocation second', async () => {
+  const service = createRefreshTokenService(memoryStore(), { now: () => 1000125 });
+  const issued = await service.issue('precision-reader');
+  assert.equal((await service.consume(issued.token)).issued_at, 1000.125);
+});
 const Module = require('node:module');
 
 const { createRefreshTokenService, RefreshTokenError, hashToken } = require('../src/lib/refresh-tokens');

@@ -1,4 +1,6 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { DEMO_PASSWORD } from './helpers';
 
 // VNPay flows end to end on the running stack, with the local VNPay simulator standing
@@ -34,7 +36,8 @@ async function walletBalance() {
 
 async function startTopup(amount: string) {
   await page.goto('/customer/fines');
-  await page.getByLabel('Số tiền nạp vào ví (VND)').selectOption(amount);
+  await page.getByRole('combobox', { name: 'Số tiền nạp vào ví (VND)' }).click();
+  await page.getByRole('option', { name: new RegExp(Number(amount).toLocaleString('vi-VN')) }).click();
   await page.getByRole('button', { name: 'Nạp qua VNPay' }).click();
   await page.waitForURL(/\/paymentv2\/vpcpay\.html/);
   await expect(page.getByText('TRÌNH GIẢ LẬP VNPay')).toBeVisible();
@@ -87,12 +90,11 @@ test.describe.serial('VNPay through the simulator', () => {
 
   test('only the five fixed top-up amounts are offered and accepted', async ({ browser }) => {
     await page.goto('/customer/fines');
-    const picker = page.getByLabel('Số tiền nạp vào ví (VND)');
+    const picker = page.getByRole('combobox', { name: 'Số tiền nạp vào ví (VND)' });
     await expect(picker).toBeVisible();
-    const options = await picker.locator('option').evaluateAll(
-      (nodes) => nodes.map((node) => (node as HTMLOptionElement).value).filter(Boolean),
-    );
-    expect(options).toEqual(['10000', '20000', '50000', '100000', '200000']);
+    await picker.click();
+    await expect(page.getByRole('option')).toHaveText(['10.000 VND', '20.000 VND', '50.000 VND', '100.000 VND', '200.000 VND']);
+    await page.keyboard.press('Escape');
 
     const online = await page.request.post(`${GATEWAY}/my/account/topups/vnpay/create`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -126,18 +128,32 @@ test.describe.serial('VNPay through the simulator', () => {
   });
 
   test('a fine is paid online when the reader has one', async () => {
+    if (process.env.SMARTBOOK_TEST_ISOLATED !== '1') throw new Error('Fine fixture requires the disposable QA stack');
+    const me = await page.request.get(`${GATEWAY}/my/account`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(me.ok()).toBeTruthy();
+    const customerId = (await me.json()).data.customer_id;
+    expect(customerId).toMatch(/^[0-9a-f-]{36}$/i);
+    const sql = (query: string) => execFileSync('docker', ['compose', 'exec', '-T', 'db', 'psql', '-U', process.env.DB_USER!, '-d', 'borrow_db', '-v', 'ON_ERROR_STOP=1', '-At', '-c', query], { cwd: resolve(import.meta.dirname, '../../..'), encoding: 'utf8' }).trim();
+    const fineId = sql(`INSERT INTO fines (customer_id,fine_type,amount,note) VALUES ('${customerId}','OVERDUE',5000,'Disposable VNPay E2E fine') RETURNING id`).split('\n')[0];
+    expect(fineId).toMatch(/^[0-9a-f-]{36}$/i);
+    sql(`UPDATE customers SET total_fine_balance=total_fine_balance+5000 WHERE id='${customerId}'`);
     await page.goto('/customer/fines');
     const payButton = page.getByRole('button', { name: 'Thanh toán online qua VNPay' }).first();
-    test.skip(!(await payButton.isVisible().catch(() => false)), 'customer01 has no open fine to pay');
+    await expect(payButton).toBeVisible();
     const owed = vnd(await page.getByText('Tiền phạt còn lại', { exact: true }).locator('xpath=..').innerText());
     await payButton.click();
     await page.waitForURL(/\/paymentv2\/vpcpay\.html/);
     await expect(page.locator('#sig')).toHaveText('Hợp lệ');
     await page.locator('#pay').click();
     await page.waitForURL(/\/webhooks\/vnpay\/return/);
+    const fineReturnUrl = page.url();
     await expect(page.getByRole('heading', { name: 'Thanh toán thành công' })).toBeVisible();
     await page.getByRole('link', { name: 'Quay lại SmartBook' }).click();
     await page.waitForURL(/\/customer\/fines/);
     await expect.poll(async () => vnd(await page.getByText('Tiền phạt còn lại', { exact: true }).locator('xpath=..').innerText())).toBeLessThan(owed);
+    expect(sql(`SELECT status FROM fines WHERE id='${fineId}'`)).toBe('PAID');
+    const replay = await page.request.get(fineReturnUrl);
+    expect(replay.ok()).toBeTruthy();
+    expect(Number(sql(`SELECT COUNT(*) FROM fine_payments WHERE fine_id='${fineId}'`))).toBe(1);
   });
 });

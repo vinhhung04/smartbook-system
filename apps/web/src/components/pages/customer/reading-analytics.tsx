@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Award, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { customerBorrowService } from '@/services/customer-borrow';
+import { publicCatalogService, type PublicBook } from '@/services/public-catalog';
+import { enrichLoansForStats } from '@/lib/reading-stats-input';
 import { aiService, ReadingStatsResponse } from '@/services/ai';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -38,8 +40,23 @@ export function CustomerReadingAnalyticsPage() {
   const loadStats = useCallback(async () => {
     try {
       setLoading(true);
-      const loansResp = await customerBorrowService.getMyLoans();
-      const loans = Array.isArray(loansResp?.data) ? loansResp.data : [];
+      // Every loan, not just the first page (the API caps a page at 100).
+      const firstPage = await customerBorrowService.getMyLoans({ page: 1, pageSize: 100 });
+      const loanPages = Math.min(Number(firstPage?.meta?.totalPages) || 1, 10);
+      const restLoans = await Promise.all(
+        Array.from({ length: loanPages - 1 }, (_, index) => customerBorrowService.getMyLoans({ page: index + 2, pageSize: 100 })),
+      );
+      const rawLoans = [firstPage, ...restLoans].flatMap((page) => (Array.isArray(page?.data) ? page.data : []));
+
+      // Category (and author for older loans) come from the public catalog; a failure only leaves them empty.
+      let catalog: PublicBook[] = [];
+      try {
+        const first = await publicCatalogService.getBooks({ page: 1, pageSize: 48 });
+        const pages = Math.min(first.meta.totalPages, 10);
+        const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, index) => publicCatalogService.getBooks({ page: index + 2, pageSize: 48 })));
+        catalog = [first, ...rest].flatMap((page) => page.data);
+      } catch { /* optional enrichment */ }
+      const loans = enrichLoansForStats(rawLoans, catalog);
 
       let reviews: any[] = [];
       try {

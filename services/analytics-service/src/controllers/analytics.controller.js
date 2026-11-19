@@ -846,9 +846,9 @@ async function getLoanReturnView(to) {
 }
 
 // Copies ordered and not yet received on purchase orders a supplier is working
-// on. DRAFT / PENDING_APPROVAL are not commitments; SHORTAGE_REPORTED means
-// the rest may never come, so neither counts as incoming.
-const INCOMING_PO_STATUSES = ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED'];
+// on. A shortage report describes a delivery discrepancy, not closure of all
+// remaining PO lines. Only explicitly closed lines stop being incoming.
+const INCOMING_PO_STATUSES = ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED', 'SHORTAGE_REPORTED'];
 
 async function getIncomingQtyByVariant() {
   const rows = await query(
@@ -1302,20 +1302,26 @@ async function getLateReturnTrainingRows() {
   return query(borrowPool, `${LATE_RETURN_ROW_SQL} WHERE li.return_date IS NOT NULL`, []);
 }
 
-async function getLateReturnScoringRows(dueWithinDays, limit) {
-  const params = [limit];
+// Every open item is scored: `limit` is applied after ranking (riskiest first), never to the candidates.
+async function getLateReturnScoringRows(dueWithinDays) {
+  const params = [];
   let where = `WHERE li.return_date IS NULL AND li.status IN ('BORROWED', 'OVERDUE')`;
   if (dueWithinDays !== null) {
-    where += ` AND li.due_date <= now() + ($2 || ' days')::interval`;
+    where += ` AND li.due_date <= now() + ($1 || ' days')::interval`;
     params.push(dueWithinDays);
   }
-  return query(borrowPool, `${LATE_RETURN_ROW_SQL} ${where} ORDER BY li.due_date ASC LIMIT $1`, params);
+  return query(borrowPool, `${LATE_RETURN_ROW_SQL} ${where}`, params);
 }
 
 async function trainLateReturnModel() {
   const rows = await getLateReturnTrainingRows();
   const samples = rows.map(toLateReturnSample).filter((sample) => sample.label !== null);
   return trainAndEvaluate(samples, { featureNames: LATE_RETURN_FEATURES });
+}
+
+/** The `limit` riskiest rows, riskiest first. */
+function topByRisk(rows, limit) {
+  return [...rows].sort((a, b) => b.risk_score - a.risk_score).slice(0, limit);
 }
 
 function riskBand(score, evaluation) {
@@ -1336,8 +1342,8 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
     return res.json({ data: { generated_at: new Date().toISOString(), status: trained.status, reason: trained.reason, items: [] } });
   }
 
-  const scoringRows = await getLateReturnScoringRows(dueWithinDays, limit);
-  const scoredRows = scoreRows(trained.model, scoringRows, toLateReturnSample);
+  const scoringRows = await getLateReturnScoringRows(dueWithinDays);
+  const scoredRows = topByRisk(scoreRows(trained.model, scoringRows, toLateReturnSample), limit);
   const titleByVariant = await getTitlesByVariantIds(scoredRows.map((item) => item.variant_id));
   const scored = scoredRows
     .map((item) => ({
@@ -1349,8 +1355,7 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
       risk_score: item.risk_score,
       risk_band: riskBand(item.risk_score, trained.evaluation),
       top_factors: item.top_factors,
-    }))
-    .sort((a, b) => b.risk_score - a.risk_score);
+    }));
 
   res.json({
     data: {
@@ -1417,12 +1422,12 @@ async function getNoShowTrainingRows() {
   );
 }
 
-async function getNoShowScoringRows(limit) {
+// Every waiting reservation is scored; `limit` is applied after ranking (see getLateReturnScoringRows).
+async function getNoShowScoringRows() {
   return query(
     borrowPool,
-    `${NO_SHOW_ROW_SQL} WHERE r.status = 'READY_FOR_PICKUP' AND r.pickup_code_used_at IS NULL
-       ORDER BY r.pickup_code_expires_at ASC LIMIT $1`,
-    [limit],
+    `${NO_SHOW_ROW_SQL} WHERE r.status = 'READY_FOR_PICKUP' AND r.pickup_code_used_at IS NULL`,
+    [],
   );
 }
 
@@ -1440,8 +1445,8 @@ const getReservationNoShowRisk = asyncHandler(async (req, res) => {
     return res.json({ data: { generated_at: new Date().toISOString(), status: trained.status, reason: trained.reason, items: [] } });
   }
 
-  const scoringRows = await getNoShowScoringRows(limit);
-  const scoredRows = scoreRows(trained.model, scoringRows, toNoShowSample);
+  const scoringRows = await getNoShowScoringRows();
+  const scoredRows = topByRisk(scoreRows(trained.model, scoringRows, toNoShowSample), limit);
   const titleByVariant = await getTitlesByVariantIds(scoredRows.map((item) => item.variant_id));
   const scored = scoredRows
     .map((item) => ({
@@ -1453,8 +1458,7 @@ const getReservationNoShowRisk = asyncHandler(async (req, res) => {
       risk_score: item.risk_score,
       risk_band: riskBand(item.risk_score, trained.evaluation),
       top_factors: item.top_factors,
-    }))
-    .sort((a, b) => b.risk_score - a.risk_score);
+    }));
 
   res.json({
     data: {

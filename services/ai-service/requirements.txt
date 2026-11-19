@@ -1,14 +1,17 @@
-fastapi
-uvicorn
-python-multipart
-ddgs
-httpx
-cloakbrowser
-sqlalchemy[asyncio]
-asyncpg
-pgvector
-aiosqlite
-transformers
-Pillow
-prometheus-client
-prometheus-fastapi-instrumentator
+# Direct dependency intent; install the complete hashed Linux amd64 graph from
+# requirements-linux-amd64-py312.lock after requirements-build.lock.
+fastapi==0.162.5
+uvicorn==0.54.0
+python-multipart==0.0.32
+ddgs==9.16.1
+httpx==0.28.1
+cloakbrowser==0.7.2
+sqlalchemy[asyncio]==2.0.57
+asyncpg==0.32.0
+pgvector==0.5.1
+aiosqlite==0.22.1
+transformers==5.20.2
+Pillow==13.0.0
+prometheus-client==0.26.0
+prometheus-fastapi-instrumentator==8.1.0
+torch @ https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl#sha256=5a6363570c753812540a05eb82380e329469cbe668643e88111414c12627711f

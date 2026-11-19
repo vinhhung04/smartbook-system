@@ -1,4 +1,5 @@
 const { Prisma } = require('@prisma/client');
+const { createHash } = require('node:crypto');
 
 const Decimal = Prisma.Decimal;
 
@@ -36,6 +37,45 @@ class AccountError extends Error {
     this.code = code;
     this.detail = detail;
   }
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  return value;
+}
+function walletMetadata(value) {
+  const copy = JSON.parse(JSON.stringify(value || {}));
+  delete copy._wallet_request;
+  return copy;
+}
+function walletFingerprint(entryType, input) {
+  const id = value => value ? String(value).trim().toLowerCase() : null;
+  const request = { version: 1, entry_type: entryType, customer_id: id(input.customerId), actor_id: id(input.actorUserId),
+    amount: toMoney(input.amount).toFixed(2), reference_id: id(input.referenceId), reference_type: input.referenceType || null,
+    note: input.note?.trim() || null, metadata: walletMetadata(input.metadata) };
+  return createHash('sha256').update(JSON.stringify(canonical(request))).digest('hex');
+}
+function assertWalletReplay(entry, fingerprint) {
+  const stored = entry.metadata?._wallet_request;
+  // Existing keys remain scoped to (customer,key). Legacy entries have enough
+  // immutable ledger columns to reconstruct the original effect and identity;
+  // never accept a replay merely because an account/key row exists.
+  const expected = stored?.version === 1 ? stored.fingerprint : walletFingerprint(entry.entry_type, {
+    customerId: entry.customer_id, actorUserId: entry.created_by_user_id, amount: entry.amount,
+    referenceId: entry.reference_id, referenceType: entry.reference_type, note: entry.note, metadata: entry.metadata,
+  });
+  if (expected !== fingerprint) throw new AccountError('IDEMPOTENCY_PAYLOAD_CONFLICT', 'idempotency key has already been used for a different wallet request');
+}
+async function lockWalletRequestKey(tx, key) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`wallet-request:${key}`}, 0))`;
+}
+async function assertNewWalletCustomer(tx, customerId, key) {
+  // New identities bind the customer too. Existing pre-upgrade customer-scoped
+  // entries still replay through their original immutable ledger columns.
+  const other = await tx.account_ledger.findFirst({ where: { idempotency_key: key,
+    customer_id: { not: customerId }, metadata: { path: ['_wallet_request', 'version'], equals: 1 } }, select: { id: true } });
+  if (other) throw new AccountError('IDEMPOTENCY_PAYLOAD_CONFLICT', 'idempotency key has already been bound to another customer');
 }
 
 async function ensureCustomerAccount(tx, customerId) {
@@ -107,23 +147,21 @@ async function debitBorrowFee(tx, input) {
   if (debitAmount <= 0) {
     throw new AccountError('INVALID_AMOUNT', 'debit amount must be positive');
   }
+  const fingerprint = walletFingerprint('DEBIT', { customerId, actorUserId, amount: debitAmount, referenceId, referenceType, note, metadata });
 
+  await lockWalletRequestKey(tx, idempotencyKey);
   await lockCustomerAccount(tx, customerId);
   const { account, settings, availableBalance, minWalletBalanceRequired } = await getCustomerAccountSnapshot(tx, customerId);
-
-  if (settings.auto_debit_borrow_fee !== true) {
-    throw new AccountError('AUTO_DEBIT_DISABLED', 'auto debit for borrow fee is disabled');
-  }
 
   const existingEntry = await tx.account_ledger.findFirst({
     where: {
       customer_id: customerId,
       idempotency_key: idempotencyKey,
-      entry_type: 'DEBIT',
     },
   });
 
   if (existingEntry) {
+    assertWalletReplay(existingEntry, fingerprint);
     return {
       idempotent: true,
       entry: existingEntry,
@@ -132,6 +170,11 @@ async function debitBorrowFee(tx, input) {
       account,
     };
   }
+
+  if (settings.auto_debit_borrow_fee !== true) {
+    throw new AccountError('AUTO_DEBIT_DISABLED', 'auto debit for borrow fee is disabled');
+  }
+  await assertNewWalletCustomer(tx, customerId, idempotencyKey);
 
   if (account.status !== 'ACTIVE') {
     throw new AccountError('ACCOUNT_NOT_ACTIVE', `customer account is ${account.status}`);
@@ -167,7 +210,7 @@ async function debitBorrowFee(tx, input) {
       reference_id: referenceId,
       idempotency_key: idempotencyKey,
       note,
-      metadata,
+      metadata: { ...walletMetadata(metadata), _wallet_request: { version: 1, fingerprint } },
       created_by_user_id: actorUserId,
     },
   });
@@ -201,7 +244,9 @@ async function creditAccount(tx, input) {
   if (creditAmount <= 0) {
     throw new AccountError('INVALID_AMOUNT', 'credit amount must be positive');
   }
+  const fingerprint = walletFingerprint('CREDIT', { customerId, actorUserId, amount: creditAmount, referenceId, referenceType, note, metadata });
 
+  await lockWalletRequestKey(tx, idempotencyKey);
   await lockCustomerAccount(tx, customerId);
   const { account, availableBalance } = await getCustomerAccountSnapshot(tx, customerId);
 
@@ -209,11 +254,11 @@ async function creditAccount(tx, input) {
     where: {
       customer_id: customerId,
       idempotency_key: idempotencyKey,
-      entry_type: 'CREDIT',
     },
   });
 
   if (existingEntry) {
+    assertWalletReplay(existingEntry, fingerprint);
     return {
       idempotent: true,
       entry: existingEntry,
@@ -222,6 +267,8 @@ async function creditAccount(tx, input) {
       account,
     };
   }
+
+  await assertNewWalletCustomer(tx, customerId, idempotencyKey);
 
   if (account.status !== 'ACTIVE') {
     throw new AccountError('ACCOUNT_NOT_ACTIVE', `customer account is ${account.status}`);
@@ -250,7 +297,7 @@ async function creditAccount(tx, input) {
       reference_id: referenceId,
       idempotency_key: idempotencyKey,
       note,
-      metadata,
+      metadata: { ...walletMetadata(metadata), _wallet_request: { version: 1, fingerprint } },
       created_by_user_id: actorUserId,
     },
   });

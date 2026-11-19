@@ -40,6 +40,8 @@ def build_router(lookup_isbn):
             "enabled": settings.enabled, "imageKinds": list(IMAGE_KINDS), "maxImages": settings.max_images,
             "maxFileBytes": settings.max_file_bytes, "maxTotalBytes": settings.max_total_bytes,
             "acceptedTypes": ["image/jpeg", "image/png", "image/webp"], "model": settings.model,
+            "visualVerificationEnabled": settings.visual_verification_enabled and bool(settings.verify_model),
+            "visualVerificationModel": settings.verify_model if settings.visual_verification_enabled else None,
         }
 
     @router.post("/book-metadata/scan-images")

@@ -53,11 +53,13 @@ async def read_upload(file: UploadFile, limit: int = MAX_IMAGE_BYTES) -> bytes:
     return bytes(buf)
 
 
-def validate(data: bytes) -> dict:
+def validate(data: bytes, *, allow_gif: bool = False) -> dict:
     """{'format', 'mime', 'width', 'height'} of a safe image, or an HTTP 4xx."""
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail=f"Ảnh vượt quá {MAX_IMAGE_BYTES // (1024 * 1024)} MB.")
     fmt = sniff_format(data)
+    if allow_gif and data[:6] in (b'GIF87a', b'GIF89a'):
+        fmt = 'GIF'
     if fmt is None:
         raise HTTPException(status_code=415, detail="Chỉ nhận ảnh JPEG, PNG hoặc WebP.")
     try:
@@ -75,7 +77,7 @@ def validate(data: bytes) -> dict:
         raise
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError, Image.DecompressionBombError):
         raise HTTPException(status_code=400, detail="Không đọc được ảnh (file hỏng hoặc không hợp lệ).")
-    return {"format": fmt, "mime": ALLOWED_FORMATS[fmt], "width": width, "height": height}
+    return {"format": fmt, "mime": 'image/gif' if fmt == 'GIF' else ALLOWED_FORMATS[fmt], "width": width, "height": height}
 
 
 def normalize(data: bytes) -> bytes:

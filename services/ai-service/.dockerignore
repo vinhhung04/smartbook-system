@@ -23,3 +23,6 @@ htmlcov/
 *.sqlite3
 chroma_db/
 chromadb_data/
+# Local research environments/model downloads are not service runtime inputs.
+**/.venv*/
+**/.hf-cache/

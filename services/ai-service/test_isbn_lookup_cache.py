@@ -141,3 +141,34 @@ class IsbnCacheQualityTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CodeClassificationTests(unittest.TestCase):
+    """ISBN-10 / ISBN-13 (978, 979) / retail EAN-13 / invalid - checked before any lookup."""
+
+    def test_valid_codes_and_their_conversions(self):
+        from main import _code_kind, _normalize_and_validate_isbn
+        cases = {
+            "0-13-235088-2": ("ISBN10", "9780132350884", "0132350882"),
+            "080442957x": ("ISBN10", "9780804429573", "080442957X"),   # X check digit, any case
+            "978-0-13-235088-4": ("ISBN13", "9780132350884", "0132350882"),
+            "9791234567896": ("ISBN13", "9791234567896", None),       # 979: no ISBN-10 exists
+        }
+        for raw, (kind, isbn13, isbn10) in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(_code_kind(raw), kind)
+                self.assertEqual(_normalize_and_validate_isbn(raw), (isbn13, isbn10, None))
+
+    def test_retail_ean_and_bad_check_digits_are_not_isbns(self):
+        from main import NOT_ISBN_EAN13, _code_kind, _normalize_and_validate_isbn
+        self.assertEqual(_code_kind("8935309501694"), "EAN13")
+        self.assertEqual(_normalize_and_validate_isbn("8935309501694"), (None, None, NOT_ISBN_EAN13))
+        for bad in ("8935309501695", "9780132350885", "0132350883", "12345", "97801323508XX"):
+            with self.subTest(code=bad):
+                self.assertEqual(_code_kind(bad), "INVALID")
+
+    def test_ean_lookups_are_cached_apart_from_isbns(self):
+        from main import _isbn_lookup_cache_key
+        self.assertTrue(_isbn_lookup_cache_key(IsbnLookupRequest(isbn="8935309501694")).startswith("ean7:8935309501694:"))
+        self.assertTrue(_isbn_lookup_cache_key(IsbnLookupRequest(isbn="9780132350884")).startswith("9780132350884:"))
+        self.assertIsNone(_isbn_lookup_cache_key(IsbnLookupRequest(isbn="8935309501695")))

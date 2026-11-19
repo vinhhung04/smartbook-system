@@ -49,8 +49,17 @@ def _load_statements(schema_path: Path) -> list[str]:
 async def init_db() -> None:
     """Apply schema.sql idempotently against DATABASE_URL. Safe to call on every
     service startup — every statement is CREATE ... IF NOT EXISTS."""
-    schema_path = Path(__file__).parent / "schema.sql"
-    statements = _load_statements(schema_path)
+    if os.getenv("AI_SCHEMA_MANAGED_EXTERNALLY", "false").lower() == "true":
+        async with engine.connect() as connection:
+            # Fail closed when the explicit owner job was not run. No CREATE,
+            # ALTER, migration password, or quota schema auto-repair at runtime.
+            await connection.execute(text("SELECT 1 FROM ai_conversations LIMIT 0"))
+            await connection.execute(text("SELECT 1 FROM ai_inference_leases LIMIT 0"))
+        return
+    # Same files as migrate.py: the budget gate needs ai_inference_leases from migrations/.
+    root = Path(__file__).parent
+    statements = [stmt for path in [root / "schema.sql", *sorted((root / "migrations").glob("*.sql"))]
+                  for stmt in _load_statements(path)]
     async with engine.begin() as conn:
         for statement in statements:
             await conn.execute(text(statement))

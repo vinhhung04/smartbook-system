@@ -272,6 +272,28 @@ class LookupContractTests(NoBackoff):
         self.assertEqual({s["name"]: s["status"] for s in result["sources"]}["aiWebSearch"], "DISABLED")
         providers[2].by_title.assert_not_awaited()
 
+    async def test_ean_scan_links_the_isbn_two_stores_state_without_calling_isbn_only_sources(self):
+        ean, isbn = "8935325011894", "9786043927436"
+        google = by_code_returning(record())
+        providers = [provider("googleBooks", google, round1=True),
+                     provider("azVietnam", by_code_returning({**record(ean), "identifiers": [ean, isbn]}),
+                              round1=True, accepts_raw_barcode=True),
+                     provider("fahasa", by_code_returning({**record(ean), "identifiers": [isbn, ean]}),
+                              accepts_raw_barcode=True)]
+        with patch("main.ENABLE_MARKETPLACE_LOOKUP", True):
+            result = await self._lookup(providers, isbn=ean, order="googleBooks,azVietnam")
+        google.assert_not_awaited()  # an EAN is not an ISBN: ISBN-only sources are skipped
+        self.assertTrue(result["found"])
+        self.assertEqual((result["isbn"], result["isbn13"], result["codeKind"]), (ean, None, "EAN13"))
+        cross = result["crossLookup"]
+        self.assertEqual((cross["direction"], cross["status"], cross["value"]), ("EAN_TO_ISBN", "VERIFIED", isbn))
+        self.assertEqual(sorted(e["source"] for e in cross["evidence"]), ["azVietnam", "fahasa"])
+
+    async def test_isbn_scan_reports_its_kind_and_isbn13(self):
+        result = await self._lookup([provider("googleBooks", by_code_returning(record()), round1=True)])
+        self.assertEqual((result["codeKind"], result["isbn13"]), ("ISBN13", ISBN))
+        self.assertEqual(result["crossLookup"]["direction"], "ISBN_TO_EAN")
+
     async def test_translator_is_fused_from_sources_that_have_it(self):
         providers = [provider("dinhTi", by_code_returning(record(translator=["Hà Giang"])), round1=True),
                      provider("nhanam", by_code_returning(record(translator=["Ha Giang"]))),

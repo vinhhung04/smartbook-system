@@ -132,7 +132,9 @@ test('1. tra mã có gạch ngang: Vòng 1 khớp đúng mã, Vòng 2 đối chi
   // The source that identified the book, with its round and verification, in the Sources pane.
   await showPane('Nguồn');
   const identifying = page.getByTestId(`source-row-${identifiedBy}`);
-  await expect(identifying).toContainText('Tìm thấy');
+  // The row announces its status in lower case (", tìm thấy") and badges the identifying source.
+  await expect(identifying).toContainText(/tìm thấy/i);
+  await expect(identifying).toContainText('Xác định sách');
   await expect(identifying).toContainText('Vòng 1');
   await expect(identifying).toContainText('Khớp mã chính xác');
   await expect(page.getByText(/Sách được xác định bởi/)).toBeVisible();

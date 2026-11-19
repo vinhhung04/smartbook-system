@@ -1,3 +1,4 @@
+import { DEMO_PASSWORD, confirmShelfReturn } from './helpers';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 
@@ -12,17 +13,32 @@ import { loginAs, loginAsCustomer, logout } from './helpers/auth';
 // from the API responses) — never "the first row mentioning customer01".
 
 const GATEWAY = process.env.GATEWAY_URL || 'http://localhost:3000';
-const CUSTOMER = { identifier: 'customer01', password: '123456' };
-const LIBRARIAN = { identifier: 'librarian01', password: '123456' };
-// auth/inventory seeds give librarian01 OPERATOR access only at BR-HCM-01.
-const PICKUP_BRANCH_ID = '00000000-0000-0000-0000-000000000004';
-const PICKUP_BRANCH_NAME = 'Chi Nhanh District 1';
-
-async function apiToken(request: APIRequestContext, identifier: string, password: string) {
+const CUSTOMER = { identifier: 'customer01', password: DEMO_PASSWORD };
+const LIBRARIAN = { identifier: 'librarian01', password: DEMO_PASSWORD };
+async function apiLogin(request: APIRequestContext, identifier: string, password: string) {
   const response = await request.post(`${GATEWAY}/auth/login`, { data: { identifier, password } });
   expect(response.ok(), `login ${identifier}`).toBeTruthy();
-  const body = await response.json();
+  return response.json();
+}
+
+async function apiToken(request: APIRequestContext, identifier: string, password: string) {
+  const body = await apiLogin(request, identifier, password);
   return String(body.token || body.data?.token);
+}
+
+/**
+ * The branch librarian01 can operate, read from its real warehouse scope (the
+ * auth seed gives it OPERATOR at BR-HCM-01; warehouse ids differ per database).
+ */
+async function librarianPickupBranch(request: APIRequestContext) {
+  const librarianId = (await apiLogin(request, LIBRARIAN.identifier, LIBRARIAN.password)).user.id;
+  const admin = { Authorization: `Bearer ${await apiToken(request, 'hung', DEMO_PASSWORD)}` };
+  const response = await request.get(`${GATEWAY}/iam/users/${librarianId}/warehouse-scopes`, { headers: admin });
+  expect(response.ok(), 'read librarian01 warehouse scopes').toBeTruthy();
+  const scopes: Array<{ warehouse_id: string; access_level: string; warehouse: { name: string; is_active: boolean } | null }> = (await response.json()).data.scopes;
+  const scope = scopes.find((s) => ['OPERATOR', 'FULL'].includes(s.access_level) && s.warehouse?.is_active);
+  expect(scope, 'librarian01 needs an OPERATOR/FULL warehouse scope (auth seed: BR-HCM-01)').toBeTruthy();
+  return { id: scope!.warehouse_id, name: scope!.warehouse!.name };
 }
 
 const idempotency = (prefix: string) => ({ 'Idempotency-Key': `e2e-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
@@ -44,7 +60,9 @@ async function settleOpenCustomerState(request: APIRequestContext) {
   const loans = (await (await request.get(`${GATEWAY}/my/loans`, { headers: customer, params: { pageSize: '100' } })).json()).data ?? [];
   for (const loan of loans) {
     if (!['BORROWED', 'OVERDUE', 'RESERVED'].includes(loan.status)) continue;
-    const res = await request.post(`${GATEWAY}/borrow/loans/${loan.id}/return`, { headers: { ...staff, ...idempotency('return') }, data: {} });
+    const locations = (await (await request.get(`${GATEWAY}/api/warehouses/${loan.warehouse_id}/locations`, { headers: staff })).json()).locations ?? [];
+    const shelf = locations.find((location: { is_active: boolean }) => location.is_active);
+    const res = await request.post(`${GATEWAY}/borrow/loans/${loan.id}/return`, { headers: { ...staff, ...idempotency('return') }, data: { returned_to_location_id: shelf?.id } });
     expect(res.ok(), `return leftover ${loan.loan_number}`).toBeTruthy();
   }
 }
@@ -53,14 +71,46 @@ function toast(page: Page, text: string | RegExp) {
   return page.locator('[data-sonner-toast]').filter({ hasText: text });
 }
 
+let restorePlan: { id: string; deposit: number; token: string } | null = null;
 test.beforeEach(async ({ request }) => {
   await settleOpenCustomerState(request);
+  const reader = await apiToken(request, CUSTOMER.identifier, CUSTOMER.password);
+  const membershipResponse = await request.get(`${GATEWAY}/my/membership`, { headers: { Authorization: `Bearer ${reader}` } });
+  expect(membershipResponse.ok()).toBeTruthy();
+  const membership = (await membershipResponse.json()).data;
+  const admin = await apiToken(request, 'hung', DEMO_PASSWORD);
+  restorePlan = { id: membership.plan_id, deposit: Number(membership.limits.deposit_per_item), token: admin };
+  const configured = await request.patch(`${GATEWAY}/borrow/membership-plans/${membership.plan_id}`, {
+    headers: { Authorization: `Bearer ${admin}` }, data: { deposit_per_item: 30000 },
+  });
+  expect(configured.ok()).toBeTruthy();
+  const funded = await request.post(`${GATEWAY}/borrow/customers/${membership.customer_id}/account/topups`, {
+    headers: { Authorization: `Bearer ${admin}`, ...idempotency('deposit-fixture') },
+    data: { amount: 200000, method: 'CASH', note: 'Disposable E2E deposit fixture' },
+  });
+  expect(funded.ok()).toBeTruthy();
+});
+test.afterEach(async ({ request }) => {
+  if (!restorePlan) return;
+  const restored = await request.patch(`${GATEWAY}/borrow/membership-plans/${restorePlan.id}`, {
+    headers: { Authorization: `Bearer ${restorePlan.token}` }, data: { deposit_per_item: restorePlan.deposit },
+  });
+  expect(restored.ok()).toBeTruthy();
+  restorePlan = null;
 });
 
-test('customer reservation through pickup and return', async ({ page }) => {
+test('customer reservation through pickup and return', async ({ page, request }) => {
+  const headers = { Authorization: `Bearer ${await apiToken(request, CUSTOMER.identifier, CUSTOMER.password)}` };
+  const account = async () => {
+    const response = await request.get(`${GATEWAY}/my/account`, { headers });
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()).data;
+  };
+  const beforeWallet = await account();
+  const branch = await librarianPickupBranch(request);
   await loginAsCustomer(page, CUSTOMER);
 
-  await page.goto(`/books?branch=${PICKUP_BRANCH_ID}&availability=available`);
+  await page.goto(`/books?branch=${branch.id}&availability=available`);
   const reserveButton = page.locator('[data-testid="reserve-book-button"]:not([disabled])').first();
   await reserveButton.waitFor();
   await reserveButton.click();
@@ -71,16 +121,16 @@ test('customer reservation through pickup and return', async ({ page }) => {
   await expect(dialog).toBeVisible();
   const branchOptions = dialog.locator('button').filter({ hasText: 'cuốn sẵn sàng' });
   if (await branchOptions.count() > 1) {
-    await branchOptions.filter({ hasText: PICKUP_BRANCH_NAME }).click();
+    await branchOptions.filter({ hasText: branch.name }).click();
   } else {
-    await expect(dialog.getByText(PICKUP_BRANCH_NAME, { exact: true })).toBeVisible();
+    await expect(dialog.getByText(branch.name, { exact: true })).toBeVisible();
   }
 
   const createdResponse = page.waitForResponse((r) => r.request().method() === 'POST' && /\/my\/reservations$/.test(new URL(r.url()).pathname));
   await page.getByTestId('confirm-reserve-button').click();
   const created = await (await createdResponse).json();
   const reservationNumber: string = created.data.reservation_number;
-  expect(created.data.warehouse_id).toBe(PICKUP_BRANCH_ID);
+  expect(created.data.warehouse_id).toBe(branch.id);
   expect(reservationNumber).toMatch(/^RSV-/);
   await expect(toast(page, 'Đặt trước thành công!')).toBeVisible();
 
@@ -96,6 +146,9 @@ test('customer reservation through pickup and return', async ({ page }) => {
   await expect(toast(page, 'Đã xác nhận đặt trước')).toBeVisible();
 
   await row.getByTestId('mark-ready-button').click();
+  // The pick dialog starts on the shelf the system holds the copy on; the librarian took it from there.
+  await expect(page.getByTestId('confirm-ready-pick-button')).toBeEnabled({ timeout: 10_000 });
+  await page.getByTestId('confirm-ready-pick-button').click();
   await expect(toast(page, 'Đặt trước sẵn sàng lấy sách')).toBeVisible();
 
   const pickupCodeCell = row.locator('p.font-mono');
@@ -105,15 +158,27 @@ test('customer reservation through pickup and return', async ({ page }) => {
   const convertResponse = page.waitForResponse((r) => r.request().method() === 'POST' && r.url().includes('/borrow/reservations/pickup/convert-to-loan'));
   await page.getByTestId('pickup-code-input').fill(pickupCode);
   await page.getByTestId('convert-pickup-submit').click();
-  const loan = (await (await convertResponse).json()).data;
+  const convertedResponse = await convertResponse;
+  expect(convertedResponse.ok(), await convertedResponse.text()).toBeTruthy();
+  const loan = (await convertedResponse.json()).data;
   expect(loan.loan_number).toMatch(/^LOAN-/);
   await expect(toast(page, `Đã tạo phiếu mượn ${loan.loan_number}`)).toBeVisible();
+  const heldWallet = await account();
+  const deposit = Number(loan.deposit_total || 0);
+  expect(deposit).toBe(30000);
+  expect(Number(heldWallet.held_balance)).toBe(Number(beforeWallet.held_balance) + deposit);
+  expect(Number(heldWallet.available_balance)).toBe(Number(beforeWallet.available_balance) - deposit - Number(loan.borrow_fee_amount || 0));
 
   // Open exactly the loan this test created.
   await page.goto(`/borrow/loans/${loan.id}`);
   await page.getByTestId('return-loan-button').click();
-  await page.getByTestId('confirm-dialog-action').click();
-  await expect(toast(page, 'Đã trả sách thành công')).toBeVisible();
+  await confirmShelfReturn(page);
 
   await expect(page.getByTestId('loan-status-badge')).toContainText('Đã trả');
+  const afterWallet = await account();
+  expect(Number(afterWallet.held_balance)).toBe(Number(beforeWallet.held_balance));
+  expect(Number(afterWallet.available_balance)).toBe(Number(heldWallet.available_balance) + deposit);
+  const persistedResponse = await request.get(`${GATEWAY}/my/loans/${loan.id}`, { headers });
+  expect(persistedResponse.ok()).toBeTruthy();
+  expect((await persistedResponse.json()).data.status).toBe('RETURNED');
 });

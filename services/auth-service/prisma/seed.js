@@ -34,6 +34,12 @@ async function main() {
     { code: 'auth.audit.read', module_name: 'auth', action_name: 'read', description: 'View authentication audit logs' },
     { code: 'audit.read', module_name: 'audit', action_name: 'read', description: 'View system audit trail' },
 
+    // Monitoring & incident management (monitoring-service). ADMIN receives them
+    // with every other permission; grant them explicitly to other roles if needed.
+    { code: 'monitoring.incidents.read', module_name: 'monitoring', action_name: 'read', description: 'View incidents, alert activity and monitoring analytics' },
+    { code: 'monitoring.incidents.manage', module_name: 'monitoring', action_name: 'write', description: 'Acknowledge, resolve and annotate incidents' },
+    { code: 'monitoring.settings.manage', module_name: 'monitoring', action_name: 'write', description: 'Configure alert notification channels and routing policies' },
+
     // Catalog module (Inventory)
     { code: 'inventory.catalog.read', module_name: 'inventory', action_name: 'read', description: 'View catalog, books, and variants' },
     { code: 'inventory.catalog.write', module_name: 'inventory', action_name: 'write', description: 'Create or update catalog items' },
@@ -370,7 +376,7 @@ async function main() {
 
   console.log('✅ Legacy role migration complete');
 
-  const passwordHash = await bcrypt.hash('123456', 12);
+  const passwordHash = await bcrypt.hash(process.env.DEMO_PASSWORD || '123456', 12);
 
   const users = await Promise.all([
     // Admin user
@@ -732,7 +738,7 @@ async function main() {
   console.log(`   • ${warehouseScopes.length} User Warehouse Scopes`);
   console.log(`   • Sample audit logs`);
   console.log('');
-  console.log('🔑 Default Password for all users: 123456');
+  console.log(process.env.DEMO_PASSWORD ? '🔑 Test password supplied through DEMO_PASSWORD (not logged).' : '🔑 Default demo password is configured in the seed.');
   console.log('═══════════════════════════════════════════════════════════════════════\n');
 }
 

@@ -7,6 +7,7 @@
     "start": "node -r ./src/telemetry.js src/index.js",
     "dev": "node --watch -r ./src/telemetry.js src/index.js",
     "prisma:generate": "prisma generate",
+    "reconcile:fines": "node scripts/reconcile-fine-balances.js",
     "prisma:push": "prisma db push",
     "pretest": "prisma generate",
     "prisma:seed-history": "node prisma/seed-history.js",
@@ -27,7 +28,7 @@
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "9.0.1",
+    "nodemailer": "10.1.4",
     "prisma": "5.21.0",
     "redis": "^4.6.12"
   },

@@ -22,6 +22,7 @@ class ProcurementError extends Error {
 
 function toNonNegativeInt(value, fallback = 0) {
   if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
   const n = Number(value);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
   return n;
@@ -154,6 +155,10 @@ async function settleSupplierReceiptQuantities(tx, receipt) {
   ]);
   const noteByVariant = new Map(noteItems.map((item) => [String(item.variant_id), item]));
   const poByVariant = new Map(poItems.map((item) => [String(item.variant_id), item]));
+  const countedVariants = new Set(items.map((item) => String(item.variant_id)));
+  if (noteItems.some((item) => !countedVariants.has(String(item.variant_id)))) {
+    throw new ProcurementError("INCOMPLETE_DELIVERY_COUNT", "Phải kiểm đếm đầy đủ các dòng phiếu giao trước khi nhập kho");
+  }
 
   const outcomes = [];
   for (const item of items) {

@@ -41,6 +41,36 @@ export interface TransferReceivingLineCount {
   rejected_qty?: number;
 }
 
+export interface TransferDiscrepancyItem {
+  id: string; variant_id: string; title?: string; sku?: string;
+  shipped_qty: number; delivered_qty: number; accepted_qty: number;
+  remaining_missing_qty: number; remaining_damaged_qty: number; remaining_rejected_qty: number;
+}
+export interface TransferDiscrepancy {
+  id: string; transfer_order_id: string; transfer_number?: string; status: 'OPEN' | 'RESOLVED';
+  items: TransferDiscrepancyItem[];
+  resolutions?: { id: string; action: string; bucket: string; quantity: number; reason: string; evidence_reference: string; created_at: string }[];
+}
+export interface TransferResolution {
+  discrepancy_item_id: string; bucket: 'MISSING' | 'DAMAGED' | 'REJECTED';
+  action: 'FOUND' | 'REDELIVERED' | 'RETURN_TO_SOURCE' | 'WRITE_OFF'; quantity: number;
+  reason: string; evidence_reference: string; redelivery_transfer_id?: string;
+}
+export const transferDiscrepancyService = {
+  async list(warehouseId?: string, status = 'OPEN') {
+    const response = await inventoryAPI.get('/api/transfer-receiving/discrepancies', { params: { warehouse_id: warehouseId, status } });
+    return response.data as { data: TransferDiscrepancy[] };
+  },
+  async get(transferId: string) {
+    const response = await inventoryAPI.get(`/api/transfer-receiving/${transferId}/discrepancies`);
+    return response.data as { data: TransferDiscrepancy };
+  },
+  async resolve(transferId: string, body: TransferResolution, key: string) {
+    const response = await inventoryAPI.post(`/api/transfer-receiving/${transferId}/discrepancies/resolve`, body, { headers: { 'Idempotency-Key': key } });
+    return response.data as { data: TransferDiscrepancy; idempotent: boolean };
+  },
+};
+
 export const transferReceivingService = {
   getQueue: async (warehouseId?: string) => {
     const response = await inventoryAPI.get('/api/transfer-receiving', {

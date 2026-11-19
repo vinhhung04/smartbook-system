@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { AlertTriangle, BookOpen, BookX, CalendarPlus, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageWrapper, FadeItem } from '../motion-utils';
@@ -62,6 +62,7 @@ function isTabKey(value: string | null): value is TabKey {
 
 export function BorrowLoansPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabParam = searchParams.get('tab');
   const tab: TabKey = isTabKey(tabParam) ? tabParam : 'active';
   const activeTab = TABS.find((item) => item.key === tab) ?? TABS[0];
@@ -128,41 +129,9 @@ export function BorrowLoansPage() {
     setConfirmState({ open: true, title, description, variant, onConfirm: action });
   };
 
-  const returnLoan = (loanId: string) => {
-    openConfirm(
-      'Xác nhận trả sách',
-      'Trả tất cả sách đang mượn trong phiếu này? Hành động này không thể hoàn tác.',
-      'default',
-      async () => {
-        try {
-          await borrowService.returnLoan(loanId, {});
-          toast.success('Đã trả sách thành công');
-          setConfirmState((s) => ({ ...s, open: false }));
-          await list.reload();
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Trả sách thất bại'));
-        }
-      },
-    );
-  };
-
-  const reportDamage = (loanId: string) => {
-    openConfirm(
-      'Báo hư hỏng sách',
-      'Đánh dấu sách trả bị hư hỏng và tạo tiền phạt?',
-      'destructive',
-      async () => {
-        try {
-          await borrowService.returnLoan(loanId, { item_condition_on_return: 'DAMAGED' });
-          toast.success('Đã xử lý trả sách hư hỏng');
-          setConfirmState((s) => ({ ...s, open: false }));
-          await list.reload();
-        } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Báo hư hỏng thất bại'));
-        }
-      },
-    );
-  };
+  // A return needs each copy's condition and the shelf it was put back on: the loan page asks for both.
+  const returnLoan = (loanId: string) => navigate(`/borrow/loans/${loanId}?action=return`);
+  const reportDamage = (loanId: string) => navigate(`/borrow/loans/${loanId}?action=damage`);
 
   const markLost = (loanId: string) => {
     openConfirm(

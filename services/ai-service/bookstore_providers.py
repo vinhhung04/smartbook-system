@@ -28,6 +28,7 @@ import httpx
 
 import isbn_matching
 from metadata_intelligence.capture import capture as capture_metadata_source
+from metadata_intelligence.verification import canonical_isbn
 
 SITEMAP_TTL_SECONDS = int(os.getenv("BOOKSTORE_SITEMAP_TTL_SECONDS", "86400"))
 TITLE_CANDIDATES = 3
@@ -126,7 +127,7 @@ def parse_dinhti_product(page: str, url: str) -> dict | None:
         "language": "vi",
         "pageCount": _page_count(specs.get("pageCount")),
         "thumbnail": image.group(1) if image else None,
-        "identifiers": [code] if code else [],
+        "identifiers": record_codes([code] if code else [], description),
         "sourceUrl": url,
         "sourceFetchMode": "html",
     }
@@ -177,6 +178,7 @@ BIZBOOKS_STORE_API = "https://bizbooks.vn/wp-json/wc/store/v1/products"
 
 def parse_bizbooks_product(item: dict) -> dict:
     code = isbn_matching.normalize_code(item.get("sku"))
+    description = html_to_text(item.get("description") or item.get("short_description"))
     images = item.get("images") or []
     categories = [c.get("name") for c in item.get("categories") or [] if c.get("name")]
     return {
@@ -186,12 +188,12 @@ def parse_bizbooks_product(item: dict) -> dict:
         "translator": [],
         "publisher": None,
         "publishedDate": None,
-        "description": html_to_text(item.get("description") or item.get("short_description")),
+        "description": description,
         "categories": categories,
         "language": "vi",
         "pageCount": None,
         "thumbnail": _https(images[0].get("src")) if images else None,
-        "identifiers": [code] if len(code) in (10, 13) else [],
+        "identifiers": record_codes([code] if len(code) in (10, 13) else [], description),
         "sourceUrl": item.get("permalink"),
         "sourceFetchMode": "json",
     }
@@ -253,6 +255,28 @@ def labelled_specs(text: str | None) -> dict:
             continue
         specs[key] = value
     return specs
+
+
+# "Mã ISBN 9786043927436", "ISBN: 978-604-...", "ISBN-10: 0-13-235088-2" - the code
+# must follow the "ISBN" label directly; a number in prose is never read.
+_LABELLED_ISBN = re.compile(
+    r"\bisbn(?:[\s-]*1[03])?\s*[:：.]?\s*((?:97[89])(?:[\s.-]?\d){10}|\d(?:[\s.-]?\d){8}[\s.-]?[\dX])(?![\dX])",
+    flags=re.IGNORECASE,
+)
+
+
+def labelled_isbn(text: str | None) -> str | None:
+    """The ISBN-13 a store's description states under an "ISBN" label - only when it
+    states exactly one valid ISBN (several = a series or other editions: none is used)."""
+    found = {canonical_isbn(match.group(1)) for match in _LABELLED_ISBN.finditer(text or "")} - {None}
+    return found.pop() if len(found) == 1 else None
+
+
+def record_codes(codes: list[str], description: str | None) -> list[str]:
+    """A record's identifiers plus the ISBN its description labels: a page that shows a
+    retail EAN-13 as its barcode and "Mã ISBN ..." in its text states both codes."""
+    isbn = labelled_isbn(description)
+    return [*codes, isbn] if isbn and isbn not in codes else codes
 
 
 def spec_text(fragment: str | None) -> str | None:
@@ -326,7 +350,7 @@ def parse_nhanam_product(product: dict, url: str) -> dict:
         "language": "vi",
         "pageCount": tags["pageCount"],
         "thumbnail": _https(product.get("featured_image")),
-        "identifiers": _variant_codes(product),
+        "identifiers": record_codes(_variant_codes(product), html_to_text(product.get("content") or product.get("description"))),
         "sourceUrl": url,
         "sourceFetchMode": "json",
     }
@@ -349,7 +373,7 @@ def parse_vanlang_product(product: dict, url: str) -> dict:
         "categories": [category] if category else [],
         "language": "vi", "pageCount": _page_count(specs.get("pageCount")),
         "thumbnail": _https(product.get("featured_image")),
-        "identifiers": _variant_codes(product),
+        "identifiers": record_codes(_variant_codes(product), description),
         "sourceUrl": url,
         "sourceFetchMode": "json",
     }
@@ -371,7 +395,7 @@ def parse_thaiha_product(product: dict, url: str) -> dict:
         "categories": [category] if category and category.lower() != "sách" else [],
         "language": "vi", "pageCount": _page_count(specs.get("pageCount")),
         "thumbnail": _https(product.get("featured_image")),
-        "identifiers": _variant_codes(product),
+        "identifiers": record_codes(_variant_codes(product), description),
         "sourceUrl": url,
         "sourceFetchMode": "json",
     }
@@ -406,7 +430,7 @@ def parse_feed_store_product(product: dict, url: str, *, title_suffix: str | Non
         "language": "vi",
         "pageCount": _page_count(specs.get("pageCount")),
         "thumbnail": _first_image(product),
-        "identifiers": _variant_codes(product),
+        "identifiers": record_codes(_variant_codes(product), html_to_text(raw_description)),
         "sourceUrl": url,
         "sourceFetchMode": "json",
     }
@@ -572,7 +596,7 @@ async def refresh_code_index(store: SitemapStore, user_agent: str | None = None)
             "truncated": built.get("truncated", False)}
 
 
-async def refresh_code_indexes_forever(user_agent: str | None, logger) -> None:
+async def refresh_code_indexes_forever(user_agent: str | None, logger, stop_event=None) -> None:
     """Background task started with the service: build every store index (stores
     in parallel - each host is still read one page at a time), then refresh
     daily. A store that blocks or fails keeps its previous index and is retried
@@ -588,9 +612,10 @@ async def refresh_code_indexes_forever(user_agent: str | None, logger) -> None:
             logger.warning("bookstore code index %s not refreshed: %s", store.name, exc)
             return False
 
-    while True:
+    while stop_event is None or not stop_event.is_set():
         results = await asyncio.gather(*(refresh(store) for store in CODE_INDEX_STORES))
-        await asyncio.sleep(CODE_INDEX_TTL_SECONDS if all(results) else 3600)
+        from ai_core.lifecycle import wait_for_next
+        await wait_for_next(stop_event, CODE_INDEX_TTL_SECONDS if all(results) else 3600)
 
 
 def code_index_status() -> dict:

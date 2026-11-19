@@ -156,7 +156,7 @@ export function AiSuggestionPanel({
     return (
       <Shell live="status" busy rootRef={rootRef}>
         <AiMark meta={<span className="inline-flex items-center gap-1.5"><Loader2 className={`h-3.5 w-3.5 animate-spin motion-reduce:animate-none ${AI_HUE}`} aria-hidden="true" />Đang viết</span>}>
-          AI đang viết {copy.noun}
+          <span className="ai-shiny-text">AI đang viết {copy.noun}</span>
         </AiMark>
         {/* The final layout at its real size, flat grey, no shimmer: nothing jumps when the text lands. */}
         <div className="mt-3 space-y-2" aria-hidden="true">

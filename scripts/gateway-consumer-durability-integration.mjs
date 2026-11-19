@@ -15,6 +15,7 @@ const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const managementUrl = process.env.RABBITMQ_MANAGEMENT_URL || 'http://localhost:15672';
 
 function readEnvVar(name, fallback) {
+  if (process.env[name] !== undefined) return process.env[name];
   if (!existsSync(envPath)) return fallback;
   const contents = readFileSync(envPath, 'utf8');
   const match = contents.match(new RegExp(`^${name}=(.*)$`, 'm'));
@@ -192,7 +193,8 @@ async function scenarioInboxDedup() {
     second.stderr?.trim().split('\n').pop(),
   );
 
-  psql(borrowDbName, `DELETE FROM integration_inbox WHERE source_service = '${sourceService}';`);
+  // Retain the UUID-scoped synthetic inbox record as deduplication evidence.
+  // A shared source_service must never delete evidence from earlier runs.
 }
 
 async function run() {

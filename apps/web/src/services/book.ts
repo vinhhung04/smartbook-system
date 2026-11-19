@@ -23,7 +23,10 @@ export interface BookCreateRequest {
 export type BookUpdateRequest = Record<string, unknown>;
 
 export interface IncompleteBookRequest {
-  isbn13: string;
+  /** An ISBN-13; a retail EAN-13 sent here is saved as the barcode, never as the ISBN. */
+  isbn13?: string;
+  /** A retail EAN-13 (e.g. 893...), saved as internal_barcode. */
+  barcode?: string;
   title: string;
   price: number;
   cover_image_url?: string;

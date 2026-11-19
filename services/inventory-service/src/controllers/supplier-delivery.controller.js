@@ -1,8 +1,10 @@
+const { RequestBindingError, receiptIdentity, assertReceiptReplay } = require('../services/request-binding.service');
+const { findActiveDeliveryReceipt } = require('../services/delivery-receipt-guard.service');
 
 const { prisma } = require("../lib/prisma");
 
 const { parseId, toInt, normalizeText } = require("../utils/validation");
-const { computeLineOutcome } = require("../services/procurement-receipt.service");
+const { computeLineOutcome, assertInvoiceQtyWithinRemaining, assertLineNotClosed } = require("../services/procurement-receipt.service");
 const { registerDeliveryNote } = require("../services/procurement-document.service");
 const {
   getReadableWarehouseIds,
@@ -173,8 +175,10 @@ async function createSupplierDelivery(req, res) {
         return { invalid: true, message: "Đơn đặt hàng phải được gửi cho nhà cung cấp trước khi tạo hóa đơn nhà cung cấp" };
       }
 
-      const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
-      const poItemsByVariant = new Map(po.purchase_order_items.map((item) => [String(item.variant_id), item]));
+      await tx.$queryRawUnsafe("SELECT id FROM purchase_order_items WHERE purchase_order_id = $1::uuid ORDER BY id FOR UPDATE", po.id);
+      const freshPoItems = await tx.purchase_order_items.findMany({ where: { purchase_order_id: po.id } });
+      const poItemsById = new Map(freshPoItems.map((item) => [String(item.id), item]));
+      const poItemsByVariant = new Map(freshPoItems.map((item) => [String(item.variant_id), item]));
       const invoiceItems = [];
       const seen = new Set();
 
@@ -185,6 +189,7 @@ async function createSupplierDelivery(req, res) {
         const invoicedQty = toInt(rawLine?.invoiced_qty);
         const unitCost = Number(rawLine?.unit_cost);
         if (!poItem) return { invalid: true, message: "Ấn bản trong hóa đơn không thuộc đơn đặt hàng" };
+        assertLineNotClosed(poItem);
         if (variantId && variantId !== poItem.variant_id) return { invalid: true, message: "purchase_order_item_id và variant_id không khớp nhau" };
         if (!invoicedQty || invoicedQty <= 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có invoiced_qty > 0" };
         if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
@@ -192,6 +197,8 @@ async function createSupplierDelivery(req, res) {
         seen.add(poItem.variant_id);
         const remainingQty = Number(poItem.ordered_qty || 0) - Number(poItem.received_qty || 0);
         if (invoicedQty > remainingQty) return { invalid: true, message: "Số lượng hóa đơn không được vượt số lượng còn lại của đơn đặt hàng" };
+        const remainingNoted = await assertInvoiceQtyWithinRemaining(tx, poItem, invoicedQty);
+        if (remainingNoted !== null) return { invalid: true, message: `Số lượng phiếu giao vượt phần PO chưa khai báo giao (${Math.max(0, remainingNoted)})` };
         invoiceItems.push({
           purchase_order_item_id: poItem.id,
           variant_id: poItem.variant_id,
@@ -236,6 +243,7 @@ async function createSupplierDelivery(req, res) {
     return res.status(201).json({ message: "Supplier delivery invoice created", data: result.data });
   } catch (error) {
     if (error.code === "P2002") return res.status(409).json({ message: "Số hóa đơn này đã tồn tại với nhà cung cấp" });
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
     console.error("Error while creating supplier delivery:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -255,18 +263,16 @@ async function createGoodsReceiptFromInvoice(req, res) {
   if (!warehouseId) return res.status(400).json({ message: "Thiếu warehouse_id" });
   if (items.length === 0) return res.status(400).json({ message: "Thiếu items" });
 
-  if (idempotencyKey) {
-    const previous = await prisma.goods_receipts.findUnique({ where: { idempotency_key: idempotencyKey } });
-    if (previous) {
-      if (previous.supplier_delivery_invoice_id !== invoiceId) {
-        return res.status(409).json({ message: "Idempotency-Key đã được dùng cho một phiếu giao khác" });
-      }
-      return res.status(200).json({ message: "Goods receipt already created for this request", data: mapCreatedReceipt(previous, invoiceId), idempotent: true });
-    }
-  }
-
   try {
+    if (idempotencyKey) {
+      const previous = await prisma.goods_receipts.findUnique({ where: { idempotency_key: idempotencyKey } });
+      if (previous) {
+        return await replayCreatedReceipt(req, res, previous, invoiceId, warehouseId);
+      }
+    }
+
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe("SELECT id FROM supplier_delivery_invoices WHERE id = $1::uuid FOR UPDATE", invoiceId);
       const invoice = await tx.supplier_delivery_invoices.findUnique({
         where: { id: invoiceId },
         include: {
@@ -290,11 +296,12 @@ async function createGoodsReceiptFromInvoice(req, res) {
 
       // One delivery note = one goods receipt. A second (non-cancelled) receipt for the same
       // delivery would let the same goods be counted twice.
-      const existing = await tx.goods_receipts.findFirst({
-        where: { supplier_delivery_invoice_id: invoice.id, status: { not: "CANCELLED" } },
-        select: { id: true, receipt_number: true, status: true },
-      });
+      const existing = await findActiveDeliveryReceipt(tx, invoice.id);
       if (existing) {
+        if (idempotencyKey && existing.idempotency_key === idempotencyKey) {
+          await assertReceiptReplay(tx, req, existing, invoice);
+          return { data: { receipt: existing }, idempotent: true };
+        }
         return {
           invalid: true,
           statusCode: 409,
@@ -345,6 +352,9 @@ async function createGoodsReceiptFromInvoice(req, res) {
           note: normalizeText(rawLine?.note),
         });
       }
+      if (receiptItems.length !== invoice.supplier_delivery_invoice_items.length) {
+        return { invalid: true, message: "Phải kiểm đếm đầy đủ các dòng phiếu giao, ghi 0 cho dòng không thực nhận" };
+      }
       if (receiptItems.every((item) => item.delivered_qty === 0)) {
         return { invalid: true, message: "Chưa có dòng nào thực nhận — không cần lập phiếu nhập" };
       }
@@ -388,6 +398,7 @@ async function createGoodsReceiptFromInvoice(req, res) {
         total_accepted_qty: receiptItems.reduce((sum, item) => sum + item.quantity, 0),
         total_damaged_qty: receiptItems.reduce((sum, item) => sum + item.damaged_qty, 0),
         total_rejected_qty: receiptItems.reduce((sum, item) => sum + item.rejected_qty, 0),
+        request_identity: receiptIdentity(req, invoice),
       });
 
       return { data: { receipt } };
@@ -399,18 +410,46 @@ async function createGoodsReceiptFromInvoice(req, res) {
         ...(result.existing_goods_receipt_id ? { existing_goods_receipt_id: result.existing_goods_receipt_id } : {}),
       });
     }
-    return res.status(201).json({
-      message: "Goods receipt draft created from supplier invoice",
+    return res.status(result.idempotent ? 200 : 201).json({
+      message: result.idempotent ? "Goods receipt already created for this request" : "Goods receipt draft created from supplier invoice",
       data: mapCreatedReceipt(result.data.receipt, invoiceId),
+      ...(result.idempotent ? { idempotent: true } : {}),
     });
   } catch (error) {
+    if (error instanceof RequestBindingError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
     if (error.code === "P2002" && idempotencyKey) {
       const previous = await prisma.goods_receipts.findUnique({ where: { idempotency_key: idempotencyKey } });
-      if (previous) return res.status(200).json({ message: "Goods receipt already created for this request", data: mapCreatedReceipt(previous, invoiceId), idempotent: true });
+      if (previous) return await replayCreatedReceipt(req, res, previous, invoiceId, warehouseId);
     }
     console.error("Error while creating goods receipt from supplier invoice:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
+}
+
+async function replayCreatedReceipt(req, res, receipt, invoiceId, warehouseId) {
+  // A key is not an access credential. Authorize the stored receipt and its actual
+  // delivery/PO warehouse on both normal replay and unique-constraint recovery.
+  if (!(await canWriteWarehouse(req.user, receipt.warehouse_id))) {
+    return res.status(403).json({ message: "Bạn không có quyền thao tác trên kho này" });
+  }
+  if (receipt.supplier_delivery_invoice_id !== invoiceId) {
+    return res.status(409).json({ message: "Idempotency-Key đã được dùng cho một phiếu giao khác" });
+  }
+  const invoice = await prisma.supplier_delivery_invoices.findUnique({ where: { id: invoiceId }, include: { purchase_orders: true, supplier_delivery_invoice_items: true } });
+  const po = invoice?.purchase_orders;
+  if (!po || !(await canWriteWarehouse(req.user, po.warehouse_id))) {
+    return res.status(403).json({ message: "Bạn không có quyền thao tác trên kho này" });
+  }
+  if (warehouseId !== po.warehouse_id || receipt.warehouse_id !== po.warehouse_id || receipt.purchase_order_id !== po.id) {
+    return res.status(409).json({ message: "Idempotency-Key không khớp chứng từ và kho của yêu cầu" });
+  }
+  try {
+    await assertReceiptReplay(prisma, req, receipt, invoice);
+  } catch (error) {
+    if (error instanceof RequestBindingError) return res.status(error.statusCode).json({ message: error.message, code: error.code });
+    throw error;
+  }
+  return res.status(200).json({ message: "Goods receipt already created for this request", data: mapCreatedReceipt(receipt, invoiceId), idempotent: true });
 }
 
 function mapCreatedReceipt(receipt, invoiceId) {

@@ -1,5 +1,8 @@
 const { RECEIVING_LOCATION_TYPES } = require('../utils/constants');
-const { normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear } = require('../services/catalog-metadata.validation');
+const {
+  normalizeCoverImageUrl, normalizeLanguageCode, normalizePublishYear, classifyBookCode, normalizeInternalBarcode,
+  normalizeIsbn13: validIsbn13, normalizeIsbn10: validIsbn10,
+} = require('../services/catalog-metadata.validation');
 const {
   readableWarehouseFilter,
   WarehouseScopeUnavailableError,
@@ -434,7 +437,8 @@ async function findBookByIsbn13(req, res) {
 
   try {
     const variant = await prisma.book_variants.findFirst({
-      where: { isbn13 },
+      // A scanned 13-digit code is an ISBN-13 or a retail EAN-13, which is saved as internal_barcode.
+      where: { OR: [{ isbn13 }, { internal_barcode: isbn13 }] },
       include: {
         books: {
           select: {
@@ -467,9 +471,13 @@ async function findBookByIsbn13(req, res) {
 }
 
 async function createIncompleteBook(req, res) {
-  const rawIsbn13 = normalizeIsbn13(req.body?.isbn13);
-  const barcode = normalizeBarcode(req.body?.barcode || rawIsbn13);
-  const isbn13 = rawIsbn13 || (/^\d{13}$/.test(barcode) ? barcode : '');
+  // `isbn13` and `barcode` may each carry an ISBN-13 or a retail EAN-13 (older callers
+  // send a scanned 893... EAN as isbn13): each is classified, and an EAN is saved as the
+  // variant's internal_barcode only - never as its ISBN.
+  const sent = [req.body?.isbn13, req.body?.barcode].map(classifyBookCode);
+  const isbn13 = sent.find((code) => code.kind === 'ISBN13')?.code || null;
+  const ean13 = sent.find((code) => code.kind === 'EAN13')?.code || null;
+  const barcode = ean13 || isbn13;
   const title = String(req.body?.title || '').trim();
   const rawPrice = Number(req.body?.price);
   const coverImageUrl = normalizeCoverImageUrl(req.body?.cover_image_url);
@@ -477,14 +485,14 @@ async function createIncompleteBook(req, res) {
   const publishYear = normalizePublishYear(req.body?.publish_year);
   const userId = req.user?.id || null;
 
-  if (!isbn13 || !title || !Number.isFinite(rawPrice) || rawPrice < 0) {
-    return res.status(400).json({
-      message: 'Cần có đủ isbn13, title và price >= 0',
-    });
+  if (sent.some((code) => !['EMPTY', 'ISBN13', 'EAN13'].includes(code.kind))) {
+    return res.status(400).json({ message: 'Mã phải là ISBN-13 (978/979) hoặc mã vạch EAN-13 có số kiểm tra đúng' });
   }
 
-  if (!/^\d{13}$/.test(isbn13)) {
-    return res.status(400).json({ message: 'isbn13 phải gồm đúng 13 chữ số' });
+  if (!barcode || !title || !Number.isFinite(rawPrice) || rawPrice < 0) {
+    return res.status(400).json({
+      message: 'Cần có đủ isbn13 (hoặc mã vạch EAN-13), title và price >= 0',
+    });
   }
 
   if (publishYear === undefined) {
@@ -494,7 +502,9 @@ async function createIncompleteBook(req, res) {
   try {
     const existingVariant = await prisma.book_variants.findFirst({
       where: {
-        OR: [{ isbn13 }, { internal_barcode: isbn13 }, { isbn10: isbn13 }, { sku: isbn13 }],
+        OR: [...new Set([isbn13, ean13].filter(Boolean))].flatMap((code) => [
+          { isbn13: code }, { internal_barcode: code }, { isbn10: code }, { sku: code },
+        ]),
       },
       include: {
         books: {
@@ -513,7 +523,7 @@ async function createIncompleteBook(req, res) {
         data: {
           book_id: existingVariant.books?.id,
           variant_id: existingVariant.id,
-          barcode: existingVariant.internal_barcode || isbn13,
+          barcode: existingVariant.internal_barcode || barcode,
           isbn13: existingVariant.isbn13 || isbn13,
           title: existingVariant.books?.title,
           unit_cost: existingVariant.unit_cost,
@@ -555,9 +565,9 @@ async function createIncompleteBook(req, res) {
 
       const variantData = {
         book_id: createdBook.id,
-        sku: buildManualSku(isbn13),
-        internal_barcode: isbn13,
-        isbn13,
+        sku: buildManualSku(barcode),
+        internal_barcode: barcode,
+        ...(isbn13 ? { isbn13 } : {}),
         unit_cost: rawPrice,
         list_price: rawPrice,
         language_code: languageCode,
@@ -577,7 +587,7 @@ async function createIncompleteBook(req, res) {
           entity_id: createdBook.id,
           after_data: {
             title,
-            barcode: isbn13,
+            barcode,
             isbn13,
             category: UNCATEGORIZED_NAME,
             publisher: UNCATEGORIZED_NAME,
@@ -589,7 +599,7 @@ async function createIncompleteBook(req, res) {
       return {
         book_id: createdBook.id,
         variant_id: createdVariant.id,
-        barcode: isbn13,
+        barcode,
         isbn13,
         title,
         unit_cost: createdVariant.unit_cost,
@@ -729,6 +739,18 @@ async function updateBookDetails(req, res) {
     return res.status(400).json({ message: 'publish_year phải là số nguyên từ 1000 đến 2100' });
   }
 
+  // Each code column holds only its own kind - enforced here, not only by the web form.
+  const blank = (value) => value === null || String(value).trim() === '';
+  if (isbn13 !== undefined && !blank(isbn13) && !validIsbn13(isbn13)) {
+    return res.status(400).json({ message: 'ISBN-13 không hợp lệ: cần tiền tố 978/979 và số kiểm tra đúng (mã EAN-13 bán lẻ lưu ở internal_barcode)' });
+  }
+  if (isbn10 !== undefined && !blank(isbn10) && !validIsbn10(isbn10)) {
+    return res.status(400).json({ message: 'ISBN-10 sai số kiểm tra' });
+  }
+  if (internal_barcode !== undefined && normalizeInternalBarcode(internal_barcode) === undefined) {
+    return res.status(400).json({ message: 'Mã vạch sai số kiểm tra EAN-13' });
+  }
+
   try {
     const stockWhere = await stockBalanceScopeWhere(req.user);
     const updated = await prisma.$transaction(async (tx) => {
@@ -802,9 +824,9 @@ async function updateBookDetails(req, res) {
       const variantData = {
         ...(list_price !== undefined ? { list_price: Number(list_price) } : {}),
         ...(unit_cost !== undefined ? { unit_cost: Number(unit_cost) } : {}),
-        ...(isbn13 !== undefined ? { isbn13: String(isbn13).trim() || null } : {}),
-        ...(isbn10 !== undefined ? { isbn10: String(isbn10).trim() || null } : {}),
-        ...(internal_barcode !== undefined ? { internal_barcode: String(internal_barcode).trim() || null } : {}),
+        ...(isbn13 !== undefined ? { isbn13: blank(isbn13) ? null : validIsbn13(isbn13) } : {}),
+        ...(isbn10 !== undefined ? { isbn10: blank(isbn10) ? null : validIsbn10(isbn10) } : {}),
+        ...(internal_barcode !== undefined ? { internal_barcode: normalizeInternalBarcode(internal_barcode) } : {}),
         ...(cover_image_url !== undefined ? { cover_image_url: normalizeCoverImageUrl(cover_image_url) } : {}),
         ...(normalizedLanguage !== undefined ? { language_code: normalizedLanguage } : {}),
         ...(normalizedPublishYear !== undefined ? { publish_year: normalizedPublishYear } : {}),

@@ -1,7 +1,8 @@
 const { prisma } = require('../lib/prisma');
+const crypto = require('node:crypto');
 const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
-const { normalizeMoney, recomputeCustomerFineBalance } = require('../services/fine.service');
+const { normalizeMoney, recomputeCustomerFineBalance, lockFineAccrual, refreshFineAccrual } = require('../services/fine.service');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
 
 function isUuid(value) {
@@ -152,7 +153,7 @@ async function getFineById(req, res) {
             total_fine_balance: true,
           },
         },
-        loan_items: true,
+        loan_items: { include: { overdue_fine_episode: true } },
         fine_payments: {
           orderBy: [{ paid_at: 'desc' }],
         },
@@ -189,12 +190,30 @@ async function recordFinePayment(req, res) {
     return res.status(400).json({ message: 'amount phải là số dương' });
   }
 
+  const reference = req.body?.transaction_reference ? String(req.body.transaction_reference).trim().slice(0, 255) || null : null;
+  const note = req.body?.note ? String(req.body.note).slice(0, 1000) : null;
+  const headerKey = String(req.headers?.['idempotency-key'] || req.headers?.['x-idempotency-key'] || '').trim();
+  // Older counter clients supplied bank/card identity but no request header.
+  // Keep that identity scoped; a reference is never globally unique across fines.
+  const key = headerKey || (reference ? `legacy-fine:${crypto.createHash('sha256').update(JSON.stringify([actorUserId, fineId.toLowerCase(), paymentMethod, reference])).digest('hex')}` : null);
+  if (!key || key.length > 255) return res.status(400).json({ message: 'Cần Idempotency-Key tối đa 255 ký tự khi ghi nhận thanh toán phạt', code: 'IDEMPOTENCY_KEY_REQUIRED' });
+  const amount = normalizeMoney(requestedAmount);
+  if (amount <= 0) return res.status(400).json({ message: 'amount phải lớn hơn 0 sau làm tròn' });
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ actor: actorUserId, fine: fineId.toLowerCase(), amount, paymentMethod, reference, note })).digest('hex');
+
   try {
     const result = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`fine-payment-key:${key}`}, 0))`;
+      const previous = await tx.fine_payment_requests.findUnique({ where: { idempotency_key: key } });
+      if (previous) {
+        if (previous.fingerprint !== fingerprint || previous.fine_id !== fineId.toLowerCase()) return { code: 409, payload: { message: 'Idempotency-Key đã được dùng cho giao dịch khác', code: 'IDEMPOTENCY_CONFLICT' } };
+        return previous.response;
+      }
+      await lockFineAccrual(tx, fineId);
       // Row-lock the fine so a concurrent VNPay confirmation or deposit settlement
       // cannot pay against the same remaining balance.
       await tx.$executeRaw`SELECT id FROM fines WHERE id = ${fineId}::uuid FOR UPDATE`;
-      const fine = await tx.fines.findUnique({
+      let fine = await tx.fines.findUnique({
         where: { id: fineId },
         include: { fine_payments: true },
       });
@@ -203,13 +222,27 @@ async function recordFinePayment(req, res) {
         return { code: 404, payload: { message: 'Không tìm thấy khoản phạt' } };
       }
 
+      // Pre-upgrade payments have no durable request-result row. A reference-
+      // only retry matching that history cannot safely allocate another partial
+      // payment or fabricate an original response. Scope this to the same fine
+      // and method: a bank reference is not globally unique across obligations.
+      if (!headerKey && reference && fine.fine_payments.some(payment =>
+        payment.transaction_reference === reference && payment.payment_method === paymentMethod)) {
+        return { code: 409, payload: {
+          message: 'Đã có thanh toán cùng tham chiếu; cần đối soát yêu cầu cũ trước khi ghi nhận thêm tiền.',
+          code: 'LEGACY_PAYMENT_REVIEW_REQUIRED',
+        } };
+      }
+
+      await refreshFineAccrual(tx, fine);
+      fine = await tx.fines.findUnique({ where: { id: fineId }, include: { fine_payments: true } });
+
       if (fine.status === 'PAID' || fine.status === 'WAIVED') {
         return { code: 409, payload: { message: `Không thể thanh toán khoản phạt ở trạng thái ${fine.status}` } };
       }
 
       const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + normalizeMoney(item.amount), 0);
       const remaining = Math.max(0, normalizeMoney(fine.amount) - normalizeMoney(fine.waived_amount) - paidSoFar);
-      const amount = normalizeMoney(requestedAmount);
 
       if (amount > remaining + 0.0001) {
         return {
@@ -226,9 +259,9 @@ async function recordFinePayment(req, res) {
           fine_id: fine.id,
           payment_method: paymentMethod,
           amount,
-          transaction_reference: req.body?.transaction_reference ? String(req.body.transaction_reference).slice(0, 255) : null,
+          transaction_reference: reference,
           paid_by_user_id: actorUserId,
-          note: req.body?.note ? String(req.body.note).slice(0, 1000) : null,
+          note,
         },
       });
 
@@ -283,7 +316,7 @@ async function recordFinePayment(req, res) {
         },
       });
 
-      return {
+      const response = {
         code: 200,
         payload: {
           message: stillRemaining <= 0 ? 'Fine paid successfully' : 'Fine payment recorded',
@@ -297,6 +330,8 @@ async function recordFinePayment(req, res) {
           },
         },
       };
+      await tx.fine_payment_requests.create({ data: { idempotency_key: key, fingerprint, fine_id: fine.id, response } });
+      return response;
     });
 
     return res.status(result.code).json(result.payload);
@@ -314,12 +349,24 @@ async function waiveFine(req, res) {
     return res.status(400).json({ message: 'Mã khoản phạt không hợp lệ' });
   }
 
+  const waiveFuture = req.body?.waive_future === true;
+  const waiverReason = String(req.body?.note || '').trim().slice(0, 1000);
+  if (req.body?.waive_future != null && typeof req.body.waive_future !== 'boolean') {
+    return res.status(400).json({ message: 'waive_future phải là boolean' });
+  }
+  if (waiveFuture && (typeof req.body?.note !== 'string' || !waiverReason)) return res.status(400).json({ message: 'Cần lý do khi miễn phạt cả thời gian tiếp theo' });
+  if (waiveFuture && !isUuid(actorUserId)) return res.status(400).json({ message: 'Thiếu người phê duyệt miễn toàn bộ kỳ quá hạn' });
+  if (waiveFuture && !(req.user?.is_superuser || req.user?.permissions?.includes('borrow.fines.manage'))) {
+    return res.status(403).json({ message: 'Cần quyền quản lý tiền phạt để miễn toàn bộ kỳ quá hạn' });
+  }
+
   try {
     const result = await prisma.$transaction(async (tx) => {
+      await lockFineAccrual(tx, fineId);
       // Same row lock as recordFinePayment: a concurrent payment must not be able to commit
       // against the remaining balance this waiver is about to compute from.
       await tx.$executeRaw`SELECT id FROM fines WHERE id = ${fineId}::uuid FOR UPDATE`;
-      const fine = await tx.fines.findUnique({
+      let fine = await tx.fines.findUnique({
         where: { id: fineId },
         include: { fine_payments: true },
       });
@@ -327,6 +374,12 @@ async function waiveFine(req, res) {
       if (!fine) {
         return { code: 404, payload: { message: 'Không tìm thấy khoản phạt' } };
       }
+
+      if (waiveFuture && (fine.fine_type !== 'OVERDUE' || !fine.loan_item_id)) {
+        return { code: 400, payload: { message: 'Chỉ khoản phạt quá hạn gắn với sách mượn được miễn kỳ tiếp theo' } };
+      }
+      await refreshFineAccrual(tx, fine);
+      fine = await tx.fines.findUnique({ where: { id: fineId }, include: { fine_payments: true } });
 
       if (fine.status === 'PAID') {
         return { code: 409, payload: { message: 'Không thể miễn giảm khoản phạt đã thanh toán đủ' } };
@@ -370,6 +423,14 @@ async function waiveFine(req, res) {
         },
       });
 
+      if (waiveFuture) {
+        await tx.overdue_fine_episodes.upsert({
+          where: { loan_item_id: fine.loan_item_id },
+          create: { loan_item_id: fine.loan_item_id, waived_future: true, waived_at: new Date(), waived_by_user_id: actorUserId, waiver_reason: waiverReason },
+          update: { waived_future: true, waived_at: new Date(), waived_by_user_id: actorUserId, waiver_reason: waiverReason },
+        });
+      }
+
       const totalFineBalance = await recomputeCustomerFineBalance(tx, fine.customer_id);
 
       await createNotificationRecord(tx, {
@@ -377,7 +438,7 @@ async function waiveFine(req, res) {
         channel: 'IN_APP',
         template_code: 'FINE_WAIVED',
         subject: 'Khoản phạt được điều chỉnh',
-        body: `Khoản phạt ${fine.id} đã được giảm ${Number(waiveAmount).toLocaleString('vi-VN')}đ.`,
+        body: `Khoản phạt ${fine.id} đã được giảm ${Number(waiveAmount).toLocaleString('vi-VN')}đ.${waiveFuture ? ' Đã miễn phạt quá hạn cho thời gian tiếp theo của cuốn sách này.' : ''}`,
         reference_type: 'FINE',
         reference_id: fine.id,
         metadata: {
@@ -386,6 +447,7 @@ async function waiveFine(req, res) {
           waived_amount_total: newWaivedAmount,
           remaining_balance: normalizeMoney(newRemaining),
           waived_by_user_id: actorUserId,
+          waive_future: waiveFuture,
         },
         status: 'SENT',
       });
@@ -405,6 +467,7 @@ async function waiveFine(req, res) {
           waived_amount: newWaivedAmount,
           remaining_balance: normalizeMoney(newRemaining),
           total_fine_balance: totalFineBalance,
+          waive_future: waiveFuture,
         },
       });
 

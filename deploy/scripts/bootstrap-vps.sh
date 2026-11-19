@@ -132,7 +132,7 @@ cat >/etc/cron.d/smartbook <<EOF
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 # 02:30 server time (the VPS clock is Asia/Bangkok, UTC+7 = Vietnam time)
-30 2 * * * deploy [ -x $APP_DIR/deploy/scripts/backup.sh ] && $APP_DIR/deploy/scripts/backup.sh >>$APP_DIR/state/backup.log 2>&1
+30 2 * * * deploy [ -x $APP_DIR/deploy/scripts/backup.sh ] && $APP_DIR/deploy/scripts/backup.sh --quiesce >>$APP_DIR/state/backup.log 2>&1
 */5 * * * * deploy [ -x $APP_DIR/deploy/scripts/healthcheck.sh ] && [ -f $APP_DIR/state/release.env ] && $APP_DIR/deploy/scripts/healthcheck.sh >/dev/null 2>&1
 EOF
 chmod 644 /etc/cron.d/smartbook

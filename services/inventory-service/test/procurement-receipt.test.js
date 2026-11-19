@@ -13,6 +13,14 @@ const {
 } = require('../src/services/procurement-receipt.service');
 const { createFakeDb } = require('./helpers/procurement-fake-db');
 
+for (const value of [true, false, [], [1], {}]) {
+  test(`supplier receipt rejects JSON ${JSON.stringify(value)} as a count`, () => {
+    for (const field of ['delivered', 'damaged', 'rejected']) {
+      assert.throws(() => computeLineOutcome({ noteQty: 5, poRemainingQty: 5, delivered: 5, [field]: value }), ProcurementError);
+    }
+  });
+}
+
 // ── P1.2 Close Remaining Quantity guard ─────────────────────────────────────
 
 test('assertLineNotClosed blocks a line that was closed with a remainder', () => {
@@ -99,6 +107,13 @@ function seedPostingDb({ received = 0, item = {}, noteQty = 100, ordered = 100 }
     goods_receipt_items: [{ id: 'gri-1', goods_receipt_id: 'gr-1', variant_id: 'v1', quantity: 100, actual_quantity: null, delivered_qty: 100, damaged_qty: 0, rejected_qty: 0, ...item }],
   });
 }
+
+test('SB-16: posting a legacy incomplete GRN refuses to lose an uncounted delivery line', async () => {
+  const { client, table } = seedPostingDb();
+  table('supplier_delivery_invoice_items').push({ id: 'dni-2', invoice_id: 'dn-1', purchase_order_item_id: 'poi-2', variant_id: 'v2', invoiced_qty: 10 });
+  table('purchase_order_items').push({ id: 'poi-2', purchase_order_id: 'po-1', variant_id: 'v2', ordered_qty: 10, received_qty: 0 });
+  await assert.rejects(settleSupplierReceiptQuantities(client, table('goods_receipts')[0]), (error) => error.code === 'INCOMPLETE_DELIVERY_COUNT');
+});
 
 test('posting uses the staff count: 98 counted, 3 damaged -> the GRN line becomes 95 before stock posting', async () => {
   const { client, table } = seedPostingDb({ item: { actual_quantity: 98, damaged_qty: 3 } });

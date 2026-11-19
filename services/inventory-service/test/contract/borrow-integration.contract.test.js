@@ -80,6 +80,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
   const reservationId = crypto.randomUUID();
   const loanId = crypto.randomUUID();
   const runTag = Date.now();
+  const expiresAt = new Date(Date.now() + 3600_000).toISOString();
 
   await t.test('POST reservations/reserve (201) matches schema', async () => {
     const res = await request('POST', '/api/borrow-integration/reservations/reserve', {
@@ -88,7 +89,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
       variant_id: target.variant_id,
       warehouse_id: target.warehouse_id,
       quantity: 1,
-      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      expires_at: expiresAt,
       idempotency_key: `ct-reserve-${runTag}`,
     });
     assert.equal(res.status, 201, JSON.stringify(res.data));
@@ -104,7 +105,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
       variant_id: target.variant_id,
       warehouse_id: target.warehouse_id,
       quantity: 1,
-      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      expires_at: expiresAt,
       idempotency_key: `ct-reserve-${runTag}`,
     });
     assert.equal(res.status, 200, JSON.stringify(res.data));
@@ -127,6 +128,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     assert.ok(valid, ajv.errorsText(ajv.errors));
   });
 
+  let lentFromLocationId = null;
   await t.test('POST reservations/consume (201) matches schema', async () => {
     const res = await request('POST', '/api/borrow-integration/reservations/consume', {
       reservation_id: reservationId,
@@ -139,6 +141,7 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     const valid = ajv.validate(schemas.consume, res.data);
     assert.ok(valid, ajv.errorsText(ajv.errors));
     assert.equal(res.data.idempotent, false);
+    lentFromLocationId = res.data.data?.from_location_id;
   });
 
   await t.test('POST loans/return (201) matches schema', async () => {
@@ -147,6 +150,8 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
       variant_id: target.variant_id,
       warehouse_id: target.warehouse_id,
       quantity: 1,
+      // Put back where it was lent from.
+      location_id: lentFromLocationId,
       idempotency_key: `ct-return-${runTag}`,
     });
     assert.equal(res.status, 201, JSON.stringify(res.data));
@@ -162,18 +167,14 @@ test('contract: reserve -> consume -> return lifecycle matches locked schemas', 
     assert.ok(valid, ajv.errorsText(ajv.errors));
   });
 
-  await t.test('POST reservations/release (idempotent-replay branch, has `idempotent`) matches schema', async () => {
-    // The reservation was already CONSUMED above, so a release attempt
-    // now hits the "not active" branch -- still validates the shared
-    // release schema, which is what's being locked here.
+  await t.test('POST reservations/release refuses a previously CONSUMED hold', async () => {
     const res = await request('POST', '/api/borrow-integration/reservations/release', {
       reservation_id: reservationId,
       reason: 'CONTRACT_TEST_CLEANUP',
       idempotency_key: `ct-release-${runTag}`,
     });
-    const valid = ajv.validate(schemas.release, res.data);
-    assert.ok(valid, ajv.errorsText(ajv.errors));
-    assert.equal(res.data.idempotent, true);
+    assert.equal(res.status, 409, JSON.stringify(res.data));
+    assert.equal(res.data.data, undefined);
   });
 });
 

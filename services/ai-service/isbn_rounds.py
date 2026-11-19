@@ -383,7 +383,9 @@ async def run_round2(providers: list[BookProvider], round1: dict, code: str, tar
                              "reason": provider.disabled_reason, "durationMs": 0, "attempts": 0})
             outcomes.append(disabled[-1])
             continue
-        ask_code = provider.name not in asked_by_code
+        # An ISBN-only source is never asked for a retail EAN-13 (it cannot hold one).
+        ask_code = provider.name not in asked_by_code and (
+            provider.accepts_raw_barcode or isbn_matching.code_namespace(code) == "isbn")
         if not ask_code and not provider.by_title:
             continue  # already asked by code in Round 1 and has no title search
         tasks.append(reported(_round2_provider(provider, identity, code, targets, ask_code)))

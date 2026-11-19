@@ -1,1 +1,1 @@
-require('@smartbook/shared/telemetry').initTelemetry('auth-service');
+module.exports = require('@smartbook/shared/telemetry').initTelemetry('auth-service');

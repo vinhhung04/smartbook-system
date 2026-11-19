@@ -20,6 +20,7 @@ const envPath = resolve(root, '.env');
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 
 function readEnvVar(name, fallback) {
+  if (process.env[name] !== undefined) return process.env[name];
   if (!existsSync(envPath)) return fallback;
   const contents = readFileSync(envPath, 'utf8');
   const match = contents.match(new RegExp(`^${name}=(.*)$`, 'm'));
@@ -96,6 +97,7 @@ function idemHeader() {
 }
 
 const results = [];
+let activeAuditId = null;
 function add(name, ok, detail) {
   results.push({ name, ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'} - ${name}${detail ? ` :: ${detail}` : ''}`);
@@ -293,6 +295,9 @@ async function scenarioStockAuditApprovalRace(target) {
     throw new Error(`Failed to create stock audit: ${JSON.stringify(created.data)}`);
   }
   const auditId = created.data.data.id;
+  activeAuditId = auditId;
+  const started = await request('PATCH', `/api/stock-audits/${auditId}/recount`);
+  if (!started.ok) throw new Error(`Failed to start physical count: ${JSON.stringify(started.data)}`);
 
   const detail = await request('GET', `/api/stock-audits/${auditId}`);
   const lines = detail.data?.data?.items || [];
@@ -370,6 +375,22 @@ async function run() {
   console.log(`Target: variant=${target.variant_id} warehouse=${target.warehouse_id} location=${target.location_id}`);
   const snapshot = snapshotLocationBalances(target.location_id);
 
+  // A SIGINT/SIGTERM (Ctrl+C, a killed shell, a machine restart mid-run) skips
+  // the try/finally below entirely, leaving this location's balances mutated
+  // mid-test — that is exactly how a prior run corrupted stock_balances with a
+  // negative available_qty with no stock_movements to explain it. Best-effort
+  // restore on these signals too, then exit with the signal's conventional code.
+  let restored = false;
+  const restoreOnSignal = (signal) => {
+    if (restored) return;
+    restored = true;
+    restoreLocationBalances(snapshot);
+    console.log(`Restored ${snapshot.length} stock_balances row(s) at location ${target.location_id} after ${signal}.`);
+    process.exit(128 + (signal === 'SIGINT' ? 2 : 15));
+  };
+  process.on('SIGINT', () => restoreOnSignal('SIGINT'));
+  process.on('SIGTERM', () => restoreOnSignal('SIGTERM'));
+
   try {
     const winningReservationId = await scenarioReservationRace(target);
     if (winningReservationId) {
@@ -381,8 +402,12 @@ async function run() {
     await scenarioConsumeRace(target);
     await scenarioStockAuditApprovalRace(target);
   } finally {
-    restoreLocationBalances(snapshot);
-    console.log(`Restored ${snapshot.length} stock_balances row(s) at location ${target.location_id} to pre-test values.`);
+    if (activeAuditId) await request('PATCH', `/api/stock-audits/${activeAuditId}/cancel`);
+    if (!restored) {
+      restored = true;
+      restoreLocationBalances(snapshot);
+      console.log(`Restored ${snapshot.length} stock_balances row(s) at location ${target.location_id} to pre-test values.`);
+    }
   }
 
   console.table(results);

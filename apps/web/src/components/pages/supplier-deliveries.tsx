@@ -472,10 +472,9 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
         unit_cost: item.unit_cost,
         location_id: null,
         note: over > 0 ? "Số lượng hóa đơn vượt PO còn lại" : null,
-      }))
-      .filter((item) => item.delivered_qty > 0);
+      }));
 
-    if (items.length === 0) return toast.error("Không có mục hàng nào để tạo phiếu");
+    if (!items.some((item) => item.delivered_qty > 0)) return toast.error("Không có mục hàng nào để tạo phiếu");
 
     try {
       setSaving(true);

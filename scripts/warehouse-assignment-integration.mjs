@@ -4,7 +4,13 @@
 // staff tasks, and leaves them INACTIVE / CANCELLED at the end.
 //
 //   node scripts/warehouse-assignment-integration.mjs     (DEMO_PASSWORD, GATEWAY_URL optional)
+//
+// Checks 6 and 12 below assume manager01's real warehouse_scopes (FULL on HCM/HN/BR-HCM-01,
+// nothing on DN) stay put for the whole run - scripts/lib/manager01-scope-lock.mjs serializes
+// that assumption against warehouse-stock-data-scope-integration.mjs, which temporarily
+// overwrites manager01's scope for its own test window.
 import assert from 'node:assert/strict';
+import { withManager01ScopeLock } from './lib/manager01-scope-lock.mjs';
 
 const GATEWAY = (process.env.GATEWAY_URL || 'http://localhost:3000').replace(/\/$/, '');
 const PASSWORD = process.env.DEMO_PASSWORD || '123456';
@@ -41,6 +47,7 @@ async function check(name, fn) {
   }
 }
 
+await withManager01ScopeLock(async () => {
 const tokens = Object.fromEntries(await Promise.all(
   ['hung', 'manager01', 'staff01', 'curator01'].map(async (u) => [u, await login(u)]),
 ));
@@ -48,7 +55,8 @@ const warehouses = (await call(tokens.hung, '/api/warehouses')).body;
 const byCode = Object.fromEntries(warehouses.map((w) => [w.code, w.id]));
 const HCM = byCode['WH-HCM-01'];
 const HN = byCode['WH-HN-01'];
-const DN = byCode['WH-DN-01'];
+const DN = byCode['BR-HCM-02'];
+assert.ok(HCM && HN && DN, 'three seeded warehouses are required');
 const roles = (await call(tokens.hung, '/iam/roles')).body.data;
 const staffRole = roles.find((r) => r.code === 'WAREHOUSE_STAFF');
 const users = (await call(tokens.hung, '/iam/users')).body.data;
@@ -212,6 +220,7 @@ if (tempId) {
   await put(tokens.hung, scopesPath(tempId), { scopes: [], primary_warehouse_id: null });
   await patch(tokens.hung, `/iam/users/${tempId}`, { status: 'INACTIVE' });
 }
+});
 
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

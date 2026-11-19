@@ -1,0 +1,23 @@
+# Test-only dependency boundary, including AJV/devDependencies. Never deploy it.
+FROM node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203 AS test
+# Match the production Prisma engine's system SSL dependency; bundled Node SSL
+# does not provide libssl/libcrypto for the native query engine.
+RUN apt-get update -y \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
+RUN corepack enable
+ARG SERVICE
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY services/${SERVICE}/package.json services/${SERVICE}/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter "${SERVICE}..."
+COPY packages/shared packages/shared
+COPY services/${SERVICE} services/${SERVICE}
+# Analytics evaluation tests share deterministic catalog/simulation helpers.
+COPY services/borrow-service/prisma/simulation services/borrow-service/prisma/simulation
+COPY data/smartbook_catalog_enrichment_seed.sql data/smartbook_catalog_enrichment_seed.sql
+COPY data/smartbook_sample_seed.sql data/smartbook_sample_seed.sql
+WORKDIR /workspace/services/${SERVICE}
+RUN if [ -f prisma/schema.prisma ]; then pnpm exec prisma generate; fi

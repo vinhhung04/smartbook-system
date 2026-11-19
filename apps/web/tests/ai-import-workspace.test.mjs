@@ -94,6 +94,78 @@ test('classifyCode: ISBN-13, ISBN-10, retail EAN-13 and checksum errors', () => 
   assert.equal(classifyCode('  ').kind, 'EMPTY');
 });
 
+// ── ISBN / EAN-13: each code is saved in the column of its own kind ─────────────
+const FORM = { isbn: '', isbn13: '', isbn10: '', internalBarcode: '', title: 'T', subtitle: '', authorsText: '', translatorText: '',
+  publisher: '', publishedDate: '', description: '', categoriesText: '', language: 'vi', pageCount: '', thumbnail: '', summaryVi: '', keywordsText: '' };
+
+test('ISBN-10 (X check digit too) gives its ISBN-13; a 978 ISBN-13 its ISBN-10; a 979 ISBN-13 none', () => {
+  const { resolveBookCodes } = utils;
+  assert.deepEqual(resolveBookCodes({ ...FORM, isbn: '0-8044-2957-x' }), {
+    isbn13: '9780804429573', isbn10: '080442957X', ean13: '', internalBarcode: '9780804429573', hasCode: true, errors: {} });
+  assert.equal(resolveBookCodes({ ...FORM, isbn: '9780132350884' }).isbn10, '0132350882');
+  const isbn979 = resolveBookCodes({ ...FORM, isbn: '979-1234567896' });
+  assert.equal(isbn979.isbn13, '9791234567896');
+  assert.equal(isbn979.isbn10, '');
+});
+
+test('the EAN-13 8935309501694 is kept as the barcode and never becomes an ISBN', () => {
+  const codes = utils.resolveBookCodes({ ...FORM, isbn: '8935309501694' });
+  assert.deepEqual(codes, { isbn13: '', isbn10: '', ean13: '8935309501694', internalBarcode: '8935309501694', hasCode: true, errors: {} });
+  const final = utils.finalMetadataFromForm({ ...FORM, isbn: '8935309501694' });
+  assert.equal(final.isbn13, undefined);
+  assert.equal(final.isbn10, undefined);
+  assert.equal(final.internalBarcode, '8935309501694');
+});
+
+test('an ISBN and the retail EAN of the same edition are both saved, each in its own field', () => {
+  const final = utils.finalMetadataFromForm({ ...FORM, isbn: '8935325011894', isbn13: '9786043927436', internalBarcode: '8935325011894' });
+  assert.equal(final.isbn13, '9786043927436');
+  assert.equal(final.isbn10, '6043927438');
+  assert.equal(final.internalBarcode, '8935325011894');
+});
+
+test('bad check digits and an EAN typed as ISBN-13 are refused, not saved', () => {
+  const { resolveBookCodes } = utils;
+  assert.ok(resolveBookCodes({ ...FORM, isbn: '9780132350885' }).errors.isbn);
+  assert.equal(resolveBookCodes({ ...FORM, isbn: '9780132350885' }).hasCode, false);
+  assert.ok(resolveBookCodes({ ...FORM, isbn: '8935309501695' }).errors.isbn); // EAN, wrong check digit
+  assert.match(resolveBookCodes({ ...FORM, isbn13: '8935309501694' }).errors.isbn13, /EAN-13/);
+  assert.ok(resolveBookCodes({ ...FORM, isbn10: '0132350883' }).errors.isbn10);
+  assert.ok(resolveBookCodes({ ...FORM, internalBarcode: '8935309501695' }).errors.internalBarcode);
+  assert.equal(utils.finalMetadataFromForm({ ...FORM, isbn13: '8935309501694' }).isbn13, undefined);
+});
+
+test('a looked-up EAN fills the barcode field, never ISBN-13 (also for an old cached isbn13 = EAN)', () => {
+  const form = utils.mapLookupToForm({ ...LOOKUP, isbn: '8935309501694', isbn13: '8935309501694', isbn10: null, authors: [], categories: [], keywords: [] });
+  assert.equal(form.isbn13, '');
+  assert.equal(form.internalBarcode, '8935309501694');
+});
+
+test('applying an ISBN over an EAN keeps the EAN as the barcode; an existing barcode or edit is not overwritten', () => {
+  const { keepEanWhenApplying } = utils;
+  const prev = { ...FORM, isbn: '8935325011894' };
+  assert.deepEqual(keepEanWhenApplying(prev, { isbn: '9786043927436', isbn13: '9786043927436' }),
+    { isbn: '9786043927436', isbn13: '9786043927436', internalBarcode: '8935325011894' });
+  const typed = { ...prev, internalBarcode: '8935000000000' };
+  assert.equal(keepEanWhenApplying(typed, { isbn: '9786043927436' }).internalBarcode, undefined);
+  assert.equal(keepEanWhenApplying(prev, { title: 'X' }).internalBarcode, undefined);
+});
+
+test('a chosen cross-lookup candidate goes to its own field; a 979 ISBN clears a stale ISBN-10', () => {
+  const { crossLookupPatch } = utils;
+  assert.deepEqual(crossLookupPatch({ direction: 'EAN_TO_ISBN' }, '9786048863135', '6048863136'), { isbn13: '9786048863135', isbn10: '6048863136' });
+  assert.deepEqual(crossLookupPatch({ direction: 'EAN_TO_ISBN' }, '9791234567896', null), { isbn13: '9791234567896', isbn10: '' });
+  assert.deepEqual(crossLookupPatch({ direction: 'ISBN_TO_EAN' }, '8935325018732', null), { internalBarcode: '8935325018732' });
+});
+
+test('duplicate check sends the ISBN as isbn and the EAN as barcode', () => {
+  const meta = utils.buildDuplicateCheckMetadata({ lookup: { ...LOOKUP, authors: [], categories: [] }, normalizedMetadata: {},
+    form: { ...FORM, isbn: '8935309501694' } });
+  assert.equal(meta.isbn, '');
+  assert.equal(meta.barcode, '8935309501694');
+  assert.equal(meta.internal_barcode, '8935309501694');
+});
+
 const LOOKUP = {
   found: true,
   sources: [{ name: 'fahasa', status: 'SUCCESS' }, { name: 'googleBooks', status: 'SUCCESS' }, { name: 'tiki', status: 'SUCCESS' }],

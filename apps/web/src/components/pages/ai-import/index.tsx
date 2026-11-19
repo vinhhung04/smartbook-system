@@ -14,7 +14,7 @@ import { StudioHeader, type SessionTone, type StudioStep } from "./studio-ui";
 import { useMediaQuery, WIDE_WORKSPACE_QUERY } from "./use-media-query";
 import type { SaveIssue } from "./sticky-footer";
 import { ExtractionEvidencePanel } from "./extraction-evidence-panel";
-import { aiService, type EnrichBookAfterIsbnResponse, type EnrichMode, type LookupBookByIsbnResponse, type PostIsbnAiSuggestions } from "@/services/ai";
+import { aiService, type EnrichBookAfterIsbnResponse, type EnrichMode, type IsbnSourceName, type LookupBookByIsbnResponse, type PostIsbnAiSuggestions } from "@/services/ai";
 import { bookService } from "@/services/book";
 import { metadataIntelligenceService, type DuplicateDecisionResult, type DuplicateReview, type ReconciliationDraft } from "@/services/metadata-intelligence";
 import { ProgressStreamUnavailable, type LookupProgressEvent } from "@/services/lookup-progress-stream";
@@ -26,6 +26,7 @@ import { ReviewTab } from "./review-tab";
 import { StickyFooter } from "./sticky-footer";
 import { ImageOcrCard, OcrAvailabilityNotice } from "./image-ocr-card";
 import { OcrReviewPanel } from "./ocr-review-panel";
+import { CROSS_LOOKUP_CARD_ID } from "./cross-lookup-card";
 import { useBookOcr } from "./use-book-ocr";
 import { MetadataReview } from "./metadata-review";
 import { ProcessingTimeline } from "./processing-timeline";
@@ -33,19 +34,25 @@ import { SourceComparison } from "./source-comparison";
 import { ReviewChecklist, type ChecklistItem } from "./review-checklist";
 import { applyProgressEvent, finishProgress, initialProgress, markClientStep, type LookupProgress, type PhaseState } from "./lookup-progress";
 import type { FieldFilter } from "./field-review-model";
-import { AI_FIELD_NOUN, AI_FORM_FIELD, EMPTY_FORM, qualityCheckBasis, type QualityCheckResult, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type EditableBookForm } from "./types";
-import { applySafeProposals, formFromScan, lookupStateFromScan, singleSourceProposals } from "@/lib/book-ocr";
+import { AI_FIELD_NOUN, AI_FORM_FIELD, EMPTY_FORM, qualityCheckBasis, type QualityCheckResult, type AiAppliedChange, type AiFieldCandidates, type AiFieldKey, type CatalogBookLite, type CodeSuggestion, type EditableBookForm } from "./types";
+import { applySafeProposals, formFromScan, lookupStateFromScan, OCR_FIELD_LABELS, singleSourceProposals, unresolvedOcrFields } from "@/lib/book-ocr";
 import type { BookOcrScanResult } from "@/services/book-ocr";
+import { imageFileToDataUrl } from "@/lib/resize-image";
 import {
   buildDuplicateCheckMetadata,
+  classifyCode,
+  crossLookupPatch,
   finalMetadataFromForm,
   findDuplicateMatches,
+  keepEanWhenApplying,
   mapLookupToForm,
   mergeCommaText,
   planBulkAiApply,
   normalizeIsbnInput,
   parsePublishYear,
   reconciliationValueFromForm,
+  resolveBookCodes,
+  SOURCE_LABELS,
   splitCommaValues,
 } from "./utils";
 
@@ -119,6 +126,8 @@ export function AIImportPage() {
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("metadata");
   const [lastPanelTab, setLastPanelTab] = useState<PanelTab>("sources");
   const [fieldFilter, setFieldFilter] = useState<FieldFilter>("all");
+  /** The scanned code whose EAN-13 <-> ISBN comparison is expanded (a new lookup starts closed). */
+  const [crossOpenFor, setCrossOpenFor] = useState<string | null>(null);
   const initializedTabForLookup = useRef<LookupBookByIsbnResponse | null>(null);
 
   const [confirmEntityField, setConfirmEntityField] = useState<string | null>(null);
@@ -129,6 +138,8 @@ export function AIImportPage() {
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [ocrCancelled, setOcrCancelled] = useState(false);
+  // The lookup result the user re-opened the full inputs for; a new result folds them again.
+  const [inputsOpenFor, setInputsOpenFor] = useState<LookupBookByIsbnResponse | null>(null);
   const wideWorkspace = useMediaQuery(WIDE_WORKSPACE_QUERY);
 
   function selectTab(tab: WorkspaceTab) {
@@ -356,11 +367,14 @@ export function AIImportPage() {
           toast.success("Đã tìm thấy metadata sách");
         }
       } else {
+        // Each typed code goes to the field of its own kind: a retail EAN-13 is the barcode, never an ISBN.
+        const typed = classifyCode(normalized);
         setForm({
           ...EMPTY_FORM,
           isbn: lookup.isbn || normalized,
-          isbn13: lookup.isbn13 || (normalized.length === 13 ? normalized : ""),
-          isbn10: lookup.isbn10 || (normalized.length === 10 ? normalized : ""),
+          isbn13: classifyCode(lookup.isbn13 || "").kind === "ISBN13" ? normalizeIsbnInput(lookup.isbn13 || "") : typed.kind === "ISBN13" ? typed.digits : "",
+          isbn10: classifyCode(lookup.isbn10 || "").kind === "ISBN10" ? normalizeIsbnInput(lookup.isbn10 || "") : typed.kind === "ISBN10" ? typed.digits : "",
+          internalBarcode: typed.kind === "EAN13" ? typed.digits : "",
         });
         // No source carries this code: the book itself is the reliable source - its
         // copyright page holds ISBN, publisher, year and page count for the OCR flow.
@@ -393,8 +407,12 @@ export function AIImportPage() {
   }
 
   function scrollToCopyrightSlot() {
-    document.querySelector('[data-testid="ocr-slot-copyright_page"]')
-      ?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth", block: "center" });
+    // The photo slots may be folded away; open them first, then scroll once they are laid out.
+    setInputsOpenFor(lookupData);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      document.querySelector('[data-testid="ocr-slot-copyright_page"]')
+        ?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth", block: "center" });
+    }));
   }
 
   /** Reconciliation draft (only for a provider record) + duplicate check, shared by the
@@ -456,7 +474,14 @@ export function AIImportPage() {
     const seq = beginSession();
     setLookupLoading(false);
     const lookup = lookupStateFromScan(result);
-    const { form: nextForm, applied, keptUserValues } = formFromScan(formRef.current, result.proposals, userEditedRef.current, EMPTY_FORM);
+    const scanned = formFromScan(formRef.current, result.proposals, userEditedRef.current, EMPTY_FORM);
+    const { applied, keptUserValues } = scanned;
+    // Cover: the verified lookup record's image when it has one, otherwise the
+    // front-cover photo (set below, once resized). A cover the user set is kept.
+    const keepCover = userEditedRef.current.has("thumbnail");
+    const nextForm = !keepCover && lookup.thumbnail ? { ...scanned.form, thumbnail: lookup.thumbnail } : scanned.form;
+    const frontCover = !keepCover && !lookup.thumbnail ? ocr.slots.front_cover?.file : undefined;
+    if (frontCover) void applyFrontCoverThumbnail(frontCover, seq);
     setPostIsbnSuggestions(null);
     setReconciliationDraft(null);
     setCreateAuthorityEntities({});
@@ -480,9 +505,20 @@ export function AIImportPage() {
     if (lookup.found || nextForm.title.trim() || nextForm.isbn.trim()) await startCatalogReview(lookup, NO_AI_SUGGESTIONS, nextForm, seq, true);
   }
 
+  async function applyFrontCoverThumbnail(file: File, seq: number) {
+    try {
+      // ~600 px JPEG keeps the data URL small enough for cover_image_url and catalog lists.
+      const dataUrl = await imageFileToDataUrl(file, { maxDimension: 600, quality: 0.8 });
+      if (seq !== lookupSeqRef.current || userEditedRef.current.has("thumbnail")) return;
+      setForm((current) => (current.thumbnail ? current : { ...current, thumbnail: dataUrl }));
+    } catch {
+      // The cover simply stays empty; a URL can still be pasted by hand.
+    }
+  }
+
   function handleOcrApply(fields: Array<keyof EditableBookForm>, value: string, label: string) {
     if (ocr.resultStale) return;
-    setForm((prev) => ({ ...prev, ...Object.fromEntries(fields.map((field) => [field, value])) }));
+    setForm((prev) => ({ ...prev, ...keepEanWhenApplying(prev, Object.fromEntries(fields.map((field) => [field, value]))) }));
     markUserEdited(...fields); // an explicit choice: later safe-applies keep it
     toast.success(`Đã áp dụng ${label.toLowerCase()}`);
   }
@@ -499,8 +535,8 @@ export function AIImportPage() {
     if (!ocr.result || ocr.resultStale) return;
     const chosen = singleSourceProposals(ocr.result.proposals, userEditedFields);
     const fields = chosen.flatMap((proposal) => (proposal.formField === "isbn" ? ["isbn", "isbn13"] : [proposal.formField]));
-    setForm((prev) => ({ ...prev, ...Object.fromEntries(chosen.flatMap((proposal) => (proposal.formField === "isbn"
-      ? [["isbn", proposal.value], ["isbn13", proposal.value]] : [[proposal.formField, proposal.value]]))) }));
+    setForm((prev) => ({ ...prev, ...keepEanWhenApplying(prev, Object.fromEntries(chosen.flatMap((proposal) => (proposal.formField === "isbn"
+      ? [["isbn", proposal.value], ["isbn13", proposal.value]] : [[proposal.formField, proposal.value]])))) }));
     markUserEdited(...fields); // an explicit choice, kept like a typed value
     toast.success(`Đã áp dụng ${chosen.length} giá trị đọc từ một ảnh`);
   }
@@ -774,10 +810,17 @@ export function AIImportPage() {
       toast.error('Cần có bản nháp kiểm duyệt trước khi lưu kết quả trích xuất.');
       return;
     }
-    const normalizedIsbn = normalizeIsbnInput(form.isbn || isbnInput);
+    // Each code is saved in the column of its own kind (server enforces the same rules):
+    // ISBN-13/10 -> isbn13/isbn10, a retail EAN-13 -> internal_barcode, never the reverse.
+    const codes = resolveBookCodes({ ...form, isbn: form.isbn || isbnInput });
     const title = form.title.trim();
-    if (!normalizedIsbn) {
-      toast.error("ISBN là bắt buộc");
+    const codeError = Object.values(codes.errors)[0];
+    if (codeError) {
+      toast.error(codeError);
+      return;
+    }
+    if (!codes.hasCode) {
+      toast.error("Cần ISBN hoặc mã vạch EAN-13 hợp lệ để lưu sách");
       return;
     }
     if (!title) {
@@ -791,6 +834,18 @@ export function AIImportPage() {
     if (reconciliationDraft?.decisions.some((item) => item.status === "PENDING")) {
       toast.error("Vui lòng hoàn tất các quyết định metadata trước khi lưu.");
       return;
+    }
+    // The reconciliation draft's PENDING gate above only exists for a matched ISBN record,
+    // and even then only covers authority normalization (author/publisher/category) - never
+    // book_ocr's own per-field CONFLICTED / REVIEW_REQUIRED / INVALID status. A photo-only
+    // import with no (or no matching) ISBN record never gets a draft at all, so without this
+    // check nothing stops a flagged field the user hasn't looked at from being saved.
+    if (ocr.result && !ocr.resultStale) {
+      const unresolved = unresolvedOcrFields(ocr.result.proposals, userEditedFields);
+      if (unresolved.length) {
+        toast.error(`Cần kiểm tra lại thông tin đọc từ ảnh trước khi lưu: ${unresolved.map((field) => OCR_FIELD_LABELS[field] || field).join(", ")}.`);
+        return;
+      }
     }
     if (duplicateReview && duplicateReview.classification !== "NEW_TITLE") {
       toast.error("Vui lòng xử lý duplicate review trước khi lưu.");
@@ -817,13 +872,11 @@ export function AIImportPage() {
         description: form.description.trim() || null,
         summary_vi: form.summaryVi.trim() || null,
         language: (form.language || "vi").trim() || "vi",
-        internal_barcode: normalizedIsbn,
+        internal_barcode: codes.internalBarcode,
       };
 
-      const isbn13 = normalizeIsbnInput(form.isbn13 || "");
-      const isbn10 = normalizeIsbnInput(form.isbn10 || "");
-      if (isbn13.length === 13) updatePayload.isbn13 = isbn13;
-      if (isbn10.length === 10) updatePayload.isbn10 = isbn10;
+      if (codes.isbn13) updatePayload.isbn13 = codes.isbn13;
+      if (codes.isbn10) updatePayload.isbn10 = codes.isbn10;
 
       const year = parsePublishYear(form.publishedDate);
       if (year) updatePayload.publish_year = year;
@@ -858,7 +911,10 @@ export function AIImportPage() {
         savedBookId = result.book.id;
         appendSnapshot = duplicateAction !== "LINK_EXISTING_VARIANT";
       } else {
-        const created = await bookService.createIncomplete({ isbn13: normalizedIsbn, title, price: 0, language: (form.language || "vi").trim() || "vi" });
+        const created = await bookService.createIncomplete({
+          ...(codes.isbn13 ? { isbn13: codes.isbn13 } : {}), ...(codes.ean13 ? { barcode: codes.ean13 } : {}),
+          title, price: 0, language: (form.language || "vi").trim() || "vi",
+        });
         const payload = created?.data;
         if (!payload?.book_id) throw new Error("Không lấy được book id để cập nhật metadata");
         savedBookId = String(payload.book_id);
@@ -869,7 +925,7 @@ export function AIImportPage() {
 
       // Keep the local catalog snapshot in sync so the duplicate check catches
       // this book if the user immediately tries to import it again this session.
-      if (appendSnapshot) setCatalogBooks((prev) => [...prev, { id: savedBookId, title, author: authors[0] || "", isbn: normalizedIsbn, category: categories[0] || "" }]);
+      if (appendSnapshot) setCatalogBooks((prev) => [...prev, { id: savedBookId, title, author: authors[0] || "", isbn: codes.isbn13 || codes.ean13, category: categories[0] || "" }]);
 
       setLookupData(null);
       setPostIsbnSuggestions(null);
@@ -985,14 +1041,67 @@ export function AIImportPage() {
     return map;
   }, [form, userEditedFields, ocr.result, lookupData]);
 
+  // The ISBN the EAN-13 cross lookup offers (never applied by itself): shown on the card,
+  // at the ISBN-13 field and in the review checklist, so it is seen from either tab.
+  const crossLookup = lookupData?.crossLookup;
+  function applyCrossLookup(patch: Partial<EditableBookForm>, label: string) {
+    setForm((prev) => ({ ...prev, ...keepEanWhenApplying(prev, patch) }));
+    markUserEdited(...(Object.keys(patch) as Array<keyof EditableBookForm>)); // an explicit choice
+    toast.success(`Đã áp dụng ${label}`);
+  }
+  function showCrossEvidence() {
+    setFieldFilter("all");
+    setCrossOpenFor(crossLookup?.scannedCode ?? null);
+    selectTab("metadata");
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => scrollToId(CROSS_LOOKUP_CARD_ID, "center")));
+  }
+  // EAN scanned -> an ISBN for the ISBN-13 field; ISBN scanned -> a barcode for the EAN-13 field.
+  function codeSuggestion(direction: "EAN_TO_ISBN" | "ISBN_TO_EAN"): CodeSuggestion | null {
+    if (!crossLookup || crossLookup.direction !== direction) return null;
+    const candidates = crossLookup.candidates || [];
+    const several = candidates.length > 1;
+    const single = !several && crossLookup.value && (crossLookup.status === "VERIFIED" || crossLookup.status === "REVIEW_REQUIRED")
+      ? crossLookup.value : null;
+    if (!single && !several) return null;
+    const pick = single || crossLookup.preferred || null;
+    const isbn10 = single ? crossLookup.isbn10 : candidates.find((c) => c.value === pick)?.isbn10 ?? null;
+    const toIsbn = direction === "EAN_TO_ISBN";
+    const sources = [...new Set(crossLookup.evidence.map((item) => SOURCE_LABELS[item.source as IsbnSourceName] || item.source))];
+    return {
+      from: toIsbn ? "mã EAN-13" : "ISBN", noun: toIsbn ? "ISBN" : "mã vạch",
+      value: pick, values: several ? candidates.map((c) => c.value) : [single!],
+      statusLabel: several ? `${candidates.length} ứng viên${pick ? ", ưu tiên mã khớp năm ấn bản" : ""}`
+        : crossLookup.status === "VERIFIED" ? "Đã đối chiếu" : "Cần kiểm tra",
+      sourceLabel: sources.join(", "),
+      onApply: pick ? () => applyCrossLookup(crossLookupPatch(crossLookup, pick, isbn10),
+        `${toIsbn ? "ISBN" : "mã vạch EAN-13"} từ đối chiếu ${toIsbn ? "mã EAN-13" : "ISBN"}`) : null,
+      onShowEvidence: showCrossEvidence,
+    };
+  }
+  const isbnSuggestion = codeSuggestion("EAN_TO_ISBN");
+  const barcodeSuggestion = codeSuggestion("ISBN_TO_EAN");
+
   // One list for the review checklist and the save bar. Its required items mirror
   // handleSave's refusals, in the same order, so neither promises a save that will be refused.
   const checklist: Array<ChecklistItem & { short: string }> = [];
   if (lookupData) {
     if (lookupData.intelligence) checklist.push({ key: "draft", required: true, done: Boolean(reconciliationDraft), label: "Bản nháp kiểm duyệt đã được tạo", short: "Chưa có bản nháp kiểm duyệt", detail: "Tra cứu lại nếu bản nháp không tạo được.", onGo: () => goToReview(REVIEW_CARD_IDS.authority) });
-    const hasIsbn = Boolean(normalizeIsbnInput(form.isbn || isbnInput));
-    checklist.push({ key: "isbn", required: true, done: hasIsbn, label: "Có mã ISBN", short: "Thiếu ISBN", onGo: () => focusField("isbn") });
+    const savedCodes = resolveBookCodes({ ...form, isbn: form.isbn || isbnInput });
+    const hasIsbn = savedCodes.hasCode && !Object.keys(savedCodes.errors).length;
+    checklist.push({ key: "isbn", required: true, done: hasIsbn, label: "Có ISBN hoặc mã vạch EAN-13 hợp lệ", short: "Thiếu ISBN / EAN-13", onGo: () => focusField("isbn") });
     checklist.push({ key: "title", required: true, done: Boolean(form.title.trim()), label: "Có tên sách", short: "Thiếu tên sách", onGo: () => focusField("title") });
+    for (const [key, suggestion, current] of [["cross-isbn", isbnSuggestion, form.isbn13], ["cross-ean", barcodeSuggestion, form.internalBarcode]] as const) {
+      if (!suggestion) continue;
+      const applied = suggestion.values.includes(current.trim());
+      const several = suggestion.values.length > 1;
+      checklist.push({ key, required: false, done: applied,
+        label: applied ? `Đã dùng ${suggestion.noun} ${current.trim()} đề xuất từ ${suggestion.from}`
+          : several ? `Có ${suggestion.values.length} ${suggestion.noun} ứng viên cho ${suggestion.from}${suggestion.value ? ` — ưu tiên ${suggestion.value} (khớp năm ấn bản)` : ""}: chọn đúng mã của cuốn trong tay`
+            : `Có ${suggestion.noun} đề xuất cho ${suggestion.from}: ${suggestion.value} (${suggestion.statusLabel.toLowerCase()})`,
+        short: `${suggestion.noun === "ISBN" ? "ISBN" : "Mã vạch"} đề xuất chưa xem`,
+        detail: `Nguồn: ${suggestion.sourceLabel}. Xem bằng chứng rồi bấm “Dùng ${suggestion.noun} này” — hệ thống không tự điền.`,
+        onGo: showCrossEvidence });
+    }
     if (duplicateMatches.length > 0) checklist.push({ key: "catalog-dup", required: true, done: !catalogDuplicateNeedsReview, label: "Xác nhận sách có thể đã có trong catalog", short: "Xác nhận trùng catalog", onGo: () => goToReview(REVIEW_CARD_IDS.duplicate) });
     if (reconciliationDraft) checklist.push({ key: "authority", required: true, done: !reconciliationDraft.decisions.some((item) => item.status === "PENDING"), label: "Duyệt chuẩn hóa tác giả, NXB, thể loại", short: "Quyết định chuẩn hóa còn chờ", onGo: () => goToReview(REVIEW_CARD_IDS.authority) });
     if (duplicateReview || duplicateDecisionResult) checklist.push({ key: "duplicate", required: true, done: !duplicateNeedsReview, label: "Xử lý trùng lặp và ấn bản", short: "Xử lý trùng lặp & ấn bản", onGo: () => goToReview(REVIEW_CARD_IDS.duplicate) });
@@ -1059,6 +1168,10 @@ export function AIImportPage() {
 
   const metadataPane = (
     <MetadataReview
+      crossLookup={crossLookup}
+      crossOpen={Boolean(crossLookup) && crossOpenFor === crossLookup?.scannedCode}
+      onCrossToggle={() => setCrossOpenFor((open) => (open === crossLookup?.scannedCode ? null : crossLookup?.scannedCode ?? null))}
+      onCrossApply={applyCrossLookup}
       form={form}
       onFieldChange={(field, value) => {
         markUserEdited(field);
@@ -1166,19 +1279,33 @@ export function AIImportPage() {
   const panelTab: PanelTab = workspaceTab === "metadata" ? lastPanelTab : workspaceTab;
   const safePanelTab: PanelTab = panelTab === "ocr" && !ocr.result ? "review" : panelTab;
 
+  // Fold the inputs to the lookup row while a looked-up book is being reviewed; photos already chosen keep them open.
+  const inputsFolded = Boolean(lookupData) && !lookupLoading && Object.keys(ocr.slots).length === 0 && inputsOpenFor !== lookupData;
+
   return (
     <div ref={rootRef} className="mx-auto max-w-[1440px] space-y-6 p-4 pb-10 sm:p-6 lg:p-8">
       <StudioHeader session={session} steps={steps} ocrAvailability={ocr.availability} />
 
       <section data-reveal aria-labelledby="import-sources-title" className="rounded-2xl border border-border bg-card">
         <div className="px-5 pt-5 sm:px-6">
-          <h2 id="import-sources-title" className="text-[16px] font-semibold text-foreground">Dữ liệu đầu vào</h2>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <h2 id="import-sources-title" className="text-[16px] font-semibold text-foreground">Dữ liệu đầu vào</h2>
+            {inputsFolded ? (
+              <button type="button" onClick={() => setInputsOpenFor(lookupData)} aria-expanded={false} aria-controls="import-photo-inputs"
+                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-semibold text-primary hover:bg-primary/[0.06] focus-visible:outline-2 focus-visible:outline-ring">
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />Thêm ảnh để đối chiếu
+              </button>
+            ) : null}
+          </div>
           <p className="mt-0.5 max-w-[70ch] text-[12.5px] leading-relaxed text-muted-foreground">
-            Dùng mã in trên sách, hoặc chụp bìa trước, bìa sau và trang thông tin xuất bản. Tra mã mới sẽ thay biểu mẫu; quét ảnh giữ lại trường bạn đã tự sửa.
+            {inputsFolded
+              ? "Sách đang được kiểm duyệt bên dưới. Tra mã khác sẽ thay biểu mẫu; thêm ảnh bìa hoặc trang xuất bản để AI đối chiếu chéo."
+              : "Dùng mã in trên sách, hoặc chụp bìa trước, bìa sau và trang thông tin xuất bản. Tra mã mới sẽ thay biểu mẫu; quét ảnh giữ lại trường bạn đã tự sửa."}
           </p>
         </div>
-        <div className="grid gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8">
+        <div className={inputsFolded ? "px-5 py-4 sm:px-6" : "grid gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8"}>
           <LookupSearchCard
+            compact={inputsFolded}
             isbnInput={isbnInput}
             onIsbnInputChange={setIsbnInput}
             onLookup={() => void handleLookup()}
@@ -1186,7 +1313,7 @@ export function AIImportPage() {
             lookupLoading={lookupLoading}
             hasLookupData={Boolean(lookupData)}
           />
-          <div className="min-w-0 border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+          <div id="import-photo-inputs" hidden={inputsFolded} className="min-w-0 border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
             {ocr.availability === "AVAILABLE" && ocr.capabilities ? (
               <ImageOcrCard
                 slots={ocr.slots}
@@ -1256,7 +1383,7 @@ export function AIImportPage() {
                         ? "Bản ghi tra cứu ISBN không khớp sách trong ảnh — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh, hãy kiểm tra lại ISBN"
                         : "Chưa có metadata từ nhà cung cấp — biểu mẫu chỉ dùng dữ liệu đọc từ ảnh"}
                     </p>
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">{form.isbn.trim() ? "Kiểm tra lại từng trường với sách thật trước khi lưu." : "Ảnh không có ISBN hợp lệ — nhập ISBN in trên sách để lưu (ISBN là bắt buộc)."}</p>
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">{form.isbn.trim() || form.internalBarcode.trim() ? "Kiểm tra lại từng trường với sách thật trước khi lưu." : "Ảnh không có ISBN hợp lệ — nhập ISBN in trên sách, hoặc dùng mã vạch EAN-13 để lưu."}</p>
                   </>
                 ) : (
                   <>

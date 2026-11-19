@@ -164,7 +164,7 @@ class FieldLevelLookupTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["verification"]["round1"]["matchedSource"], "googleBooks")
 
     async def test_barcode_mode_does_not_use_field_level_orchestrator(self):
-        barcode = "1234567890123"  # fails the checksum: only raw-barcode sources may search it
+        barcode = "8935235226272"  # a retail EAN-13, not an ISBN: only raw-barcode sources may search it
         reg, order = registry(code_provider("dinhTi", market(publisher="NXB")[0], code=barcode, accepts_raw_barcode=True))
         with patch("main._run_field_level_lookup", new=AsyncMock()) as orchestrator, reg, order:
             result = await lookup_book_by_isbn(IsbnLookupRequest(isbn=barcode))

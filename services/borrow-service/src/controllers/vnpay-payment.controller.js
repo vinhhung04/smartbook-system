@@ -1,17 +1,11 @@
-const crypto = require('crypto');
 const { prisma } = require('../lib/prisma');
 const { ensureCurrentCustomer } = require('./customer.controller');
 const { normalizeMoney } = require('../services/fine.service');
+const { createFinePaymentIntent } = require('../services/fine-payment-intent.service');
 const vnpayService = require('../services/vnpay.service');
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
-}
-
-function generateTxnRef() {
-  const datePart = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  const randomPart = crypto.randomBytes(4).toString('hex');
-  return `SB${datePart}${randomPart}`;
 }
 
 async function createVnpayFinePayment(req, res) {
@@ -32,66 +26,8 @@ async function createVnpayFinePayment(req, res) {
       });
     }
 
-    const fine = await prisma.fines.findUnique({ where: { id: fineId }, include: { fine_payments: true } });
-    if (!fine || fine.customer_id !== customer.id) {
-      return res.status(404).json({ message: 'Không tìm thấy khoản phạt' });
-    }
-    if (fine.status === 'PAID' || fine.status === 'WAIVED') {
-      return res.status(409).json({ message: `Không thể thanh toán khoản phạt ở trạng thái ${fine.status}` });
-    }
-
-    const paidSoFar = fine.fine_payments.reduce((sum, item) => sum + normalizeMoney(item.amount), 0);
-    const remaining = Math.max(0, normalizeMoney(fine.amount) - normalizeMoney(fine.waived_amount) - paidSoFar);
-    if (remaining <= 0) {
-      return res.status(409).json({ message: 'Khoản phạt đã được thanh toán đủ' });
-    }
-
-    // One live payment per fine. If the reader already paid an earlier link that VNPay
-    // has not confirmed yet, a second link would be paid too and then rejected as
-    // STALE_INTENT by finalizeVnpayPayment — money taken, nothing recorded. Make them
-    // wait for the first link to be confirmed or to expire (INTENT_TTL_MS) instead.
-    const pendingIntent = await prisma.fine_payment_intents.findFirst({
-      where: { fine_id: fine.id, status: { in: ['PENDING', 'PROCESSING'] }, expires_at: { gt: new Date() } },
-      orderBy: { created_at: 'desc' },
-      select: { txn_ref: true, expires_at: true, amount: true, status: true },
-    });
-    if (pendingIntent) {
-      return res.status(409).json({
-        message: 'Khoản phạt này đang có một giao dịch VNPay chờ xác nhận. Nếu bạn đã thanh toán, vui lòng đợi hệ thống xác nhận; nếu chưa, hãy thử lại sau khi giao dịch cũ hết hạn.',
-        code: 'PAYMENT_PENDING',
-        data: {
-          txn_ref: pendingIntent.txn_ref,
-          expires_at: pendingIntent.expires_at,
-          amount: normalizeMoney(pendingIntent.amount),
-        },
-      });
-    }
-
-    const txnRef = generateTxnRef();
-    const orderInfo = `Thanh toan phi phat ${fine.id}`;
-    const { paymentUrl, expiresAt } = vnpayService.buildPaymentUrl({
-      txnRef,
-      amountVnd: remaining,
-      orderInfo,
-      ipAddr: req.ip,
-    });
-
-    await prisma.fine_payment_intents.create({
-      data: {
-        fine_id: fine.id,
-        customer_id: customer.id,
-        txn_ref: txnRef,
-        amount: remaining,
-        status: 'PENDING',
-        vnp_order_info: orderInfo,
-        expires_at: expiresAt,
-      },
-    });
-
-    return res.status(201).json({
-      message: 'Payment link created',
-      data: { payment_url: paymentUrl, txn_ref: txnRef, amount: remaining, expires_at: expiresAt },
-    });
+    const result = await createFinePaymentIntent(prisma, { customerId: customer.id, fineId, ipAddr: req.ip });
+    return res.status(result.code).json(result.payload);
   } catch (error) {
     console.error('createVnpayFinePayment error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -113,7 +49,6 @@ async function getVnpayFinePaymentStatus(req, res) {
 
     let status = intent.status;
     if (status === 'PENDING' && new Date() > intent.expires_at) {
-      await prisma.fine_payment_intents.update({ where: { id: intent.id }, data: { status: 'EXPIRED' } });
       status = 'EXPIRED';
     }
 

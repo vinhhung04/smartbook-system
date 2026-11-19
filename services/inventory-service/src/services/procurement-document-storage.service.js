@@ -118,7 +118,11 @@ function openReadStream(storageRef) {
 // inspected (magic bytes + size + checksum) before anything touches the disk.
 const documentUploadMiddleware = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_BYTES, files: 1, fields: 40 },
+  limits: {
+    fileSize: MAX_FILE_BYTES, files: 1, fields: 40,
+    // Multer's nesting/index defaults remain unlimited even in patched releases.
+    fieldNameSize: 100, fieldNestingDepth: 4, fieldArrayIndexLimit: 100,
+  },
 }).single("file");
 
 function handleDocumentUpload(req, res, next) {

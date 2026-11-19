@@ -97,7 +97,8 @@ test('Grafana provisions only Prometheus, and every panel and alert uses it', ()
     }
   }
   const rules = read('observability/grafana/provisioning/alerting/rules.yaml');
-  const uids = [...rules.matchAll(/datasourceUid: (\S+)/g)].map((m) => m[1]);
+  // __expr__ is Grafana's built-in expression engine (the threshold step), not a datasource.
+  const uids = [...rules.matchAll(/datasourceUid: (\S+)/g)].map((m) => m[1]).filter((uid) => uid !== '__expr__');
   assert.ok(uids.length > 0);
   assert.deepEqual([...new Set(uids)], ['prometheus-ds']);
 });
@@ -128,7 +129,7 @@ test('ai-service runs without the OpenTelemetry agent but keeps its /metrics end
   assert.doesNotMatch(read('services/ai-service/Dockerfile'), /opentelemetry-instrument/);
   const requirements = read('services/ai-service/requirements.txt');
   assert.doesNotMatch(requirements, /opentelemetry/);
-  assert.match(requirements, /^prometheus-fastapi-instrumentator\r?$/m);
-  assert.match(requirements, /^prometheus-client\r?$/m);
+  assert.match(requirements, /^prometheus-fastapi-instrumentator==\d+\.\d+\.\d+\r?$/m);
+  assert.match(requirements, /^prometheus-client==\d+\.\d+\.\d+\r?$/m);
   assert.match(read('services/ai-service/main.py'), /Instrumentator\(\)\.instrument\(app\)\.expose\(app\)/);
 });

@@ -20,6 +20,8 @@ x-app: &app-defaults
   restart: unless-stopped
   logging: *default-logging
   networks: [app, data]
+  init: true
+  stop_grace_period: 45s
 
 x-node-healthcheck: &node-healthcheck
   interval: 10s
@@ -30,7 +32,7 @@ x-node-healthcheck: &node-healthcheck
 
 services:
   db:
-    image: pgvector/pgvector:pg15
+    image: pgvector/pgvector:0.8.7-pg15-bookworm@sha256:e0b617fffc06dd37323ee99873c7a8683f19f1dce34633670262b0113ce32638
     restart: unless-stopped
     shm_size: 256m
     command:
@@ -51,6 +53,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-inventory}
       ANALYTICS_DB_USER: ${ANALYTICS_DB_USER:-analytics_reader}
       ANALYTICS_DB_PASSWORD: ${ANALYTICS_DB_PASSWORD:?Set ANALYTICS_DB_PASSWORD in .env}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD}
+      BORROW_DB_PASSWORD: ${BORROW_DB_PASSWORD:?Set BORROW_DB_PASSWORD}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD}
+      # Optional: monitoring_db is created by db-init/05-monitoring-db.sh only when set.
+      MONITORING_DB_PASSWORD: ${MONITORING_DB_PASSWORD:-}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -68,7 +76,7 @@ services:
     networks: [data]
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.12-alpine3.22@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
@@ -107,12 +115,11 @@ services:
 
   inventory-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
-    command: sh -c "npx prisma migrate deploy && node -r ./src/telemetry.js src/index.js"
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/inventory_db?schema=public
+      - DATABASE_URL=postgresql://inventory_runtime:${INVENTORY_DB_PASSWORD:?Set INVENTORY_DB_PASSWORD}@db:5432/inventory_db?schema=public
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
       - REDIS_URL=redis://redis:6379
@@ -137,7 +144,7 @@ services:
       redis: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3001/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -145,12 +152,11 @@ services:
 
   auth-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
-    command: sh -c "npx prisma migrate deploy && npm run start"
+    image: ${AUTH_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3002
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth_db?schema=public
+      - DATABASE_URL=postgresql://auth_runtime:${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD}@db:5432/auth_db?schema=public
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-2h}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
@@ -175,7 +181,7 @@ services:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3002/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -183,12 +189,11 @@ services:
 
   borrow-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
-    command: sh -c "npx prisma migrate deploy && npm run start"
+    image: ${BORROW_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3005
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/borrow_db?schema=public
+      - DATABASE_URL=postgresql://borrow_runtime:${BORROW_DB_PASSWORD:?Set BORROW_DB_PASSWORD}@db:5432/borrow_db?schema=public
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
@@ -210,7 +215,7 @@ services:
       db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3005/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -218,7 +223,7 @@ services:
 
   analytics-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-analytics-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${ANALYTICS_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-analytics-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     environment:
       - NODE_ENV=production
       - PORT=3006
@@ -236,7 +241,7 @@ services:
       inventory-service: { condition: service_healthy }
       borrow-service: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3006/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       <<: *node-healthcheck
     deploy:
       resources:
@@ -244,12 +249,13 @@ services:
 
   ai-service:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${AI_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     depends_on:
       db: { condition: service_healthy }
       inventory-service: { condition: service_healthy }
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/ai_db
+      - AI_SCHEMA_MANAGED_EXTERNALLY=true
+      - DATABASE_URL=postgresql+asyncpg://ai_runtime:${AI_DB_PASSWORD:?Set AI_DB_PASSWORD}@db:5432/ai_db
       - SMARTBOOK_GATEWAY_URL=http://api-gateway:3000
       - INVENTORY_SERVICE_URL=http://inventory-service:3001
       - BORROW_SERVICE_URL=http://borrow-service:3005
@@ -333,12 +339,16 @@ services:
       - BOOK_OCR_MAX_IMAGE_EDGE=${BOOK_OCR_MAX_IMAGE_EDGE:-1600}
       - BOOK_OCR_LOOKUP_TIMEOUT_SECONDS=${BOOK_OCR_LOOKUP_TIMEOUT_SECONDS:-35}
       - BOOK_OCR_MAX_CONCURRENCY=${BOOK_OCR_MAX_CONCURRENCY:-2}
+      - BOOK_OCR_VISUAL_VERIFICATION_ENABLED=${BOOK_OCR_VISUAL_VERIFICATION_ENABLED:-true}
+      - OPENROUTER_BOOK_OCR_VERIFY_MODEL=${OPENROUTER_BOOK_OCR_VERIFY_MODEL-google/gemini-3.1-flash-lite}
+      - BOOK_OCR_VERIFY_MAX_TOKENS=${BOOK_OCR_VERIFY_MAX_TOKENS:-4000}
+      - BOOK_OCR_VERIFY_DAILY_BUDGET_USD=${BOOK_OCR_VERIFY_DAILY_BUDGET_USD:-0.5}
       - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}
       - NIGHTLY_BRIEFING_HOUR_VN=${NIGHTLY_BRIEFING_HOUR_VN:-2}
       - NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS=${NIGHTLY_BRIEFING_LLM_TIMEOUT_SECONDS:-180}
     volumes:
-      - ai_model_cache:/root/.cache/huggingface
-      - ai_cloakbrowser_cache:/root/.cloakbrowser
+      - ai_model_cache:/app/.cache/huggingface
+      - ai_cloakbrowser_cache:/app/.cloakbrowser
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
       interval: 15s
@@ -352,7 +362,7 @@ services:
 
   api-gateway:
     <<: *app-defaults
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${API_GATEWAY_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-api-gateway:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     networks: [edge, app, data]
     environment:
       - NODE_ENV=production
@@ -362,6 +372,8 @@ services:
       - BORROW_SERVICE_URL=http://borrow-service:3005
       - ANALYTICS_SERVICE_URL=http://analytics-service:3006
       - AI_SERVICE_URL=http://ai-service:8000
+      # optional (no depends_on): /monitoring/* answers 503 while it is down
+      - MONITORING_SERVICE_URL=http://monitoring-service:3007
       - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
       - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
@@ -374,7 +386,7 @@ services:
       analytics-service: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -384,8 +396,12 @@ services:
         limits: { cpus: "1", memory: 512m }
 
   web:
-    image: ${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-web:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}
+    image: ${WEB_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-web:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
     restart: unless-stopped
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     environment:
       # CSP connect-src (apps/web/nginx.conf); the API origins themselves are baked into the bundle at CI build time
       - API_ORIGIN=${PUBLIC_API_ORIGIN:-https://api.smartbook.io.vn}
@@ -403,7 +419,7 @@ services:
     networks: [edge]
 
   caddy:
-    image: caddy:2.8.4-alpine
+    image: ${CADDY_IMAGE:-ghcr.io/vinhhung04/smartbook-caddy:${IMAGE_TAG:-latest}}
     restart: unless-stopped
     ports:
       - "80:80"
@@ -428,6 +444,265 @@ services:
     logging: *default-logging
     networks: [edge]
 
+
+  # ---- Monitoring & alerting -----------------------------------------------
+  # Started by deploy.sh AFTER a healthy application rollout and never part of it:
+  # none of these failing can stop or roll back a business release. No business
+  # service depends on them. Nothing here publishes a port except Grafana on
+  # loopback (reach it through an SSH tunnel).
+
+  # Incidents, routing, email/in-app/Slack/Discord delivery (monitoring_db).
+  monitoring-service:
+    <<: *app-defaults
+    image: ${MONITORING_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-monitoring-service:${IMAGE_TAG:?Set IMAGE_TAG (state/release.env)}}
+    environment:
+      - NODE_ENV=production
+      - PORT=3007
+      - DATABASE_URL=postgresql://monitoring_runtime:${MONITORING_DB_PASSWORD:-}@db:5432/monitoring_db?schema=public
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?Set INTERNAL_SERVICE_KEY in .env}
+      # Shared with Grafana and healthcheck.sh (>= 24 chars); the service refuses to start without it.
+      - MONITORING_INGEST_TOKEN=${MONITORING_INGEST_TOKEN:-}
+      # 64 hex chars: AES-256-GCM key for stored webhook URLs (openssl rand -hex 32).
+      - MONITORING_SECRET_KEY=${MONITORING_SECRET_KEY:-}
+      - MONITORING_WEBHOOK_ALLOW_PUBLIC=${MONITORING_WEBHOOK_ALLOW_PUBLIC:-false}
+      - ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - PUBLIC_WEB_URL=${PUBLIC_WEB_ORIGIN:-https://smartbook.io.vn}
+      - REDIS_URL=redis://redis:6379
+      - GATEWAY_URL=http://api-gateway:3000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${MONITORING_SMTP_FROM:-SmartBook Monitoring <noreply@smartbook.io.vn>}
+    volumes:
+      # alert payloads received while monitoring_db is down (replayed when it is back)
+      - monitoring_spool:/app/spool
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3007/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m }
+
+  prometheus:
+    image: prom/prometheus:v2.53.0@sha256:075b1ba2c4ebb04bc3a6ab86c06ec8d8099f8fda1c96ef6d104d9bb1def1d8bc
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384m }
+    logging: *default-logging
+  grafana:
+    image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      # Expanded by provisioning/alerting/contact-points.yaml (webhook to monitoring-service).
+      MONITORING_INGEST_TOKEN: ${MONITORING_INGEST_TOKEN:-}
+    # Refuse to start with a missing/short ingest token instead of provisioning a
+    # contact point that every delivery would fail against.
+    entrypoint:
+      - sh
+      - -c
+      - '[ "$${#MONITORING_INGEST_TOKEN}" -ge 24 ] || { echo "Set MONITORING_INGEST_TOKEN (>= 24 chars) in .env" >&2; exit 1; }; exec /run.sh'
+    ports: ["127.0.0.1:3100:3000"]
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [app, data]
+    depends_on: [prometheus]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m }
+    logging: *default-logging
+
+  # VPS CPU/RAM/disk. Host PID namespace and a read-only view of / are what the
+  # exporter reads; it has no write access and no published port.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2@sha256:4032c6d5bfd752342c3e631c2f1de93ba6b86c41db6b167b9a35372c139e7706
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+)($$|/)
+    pid: host
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - /:/host:ro,rslave
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9100/metrics >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "0.2", memory: 64m }
+    logging: *default-logging
+
+  # Per-container CPU/memory/OOM. Needs the Docker socket (read-only mount; note
+  # that :ro does not restrict Docker API calls - the container is not exposed and
+  # runs with no-new-privileges). Only the series the rules use are kept (prometheus.yml).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1@sha256:3cde6faf0791ebf7b41d6f8ae7145466fed712ea6f252c935294d2608b1af388
+    restart: unless-stopped
+    command:
+      - --housekeeping_interval=30s
+      - --docker_only=true
+      - --store_container_labels=false
+      - --disable_metrics=advtcp,cpu_topology,cpuset,disk,diskIO,hugetlb,memory_numa,network,percpu,perf_event,process,referenced_memory,resctrl,sched,tcp,udp
+    security_opt: [no-new-privileges:true]
+    devices: [/dev/kmsg]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "0.3", memory: 192m }
+    logging: *default-logging
+
+  # Connects as monitoring_exporter (pg_monitor only, db-init/05-monitoring-db.sh):
+  # cluster statistics only, no read access to business tables.
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0@sha256:386b12d19eab2a37d7cd8ca8b4c7491cc7a830d9581f49af6c98a393da9605e6
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_URI: db:5432/monitoring_db?sslmode=disable
+      DATA_SOURCE_USER: monitoring_exporter
+      DATA_SOURCE_PASS: ${MONITORING_DB_PASSWORD:-}
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    networks: [data]
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9187/metrics >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits: { cpus: "0.2", memory: 64m }
+    logging: *default-logging
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0@sha256:c5a968ba5f30bab5e12181cceb89c4ed37cb4fe4d85490b5b66c7cfe4750b5e8
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    networks: [data]
+    depends_on:
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        limits: { cpus: "0.1", memory: 32m }
+    logging: *default-logging
+
+  # Explicit owner jobs: never part of default application startup.
+  migrate-auth:
+    profiles: ["operations"]
+    image: ${AUTH_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-auth-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth_db?schema=public
+    networks: [data]
+  migrate-inventory:
+    profiles: ["operations"]
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/inventory_db?schema=public
+    networks: [data]
+  migrate-borrow:
+    profiles: ["operations"]
+    image: ${BORROW_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-borrow-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/borrow_db?schema=public
+    networks: [data]
+  migrate-monitoring:
+    profiles: ["operations"]
+    image: ${MONITORING_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-monitoring-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    entrypoint: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/monitoring_db?schema=public
+    networks: [data]
+  migrate-ai:
+    profiles: ["operations"]
+    image: ${AI_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-ai-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    entrypoint: ["python", "migrate.py"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/ai_db
+    networks: [data]
+  backup-files:
+    profiles: ["operations"]
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    volumes:
+      - packing_evidence_data:/recovery/packing:ro
+      - procurement_document_data:/recovery/procurement:ro
+  prepare-volumes:
+    profiles: ["operations"]
+    image: ${INVENTORY_SERVICE_IMAGE:-${IMAGE_REGISTRY:-ghcr.io/vinhhung04}/smartbook-inventory-service:${IMAGE_TAG:?Set IMAGE_TAG}}
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["chown", "--no-dereference", "-R", "-P", "--", "1000:1000", "/recovery/packing", "/recovery/procurement", "/models", "/browser"]
+    command: []
+    volumes:
+      - packing_evidence_data:/recovery/packing
+      - procurement_document_data:/recovery/procurement
+      - ai_model_cache:/models
+      - ai_cloakbrowser_cache:/browser
+
 networks:
   # Caddy <-> web, api-gateway
   edge:
@@ -447,3 +722,6 @@ volumes:
   ai_cloakbrowser_cache:
   caddy_data:
   caddy_config:
+  prometheus_data:
+  grafana_data:
+  monitoring_spool:

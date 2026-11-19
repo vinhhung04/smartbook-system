@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { shelfPicks, returnToShelf } from './lib/borrow-shelves.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
@@ -85,6 +86,10 @@ async function resolveStockTarget() {
   warehouseId = candidate.default_warehouse_id;
 }
 
+const getAs = (tokenOverride) => async (path) => (await request('GET', path, undefined, {}, tokenOverride)).data;
+const get = getAs(token);
+const picksFor = (quantity, extra = {}) => shelfPicks(get, { variantId, warehouseId, quantity, ...extra });
+
 const results = [];
 function add(name, ok, detail) {
   results.push({ name, ok, detail });
@@ -122,6 +127,8 @@ async function topUpWallet(customerId, needed) {
 let customerId = '00000000-0000-0000-0000-000000000809';
 let directLoanId = null;
 let reservationLoanId = null;
+// One logical operation per run: a retry inside this run must reuse its key.
+const runId = crypto.randomUUID();
 let firstFine = null;
 let secondFine = null;
 
@@ -147,6 +154,7 @@ async function run() {
         variant_id: variantId,
         warehouse_id: warehouseId,
         quantity: 1,
+        picks: await picksFor(1),
         source_channel: 'COUNTER',
         notes: 'deposit check: empty wallet',
       },
@@ -169,6 +177,7 @@ async function run() {
       variant_id: variantId,
       warehouse_id: warehouseId,
       quantity: 1,
+      picks: await picksFor(1),
       source_channel: 'COUNTER',
       notes: 'direct loan integration test',
     },
@@ -215,7 +224,7 @@ async function run() {
       const converted = await request(
         'POST',
         `/borrow/reservations/${reservationId}/convert-to-loan`,
-        {},
+        { picks: await picksFor(1, { reservationId }) },
         { 'Idempotency-Key': crypto.randomUUID() }
       );
       if (converted.ok) {
@@ -242,7 +251,7 @@ async function run() {
   }
 
   if (reservationLoanId) {
-    const returnNormal = await request('POST', `/borrow/loans/${reservationLoanId}/return`, {}, { 'Idempotency-Key': crypto.randomUUID() });
+    const returnNormal = await request('POST', `/borrow/loans/${reservationLoanId}/return`, await returnToShelf(get, reservationLoanId), { 'Idempotency-Key': crypto.randomUUID() });
     add('6.return normal', returnNormal.ok, JSON.stringify(returnNormal.data));
     if (deposit > 0) {
       const returnedLoan = await request('GET', `/borrow/loans/${reservationLoanId}`);
@@ -261,6 +270,7 @@ async function run() {
       variant_id: variantId,
       warehouse_id: warehouseId,
       quantity: 1,
+      picks: await picksFor(1),
       source_channel: 'COUNTER',
       notes: 'lost flow integration test',
     },
@@ -304,6 +314,7 @@ async function run() {
       variant_id: damagedTarget?.variant_id || variantId,
       warehouse_id: damagedTarget?.default_warehouse_id || warehouseId,
       quantity: 1,
+      picks: await shelfPicks(getAs(damagedActorToken), { variantId: damagedTarget?.variant_id || variantId, warehouseId: damagedTarget?.default_warehouse_id || warehouseId, quantity: 1 }),
       source_channel: 'COUNTER',
       notes: 'damaged flow integration test',
     },
@@ -315,7 +326,7 @@ async function run() {
     const damaged = await request(
       'POST',
       `/borrow/loans/${damagedLoanId}/return`,
-      { item_condition_on_return: 'DAMAGED', settlement_reason: 'integration test: cover torn' },
+      { item_condition_on_return: 'DAMAGED', settlement_reason: 'integration test: cover torn', ...(await returnToShelf(getAs(damagedActorToken), damagedLoanId)) },
       { 'Idempotency-Key': crypto.randomUUID() },
       damagedActorToken
     );
@@ -340,7 +351,7 @@ async function run() {
       amount: payAmount,
       payment_method: 'CASH',
       note: 'integration payment',
-    });
+    }, { 'Idempotency-Key': `phase2-fine-payment:${firstFine.id}:${runId}` });
     add('10.fine payment', pay.ok, JSON.stringify(pay.data));
   } else {
     add('10.fine payment', false, 'Skipped: no unpaid fine');
@@ -377,8 +388,9 @@ async function run() {
     const e4 = await request('POST', `/borrow/fines/${firstFine.id}/payments`, {
       amount: Number(firstFine.summary.remaining_balance) + 999,
       payment_method: 'CASH',
-    });
-    add('E4.overpay fine', e4.status >= 400, `status=${e4.status}`);
+    }, { 'Idempotency-Key': `phase2-fine-overpay:${firstFine.id}:${runId}` });
+    // Must be rejected by the balance rule, not by the idempotency-key guard.
+    add('E4.overpay fine', e4.status === 409 && e4.data?.detail?.remaining_balance != null, `status=${e4.status} body=${JSON.stringify(e4.data)}`);
   } else {
     add('E4.overpay fine', false, 'Skipped: no unpaid fine');
   }

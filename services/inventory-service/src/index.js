@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
+const { createServiceLifecycle, createCorsOptions, createRequestContext, createRequestLogger, requireEnv, securityHeaders } = require('@smartbook/shared/runtime');
 const {
   authenticateToken,
   authorizeAnyPermission,
@@ -11,7 +11,9 @@ const {
 } = require('./middlewares/auth.middleware');
 const { enforceRequestedWarehouseScope } = require('./middlewares/warehouse-scope.middleware');
 const { rejectInvalidUuidParams } = require('./middlewares/uuid-params.middleware');
+const { stockAuditFreezeResponses } = require('./middlewares/stock-audit-freeze.middleware');
 const { createInternalWarehousesRouter } = require('./routes/internal-warehouses.routes');
+const { createInternalBorrowReconciliationRouter } = require('./routes/internal-borrow-reconciliation.routes');
 const {
   clearScopeCache,
   scopedWarehouseWhere,
@@ -57,11 +59,13 @@ const internalAuthorityRoutes = require('./routes/internal-authority.routes');
 const internalCatalogRoutes = require('./routes/internal-catalog.routes');
 const internalBookCorpusRoutes = require('./routes/internal-book-corpus.routes');
 const publicCatalogRoutes = require('./routes/public-catalog.routes');
-const { startAgingInventoryJob } = require('./jobs/aging-inventory.job');
-const { startOutboxPublisherJob } = require('./jobs/outbox-publisher.job');
+const { startAgingInventoryJob, stopAgingInventoryJob } = require('./jobs/aging-inventory.job');
+const { startOutboxPublisherJob, stopOutboxPublisherJob } = require('./jobs/outbox-publisher.job');
 const redis = require('./lib/redis');
 
 const app = express();
+let lifecycle;
+app.use((req, res, next) => lifecycle ? lifecycle.middleware(req, res, next) : next());
 const PORT = process.env.PORT || 3001;
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '8mb';
 
@@ -80,12 +84,14 @@ app.use(securityHeaders);
 app.use(cors(createCorsOptions(process.env.ALLOWED_ORIGINS)));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
+app.use(stockAuditFreezeResponses);
 
 app.get('/health', (_req, res) => {
   res.json({ service: 'inventory-service', status: 'ok', version: '1.0.0' });
 });
 
 app.get('/ready', async (_req, res) => {
+  if (lifecycle && !lifecycle.isReady()) return res.status(503).json({ status: 'draining' });
   try {
     await prisma.$queryRaw`SELECT 1`;
     return res.json({ service: 'inventory-service', status: 'ready' });
@@ -100,6 +106,7 @@ app.use('/internal/authority', internalAuthorityRoutes);
 app.use('/internal/covers', internalCatalogRoutes);
 app.use('/internal/catalog/books', internalBookCorpusRoutes);
 app.use('/internal', createInternalWarehousesRouter({ prisma, onScopeChanged: clearScopeCache }));
+app.use('/internal', createInternalBorrowReconciliationRouter({ prisma }));
 // Read-only anonymous catalog for the public website (see routes/public-catalog.routes.js).
 app.use('/public/catalog', publicCatalogRoutes);
 
@@ -603,13 +610,17 @@ app.use((err, req, res, next) => {
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Inventory Service running on http://localhost:${PORT}`);
   startAgingInventoryJob();
   startOutboxPublisherJob();
 });
 
-process.on('SIGTERM', async () => {
-  await redis.disconnect();
-  process.exit(0);
+
+lifecycle = createServiceLifecycle({
+  server,
+  stopWork: [stopAgingInventoryJob, stopOutboxPublisherJob],
+  closeResources: [() => require('./lib/rabbitmq').close(), () => redis.disconnect(), () => prisma.$disconnect(), () => require('./telemetry').shutdown?.()],
 });
+process.on('SIGINT', lifecycle.shutdown);
+process.on('SIGTERM', lifecycle.shutdown);

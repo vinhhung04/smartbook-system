@@ -112,6 +112,15 @@ class PpdvnParsingTests(unittest.TestCase):
         self.assertEqual(second["authors"], ["Nguyễn Thị Thanh", "Hoàng Thị Mai", "Trương Thị Thành Vinh"])
         self.assertEqual(second["publisher"], "NXB Đại học Vinh")
 
+    def test_reprints_of_one_isbn_keep_every_deposit_date_and_the_partner(self):
+        row = ('<tr><td>{n}</td><td>978-604-365-993-1</td><td>Thuật thao túng</td><td>W. Jachtchenko</td><td></td>'
+               '<td>Thế giới</td><td>AZ Việt Nam</td><td>Nhà in</td><td>{date}</td></tr>')
+        page = "<table>" + row.format(n=1, date="13/10/2023") + row.format(n=2, date="21/02/2023") + "</table>"
+        [record] = lp.parse_ppdvn_results(page, "u")
+        self.assertEqual(record["depositDates"], ["13/10/2023", "21/02/2023"])
+        self.assertEqual(record["partner"], "AZ Việt Nam")
+        self.assertIsNone(record["publishedDate"])  # still not a publication date
+
     def test_no_data_row_is_not_a_record(self):
         self.assertEqual(lp.parse_ppdvn_results(PPDVN_EMPTY, "u"), [])
 
@@ -133,11 +142,50 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen[0].url.params["query"], 'tit="Clean  Code" and per="Robert Martin"')
 
     async def test_ppdvn_searches_by_title(self):
+        lp._PPDVN_CACHE.clear()  # answers are kept briefly per query
         seen = []
         async with mock_client(PPDVN_PAGE, seen) as client:
             records = await lp.ppdvn_by_title(client, "Nhà giả kim", None)
         self.assertEqual(seen[0].url.params["query"], "Nhà giả kim")
         self.assertEqual(records[0]["title"], "Nhà giả Kim")
+
+    def test_ppdvn_query_variants_drop_listing_noise(self):
+        self.assertEqual(lp.ppdvn_queries("[Phiên chợ sách cũ] NVIDIA - Cỗ Máy Tư Duy Vĩ Đại"),
+                         ["[Phiên chợ sách cũ] NVIDIA - Cỗ Máy Tư Duy Vĩ Đại", "NVIDIA - Cỗ Máy Tư Duy Vĩ Đại",
+                          "Cỗ Máy Tư Duy Vĩ Đại"])
+        self.assertEqual(lp.ppdvn_queries("Nhà giả kim"), ["Nhà giả kim"])
+        self.assertEqual(lp.ppdvn_queries("Đắc Nhân Tâm (2023)"), ["Đắc Nhân Tâm (2023)", "Đắc Nhân Tâm"])
+        self.assertEqual(lp.ppdvn_queries("Sapiens: Lược sử loài người"), ["Sapiens: Lược sử loài người", "Lược sử loài người"])
+        # The main title before the subtitle too (registered as "Trên Đỉnh Phố Wall/Cách bạn ...").
+        self.assertEqual(lp.ppdvn_queries("Trên Đỉnh Phố Wall - Cách Bạn Sử Dụng Những Điều Đã Biết Để Làm Giàu"),
+                         ["Trên Đỉnh Phố Wall - Cách Bạn Sử Dụng Những Điều Đã Biết Để Làm Giàu",
+                          "Cách Bạn Sử Dụng Những Điều Đã Biết Để Làm Giàu", "Trên Đỉnh Phố Wall"])
+
+    async def test_ppdvn_tries_the_next_variant_only_when_nothing_was_found(self):
+        lp._PPDVN_CACHE.clear()
+        seen = []
+
+        def handler(request):
+            seen.append(request.url.params["query"])
+            page = PPDVN_PAGE if request.url.params["query"] == "Cỗ Máy Tư Duy" else PPDVN_EMPTY
+            return httpx.Response(200, text=page)
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            records = await lp.ppdvn_by_title(client, "[Cũ] NVIDIA - Cỗ Máy Tư Duy", None)
+            again = await lp.ppdvn_by_title(client, "[Cũ] NVIDIA - Cỗ Máy Tư Duy", None)
+        # Rows are kept briefly; an empty answer is asked again (it may have been a bad moment).
+        self.assertEqual(seen, ["[Cũ] NVIDIA - Cỗ Máy Tư Duy", "NVIDIA - Cỗ Máy Tư Duy", "Cỗ Máy Tư Duy",
+                                "[Cũ] NVIDIA - Cỗ Máy Tư Duy", "NVIDIA - Cỗ Máy Tư Duy"])
+        self.assertTrue(records)
+        self.assertEqual(again, records)
+        lp._PPDVN_CACHE.clear()
+
+    async def test_a_page_without_the_result_table_is_an_error_not_an_empty_answer(self):
+        lp._PPDVN_CACHE.clear()
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, text="<html><body>Hệ thống đang bận</body></html>"))) as client:
+            with self.assertRaises(lp.PpdvnUnavailable):
+                await lp.ppdvn_search(client, "Cỗ Máy Tư Duy")
+        self.assertEqual(lp._PPDVN_CACHE, {})
 
 
 if __name__ == "__main__":

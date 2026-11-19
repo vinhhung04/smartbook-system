@@ -263,6 +263,7 @@ export const router = createBrowserRouter([
       { path: "ai-assistant", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.aiAssistant), lazy: { Component: async () => (await import("@/components/pages/ai-assistant")).AIAssistantPage } },
       { path: "audit-trail", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/audit-trail")).AuditTrailPage } },
       { path: "admin/monitor", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/admin-monitor")).AdminMonitorPage } },
+      { path: "admin/monitor/incidents/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/admin-monitor-incident")).AdminMonitorIncidentPage } },
       { path: "membership-plans", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.borrowRead), lazy: { Component: async () => (await import("@/components/pages/membership-plans")).MembershipPlansPage } },
       { path: "suppliers", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.suppliers), lazy: { Component: async () => (await import("@/components/pages/suppliers")).SuppliersPage } },
       { path: "users", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.admin), lazy: { Component: async () => (await import("@/components/pages/users")).UsersPage } },

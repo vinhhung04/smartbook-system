@@ -90,7 +90,11 @@ function createRevocationChecker({ get, timeoutMs = 300, staleOkMs = 60000, maxE
     if (payload?.sub && payload?.iat) {
       const r = await lookup(`user:tokens-valid-after:${payload.sub}`);
       const cutoff = r.ok ? r.value : r.cachedValue;
-      if (cutoff !== null && cutoff !== undefined && payload.iat < Number(cutoff)) return { state: REVOKED, stale: !r.ok || Boolean(r.stale) };
+      // <=, not <: both the cutoff and iat are whole seconds, so a token issued in the
+      // same second as the lock/logout that set this cutoff would otherwise read as
+      // "not before the cutoff" and survive it (reproduced live: iat === cutoff left a
+      // just-locked account's existing token still accepted).
+      if (cutoff !== null && cutoff !== undefined && payload.iat <= Number(cutoff)) return { state: REVOKED, stale: !r.ok || Boolean(r.stale) };
       if (!r.ok) unknown = true;
       stale = stale || Boolean(r.stale);
     }

@@ -19,63 +19,18 @@ permissions:
 
 env:
   PNPM_VERSION: 10.6.2
-  NODE_VERSION: 20
+  NODE_VERSION: 24.16.0
   IMAGE_PREFIX: ghcr.io/vinhhung04/smartbook
   PUBLIC_WEB_ORIGIN: https://smartbook.io.vn
   PUBLIC_API_ORIGIN: https://api.smartbook.io.vn
 
 jobs:
   test:
-    name: Tests (deploy gate)
+    name: Mandatory verification (exact release SHA)
     if: github.ref == 'refs/heads/production'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          cache: pip
-          cache-dependency-path: services/ai-service/requirements.txt
-
-      - run: pnpm install --frozen-lockfile
-      - run: pip install -r services/ai-service/requirements.txt pytest
-
-      - name: Lint
-        run: pnpm lint:ci
-      - name: Typecheck (web)
-        run: pnpm --filter web exec tsc --noEmit
-      - name: Build (web)
-        run: pnpm --filter web build
-      - name: Workspace config tests
-        run: pnpm test:workspace-config
-      - name: Web unit tests
-        run: pnpm test:web
-      - name: Node service tests
-        run: pnpm test:node
-      - name: AI service tests
-        run: pnpm test:ai
-
-      - name: Prisma schemas
-        env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-        run: |
-          for svc in auth-service inventory-service borrow-service; do
-            (cd "services/$svc" && npx prisma validate)
-          done
-
-      - name: Production compose file
-        run: IMAGE_TAG="$GITHUB_SHA" docker compose -f compose.prod.yml --env-file .env.production.example config -q
+    uses: ./.github/workflows/ci.yml
+    with:
+      release_sha: ${{ github.sha }}
 
   build:
     name: Image ${{ matrix.name }}
@@ -110,6 +65,12 @@ jobs:
           - name: ai-service
             context: services/ai-service
             file: services/ai-service/Dockerfile
+          - name: caddy
+            context: .
+            file: deploy/Dockerfile.caddy
+          - name: monitoring-service
+            context: .
+            file: services/monitoring-service/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
@@ -128,6 +89,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v6
+        id: image
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
@@ -150,6 +112,26 @@ jobs:
             VITE_AI_HEALTH_URL=${{ env.PUBLIC_API_ORIGIN }}/ai/health
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      - name: Check exact production artifact digest
+        env:
+          ARTIFACT: ${{ env.IMAGE_PREFIX }}-${{ matrix.name }}@${{ steps.image.outputs.digest }}
+        run: |
+          docker pull "$ARTIFACT"
+          test "$(docker image inspect "$ARTIFACT" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$GITHUB_SHA"
+          case '${{ matrix.name }}' in
+            web) docker run --rm --network none --read-only --entrypoint nginx "$ARTIFACT" -v ;;
+            ai-service) test "$(docker run --rm --network none --read-only --entrypoint python "$ARTIFACT" --version)" = 'Python 3.12.16' ;;
+            caddy) docker run --rm --network none --read-only --entrypoint caddy "$ARTIFACT" version ;;
+            *) test "$(docker run --rm --network none --read-only --entrypoint node "$ARTIFACT" --version)" = 'v24.16.0' ;;
+          esac
+          mkdir -p release-images
+          key="$(printf '%s_IMAGE' '${{ matrix.name }}' | tr 'a-z-' 'A-Z_')"
+          printf '%s=%s\n' "$key" "$ARTIFACT" > 'release-images/${{ matrix.name }}.env'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-image-${{ matrix.name }}
+          path: release-images/
 
   deploy:
     name: Deploy to VPS
@@ -189,9 +171,19 @@ jobs:
             ServerAliveInterval 30
           EOF
 
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-image-*
+          path: release-images
+          merge-multiple: true
+      - name: Upload exact image manifest
+        run: |
+          cat release-images/*.env > release-images.env
+          ssh vps 'mkdir -p /opt/smartbook/state/images'
+          scp release-images.env 'vps:/opt/smartbook/state/images/${{ github.sha }}.env'
       - name: Upload compose file, Caddyfile and scripts
         run: |
-          tar -czf - compose.prod.yml .env.production.example deploy db-init data \
+          tar -czf - compose.prod.yml .env.production.example deploy db-init data observability \
               scripts/seed-catalog-enrichment.mjs scripts/close-removed-title-loans.mjs scripts/lib \
             | ssh vps 'tar -xzf - -C /opt/smartbook'
 

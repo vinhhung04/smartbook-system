@@ -18,6 +18,45 @@ export interface OcrObservation {
   issues: string[];
 }
 
+export type OcrVisualStatus = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED' | 'ILLEGIBLE';
+
+/** Fractions (0-1) of the image's width/height. */
+export interface OcrVisualBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface OcrVisualEvidence {
+  /** The image kind this check ran against (front_cover/back_cover/copyright_page). */
+  source: string;
+  status: OcrVisualStatus;
+  /** The line(s) the second model read on that image that matched. */
+  readText: string | null;
+  /** Where the second model says it read those lines - its own estimate, never a verified position. */
+  boxes: OcrVisualBox[];
+}
+
+export type AnomalySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+export type AnomalyType = 'ISBN_ANOMALY' | 'AUTHOR_TRANSLATOR_ANOMALY' | 'PUBLICATION_ANOMALY'
+  | 'PHYSICAL_METADATA_ANOMALY' | 'CROSS_SOURCE_ANOMALY';
+
+/** Feature B (rule-based v1) - every anomaly traces to a rule already computed
+ *  elsewhere in book_ocr; this is only the severity-graded, explained packaging
+ *  of it. Never auto-applied: recommendedAction is a suggestion for a person. */
+export interface Anomaly {
+  anomalyType: AnomalyType;
+  severity: AnomalySeverity;
+  affectedFields: string[];
+  detectedValue: unknown;
+  expectedValue: unknown;
+  explanation: string;
+  evidence: string[];
+  recommendedAction: string;
+  requiresHumanReview: boolean;
+}
+
 export interface OcrFieldResult {
   field: string;
   status: OcrFieldStatus;
@@ -63,13 +102,22 @@ export interface BookOcrScanResult {
   };
   fields: Record<string, OcrFieldResult>;
   fieldEvidence: Record<string, Array<{ source: string; observedText: string }>>;
+  /** Feature A - per observation (keyed like `fields`, not `fieldEvidence`): a second
+   *  model's blind re-read of that exact image checked against the reading taken
+   *  from it. `{}` when the feature is off, over budget or the verifier failed. */
+  visualEvidence: Record<string, OcrVisualEvidence[]>;
+  /** Feature B (rule-based v1), sorted most severe first. */
+  anomalies: Anomaly[];
   missingFields: string[];
   conflictedFields: string[];
-  otherCodes: Array<{ source: string; label: string | null; value: string; observedText?: string | null }>;
+  /** kind: EAN13 = valid retail EAN-13 (not an ISBN), INVALID_CHECKSUM = wrong check digit. */
+  otherCodes: Array<{ source: string; label: string | null; value: string; observedText?: string | null; kind?: 'ISBN' | 'EAN13' | 'INVALID_CHECKSUM' | 'OTHER' }>;
   warnings: string[];
   isbnLookup: {
     status: 'FOUND' | 'NOT_FOUND' | 'SKIPPED_NO_VALID_ISBN' | 'SKIPPED_ISBN_CONFLICT' | 'TIMEOUT' | 'ERROR' | 'DISABLED';
     isbn: string | null;
+    /** Set when no ISBN was read and the lookup ran on the book's retail EAN-13. */
+    ean13?: string | null;
     editionMatches: boolean | null;
     lookup: LookupBookByIsbnResponse | null;
   };
@@ -89,6 +137,8 @@ export interface BookOcrCapabilities {
   maxTotalBytes: number;
   acceptedTypes: string[];
   model: string;
+  visualVerificationEnabled: boolean;
+  visualVerificationModel: string | null;
 }
 
 export const bookOcrService = {

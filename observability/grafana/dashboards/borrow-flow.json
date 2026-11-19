@@ -38,12 +38,13 @@
     {
       "id": 4,
       "title": "borrow-service p95 latency",
+      "fieldConfig": { "defaults": { "unit": "ms" } },
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_bucket{service_name=\"borrow-service\"}[5m])) by (le))",
+          "expr": "1000 * histogram_quantile(0.95, sum(rate(http_server_request_duration_bucket{service_name=\"borrow-service\"}[5m])) by (le))",
           "refId": "A"
         }
       ]

@@ -77,6 +77,24 @@ export interface Reservation {
   };
 }
 
+/** How many copies the librarian took from one shelf. */
+export interface PickLine {
+  location_id: string;
+  quantity: number;
+}
+
+/** A shelf of the warehouse holding the book: free copies plus copies this reservation already holds there. */
+export interface PickOption {
+  location_id: string;
+  location_code: string;
+  zone: string | null;
+  aisle: string | null;
+  shelf: string | null;
+  bin: string | null;
+  available_qty: number;
+  held_qty: number;
+}
+
 export interface ReservationPayload {
   customer_id: string;
   variant_id: string;
@@ -85,6 +103,8 @@ export interface ReservationPayload {
   quantity: number;
   source_channel?: ReservationSource;
   notes?: string;
+  /** Direct loans only: the shelves the copies were taken from. */
+  picks?: PickLine[];
 }
 
 export interface VariantLookupItem {
@@ -152,6 +172,23 @@ export interface ReturnPreviewItem {
   deposit_captured: number;
   deposit_refunded: number;
   additional_due: number;
+  item_condition_on_return?: string;
+  requires_reason?: boolean;
+}
+
+export interface ReturnItemInput {
+  loan_item_id: string;
+  item_condition_on_return?: string;
+  returned_to_location_id?: string;
+  notes?: string;
+  mark_lost?: boolean;
+  settlement_reason?: string;
+}
+export interface ReturnPayload extends Partial<ReturnItemInput> { items?: ReturnItemInput[] }
+export interface ReturnItemResult {
+  loan_item_id: string;
+  status: 'RETURNED' | 'LOST' | 'RECONCILIATION_REQUIRED' | 'UNKNOWN' | 'NOT_PROCESSED';
+  item_condition_on_return?: string;
 }
 
 export interface ReturnPreview {
@@ -242,6 +279,10 @@ export interface Fine {
   paid_at: string | null;
   waived_by_user_id: string | null;
   note: string | null;
+  accrual_from_days?: number | null;
+  accrual_through_days?: number | null;
+  accrual_daily_rate?: number | string | null;
+  accrual_due_date?: string | null;
   customers?: {
     id: string;
     customer_code: string;
@@ -255,6 +296,7 @@ export interface Fine {
     status: string;
     item_barcode: string | null;
     loan_transactions?: { loan_number: string };
+    overdue_fine_episode?: { waived_future: boolean; waiver_reason: string | null } | null;
   } | null;
   fine_payments?: FinePayment[];
   summary?: FineSummary;
@@ -349,7 +391,12 @@ export const borrowService = {
     return response.data as { data: Reservation };
   },
 
-  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string }, idempotencyKey?: string) => {
+  getPickOptions: async (params: { variant_id: string; warehouse_id: string; reservation_id?: string }) => {
+    const response = await gatewayAPI.get('/api/borrow-integration/pick-options', { params });
+    return response.data as { data: PickOption[] };
+  },
+
+  confirmReservation: async (id: string, payload?: { status?: 'CONFIRMED' | 'READY_FOR_PICKUP'; notes?: string; picks?: PickLine[] }, idempotencyKey?: string) => {
     const response = await gatewayAPI.patch(`/borrow/reservations/${id}/confirm`, payload || {}, {
       headers: createIdempotencyHeaders(idempotencyKey),
     });
@@ -420,15 +467,17 @@ export const borrowService = {
     return response.data as { data: Loan };
   },
 
-  returnLoan: async (id: string, payload?: { loan_item_id?: string; returned_to_location_id?: string; item_condition_on_return?: string; notes?: string; mark_lost?: boolean; settlement_reason?: string }, idempotencyKey?: string) => {
+  returnLoan: async (id: string, payload?: ReturnPayload, idempotencyKey?: string) => {
     const response = await gatewayAPI.post(`/borrow/loans/${id}/return`, payload || {}, {
         headers: createIdempotencyHeaders(idempotencyKey),
       });
-    return response.data as { data: Loan };
+    return response.data as { data: Loan & { item_results?: ReturnItemResult[] }; idempotent?: boolean };
   },
 
-  previewReturn: async (id: string, params: { loan_item_id?: string; item_condition_on_return?: string; mark_lost?: boolean }) => {
-    const response = await gatewayAPI.get(`/borrow/loans/${id}/return-preview`, { params });
+  previewReturn: async (id: string, params: ReturnPayload) => {
+    const response = params.items
+      ? await gatewayAPI.post(`/borrow/loans/${id}/return-preview`, params)
+      : await gatewayAPI.get(`/borrow/loans/${id}/return-preview`, { params });
     return response.data as { data: ReturnPreview };
   },
 
@@ -454,8 +503,10 @@ export const borrowService = {
     return response.data as { data: Fine };
   },
 
-  recordFinePayment: async (id: string, payload: { amount: number; payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET'; transaction_reference?: string; note?: string }) => {
-    const response = await gatewayAPI.post(`/borrow/fines/${id}/payments`, payload);
+  recordFinePayment: async (id: string, payload: { amount: number; payment_method: 'CASH' | 'CARD' | 'TRANSFER' | 'EWALLET'; transaction_reference?: string; note?: string }, idempotencyKey?: string) => {
+    const response = await gatewayAPI.post(`/borrow/fines/${id}/payments`, payload, {
+      headers: createIdempotencyHeaders(idempotencyKey),
+    });
     return response.data as {
       message: string;
       data: {
@@ -489,7 +540,7 @@ export const borrowService = {
     return response.data;
   },
 
-  waiveFine: async (id: string, payload: { amount?: number; note?: string }) => {
+  waiveFine: async (id: string, payload: { amount?: number; note?: string; waive_future?: boolean }) => {
     const response = await gatewayAPI.patch(`/borrow/fines/${id}/waive`, payload);
     return response.data as {
       message: string;

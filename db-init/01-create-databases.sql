@@ -19,3 +19,7 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'inventory_db')\gexec
 -- Create ai_db if it doesn't exist
 SELECT 'CREATE DATABASE ai_db'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ai_db')\gexec
+
+-- Create monitoring_db if it doesn't exist (incidents/alert delivery; role: db-init/05-monitoring-db.sh)
+SELECT 'CREATE DATABASE monitoring_db'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'monitoring_db')\gexec

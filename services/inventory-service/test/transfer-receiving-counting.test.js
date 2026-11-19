@@ -55,3 +55,11 @@ test('omitted damaged/rejected default to 0, not an error', () => {
   assert.equal(outcome.rejected, 0);
   assert.equal(outcome.accepted, 5);
 });
+
+for (const value of [true, false, [], [1], {}]) {
+  test(`JSON ${JSON.stringify(value)} cannot stand in for a received count`, () => {
+    assert.ok(computeTransferLineOutcome({ shippedQty: 5, delivered: value }).error);
+    assert.ok(computeTransferLineOutcome({ shippedQty: 5, delivered: 5, damaged: value }).error);
+    assert.ok(computeTransferLineOutcome({ shippedQty: 5, delivered: 5, rejected: value }).error);
+  });
+}

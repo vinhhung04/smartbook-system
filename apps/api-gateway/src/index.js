@@ -1,4 +1,5 @@
 const express = require("express");
+const { actualBodyLimit } = require("./request-body-limit");
 const http = require("http");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -7,6 +8,7 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { startGatewayRabbitMqConsumer } = require("./lib/rabbitmq-consumer");
 const {
+  createServiceLifecycle,
   createCorsOptions,
   createRateLimiter,
   createRequestContext,
@@ -23,6 +25,10 @@ dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
+let lifecycle;
+app.use((req, res, next) => lifecycle ? lifecycle.middleware(req, res, next) : next());
+let eventConsumer;
+let healthSamplerTimer, healthSamplePromise = Promise.resolve(), healthSamplingStopped = false;
 const port = Number(process.env.PORT || 3000);
 
 const authTarget = process.env.AUTH_SERVICE_URL || "http://auth-service:3002";
@@ -33,6 +39,7 @@ const borrowTarget =
 const analyticsTarget =
   process.env.ANALYTICS_SERVICE_URL || "http://analytics-service:3006";
 const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
+const monitoringTarget = process.env.MONITORING_SERVICE_URL || "http://monitoring-service:3007";
 
 // ai-service rate-limits anonymous callers by client IP, but sees every request
 // from this gateway's address. The gateway resolves the client IP the same way
@@ -42,6 +49,8 @@ const aiTarget = process.env.AI_SERVICE_URL || "http://ai-service:8000";
 const AI_CLIENT_IP_HEADER = "x-smartbook-client-ip";
 const AI_TRUSTED_PROXY_HOPS = Number(process.env.GATEWAY_TRUSTED_PROXY_HOPS || 1);
 function setAiClientIp(proxyReq, req) {
+  // Internal AI callers connect directly; a public request cannot delegate service authority.
+  proxyReq.removeHeader("x-internal-service-key");
   // req.aiClientIp is resolved before any proxy runs (see the middleware after
   // the global rate limiter): by the time proxyReq fires, xfwd has already
   // appended this gateway's own peer to X-Forwarded-For, shifting every hop.
@@ -54,6 +63,17 @@ function handleAiProxyError(_error, req, res) {
   res.end(JSON.stringify({
     message: "AI tạm thời không khả dụng",
     code: "AI_UNAVAILABLE",
+    request_id: req.requestId || null,
+  }));
+}
+
+// Monitoring is optional: its outage must not look like a gateway failure.
+function handleMonitoringProxyError(_error, req, res) {
+  if (res.headersSent) return;
+  res.writeHead(503, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({
+    message: "Dịch vụ giám sát tạm thời không khả dụng",
+    code: "MONITORING_UNAVAILABLE",
     request_id: req.requestId || null,
   }));
 }
@@ -85,11 +105,15 @@ const ALLOWED_EVENTS = new Set([
   "exception_report:created", "exception_report:resolved",
   "ai_action:created", "ai_action:confirmed", "ai_action:executed",
   "ai_action:failed", "ai_action:cancelled", "ai_action:reconciled",
+  // monitoring-service -> room "monitoring" only (internal incidents, never customers)
+  "incident:notification",
 ]);
 
 // Matches: user:{uuid}, customer:{uuid}, supplier:{uuid}, warehouse:{uuid},
-//          admin, warehouse_manager, warehouse_staff, librarian
-const ROOM_PATTERN = /^(user|customer|supplier|warehouse):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^(admin|warehouse_manager|warehouse_staff|librarian)$/;
+//          admin, warehouse_manager, warehouse_staff, librarian, monitoring
+const ROOM_PATTERN = /^(user|customer|supplier|warehouse):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^(admin|warehouse_manager|warehouse_staff|librarian|monitoring)$/;
+// Same audience as monitoring-service's read authorization.
+const MONITORING_PERMISSIONS = ["monitoring.incidents.read", "monitoring.incidents.manage", "monitoring.settings.manage"];
 
 const MAX_PAYLOAD_BYTES = 65536; // 64 KB
 
@@ -160,6 +184,12 @@ io.on("connection", async (socket) => {
   if (roles.includes("LIBRARIAN")) {
     socket.join("librarian");
     joinedRooms.push("librarian");
+  }
+
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+  if (user.is_superuser === true || roles.includes("ADMIN") || MONITORING_PERMISSIONS.some((p) => permissions.includes(p))) {
+    socket.join("monitoring");
+    joinedRooms.push("monitoring");
   }
 
   if (roles.includes("WAREHOUSE_MANAGER")) {
@@ -283,18 +313,7 @@ app.use((req, _res, next) => {
   req.aiClientIp = resolveClientIp(req, AI_TRUSTED_PROXY_HOPS);
   next();
 });
-app.use((req, res, next) => {
-  const maxBytes = Number(process.env.GATEWAY_MAX_REQUEST_BYTES || 8 * 1024 * 1024);
-  const contentLength = Number(req.headers["content-length"] || 0);
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    return res.status(413).json({
-      message: "Dữ liệu gửi lên quá lớn",
-      code: "PAYLOAD_TOO_LARGE",
-      request_id: req.requestId || null,
-    });
-  }
-  return next();
-});
+app.use(actualBodyLimit({ maxBytes: () => Number(process.env.GATEWAY_MAX_REQUEST_BYTES || 16 * 1024 * 1024) }));
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -314,6 +333,8 @@ const DEPENDENCIES = [
   { id: "borrow-service", name: "Borrow Service", description: "Khách hàng, đặt trước, mượn trả và tiền phạt", target: borrowTarget, path: "/ready", critical: true },
   { id: "analytics-service", name: "Analytics Service", description: "Báo cáo và số liệu tổng quan", target: analyticsTarget, path: "/ready", critical: true },
   { id: "ai-service", name: "AI Service", description: "Trợ lý AI, OCR và gợi ý metadata qua OpenRouter", target: aiTarget, path: "/health", critical: false },
+  // Optional like AI: its outage degrades monitoring, never gateway readiness.
+  { id: "monitoring-service", name: "Monitoring Service", description: "Sự cố, cảnh báo và gửi thông báo vận hành", target: monitoringTarget, path: "/ready", critical: false },
 ];
 
 const ADMIN_PERMISSIONS = ["auth.users.read", "auth.roles.read", "auth.permissions.read", "audit.read"];
@@ -376,6 +397,7 @@ function requireAdminToken(req, res, next) {
 }
 
 app.get("/ready", async (_req, res) => {
+  if (lifecycle && !lifecycle.isReady()) return res.status(503).json({ status: "draining" });
   const results = await Promise.all(DEPENDENCIES.filter((dependency) => dependency.critical).map(probeDependency));
   if (results.some((result) => result.status !== "ok")) {
     return res.status(503).json({ service: "api-gateway", status: "not_ready" });
@@ -577,6 +599,18 @@ app.use(
   }),
 );
 
+// Admin Incident Center API. Only /monitoring/* is forwarded: monitoring-service's
+// /internal/* alert ingestion is never reachable through the gateway.
+app.use(
+  createProxyMiddleware({
+    pathFilter: (path) => path === "/monitoring" || path.startsWith("/monitoring/"),
+    target: monitoringTarget,
+    changeOrigin: true,
+    xfwd: true,
+    on: { error: handleMonitoringProxyError },
+  }),
+);
+
 app.use(
   "/my",
   createProxyMiddleware({
@@ -628,7 +662,20 @@ app.use((error, req, res, _next) => {
 
 server.listen(port, "0.0.0.0", () => {
   console.log(`api-gateway running at http://0.0.0.0:${port} (HTTP + WebSocket)`);
-  startGatewayRabbitMqConsumer(io);
-  void sampleHealth();
-  setInterval(() => void sampleHealth(), HEALTH_SAMPLE_INTERVAL_MS).unref();
+  eventConsumer = startGatewayRabbitMqConsumer(io);
+  const sample = () => {
+    if (healthSamplingStopped) return;
+    healthSamplePromise = sampleHealth().catch(error => console.warn('[api-gateway] health sample failed:', error.message));
+  };
+  sample();
+  healthSamplerTimer = setInterval(sample, HEALTH_SAMPLE_INTERVAL_MS);
+  healthSamplerTimer.unref();
 });
+
+lifecycle = createServiceLifecycle({ server,
+  stopWork: [() => eventConsumer?.stop?.(), () => new Promise(resolve => io.close(resolve)),
+    () => { healthSamplingStopped = true; clearInterval(healthSamplerTimer); return healthSamplePromise; }],
+  closeResources: [() => require("./telemetry").shutdown?.()],
+});
+process.on("SIGTERM", lifecycle.shutdown);
+process.on("SIGINT", lifecycle.shutdown);

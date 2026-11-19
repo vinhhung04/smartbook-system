@@ -1,3 +1,4 @@
+import { availableStockFixture } from './testing/stock-fixture.mjs';
 // P1.4 + P1.5 concurrency checks (borrow-service):
 //   P1.4a - two managers approving the SAME pending renewal request at the same instant
 //           must not both succeed (would create two loan_renewals rows and risk exceeding
@@ -13,6 +14,7 @@
 //
 // Usage: node scripts/borrow-renewal-fine-concurrency-integration.mjs
 import crypto from 'node:crypto';
+import { shelfPicks } from './lib/borrow-shelves.mjs';
 import { execFileSync } from 'node:child_process';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
@@ -73,11 +75,7 @@ function check(name, condition, detail = '') {
 }
 
 async function findStockTarget() {
-  const books = await ok('GET', '/api/books', null, managerToken);
-  const sorted = books.filter((b) => b?.variant_id && b?.default_warehouse_id)
-    .sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0));
-  if (sorted.length === 0) throw new Error('No borrowable stock found');
-  return sorted[0];
+  return availableStockFixture(10);
 }
 
 async function main() {
@@ -94,6 +92,7 @@ async function main() {
   // ---------- P1.4a: two managers approving the same PENDING request at once ----------
   const loan1 = await ok('POST', '/borrow/loans/direct', {
     customer_id: customerId, variant_id: stock.variant_id, warehouse_id: stock.default_warehouse_id, quantity: 1,
+    picks: await shelfPicks((path) => ok('GET', path, undefined, managerToken), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 1 }),
   }, managerToken, { 'Idempotency-Key': crypto.randomUUID() });
   await ok('POST', `/borrow/my/loans/${loan1.data.id}/renew-request`, {}, customerToken);
 
@@ -122,6 +121,7 @@ async function main() {
   // ---------- P1.4b: two concurrent renewal REQUESTS for the same loan ----------
   const loan2 = await ok('POST', '/borrow/loans/direct', {
     customer_id: customerId, variant_id: stock.variant_id, warehouse_id: stock.default_warehouse_id, quantity: 1,
+    picks: await shelfPicks((path) => ok('GET', path, undefined, managerToken), { variantId: stock.variant_id, warehouseId: stock.default_warehouse_id, quantity: 1 }),
   }, managerToken, { 'Idempotency-Key': crypto.randomUUID() });
   const [reqA, reqB] = await Promise.all([
     request('POST', `/borrow/my/loans/${loan2.data.id}/renew-request`, {}, customerToken),
@@ -143,7 +143,7 @@ async function main() {
   sql(`INSERT INTO fines (id, customer_id, fine_type, amount, status) VALUES ('${fineId}', '${customerId}', 'LATE_RETURN', 100000, 'UNPAID')`);
 
   const [payResp, waiveResp] = await Promise.all([
-    request('POST', `/borrow/fines/${fineId}/payments`, { amount: 80000, payment_method: 'CASH' }, managerToken),
+    request('POST', `/borrow/fines/${fineId}/payments`, { amount: 80000, payment_method: 'CASH' }, managerToken, { 'Idempotency-Key': `p15-fine-payment:${fineId}` }),
     request('PATCH', `/borrow/fines/${fineId}/waive`, { amount: 50000 }, managerToken),
   ]);
   const financialSucceeded = [payResp, waiveResp].filter((r) => r.ok);
@@ -151,6 +151,11 @@ async function main() {
     'P1.5: not both an 80k payment and a 50k waiver succeed on a 100k fine (80k+50k > 100k)',
     financialSucceeded.length === 1,
     `payment=${payResp.status} waiver=${waiveResp.status}`,
+  );
+  check(
+    'P1.5: neither racer is rejected by the idempotency-key guard (race really reached the fine)',
+    ![payResp, waiveResp].some((r) => r.data?.code === 'IDEMPOTENCY_KEY_REQUIRED'),
+    `payment=${JSON.stringify(payResp.data?.code)} waiver=${JSON.stringify(waiveResp.data?.code)}`,
   );
   const [[finePaid], [fineWaived], [fineAmount]] = [
     sql(`SELECT COALESCE(SUM(amount),0) FROM fine_payments WHERE fine_id = '${fineId}'`)[0],

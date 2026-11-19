@@ -208,7 +208,7 @@ class PersistentCacheTests(unittest.IsolatedAsyncioTestCase):
         with patch("isbn_cache_store.get", new=AsyncMock(return_value=(None, False))), patch("isbn_cache_store.put", new=put), \
              patch("main._book_providers", return_value=[provider]), patch("main.ISBN_ROUND1_ORDER", "googleBooks"):
             await lookup_book_by_isbn(IsbnLookupRequest(isbn="9780132350884"))
-        self.assertEqual(put.await_args.args[0], "9780132350884:False:r2v1")
+        self.assertEqual(put.await_args.args[0], "9780132350884:False:r2v2")
 
     async def test_cache_store_is_a_no_op_when_disabled_or_broken(self):
         import isbn_cache_store

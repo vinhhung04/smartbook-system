@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { returnToShelf } from './lib/borrow-shelves.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
@@ -66,11 +67,14 @@ function idemHeader() {
 async function findStockTarget(minimumQuantity = 1) {
   const response = await fetch(`${baseUrl}/api/books`, { headers: makeHeaders() });
   const books = await response.json().catch(() => []);
-  return (Array.isArray(books) ? books : []).find((book) =>
-    book?.variant_id &&
-    book?.default_warehouse_id &&
-    Number(book?.quantity || 0) >= minimumQuantity
-  );
+  // Catalog quantity can include stock at a different warehouse. Probe the
+  // actual reservation target so repeated QA runs do not choose exhausted stock.
+  for (const book of Array.isArray(books) ? books : []) {
+    if (!book?.variant_id || !book?.default_warehouse_id || Number(book.quantity || 0) < minimumQuantity) continue;
+    const availability = await request('GET', `/api/borrow-integration/availability?variant_id=${encodeURIComponent(book.variant_id)}&warehouse_id=${encodeURIComponent(book.default_warehouse_id)}&quantity=${minimumQuantity}`);
+    if (availability.ok) return book;
+  }
+  return null;
 }
 
 async function resolveStockTarget() {
@@ -173,8 +177,11 @@ async function run() {
   const confirmed = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'CONFIRMED' }, idemHeader());
   add('2.confirm -> CONFIRMED', confirmed.ok && confirmed.data?.data?.status === 'CONFIRMED', JSON.stringify(confirmed.data));
 
-  // 3. Staff marks READY_FOR_PICKUP -> pickup code issued
-  const ready = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'READY_FOR_PICKUP' }, idemHeader());
+  // 3. Staff marks READY_FOR_PICKUP -> pickup code issued. "Ready" records the shelves the copy
+  // was taken from; take it from the shelf the system holds it on.
+  const pickOptions = await request('GET', `/api/borrow-integration/pick-options?variant_id=${encodeURIComponent(variantId)}&warehouse_id=${encodeURIComponent(warehouseId)}&reservation_id=${encodeURIComponent(reservationId)}`);
+  const picks = (pickOptions.data?.data || []).filter((row) => row.held_qty > 0).map((row) => ({ location_id: row.location_id, quantity: row.held_qty }));
+  const ready = await request('PATCH', `/borrow/reservations/${reservationId}/confirm`, { status: 'READY_FOR_PICKUP', picks }, idemHeader());
   const issuedCode = ready.data?.data?.pickup_code;
   if (ready.ok && ready.data?.data?.status === 'READY_FOR_PICKUP' && PICKUP_CODE_RE.test(issuedCode || '')) {
     pickupCode = issuedCode;
@@ -247,7 +254,7 @@ async function run() {
 
   // 9. Return the loan -> stock restored, loan RETURNED
   if (loanId) {
-    const returned = await request('POST', `/borrow/loans/${loanId}/return`, {}, idemHeader());
+    const returned = await request('POST', `/borrow/loans/${loanId}/return`, await returnToShelf(async (path) => (await request('GET', path)).data, loanId), idemHeader());
     add('9.return loan', returned.ok, JSON.stringify(returned.data));
 
     const afterReturn = await request('GET', `/borrow/loans/${loanId}`);

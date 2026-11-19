@@ -14,6 +14,9 @@ export interface StockAuditLine {
   counted_qty: number | null;
   variance_qty: number | null;
   adjustment_posted: boolean;
+  counted_at?: string | null;
+  baseline_on_hand_qty?: number | null;
+  baseline_borrowed_qty?: number | null;
   note: string | null;
 }
 
@@ -80,6 +83,16 @@ export const stockAuditService = {
   submit: async (id: string) => {
     const response = await inventoryAPI.patch(`/api/stock-audits/${id}/submit`, {});
     return response.data as { data: { id: string; status: StockAuditStatus } };
+  },
+
+  recount: async (id: string) => {
+    const response = await inventoryAPI.patch(`/api/stock-audits/${id}/recount`, {});
+    return response.data as { data: { id: string; status: StockAuditStatus } };
+  },
+
+  confirmLocationCount: async (id: string, locationId: string) => {
+    const response = await inventoryAPI.patch(`/api/stock-audits/${id}/locations/${locationId}/confirm-count`, {});
+    return response.data;
   },
 
   approve: async (id: string) => {

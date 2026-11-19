@@ -44,7 +44,7 @@ function createRefreshTokenService(store, { now = () => Date.now() } = {}) {
     const token = crypto.randomBytes(32).toString('base64url');
     const hash = hashToken(token);
     const ttl = ttlSeconds();
-    const issuedAt = Math.floor(now() / 1000);
+    const issuedAt = now() / 1000;
     await store.set(`refresh:token:${hash}`, JSON.stringify({ user_id: userId, family_id: familyId, issued_at: issuedAt, ...(mfa ? { mfa: true } : {}) }), ttl);
     await store.set(`refresh:family:${familyId}`, hash, ttl);
     return { token, familyId, expiresAt: new Date((issuedAt + ttl) * 1000).toISOString() };
