@@ -8,7 +8,10 @@
 //
 // Needs a variant held on >= 2 shelves of one warehouse with >= 2 free copies in total
 // and >= 2 on the fullest shelf. Pass TEST_VARIANT_ID / TEST_WAREHOUSE_ID, or the script
-// probes /api/books for one. Run with the gateway rate limit raised, as the other
+// probes /api/books for one. When no book is spread over two shelves (the CI demo seed
+// keeps each book on one shelf per branch), it spreads one itself the way a librarian
+// would: lends a copy from a shelf holding >= 3 and returns it to another shelf of the
+// same type in that branch. Run with the gateway rate limit raised, as the other
 // borrow scripts do.
 import crypto from 'node:crypto';
 
@@ -60,17 +63,47 @@ async function shelves(reservationId) {
   return new Map(res.data.data.map((row) => [row.location_id, { code: row.location_code, available: row.available_qty, held: row.held_qty }]));
 }
 
-async function resolveTarget() {
-  if (variantId && warehouseId) return;
-  const books = await (await fetch(`${baseUrl}/api/books`, { headers: { Authorization: `Bearer ${token}` } })).json().catch(() => []);
-  for (const book of (Array.isArray(books) ? books : []).slice(0, 80)) {
-    if (!book?.variant_id || !book?.default_warehouse_id) continue;
+const spreadEnough = (map) => {
+  const rows = [...map.values()].filter((row) => row.available > 0).sort((a, b) => b.available - a.available);
+  return rows.length >= 2 && rows[0].available >= 2;
+};
+
+// No book on two shelves: lend one copy off a shelf holding >= 3 and return it to another
+// shelf of the same type in that branch (never a receiving area), through the real loan flow.
+async function spreadOntoSecondShelf(candidates, customerId) {
+  for (const book of candidates) {
     variantId = book.variant_id;
     warehouseId = book.default_warehouse_id;
-    const rows = [...(await shelves()).values()].filter((row) => row.available > 0).sort((a, b) => b.available - a.available);
-    if (rows.length >= 2 && rows[0].available >= 2) return;
+    const [sourceId] = [...(await shelves())].filter(([, row]) => row.available >= 3).sort((a, b) => b[1].available - a[1].available)[0] || [];
+    if (!sourceId) continue;
+    const locations = (await request('GET', `/api/warehouses/${warehouseId}/locations`)).data?.locations || [];
+    const source = locations.find((location) => location.id === sourceId);
+    const target = locations.find((location) => location.is_active && location.id !== sourceId && source && location.location_type === source.location_type);
+    if (!target) continue;
+    const lent = await request('POST', '/borrow/loans/direct', {
+      customer_id: customerId, variant_id: variantId, warehouse_id: warehouseId, quantity: 1, picks: [{ location_id: sourceId, quantity: 1 }],
+    }, idem());
+    if (lent.status !== 201) continue;
+    const back = await request('POST', `/borrow/loans/${lent.data.data.id}/return`, { returned_to_location_id: target.id }, idem());
+    if (!back.ok) throw new Error(`setup return to ${target.location_code} failed: ${back.status} ${JSON.stringify(back.data)}`);
+    if (spreadEnough(await shelves())) {
+      add(`S0 setup: one copy moved ${source.location_code} -> ${target.location_code} (lend + return)`, true, variantId);
+      return;
+    }
   }
-  throw new Error('No variant with free copies on 2+ shelves of one warehouse; set TEST_VARIANT_ID/TEST_WAREHOUSE_ID');
+  throw new Error('No variant with free copies on 2+ shelves of one warehouse, and none could be spread; set TEST_VARIANT_ID/TEST_WAREHOUSE_ID');
+}
+
+async function resolveTarget(customerId) {
+  if (variantId && warehouseId) return;
+  const books = await (await fetch(`${baseUrl}/api/books`, { headers: { Authorization: `Bearer ${token}` } })).json().catch(() => []);
+  const candidates = (Array.isArray(books) ? books : []).slice(0, 80).filter((book) => book?.variant_id && book?.default_warehouse_id);
+  for (const book of candidates) {
+    variantId = book.variant_id;
+    warehouseId = book.default_warehouse_id;
+    if (spreadEnough(await shelves())) return;
+  }
+  await spreadOntoSecondShelf(candidates, customerId);
 }
 
 async function topUpForDeposit(customerId, copies) {
@@ -86,11 +119,11 @@ async function topUpForDeposit(customerId, copies) {
 }
 
 async function run() {
-  await resolveTarget();
   const profile = await request('GET', '/borrow/my/profile');
   const customerId = profile.data?.data?.id;
   if (!customerId) throw new Error(`no customer profile for the test actor: ${JSON.stringify(profile.data)}`);
   await topUpForDeposit(customerId, 3);
+  await resolveTarget(customerId);
   const loansToReturn = [];
 
   const start = await shelves();
@@ -191,10 +224,13 @@ async function run() {
     const beforeReturn = await shelves();
     const returned = await request('POST', `/borrow/loans/${directLoanId}/return`, { returned_to_location_id: putBackId }, idem());
     const afterReturn = await shelves();
-    add(`T2 copy lent from ${directShelf.code} put back on ${beforeReturn.get(putBackId).code}: only that shelf gains a free copy`,
-      returned.ok && afterReturn.get(putBackId).available === beforeReturn.get(putBackId).available + 1
-        && (afterReturn.get(directShelfId)?.available ?? 0) === (beforeReturn.get(directShelfId)?.available ?? 0),
-      `${returned.status} put-back ${beforeReturn.get(putBackId).available}->${afterReturn.get(putBackId).available}`);
+    // A shelf whose last free copy is out on loan has no balance row: count it as 0.
+    const freeOn = (map, locationId) => map.get(locationId)?.available ?? 0;
+    const putBackCode = putBackId === holdShelfId ? H : O;
+    add(`T2 copy lent from ${directShelf.code} put back on ${putBackCode}: only that shelf gains a free copy`,
+      returned.ok && freeOn(afterReturn, putBackId) === freeOn(beforeReturn, putBackId) + 1
+        && freeOn(afterReturn, directShelfId) === freeOn(beforeReturn, directShelfId),
+      `${returned.status} put-back ${freeOn(beforeReturn, putBackId)}->${freeOn(afterReturn, putBackId)}`);
     loansToReturn.splice(loansToReturn.indexOf(directLoanId), 1);
   }
 
@@ -215,10 +251,11 @@ async function run() {
   add('V1 convert CONFIRMED by id without shelves -> 400', convertBare.status === 400, `${convertBare.status} ${convertBare.data?.message}`);
   const convert = await request('POST', `/borrow/reservations/${singleId}/convert-to-loan`, { picks: [{ location_id: otherShelfId, quantity: 1 }] }, idem());
   const afterConvert = await shelves();
+  const freeAt = (map, locationId) => map.get(locationId)?.available ?? 0;
   add(`V2 convert with the shelf entered (${O}) -> loan, the copy comes off ${O}`,
-    convert.status === 201 && afterConvert.get(otherShelfId).available === beforeConvert.get(otherShelfId).available - 1
-      && afterConvert.get(holdShelfId).available === beforeConvert.get(holdShelfId).available,
-    `${convert.status} O ${beforeConvert.get(otherShelfId).available}->${afterConvert.get(otherShelfId).available}`);
+    convert.status === 201 && freeAt(afterConvert, otherShelfId) === freeAt(beforeConvert, otherShelfId) - 1
+      && freeAt(afterConvert, holdShelfId) === freeAt(beforeConvert, holdShelfId),
+    `${convert.status} O ${freeAt(beforeConvert, otherShelfId)}->${freeAt(afterConvert, otherShelfId)}`);
   if (convert.data?.data?.id) {
     const back = await request('POST', `/borrow/loans/${convert.data.data.id}/return`, { returned_to_location_id: otherShelfId }, idem());
     add(`C return converted loan to ${O}`, back.ok, back.status);

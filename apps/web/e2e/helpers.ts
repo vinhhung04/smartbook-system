@@ -25,3 +25,26 @@ export async function loginCustomer(page: Page, username = 'customer01') {
   await page.getByRole('button', { name: 'Đăng nhập' }).click();
   await expect(page).toHaveURL('/customer', { timeout: 15_000 });
 }
+
+/**
+ * Finish the staff "Xác nhận trả sách" dialog (ADR-001 shelf-based return):
+ * every copy keeps condition "Tốt" and goes back on the branch's first shelf
+ * compartment, then confirm and wait for the success toast.
+ */
+export async function confirmShelfReturn(page: Page) {
+  const dialog = page.getByRole('alertdialog', { name: 'Xác nhận trả sách' });
+  await expect(dialog).toBeVisible({ timeout: 15_000 });
+  const shelfSelects = dialog.locator('select[aria-label^="Vị trí trả về "]:not([aria-label="Vị trí trả về cho tất cả"])');
+  await expect(shelfSelects.first()).toBeVisible();
+  for (const select of await shelfSelects.all()) {
+    // Branch locations also include a RECEIVING dock; a returned copy goes on a shelf.
+    const shelf = select.locator('option', { hasText: 'SHELF' }).first();
+    await expect(shelf).toBeAttached({ timeout: 10_000 });
+    await select.selectOption((await shelf.getAttribute('value'))!);
+  }
+  // Confirm is refused until the deposit/fine preview has loaded.
+  await expect(dialog.getByText(/Hoàn cọc/).first()).toBeVisible({ timeout: 10_000 });
+  await dialog.getByTestId('confirm-dialog-action').click();
+  await expect(page.locator('[data-sonner-toast]').filter({ hasText: 'Đã trả sách thành công' })).toBeVisible({ timeout: 10_000 });
+  await expect(dialog).toBeHidden();
+}

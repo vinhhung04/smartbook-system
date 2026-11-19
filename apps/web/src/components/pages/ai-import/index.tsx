@@ -138,6 +138,8 @@ export function AIImportPage() {
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [ocrCancelled, setOcrCancelled] = useState(false);
+  // The lookup result the user re-opened the full inputs for; a new result folds them again.
+  const [inputsOpenFor, setInputsOpenFor] = useState<LookupBookByIsbnResponse | null>(null);
   const wideWorkspace = useMediaQuery(WIDE_WORKSPACE_QUERY);
 
   function selectTab(tab: WorkspaceTab) {
@@ -405,8 +407,12 @@ export function AIImportPage() {
   }
 
   function scrollToCopyrightSlot() {
-    document.querySelector('[data-testid="ocr-slot-copyright_page"]')
-      ?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth", block: "center" });
+    // The photo slots may be folded away; open them first, then scroll once they are laid out.
+    setInputsOpenFor(lookupData);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      document.querySelector('[data-testid="ocr-slot-copyright_page"]')
+        ?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth", block: "center" });
+    }));
   }
 
   /** Reconciliation draft (only for a provider record) + duplicate check, shared by the
@@ -1273,19 +1279,33 @@ export function AIImportPage() {
   const panelTab: PanelTab = workspaceTab === "metadata" ? lastPanelTab : workspaceTab;
   const safePanelTab: PanelTab = panelTab === "ocr" && !ocr.result ? "review" : panelTab;
 
+  // Fold the inputs to the lookup row while a looked-up book is being reviewed; photos already chosen keep them open.
+  const inputsFolded = Boolean(lookupData) && !lookupLoading && Object.keys(ocr.slots).length === 0 && inputsOpenFor !== lookupData;
+
   return (
     <div ref={rootRef} className="mx-auto max-w-[1440px] space-y-6 p-4 pb-10 sm:p-6 lg:p-8">
       <StudioHeader session={session} steps={steps} ocrAvailability={ocr.availability} />
 
       <section data-reveal aria-labelledby="import-sources-title" className="rounded-2xl border border-border bg-card">
         <div className="px-5 pt-5 sm:px-6">
-          <h2 id="import-sources-title" className="text-[16px] font-semibold text-foreground">Dữ liệu đầu vào</h2>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <h2 id="import-sources-title" className="text-[16px] font-semibold text-foreground">Dữ liệu đầu vào</h2>
+            {inputsFolded ? (
+              <button type="button" onClick={() => setInputsOpenFor(lookupData)} aria-expanded={false} aria-controls="import-photo-inputs"
+                className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-semibold text-primary hover:bg-primary/[0.06] focus-visible:outline-2 focus-visible:outline-ring">
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />Thêm ảnh để đối chiếu
+              </button>
+            ) : null}
+          </div>
           <p className="mt-0.5 max-w-[70ch] text-[12.5px] leading-relaxed text-muted-foreground">
-            Dùng mã in trên sách, hoặc chụp bìa trước, bìa sau và trang thông tin xuất bản. Tra mã mới sẽ thay biểu mẫu; quét ảnh giữ lại trường bạn đã tự sửa.
+            {inputsFolded
+              ? "Sách đang được kiểm duyệt bên dưới. Tra mã khác sẽ thay biểu mẫu; thêm ảnh bìa hoặc trang xuất bản để AI đối chiếu chéo."
+              : "Dùng mã in trên sách, hoặc chụp bìa trước, bìa sau và trang thông tin xuất bản. Tra mã mới sẽ thay biểu mẫu; quét ảnh giữ lại trường bạn đã tự sửa."}
           </p>
         </div>
-        <div className="grid gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8">
+        <div className={inputsFolded ? "px-5 py-4 sm:px-6" : "grid gap-6 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-8"}>
           <LookupSearchCard
+            compact={inputsFolded}
             isbnInput={isbnInput}
             onIsbnInputChange={setIsbnInput}
             onLookup={() => void handleLookup()}
@@ -1293,7 +1313,7 @@ export function AIImportPage() {
             lookupLoading={lookupLoading}
             hasLookupData={Boolean(lookupData)}
           />
-          <div className="min-w-0 border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+          <div id="import-photo-inputs" hidden={inputsFolded} className="min-w-0 border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
             {ocr.availability === "AVAILABLE" && ocr.capabilities ? (
               <ImageOcrCard
                 slots={ocr.slots}

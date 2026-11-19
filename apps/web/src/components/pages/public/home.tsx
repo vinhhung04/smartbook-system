@@ -14,6 +14,7 @@ import { CoverFlow } from '@/components/public/cover-flow';
 import { TiltCard } from '@/components/public/tilt-card';
 import { HowBorrowingWorks } from '@/components/public/how-borrowing-works';
 import { HomeHero } from '@/components/public/home-hero';
+import { TitleMarquee } from '@/components/public/title-marquee';
 import { RevealEngineContext, useScrollTriggerRefresh } from '@/components/public/gsap-motion';
 import { useReserveAction } from '@/components/public/use-reserve-action';
 import { useAvailabilityAlerts } from '@/components/public/use-availability-alerts';
@@ -171,7 +172,14 @@ export function PublicHomePage() {
       </div>
 
       {home ? (
-        <div className="mt-24 sm:mt-32">
+        <TitleMarquee
+          className="mt-24 text-[clamp(1.6rem,3.4vw,2.75rem)] leading-[1.2] sm:mt-32"
+          titles={[...home.most_borrowed, ...home.new_arrivals, ...home.top_rated, ...home.trending].map((book) => book.title)}
+        />
+      ) : null}
+
+      {home ? (
+        <div className="mt-16 sm:mt-20">
           <RankingBand mostBorrowed={home.most_borrowed} topRated={home.top_rated} borrowDays={home.windows?.borrow_days ?? 365} minReviews={TOP_RATED_MIN_REVIEWS} alerts={alerts} />
         </div>
       ) : null}

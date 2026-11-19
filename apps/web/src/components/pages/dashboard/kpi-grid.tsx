@@ -2,6 +2,8 @@ import { NavLink } from 'react-router';
 import { ChevronRight } from 'lucide-react';
 import type { DashboardKpis, WarehouseStockRiskItem } from '@/services/analytics';
 import { cn } from '@/components/ui/utils';
+import { CountUp } from '@/components/ui/count-up';
+import { SPOTLIGHT_CLASS, spotlightMove } from '@/components/ui/spotlight';
 import { BlockError, Panel, PanelHeader } from './panel';
 import { formatNumber, formatPercent, formatShare } from './utils';
 
@@ -10,6 +12,8 @@ interface Stat {
   label: string;
   /** `null` renders a dash: the figure could not be loaded. */
   value: string | null;
+  /** When set, the figure counts up to `to` on first load (same text as `value` once it lands). */
+  count?: { to: number; format: (value: number) => string };
   detail: string;
   to?: string;
 }
@@ -43,6 +47,7 @@ function libraryStats(kpis: DashboardKpis, access: KpiAccess): Stat[] {
       key: 'active-loans',
       label: 'Đang cho mượn',
       value: formatNumber(kpis.active_loans),
+      count: { to: kpis.active_loans, format: formatNumber },
       detail: `bản sao · ${formatShare(kpis.active_loans, kpis.total_copies)} vốn sách`,
       to: access.borrow ? '/borrow/loans' : undefined,
     },
@@ -50,6 +55,7 @@ function libraryStats(kpis: DashboardKpis, access: KpiAccess): Stat[] {
       key: 'open-reservations',
       label: 'Đặt trước đang mở',
       value: formatNumber(openReservations),
+      count: { to: openReservations, format: formatNumber },
       detail: reservationDetail,
       to: access.borrow ? `/borrow/reservations${kpis.pending_reservations > 0 ? '?tab=pending' : ''}` : undefined,
     },
@@ -57,12 +63,14 @@ function libraryStats(kpis: DashboardKpis, access: KpiAccess): Stat[] {
       key: 'conversion',
       label: 'Tỷ lệ nhận sách',
       value: formatPercent(kpis.reservation_conversion_rate),
+      count: { to: Number(kpis.reservation_conversion_rate || 0), format: formatPercent },
       detail: 'lượt đặt trước khách đã đến lấy',
     },
     {
       key: 'collection',
       label: 'Vốn sách',
       value: formatNumber(kpis.total_copies),
+      count: { to: kpis.total_copies, format: formatNumber },
       detail: `bản sao · ${formatNumber(kpis.total_titles)} đầu sách`,
       to: access.catalog ? '/catalog' : undefined,
     },
@@ -83,6 +91,7 @@ function stockStats(kpis: DashboardKpis | null, stockRisk: WarehouseStockRiskIte
       key: 'collection',
       label: 'Vốn sách',
       value: kpis ? formatNumber(kpis.total_copies) : null,
+      count: kpis ? { to: kpis.total_copies, format: formatNumber } : undefined,
       detail: kpis ? `bản sao · ${formatNumber(kpis.total_titles)} đầu sách` : 'Không tải được số liệu',
       to: access.catalog ? '/catalog' : undefined,
     },
@@ -90,6 +99,7 @@ function stockStats(kpis: DashboardKpis | null, stockRisk: WarehouseStockRiskIte
       key: 'available',
       label: 'Sẵn có tại kho',
       value: available === null ? null : formatNumber(available),
+      count: available === null ? undefined : { to: available, format: formatNumber },
       detail: stockRisk ? `bản sao trên ${formatNumber(stockRisk.length)} kho` : 'Không tải được số liệu',
       to: inventoryLink,
     },
@@ -97,6 +107,7 @@ function stockStats(kpis: DashboardKpis | null, stockRisk: WarehouseStockRiskIte
       key: 'reserved',
       label: 'Đang giữ chỗ',
       value: reserved === null ? null : formatNumber(reserved),
+      count: reserved === null ? undefined : { to: reserved, format: formatNumber },
       detail: 'bản sao đã được giữ, chưa xuất',
       to: inventoryLink,
     },
@@ -104,6 +115,7 @@ function stockStats(kpis: DashboardKpis | null, stockRisk: WarehouseStockRiskIte
       key: 'out-of-stock',
       label: 'Hết hàng',
       value: outOfStock === null ? null : formatNumber(outOfStock),
+      count: outOfStock === null ? undefined : { to: outOfStock, format: formatNumber },
       detail: outOfStock ? `đầu sách tại ${formatNumber(warehousesOut)} kho` : 'Không có đầu sách nào hết hàng',
       to: inventoryLink,
     },
@@ -128,22 +140,23 @@ function StatCell({ stat }: { stat: Stat }) {
         stat.value === null ? 'text-muted-foreground' : 'text-foreground',
       )}
       >
-        {stat.value ?? '—'}
+        {stat.count && stat.value !== null ? <CountUp to={stat.count.to} format={stat.count.format} /> : (stat.value ?? '—')}
         {stat.to ? <span className="@2xl:hidden">{chevron}</span> : null}
       </span>
       <span className="col-start-1 row-start-2 mt-0.5 text-[12px] leading-5 text-muted-foreground @2xl:row-start-3 @2xl:mt-auto @2xl:pt-1.5">{stat.detail}</span>
     </>
   );
-  const className = 'group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-center gap-x-4 bg-card px-5 py-3.5 @2xl:grid-cols-1 @2xl:grid-rows-[auto_auto_1fr] @2xl:content-stretch @2xl:py-4';
+  const className = cn(SPOTLIGHT_CLASS, 'group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-center gap-x-4 bg-card px-5 py-3.5 @2xl:grid-cols-1 @2xl:grid-rows-[auto_auto_1fr] @2xl:content-stretch @2xl:py-4');
   return stat.to ? (
     <NavLink
       to={stat.to}
+      onPointerMove={spotlightMove}
       className={cn(className, 'transition-colors hover:bg-muted/40 focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40')}
     >
       {body}
     </NavLink>
   ) : (
-    <div className={className}>{body}</div>
+    <div className={className} onPointerMove={spotlightMove}>{body}</div>
   );
 }
 

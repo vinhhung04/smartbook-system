@@ -56,6 +56,19 @@ export function DashboardSkeleton({ canViewBorrow }: { canViewBorrow: boolean })
         </Panel>
       </div>
 
+      {canViewBorrow ? (
+        <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
+          <Panel titleId="ai-risk-title" className="@5xl:col-span-8">
+            <PanelHeader id="ai-risk-title" title="AI dự báo rủi ro" description={<Bone className="mt-1 h-4 w-72" />} />
+            <PanelBody className="grid grid-cols-1 gap-x-8 gap-y-6 pt-2 @2xl:grid-cols-2"><ListBones rows={5} /><ListBones rows={5} /></PanelBody>
+          </Panel>
+          <Panel titleId="activity-title" className="@5xl:col-span-4">
+            <PanelHeader id="activity-title" title="Hoạt động trực tiếp" description={<Bone className="mt-1 h-4 w-48" />} />
+            <PanelBody className="pt-2"><ListBones rows={6} pitch="h-[45px]" /></PanelBody>
+          </Panel>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
         <Panel titleId="stock-risk-title" className={canViewBorrow ? '@5xl:col-span-7' : '@5xl:col-span-12'}>
           <PanelHeader id="stock-risk-title" title="Rủi ro tồn kho theo kho" description={<Bone className="mt-1 h-4 w-56" />} />

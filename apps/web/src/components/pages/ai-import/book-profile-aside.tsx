@@ -3,6 +3,7 @@ import type { LookupBookByIsbnResponse } from "@/services/ai";
 import { CoverPreview } from "./field";
 import type { EditableBookForm, ReviewSignalData } from "./types";
 import { fieldLabel, resolveBookCodes, winningSourceName } from "./utils";
+import { CountUp } from '@/components/ui/count-up';
 
 // Mirrors the backend's critical/high-value fields (isbn_coverage.FIELD_TIERS); supporting fields are not flagged here.
 const HIGH_VALUE_TIER: Record<string, string> = {
@@ -83,7 +84,7 @@ export function BookProfileAside({
               {lookup.found ? (
                 <div className="flex gap-1.5" title="Điểm hệ thống tra cứu tự chấm cho độ đầy đủ/nhất quán của metadata — không phải xác suất dữ liệu đúng.">
                   <dt className="text-muted-foreground">Điểm chất lượng nguồn</dt>
-                  <dd className="font-semibold tabular-nums text-foreground">{quality}/100</dd>
+                  <dd className="font-semibold tabular-nums text-foreground"><CountUp to={Number(quality) || 0} format={String} />/100</dd>
                 </div>
               ) : null}
               {source ? (

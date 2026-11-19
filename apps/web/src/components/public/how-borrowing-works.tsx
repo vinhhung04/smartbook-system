@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Link } from 'react-router';
 import { CalendarCheck, Search, Ticket, type LucideIcon } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
+import { StarBorder } from './star-border';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from './gsap-motion';
 
 // A real sequence (the order matters), so the numbers carry information.
@@ -91,19 +92,21 @@ function BorrowingJourney({ steps }: { steps: BorrowingStep[] }) {
 
 export function HowBorrowingWorks({ cta, secondary = null, variant = 'card', steps = STEPS }: HowBorrowingWorksProps) {
   const band = variant === 'band';
+  const ctaLink = cta ? (
+    <Link
+      to={cta.to}
+      className={cn(
+        'inline-flex h-11 items-center rounded-full px-5 text-[14px] font-semibold transition-[background-color,transform] focus-visible:outline-none focus-visible:ring-2 active:scale-[0.98]',
+        band ? 'bg-amber-100 text-[#1d1a4a] hover:bg-white focus-visible:ring-amber-200' : 'bg-indigo-700 text-white hover:bg-indigo-800 focus-visible:ring-indigo-500/50 dark:bg-indigo-500 dark:hover:bg-indigo-400',
+      )}
+    >
+      {cta.label}
+    </Link>
+  ) : null;
   const actions = cta || secondary ? (
     <div className={cn('flex flex-wrap items-center gap-3', band ? 'mt-8' : 'mt-7')}>
-      {cta ? (
-        <Link
-          to={cta.to}
-          className={cn(
-            'inline-flex h-11 items-center rounded-full px-5 text-[14px] font-semibold transition-[background-color,transform] focus-visible:outline-none focus-visible:ring-2 active:scale-[0.98]',
-            band ? 'bg-amber-100 text-[#1d1a4a] hover:bg-white focus-visible:ring-amber-200' : 'bg-indigo-700 text-white hover:bg-indigo-800 focus-visible:ring-indigo-500/50 dark:bg-indigo-500 dark:hover:bg-indigo-400',
-          )}
-        >
-          {cta.label}
-        </Link>
-      ) : null}
+      {/* On the dark band the main action gets a travelling light around its edge. */}
+      {band && ctaLink ? <StarBorder>{ctaLink}</StarBorder> : ctaLink}
       {secondary ? (
         <Link
           to={secondary.to}

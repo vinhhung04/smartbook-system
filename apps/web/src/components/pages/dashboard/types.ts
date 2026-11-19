@@ -2,12 +2,16 @@ import type {
   BorrowTrendItem,
   DashboardKpis,
   FineSummary,
+  LateReturnRiskItem,
   OverdueSummary,
   ReorderSuggestionsData,
   ReservationFunnel,
+  ReservationNoShowRiskItem,
+  RiskModelData,
   TopBookItem,
   WarehouseStockRiskItem,
 } from '@/services/analytics';
+import type { AuditLogEntry } from './activity-feed';
 
 export type ReorderSummary = ReorderSuggestionsData['summary'];
 
@@ -26,6 +30,9 @@ export type DashboardState = {
   pendingPR: number | null;
   openER: number | null;
   reorder: ReorderSummary | null;
+  lateRisk: RiskModelData<LateReturnRiskItem> | null;
+  noShowRisk: RiskModelData<ReservationNoShowRiskItem> | null;
+  activity: AuditLogEntry[] | null;
 };
 
 export const ANALYTICS_PERMISSIONS = ['analytics.reports.view', 'analytics.read', 'reports.read'];

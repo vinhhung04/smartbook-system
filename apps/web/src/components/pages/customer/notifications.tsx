@@ -22,6 +22,30 @@ import type { CustomerNotification } from './_shared/notification-item';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 20;
+
+/** "Hôm nay", "Hôm qua", else "Thứ Hai, 16/11/2026": the heading of each day's group. */
+function dayLabel(value?: string, now = new Date()) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return 'Không rõ ngày';
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(date)) / 86_400_000);
+  if (days === 0) return 'Hôm nay';
+  if (days === 1) return 'Hôm qua';
+  const label = date.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Rows arrive newest first; consecutive rows of the same day share one group. */
+function groupByDay(rows: CustomerNotification[]) {
+  const groups: Array<{ label: string; rows: CustomerNotification[] }> = [];
+  for (const row of rows) {
+    const label = dayLabel(row.created_at || row.scheduled_at);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.rows.push(row);
+    else groups.push({ label, rows: [row] });
+  }
+  return groups;
+}
 const STATUS_PARAM: Record<NotificationFilter, 'unread' | 'read' | undefined> = { ALL: undefined, UNREAD: 'unread', READ: 'read' };
 const EMPTY_LIST: NotificationListState<CustomerNotification> = { rows: [], total: 0, unreadCount: 0, page: 1, totalPages: 1, pageSize: PAGE_SIZE };
 
@@ -182,13 +206,20 @@ export function CustomerNotificationsPage() {
           <p className="text-[12px] font-semibold text-muted-foreground" data-testid="notifications-total">
             {filter === 'UNREAD' ? 'Chưa đọc' : filter === 'READ' ? 'Đã đọc' : 'Tất cả'} ({total})
           </p>
-          <ul className="space-y-2" data-testid="notification-list">
-            {rows.map((row) => (
-              <li key={row.id}>
-                <NotificationListItem item={row} onMarkedRead={handleMarkedRead} />
-              </li>
+          <div className="space-y-5" data-testid="notification-list">
+            {groupByDay(rows).map((group) => (
+              <section key={group.label} aria-label={group.label}>
+                <h2 className="mb-2 px-1 text-[12.5px] font-semibold text-muted-foreground">{group.label}</h2>
+                <ul className="divide-y divide-border overflow-hidden rounded-2xl bg-card ring-1 ring-border">
+                  {group.rows.map((row) => (
+                    <li key={row.id}>
+                      <NotificationListItem item={row} onMarkedRead={handleMarkedRead} />
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2 text-[12px] text-muted-foreground">
               <span>Trang {page} / {totalPages}</span>

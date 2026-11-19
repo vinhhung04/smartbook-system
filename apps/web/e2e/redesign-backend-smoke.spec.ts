@@ -8,6 +8,7 @@ import { loginStaff } from './helpers';
  * `open` names a row button that opens a read-only detail view, clicked when a row exists.
  */
 const REDESIGNED_PAGES: Array<{ route: string; open?: RegExp }> = [
+  { route: '/dashboard' },
   { route: '/warehouses' },
   { route: '/purchase-orders' },
   { route: '/orders', open: /^GR-/ },

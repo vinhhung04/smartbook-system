@@ -7,8 +7,15 @@ import { AvailabilityStamp } from './availability-stamp';
 import { Book3D } from './book-3d';
 import { HeroSearch } from './hero-search';
 import { EASE_OUT, MOTION_OK, gsap, useGSAP } from './gsap-motion';
+import { RotatingWords } from './rotating-words';
+import LightRays from '@/components/react-bits/LightRays';
+import { CountUp } from '@/components/ui/count-up';
 
 const numberFormat = new Intl.NumberFormat('vi-VN');
+const formatCount = (value: number) => numberFormat.format(value);
+
+/** Read as "Khám phá <word> tiếp theo của bạn."; short enough to keep the first line on one row. */
+const HERO_WORDS = ['cuốn sách', 'tiểu thuyết', 'cuốn truyện', 'tác giả'];
 
 /**
  * Where each book stands on the display table: the lead book front and
@@ -85,8 +92,20 @@ function HeroShowcase({ books, onShelf, loading }: { books: PublicBook[]; onShel
         data-hero="stage"
         className="relative aspect-[16/10] overflow-hidden rounded-[28px] bg-[#1d1a4a] ring-1 ring-black/5 lg:aspect-[5/4] dark:bg-[#15133a] dark:ring-white/10"
       >
-        {/* One warm light from above, falling on the table. */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_60%_at_50%_8%,rgba(255,232,190,0.24),transparent_72%)]" aria-hidden="true" />
+        {/* One warm light from above, falling on the table: the gradient is the fallback, the WebGL rays (React Bits LightRays) lean toward the pointer. */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(55%_60%_at_50%_8%,rgba(255,232,190,0.16),transparent_72%)]" aria-hidden="true" />
+        <LightRays
+          className="!absolute inset-0"
+          raysOrigin="top-center"
+          raysColor="#ffe3b0"
+          raysSpeed={0.6}
+          lightSpread={0.9}
+          rayLength={1.6}
+          followMouse
+          mouseInfluence={0.08}
+          noiseAmount={0.04}
+          opacity={0.85}
+        />
         {/* Table top: a lighter plane with a lit front edge. */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[34%] bg-[#363181] shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_24px_40px_-24px_rgba(255,232,190,0.18)] dark:bg-[#29256a]" aria-hidden="true" />
         <div data-hero="table" className="absolute inset-0">
@@ -190,9 +209,9 @@ export function HomeHero({ home, books, onShelf }: HomeHeroProps) {
     <section ref={heroRef} aria-labelledby="hero-title" className="relative overflow-x-clip">
       <div className="mx-auto grid max-w-7xl items-center gap-9 px-4 pb-14 pt-6 sm:px-6 sm:pt-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-14 lg:px-8 lg:pb-24 lg:pt-14">
         <div className="min-w-0">
-          <h1 id="hero-title" className="font-display text-[clamp(2.3rem,8.8vw,3.1rem)] font-semibold leading-[1.02] tracking-[-0.03em] text-foreground sm:text-[clamp(3.1rem,4.4vw,3.85rem)]">
-            <span data-hero="line" className="block">Khám phá cuốn sách</span>
-            <span data-hero="line" className="block">tiếp theo của bạn.</span>
+          <h1 id="hero-title" aria-label="Khám phá cuốn sách tiếp theo của bạn." className="font-display text-[clamp(2.3rem,8.8vw,3.1rem)] font-semibold leading-[1.02] tracking-[-0.03em] text-foreground sm:text-[clamp(3.1rem,4.4vw,3.85rem)]">
+            <span data-hero="line" className="block whitespace-nowrap" aria-hidden="true">Khám phá <RotatingWords words={HERO_WORDS} className="text-indigo-700 dark:text-indigo-300" /></span>
+            <span data-hero="line" className="block" aria-hidden="true">tiếp theo của bạn.</span>
           </h1>
           <p data-hero="lede" className="mt-5 max-w-[34rem] text-pretty text-[16px] leading-relaxed text-foreground/75 sm:text-[17px]">
             Thư viện SmartBook: tìm theo tên sách, tác giả, hoặc mô tả cuốn bạn muốn đọc để AI gợi ý. Xem ngay chi nhánh nào còn sách và đặt trước khi đến thư viện.
@@ -205,10 +224,10 @@ export function HomeHero({ home, books, onShelf }: HomeHeroProps) {
               <>
                 <Link data-hero="cta" to="/books?availability=available" className="group inline-flex items-center gap-2 font-semibold text-foreground hover:text-indigo-700 dark:hover:text-indigo-300">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/15" aria-hidden="true" />
-                  {numberFormat.format(home.stats.available_titles)} đầu sách có sẵn hôm nay
+                  <span><CountUp to={home.stats.available_titles} format={formatCount} /> đầu sách có sẵn hôm nay</span>
                 </Link>
                 <Link data-hero="cta" to="/books" className="group inline-flex items-center gap-1.5 font-semibold text-indigo-700 dark:text-indigo-300">
-                  Khám phá toàn bộ {numberFormat.format(home.stats.total_titles)} đầu sách
+                  <span>Khám phá toàn bộ <CountUp to={home.stats.total_titles} format={formatCount} /> đầu sách</span>
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
               </>

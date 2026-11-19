@@ -19,16 +19,18 @@ interface TopBooksFinesSectionProps {
   /** The number of books requested: a shorter list means fewer books have been borrowed. */
   topBooksLimit: number;
   fines: FineSummary | null;
+  /** The analysis period the ranking covers, e.g. "30 ngày". */
+  periodLabel: string;
   access: { catalog: boolean; borrow: boolean };
   onRetry: () => void;
 }
 
-function TopBooksPanel({ topBooks, limit, canOpenBook, onRetry }: { topBooks: TopBookItem[] | null; limit: number; canOpenBook: boolean; onRetry: () => void }) {
+function TopBooksPanel({ topBooks, limit, periodLabel, canOpenBook, onRetry }: { topBooks: TopBookItem[] | null; limit: number; periodLabel: string; canOpenBook: boolean; onRetry: () => void }) {
   const topMax = topBooks?.[0]?.borrow_count || 1;
 
   return (
     <Panel titleId="top-books-title" className="@5xl:col-span-5">
-      <PanelHeader id="top-books-title" level={3} title="Sách được mượn nhiều nhất" description="Xếp hạng theo tổng lượt mượn" />
+      <PanelHeader id="top-books-title" level={3} title="Sách được mượn nhiều nhất" description={`Xếp hạng theo lượt mượn trong ${periodLabel} qua`} />
       <PanelBody>
         {!topBooks ? (
           <BlockError what="xếp hạng sách" onRetry={onRetry} />
@@ -154,10 +156,10 @@ function FinesPanel({ fines, canOpenFines, onRetry }: { fines: FineSummary | nul
   );
 }
 
-export function TopBooksFinesSection({ topBooks, topBooksLimit, fines, access, onRetry }: TopBooksFinesSectionProps) {
+export function TopBooksFinesSection({ topBooks, topBooksLimit, fines, periodLabel, access, onRetry }: TopBooksFinesSectionProps) {
   return (
     <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
-      <TopBooksPanel topBooks={topBooks} limit={topBooksLimit} canOpenBook={access.catalog} onRetry={onRetry} />
+      <TopBooksPanel topBooks={topBooks} limit={topBooksLimit} periodLabel={periodLabel} canOpenBook={access.catalog} onRetry={onRetry} />
       <FinesPanel fines={fines} canOpenFines={access.borrow} onRetry={onRetry} />
     </div>
   );
