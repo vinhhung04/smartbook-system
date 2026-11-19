@@ -81,11 +81,14 @@ export function BlockEmpty({ children, className }: { children: ReactNode; class
 }
 
 /** Heading for a group of panels; more air above than below. */
-export function GroupHeading({ id, title, description }: { id: string; title: string; description: string }) {
+export function GroupHeading({ id, title, description, aside }: { id: string; title: string; description: string; aside?: ReactNode }) {
   return (
-    <div className="pt-4">
-      <h2 id={id} className="text-[17px] font-semibold leading-6 text-foreground">{title}</h2>
-      <p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">{description}</p>
+    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pt-4">
+      <div className="min-w-0">
+        <h2 id={id} className="font-display text-[20px] font-semibold leading-7 tracking-[-0.01em] text-foreground">{title}</h2>
+        <p className="mt-0.5 text-[13px] leading-5 text-muted-foreground">{description}</p>
+      </div>
+      {aside}
     </div>
   );
 }

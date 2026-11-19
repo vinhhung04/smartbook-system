@@ -66,7 +66,12 @@ const BAND_META: Record<RiskBand, { label: string; icon: ComponentType<{ classNa
   },
 };
 
-function BandChip({ band }: { band: RiskBand }) {
+/** Score bar in the band's colour (also used by the /dashboard AI risk block). */
+export function BandMeter({ band, score, className, label }: { band: RiskBand; score: number; className?: string; label?: string }) {
+  return <Meter value={score} fill={BAND_META[band].fill} className={className} label={label} />;
+}
+
+export function BandChip({ band }: { band: RiskBand }) {
   const meta = BAND_META[band];
   const Icon = meta.icon;
   return (

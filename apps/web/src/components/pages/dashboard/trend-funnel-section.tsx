@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useReducedMotion } from 'motion/react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { cn } from '@/components/ui/utils';
 import type { BorrowTrendItem, DashboardKpis, ReservationFunnel } from '@/services/analytics';
 import { BlockEmpty, BlockError, Panel, PanelBody, PanelHeader } from './panel';
 import { formatNumber, formatShare } from './utils';
+import { bucketLabel, longBucketLabel } from './period';
 
 // Validated categorical trio (dataviz validator, light + dark): indigo / cyan / amber.
 // Reservations also carry a dashed stroke because cyan↔indigo sits near the tritan floor in dark mode.
@@ -36,23 +38,11 @@ function zeroFill(rows: BorrowTrendItem[]): TrendRow[] {
   return out;
 }
 
-function dayLabel(date: string) {
-  const [, month, day] = date.split('-');
-  return day && month ? `${day}/${month}` : date;
-}
-
-function longDayLabel(date: string) {
-  const parsed = new Date(`${date}T00:00:00`);
-  return Number.isNaN(parsed.getTime())
-    ? date
-    : parsed.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: { dataKey?: string; value?: number }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-border bg-popover px-3 py-2 text-[12px] shadow-[0_6px_16px_-6px_rgba(15,23,42,0.25)]">
-      <p className="mb-1 font-medium capitalize text-foreground">{longDayLabel(label || '')}</p>
+      <p className="mb-1 font-medium capitalize text-foreground">{longBucketLabel(label || '')}</p>
       {SERIES.map((series) => (
         <p key={series.key} className="flex items-center justify-between gap-6 leading-5 text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
@@ -68,6 +58,10 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 function TrendPanel({ trendData, onRetry }: { trendData: BorrowTrendItem[] | null; onRetry: () => void }) {
   const series = useMemo(() => zeroFill(trendData ?? []), [trendData]);
+  // The 12-month view arrives bucketed by month ("2026-10"); everything else is by day.
+  const monthly = /^\d{4}-\d{2}$/.test(series[0]?.date ?? '');
+  const bucket = monthly ? 'tháng' : 'ngày';
+  const reduce = useReducedMotion();
   const totals = useMemo(() => series.reduce<Record<SeriesKey, number>>(
     (acc, row) => ({ loans: acc.loans + row.loans, returns: acc.returns + row.returns, reservations: acc.reservations + row.reservations }),
     { loans: 0, returns: 0, reservations: 0 },
@@ -87,7 +81,7 @@ function TrendPanel({ trendData, onRetry }: { trendData: BorrowTrendItem[] | nul
   const last = series[series.length - 1]?.date;
   const peakSeries = peak ? SERIES.find((item) => item.key === peak.key) : undefined;
   const summary = series.length
-    ? `${series.length} ngày, từ ${dayLabel(first)} đến ${dayLabel(last)}: ${SERIES.map((item) => `${formatNumber(totals[item.key])} ${item.unit}`).join(', ')}.`
+    ? `${series.length} ${bucket}, từ ${bucketLabel(first)} đến ${bucketLabel(last)}: ${SERIES.map((item) => `${formatNumber(totals[item.key])} ${item.unit}`).join(', ')}.`
     : '';
 
   return (
@@ -95,8 +89,8 @@ function TrendPanel({ trendData, onRetry }: { trendData: BorrowTrendItem[] | nul
       <PanelHeader
         id="trend-title"
         level={3}
-        title="Mượn, trả và đặt trước theo ngày"
-        description={series.length ? `${formatNumber(series.length)} ngày gần nhất · ${dayLabel(first)} – ${dayLabel(last)}` : 'Hoạt động mượn trả theo ngày'}
+        title={`Mượn, trả và đặt trước theo ${bucket}`}
+        description={series.length ? `${formatNumber(series.length)} ${bucket} gần nhất · ${bucketLabel(first)} – ${bucketLabel(last)}` : `Hoạt động mượn trả theo ${bucket}`}
       />
       <PanelBody>
         {!trendData ? (
@@ -118,35 +112,45 @@ function TrendPanel({ trendData, onRetry }: { trendData: BorrowTrendItem[] | nul
               ))}
               {peak && peakSeries ? (
                 <div className="ml-auto self-end text-right">
-                  <dt className="text-[12px] text-muted-foreground">Ngày cao nhất</dt>
+                  <dt className="text-[12px] text-muted-foreground">{monthly ? 'Tháng cao nhất' : 'Ngày cao nhất'}</dt>
                   <dd className="mt-0.5 text-[13px] leading-6 text-foreground">
-                    <span className="font-semibold tabular-nums">{formatNumber(peak.value)}</span> {peakSeries.unit} · {dayLabel(peak.date)}
+                    <span className="font-semibold tabular-nums">{formatNumber(peak.value)}</span> {peakSeries.unit} · {bucketLabel(peak.date)}
                   </dd>
                 </div>
               ) : null}
             </dl>
-            <div className="mt-4" role="img" aria-label={`Biểu đồ đường: ${summary}`}>
+            <div className="mt-4" role="img" aria-label={`Biểu đồ vùng: ${summary}`}>
               <ResponsiveContainer width="100%" height={240}>
-                <LineChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <AreaChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <defs>
+                    {SERIES.map((item) => (
+                      <linearGradient key={item.key} id={`trend-fill-${item.key}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={item.color} stopOpacity={item.dash ? 0 : 0.18} />
+                        <stop offset="100%" stopColor={item.color} stopOpacity={0} />
+                      </linearGradient>
+                    ))}
+                  </defs>
                   <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={dayLabel} tick={AXIS_TICK} axisLine={{ stroke: 'var(--border)' }} tickLine={false} minTickGap={28} tickMargin={8} />
+                  <XAxis dataKey="date" tickFormatter={bucketLabel} tick={AXIS_TICK} axisLine={{ stroke: 'var(--border)' }} tickLine={false} minTickGap={28} tickMargin={8} />
                   <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={40} allowDecimals={false} tickFormatter={(value: number) => formatNumber(value)} />
                   <Tooltip content={<TrendTooltip />} cursor={{ stroke: 'var(--muted-foreground)', strokeOpacity: 0.4, strokeWidth: 1 }} />
                   {SERIES.map((item) => (
-                    <Line
+                    <Area
                       key={item.key}
-                      type="linear"
+                      type="monotone"
                       dataKey={item.key}
                       name={item.label}
                       stroke={item.color}
                       strokeWidth={2}
                       strokeDasharray={item.dash}
+                      fill={`url(#trend-fill-${item.key})`}
                       dot={false}
                       activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--card)' }}
-                      isAnimationActive={false}
+                      isAnimationActive={!reduce}
+                      animationDuration={700}
                     />
                   ))}
-                </LineChart>
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </>
