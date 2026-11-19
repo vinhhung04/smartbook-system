@@ -12,6 +12,7 @@ import { BranchStatus } from './branch-status';
 import { bindingFor } from '@/lib/book-binding';
 import { branchBooksUrl, directionsUrl } from '@/lib/branch-links';
 import { BackCover, SpinningBook } from './spinning-book';
+import { SPOTLIGHT_CLASS, spotlightMove } from '@/components/ui/spotlight';
 
 const numberFormat = new Intl.NumberFormat('vi-VN');
 
@@ -406,7 +407,9 @@ export function CategoryShowcase({ categories }: { categories: PublicHome['categ
               <li key={category.slug} data-reveal-item className={cn(lead && 'sm:col-span-2 lg:row-span-2')}>
                 <Link
                   to={`/categories/${category.slug}`}
+                  onPointerMove={spotlightMove}
                   className={cn(
+                    SPOTLIGHT_CLASS,
                     'group relative flex h-full overflow-hidden rounded-[22px] p-5 transition-shadow hover:shadow-[0_20px_44px_-26px_rgba(30,27,75,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2 sm:p-6',
                     lead ? 'min-h-[15rem] text-[#F3EBD8] lg:min-h-[26rem] lg:p-8' : 'min-h-[9.5rem] bg-card text-foreground ring-1 ring-border sm:min-h-[11.5rem]',
                   )}
