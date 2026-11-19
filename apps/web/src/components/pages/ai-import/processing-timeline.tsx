@@ -59,10 +59,12 @@ function Phase({ state, title, summary, children, last = false }: {
       </span>
       <div className={`min-w-0 flex-1 ${last ? "" : "pb-6"}`}>
         <p className={`text-[14px] font-semibold leading-7 ${state === "pending" ? "text-muted-foreground" : "text-foreground"}`}>
-          {title}<span className="sr-only"> — {PHASE_ICON[state].words}</span>
+          <span className={state === "active" ? "ai-shiny-text" : undefined}>{title}</span><span className="sr-only"> — {PHASE_ICON[state].words}</span>
         </p>
         <div className="max-w-[72ch] text-[13px] leading-relaxed text-muted-foreground">{summary}</div>
         {children ? <div className="mt-3">{children}</div> : null}
+        {/* The phase is running but the server sends nothing finer (e.g. field-level mode): say "working", not a fake percentage. */}
+        {state === "active" && !children ? <div className="ai-indeterminate mt-3 max-w-sm" aria-hidden="true" /> : null}
       </div>
     </li>
   );
@@ -122,6 +124,10 @@ export function ProcessingTimeline({ progress, code, running, startedAt, finishe
   const r2Found = round2.filter((row) => row.status === "SUCCESS").length;
   const r2Rejected = round2.filter((row) => row.status === "DIFFERENT_EDITION" || row.status === "MISMATCH").length;
   const noChannel = progress.channel === "unavailable";
+  // Field-level mode (or no progress channel) sends no per-source events, yet the request is running:
+  // show Round 1 as running rather than "not started" for the whole wait.
+  const round1Running = running && !progress.cache && progress.round1.state === "pending"
+    && ((progress.fieldLevel && progress.validate.state !== "pending") || noChannel);
   const prepareSteps = [progress.authority, progress.ai, progress.draft, progress.duplicate];
   const prepare: PhaseState = prepareSteps.includes("active") ? "active"
     : progress.duplicate === "done" || progress.duplicate === "failed" ? "done"
@@ -194,14 +200,14 @@ export function ProcessingTimeline({ progress, code, running, startedAt, finishe
           </p>
         </div>
         <p className="shrink-0 text-[13px] tabular-nums text-muted-foreground">
-          {running ? <>{elapsed}s</> : finishedMs ? <>{progress.cache ? "Lần tra cứu đã lưu mất" : "Hoàn tất trong"} {(finishedMs / 1000).toFixed(1)}s</> : null}
+          {running ? <><span className="font-mono text-[20px] font-semibold text-foreground">{elapsed}</span> giây</> : finishedMs ? <>{progress.cache ? "Lần tra cứu đã lưu mất" : "Hoàn tất trong"} {(finishedMs / 1000).toFixed(1)}s</> : null}
         </p>
       </div>
       <p className="sr-only" aria-live="polite">{live}</p>
 
       <ol className="mt-6" aria-label="Các giai đoạn tra cứu">
         <Phase state={progress.cache ? "done" : progress.validate.state === "pending" && running && !noChannel ? "active" : progress.validate.state} title="Kiểm tra mã đầu vào" summary={validateSummary} />
-        <Phase state={progress.cache && progress.round1.state === "pending" ? "skipped" : progress.round1.state} title="Vòng 1 — tìm theo mã chính xác" summary={round1Summary}>
+        <Phase state={progress.cache && progress.round1.state === "pending" ? "skipped" : round1Running ? "active" : progress.round1.state} title="Vòng 1 — tìm theo mã chính xác" summary={round1Summary}>
           {round1.length ? (
             <Tiles rows={round1.filter((row) => !notAskedAfterMatch(row))} numbered={round1} label="Nguồn vòng 1 theo thứ tự ưu tiên">
               {skippedAfterMatch.length ? (
