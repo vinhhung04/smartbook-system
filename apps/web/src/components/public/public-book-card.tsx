@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { Bell, BellRing, Star } from 'lucide-react';
+import { Bell, BellRing, CalendarPlus, Star } from 'lucide-react';
 import type { PublicBook } from '@/services/public-catalog';
 import { cn } from '@/components/ui/utils';
 import { Book3D } from './book-3d';
@@ -46,12 +46,14 @@ export function PublicBookCard({ book, onReserve, alerts, className }: PublicBoo
 
         {onReserve && book.reservable ? (
           <div className="mt-auto pt-3">
+            {/* A compact tinted pill rather than a full-width outline: a grid of cards stays calm. */}
             <button
               type="button"
               onClick={() => onReserve(book)}
               data-testid="reserve-book-button"
-              className="h-9 w-full rounded-full border border-indigo-600/70 px-3 text-[12.5px] font-semibold text-indigo-700 transition-colors hover:border-indigo-600 hover:bg-indigo-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:border-indigo-400/60 dark:text-indigo-300 dark:hover:bg-indigo-500 dark:hover:text-white"
+              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-indigo-50 px-3 text-[12.5px] font-semibold text-indigo-700 transition-colors hover:bg-indigo-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 dark:bg-indigo-500/15 dark:text-indigo-300 dark:hover:bg-indigo-500 dark:hover:text-white"
             >
+              <CalendarPlus className="h-3.5 w-3.5" aria-hidden="true" />
               Đặt trước
             </button>
           </div>
@@ -64,10 +66,10 @@ export function PublicBookCard({ book, onReserve, alerts, className }: PublicBoo
               aria-pressed={alerts.isOn(book.id)}
               aria-label={`${alerts.isOn(book.id) ? 'Tắt thông báo' : 'Báo khi có sách'}: ${book.title}`}
               className={cn(
-                'inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 disabled:opacity-60',
+                'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-2 disabled:opacity-60',
                 alerts.isOn(book.id)
                   ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
-                  : 'border border-border text-foreground/80 hover:border-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-300',
+                  : 'bg-muted text-foreground/80 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300',
               )}
             >
               {alerts.isOn(book.id) ? <BellRing className="h-3.5 w-3.5" aria-hidden="true" /> : <Bell className="h-3.5 w-3.5" aria-hidden="true" />}
