@@ -18,7 +18,7 @@ for f in scripts/seed-catalog-enrichment.mjs scripts/close-removed-title-loans.m
   [[ -e "$f" ]] || die "$f missing (it ships with the deploy bundle)"
 done
 
-"$APP_DIR/deploy/scripts/backup.sh" --label "preseed" --db-only
+"$APP_DIR/deploy/scripts/backup.sh" --label "preseed" --quiesce
 
 # The two .mjs helpers drive `docker compose exec db psql` and need Node >= 20.11; run them
 # in a throwaway docker-cli container pointed at this project instead of installing Node.
