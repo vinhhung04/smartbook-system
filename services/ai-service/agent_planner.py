@@ -18,6 +18,7 @@ from agent_actions import (
     RISK_MEDIUM,
 )
 from agent_schemas import UserContext
+from copilot_plan import resolve_warehouses
 from intent import (
     BOOK_SEARCH_QUERY,
     BORROW_TREND_QUERY,
@@ -277,6 +278,131 @@ def _detect_warehouse_hint(normalized_msg: str) -> str | None:
     return None
 
 
+# ── The ONE book a purchase-request draft was asked for ─────────────────────────
+# "sách X ở kho Y" (normalized, any case); a quoted title; "sách X" written with
+# a capital (original text). A phrase after "sách" that describes WHICH books
+# ("sách đang thiếu", "sách bị hết hàng") is not a title.
+_TITLE_BEFORE_PLACE = re.compile(
+    r"\b(?:sach|cuon|quyen|dau sach)\s+(?:cho\s+(?:sach|cuon|quyen|dau sach)\s+)?(.+?)\s+(?:o|tai|cho|vao)\s+(?:kho|chi nhanh)\b")
+_QUOTED_TITLE = re.compile(r"[\"“‘']([^\"”’']{2,80})[\"”’']")
+_CAPITALISED_TITLE = re.compile(
+    r"(?i:sách|sach|cuốn|cuon|quyển|quyen)\s+(?:(?i:cho)\s+(?i:sách|sach|cuốn|cuon|quyển|quyen)\s+)?"
+    r"(\w[^?,.;!\"“”]{1,80}?)\s*(?:\s(?i:ở|tại|cho|vào|o|tai|vao)\s|[?,.;!]|$)")
+_NOT_A_TITLE_START = {
+    "nay", "do", "moi", "cac", "nhung", "dang", "bi", "nao", "ton", "het", "sap", "thieu", "can", "duoi", "con",
+    "it", "nhieu", "ban", "tat", "ca", "khac", "theo", "tu", "voi", "ve", "duoc", "uu", "hot", "trong", "da",
+}
+
+
+def _core_title(title: str) -> str:
+    """Normalized title without the edition note: "Nhà Giả Kim (Tái Bản 2025)" -> "nha gia kim"."""
+    text = re.sub(r"\(.*?\)", " ", normalize_text(title or "")).split(" - ")[0]
+    return re.sub(r"\s+", " ", text).strip(" \"'")
+
+
+def _named_title(message: str, intent_info: dict) -> str | None:
+    """The book title as the user wrote it (accents kept when typed), or None."""
+    named = ((intent_info or {}).get("entities") or {}).get("book_title")
+    if not named:
+        quoted = _QUOTED_TITLE.search(message or "")
+        before_place = _TITLE_BEFORE_PLACE.search(normalize_text(message or ""))
+        capital = _CAPITALISED_TITLE.search(message or "")
+        named = (quoted.group(1) if quoted else
+                 capital.group(1) if capital and capital.group(1)[0].isupper() else
+                 before_place.group(1) if before_place else None)
+    core = _core_title(named) if named else ""
+    if len(core) < 3 or core.split()[0] in _NOT_A_TITLE_START:
+        return None
+    return named.strip()
+
+
+def _requested_title(message: str, intent_info: dict) -> str | None:
+    """The book the user named (core title, normalized), or None."""
+    named = _named_title(message, intent_info)
+    return _core_title(named) if named else None
+
+
+def _title_matches(requested: str, title) -> bool:
+    core = _core_title(str(title or ""))
+    return bool(core) and (core == requested or requested in core.split(" - ")[0] or core in requested)
+
+
+async def _public_title(requested: str) -> str | None:
+    """The catalog's own spelling of a title typed without accents ("truyen kieu" ->
+    "Truyện Kiều"): /api/books search is accent-sensitive, the public catalog's is not."""
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
+            resp = await client.get(f"{_GATEWAY_URL}/public/catalog/books", params={"search": requested, "pageSize": 10})
+        rows = (resp.json() or {}).get("data") if resp.status_code < 400 else []
+    except Exception as exc:  # noqa: BLE001 - best effort, as _catalog_search
+        _planner_logger.warning("public catalog lookup failed: %s", type(exc).__name__)
+        return None
+    titles = [r.get("title") for r in rows or [] if isinstance(r, dict) and _title_matches(requested, r.get("title"))]
+    return min(titles, key=lambda t: _core_title(t) != requested, default=None)
+
+
+async def _catalog_line(requested: str, named: str, auth_header: str | None, warehouse: dict | None) -> dict | None:
+    """One draft line for the named book (exact title first), at the resolved
+    warehouse with its stock there; None when the catalog does not have it."""
+    rows = await _catalog_search(named, auth_header)
+    if not any(_title_matches(requested, r.get("title")) for r in rows):
+        canonical = await _public_title(requested)
+        rows = await _catalog_search(canonical, auth_header) if canonical else []
+    rows = [r for r in rows if r.get("variant_id") and _title_matches(requested, r.get("title"))]
+    if not rows:
+        return None
+    row = min(rows, key=lambda r: _core_title(r.get("title")) != requested)
+    wid = (warehouse or {}).get("id")
+    # /api/books lists only some locations: a warehouse missing there is unknown stock
+    # (the card shows "—"), not 0 - which would read as "hết hàng".
+    here = [loc for loc in row.get("locations") or [] if isinstance(loc, dict) and wid and loc.get("warehouse_id") == wid]
+    stock = sum(_int_safe(loc.get("available_quantity")) for loc in here) if here else None
+    return {
+        "book_id": row.get("id"), "book_variant_id": row["variant_id"], "title": row.get("title") or named,
+        "isbn": row.get("isbn"), "current_stock": stock, "suggested_quantity": 1, "priority": "LOW",
+        "reason": "USER_REQUEST", "warehouse_id": wid,
+        "warehouse_name": (warehouse or {}).get("name"), "warehouse_code": (warehouse or {}).get("code"),
+    }
+
+
+def draft_note(planned: dict | None) -> str | None:
+    """The sentence a reply ends with when a ONE-book purchase-request draft was
+    prepared: which book, which warehouse, how many copies and why. The reply is
+    written before the draft exists, so without it the text said "không thể tạo"
+    above a draft card. None for any other draft (the card lists its lines)."""
+    if not planned or planned.get("type") != CREATE_REORDER_DRAFT:
+        return None
+    items = (planned.get("payload") or {}).get("items") or []
+    if len(items) != 1:
+        return None
+    item = items[0]
+    qty = _int_safe(item.get("suggested_quantity"), 1)
+    why = ("số lượng mặc định - hệ thống hiện không gợi ý nhập đầu sách này" if item.get("reason") == "USER_REQUEST"
+           else "theo gợi ý của hệ thống")
+    where = item.get("warehouse_name") or "kho bạn sẽ chọn"
+    return (f"Theo yêu cầu, tôi đã chuẩn bị bản nháp đề xuất nhập **{item.get('title')}** cho {where}: "
+            f"{qty} bản {why}. Bản nháp chưa thành phiếu nhập: hãy kiểm tra, điều chỉnh số lượng rồi xác nhận "
+            "trong thẻ bên dưới, hoặc từ chối nếu không cần.")
+
+
+async def _catalog_search(title: str, auth_header: str | None) -> list[dict]:
+    """GET /api/books?search= with the caller's own token; [] on any failure."""
+    if not title or not auth_header:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
+            resp = await client.get(f"{_GATEWAY_URL}/api/books", params={"search": title},
+                                    headers={"Authorization": auth_header})
+        if resp.status_code >= 400:
+            return []
+        payload = resp.json()
+    except Exception as exc:  # noqa: BLE001 - lookup is best effort; the draft says what is missing
+        _planner_logger.warning("catalog lookup failed: %s", type(exc).__name__)
+        return []
+    rows = payload.get("data") if isinstance(payload, dict) else payload
+    return [r for r in rows or [] if isinstance(r, dict)]
+
+
 def _filter_items_by_warehouse_hint(
     items: list[dict],
     hint: str | None,
@@ -346,6 +472,14 @@ async def _build_reorder_draft(
     low_stock = raw.get("low_stock_books") or []
     if not isinstance(low_stock, list):
         low_stock = []
+
+    # A named book: draft that book only - never the top of the suggestion list instead.
+    requested = _requested_title(message, intent_info)
+    if requested:
+        low_stock_by_wh = [r for r in low_stock_by_wh if isinstance(r, dict) and _title_matches(requested, r.get("title"))]
+        items_raw = [r for r in items_raw if isinstance(r, dict)
+                     and _title_matches(requested, _get_item_field(r, "title", "book_title"))]
+        low_stock = [b for b in low_stock if isinstance(b, dict) and _title_matches(requested, b.get("title"))]
 
     items = []
 
@@ -422,7 +556,7 @@ async def _build_reorder_draft(
                 "warehouse_id": None,
             })
 
-    if not items:
+    if not items and not requested:
         return None
 
     # ── Warehouse resolution via DB API ──────────────────────────────────────────
@@ -442,7 +576,16 @@ async def _build_reorder_draft(
 
         if warehouse_hint:
             db_warehouses = await _fetch_active_warehouses(auth_header)
-            resolution = _resolve_warehouse_hint_against_db(warehouse_hint, db_warehouses)
+            # A full warehouse name in the message ("kho Chi Nhanh District 1", "kho Ha Noi")
+            # first - the hint keeps at most 3 words and drops "kho", so it lost the "1" /
+            # matched every Hà Nội branch. The copilot planner's resolver reads whole names.
+            named = resolve_warehouses(normalized_msg, db_warehouses)["warehouses"]
+            named_wh = next((w for w in db_warehouses if len(named) == 1 and w.get("id") == named[0].get("id")), None)
+            if named_wh:
+                warehouse_hint = named_wh.get("name") or warehouse_hint
+                resolution = {"status": "RESOLVED", "warehouse": named_wh, "candidates": []}
+            else:
+                resolution = _resolve_warehouse_hint_against_db(warehouse_hint, db_warehouses)
             warehouse_resolution_status = resolution["status"]
             resolved_warehouse = resolution.get("warehouse")
             warehouse_candidates = resolution.get("candidates") or []
@@ -466,6 +609,17 @@ async def _build_reorder_draft(
                     ]
             # AMBIGUOUS / NOT_FOUND: keep items as-is; executor will block creation
 
+    action_warnings = list(warnings or [])
+    if requested and not items:
+        # The named book is not among the system's suggestions (for that warehouse): the
+        # user still asked for it - one catalog line, quantity left to them.
+        line = await _catalog_line(requested, _named_title(message, intent_info), auth_header, resolved_warehouse)
+        if line is None:
+            return None
+        items = [line]
+        action_warnings.append(f"Đầu sách {line['title']} không nằm trong danh sách gợi ý nhập hiện tại của hệ thống; "
+                               "số lượng 1 là mặc định - hãy điều chỉnh trước khi xác nhận.")
+
     # If warehouse was resolved but no items belong to that warehouse → nothing to create
     if warehouse_resolution_status == "RESOLVED" and not items:
         rw_code = resolved_warehouse.get("code", "") if resolved_warehouse else warehouse_hint or "?"
@@ -476,7 +630,6 @@ async def _build_reorder_draft(
         )
         return None
 
-    action_warnings = list(warnings or [])
     payload_warnings = []
 
     items_with_variant = [it for it in items if it.get("book_variant_id")]
@@ -484,7 +637,8 @@ async def _build_reorder_draft(
     items_missing_warehouse = [it for it in items if not it.get("warehouse_id")]
     items_missing_variant = [it for it in items if not it.get("book_variant_id")]
 
-    requires_review = bool(items_missing_warehouse) or warehouse_resolution_status in ("AMBIGUOUS", "NOT_FOUND")
+    requires_review = bool(items_missing_warehouse) or warehouse_resolution_status in ("AMBIGUOUS", "NOT_FOUND") \
+        or any(it.get("reason") == "USER_REQUEST" for it in items)
 
     if warehouse_resolution_status == "RESOLVED":
         payload_warnings.append(
@@ -629,21 +783,13 @@ async def _lookup_reservable_books(title: str, auth_header: str | None) -> list[
     holding the most available copies; None when no branch has one - inventory
     refuses a reader's reservation at any other warehouse."""
     wanted = normalize_text(title)
-    if not wanted or not auth_header:
+    if not wanted:
         return []
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0)) as client:
-            resp = await client.get(f"{_GATEWAY_URL}/api/books", params={"search": title},
-                                    headers={"Authorization": auth_header})
-        if resp.status_code >= 400:
-            return []
-        payload = resp.json()
-    except Exception as exc:  # noqa: BLE001 - lookup is best effort; the draft says what is missing
-        logger.warning("reservation draft: catalog lookup failed: %s", type(exc).__name__)
-        return []
-    rows = payload.get("data") if isinstance(payload, dict) else payload
-    rows = [r for r in rows or [] if isinstance(r, dict) and r.get("variant_id") and r.get("reservable", True) is not False
+    rows = [r for r in await _catalog_search(title, auth_header)
+            if r.get("variant_id") and r.get("reservable", True) is not False
             and wanted in normalize_text(str(r.get("title") or ""))]
+    if not rows:
+        return []
     branch_ids = await _pickup_branch_ids()
     for row in rows:
         stocked = [loc for loc in row.get("locations") or []

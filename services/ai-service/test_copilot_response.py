@@ -55,6 +55,12 @@ class RenderTests(unittest.TestCase):
         self.assertIn("-92,2%", text)
         self.assertIn("5,54", text)
 
+    def test_write_request_tells_the_model_the_draft_is_the_systems(self):
+        # 2026-11-20: "Không thể tạo đề xuất nhập..." was written above the draft card
+        note = cr.plan_note(plan("Tạo đề xuất nhập sách Norwegian Wood ở kho Kho Ha Noi"), NOW)
+        self.assertIn("Không viết \"đã tạo\" hay \"không thể tạo\"", note)
+        self.assertNotIn("Không viết \"đã tạo\"", cr.plan_note(plan("Nên nhập sách nào cho Kho Ha Noi?"), NOW))
+
     def test_stock_risk_is_rendered_with_its_all_warehouse_totals(self):
         rows = [{"warehouse_name": "Kho A", "out_of_stock_variants": 1, "low_stock_variants": 77, "total_available_qty": 248},
                 {"warehouse_name": "Kho B", "out_of_stock_variants": 0, "low_stock_variants": 224, "total_available_qty": 40}]

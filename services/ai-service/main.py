@@ -58,7 +58,8 @@ import recommendation
 import recommendation_v2
 import recommendation_v2_service
 from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
-from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
+from agent_planner import (plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS,
+                           _requested_title, draft_note)
 from socket_emitter import push_ai_action_event
 from agent_store import (
     create_pending_action,
@@ -3871,7 +3872,9 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
     if personal.get("summary"):
         persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
     system_content = (CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
-                      + image_prompt_block(image_ctx))
+                      + image_prompt_block(image_ctx)
+                      + (DRAFT_BY_SYSTEM_RULE if user_ctx and is_action_request
+                         and intent_info.get("intent") == REORDER_SUGGESTION_QUERY else ""))
     messages = [{"role": "system", "content": system_content}]
     for msg in req.conversation_history[-10:]:
         messages.append({"role": msg.role, "content": msg.content})
@@ -3933,6 +3936,14 @@ def _chat_cached_payload(turn: dict) -> dict:
             "explainability": _chat_explainability(turn, turn["cached_reply"])}
 
 
+# The purchase-request draft is built by the system AFTER the reply is written: the
+# model must neither promise nor refuse it ("không thể tạo phiếu" above a draft card).
+DRAFT_BY_SYSTEM_RULE = (
+    "\n## Yêu cầu tạo đề xuất nhập\n- Bản nháp đề xuất nhập (nếu tạo được) do hệ thống chuẩn bị sau câu trả lời này, "
+    "cho đúng đầu sách và kho người dùng nêu, và chờ người dùng xác nhận. Không viết \"đã tạo\" hay \"không thể tạo\" "
+    "phiếu; chỉ nêu ngắn gọn dữ liệu hiện có về tồn kho và gợi ý nhập của đầu sách đó.\n")
+
+
 async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dict | None]:
     """Try to plan an agent action and append a confirmation hint to the reply."""
     user_ctx = turn["user_ctx"]
@@ -3965,7 +3976,8 @@ async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dic
                     user_context=user_ctx,
                 )
                 pending_action_data = action.model_dump()
-                reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+                reply_text += "\n\n" + (draft_note(planned) or "Tôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm "
+                                                           "tra thẻ hành động bên dưới trước khi bấm Xác nhận.")
                 asyncio.ensure_future(push_ai_action_event(
                     "ai_action:created",
                     action.id,
@@ -4348,7 +4360,11 @@ async def _build_assistant_pending_action(
 
     reorder_data = collected_data.get("get_reorder_suggestions")
     if not reorder_data or (isinstance(reorder_data, dict) and reorder_data.get("error")):
-        return None
+        if not _requested_title(message, {}):
+            return None
+        # A named book is drafted from the catalog even when the model fetched no
+        # suggestions - which tools it chose must not decide whether the draft exists.
+        reorder_data = {}
 
     try:
         planned = await _build_reorder_draft(
@@ -4940,6 +4956,9 @@ async def _finalize_assistant_turn(
         pending_action_data = await _build_assistant_pending_action(
             message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
         )
+        note = draft_note(pending_action_data)
+        if note:  # the reply was written before the draft existed (see agent_planner.draft_note)
+            answer = f"{answer.rstrip()}\n\n{note}"
 
     extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, now=viz_now, question=message_text,
                                            answer=answer, explanation=explanation, visualizations=visualizations)

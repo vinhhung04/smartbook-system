@@ -256,6 +256,10 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
                      + ". Ý nào không có dữ liệu thì nói rõ là chưa trả lời được, không suy đoán.")
     if plan.required_tools:
         lines.append("- Dữ liệu cần thiết đã được truy xuất sẵn ở các kết quả tool bên dưới; chỉ gọi thêm tool nếu thật sự thiếu.")
+    if (plan.style or {}).get("write_request") and not (plan.style or {}).get("draft_request"):
+        lines.append("- Người dùng yêu cầu tạo đề xuất nhập. Bản nháp (nếu tạo được) do hệ thống chuẩn bị sau câu trả lời này, "
+                     "cho đúng đầu sách và kho được nêu, và chờ người dùng xác nhận. Không viết \"đã tạo\" hay \"không thể "
+                     "tạo\" phiếu; nêu ngắn gọn dữ liệu cho thấy đầu sách đó có đang cần nhập hay không.")
     return "\n".join(lines)
 
 

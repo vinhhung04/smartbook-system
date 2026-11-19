@@ -1343,6 +1343,8 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         # user must confirm. Seeding here would bypass nothing, but it would
         # change what data the action builder sees.
         tools = []
+        if REORDER in caps:
+            style = {**style, "write_request": True}  # the draft is the system's, after the answer (plan_note)
         if REORDER in caps and budgets:
             # Phase 6: "Lập phiếu đề xuất nhập nháp với ngân sách X" (the decision
             # card's button) must rest on the same budget allocation the decision
