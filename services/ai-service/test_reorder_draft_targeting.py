@@ -111,6 +111,16 @@ def test_requested_title_extraction():
         "Tạo phiếu nhập sách đang thiếu ở kho Hà Nội": None,
         "Tạo đề xuất nhập sách bị hết hàng tại kho HCM": None,
         "tạo đề xuất nhập sách ưu tiên cao": None,
+        # the title right after "đề xuất / phiếu nhập", no "sách" before it (2026-11-20, prod)
+        "Tạo phiếu đề xuất nhập Dune - Xứ Cát cho kho HCM": "dune",
+        "Tạo phiếu đề xuất nhập 10 bản Dune - Xứ Cát cho kho HCM": "dune",
+        "Tạo phiếu nhập The Hobbit 5 cuốn kho HCM": "the hobbit",
+        "Tạo đề xuất nhập thêm Animal Farm cho kho Đà Nẵng": "animal farm",
+        "Tạo phiếu đề xuất nhập cho kho HCM": None,
+        "Tạo phiếu đề xuất nhập hàng cho kho HCM": None,
+        "Tạo đề xuất nhập 20 cuốn cho kho HCM": None,
+        "Tạo đề xuất nhập bổ sung cho kho HCM": None,
+        "Hãy tạo bản nháp yêu cầu điều chuyển và mua mới cho những hành động tôi đủ quyền thực hiện.": None,
     }
     for message, expected in cases.items():
         assert ap._requested_title(message, {}) == expected, message
@@ -137,3 +147,10 @@ def test_assistant_drafts_a_named_book_even_when_no_suggestions_were_fetched():
         build.reset_mock()
         asyncio.run(main._build_assistant_pending_action("Tạo đề xuất nhập sách cho kho Kho Ha Noi", {}, None, "Bearer t"))
         build.assert_not_awaited()  # no book named and no suggestions: nothing to draft from
+
+
+def test_book_named_without_the_word_sach_is_the_only_line():
+    planned = draft("Tạo phiếu đề xuất nhập 10 bản Norwegian Wood cho kho Kho Ha Noi")
+    assert titles(planned) == ["Norwegian Wood"]
+    item = planned["payload"]["items"][0]
+    assert (item["warehouse_id"], item["suggested_quantity"]) == ("w-hn", 10)
