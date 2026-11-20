@@ -1,0 +1,139 @@
+{
+  "description": "Semantic test set for AI inventory rebalancing (Phase 3). Each case is planned by copilot_plan.build_plan after its context turns (each context turn planned and its state carried with a stub tool result). R = analyze_inventory_rebalancing. tools_any: the business is right when the plan calls one of these tools; a diagnosis or shortage question may legitimately use the per-warehouse stock tools that already existed.",
+  "warehouses": [
+    {"id": "11111111-1111-4111-8111-111111111111", "name": "Kho HCM Chinh", "code": "WH-HCM-01"},
+    {"id": "22222222-2222-4222-8222-222222222222", "name": "Kho Ha Noi", "code": "WH-HN-01"},
+    {"id": "33333333-3333-4333-8333-333333333333", "name": "Kho Da Nang", "code": "WH-DN-01"}
+  ],
+  "contexts": {
+    "diag": ["Phân tích tồn kho các kho giúp tôi."],
+    "transfer": ["Phân tích tồn kho các kho giúp tôi.", "Tìm nguồn hàng để bổ sung cho kho TP.HCM."],
+    "budget15": ["Phân tích tồn kho các kho giúp tôi.", "Tìm nguồn hàng để bổ sung cho kho TP.HCM.", "Tối ưu phương án với ngân sách mua 15 triệu."],
+    "whatif12": ["Phân tích tồn kho các kho giúp tôi.", "Tìm nguồn hàng để bổ sung cho kho TP.HCM.", "Tối ưu phương án với ngân sách mua 15 triệu.", "Nếu ngân sách giảm 20% thì sao?"]
+  },
+  "cases": [
+    {"id": "diag-1", "intent": "INVENTORY_DIAGNOSIS", "kind": "standard", "q": "Phân tích tồn kho và nhu cầu của các kho giúp tôi.", "expect": {"tools_any": ["R"], "focus": "INVENTORY_DIAGNOSIS"}},
+    {"id": "diag-2", "intent": "INVENTORY_DIAGNOSIS", "kind": "natural", "q": "Tình hình nguồn sách hiện tại thế nào?", "expect": {"tools_any": ["R"], "focus": "INVENTORY_DIAGNOSIS"}},
+    {"id": "diag-3", "intent": "INVENTORY_DIAGNOSIS", "kind": "synonym", "q": "Kiểm tra tình trạng hàng hóa toàn hệ thống.", "expect": {"tools_any": ["R"]}},
+    {"id": "diag-4", "intent": "INVENTORY_DIAGNOSIS", "kind": "short", "q": "Tồn kho các kho sao rồi?", "expect": {"tools_any": ["R", "get_warehouse_stock_risk"]}},
+    {"id": "diag-5", "intent": "INVENTORY_DIAGNOSIS", "kind": "typo", "q": "phan tich ton kho va nhu cau tung kho giup minh", "expect": {"tools_any": ["R"]}},
+    {"id": "diag-6", "intent": "INVENTORY_DIAGNOSIS", "kind": "natural", "q": "Xem giúp tôi kho nào cần bổ sung hàng.", "expect": {"tools_any": ["R"]}},
+
+    {"id": "short-1", "intent": "SHORTAGE_DETECTION", "kind": "standard", "q": "Hiện tại kho nào đang thiếu sách?", "expect": {"tools_any": ["R", "get_warehouse_stock_risk"]}},
+    {"id": "short-2", "intent": "SHORTAGE_DETECTION", "kind": "natural", "q": "Kho TP.HCM đang thiếu những sách nào?", "expect": {"tools_any": ["R", "get_warehouse_low_stock_items"]}},
+    {"id": "short-3", "intent": "SHORTAGE_DETECTION", "kind": "multi", "q": "Kho nào thiếu, kho nào dư sách?", "expect": {"tools_any": ["R"], "focus": "SHORTAGE_DETECTION"}},
+    {"id": "short-4", "intent": "SHORTAGE_DETECTION", "kind": "typo", "q": "thieu sach o kho hcm ko", "expect": {"tools_any": ["R", "get_warehouse_low_stock_items"]}},
+    {"id": "short-5", "intent": "SHORTAGE_DETECTION", "kind": "context", "context": "diag", "q": "Tìm sách thiếu tại TP.HCM.", "expect": {"tools_any": ["R"], "focus": "SHORTAGE_DETECTION", "destination": "Kho HCM Chinh"}},
+
+    {"id": "surplus-1", "intent": "SURPLUS_DETECTION", "kind": "standard", "q": "Có kho nào đang tồn quá nhiều sách không?", "expect": {"tools_any": ["R"], "focus": "SURPLUS_DETECTION"}},
+    {"id": "surplus-2", "intent": "SURPLUS_DETECTION", "kind": "short", "q": "Kho nào đang dư sách?", "expect": {"tools_any": ["R"], "focus": "SURPLUS_DETECTION"}},
+    {"id": "surplus-3", "intent": "SURPLUS_DETECTION", "kind": "synonym", "q": "Sách nào đang dư thừa ở các kho?", "expect": {"tools_any": ["R"], "focus": "SURPLUS_DETECTION"}},
+    {"id": "surplus-4", "intent": "SURPLUS_DETECTION", "kind": "typo", "q": "kho nao du thua sach", "expect": {"tools_any": ["R"], "focus": "SURPLUS_DETECTION"}},
+    {"id": "surplus-5", "intent": "SURPLUS_DETECTION", "kind": "natural", "q": "Kho Hà Nội có thừa sách gì không?", "expect": {"tools_any": ["R"], "focus": "SURPLUS_DETECTION"}},
+
+    {"id": "demand-1", "intent": "DEMAND_ANALYSIS", "kind": "standard", "q": "Phân tích nhu cầu của từng kho.", "expect": {"tools_any": ["R"], "focus": "DEMAND_ANALYSIS"}},
+    {"id": "demand-2", "intent": "DEMAND_ANALYSIS", "kind": "natural", "q": "Nhu cầu dự kiến ở kho Đà Nẵng thế nào?", "expect": {"tools_any": ["R"], "focus": "DEMAND_ANALYSIS"}},
+    {"id": "demand-3", "intent": "DEMAND_ANALYSIS", "kind": "synonym", "q": "Dự báo nhu cầu các kho trong thời gian tới.", "expect": {"tools_any": ["R"], "focus": "DEMAND_ANALYSIS"}},
+    {"id": "demand-4", "intent": "DEMAND_ANALYSIS", "kind": "typo", "q": "nhu cau tung kho the nao", "expect": {"tools_any": ["R"], "focus": "DEMAND_ANALYSIS"}},
+    {"id": "demand-5", "intent": "DEMAND_ANALYSIS", "kind": "context", "context": "diag", "q": "Còn nhu cầu thì sao?", "expect": {"tools_any": ["R"], "focus": "DEMAND_ANALYSIS"}},
+
+    {"id": "transfer-1", "intent": "TRANSFER_OPPORTUNITY", "kind": "standard", "q": "Tìm sách có thể chuyển về TP.HCM.", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY", "destination": "Kho HCM Chinh"}},
+    {"id": "transfer-2", "intent": "TRANSFER_OPPORTUNITY", "kind": "natural", "q": "Kho nào dư sách để hỗ trợ TP.HCM?", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY", "destination": "Kho HCM Chinh"}},
+    {"id": "transfer-3", "intent": "TRANSFER_OPPORTUNITY", "kind": "context", "context": "diag", "q": "Có thể lấy sách từ kho khác bù cho kho TP.HCM không?", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY", "destination": "Kho HCM Chinh"}},
+    {"id": "transfer-4", "intent": "TRANSFER_OPPORTUNITY", "kind": "synonym", "q": "Tận dụng hàng tồn ở các kho để giảm tiền nhập mới.", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY"}},
+    {"id": "transfer-5", "intent": "TRANSFER_OPPORTUNITY", "kind": "synonym", "q": "Tìm nguồn hàng nội bộ thay vì đặt mua.", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY"}},
+    {"id": "transfer-6", "intent": "TRANSFER_OPPORTUNITY", "kind": "typo", "q": "tim sach co the chuyn ve tp hcm", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY", "destination": "Kho HCM Chinh"}},
+    {"id": "transfer-7", "intent": "TRANSFER_OPPORTUNITY", "kind": "natural", "q": "Tìm phương án điều phối sách giữa các kho.", "expect": {"tools_any": ["R"], "focus": "TRANSFER_OPPORTUNITY"}},
+
+    {"id": "qty-1", "intent": "TRANSFER_QUANTITY", "kind": "standard", "q": "Tính số lượng điều chuyển an toàn cho kho TP.HCM.", "expect": {"tools_any": ["R"], "focus": "TRANSFER_QUANTITY", "destination": "Kho HCM Chinh"}},
+    {"id": "qty-2", "intent": "TRANSFER_QUANTITY", "kind": "natural", "q": "Nên chuyển bao nhiêu cuốn về kho HCM cho an toàn?", "expect": {"tools_any": ["R"], "focus": "TRANSFER_QUANTITY", "destination": "Kho HCM Chinh"}},
+    {"id": "qty-3", "intent": "TRANSFER_QUANTITY", "kind": "synonym", "q": "Mỗi kho nguồn chuyển được tối đa bao nhiêu mà không bị thiếu?", "expect": {"tools_any": ["R"], "focus": "TRANSFER_QUANTITY"}},
+    {"id": "qty-4", "intent": "TRANSFER_QUANTITY", "kind": "typo", "q": "sl dieu chuyen an toan ve kho hcm", "expect": {"tools_any": ["R"], "focus": "TRANSFER_QUANTITY", "destination": "Kho HCM Chinh"}},
+    {"id": "qty-5", "intent": "TRANSFER_QUANTITY", "kind": "context", "context": "transfer", "q": "Vậy chuyển bao nhiêu là an toàn?", "expect": {"tools_any": ["R"], "focus": "TRANSFER_QUANTITY", "destination": "Kho HCM Chinh"}},
+
+    {"id": "proc-1", "intent": "PROCUREMENT_OPTIMIZATION", "kind": "context", "context": "transfer", "q": "Nếu không đủ thì mua thêm bao nhiêu?", "expect": {"tools_any": ["R"], "focus": "PROCUREMENT_OPTIMIZATION", "destination": "Kho HCM Chinh"}},
+    {"id": "proc-2", "intent": "PROCUREMENT_OPTIMIZATION", "kind": "standard", "q": "Sau khi điều chuyển, cần mua thêm bao nhiêu sách cho kho HCM?", "expect": {"tools_any": ["R"], "focus": "PROCUREMENT_OPTIMIZATION", "destination": "Kho HCM Chinh"}},
+    {"id": "proc-3", "intent": "PROCUREMENT_OPTIMIZATION", "kind": "short", "q": "Phần còn thiếu thì phải nhập bao nhiêu?", "expect": {"tools_any": ["R"], "focus": "PROCUREMENT_OPTIMIZATION"}},
+    {"id": "proc-4", "intent": "PROCUREMENT_OPTIMIZATION", "kind": "multi", "q": "TP.HCM đang thiếu sách, xem thử kho nào có thể hỗ trợ và nếu không đủ thì cần mua thêm bao nhiêu.", "expect": {"tools_any": ["R"], "focus": "PROCUREMENT_OPTIMIZATION"}},
+    {"id": "proc-5", "intent": "PROCUREMENT_OPTIMIZATION", "kind": "synonym", "q": "Mua bổ sung bao nhiêu sau khi tận dụng tồn các kho?", "expect": {"tools_any": ["R"]}},
+
+    {"id": "hybrid-1", "intent": "HYBRID_DECISION", "kind": "short", "q": "Nên chuyển hàng hay nhập thêm?", "expect": {"tools_any": ["R"], "focus": "HYBRID_DECISION"}},
+    {"id": "hybrid-2", "intent": "HYBRID_DECISION", "kind": "natural", "q": "Có cách nào kết hợp hàng tồn và mua mới không?", "expect": {"tools_any": ["R"], "focus": "HYBRID_DECISION"}},
+    {"id": "hybrid-3", "intent": "HYBRID_DECISION", "kind": "synonym", "q": "Tận dụng nguồn hàng hiện có rồi mua phần còn thiếu.", "expect": {"tools_any": ["R"], "focus": "HYBRID_DECISION"}},
+    {"id": "hybrid-4", "intent": "HYBRID_DECISION", "kind": "standard", "q": "So sánh điều chuyển với đặt hàng nhà cung cấp.", "expect": {"tools_any": ["R"], "focus": "DECISION_COMPARISON"}},
+    {"id": "hybrid-5", "intent": "HYBRID_DECISION", "kind": "typo", "q": "nen chuyn hang hay nhap them", "expect": {"tools_any": ["R"], "focus": "HYBRID_DECISION"}},
+
+    {"id": "budget-1", "intent": "BUDGET_OPTIMIZATION", "kind": "context", "context": "transfer", "q": "Tôi có 15 triệu, hãy phân bổ hợp lý.", "expect": {"tools_any": ["R"], "focus": "BUDGET_OPTIMIZATION", "budget_vnd": 15000000, "destination": "Kho HCM Chinh"}},
+    {"id": "budget-2", "intent": "BUDGET_OPTIMIZATION", "kind": "standard", "q": "Với 15 triệu thì nên nhập những sách nào?", "expect": {"tools_any": ["simulate_reorder_budget", "R"]}},
+    {"id": "budget-3", "intent": "BUDGET_OPTIMIZATION", "kind": "context", "context": "transfer", "q": "Tối ưu chi phí mua sách trong giới hạn 10 triệu.", "expect": {"tools_any": ["R"], "focus": "BUDGET_OPTIMIZATION", "budget_vnd": 10000000}},
+    {"id": "budget-4", "intent": "BUDGET_OPTIMIZATION", "kind": "context", "context": "budget15", "q": "Nếu chỉ còn 12 triệu thì sao?", "expect": {"tools_any": ["R"], "focus": "WHAT_IF", "budget_vnd": 12000000, "destination": "Kho HCM Chinh"}},
+    {"id": "budget-5", "intent": "BUDGET_OPTIMIZATION", "kind": "typo", "q": "dieu chuyen ve kho hcm voi ngansach 15tr", "expect": {"tools_any": ["R"], "focus": "BUDGET_OPTIMIZATION", "budget_vnd": 15000000}},
+
+    {"id": "whatif-1", "intent": "WHAT_IF", "kind": "context", "context": "budget15", "q": "Nếu ngân sách giảm 20%, mức đáp ứng thay đổi thế nào?", "expect": {"tools_any": ["R"], "focus": "WHAT_IF", "budget_vnd": 12000000}},
+    {"id": "whatif-2", "intent": "WHAT_IF", "kind": "context", "context": "whatif12", "q": "Giảm tiếp 20% nhé.", "expect": {"tools_any": ["R"], "focus": "WHAT_IF", "budget_vnd": 9600000, "destination": "Kho HCM Chinh"}},
+    {"id": "whatif-3", "intent": "WHAT_IF", "kind": "context", "context": "budget15", "q": "Tăng ngân sách thêm 30% thì sao?", "expect": {"tools_any": ["R"], "focus": "WHAT_IF", "budget_vnd": 19500000}},
+    {"id": "whatif-4", "intent": "WHAT_IF", "kind": "context", "context": "budget15", "q": "Giữ nguyên mọi thứ, chỉ tăng ngân sách lên 20 triệu.", "expect": {"tools_any": ["R"], "budget_vnd": 20000000, "destination": "Kho HCM Chinh"}},
+    {"id": "whatif-5", "intent": "WHAT_IF", "kind": "context", "context": "budget15", "q": "giam them 5 trieu thi sao", "expect": {"tools_any": ["R"], "focus": "WHAT_IF", "budget_vnd": 10000000}},
+
+    {"id": "cmp-1", "intent": "DECISION_COMPARISON", "kind": "context", "context": "transfer", "q": "So sánh ba phương án: chỉ điều chuyển, chỉ mua mới và kết hợp.", "expect": {"tools_any": ["R"], "focus": "DECISION_COMPARISON"}},
+    {"id": "cmp-2", "intent": "DECISION_COMPARISON", "kind": "context", "context": "whatif12", "q": "Vậy phương án nào tốt hơn?", "expect": {"tools_any": ["R"], "focus": "DECISION_COMPARISON", "budget_vnd": 12000000}},
+    {"id": "cmp-3", "intent": "DECISION_COMPARISON", "kind": "context", "context": "whatif12", "q": "So sánh với phương án lúc nãy.", "expect": {"tools_any": ["R"], "focus": "DECISION_COMPARISON", "budget_vnd": 12000000, "compare_budget_vnd": 15000000}},
+    {"id": "cmp-4", "intent": "DECISION_COMPARISON", "kind": "short", "context": "transfer", "q": "Phương án nào hiệu quả nhất?", "expect": {"tools_any": ["R"], "focus": "DECISION_COMPARISON"}},
+    {"id": "cmp-5", "intent": "DECISION_COMPARISON", "kind": "typo", "context": "transfer", "q": "so sanh 3 phuong an giup toi", "expect": {"tools_any": ["R"], "focus": "DECISION_COMPARISON"}},
+
+    {"id": "why-1", "intent": "DECISION_EXPLANATION", "kind": "context", "context": "transfer", "q": "Tại sao không chọn Hà Nội?", "expect": {"tools_any": ["R"], "focus": "DECISION_EXPLANATION", "destination": "Kho HCM Chinh"}},
+    {"id": "why-2", "intent": "DECISION_EXPLANATION", "kind": "context", "context": "budget15", "q": "Vì sao lại đề xuất mua thay vì chuyển?", "expect": {"tools_any": ["R"], "focus": "DECISION_EXPLANATION"}},
+    {"id": "why-3", "intent": "DECISION_EXPLANATION", "kind": "context", "context": "budget15", "q": "Giải thích căn cứ của phương án này.", "expect": {"tools_any": ["R"], "focus": "DECISION_EXPLANATION", "budget_vnd": 15000000}},
+    {"id": "why-4", "intent": "DECISION_EXPLANATION", "kind": "context", "context": "transfer", "q": "Tôi cần Manager khác phối hợp như thế nào?", "expect": {"tools_any": ["R"], "focus": "DECISION_EXPLANATION"}},
+    {"id": "why-5", "intent": "DECISION_EXPLANATION", "kind": "short", "context": "transfer", "q": "vi sao vay", "expect": {"tools_any": ["R"], "focus": "DECISION_EXPLANATION"}},
+
+    {"id": "draft-1", "intent": "CREATE_DRAFT", "kind": "context", "context": "whatif12", "q": "Tạo bản nháp cho phương án đó.", "expect": {"tools_any": ["R"], "focus": "CREATE_DRAFT", "budget_vnd": 12000000, "style": "rebalance_draft"}},
+    {"id": "draft-2", "intent": "CREATE_DRAFT", "kind": "context", "context": "whatif12", "q": "Tôi đồng ý với phương án 15 triệu ban đầu. Hãy tạo bản nháp yêu cầu điều chuyển và mua mới.", "expect": {"tools_any": ["R"], "focus": "CREATE_DRAFT", "budget_vnd": 15000000, "style": "rebalance_draft"}},
+    {"id": "draft-3", "intent": "CREATE_DRAFT", "kind": "context", "context": "transfer", "q": "Lập phiếu điều chuyển theo phương án vừa chọn.", "expect": {"tools_any": ["R"], "focus": "CREATE_DRAFT", "destination": "Kho HCM Chinh"}},
+    {"id": "draft-4", "intent": "CREATE_DRAFT", "kind": "typo", "context": "budget15", "q": "tao ban nhap giup toi", "expect": {"tools_any": ["R"], "focus": "CREATE_DRAFT", "budget_vnd": 15000000}},
+    {"id": "draft-5", "intent": "CREATE_DRAFT", "kind": "standard", "q": "Soạn yêu cầu điều chuyển sách về kho HCM.", "expect": {"tools_any": ["R"], "focus": "CREATE_DRAFT", "destination": "Kho HCM Chinh"}},
+
+    {"id": "confirm-1", "intent": "CONFIRM_ACTION", "kind": "context", "context": "budget15", "q": "Tôi xác nhận.", "expect": {"no_tools": true, "focus": "CONFIRM_ACTION", "style": "confirm_request"}},
+    {"id": "confirm-2", "intent": "CONFIRM_ACTION", "kind": "standard", "context": "budget15", "q": "Tôi xác nhận. Hãy kiểm tra lại quyền và tồn kho rồi thực hiện các yêu cầu hợp lệ.", "expect": {"no_tools": true, "focus": "CONFIRM_ACTION"}},
+    {"id": "confirm-3", "intent": "CONFIRM_ACTION", "kind": "natural", "context": "budget15", "q": "OK, thực hiện phương án này đi.", "expect": {"no_tools": true, "focus": "CONFIRM_ACTION"}},
+    {"id": "confirm-4", "intent": "CONFIRM_ACTION", "kind": "typo", "context": "budget15", "q": "xac nhan nhe", "expect": {"no_tools": true, "focus": "CONFIRM_ACTION"}},
+    {"id": "confirm-5", "intent": "CONFIRM_ACTION", "kind": "synonym", "context": "budget15", "q": "Tôi đồng ý, thực hiện bản nháp.", "expect": {"no_tools": true, "focus": "CONFIRM_ACTION"}},
+
+    {"id": "clarify-1", "intent": "CLARIFICATION", "kind": "short", "q": "Điều chuyển sách giúp tôi.", "expect": {"clarify": true}},
+    {"id": "clarify-2", "intent": "CLARIFICATION", "kind": "context", "context": "transfer", "q": "Giảm 20% ngân sách thì sao?", "expect": {"clarify": true}},
+    {"id": "clarify-3", "intent": "CLARIFICATION", "kind": "context", "context": "transfer", "q": "Điều chuyển sách giúp tôi.", "expect": {"tools_any": ["R"], "destination": "Kho HCM Chinh"}},
+    {"id": "sep-1", "intent": "APPROVAL_REFUSED", "kind": "context", "context": "budget15", "q": "Phê duyệt luôn giúp tôi.", "expect": {"clarify": true, "no_tools": true}},
+
+    {"id": "neg-1", "intent": "OTHER", "kind": "regression", "q": "Tỷ lệ đặt chỗ chuyển thành mượn là bao nhiêu?", "expect": {"not_rebalance": true}},
+    {"id": "neg-2", "intent": "OTHER", "kind": "regression", "q": "Đề xuất thanh lý sách cũ.", "expect": {"not_rebalance": true, "tools_any": ["get_weeding_suggestions"]}},
+    {"id": "neg-3", "intent": "OTHER", "kind": "regression", "q": "Kho có đủ sách Dế Mèn không?", "expect": {"not_rebalance": true}},
+    {"id": "neg-4", "intent": "OTHER", "kind": "regression", "q": "Lượt mượn tháng này so với tháng trước?", "expect": {"not_rebalance": true}},
+    {"id": "neg-5", "intent": "OTHER", "kind": "regression", "context": "budget15", "q": "Tiền phạt chưa thu là bao nhiêu?", "expect": {"not_rebalance": true}}
+  ],
+  "conversations": {
+    "A": [
+      {"q": "Phân tích tồn kho các kho giúp tôi.", "expect": {"focus": "INVENTORY_DIAGNOSIS"}},
+      {"q": "Tìm nguồn điều chuyển cho kho TP.HCM.", "expect": {"focus": "TRANSFER_OPPORTUNITY", "destination": "Kho HCM Chinh"}},
+      {"q": "So sánh với mua mới.", "expect": {"focus": "DECISION_COMPARISON", "destination": "Kho HCM Chinh"}},
+      {"q": "Ngân sách 15 triệu thôi.", "expect": {"budget_vnd": 15000000, "destination": "Kho HCM Chinh"}},
+      {"q": "Giảm 20% ngân sách.", "expect": {"budget_vnd": 12000000}},
+      {"q": "Chọn phương án ban đầu.", "expect": {"budget_vnd": 15000000}},
+      {"q": "Tạo bản nháp.", "expect": {"focus": "CREATE_DRAFT", "budget_vnd": 15000000, "destination": "Kho HCM Chinh"}}
+    ],
+    "B": [
+      {"q": "Phân tích các kho.", "expect": {"tools_any": ["R", "get_warehouse_stock_risk"]}},
+      {"q": "Kho nào dư sách?", "expect": {"focus": "SURPLUS_DETECTION"}},
+      {"q": "Tìm sách thiếu tại TP.HCM.", "expect": {"focus": "SHORTAGE_DETECTION", "destination": "Kho HCM Chinh"}},
+      {"q": "Nếu không đủ thì mua thêm.", "expect": {"focus": "PROCUREMENT_OPTIMIZATION", "destination": "Kho HCM Chinh"}},
+      {"q": "Ngân sách chỉ còn 10 triệu.", "expect": {"budget_vnd": 10000000, "destination": "Kho HCM Chinh"}},
+      {"q": "So sánh với phương án trước.", "expect": {"budget_vnd": 10000000, "compare_budget_vnd": null}}
+    ],
+    "C": [
+      {"q": "Phân tích tồn kho các kho.", "expect": {"focus": "INVENTORY_DIAGNOSIS"}},
+      {"q": "Tìm nguồn điều chuyển về kho TP.HCM.", "expect": {"destination": "Kho HCM Chinh"}},
+      {"q": "Tại sao không chọn Hà Nội?", "expect": {"focus": "DECISION_EXPLANATION", "destination": "Kho HCM Chinh", "source": "Kho Ha Noi"}},
+      {"q": "Tôi cần Manager khác phối hợp như thế nào?", "expect": {"focus": "DECISION_EXPLANATION", "style": "coordination"}},
+      {"q": "Tạo bản nháp cho phương án có thể thực hiện.", "expect": {"focus": "CREATE_DRAFT", "destination": "Kho HCM Chinh"}}
+    ]
+  }
+}

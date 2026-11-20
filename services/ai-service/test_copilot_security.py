@@ -270,7 +270,7 @@ class ActionConfirmationTests(unittest.IsolatedAsyncioTestCase):
         async def user(_header):
             return self.user
 
-        async def writable(_user_ctx):
+        async def writable(_user_ctx, **_kw):
             if isinstance(self.writable, Exception):
                 raise self.writable
             return self.writable

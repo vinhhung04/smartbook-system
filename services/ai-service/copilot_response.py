@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 
@@ -310,10 +311,39 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
                      + ". Ý nào không có dữ liệu thì nói rõ là chưa trả lời được, không suy đoán.")
     if plan.required_tools:
         lines.append("- Dữ liệu cần thiết đã được truy xuất sẵn ở các kết quả tool bên dưới; chỉ gọi thêm tool nếu thật sự thiếu.")
-    if (plan.style or {}).get("write_request") and not (plan.style or {}).get("draft_request"):
+    reb = (plan.entities or {}).get("rebalance")
+    if reb:
+        lines.append("- Lượt này về cân bằng tồn kho giữa các kho (ý chính: " + ", ".join(reb.get("focus") or []) + "). "
+                     "Trả lời từ kết quả analyze_inventory_rebalancing; mọi con số lấy nguyên văn từ đó. Tách rõ: phương án "
+                     "tốt nhất về nghiệp vụ, phần bạn tự thực hiện được, và phần cần Manager kho khác phối hợp. Chi phí "
+                     "điều chuyển không có dữ liệu - nói rõ, không ước đoán. Không nói đã tạo, đã duyệt hay đã chuyển hàng. "
+                     "Trình bày gọn (khoảng 250-300 từ): khi đã có bảng so sánh thì không viết lại từng phương án thành "
+                     "đoạn riêng. Chỉ kho có quyền \"chỉ xem\" mới cần Manager kho đó phối hợp; kho \"toàn quyền\" thì "
+                     "người dùng tự làm, không viết là cần ai phê duyệt hay phối hợp.")
+        focus = set(reb.get("focus") or [])
+        if focus & {"TRANSFER_OPPORTUNITY", "TRANSFER_QUANTITY"}:
+            lines.append("- Người dùng hỏi về điều chuyển: liệt kê từng dòng điều chuyển (sách, kho nguồn → kho đích, số bản "
+                         "an toàn, kho nguồn còn bao nhiêu so với mức cần giữ) và quyền của từng dòng (tự tạo được hay cần "
+                         "Manager kho nguồn phối hợp).")
+        if focus & {"DECISION_COMPARISON", "HYBRID_DECISION"}:
+            lines.append("- So sánh đủ các phương án có trong dữ liệu theo đúng thứ tự xếp hạng của hệ thống và nêu quy tắc xếp hạng.")
+        if "BUDGET_OPTIMIZATION" in focus:
+            lines.append("- Nêu ngân sách, chi phí mua mới, ngân sách còn lại, mức đáp ứng và số còn thiếu của phương án tốt "
+                         "nhất và của phương án bạn tự thực hiện được.")
+        if len([c for c in plan.required_tools if c.get("name") == "analyze_inventory_rebalancing"]) >= 2:
+            lines.append("- Có hai kết quả: kết quả đầu là kịch bản trước, kết quả sau là kịch bản mới. So sánh hai kịch bản "
+                         "(mức đáp ứng, thiếu còn lại, chi phí mua, ngân sách còn) và giải thích tác động của điều kiện thay đổi.")
+        if (plan.style or {}).get("rebalance_draft"):
+            lines.append("- Người dùng yêu cầu tạo bản nháp. Hệ thống chuẩn bị bản nháp sau câu trả lời này, chỉ gồm việc "
+                         "họ đủ quyền làm; việc cần Manager khác vẫn là đề xuất. Tóm tắt phương án sẽ được lập bản nháp; không "
+                         "viết \"đã tạo\".")
+        if (plan.style or {}).get("coordination"):
+            lines.append("- Người dùng hỏi cách phối hợp: nêu cho từng dòng cần phối hợp kho nguồn nào, bao nhiêu bản, vì sao "
+                         "(quyền chỉ xem), và rằng Manager kho nguồn tạo yêu cầu điều chuyển trên màn hình Yêu cầu.")
+    if (plan.style or {}).get("write_request") and not (plan.style or {}).get("draft_request") and not reb:
         lines.append("- Người dùng yêu cầu tạo đề xuất nhập. Bản nháp (nếu tạo được) do hệ thống chuẩn bị sau câu trả lời này, "
                      "cho đúng đầu sách và kho được nêu, và chờ người dùng xác nhận. Không viết \"đã tạo\" hay \"không thể "
-                     "tạo\" phiếu; nêu ngắn gọn dữ liệu cho thấy đầu sách đó có đang cần nhập hay không.")
+                     "tạo\" hay \"đã ghi nhận\" phiếu; nêu ngắn gọn dữ liệu cho thấy đầu sách đó có đang cần nhập hay không.")
     return "\n".join(lines)
 
 
@@ -620,7 +650,72 @@ def _render_priorities(r: dict) -> str:
     return "\n".join(lines)
 
 
+_ACCESS_VI = {"WRITE": "toàn quyền", "READ": "chỉ xem"}
+_PERM_VI = {"EXECUTABLE": "bạn tự tạo được", "COLLABORATIVE": "cần Manager kho nguồn phối hợp",
+            "PROPOSAL_ONLY": "chỉ đề xuất (kho chỉ xem)"}
+
+
+def _render_rebalancing(r: dict) -> str:
+    """Every figure the answer may use, already computed by analytics."""
+    def n(v):
+        return "không có dữ liệu" if v is None else (f"{int(v):,}".replace(",", ".") if float(v).is_integer() else f"{v}")
+    lines = [f"Nguồn: {r.get('source')} lúc {r.get('retrieved_at')}. Chỉ dùng các số dưới đây; không tự tính thêm."]
+    if r.get("notice"):
+        lines.append(f"Thông báo: {r['notice']}")
+    lines.append("Phạm vi kho: " + "; ".join(f"{w.get('warehouse')} ({_ACCESS_VI.get(w.get('access'), w.get('access'))})"
+                                             for w in r.get("scope") or []))
+    own = [w.get("warehouse") for w in r.get("scope") or [] if w.get("access") == "WRITE"]
+    other = [w.get("warehouse") for w in r.get("scope") or [] if w.get("access") != "WRITE"]
+    if own:
+        lines.append(f"Người dùng TỰ thao tác được tại: {', '.join(own)} (không cần ai phối hợp hay phê duyệt ở các kho này)."
+                     + (f" Chỉ {', '.join(other)} cần Manager kho đó phối hợp." if other else ""))
+    if r.get("budget_vnd") is not None:
+        lines.append(f"Ngân sách mua mới: {n(r['budget_vnd'])} ₫")
+    if r.get("what_if"):
+        lines.append(f"Điều kiện giả định: {json.dumps(r['what_if'], ensure_ascii=False)}")
+    for d in r.get("diagnosis") or []:
+        lines.append(f"- Kho {d.get('warehouse')} ({_ACCESS_VI.get(d.get('access'), '')}): {d.get('variants_tracked')} đầu sách; "
+                     f"thiếu {d.get('shortage_variants')} đầu sách / {d.get('shortage_qty')} bản; dư {d.get('surplus_variants')} "
+                     f"đầu sách / {d.get('surplus_qty')} bản; nhu cầu dự kiến {d.get('forecast_demand_qty')} bản; "
+                     f"đang về {d.get('incoming_qty')}, đã hứa chuyển đi {d.get('outgoing_qty')}")
+    for label, key, qty in (("Thiếu nhiều nhất", "top_shortages", "shortage_qty"), ("Dư nhiều nhất", "top_surpluses", "surplus_qty")):
+        rows = r.get(key) or []
+        if rows:
+            lines.append(f"{label}: " + "; ".join(f"{x.get('title')} @ {x.get('warehouse')}: {x.get(qty)} bản "
+                                                  f"(tồn {x.get('available_qty')}, nhu cầu {x.get('lead_time_demand')})"
+                                                  for x in rows[:5]))
+    for code, o in (r.get("options") or {}).items():
+        lines.append(f"Phương án {code} – {o.get('label')}: thiếu {o.get('total_shortage_qty')} bản; điều chuyển "
+                     f"{o.get('transfer_qty')} bản; mua {o.get('purchase_qty')} bản ({n(o.get('purchase_cost_vnd'))} ₫); còn "
+                     f"thiếu {o.get('remaining_shortage_qty')} (HIGH {o.get('remaining_high_priority_qty')}); đáp ứng "
+                     f"{o.get('shortage_covered_pct')}%; ngân sách còn {n(o.get('remaining_budget_vnd'))}; chi phí điều "
+                     f"chuyển: không có dữ liệu; thời gian đáp ứng {n(o.get('response_days'))} ngày; rủi ro "
+                     f"{o.get('risk_level')} {o.get('risks') or ''}; {o.get('collaborative_transfer_lines')} dòng cần phối hợp")
+        for t in (o.get("transfers") or [])[:5]:
+            lines.append(f"  · chuyển {t.get('quantity')} '{t.get('title')}' {t.get('from_warehouse')} → {t.get('to_warehouse')} "
+                         f"(kho nguồn còn {t.get('source_available_after')}, mức cần giữ {t.get('source_protected_qty')}; "
+                         f"{_PERM_VI.get(t.get('permission'), t.get('permission'))})")
+        for p in (o.get("purchases") or [])[:5]:
+            lines.append(f"  · mua {p.get('quantity')} '{p.get('title')}' cho {p.get('warehouse')} ({n(p.get('cost_vnd'))} ₫; "
+                         f"{_PERM_VI.get(p.get('permission'), p.get('permission'))})")
+    rec = r.get("recommendation") or {}
+    ex = (r.get("options") or {}).get(rec.get("executable_option")) or {}
+    if ex:
+        lines.append(f"Nếu người dùng muốn tự làm, không chờ ai phối hợp: dùng phương án {ex.get('label')} "
+                     f"(đáp ứng {ex.get('shortage_covered_pct')}%, mua {n(ex.get('purchase_cost_vnd'))} ₫). Không đề xuất "
+                     "phương án nào có mức đáp ứng thấp hơn phương án này.")
+    lines.append(f"Xếp hạng theo quy tắc cố định: {', '.join(rec.get('ranking') or [])}. Tốt nhất về nghiệp vụ: "
+                 f"{rec.get('best_business_label')}. Tốt nhất trong các việc bạn tự làm được: "
+                 f"{rec.get('executable_label') or 'không có'}. Quy tắc: {rec.get('rule')}")
+    dq = r.get("data_quality") or {}
+    lines.append(f"Chất lượng dữ liệu: thời gian điều chuyển lịch sử {n(dq.get('transfer_lead_time_days'))} ngày "
+                 f"({dq.get('transfer_lead_time_samples')} mẫu); {dq.get('unpriced_variants')} đầu sách chưa có đơn giá; "
+                 f"cửa sổ nhu cầu {dq.get('forecast_window_days')} ngày.")
+    return "\n".join(lines)
+
+
 RENDERERS = {
+    "analyze_inventory_rebalancing": (_render_rebalancing, dict),
     "get_reorder_suggestions": (_render_reorder, dict),
     "get_top_books": (_render_top_books, list),
     "get_warehouse_stock_risk": (_render_stock_risk, list),

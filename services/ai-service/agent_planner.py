@@ -316,6 +316,13 @@ def _named_title(message: str, intent_info: dict) -> str | None:
     return named.strip()
 
 
+def requested_quantity(message: str) -> int | None:
+    """ "Tạo phiếu đề xuất nhập 10 cuốn Dune": the copies the user asked for."""
+    m = re.search(r"(?<![\d.,])(\d{1,4})\s*(cuốn|quyển|bản|cuon|quyen|ban)\b", message or "", re.IGNORECASE)
+    qty = int(m.group(1)) if m else None
+    return qty if qty and 0 < qty <= 1000 else None
+
+
 def _requested_title(message: str, intent_info: dict) -> str | None:
     """The book the user named (core title, normalized), or None."""
     named = _named_title(message, intent_info)
@@ -377,11 +384,19 @@ def draft_note(planned: dict | None) -> str | None:
         return None
     item = items[0]
     qty = _int_safe(item.get("suggested_quantity"), 1)
-    why = ("số lượng mặc định - hệ thống hiện không gợi ý nhập đầu sách này" if item.get("reason") == "USER_REQUEST"
+    why = ("theo số lượng bạn yêu cầu" if item.get("quantity_source") == "USER"
+           else "số lượng mặc định - hệ thống hiện không gợi ý nhập đầu sách này" if item.get("reason") == "USER_REQUEST"
            else "theo gợi ý của hệ thống")
     where = item.get("warehouse_name") or "kho bạn sẽ chọn"
+    system = item.get("system_quantity")
+    compare = ""
+    if item.get("quantity_source") == "USER" and system and system != qty:
+        gap = system - qty
+        compare = (f" Hệ thống tính {where} cần {system} bản; với {qty} bản "
+                   + (f"vẫn còn thiếu {gap} bản so với nhu cầu dự kiến." if gap > 0
+                      else f"sẽ nhập dư {-gap} bản so với nhu cầu dự kiến."))
     return (f"Theo yêu cầu, tôi đã chuẩn bị bản nháp đề xuất nhập **{item.get('title')}** cho {where}: "
-            f"{qty} bản {why}. Bản nháp chưa thành phiếu nhập: hãy kiểm tra, điều chỉnh số lượng rồi xác nhận "
+            f"{qty} bản {why}.{compare} Bản nháp chưa thành phiếu nhập: hãy kiểm tra, điều chỉnh số lượng rồi xác nhận "
             "trong thẻ bên dưới, hoặc từ chối nếu không cần.")
 
 
@@ -610,6 +625,7 @@ async def _build_reorder_draft(
             # AMBIGUOUS / NOT_FOUND: keep items as-is; executor will block creation
 
     action_warnings = list(warnings or [])
+    asked_qty = requested_quantity(message) if requested else None
     if requested and not items:
         # The named book is not among the system's suggestions (for that warehouse): the
         # user still asked for it - one catalog line, quantity left to them.
@@ -618,7 +634,14 @@ async def _build_reorder_draft(
             return None
         items = [line]
         action_warnings.append(f"Đầu sách {line['title']} không nằm trong danh sách gợi ý nhập hiện tại của hệ thống; "
-                               "số lượng 1 là mặc định - hãy điều chỉnh trước khi xác nhận.")
+                               + (f"số lượng {asked_qty} theo yêu cầu của bạn." if asked_qty
+                                  else "số lượng 1 là mặc định - hãy điều chỉnh trước khi xác nhận."))
+    if asked_qty and items:
+        # the copies the user named win over the suggestion (still editable on the card)
+        items = [{**it, "suggested_quantity": asked_qty, "quantity_source": "USER",
+                  # what the system itself computed, kept so the reply compares the two
+                  "system_quantity": None if it.get("reason") == "USER_REQUEST" else _int_safe(it.get("suggested_quantity"))}
+                 for it in items]
 
     # If warehouse was resolved but no items belong to that warehouse → nothing to create
     if warehouse_resolution_status == "RESOLVED" and not items:

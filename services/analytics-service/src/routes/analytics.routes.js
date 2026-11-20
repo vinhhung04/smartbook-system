@@ -2,6 +2,7 @@ const express = require('express');
 const { attachWarehouseScope } = require('../middlewares/warehouse-scope.middleware');
 const { declareDataScope } = require('../middlewares/data-scope.middleware');
 const analyticsController = require('../controllers/analytics.controller');
+const rebalancingController = require('../controllers/rebalancing.controller');
 const { authenticateToken, authorizeAnyPermission } = require('../middlewares/auth.middleware');
 
 const router = express.Router();
@@ -52,6 +53,9 @@ router.get('/fine-summary', declareDataScope('SYSTEM'), authenticateInternalOrUs
 router.get('/warehouse-stock-risk', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWarehouseStockRisk);
 router.get('/warehouse-stock-items', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWarehouseStockItems);
 router.get('/reorder-suggestions', declareDataScope('SYSTEM'), authenticateInternalOrUser(), analyticsController.getReorderSuggestions);
+// Per-warehouse rebalancing / procurement decision for the signed-in user only (no service key):
+// the scope and the executable / collaborative status are the caller's own.
+router.get('/rebalancing-plan', declareDataScope('WAREHOUSE_SCOPED'), authenticateToken, readAnalytics, rebalancingController.getRebalancingPlan);
 router.get('/reservation-funnel', declareDataScope('SYSTEM'), authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getReservationFunnel);
 router.get('/weeding-suggestions', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWeedingSuggestions);
 

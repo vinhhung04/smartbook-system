@@ -148,38 +148,56 @@ async def get_reorder_suggestions(
 
 
 async def _scope_reorder_to_warehouse(result: dict, warehouse: str, auth_header: str | None, limit: int) -> dict:
-    """The library-wide reorder list cut to the books out of stock / under their
-    reorder point at ONE warehouse (joined on variant_id), with that warehouse's
-    own stock on each line. Analytics computes demand and suggested quantities for
-    the whole library; the scope note says so. An unknown warehouse is an error,
-    never the unscoped list (which is what put other books on the cards)."""
+    """Purchase need of ONE warehouse: every title short there (its own stock,
+    incoming purchases and transfers, its own demand forecast and safety stock -
+    analytics /rebalancing-plan), with the library-wide line attached for
+    context. Titles with demand but no stock row there are included (they are
+    out of stock there). The library-wide reorder list used to supply the
+    quantities, so a title with copies elsewhere read as "no need" at a
+    warehouse that had none (2026-11-20). An unknown warehouse is an error,
+    never the unscoped list."""
     import copilot_tools  # deferred: copilot_tools builds on this module
 
-    low = await copilot_tools.get_warehouse_low_stock_items(auth_header, warehouse, limit=100)
-    if not isinstance(low, dict) or low.get("error"):
-        return low if isinstance(low, dict) else {"error": "không đọc được tồn kho của kho"}
-    here = {i["variant_id"]: i for i in low.get("items") or [] if isinstance(i, dict) and i.get("variant_id")}
-    # shortcut: the 100-row list is analytics' cap; a low-stock book ranked below it reads as "no suggestion".
-    suggested = {i.get("variant_id") for i in result["items"] if isinstance(i, dict)}
-    rows = [{**i, "warehouse_available_qty": here[i["variant_id"]].get("available_qty"),
-             "warehouse_reorder_point": here[i["variant_id"]].get("reorder_point"),
-             "warehouse_status": here[i["variant_id"]].get("status")}
-            for i in result["items"] if isinstance(i, dict) and i.get("variant_id") in here]
+    data, destinations = await copilot_tools.fetch_rebalancing_plan(auth_header, [warehouse])
+    if not isinstance(data, dict) or data.get("error") or not destinations:
+        return data if isinstance(data, dict) and data.get("error") else {"error": "không đọc được tồn kho của kho"}
+    wh = destinations[0]
+    library = {i.get("variant_id"): i for i in result["items"] if isinstance(i, dict)}
+    rows = []
+    for s in data.get("shortages") or []:
+        qty, cost = int(s.get("shortage_qty") or 0), float(s.get("unit_cost") or 0)
+        lib = library.get(s.get("variant_id")) or {}
+        available = s.get("available_qty") or 0
+        rows.append({
+            "variant_id": s.get("variant_id"), "title": s.get("title"), "priority": s.get("priority"),
+            "warehouse_id": wh["id"], "warehouse_name": wh.get("name"), "warehouse_code": wh.get("code"),
+            "available_qty": lib.get("available_qty"),  # library-wide, for context
+            "warehouse_available_qty": available,
+            "warehouse_incoming_qty": s.get("incoming_qty"),
+            "warehouse_status": "OUT_OF_STOCK" if available <= 0 else "LOW_STOCK",
+            "warehouse_reorder_point": s.get("safety_stock"),
+            "lead_time_demand": s.get("lead_time_demand"), "safety_stock": s.get("safety_stock"),
+            "lead_time_days": s.get("lead_time_days"),
+            "suggested_reorder_qty": qty, "unit_cost": cost, "estimated_cost": round(qty * cost, 2),
+            "borrow_count": lib.get("borrow_count"),
+            "reason": (f"Tại {wh.get('name')}: tồn {available}, đang về {s.get('incoming_qty') or 0}, nhu cầu dự kiến "
+                       f"{s.get('lead_time_demand')} bản trong {s.get('lead_time_days')} ngày chờ hàng, tồn an toàn "
+                       f"{s.get('safety_stock')} → cần thêm {qty} bản."),
+        })
     by_priority = {p: sum(1 for i in rows if i.get("priority") == p) for p in ("HIGH", "MEDIUM", "LOW")}
     return {
         **result,
         "items": rows[:limit],
         "summary": {"total_candidates": len(rows), "high_priority": by_priority["HIGH"],
                     "medium_priority": by_priority["MEDIUM"], "low_priority": by_priority["LOW"],
-                    "estimated_total_reorder_qty": sum(i.get("suggested_reorder_qty") or 0 for i in rows),
-                    "estimated_total_cost": round(sum(i.get("estimated_cost") or 0 for i in rows), 2)},
+                    "estimated_total_reorder_qty": sum(i["suggested_reorder_qty"] for i in rows),
+                    "estimated_total_cost": round(sum(i["estimated_cost"] for i in rows), 2)},
         "system_summary": result.get("summary"),
         "warehouse_scope": {
-            "warehouse_name": low.get("warehouse_name"), "warehouse_id": low.get("warehouse_id"),
-            "low_stock_titles": low.get("total_items"), "with_suggestion": len(rows),
-            "without_suggestion": [i.get("title") for v, i in here.items() if v not in suggested][:10],
-            "note": ("Chỉ gồm các đầu sách đang hết hàng/dưới ngưỡng tại kho này. Lượt mượn, nhu cầu và số lượng đề "
-                     "xuất nhập do hệ thống tính trên toàn thư viện, không riêng kho này."),
+            "warehouse_name": wh.get("name"), "warehouse_id": wh["id"],
+            "low_stock_titles": len(rows), "with_suggestion": len(rows), "without_suggestion": [],
+            "note": ("Số lượng cần nhập tính theo tồn, hàng đang về và nhu cầu của riêng kho này; chưa trừ phần có thể "
+                     "điều chuyển từ kho khác (hỏi về điều chuyển để xem)."),
         },
     }
 

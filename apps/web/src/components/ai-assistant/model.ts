@@ -3,6 +3,9 @@ import { BookAlertIcon, BookDueIcon, BookPileIcon, BookStackIcon, BookTaskIcon }
 import type {
   AiDecision,
   AiEvidenceItem,
+  AiExecution,
+  AiRebalanceDecision,
+  AiTimelineStage,
   AiExplanation,
   AiFaithfulness,
   AiRecommendation,
@@ -35,7 +38,10 @@ export interface AssistantMessage {
   visualizationNotes?: string[];
   faithfulness?: AiFaithfulness | null;
   verification?: AiVerification | null;
-  decision?: AiDecision | null;
+  decision?: AiDecision | AiRebalanceDecision | null;
+  /** Rebalancing: the confirmed draft's real outcome, and the stages the turn completed. */
+  execution?: AiExecution | null;
+  timeline?: AiTimelineStage[];
   /** Streaming: the draft text is being checked against the data (Copilot 3.2). */
   verifying?: boolean;
   /** Reopened from history: charts show the stored snapshot, never refreshed. */
@@ -62,6 +68,8 @@ export function extrasToMessageFields(extras?: AssistantExtras | null): Partial<
     faithfulness: extras?.faithfulness ?? null,
     verification: extras?.verification ?? null,
     decision: extras?.decision ?? null,
+    execution: extras?.execution ?? null,
+    timeline: extras?.timeline ?? [],
   };
 }
 

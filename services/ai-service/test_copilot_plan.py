@@ -148,7 +148,12 @@ class PlanToolTests(unittest.TestCase):
         self.assertEqual(p.requested_analysis, "out_of_scope")
 
     def test_write_requests_keep_the_confirmation_route(self):
-        self.assertEqual(plan("Tạo phiếu nhập cho sách cần bổ sung").required_tools, [])
+        # Only the read the draft needs is seeded (live run 2026-11-20: left to the
+        # model, it called nothing and invented the answer); the draft itself still
+        # waits for the user's confirmation.
+        p = plan("Tạo phiếu nhập cho sách cần bổ sung")
+        self.assertEqual(p.required_tools, [{"name": "get_reorder_suggestions", "args": {"limit": 100}}])
+        self.assertTrue(p.style.get("write_request"))
 
     def test_every_planned_tool_is_whitelisted_for_the_whole_dataset(self):
         path = os.path.join(os.path.dirname(__file__), "eval", "copilot_dataset.json")
@@ -304,8 +309,10 @@ class BookTitleIsNotAVerbTests(unittest.TestCase):
                          ["explain_reorder_item"])
         self.assertEqual(tools(plan("Có sách Lập Trình Lượng Tử Cho Mèo không?")), ["search_books"])
 
-    def test_a_real_write_request_still_leaves_tool_choice_to_the_action_flow(self):
-        self.assertEqual(plan("Lập phiếu đề xuất nhập cho sách ưu tiên cao").required_tools, [])
+    def test_a_real_write_request_still_goes_to_the_action_flow(self):
+        p = plan("Lập phiếu đề xuất nhập cho sách ưu tiên cao")
+        self.assertEqual(p.required_tools, [{"name": "get_reorder_suggestions", "args": {"limit": 100, "priority": "HIGH"}}])
+        self.assertTrue(p.style.get("write_request"))
 
 
 class Copilot33PlannerGapTests(unittest.TestCase):

@@ -394,3 +394,29 @@ async def cleanup_expired_actions() -> int:
         if rows:
             await session.commit()
         return len(rows)
+
+
+async def latest_pending_action(user_id: str | None, conversation_id: str | None, action_type: str) -> PendingAction | None:
+    """The newest action of this type still waiting for this user's
+    confirmation in this conversation (expiry applied), or None."""
+    if not user_id or not conversation_id:
+        return None
+    try:
+        conversation_uuid = UUID(conversation_id)
+    except ValueError:
+        return None
+    async with get_session() as session:
+        result = await session.execute(
+            select(PendingActionRow.action_id)
+            .where(PendingActionRow.created_by_user_id == user_id,
+                   PendingActionRow.conversation_id == conversation_uuid,
+                   PendingActionRow.type == action_type,
+                   PendingActionRow.status == PENDING_CONFIRMATION)
+            .order_by(PendingActionRow.created_at.desc())
+            .limit(1)
+        )
+        action_id = result.scalar_one_or_none()
+    if action_id is None:
+        return None
+    action = await get_pending_action(action_id)  # applies expiry
+    return action if action and action.status == PENDING_CONFIRMATION else None

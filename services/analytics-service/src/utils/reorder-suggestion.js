@@ -225,6 +225,7 @@ function calculateSuggestion(row, demand, ranges, seasonal = {}, series = [], le
     lead_time_demand: expectedDemandDuringLeadTime,
     expected_returns: returnsWithinLeadTime,
     inventory_position: positionQty,
+    safety_stock: safetyStock,
     estimated_days_until_stockout: estimatedDaysUntilStockout,
     demand_trend_pct: demandTrendPct,
     demand_score: demandScore,

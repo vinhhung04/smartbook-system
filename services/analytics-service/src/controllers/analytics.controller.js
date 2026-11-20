@@ -447,7 +447,50 @@ function buildWarehouseRiskReasoning(row) {
 // One row per (warehouse, variant) with quantities summed over locations -
 // the unit warehouse-stock.js classifies. Active warehouses with no stock
 // still appear (variant_id null) so they show up with zero counts.
+// A title borrowed at a warehouse recently but with no stock row there at all
+// is out of stock at that warehouse, not absent from it: without these rows a
+// title with demand and 0 copies never showed as "hết hàng" (2026-11-20).
+const DEMAND_ONLY_LOOKBACK_DAYS = 30;
+
+async function addDemandOnlyRows(rows, warehouseId) {
+  const pairs = await query(
+    borrowPool,
+    `
+    SELECT DISTINCT lt.warehouse_id::text AS warehouse_id, li.variant_id::text AS variant_id
+    FROM loan_items li
+    JOIN loan_transactions lt ON lt.id = li.loan_id
+    WHERE lt.borrow_date >= now() - ($2::int * interval '1 day')
+      AND ($1::uuid IS NULL OR lt.warehouse_id = $1::uuid)
+    `,
+    [warehouseId, DEMAND_ONLY_LOOKBACK_DAYS],
+  );
+  if (!pairs.length) return rows;
+  const have = new Set(rows.filter((r) => r.variant_id).map((r) => `${r.warehouse_id}:${r.variant_id}`));
+  const warehouseInfo = new Map(rows.map((r) => [r.warehouse_id, r]));
+  const extra = [];
+  for (const { warehouse_id: wid, variant_id: vid } of pairs) {
+    const info = warehouseInfo.get(wid);
+    if (!info || !vid || have.has(`${wid}:${vid}`)) continue; // inactive / unknown warehouse: skip
+    extra.push({
+      warehouse_id: wid, warehouse_name: info.warehouse_name, warehouse_code: info.warehouse_code, variant_id: vid,
+      available_qty: 0, on_hand_qty: 0, reserved_qty: 0, borrowed_qty: 0, reorder_point: 0, demand_only: true,
+    });
+  }
+  if (!extra.length) return rows;
+  // only titles still active in the catalog
+  const active = new Set((await query(
+    inventoryPool,
+    'SELECT bv.id::text AS id FROM book_variants bv JOIN books b ON b.id = bv.book_id WHERE bv.id = ANY($1::uuid[]) AND bv.is_active AND b.is_active',
+    [[...new Set(extra.map((r) => r.variant_id))]],
+  )).map((r) => r.id));
+  return [...rows, ...extra.filter((r) => active.has(r.variant_id))];
+}
+
 async function getWarehouseVariantStock(warehouseId = null) {
+  return addDemandOnlyRows(await getWarehouseVariantStockRows(warehouseId), warehouseId);
+}
+
+async function getWarehouseVariantStockRows(warehouseId = null) {
   return query(
     inventoryPool,
     `
@@ -1837,4 +1880,9 @@ module.exports = {
   // Exported for unit tests: resolves one variant's lead time from the
   // delivery history maps built by getLeadTimeHistory().
   resolveItemLeadTime,
+  // Shared with rebalancing.controller.js (same demand/lead-time model).
+  parseReorderDateRanges,
+  parseOptionalBudget,
+  getLeadTimeHistory,
+  getSeasonalIndexByVariant,
 };

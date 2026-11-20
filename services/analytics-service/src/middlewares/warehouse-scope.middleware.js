@@ -42,4 +42,11 @@ async function canReadWarehouseScope(user, warehouseId) {
   return resolver.canRead(user, warehouseId);
 }
 
-module.exports = { attachWarehouseScope, inScope, canReadWarehouseScope, setWarehouseScopeResolver };
+/** {all, read, write} for a user - read AND write sets, for endpoints that say
+ * which actions are executable. `fresh` skips the 30 s cache.
+ * Scope unreadable -> WarehouseScopeUnavailableError (503 via the error handler). */
+async function resolveWarehouseScope(user, options) {
+  return resolver.resolve(user, options);
+}
+
+module.exports = { attachWarehouseScope, inScope, canReadWarehouseScope, resolveWarehouseScope, setWarehouseScopeResolver };

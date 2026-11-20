@@ -340,8 +340,17 @@ class ReorderWarehouseScopeTests(unittest.TestCase):
                           "reorder_point": 5},
                          {"variant_id": "v-oh", "title": "One Hundred Years of Solitude", "status": "LOW_STOCK",
                           "available_qty": 1, "reorder_point": 15}]}
+        # the warehouse's own need (analytics /rebalancing-plan): Dune has copies elsewhere
+        # in the library but none here, so it is short here although not on the library list
+        plan = {"generated_at": "t", "scope": {"warehouses": []}, "options": {}, "recommendation": {},
+                "shortages": [{"variant_id": "v-nw", "title": "Norwegian Wood", "priority": "MEDIUM", "available_qty": 2,
+                               "incoming_qty": 0, "lead_time_demand": 6.2, "safety_stock": 3, "lead_time_days": 14,
+                               "unit_cost": 100_000, "shortage_qty": 8},
+                              {"variant_id": "v-dune", "title": "Dune - Xứ Cát", "priority": "HIGH", "available_qty": 0,
+                               "incoming_qty": 0, "lead_time_demand": 12, "safety_stock": 2, "lead_time_days": 14,
+                               "unit_cost": 200_000, "shortage_qty": 14}]}
         return FakeGateway({"/analytics/reorder-suggestions": reorder, "/api/warehouses": WAREHOUSES,
-                            "/analytics/warehouse-stock-items": low})
+                            "/analytics/warehouse-stock-items": low, "/analytics/rebalancing-plan": plan})
 
     def _run(self, **kw):
         import assistant_tools as at
@@ -350,19 +359,22 @@ class ReorderWarehouseScopeTests(unittest.TestCase):
              patch.object(ct, "_cached_get", gw):
             return run(at.get_reorder_suggestions("Bearer t", **kw)), gw
 
-    def test_a_named_warehouse_keeps_only_its_low_stock_books(self):
+    def test_a_named_warehouse_gets_its_own_need(self):
         r, gw = self._run(warehouse="Kho HCM Chinh")
-        self.assertEqual([i["title"] for i in r["items"]], ["Norwegian Wood"])
-        item = r["items"][0]
-        self.assertEqual((item["warehouse_available_qty"], item["warehouse_reorder_point"], item["available_qty"]), (2, 5, 12))
-        self.assertEqual(r["summary"]["total_candidates"], 1)          # the warehouse's, so a "1 đầu sách" claim checks out
-        self.assertEqual(r["summary"]["estimated_total_cost"], 200_000)
+        self.assertEqual([i["title"] for i in r["items"]], ["Norwegian Wood", "Dune - Xứ Cát"])
+        nw, dune = r["items"]
+        # the warehouse's own figures; the library-wide line stays for context
+        self.assertEqual((nw["warehouse_available_qty"], nw["suggested_reorder_qty"], nw["available_qty"]), (2, 8, 12))
+        self.assertEqual((dune["warehouse_status"], dune["suggested_reorder_qty"], dune["estimated_cost"]),
+                         ("OUT_OF_STOCK", 14, 2_800_000))
+        self.assertEqual(r["summary"]["total_candidates"], 2)
+        self.assertEqual(r["summary"]["estimated_total_cost"], 3_600_000)
         self.assertEqual(r["system_summary"]["total_candidates"], 106)
-        scope = r["warehouse_scope"]
-        self.assertEqual((scope["warehouse_name"], scope["low_stock_titles"]), ("Kho HCM Chinh", 2))
-        self.assertEqual(scope["without_suggestion"], ["One Hundred Years of Solitude"])
-        self.assertIn("toàn thư viện", scope["note"])
-        self.assertEqual([c[1].get("limit") for c in gw.calls if c[0] == "/analytics/reorder-suggestions"], [100])
+        self.assertEqual(r["warehouse_scope"]["warehouse_name"], "Kho HCM Chinh")
+        self.assertIn("riêng kho này", r["warehouse_scope"]["note"])
+        plan_calls = [c for c in gw.calls if c[0] == "/analytics/rebalancing-plan"]
+        self.assertEqual(len(plan_calls), 1)
+        self.assertIn("destinationWarehouseIds", plan_calls[0][1])
 
     def test_no_warehouse_or_a_budget_keeps_the_library_list(self):
         r, _ = self._run()
