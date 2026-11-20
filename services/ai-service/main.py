@@ -38,6 +38,7 @@ from intent import (
 import retrieval_confidence
 from nlu import _has_action_surface, _is_complex_message, classify_user_message
 from rag import (
+    sanitize_reply,
     RAG_SYSTEM_RULES,
     build_fallback_reply,
     build_no_data_context,
@@ -46,7 +47,7 @@ from rag import (
     merge_grounding_context,
     verify_numeric_grounding,
 )
-from retrieval import retrieve_context
+from retrieval import MISSING_AUTH_WARNING, retrieve_context
 from assistant_tools import GATEWAY_URL
 from tool_registry import ANALYTICS_TOOLS, TOOL_FUNCTIONS
 import assistant_tools
@@ -58,7 +59,8 @@ import recommendation
 import recommendation_v2
 import recommendation_v2_service
 from intent import ANALYTICS_BLOCK_EXEMPT_INTENTS
-from agent_planner import plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS
+from agent_planner import (plan_agent_action, _build_reorder_draft, _wants_action, _contains_any, _REORDER_KEYWORDS,
+                           _requested_title, draft_note)
 from socket_emitter import push_ai_action_event
 from agent_store import (
     create_pending_action,
@@ -73,6 +75,7 @@ from agent_store import (
     mark_action_needs_reconciliation,
     release_stale_confirmed_actions,
     resolve_reconciliation,
+    latest_pending_action,
 )
 from ai_core import capabilities as ai_capabilities, policy as ai_policy, prompts as ai_prompts, tools as ai_tools
 from contextlib import asynccontextmanager
@@ -117,6 +120,8 @@ import copilot_faithfulness
 import copilot_verification
 import copilot_claims
 import copilot_decision
+import copilot_rebalance_decision
+import rebalance_actions
 import action_guard
 import copilot_visualization
 import warehouse_scope
@@ -288,6 +293,23 @@ ASSISTANT_MAX_TOOL_ROUNDS = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "4"))
 # also silently truncated a correct direct answer (no tool needed) at 200
 # tokens - the one case where the model is actually generating prose there.
 ASSISTANT_NUM_PREDICT = int(os.getenv("ASSISTANT_NUM_PREDICT", "700"))
+# Rebalancing answers compare four options and who may do what: 700 tokens cut
+# them mid-sentence (live run 2026-11-20, steps 3-5).
+ASSISTANT_REBALANCE_NUM_PREDICT = int(os.getenv("ASSISTANT_REBALANCE_NUM_PREDICT", "1600"))
+
+
+# Sentences of a reply written before the draft existed that the draft note
+# (agent_planner.draft_note) contradicts or repeats: "không thể tạo", "đã được
+# ghi nhận", a judgement of the requested quantity (the note compares it with
+# the system's figure), and the model's own "bước tiếp theo / hãy xác nhận".
+_DRAFT_CONTRADICTIONS = (r"(không|chưa) thể tạo|không tạo được|(đề xuất|phiếu)[^.!?\n]{0,60}đã (được )?(ghi nhận|tạo|lập|gửi)"
+                         r"|(yêu cầu|số lượng|\d+ bản)[^.!?\n]{0,40}(là |khá |rất )?(phù hợp|hợp lý|vừa đủ)"
+                         r"|bước tiếp theo|(vui lòng|hãy|bạn cần) xác nhận|sau khi (bạn )?xác nhận")
+
+
+def _num_predict(plan) -> int:
+    return ASSISTANT_REBALANCE_NUM_PREDICT if ((getattr(plan, "entities", None) or {}).get("rebalance")) \
+        else ASSISTANT_NUM_PREDICT
 # A chart follow-up ("đổi sang biểu đồ cột") redraws the previous turn's data
 # snapshot while it is younger than this; older, the same planner-built tool
 # calls are replayed (same scope, same permissions) and the answer says so.
@@ -3513,9 +3535,8 @@ def _build_context_block(system_context: dict | None) -> str:
         parts.append(f"- Tổng số bản (units): **{summary.get('totalUnits', '?')}**")
         parts.append(f"- Sách tồn kho thấp (≤10): **{summary.get('lowStock', '?')}**")
         parts.append(f"- Sách hết hàng: **{summary.get('outOfStock', '?')}**")
-        parts.append(f"- Phiếu mượn đang mở: **{summary.get('activeLoans', '?')}**")
-        parts.append(f"- Phiếu mượn quá hạn: **{summary.get('overdueLoans', '?')}**")
-        parts.append(f"- Tổng tiền phạt chưa thu: **{summary.get('totalFines', '?')}**đ")
+        # activeLoans / overdueLoans / totalFines are counted by the client in ONE page
+        # (30 loans, 20 fines) - not totals, so not stated as such (audit S-3).
         parts.append("")
 
     books = system_context.get("books")
@@ -3534,7 +3555,7 @@ def _build_context_block(system_context: dict | None) -> str:
 
     loans = system_context.get("recentLoans")
     if loans and isinstance(loans, list):
-        parts.append(f"### Phiếu mượn gần đây ({len(loans)} phiếu)")
+        parts.append(f"### Phiếu mượn gần đây (mẫu {len(loans)} phiếu, không phải tổng số)")
         for l in loans[:15]:
             num = l.get("loan_number", "?")
             cust = l.get("customer_name", "?")
@@ -3546,7 +3567,7 @@ def _build_context_block(system_context: dict | None) -> str:
 
     fines = system_context.get("recentFines")
     if fines and isinstance(fines, list) and len(fines) > 0:
-        parts.append(f"### Phạt gần đây ({len(fines)} khoản)")
+        parts.append(f"### Phạt gần đây (mẫu {len(fines)} khoản, không phải tổng số)")
         for f in fines[:10]:
             cust = f.get("customer_name", "?")
             amount = f.get("amount", 0)
@@ -3646,6 +3667,11 @@ class AssistantResponse(BaseModel):
     # what-if - options, pros / cons, risks, assumptions, conditional
     # recommendation - built from tool data only (copilot_decision).
     decision: dict | None = None
+    # Inventory rebalancing (optional, additive): the result of confirming a
+    # rebalancing draft from the chat ("Tôi xác nhận"), and the stages this
+    # turn really completed (built after each one, never predicted).
+    execution: dict | None = None
+    timeline: list[dict] = []
     # Phase F (optional, additive): the unified evidence contract shared with
     # /chat (ai_core.explainability) and the photo context the turn used.
     explainability: dict | None = None
@@ -3832,7 +3858,7 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
     warnings = list(retrieval.get("warnings") or [])
     sources = list(retrieval.get("sources") or [])
     ok_sources = any(source.get("status") == "ok" for source in sources)
-    missing_auth = any("Missing Authorization" in warning for warning in warnings)
+    missing_auth = MISSING_AUTH_WARNING in warnings
     used_legacy_context = False
 
     # RAG is the primary path. Legacy frontend system_context remains only as a
@@ -3869,9 +3895,14 @@ async def _prepare_chat_turn(request: Request, req: ChatRequest) -> dict:
 
     persona_block = f"\n## Người dùng hiện tại\n{personal['persona']}\n"
     if personal.get("summary"):
-        persona_block += f"\n## Dữ liệu cá nhân người dùng\n{personal['summary']}\n"
+        heading = ("Dữ liệu cá nhân người dùng" if personal.get("data_scope", "self") == "self" else
+                   "Dữ liệu nghiệp vụ trong phạm vi được phân quyền của người dùng (chi nhánh/kho họ phụ trách; "
+                   "không phải số liệu toàn hệ thống, không phải dữ liệu cá nhân của họ)")
+        persona_block += f"\n## {heading}\n{personal['summary']}\n"
     system_content = (CHAT_SYSTEM_PROMPT + ROLE_BASED_RULES + persona_block + RAG_SYSTEM_RULES + context_block
-                      + image_prompt_block(image_ctx))
+                      + image_prompt_block(image_ctx)
+                      + (DRAFT_BY_SYSTEM_RULE if user_ctx and is_action_request
+                         and intent_info.get("intent") == REORDER_SUGGESTION_QUERY else ""))
     messages = [{"role": "system", "content": system_content}]
     for msg in req.conversation_history[-10:]:
         messages.append({"role": msg.role, "content": msg.content})
@@ -3933,11 +3964,21 @@ def _chat_cached_payload(turn: dict) -> dict:
             "explainability": _chat_explainability(turn, turn["cached_reply"])}
 
 
+# The purchase-request draft is built by the system AFTER the reply is written: the
+# model must neither promise nor refuse it ("không thể tạo phiếu" above a draft card).
+DRAFT_BY_SYSTEM_RULE = (
+    "\n## Yêu cầu tạo đề xuất nhập\n- Bản nháp đề xuất nhập (nếu tạo được) do hệ thống chuẩn bị sau câu trả lời này, "
+    "cho đúng đầu sách và kho người dùng nêu, và chờ người dùng xác nhận. Không viết \"đã tạo\" hay \"không thể tạo\" "
+    "phiếu; chỉ nêu ngắn gọn dữ liệu hiện có về tồn kho và gợi ý nhập của đầu sách đó.\n")
+
+
 async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dict | None]:
     """Try to plan an agent action and append a confirmation hint to the reply."""
     user_ctx = turn["user_ctx"]
-    if turn["is_action_request"] and user_ctx is None:
-        return reply_text + "\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.", None
+    # The keyword gate alone is substring-based ("lap" also matches "lập trình"); the
+    # NLU's validated action_type is what says an action was actually asked for.
+    if turn["is_action_request"] and user_ctx is None and turn["intent_info"].get("action_type"):
+        return reply_text + "\n\nĐể thực hiện thao tác này, bạn vui lòng đăng nhập tài khoản SmartBook.", None
     if user_ctx is None:
         return reply_text, None
 
@@ -3963,7 +4004,8 @@ async def _apply_chat_agent_layer(turn: dict, reply_text: str) -> tuple[str, dic
                     user_context=user_ctx,
                 )
                 pending_action_data = action.model_dump()
-                reply_text += "\n\nTôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm tra thẻ hành động bên dưới trước khi bấm Xác nhận."
+                reply_text += "\n\n" + (draft_note(planned) or "Tôi đã chuẩn bị một hành động cần xác nhận. Vui lòng kiểm "
+                                                           "tra thẻ hành động bên dưới trước khi bấm Xác nhận.")
                 asyncio.ensure_future(push_ai_action_event(
                     "ai_action:created",
                     action.id,
@@ -3988,6 +4030,10 @@ async def _finish_chat_reply(turn: dict, text: str, provider: str) -> dict:
     """Source line, numeric grounding (model replies only), the agent-action
     layer and the cache write - the final body of /chat and of /chat/stream's
     `done` event."""
+    if provider != "fallback":
+        # "SmartBook chưa hỗ trợ X" with no such statement in the documents, or a reason why
+        # the user's wrong figure "applies in special cases": dropped (rag.sanitize_reply).
+        text, _removed = sanitize_reply(text, turn["message"], turn["grounding_context"])
     # An uncertain FAQ near-miss is not a citation the reply necessarily used.
     uncertain = turn["retrieval"].get("retrieval_status") == retrieval_confidence.UNCERTAIN
     reply_with_sources = text if uncertain else ensure_source_line(text, turn["retrieval"].get("sources") or [])
@@ -4319,6 +4365,26 @@ RAW_JSON_REFUSAL = (
 )
 
 
+async def _unwritable_draft_warehouses(planned: dict, user_ctx) -> list[str]:
+    """Names of the draft's warehouses outside the user's write scope; when the
+    scope cannot be read, every one of them (fail-closed)."""
+    ids = action_guard.target_warehouses(planned.get("payload") or {})
+    if not ids:
+        return []
+    try:
+        writable = await warehouse_scope.writable_warehouses(user_ctx)
+    except warehouse_scope.ScopeUnavailable:
+        writable = frozenset()
+    if writable is None:
+        return []
+    names = {}
+    payload = planned.get("payload") or {}
+    for item in [payload, *(payload.get("items") or [])]:
+        if isinstance(item, dict) and item.get("warehouse_id"):
+            names[item["warehouse_id"]] = item.get("warehouse_name") or item.get("warehouse_code") or item["warehouse_id"]
+    return sorted({names.get(i, i) for i in ids - writable})
+
+
 async def _build_assistant_pending_action(
     message: str,
     collected_data: dict,
@@ -4346,7 +4412,11 @@ async def _build_assistant_pending_action(
 
     reorder_data = collected_data.get("get_reorder_suggestions")
     if not reorder_data or (isinstance(reorder_data, dict) and reorder_data.get("error")):
-        return None
+        if not _requested_title(message, {}):
+            return None
+        # A named book is drafted from the catalog even when the model fetched no
+        # suggestions - which tools it chose must not decide whether the draft exists.
+        reorder_data = {}
 
     try:
         planned = await _build_reorder_draft(
@@ -4364,6 +4434,14 @@ async def _build_assistant_pending_action(
         temp_action = _make_temp_action_for_check(planned)
         if not can_confirm_action(user_ctx, temp_action):
             return None
+        # A draft for a warehouse the user may only read would be refused at
+        # confirm (action_guard): say so now instead of offering it (live run
+        # 2026-11-20, "nhập 5 cuốn Dune cho kho Hà Nội" with READ on Hà Nội).
+        blocked = await _unwritable_draft_warehouses(planned, user_ctx)
+        if blocked:
+            names = ", ".join(blocked)
+            return {"blocked_note": f"Tôi chưa tạo bản nháp: bạn chỉ có quyền xem {names}, nên phiếu đề xuất nhập ở kho "
+                                    f"này phải do Manager của {names} tạo (hoặc bạn chọn kho bạn có quyền ghi)."}
 
         action = await create_pending_action(
             action_type=planned["type"],
@@ -4582,6 +4660,8 @@ def _assistant_payload(
         "faithfulness": extras.get("faithfulness"),
         "verification": extras.get("verification"),
         "decision": extras.get("decision"),
+        "execution": extras.get("execution"),
+        "timeline": extras.get("timeline") or [],
     }
     if extras.get("image_context"):
         payload["image_context"] = extras["image_context"]
@@ -4604,6 +4684,40 @@ async def _clarify_turn(plan, conversation, conversation_id_str: str, message_te
     return _assistant_payload(
         answer=answer, tools_used=[], collected_data={}, conversation_id=conversation_id_str, grounding_warning=None,
         pending_action=None, plan=plan, extras=extras, retrieval_warnings=[], evidence=[], debug={"llm_calls": []},
+    )
+
+
+async def _confirm_rebalance_turn(request: Request, turn: dict) -> dict:
+    """ "Tôi xác nhận": confirms THIS conversation's latest rebalancing draft
+    through confirm_action - the card's own route (identity and ownership,
+    current policy, fresh write scope, atomic claim, audit) - never a second
+    path to a write. No draft waiting: nothing is done."""
+    plan, conversation, user_ctx = turn["plan"], turn["conversation"], turn["user_ctx"]
+    action = await latest_pending_action(user_ctx.user_id if user_ctx else None, turn["conversation_id_str"],
+                                         rebalance_actions.CREATE_REBALANCE_DRAFT)
+    execution: dict = {"action_id": action.id if action else None, "status": None, "result": None}
+    if action is None:
+        answer = ("Chưa có bản nháp điều chuyển / mua mới nào đang chờ xác nhận trong hội thoại này, nên tôi chưa thực "
+                  "hiện gì. Hãy yêu cầu tạo bản nháp cho phương án bạn chọn trước.")
+    else:
+        try:
+            resp = await confirm_action(request, ConfirmActionRequest(action_id=action.id, confirm=True))
+            execution.update(status=resp.status, result=resp.result)
+            answer = rebalance_actions.execution_answer(resp.status, resp.result)
+        except HTTPException as exc:
+            execution.update(status="FAILED", error=str(exc.detail))
+            answer = f"Chưa thực hiện bản nháp: {exc.detail}"
+    extras = copilot_response.build_extras(plan, {})
+    extras["execution"] = execution
+    extras["timeline"] = copilot_rebalance_decision.confirm_timeline(execution)
+    await conversation_store.append_message(
+        conversation.id, role="assistant", content=answer, tool_calls=[], data={},
+        metadata={"copilot_state": turn["state"] or {}, "plan": plan.public(), "extras": extras},
+    )
+    return _assistant_payload(
+        answer=answer, tools_used=[], collected_data={}, conversation_id=turn["conversation_id_str"],
+        grounding_warning=None, pending_action=None, plan=plan, extras=extras, retrieval_warnings=[], evidence=[],
+        debug={"llm_calls": []},
     )
 
 
@@ -4794,6 +4908,10 @@ async def _finalize_assistant_turn(
     # every check below - no business tool is called again.
     sheet = copilot_verification.build_sheet(collected_data, explanation, visualizations[0])
     answer, label_issues = copilot_faithfulness.strip_internal_labels(answer)
+    # The few-shot example's invented figures, copied into the answer (audit E-5).
+    example_grounding = f"{json.dumps(collected_data, ensure_ascii=False, default=str)}\n{grounded_context}\n{message_text}"
+    answer, _copied = copilot_response.strip_example_copies(answer, plan, example_grounding)
+    answer = copilot_response.enforce_brief(answer, plan)  # "nói ngắn gọn" (audit E-15)
     # Figures a turn without tool data may repeat: the question and the earlier
     # (already checked) answers. Only assistant messages BEFORE the current
     # question count - by now `messages` also holds this turn's own draft, and
@@ -4860,11 +4978,13 @@ async def _finalize_assistant_turn(
         report = revalidated(answer, checked_text, report)
     contradicted_before_retry = bool(report.critical)
     retried = retry_discarded = False
-    if (grounding_warning or language_flags or semantic or report.problems) and answered_normally:
+    permission_wrong = copilot_rebalance_decision.answer_issues(answer, collected_data)
+    if (grounding_warning or language_flags or semantic or report.problems or permission_wrong) and answered_normally:
         # One corrective turn covers all of it: numbers with no basis, wording
         # stronger than the evidence, claims the data contradicts (with the
         # value the data holds). An answer that passes costs no extra LLM call.
         problems = " ".join(p for p in (
+            copilot_rebalance_decision.answer_instruction(permission_wrong, collected_data),
             grounding_warning,
             copilot_verification.retry_instruction(report),
             copilot_faithfulness.retry_instruction(semantic) or copilot_explain.overclaim_warning(language_flags),
@@ -4872,7 +4992,7 @@ async def _finalize_assistant_turn(
         before = (answer, grounding_warning, language_flags, semantic, report, list(label_issues), list(repairs))
         answer, retry_usage = await retry_once_if_ungrounded(
             messages, answer, problems, functools.partial(provider.chat, feature="assistant"),
-            ANALYTICS_TOOLS, ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+            ANALYTICS_TOOLS, _num_predict(plan), ASSISTANT_LLM_TIMEOUT_SECONDS,
         )
         retried = True
         if retry_usage:
@@ -4881,6 +5001,8 @@ async def _finalize_assistant_turn(
             answer = RAW_JSON_REFUSAL
         answer, more_labels = copilot_faithfulness.strip_internal_labels(answer)
         label_issues += more_labels
+        answer, _copied = copilot_response.strip_example_copies(answer, plan, example_grounding)
+        answer = copilot_response.enforce_brief(answer, plan)
         # the retried text is checked from scratch: every layer, every rule
         grounding_warning, language_flags, semantic, report = await full_check(answer)
         checked_text = answer
@@ -4894,6 +5016,15 @@ async def _finalize_assistant_turn(
             # keep the checked draft - never trade one error for another
             answer, grounding_warning, language_flags, semantic, report, label_issues, repairs = before
             retry_discarded = True
+    permission_wrong = copilot_rebalance_decision.answer_issues(answer, collected_data)
+    if permission_wrong:
+        # still wrong after the one retry: the sentence goes, the rest stays; a
+        # removed recommendation is replaced by the plan's own
+        lead = (copilot_rebalance_decision.recommendation_sentence(collected_data)
+                if copilot_rebalance_decision.option_issues(" ".join(permission_wrong), collected_data) else None)
+        answer = copilot_rebalance_decision.strip_sentences(answer, permission_wrong)
+        if lead:
+            answer = f"{lead}\n\n{answer}"
     faith_status = "retried_passed" if retried else ("repaired" if label_issues or repairs else "passed")
     blocked = False
     withdrawn: list = []
@@ -4935,15 +5066,37 @@ async def _finalize_assistant_turn(
 
     pending_action_data = None
     if answered_normally and verification["safe_to_act"]:
-        pending_action_data = await _build_assistant_pending_action(
-            message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
-        )
+        if (plan.style or {}).get("rebalance_draft"):
+            # the draft rests on the same plan the answer described, re-read from analytics
+            pending_action_data, note = await rebalance_actions.plan_draft(
+                plan, user_ctx, auth_header, conversation_id_str)
+            if pending_action_data:
+                # the reply is the draft itself, so text and card cannot disagree
+                answer, note = rebalance_actions.draft_answer(pending_action_data["payload"]), None
+        else:
+            pending_action_data = await _build_assistant_pending_action(
+                message_text, collected_data, user_ctx, auth_header, conversation_id=conversation_id_str,
+            )
+            if isinstance(pending_action_data, dict) and pending_action_data.get("blocked_note"):
+                pending_action_data, blocked_note = None, pending_action_data["blocked_note"]
+            else:
+                blocked_note = None
+            note = blocked_note or draft_note(pending_action_data)
+            if pending_action_data:
+                # written before the draft existed: a "không thể tạo phiếu" sentence would contradict the card
+                answer = copilot_rebalance_decision.strip_sentences(
+                    answer, [s for s in re.split(r"(?<=[.!?])\s+|\n+", answer)
+                             if re.search(_DRAFT_CONTRADICTIONS, s, re.IGNORECASE)])
+        if note:  # the reply was written before the draft existed (see agent_planner.draft_note)
+            answer = f"{answer.rstrip()}\n\n{note}"
 
     extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, now=viz_now, question=message_text,
                                            answer=answer, explanation=explanation, visualizations=visualizations)
     extras["faithfulness"] = faithfulness
     extras["verification"] = verification
-    extras["decision"] = copilot_decision.build(plan, collected_data, verification)
+    extras["decision"] = (copilot_rebalance_decision.build(plan, collected_data, verification)
+                          or copilot_decision.build(plan, collected_data, verification))
+    extras["timeline"] = copilot_rebalance_decision.timeline(plan, collected_data, verification)
     if image_ctx:
         extras["image_context"] = _public_image_context(image_ctx)
     new_state = copilot_next_state(plan, collected_data, state, extras["visualizations"])
@@ -5070,6 +5223,9 @@ def _attach_explanation_brief(messages: list[dict], plan, collected_data: dict, 
         # tools the model picks): an answer now could only be invented.
         brief = ("## Chưa có dữ liệu cho câu hỏi này\nChưa có kết quả tool nào. Gọi tool phù hợp trước khi trả lời; "
                  "không trả lời bằng kiến thức chung hay suy đoán (tên sách, số liệu, mức ưu tiên, lý do).")
+    comparison = copilot_rebalance_decision.comparison_brief(collected_data)
+    if comparison:
+        brief = f"{brief}\n\n{comparison}" if brief else comparison
     coverage = copilot_response.coverage_note(plan, collected_data)
     if coverage:
         brief = f"{brief}\n\n{coverage}" if brief else coverage
@@ -5089,6 +5245,8 @@ async def assistant(request: Request, req: AssistantRequest):
         return AssistantResponse(**await _clarify_turn(plan, conversation, conversation_id_str, message_text, turn["state"]))
     if (plan.visualization or {}).get("mode") in ("retype", "render"):
         return AssistantResponse(**await _visualization_turn(turn))
+    if (plan.style or {}).get("confirm_request"):
+        return AssistantResponse(**await _confirm_rebalance_turn(request, turn))
 
     messages = turn["messages"]
     answer = ""
@@ -5108,7 +5266,7 @@ async def assistant(request: Request, req: AssistantRequest):
                 answer, answered_normally = deterministic, True
                 break
             result = await provider.chat(
-                messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                messages, ANALYTICS_TOOLS, num_predict=_num_predict(plan), timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
                 feature="assistant",
             )
             call_usage.append(result.usage.as_dict())
@@ -5127,13 +5285,14 @@ async def assistant(request: Request, req: AssistantRequest):
         else:
             answer, final_usage = await answer_from_collected_data(
                 messages, collected_data, functools.partial(provider.chat, feature="assistant"),
-                ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+                _num_predict(plan), ASSISTANT_LLM_TIMEOUT_SECONDS,
             )
             if final_usage:
                 call_usage.append(final_usage)
                 answered_normally = answer != TOOL_LOOP_EXHAUSTED_MESSAGE
     except Exception:
         logger.exception("Assistant tool-calling failed")
+        await _record_failed_turn(conversation)
         raise HTTPException(
             status_code=503,
             detail="Trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi).",
@@ -5148,6 +5307,19 @@ async def assistant(request: Request, req: AssistantRequest):
         plan_note_text=turn["plan_note"], viz_now=turn.get("viz_now"), image_ctx=turn.get("image_ctx"),
     )
     return AssistantResponse(**payload)
+
+
+ASSISTANT_UNAVAILABLE_REPLY = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
+
+
+async def _record_failed_turn(conversation) -> None:
+    """The question was already stored: store what the user was told too, so the
+    next prompt never holds two user turns in a row (audit S-2). Best effort."""
+    try:
+        await conversation_store.append_message(conversation.id, role="assistant", content=ASSISTANT_UNAVAILABLE_REPLY,
+                                                metadata={"failed": True})
+    except Exception:  # noqa: BLE001 - the user-facing error is already being returned
+        logger.warning("could not record the failed assistant turn", exc_info=True)
 
 
 def _validated_payload(payload: dict) -> dict:
@@ -5195,6 +5367,13 @@ async def assistant_stream(request: Request, req: AssistantRequest):
             yield _sse("token", {"text": payload["answer"]})
             yield _sse("done", payload)
         return StreamingResponse(visualization_event_generator(), media_type="text/event-stream")
+    if (plan.style or {}).get("confirm_request"):
+        async def confirm_event_generator():
+            yield _sse("status", {"stage": "permission_recheck"})
+            payload = _validated_payload(await _confirm_rebalance_turn(request, turn))
+            yield _sse("token", {"text": payload["answer"]})
+            yield _sse("done", payload)
+        return StreamingResponse(confirm_event_generator(), media_type="text/event-stream")
 
     messages = turn["messages"]
 
@@ -5219,17 +5398,19 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     yield _sse("token", {"text": answer})
                     break
                 final_chunk = None
+                round_text = ""
                 async for chunk in provider.chat_stream(
-                    messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
+                    messages, ANALYTICS_TOOLS, num_predict=_num_predict(plan), timeout=ASSISTANT_LLM_TIMEOUT_SECONDS,
                     feature="assistant",
                 ):
                     if chunk.delta:
-                        answer += chunk.delta
+                        round_text += chunk.delta
                         yield _sse("token", {"text": chunk.delta})
                     if chunk.done:
                         final_chunk = chunk
 
                 if final_chunk is None or final_chunk.assistant_message is None:
+                    answer = round_text
                     break
 
                 call_usage.append(final_chunk.usage.as_dict())
@@ -5237,8 +5418,11 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 tool_calls = final_chunk.tool_calls
 
                 if not tool_calls:
+                    answer = round_text
                     answered_normally = True
                     break
+                # Text the model wrote while calling tools is not the answer (audit S-1):
+                # only the final round's text is, like /assistant's result.text.
 
                 await execute_tool_round(
                     tool_calls, auth_header, tools_used, collected_data, messages, _run_tool_call, _render_tool_result,
@@ -5247,7 +5431,7 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                 if not answer:
                     answer, final_usage = await answer_from_collected_data(
                         messages, collected_data, functools.partial(provider.chat, feature="assistant"),
-                        ASSISTANT_NUM_PREDICT, ASSISTANT_LLM_TIMEOUT_SECONDS,
+                        _num_predict(plan), ASSISTANT_LLM_TIMEOUT_SECONDS,
                     )
                     if final_usage:
                         call_usage.append(final_usage)
@@ -5255,7 +5439,8 @@ async def assistant_stream(request: Request, req: AssistantRequest):
                     yield _sse("token", {"text": answer})
         except Exception:
             logger.exception("Assistant streaming failed")
-            answer = "Xin lỗi, trợ lý AI hiện không khả dụng (model chưa sẵn sàng hoặc không phản hồi)."
+            answer = ASSISTANT_UNAVAILABLE_REPLY
+            await _record_failed_turn(conversation)
             yield _sse("token", {"text": answer})
             yield _sse("done", _assistant_payload(
                 answer=answer, tools_used=tools_used, collected_data=collected_data,

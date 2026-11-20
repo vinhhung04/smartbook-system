@@ -41,6 +41,8 @@ AGING = "aging"
 WEEDING = "weeding"
 BOOK_SEARCH = "book_search"
 PRIORITY = "priority"
+# Inventory rebalancing & procurement decision (analytics /rebalancing-plan).
+REBALANCE = "rebalance"
 
 # Capabilities whose tools take a period / a warehouse - used to decide what a
 # follow-up may inherit from the previous turn.
@@ -59,7 +61,7 @@ PLANNABLE_TOOLS = frozenset({
     "get_aging_inventory", "get_weeding_suggestions",
     "get_warehouse_low_stock_items", "compare_warehouses", "explain_warehouse_shortage",
     "compare_borrow_periods", "compare_top_books", "analyze_demand_vs_stock", "simulate_reorder_budget",
-    "explain_reorder_item", "rank_priority_tasks",
+    "explain_reorder_item", "rank_priority_tasks", "analyze_inventory_rebalancing",
 })
 
 _SIMPLE_CAP_TOOL = {
@@ -105,9 +107,30 @@ CAP_KEYWORDS: dict[str, list] = {
               "luong nhap", "de xuat nhap", "nhap uu tien", _R(r"\bnhap (du|het|toan bo)\b"),
               _R(r"\bsach (duoc )?de xuat\b"), _R(r"\b(dau sach|sach) (co )?uu tien (cao|trung binh|thap)\b")],
     AGING: ["ton lau", "ton kho lau", "khong ai muon", "lau khong ai", _R(r"\be ton\b"), _R(r"\bsach e\b"), "hang chet",
-            "dead stock", "nam kho", "khong ai dung", "khong hoat dong"],
-    WEEDING: ["thanh ly", "chon von", "chuyen kho", "dieu chuyen", "weeding"],
+            "dead stock", "nam kho", "khong ai dung", "khong hoat dong", "chiem von", "ton dong von", "von ton dong"],
+    # "điều chuyển" is rebalancing (REBALANCE), not weeding: thanh lý stays here.
+    WEEDING: ["thanh ly", "chon von", "weeding"],
     BOOK_SEARCH: [_R(r"\bco sach (?!nao)\S.* (khong|ko)\b"), "tim sach", "sach cua tac gia", "tac gia", "isbn", "sach ve chu de"],
+    # Moving stock between warehouses / transfer-vs-buy decisions. "dư" (surplus)
+    # loses its accent to "du" = "đủ" (enough), so it is detected on the
+    # original message instead (_SURPLUS_WORD); only unambiguous forms here.
+    REBALANCE: ["dieu chuyen", "chuyen kho", "chuyen hang", "dieu phoi", "can bang ton", "can bang kho", "du thua",
+                "thua sach", "nguon hang", "nguon sach", "noi bo", "phan con thieu",
+                _R(r"\bchuyen (sach|ve|sang|qua|tu|bot)\b"), _R(r"\bton (qua|rat|kha) nhieu\b"),
+                _R(r"\btan dung (hang|sach|nguon|ton|so)\b"),
+                _R(r"\blay (sach|hang) (tu|o|cua) (kho|cac kho|noi khac|cho khac|chi nhanh)\b"),
+                _R(r"\blay (hang|sach) o dau\b"), _R(r"\bbu (cho|sang|vao|lai cho) (kho|chi nhanh)\b"),
+                _R(r"\bho tro (cho )?(kho|chi nhanh|hcm|ha noi|da nang|can tho)\b"),
+                _R(r"\b(chuyen|dieu chuyen) hay (nhap|mua)\b|\b(nhap|mua)( them| moi)? hay (chuyen|dieu chuyen)\b"),
+                "san se", _R(r"\bcan (doi|bang) (hang|ton|sach|kho|nguon)\b"), _R(r"\bom (nhieu|qua nhieu|rat nhieu) (sach|hang)\b"),
+                _R(r"\b(mua|nhap)\b.{0,25}\bhay\b.{0,12}\b(chuyen|dieu chuyen)\b"),
+                "so luong dieu chuyen", "kho nguon", _R(r"\bchuyen (duoc )?(toi da )?bao nhieu\b"),
+                _R(r"\b(phan tich|danh gia|kiem tra)\b.{0,15}\bton kho\b.{0,25}\b(cac|tung|moi|nhung|tat ca) kho\b"),
+                _R(r"\b(tinh trang|tinh hinh) (hang hoa|nguon hang|nguon sach)\b"),
+                _R(r"\bkho nao (can|nen) (bo sung|nhap them|them hang)\b"), _R(r"\bkho nao\b.{0,30}\bho tro\b"),
+                _R(r"\bnhu cau\b.{0,40}\b(tung|cac|moi) kho\b|\b(tung|cac|moi) kho\b.{0,40}\bnhu cau\b"),
+                _R(r"\bnhu cau (du kien|du bao)\b.{0,30}\bkho\b"),
+                _R(r"\bket hop\b.{0,40}\b(mua|nhap|ton|chuyen)\b"), _R(r"\b(chi|vua) (dieu chuyen|mua moi)\b")],
     PRIORITY: ["uu tien xu ly", "viec gi", "thu tu uu tien", "uu tien cong viec", "nen lam gi truoc",
                "viec can lam", "cong viec tuan nay", "cong viec hom nay"],
 }
@@ -219,6 +242,8 @@ _TOKEN_EXPANSIONS = {
     "hn": "ha noi", "hni": "ha noi", "sg": "hcm", "tphcm": "hcm", "dashbord": "dashboard",
     "trc": "truoc", "hnay": "hom nay", "hqua": "hom qua", "thg": "thang", "nhiu": "nhieu", "bnhieu": "bao nhieu",
     "ktra": "kiem tra",
+    # rebalancing typos seen in the semantic test set
+    "chuyn": "chuyen", "chuyeb": "chuyen", "dieuchuyen": "dieu chuyen", "muamoi": "mua moi", "ngansach": "ngan sach",
 }
 _PHRASE_EXPANSIONS = [
     (_R(r"\btp\.? ?hcm\b"), "hcm"), (_R(r"\bsai gon\b"), "hcm"), (_R(r"\bho chi minh\b"), "hcm"),
@@ -303,6 +328,8 @@ def detect_capabilities(text: str) -> list[str]:
     """All capabilities a normalized question touches, in table order."""
     # "phạt quá hạn" is a fine type, not a question about overdue loans.
     scan = re.sub(r"\bphat qua han\b", "phat loai tre", text)
+    # "không sinh ra lượt mượn nào" describes idle stock, it does not ask for borrow trends (audit E-18).
+    scan = re.sub(r"\bkhong (sinh ra |phat sinh |co |tao ra )?(luot muon|ai muon)\b", "khong ai muon", scan)
     return [cap for cap, keywords in CAP_KEYWORDS.items() if any(_matches(scan, kw) for kw in keywords)]
 
 
@@ -600,6 +627,9 @@ _ORDINAL_BOOK = _R(r"(?<!\d )\b(cuon|quyen|sach|dau sach)\s*(dau tien|thu nhat|s
 # Personal data the copilot never hands out, whatever the role.
 _SENSITIVE = _R(r"so dien thoai|\bsdt\b|dia chi nha|\bemail\b|\bcccd\b|\bcmnd\b|mat khau|password|"
                 r"so tai khoan|the tin dung")
+# A database statement: never run, never a chart ("DROP TABLE" read as a table request, audit E-8).
+_SQL = _R(r"\bsql\b|\bselect\b.{1,80}\bfrom\b|\b(drop|truncate|alter) table\b|\bdelete from\b|\binsert into\b|"
+          r"\bupdate\s+\w+\s+set\b")
 _ALL_WAREHOUSES = _R(r"\b(tat ca|cac|tung|moi|nhung|toan bo) kho\b|\bkho nao\b")
 # Words after "kho" that are not a warehouse name.
 _HINT_STOP = {"nay", "do", "kia", "ay", "nao", "thap", "cao", "lau", "hang", "sach", "va", "voi", "vs", "thi",
@@ -767,7 +797,7 @@ _CAP_PRIMARY_INTENT = {
     OVERDUE: "OVERDUE_LOAN_QUERY", FINES: "FINE_SUMMARY_QUERY", RESERVATION: "RESERVATION_QUERY",
     WAREHOUSE_RISK: "LOW_STOCK_QUERY", LOW_STOCK_ITEMS: "LOW_STOCK_QUERY", REORDER: "REORDER_SUGGESTION_QUERY",
     AGING: "AGING_INVENTORY_QUERY", WEEDING: "AGING_INVENTORY_QUERY", BOOK_SEARCH: "BOOK_SEARCH_QUERY",
-    PRIORITY: "DASHBOARD_SUMMARY_QUERY",
+    PRIORITY: "DASHBOARD_SUMMARY_QUERY", REBALANCE: "INVENTORY_REBALANCING_QUERY",
 }
 
 
@@ -829,6 +859,364 @@ def _book_title_in(text: str, original: str) -> str | None:
     return None
 
 
+# ── inventory rebalancing turns ──────────────────────────────────────────────
+#
+# One structured reading of a rebalancing turn (QueryPlan.entities["rebalance"]):
+#   focus        every business intent the turn asks for, primary first (REB_FOCUS)
+#   destinations warehouses to supply (resolved against the user's visible list)
+#   sources      warehouses named as "từ <kho>" (kept for the what-if layer)
+#   budget_vnd   purchase budget of THIS scenario, resolved deterministically
+#                from the words, the previous scenario or a recovered one
+#   scenario_ref the earlier scenario the turn goes back to, if any
+# The planner never computes figures and never trusts warehouse ids from text:
+# names are resolved against the visible list and analytics re-checks scope.
+
+REB_FOCUS = ("CONFIRM_ACTION", "CREATE_DRAFT", "WHAT_IF", "BUDGET_OPTIMIZATION", "DECISION_EXPLANATION",
+             "DECISION_COMPARISON", "HYBRID_DECISION", "PROCUREMENT_OPTIMIZATION", "TRANSFER_QUANTITY",
+             "TRANSFER_OPPORTUNITY", "SURPLUS_DETECTION", "SHORTAGE_DETECTION", "DEMAND_ANALYSIS", "INVENTORY_DIAGNOSIS")
+_REB_FOCUS_RULES = [
+    ("CONFIRM_ACTION", _R(r"\b(toi |minh )?xac nhan\b|\b(hay |cu )?thuc hien\b.{0,40}\b(yeu cau|phuong an|ban nhap|hop le)\b")),
+    ("CREATE_DRAFT", _R(r"\b(tao|lap|soan)\b.{0,30}\b(ban nhap|phieu|yeu cau|de xuat|don)\b|\bban nhap\b")),
+    ("WHAT_IF", _R(r"\b(neu|gia su|gia dinh|what if)\b|\b(giam|tang|cat|bot) (tiep|them)\b")),
+    ("BUDGET_OPTIMIZATION", _R(r"\bngan sach\b|\btoi uu chi phi\b|\bphan bo\b|\b\d+(?:[.,]\d+)? ?(trieu|tr|ty)\b")),
+    ("DECISION_EXPLANATION", _R(r"\b(tai sao|vi sao|ly do|giai thich|can cu|phoi hop|manager khac|quan ly kho khac)\b")),
+    ("DECISION_COMPARISON", _R(r"\b(so sanh|phuong an nao|cach nao|tot hon|hieu qua (nhat|hon)|nen chon|lua chon)\b")),
+    ("HYBRID_DECISION", _R(r"\bket hop\b|\b(mua|nhap)\b.{0,25}\bhay\b.{0,12}\b(chuyen|dieu chuyen)\b|\b(chuyen|dieu chuyen)( hang| sach)? hay (nhap|mua)\b|\b(nhap|mua)( them| moi)? hay "
+                           r"(chuyen|dieu chuyen)\b|\bphan con thieu\b|\b(khong|chua) du\b.{0,30}\b(mua|nhap)\b")),
+    ("PROCUREMENT_OPTIMIZATION", _R(r"\b(mua|nhap) (them|moi|bao nhieu)\b|\bcan (mua|nhap)\b|\bdat mua\b")),
+    ("TRANSFER_QUANTITY", _R(r"\bso luong (dieu )?chuyen\b|\bchuyen (duoc )?(toi da )?bao nhieu\b|"
+                             r"\b(so luong|muc|la) an toan\b")),
+    ("TRANSFER_OPPORTUNITY", _R(r"\b(dieu chuyen|chuyen kho|chuyen hang|dieu phoi|san se|can doi|nguon hang|nguon sach|noi bo)\b|"
+                                r"\bchuyen (sach|ve|sang|qua|tu)\b|\btan dung\b|\blay (sach|hang)\b|\bbu (cho|sang|vao)\b|"
+                                r"\bho tro\b")),
+    ("SURPLUS_DETECTION", _R(r"\b(du thua|thua sach|om (nhieu|qua nhieu|rat nhieu) (sach|hang)|ton (qua|rat|kha) nhieu)\b")),
+    ("SHORTAGE_DETECTION", _R(r"\b(thieu|het hang|het sach|can bo sung|bo sung hang)\b")),
+    ("DEMAND_ANALYSIS", _R(r"\bnhu cau\b")),
+    ("INVENTORY_DIAGNOSIS", _R(r"\b(phan tich|tinh hinh|kiem tra|tong quan|danh gia|xem)\b.{0,20}\b(ton kho|kho|hang hoa|"
+                              r"nguon sach|nguon hang)\b")),
+]
+_SURPLUS_WORD = re.compile(r"(?<!\w)(dư|thừa)(?!\w)", re.IGNORECASE)
+_REB_FOLLOWUP = _R(r"\b(phuong an|kich ban|ngan sach|ban dau|luc dau|luc nay|truoc do|vua roi|quay lai|dung lai|"
+                   r"giu nguyen|kho dich|kho nguon|tot hon|hieu qua|ban nhap|xac nhan|dong y|thuc hien|tai sao|vi sao|"
+                   r"phoi hop|quan ly kho|manager|con thieu|mua them|nhap them|mua moi|khong du|so sanh|lua chon|"
+                   r"phe duyet|duyet|nhu cau|an toan|bao nhieu|thieu|het hang|bo sung|cham|tre|ngung hoat dong|ton an toan|uu tien|chi cho phep|gia dinh|ngung|dong cua)\b")
+_REB_ALL = _R(r"\b(tat ca|cac|tung|moi|nhung|toan bo|hai|ba|bon|giua) kho\b|\b\d+ kho\b|\bkho nao\b|\b(toan )?he thong\b|\bnguon (hang|sach)\b")
+_REB_APPROVE = _R(r"\b(phe duyet|duyet)\b")
+_REB_SHORT_AT = _R(r"\b(?:kho |chi nhanh )?([a-z0-9]+(?: [a-z0-9]+)?) (?:dang |van |bi )?(?:thieu|can bo sung|het sach|het hang)\b")
+_REB_DEMAND = _R(r"\bnhu cau\b.{0,25}\b(tang|giam)\s*(?:them\s*)?(\d{1,3})\s*%")
+_SAFETY_WORDS = r"(?:ton an toan|safety stock|muc an toan|du phong)"
+_REB_SAFETY_PCT = [_R(rf"\b{_SAFETY_WORDS}\b.{{0,20}}\b(tang|giam)\s*(?:len |them )?(\d{{1,3}})\s*%"),
+                   _R(rf"\b(tang|giam)\b.{{0,12}}\b{_SAFETY_WORDS}\b.{{0,12}}?\b(\d{{1,3}})\s*%")]
+_REB_SAFETY_DOUBLE = _R(rf"\b{_SAFETY_WORDS}\b.{{0,20}}\bgap doi\b|\bgap doi\b.{{0,20}}\b{_SAFETY_WORDS}\b")
+
+
+def _safety_multiplier(text: str) -> float | None:
+    """ "tăng tồn an toàn 50%" -> 1.5, "giảm mức an toàn 20%" -> 0.8, "gấp đôi tồn an toàn" -> 2."""
+    if _REB_SAFETY_DOUBLE.search(text):
+        return 2.0
+    for pattern in _REB_SAFETY_PCT:
+        if m := pattern.search(text):
+            return round(1 + float(m.group(2)) / 100 * (1 if m.group(1) == "tang" else -1), 2)
+    return None
+_REB_HIGH = _R(r"\b(chi|uu tien)\b.{0,20}\b(high|uu tien cao|muc cao)\b|\bsach high\b")
+_REB_ONLY_PAIR = _R(r"\bchi (cho phep |duoc )?(dieu )?chuyen (giua|tu)\b")
+_REB_RESET = _R(r"\b(bo|xoa|huy) (cac |moi |het )?(gia dinh|dieu kien)\b")
+_REB_CLOSED_AFTER = r"(ngung hoat dong|dong cua|tam dong|ngung)"
+_REB_BLOCKED_AFTER = r"(khong (the |duoc )?(dieu )?chuyen|khong chuyen duoc|khong ho tro)"
+_REB_BLOCKED_BEFORE = r"(tru|bo|loai|khong lay (sach |hang )?(tu |o )?|khong dung)"
+
+
+def _wh_near(w: dict, text: str, after: str | None = None, before: str | None = None) -> bool:
+    """The warehouse is named right before `after` or right after `before`."""
+    name = _wh_norm(w.get("name", ""))
+    for alias in {name, _wh_norm(w.get("code", "")), re.sub(r"^(kho|chi nhanh) ", "", name)}:
+        if not alias:
+            continue
+        if after and re.search(rf"\b{re.escape(alias)}\b.{{0,15}}\b{after}", text):
+            return True
+        if before and re.search(rf"\b{before}\s*(kho |chi nhanh )?{re.escape(alias)}\b", text):
+            return True
+    return False
+# "giảm tiếp 20%", "tăng thêm 10% nữa": a change of the CURRENT scenario's budget
+_REB_PCT_AGAIN = _R(r"\b(giam|cat|bot|tang)\s*(tiep|them|nua)\s*(\d{1,3})\s*%")
+_REB_ORIGINAL = _R(r"\b(ban dau|luc dau|dau tien|goc|ngay tu dau)\b")
+_REB_PREVIOUS = _R(r"\b(phuong an|kich ban|ngan sach|lan)\b.{0,12}\b(truoc|truoc do|luc nay|vua roi|cu)\b|\bquay lai\b")
+_REB_CROSS = _R(r"\bso (sanh )?voi\b.{0,20}\b(phuong an|kich ban|ngan sach|lan)\b")
+_REB_DEST_AFTER = _R(r"\b(?:ve|sang|den|cho|ho tro|bu cho|tai)\s+(?:kho\s+|chi nhanh\s+)?([a-z0-9]+(?: [a-z0-9]+)?)")
+_REB_ANALYSIS = {
+    "CONFIRM_ACTION": DECISION, "CREATE_DRAFT": DECISION, "WHAT_IF": WHAT_IF, "BUDGET_OPTIMIZATION": DECISION,
+    "DECISION_EXPLANATION": CAUSAL, "DECISION_COMPARISON": DECISION, "HYBRID_DECISION": DECISION,
+    "PROCUREMENT_OPTIMIZATION": DECISION, "TRANSFER_QUANTITY": DECISION, "TRANSFER_OPPORTUNITY": DECISION,
+}
+_REB_EXTRA_TOOLS = {KPI: "get_dashboard_kpis", OVERDUE: "get_overdue_summary", FINES: "get_fine_summary",
+                    RESERVATION: "get_reservation_funnel", AGING: "get_aging_inventory",
+                    TOP_BORROWED: "get_top_books", BORROW_TREND: "get_borrow_trends"}
+
+
+def rebalance_focus(text: str, original: str = "") -> list[str]:
+    """Every rebalancing intent a normalized message asks for, primary first."""
+    found = [name for name, pattern in _REB_FOCUS_RULES if pattern.search(text)]
+    if original and _SURPLUS_WORD.search(original) and not re.search(r"(?i)số dư", original) \
+            and "SURPLUS_DETECTION" not in found:
+        found.append("SURPLUS_DETECTION")
+    found = sorted(found, key=REB_FOCUS.index)
+    return found or ["INVENTORY_DIAGNOSIS"]
+
+
+def _named_after_from(w: dict, text: str) -> bool:
+    """The warehouse is named as a source: "từ kho X", "lấy ... ở X"."""
+    name = _wh_norm(w.get("name", ""))
+    aliases = {name, _wh_norm(w.get("code", "")), re.sub(r"^(kho|chi nhanh) ", "", name)}
+    return any(a and re.search(rf"\b(tu|o|cua) (kho |chi nhanh )?{re.escape(a)}\b", text) for a in aliases)
+
+
+def _plan_rebalance(message: str, text: str, caps: list[str], budgets: list[float], budget_pct: float | None,
+                    budget_delta: float | None, named: list[dict], wh: dict, state: dict, warehouses: list[dict],
+                    assumptions: list[str], sensitive: bool) -> QueryPlan | None:
+    """The plan of a rebalancing turn, or None when the turn is not one."""
+    if sensitive:
+        return None
+    prev = state.get("rebalance") or {}
+    in_topic = REBALANCE in (state.get("capabilities") or []) and bool(prev)
+    if _SURPLUS_WORD.search(message) and not re.search(r"(?i)số dư", message) and REBALANCE not in caps \
+            and re.search(r"\b(kho|sach|hang|ton)\b", text):
+        caps = [*caps, REBALANCE]
+    if budget_pct is None and (m := _REB_PCT_AGAIN.search(text)):
+        budget_pct = float(m.group(3)) * (1 if m.group(1) == "tang" else -1)
+    if BOOK_SEARCH in caps and in_topic and not _book_title_in(text, message):
+        # "Tìm sách thiếu tại TP.HCM" during a rebalancing talk: no title, so not a catalog search
+        caps = [c for c in caps if c != BOOK_SEARCH]
+    other = set(caps) - {REBALANCE, REORDER, WAREHOUSE_RISK, LOW_STOCK_ITEMS}
+    # A follow-up stays in the rebalancing talk only when it asks for nothing
+    # else ("tiền phạt chưa thu?" mid-talk is a fines question).
+    followup = in_topic and not other and bool(
+        caps or budgets or budget_pct is not None or budget_delta is not None or _REB_FOLLOWUP.search(text) or named)
+    if REBALANCE not in caps and not followup:
+        return None
+    caps = [REBALANCE, *[c for c in caps if c != REBALANCE]]
+    focus = rebalance_focus(text, message)
+    if (budget_pct is not None or (budget_delta is not None and in_topic)) and "WHAT_IF" not in focus:
+        focus = sorted([*focus, "WHAT_IF"], key=REB_FOCUS.index)
+    primary = focus[0]
+    carried: list[str] = []
+    assumptions = list(assumptions)
+
+    sources = [w for w in named if _named_after_from(w, text)]
+    dests = [w for w in named if w not in sources]
+    # "Kho Đà Nẵng san sẻ sách cho HCM": the warehouse after "về / cho / sang"
+    # is the one supplied; any other warehouse named is a source.
+    m = _REB_DEST_AFTER.search(text)
+    found = resolve_warehouses(f"kho {m.group(1)}", warehouses)["warehouses"] if m else []
+    if len(found) == 1:
+        sources = [*sources, *[w for w in named if w["id"] != found[0]["id"] and w not in sources]]
+        dests = found
+        if not any(w["id"] == found[0]["id"] for w in named):
+            assumptions.append(f"Hiểu kho cần bổ sung là {found[0]['name']}")
+    elif not dests and (m := _REB_SHORT_AT.search(text)):
+        # "TP.HCM đang thiếu sách, kho nào hỗ trợ…": the place said to be short is the one to supply
+        found = resolve_warehouses(f"kho {m.group(1)}", warehouses)["warehouses"]
+        if len(found) == 1:
+            dests = found
+            assumptions.append(f"Hiểu kho cần bổ sung là {found[0]['name']}")
+    # What-if conditions (Phase 4), read from the words; merged below into the
+    # current scenario's conditions so only what the user changes moves.
+    whatif: dict = {}
+    if m := _REB_DEMAND.search(text):
+        whatif["demand_change_pct"] = float(m.group(2)) * (1 if m.group(1) == "tang" else -1)
+        if budget_pct is not None and abs(budget_pct) == float(m.group(2)) and "ngan sach" not in text:
+            budget_pct = None  # "nhu cầu tăng 20%" changes demand, not the budget
+    for w in named:
+        if _wh_near(w, text, after=_REB_CLOSED_AFTER):
+            whatif.setdefault("closed_warehouses", []).append(w["name"])
+        elif _wh_near(w, text, after=_REB_BLOCKED_AFTER, before=_REB_BLOCKED_BEFORE):
+            whatif.setdefault("exclude_source_warehouses", []).append(w["name"])
+    if _REB_ONLY_PAIR.search(text) and len(named) >= 2:
+        # "chỉ cho phép điều chuyển giữa Đà Nẵng và HCM": the warehouse already
+        # being supplied stays the destination, the other is the only source
+        prev_ids = {w.get("id") for w in prev.get("destinations") or []}
+        pair_dest = [w for w in named if w["id"] in prev_ids] or [named[-1]]
+        whatif["only_source_warehouses"] = [w["name"] for w in named if w not in pair_dest]
+        dests, sources = pair_dest, [w for w in named if w not in pair_dest]
+    if (multiplier := _safety_multiplier(text)) is not None:
+        whatif["safety_stock_multiplier"] = multiplier
+        if budget_pct is not None and "ngan sach" not in text:
+            budget_pct = None  # the % belongs to the safety stock
+    if _REB_HIGH.search(text):
+        whatif["priority"] = "HIGH"
+    if delay := parse_lead_time_delay(text):
+        whatif["lead_time_delay_days"] = delay
+    conditioned = {n for v in whatif.values() if isinstance(v, list) for n in v}
+    if conditioned:  # a warehouse named in a condition is not a place to supply
+        dests = [w for w in dests if w["name"] not in conditioned]
+    if whatif and "WHAT_IF" not in focus:
+        focus = sorted([*focus, "WHAT_IF"], key=REB_FOCUS.index)
+        primary = focus[0]
+    if in_topic and primary == "DECISION_EXPLANATION":
+        # "Tại sao không chọn Hà Nội?": a warehouse named while asking about the
+        # plan is a source being discussed, not a new place to supply.
+        sources = [*sources, *[w for w in dests if w not in sources]]
+        dests = []
+    if _REB_ALL.search(text) and not found and not _REB_DEST_AFTER.search(text):
+        dests = []  # "tất cả các kho tôi được xem": every readable warehouse, not a named list
+    if not dests and in_topic and not _REB_ALL.search(text):
+        dests = _still_visible(prev.get("destinations"), warehouses)
+        if dests:
+            carried.append("destinations")
+
+    scenarios = [s for s in prev.get("scenarios") or [] if isinstance(s, dict)]
+    current = prev.get("budget_vnd")
+    referenced = None
+    if in_topic and _REB_ORIGINAL.search(text) and scenarios:
+        priced = [s for s in scenarios if s.get("budget_vnd") is not None]
+        if budgets:
+            referenced = next((s for s in scenarios if s.get("budget_vnd") == budgets[0]), None)
+        else:
+            referenced = priced[0] if priced else scenarios[0]
+    elif in_topic and _REB_PREVIOUS.search(text) and len(scenarios) >= 2:
+        referenced = scenarios[-2]
+    # "So sánh với phương án lúc nãy": the referenced scenario is the one to
+    # compare WITH; the current scenario stays the one being answered.
+    compare_with = None
+    if in_topic and _REB_CROSS.search(text) and scenarios:
+        compare_with = referenced or (scenarios[-2] if len(scenarios) >= 2 else None)
+        referenced = None
+    selected = referenced
+    if compare_with is None and selected is None and in_topic and scenarios and "WHAT_IF" in focus:
+        # A what-if is answered against the scenario it changes, so the
+        # difference (old vs new) is computed from two real results.
+        compare_with = next((s for s in scenarios if s.get("id") == prev.get("selected_scenario_id")), scenarios[-1])
+    question = None
+    budget = None
+    if selected:
+        budget = selected.get("budget_vnd")
+        if not named:
+            dests = _still_visible(selected.get("destinations"), warehouses)
+        carried.append(f"scenario#{selected.get('id')}")
+        assumptions.append(f"Dùng lại kịch bản #{selected.get('id')}"
+                           + (f" (ngân sách mua {_money(budget)})" if budget is not None else " (không giới hạn ngân sách)"))
+    elif budget_delta is not None and current is not None and in_topic and budget_pct is None \
+            and current + budget_delta > 0 and not re.search(r"\b(len|xuong|con)\b", text):
+        # "giảm thêm 5 triệu" changes the current budget; "giảm xuống 8 triệu" names the new one
+        budget = round(current + budget_delta)
+        carried.append("budget_vnd")
+        assumptions.append(f"Ngân sách mới = {_money(current)} {'+' if budget_delta > 0 else '−'} "
+                           f"{_money(abs(budget_delta))} = {_money(budget)}")
+    elif budgets:
+        budget = budgets[0]
+    elif budget_pct is not None:
+        if current is None:
+            question = (f"Bạn muốn {'tăng' if budget_pct > 0 else 'giảm'} {abs(budget_pct):g}% so với ngân sách mua nào? "
+                        "Kịch bản hiện tại chưa có ngân sách mua.")
+        else:
+            budget = round(current * (1 + budget_pct / 100))
+            carried.append("budget_vnd")
+            assumptions.append(f"Ngân sách mới = {_money(current)} {'+' if budget_pct > 0 else '−'} {abs(budget_pct):g}% "
+                               f"= {_money(budget)}")
+    elif budget_delta is not None and current is not None and current + budget_delta > 0:
+        budget = round(current + budget_delta)
+        carried.append("budget_vnd")
+        assumptions.append(f"Ngân sách mới = {_money(current)} {'+' if budget_delta > 0 else '−'} "
+                           f"{_money(abs(budget_delta))} = {_money(budget)}")
+    elif in_topic and current is not None:
+        budget = current
+        carried.append("budget_vnd")
+
+    prev_whatif = (selected.get("whatif") if selected else (prev.get("whatif") if in_topic else None)) or {}
+    if _REB_RESET.search(text):
+        prev_whatif = {}
+    visible_names = {w.get("name") for w in warehouses}
+    merged = {}
+    for k, v in {**prev_whatif, **whatif}.items():
+        if isinstance(v, list):
+            v = [n for n in v if n in visible_names]  # a condition never outlives the warehouse's visibility
+            if not v:
+                continue
+        merged[k] = v
+    if prev_whatif and any(k not in whatif for k in merged):
+        carried.append("what_if")
+    if question is None and wh.get("ambiguous") and not named:
+        question = f"Có nhiều kho khớp với tên bạn nêu: {_warehouse_names(wh['ambiguous'])}. Bạn muốn bổ sung cho kho nào?"
+    if question is None and primary in ("TRANSFER_OPPORTUNITY", "TRANSFER_QUANTITY") and not dests and not sources \
+            and not _REB_ALL.search(text) and not in_topic and len(warehouses) > 1:
+        question = "Bạn muốn bổ sung sách cho kho nào? Hoặc tôi có thể phân tích cơ hội điều chuyển giữa tất cả các kho bạn được xem."
+    plan = QueryPlan(intent="INVENTORY_REBALANCING_QUERY", normalized=text, capabilities=caps,
+                     is_followup=in_topic and followup and REBALANCE not in detect_capabilities(text))
+    plan.secondary_intents = [i for i in _intent_of(caps)[1] if i != plan.intent]
+    if question:
+        plan.clarification_needed = True
+        plan.clarification_question = question
+        plan.clarification_options = ([f"Điều chuyển sách về {w['name']}" for w in (wh.get("ambiguous") or warehouses)[:3]]
+                                      + ["Phân tích tất cả các kho"]) if "kho nào" in question else []
+        plan.requested_analysis = CLARIFICATION
+        plan.carried_over = carried
+        plan.assumptions = assumptions
+        return plan
+
+    def call(dest_list: list[dict], amount, conditions: dict) -> dict:
+        args: dict = {}
+        if dest_list:
+            args["destination_warehouses"] = [w["name"] for w in dest_list]
+        if amount is not None:
+            args["budget_vnd"] = amount
+        args.update(conditions)
+        return {"name": "analyze_inventory_rebalancing", "args": args}
+
+    style = detect_style(text)
+    tools = [call(dests, budget, merged)]
+    if compare_with:
+        back = call(_still_visible(compare_with.get("destinations"), warehouses), compare_with.get("budget_vnd"),
+                    {k: v for k, v in (compare_with.get("whatif") or {}).items()
+                     if not isinstance(v, list) or all(n in visible_names for n in v)})
+        if back != tools[0]:
+            tools.insert(0, back)  # the current scenario stays the last call (next_state reads it)
+            carried.append(f"compare_scenario#{compare_with.get('id')}")
+    for cap in caps:
+        if cap in _REB_EXTRA_TOOLS and len(tools) < MAX_PLANNED_TOOLS:
+            tools.append({"name": _REB_EXTRA_TOOLS[cap], "args": {}})
+    analysis = _REB_ANALYSIS.get(primary, LOOKUP)
+    if primary == "CONFIRM_ACTION":
+        # Executing is the pending-action confirm step (fresh permission and
+        # stock re-check there), never a side effect of reading the plan.
+        tools = []
+        style = {**style, "confirm_request": True}
+    elif _REB_APPROVE.search(text) and primary not in ("CREATE_DRAFT",):
+        # Approving a transfer / purchase is the approver's own step in its
+        # workflow screen; the copilot neither approves nor implies it did.
+        plan.clarification_needed = True
+        plan.requested_analysis = CLARIFICATION
+        plan.clarification_question = ("Tôi không phê duyệt giao dịch thay bạn. Tôi có thể tạo bản nháp yêu cầu điều chuyển / "
+                                        "mua mới để bạn xác nhận; việc duyệt, xuất kho và nhận hàng vẫn làm theo quy trình "
+                                        "hiện tại trên màn hình Yêu cầu.")
+        plan.clarification_options = ["Tạo bản nháp cho phương án đang chọn"]
+        plan.carried_over = carried
+        plan.assumptions = assumptions
+        return plan
+    elif primary == "CREATE_DRAFT":
+        style = {**style, "write_request": True, "rebalance_draft": True}
+    if "DECISION_EXPLANATION" in focus and _R(r"\b(phoi hop|manager|quan ly kho|lien he)\b").search(text):
+        style = {**style, "coordination": True}
+
+    plan.requested_analysis = analysis
+    plan.answer_mode = answer_mode(analysis, caps, text) if analysis != LOOKUP else ANALYSIS
+    plan.style = style
+    plan.entities = {
+        "warehouses": [*dests, *sources],
+        "budgets_vnd": [budget] if budget is not None else [],
+        "budget_change_pct": budget_pct,
+        "rebalance": {
+            "focus": focus, "primary": primary,
+            "destinations": dests, "sources": sources, "budget_vnd": budget, "whatif": merged,
+            "scenario_ref": selected.get("id") if selected else None,
+            "compare_scenario": compare_with.get("id") if compare_with else None,
+        },
+    }
+    plan.required_tools = tools[:MAX_PLANNED_TOOLS]
+    plan.carried_over = carried
+    plan.assumptions = assumptions
+    plan.sub_questions = decompose(caps, plan.required_tools, dests, None, None)
+    return plan
+
+
 @dataclass
 class SemanticHint:
     """A validated semantic reading of the question (copilot_semantic_planner):
@@ -875,11 +1263,12 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
     deictic_warehouse = bool(_DEICTIC_WAREHOUSE.search(text))
     deictic_book = bool(_DEICTIC_BOOK.search(text))
     deictic_generic = bool(_DEICTIC_GENERIC.search(text))
-    sensitive = bool(_SENSITIVE.search(text))
+    sql = bool(_SQL.search(text))
+    sensitive = bool(_SENSITIVE.search(text)) or sql
     ordinal_book = _ORDINAL_BOOK.search(text)
     book_title = _book_title_in(text, message)
     style = detect_style(text)
-    viz = detect_visualization(text)
+    viz = detect_visualization("" if sql else text)
     budget_delta = parse_budget_delta(text)
     book_ref = _DEICTIC_BOOK.search(text)
     subset_ref = _SUBSET_REF.search(text)
@@ -900,6 +1289,10 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             named_warehouses = list(hint.warehouses)
         if not periods and hint.periods:
             periods = list(hint.periods)
+    rebalance = _plan_rebalance(message, text, caps, budgets, budget_pct, budget_delta, named_warehouses, wh, state,
+                                warehouses, assumptions, sensitive)
+    if rebalance is not None:
+        return rebalance
     # "Giải thích kỹ hơn", "nói ngắn gọn", "vì sao không chọn phương án khác":
     # a request about HOW to say the previous answer, not a new data question.
     no_new_scope = not caps and not periods and not named_warehouses and not budgets \
@@ -1293,6 +1686,9 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
                 args["priority"] = priority
             if lead_time:
                 args["lead_time_days"] = lead_time
+            if len(named_warehouses) == 1:
+                # the cards and the list must be about the books short at THAT warehouse
+                args["warehouse"] = named_warehouses[0]["name"]
             add("get_reorder_suggestions", args)
         capset.discard(REORDER)
     if AGING in capset or WEEDING in capset:
@@ -1343,6 +1739,8 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
         # user must confirm. Seeding here would bypass nothing, but it would
         # change what data the action builder sees.
         tools = []
+        if REORDER in caps:
+            style = {**style, "write_request": True}  # the draft is the system's, after the answer (plan_note)
         if REORDER in caps and budgets:
             # Phase 6: "Lập phiếu đề xuất nhập nháp với ngân sách X" (the decision
             # card's button) must rest on the same budget allocation the decision
@@ -1350,6 +1748,16 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             # The draft still only becomes a pending action the user confirms.
             tools = [{"name": "get_reorder_suggestions", "args": {"budget_vnd": budgets[0], "limit": 100}}]
             style = {**style, "draft_request": True}
+        elif REORDER in caps:
+            # "Tạo đề xuất phiếu nhập sách cho kho Đà Nẵng": left to the model, it once
+            # called no tool and answered with invented generalities (live run
+            # 2026-11-20). The same data the model picks when it does call a tool.
+            args = {"limit": 100}
+            if len(named_warehouses) == 1:
+                args["warehouse"] = named_warehouses[0]["name"]
+            if priority:
+                args["priority"] = priority
+            tools = [{"name": "get_reorder_suggestions", "args": args}]
 
     plan.capabilities = caps
     plan.intent, plan.secondary_intents = _intent_of(caps)
@@ -1407,14 +1815,15 @@ TOOL_CAPABILITIES: dict[str, set[str]] = {
     "analyze_demand_vs_stock": {TOP_BORROWED, WAREHOUSE_RISK, LOW_STOCK_ITEMS, REORDER},
     "get_aging_inventory": {AGING}, "get_weeding_suggestions": {WEEDING}, "search_books": {BOOK_SEARCH},
     "rank_priority_tasks": {PRIORITY},
+    "analyze_inventory_rebalancing": {REBALANCE, WAREHOUSE_RISK, LOW_STOCK_ITEMS, REORDER},
 }
 _CAP_GOAL = {
     KPI: "Tổng quan các chỉ số chính", BORROW_TREND: "Lượt mượn theo thời gian (tăng hay giảm)",
     TOP_BORROWED: "Sách được mượn nhiều nhất", OVERDUE: "Tình hình phiếu quá hạn", FINES: "Tiền phạt",
     RESERVATION: "Đặt chỗ / giữ sách", WAREHOUSE_RISK: "Tồn kho thấp, rủi ro thiếu sách",
     LOW_STOCK_ITEMS: "Đầu sách dưới ngưỡng tồn", REORDER: "Đề xuất nhập (số lượng, chi phí)",
-    AGING: "Sách tồn lâu, ít được mượn", WEEDING: "Đề xuất thanh lý / điều chuyển", BOOK_SEARCH: "Tìm sách trong danh mục",
-    PRIORITY: "Việc cần ưu tiên xử lý",
+    AGING: "Sách tồn lâu, ít được mượn", WEEDING: "Đề xuất thanh lý", BOOK_SEARCH: "Tìm sách trong danh mục",
+    PRIORITY: "Việc cần ưu tiên xử lý", REBALANCE: "Điều chuyển giữa các kho và mua mới phần còn thiếu",
 }
 # (part, the part it builds on): "sắp hết" / "cần nhập bao nhiêu" asked about
 # the most-borrowed books are answered for THOSE books.
@@ -1450,6 +1859,7 @@ def decompose(caps: list[str], tools: list[dict], warehouses: list[dict], curren
 # ── conversation state ───────────────────────────────────────────────────────
 
 _ITEM_SOURCES = (
+    ("analyze_inventory_rebalancing", lambda r: r.get("top_shortages") or []),
     ("explain_reorder_item", lambda r: [r.get("item")] if isinstance(r.get("item"), dict) else []),
     ("simulate_reorder_budget", lambda r: (r.get("scenarios") or [{}])[0].get("funded_items") or []),
     ("analyze_demand_vs_stock", lambda r: r.get("rows") or []),
@@ -1470,6 +1880,42 @@ def _viz_state(visualizations: list[dict] | None, previous: dict) -> dict:
     primary = next((v for v in charts if v.get("type") != "table"), charts[0] if charts else None)
     return {"shown": bool(visualizations), "chart_type": primary.get("type") if primary else None,
             "types": [v.get("type") for v in visualizations], "titles": [v.get("title") for v in visualizations][:4]}
+
+
+MAX_SCENARIOS = 8
+
+
+def _rebalance_state(plan: QueryPlan, collected_data: dict, previous: dict) -> dict | None:
+    """Scenario memory of the rebalancing conversation: every scenario that was
+    actually computed (its budget, destinations and the options' ranking), so
+    "phương án 15 triệu ban đầu", "quay lại phương án trước" and "giảm tiếp 20%"
+    resolve to real earlier parameters. Kept across other topics; only a
+    computed result adds a scenario."""
+    prev = previous.get("rebalance") or None
+    reb = (plan.entities or {}).get("rebalance")
+    if not reb:
+        return prev
+    calls = [c for c in plan.required_tools if c.get("name") == "analyze_inventory_rebalancing"]
+    key = "analyze_inventory_rebalancing" + (f"#{len(calls)}" if len(calls) > 1 else "")
+    result = collected_data.get(key)
+    if not isinstance(result, dict) or result.get("error"):
+        return prev
+    scenarios = [s for s in (prev or {}).get("scenarios") or [] if isinstance(s, dict)]
+    dests = [{"id": w.get("id"), "name": w.get("name"), "code": w.get("code")} for w in reb.get("destinations") or []]
+    ids = sorted(d["id"] for d in dests)
+    budget = reb.get("budget_vnd")
+    whatif = reb.get("whatif") or {}
+    same = next((s for s in scenarios if s.get("budget_vnd") == budget and sorted(s.get("destination_ids") or []) == ids
+                 and (s.get("whatif") or {}) == whatif), None)
+    rec = result.get("recommendation") or {}
+    if same is None:
+        same = {"id": (scenarios[-1]["id"] + 1) if scenarios else 1, "budget_vnd": budget, "destinations": dests,
+                "destination_ids": ids, "whatif": whatif, "best_option": rec.get("best_business_option"),
+                "executable_option": rec.get("executable_option")}
+        scenarios = (scenarios + [same])[-MAX_SCENARIOS:]
+    return {"destinations": dests, "budget_vnd": budget, "whatif": whatif, "scenarios": scenarios,
+            "selected_scenario_id": same["id"],
+            "focus": reb.get("focus")}
 
 
 def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = None,
@@ -1511,7 +1957,9 @@ def next_state(plan: QueryPlan, collected_data: dict, previous: dict | None = No
     focus = next((w for w in warehouses if riskier and w.get("name") == riskier), None)
     if focus is None and warehouses == previous.get("warehouses"):
         focus = previous.get("focus_warehouse")
+    rebalance = _rebalance_state(plan, collected_data, previous)
     return {
+        "rebalance": rebalance,
         "capabilities": caps,
         "intent": plan.intent,
         "analysis": plan.requested_analysis,

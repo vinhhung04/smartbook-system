@@ -1,0 +1,49 @@
+Running assistant tool-selection eval on 34 questions (provider=openrouter, model=qwen/qwen3.7-flash)...
+  [1/34] 'Tình hình thư viện hiện nay thế nào?' -> round1=[] (MISS) multi=[] (MISS)
+  [2/34] 'Cho tôi xem KPI tổng quan tháng này' -> round1=['get_dashboard_kpis'] (OK) multi=['get_dashboard_kpis'] (OK)
+  [3/34] 'Xu hướng mượn sách 30 ngày qua ra sao?' -> round1=['get_borrow_trends'] (OK) multi=['get_borrow_trends'] (OK)
+  [4/34] 'Lượt mượn trả sách theo tháng trong quý vừa rồi như thế nào?' -> round1=['get_borrow_trends'] (OK) multi=['get_borrow_trends'] (OK)
+  [5/34] 'Top 10 sách được mượn nhiều nhất là gì?' -> round1=[] (MISS) multi=[] (MISS)
+  [6/34] 'Sách nào đang hot nhất thư viện hiện tại?' -> round1=['get_top_books'] (OK) multi=[] (MISS)
+  [7/34] 'Hiện có bao nhiêu phiếu mượn đang quá hạn?' -> round1=['get_overdue_summary'] (OK) multi=['get_overdue_summary'] (OK)
+  [8/34] 'Danh sách các khoản mượn trễ hạn lâu nhất là gì?' -> round1=[] (MISS) multi=[] (MISS)
+  [9/34] 'Tổng số tiền phạt chưa thu là bao nhiêu?' -> round1=['get_fine_summary'] (OK) multi=[] (MISS)
+  [10/34] 'Phân loại tiền phạt theo loại (quá hạn, mất sách, hư sách) t' -> round1=[] (MISS) multi=['get_fine_summary'] (OK)
+  [11/34] 'Kho nào đang có rủi ro hết hàng cao nhất?' -> round1=['compare_warehouses'] (MISS) multi=['compare_warehouses'] (MISS)
+  [12/34] 'Tồn kho thấp đang tập trung ở kho nào?' -> round1=['get_warehouse_stock_risk'] (OK) multi=[] (MISS)
+  [13/34] 'Nên nhập thêm sách gì trong tuần này?' -> round1=[] (MISS) multi=[] (MISS)
+  [14/34] 'Gợi ý nhập hàng ưu tiên cao là những sách nào?' -> round1=['get_reorder_suggestions'] (OK) multi=[] (MISS)
+  [15/34] 'Với ngân sách 50 triệu đồng thì nên nhập những sách nào?' -> round1=['get_reorder_suggestions'] (OK) multi=['get_reorder_suggestions'] (OK)
+  [16/34] 'Tỷ lệ chuyển đổi từ đặt sách sang mượn sách là bao nhiêu phầ' -> round1=['get_reservation_funnel'] (OK) multi=[] (MISS)
+  [17/34] 'Có bao nhiêu đơn đặt sách đang chờ xác nhận?' -> round1=['get_reservation_funnel'] (OK) multi=['get_reservation_funnel'] (OK)
+  [18/34] 'Tìm sách viết về kỹ năng sống cho trẻ em' -> round1=['search_books'] (OK) multi=['search_books'] (OK)
+  [19/34] 'Có sách nào của tác giả Nguyễn Nhật Ánh trong thư viện không' -> round1=['search_books'] (OK) multi=['search_books'] (OK)
+  [20/34] 'Sách nào đang tồn kho lâu ngày không ai mượn?' -> round1=[] (MISS) multi=['get_aging_inventory'] (OK)
+  [21/34] 'Hàng nào nằm im trong kho hơn 90 ngày rồi?' -> round1=[] (MISS) multi=[] (MISS)
+  [22/34] 'Nên thanh lý những sách nào để giải phóng kho?' -> round1=['get_weeding_suggestions'] (OK) multi=['get_weeding_suggestions'] (OK)
+  [23/34] 'Sách nào đang chiếm vốn mà không sinh ra lượt mượn nào, nên ' -> round1=['get_weeding_suggestions'] (OK) multi=[] (MISS)
+  [24/34] 'So sánh tình hình tồn kho rủi ro và gợi ý nhập hàng để tôi q' -> round1=['compare_warehouses'] (MISS) multi=[] (MISS)
+  [25/34] 'Cho tôi bức tranh tổng thể: KPI hiện tại và các khoản quá hạ' -> round1=['get_dashboard_kpis', 'get_overdue_summary'] (OK) multi=['get_dashboard_kpis', 'get_overdue_summary'] (OK)
+  [26/34] 'Tổng số tiền phạt chưa thu và tỷ lệ chuyển đổi đặt sách sang' -> round1=['get_fine_summary'] (MISS) multi=['get_fine_summary', 'get_reservation_funnel'] (OK)
+  [27/34] 'Top sách được mượn nhiều nhất, và xu hướng mượn trả 30 ngày ' -> round1=['get_top_books', 'get_borrow_trends'] (OK) multi=['get_top_books', 'get_borrow_trends'] (OK)
+  [28/34] 'Sách nào đang tồn kho lâu ngày, và sách nào nên thanh lý để ' -> round1=['get_aging_inventory', 'get_weeding_suggestions'] (OK) multi=['get_aging_inventory', 'get_weeding_suggestions'] (OK)
+  [29/34] 'Cho tôi biết tình hình mượn quá hạn, đồng thời tổng tiền phạ' -> round1=[] (MISS) multi=[] (MISS)
+  [30/34] 'Tình hình thư viện hiện nay thế nào, và kho nào đang có rủi ' -> round1=[] (MISS) multi=['get_dashboard_kpis', 'compare_warehouses'] (MISS)
+  [31/34] 'Có bao nhiêu đơn đặt sách đang chờ xác nhận, và sách nào đan' -> round1=['get_reservation_funnel'] (MISS) multi=['get_reservation_funnel', 'get_aging_inventory'] (OK)
+  [32/34] 'Xin chào, bạn có thể giúp tôi những việc gì?' -> round1=[] (OK) multi=[] (OK)
+  [33/34] 'Cảm ơn bạn nhiều nhé' -> round1=[] (OK) multi=[] (OK)
+  [34/34] '1 cộng 1 bằng mấy?' -> round1=[] (OK) multi=[] (OK)
+round1: {
+  "total": 34,
+  "exact_match_rate": 0.618,
+  "avg_precision": 0.676,
+  "avg_recall": 0.647
+}
+multi_round: {
+  "total": 34,
+  "exact_match_rate": 0.559,
+  "avg_precision": 0.574,
+  "avg_recall": 0.574
+}
+
+Report written to /work/eval/reports/assistant_tools_20261119_210315.md

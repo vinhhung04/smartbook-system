@@ -17,6 +17,7 @@ Usage (from services/ai-service/):
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -27,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # this dir, for 
 
 import scoring  # noqa: E402
 from main import (  # noqa: E402
-    ANALYTICS_TOOLS, ASSISTANT_MAX_TOOL_ROUNDS, ASSISTANT_SYSTEM_PROMPT, _get_assistant_provider,
+    ANALYTICS_TOOLS, ASSISTANT_MAX_TOOL_ROUNDS, ASSISTANT_NUM_PREDICT, ASSISTANT_SYSTEM_PROMPT, _get_assistant_provider,
 )
 
 DATASET_PATH = os.path.join(os.path.dirname(__file__), "assistant_dataset.json")
@@ -43,7 +44,7 @@ async def ask_once(question: str) -> list[str]:
         {"role": "system", "content": ASSISTANT_SYSTEM_PROMPT},
         {"role": "user", "content": question},
     ]
-    result = await provider.chat(messages, ANALYTICS_TOOLS, num_predict=200, timeout=LLM_TIMEOUT_SECONDS)
+    result = await provider.chat(messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=LLM_TIMEOUT_SECONDS)
     return [call["function"]["name"] for call in result.tool_calls]
 
 
@@ -68,7 +69,7 @@ async def ask_multi_round(question: str, max_rounds: int = ASSISTANT_MAX_TOOL_RO
     ]
     called: list[str] = []
     for _round in range(max_rounds):
-        result = await provider.chat(messages, ANALYTICS_TOOLS, num_predict=200, timeout=LLM_TIMEOUT_SECONDS)
+        result = await provider.chat(messages, ANALYTICS_TOOLS, num_predict=ASSISTANT_NUM_PREDICT, timeout=LLM_TIMEOUT_SECONDS)
         messages.append(result.assistant_message)
         tool_calls = result.tool_calls
         if not tool_calls:

@@ -55,9 +55,11 @@ CAPABILITIES = {
     cp.WAREHOUSE_RISK: "tồn kho thấp, thiếu sách, hết hàng, rủi ro theo kho/chi nhánh, số bản còn",
     cp.REORDER: "đề xuất nhập/mua thêm, số lượng nên nhập, ngân sách nhập, nguy cơ hết trước khi hàng về",
     cp.AGING: "sách tồn lâu, ít hoặc không ai mượn",
-    cp.WEEDING: "đề xuất thanh lý, điều chuyển sách",
+    cp.WEEDING: "đề xuất thanh lý sách",
     cp.BOOK_SEARCH: "tìm một cuốn sách cụ thể theo tên/tác giả/ISBN trong danh mục",
     cp.PRIORITY: "việc cần ưu tiên xử lý hôm nay/tuần này, điều đáng quan tâm nhất",
+    cp.REBALANCE: ("điều chuyển/cân bằng sách giữa các kho, kho thiếu và kho dư, nguồn hàng nội bộ, nên chuyển hay "
+                   "mua mới hay kết hợp, ngân sách mua phần còn thiếu, kịch bản và bản nháp điều chuyển"),
 }
 ANALYSES = {cp.LOOKUP, cp.CAUSAL, cp.COMPARISON, cp.DECISION, cp.WHAT_IF, cp.RANKING}
 CLARIFY_REASONS = {"warehouse", "book", "period", "metric", "other"}
@@ -241,6 +243,9 @@ def _context_block(state: dict | None, warehouses: list[dict], rule_plan: cp.Que
         "time_range": (state.get("time_range") or {}).get("label"),
         "budgets_vnd": state.get("budgets") or [],
         "items_shown": [i.get("title") for i in (state.get("last_items") or [])[:5] if isinstance(i, dict)],
+        "rebalance_scenarios": [{"id": sc.get("id"), "budget_vnd": sc.get("budget_vnd"),
+                                 "destinations": [d.get("name") for d in sc.get("destinations") or []]}
+                                for sc in ((state.get("rebalance") or {}).get("scenarios") or [])[-4:]],
     } if state.get("capabilities") else None
     return json.dumps({
         "previous_turn": prev,

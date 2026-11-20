@@ -428,6 +428,139 @@ export interface AssistantExtras {
   verification?: AiVerification | null;
   /** Phase 6: structured decision for a reorder decision / what-if, built from tool data (copilot_decision.py). */
   decision?: AiDecision | null;
+  /** Inventory rebalancing: result of confirming a draft from the chat ("Tôi xác nhận"). */
+  execution?: AiExecution | null;
+  /** Inventory rebalancing: stages the turn really completed (copilot_rebalance_decision.timeline). */
+  timeline?: AiTimelineStage[];
+}
+
+export interface AiTimelineStage {
+  key: string;
+  label: string;
+  status: 'done' | 'failed' | 'skipped' | 'warning' | string;
+  at?: string;
+}
+
+export interface AiRebalanceTransfer {
+  variant_id: string;
+  title: string;
+  quantity: number;
+  from_warehouse?: string | null;
+  to_warehouse?: string | null;
+  source_available_after?: number | null;
+  source_protected_qty?: number | null;
+  permission: 'EXECUTABLE' | 'COLLABORATIVE' | string;
+  permission_reason?: string | null;
+}
+
+export interface AiRebalancePurchase {
+  variant_id: string;
+  title: string;
+  quantity: number;
+  warehouse?: string | null;
+  cost_vnd?: number | null;
+  lead_time_days?: number | null;
+  permission: 'EXECUTABLE' | 'PROPOSAL_ONLY' | string;
+}
+
+export interface AiRebalanceOption {
+  code: string;
+  label: string;
+  is_best: boolean;
+  is_executable: boolean;
+  total_shortage_qty: number;
+  transfer_qty: number;
+  purchase_qty: number;
+  covered_qty: number;
+  remaining_shortage_qty: number;
+  remaining_high_priority_qty: number;
+  shortage_covered_pct: number;
+  purchase_cost_vnd: number;
+  transfer_cost_vnd: number | null;
+  budget_vnd: number | null;
+  remaining_budget_vnd: number | null;
+  collaborative_transfer_lines: number;
+  response_days: number | null;
+  risk_level: string;
+  risks: string[];
+}
+
+export interface AiRebalanceWarehouse {
+  warehouse_id: string;
+  warehouse: string;
+  access: 'WRITE' | 'READ' | string;
+  variants_tracked: number;
+  shortage_variants: number;
+  shortage_qty: number;
+  surplus_variants: number;
+  surplus_qty: number;
+  forecast_demand_qty: number;
+  incoming_qty: number;
+  outgoing_qty: number;
+}
+
+export interface AiRebalanceSide {
+  budget_vnd: number | null;
+  best_option: string | null;
+  shortage_covered_pct: number | null;
+  remaining_shortage_qty: number | null;
+  purchase_cost_vnd: number | null;
+  transfer_qty: number | null;
+  purchase_qty: number | null;
+  remaining_budget_vnd: number | null;
+  what_if?: Record<string, unknown>;
+}
+
+/** Decision object of a rebalancing turn (copilot_rebalance_decision.build): figures from analytics only. */
+export interface AiRebalanceDecision {
+  kind: 'rebalance';
+  error?: string;
+  permission_denied?: boolean;
+  scope_unavailable?: boolean;
+  focus?: string[];
+  conclusion?: string | null;
+  notice?: string | null;
+  scope?: Array<{ warehouse_id: string; warehouse: string; access: string }>;
+  diagnosis?: {
+    warehouses_analyzed: number;
+    shortage_variants: number;
+    surplus_variants: number;
+    shortage_qty: number;
+    surplus_qty: number;
+    forecast_demand_qty: number;
+    per_warehouse: AiRebalanceWarehouse[];
+  };
+  options?: AiRebalanceOption[];
+  recommendation?: { best_business_option: string | null; executable_option: string | null; rule: string | null;
+    best_label?: string | null; executable_label?: string | null };
+  transfers?: AiRebalanceTransfer[];
+  purchases?: AiRebalancePurchase[];
+  budget_vnd?: number | null;
+  what_if?: Record<string, unknown>;
+  comparison?: { base: AiRebalanceSide; current: AiRebalanceSide; diff: Record<string, number | null> } | null;
+  assumptions?: string[];
+  data_quality?: { transfer_lead_time_days?: number | null; transfer_lead_time_samples?: number; unpriced_variants?: number };
+  evidence?: { source?: string | null; retrieved_at?: string | null };
+  verification?: string | null;
+}
+
+export interface AiExecutionResult {
+  message?: string;
+  created_transfers?: Array<{ label: string; number: string | null; status: string | null; quantity?: number; lines?: number }>;
+  created_purchase_requests?: Array<{ label: string; number: string | null; status: string | null; quantity?: number }>;
+  already_created?: Array<{ kind: string; label: string; number: string | null; status: string | null }>;
+  skipped?: Array<{ kind: string; label: string; reason: string }>;
+  failed_items?: Array<{ kind?: string; title: string; error: string }>;
+  proposals?: Array<{ kind: string; title: string; quantity: number; from_warehouse?: string; to_warehouse?: string; warehouse?: string; reason: string }>;
+  next_steps?: string[];
+  needs_reconciliation?: boolean;
+}
+
+export interface AiExecution {
+  action_id: string | null;
+  status: string | null;
+  result?: AiExecutionResult | null;
+  error?: string;
 }
 
 export interface AiDecisionOption {

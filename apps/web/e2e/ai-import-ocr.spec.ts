@@ -231,8 +231,18 @@ test('the verifying model\'s location is drawn on the photo, labelled as its own
   await row.getByRole('button', { name: 'Xem vị trí trên ảnh' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(/vị trí do model xác minh tự chỉ ra/)).toBeVisible();
-  const image = await dialog.getByAltText('Ảnh bìa trước').boundingBox();
-  const box = await dialog.getByTestId('ocr-location-box').boundingBox();
+  // Measure image and box in the same frame, once the photo is decoded and the dialog's open
+  // animation has finished: two separate reads mid-animation drifted by ~1.7 px on CI.
+  await expect(dialog.getByAltText('Ảnh bìa trước')).toHaveJSProperty('complete', true);
+  const { image, box } = await dialog.getByTestId('ocr-image-view').evaluate(async (view) => {
+    const root = view.closest('[role="dialog"]') ?? view;
+    await Promise.all(root.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => undefined)));
+    const rect = (el: Element | null) => {
+      const r = el!.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    return { image: rect(view.querySelector('img')), box: rect(view.querySelector('[data-testid="ocr-location-box"]')) };
+  });
   expect(image && box).toBeTruthy();
   // The box sits at the returned fractions of the rendered image (within a pixel).
   expect(Math.abs(box!.x - (image!.x + TITLE_BOX.x * image!.width))).toBeLessThan(1.5);

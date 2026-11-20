@@ -148,7 +148,16 @@ class RagContextTests(unittest.TestCase):
         )
         self.assertIn("[RAG CONTEXT]", context)
         self.assertIn("Catalog Books", context)
-        self.assertIn("error:500", context)
+        self.assertIn("lỗi máy chủ", context)
+
+    def test_rag_context_says_no_permission_not_http_403(self):
+        # audit E-4: "error:403" / "returned HTTP 403" made the model tell a librarian to get a "lỗi quyền" fixed
+        context = build_rag_context(
+            {"intent": LOW_STOCK_QUERY, "confidence": 0.9},
+            {"summary": "", "raw": {}, "warnings": [],
+             "sources": [{"name": "Overdue Summary", "endpoint": "/analytics/overdue-summary", "status": "error:403"}]})
+        self.assertIn("Overdue Summary: tài khoản không có quyền xem", context)
+        self.assertNotIn("403", context)
 
 
 class MergeGroundingContextTests(unittest.TestCase):
@@ -270,3 +279,44 @@ def test_personal_loan_titles_come_from_the_borrow_service_shape():
     assert upc._loan_title({}) == "?"
     text = upc._fmt_loans([{"loan_number": "L1", "status": "BORROWED", "primary_book_title": "Norwegian Wood"}])
     assert '"Norwegian Wood"' in text
+
+
+class ReplySanitizerTests(unittest.TestCase):
+    """Audit E-9 / E-10: rules the model broke although the prompt states them."""
+    CONTEXT = {"summary": "- Gia hạn sách: Thẻ Đọc 1 lần, Thẻ Bạc 2 lần.\n- Phạt trễ hạn: Thẻ Đọc 5.000 VND/ngày.",
+               "raw": {}, "sources": [{"name": "FAQ", "status": "ok"}]}
+
+    def test_an_unstated_not_supported_claim_is_replaced_by_the_honest_gap(self):
+        from rag import sanitize_reply
+        reply = ("Hiện tại SmartBook **chưa hỗ trợ** gia hạn thẻ hội viên qua tin nhắn SMS.\n"
+                 "Bạn có thể gia hạn sách đã mượn: Thẻ Đọc 1 lần, Thẻ Bạc 2 lần.")
+        text, removed = sanitize_reply(reply, "Có thể gia hạn thẻ qua SMS không?", self.CONTEXT)
+        self.assertEqual(len(removed), 1)
+        self.assertNotIn("chưa hỗ trợ", text)
+        self.assertIn("Thẻ Đọc 1 lần", text)
+        self.assertIn("Tài liệu của thư viện chưa có thông tin", text)
+
+    def test_a_stated_restriction_stays(self):
+        from rag import sanitize_reply
+        ctx = {**self.CONTEXT, "summary": self.CONTEXT["summary"] + "\n- Thư viện không hỗ trợ đặt sách qua điện thoại."}
+        reply = "Thư viện không hỗ trợ đặt sách qua điện thoại."
+        self.assertEqual(sanitize_reply(reply, "Đặt sách qua điện thoại được không?", ctx), (reply, []))
+
+    def test_the_users_wrong_figure_is_not_rationalised(self):
+        from rag import sanitize_reply
+        reply = ("Thông tin này không chính xác theo quy định hiện hành.\n"
+                 "Mức phạt 50.000 VND/ngày chỉ áp dụng cho một trường hợp rất cụ thể hoặc các gói cũ.\n"
+                 "- Thẻ Đọc: 5.000 VND/ngày")
+        text, removed = sanitize_reply(reply, "Vì sao phí phạt trễ là 50.000 đồng mỗi ngày?", self.CONTEXT)
+        self.assertEqual(len(removed), 1)
+        self.assertIn("không chính xác", text)
+        self.assertIn("5.000 VND/ngày", text)
+        self.assertNotIn("trường hợp rất cụ thể", text)
+        # refuting it is fine: the figure stays when the sentence says it is wrong
+        ok = "Mức 50.000 VND/ngày không đúng; mức đúng là 5.000 VND/ngày."
+        self.assertEqual(sanitize_reply(ok, "Vì sao phí phạt trễ là 50.000 đồng mỗi ngày?", self.CONTEXT)[1], [])
+
+    def test_a_number_the_user_merely_mentions_is_kept(self):
+        from rag import sanitize_reply
+        reply = "12 cuốn vượt hạn mức của Thẻ Đọc."
+        self.assertEqual(sanitize_reply(reply, "Tôi muốn mượn 12 cuốn được không?", self.CONTEXT), (reply, []))

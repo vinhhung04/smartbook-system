@@ -1,0 +1,1078 @@
+[
+ {
+  "rep": 0,
+  "system": "assistant",
+  "message": "Tại sao Kho HCM Chinh thiếu sách?",
+  "status": 200,
+  "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt mượn). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; đầu sách không có lượt mượn ít cấp bách hơn.\n* **Quy mô tồn kho hiện tại**: Kho có tổng cộng 4 đầu sách dưới ngưỡng (0 đầu sách đã hết hàng), với 198 bản tồn khả dụng và 2 bản đang cho mượn.\n\nGiới hạn: Số liệu nhu cầu mượn lấy từ mô hình đề xuất nhập, tính trên toàn hệ thống, chưa tách riêng cho từng kho. Các yếu tố nêu trên chỉ là tương quan quan sát được trong dữ liệu, không phải nguyên nhân đã được kiểm chứng.",
+  "tools": [
+   [
+    "explain_warehouse_shortage",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "causal",
+   "requested_analysis": "causal",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "explain_warehouse_shortage"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [
+   "kpi"
+  ],
+  "llm_calls": 1,
+  "draft_answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n*   **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt mượn). Ý nghĩa: Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; đầu sách không có lượt mượn ít cấp bách hơn.\n*   **Quy mô tồn kho hiện tại**: Kho có tổng cộng 4 đầu sách dưới ngưỡng (0 đầu sách đã hết hàng), với 198 bản tồn khả dụng và 2 bản đang cho mượn.\n\nGiới hạn: Số liệu nhu cầu mượn lấy từ mô hình đề xuất nhập, tính trên toàn hệ thống, chưa tách riêng cho từng kho. Các yếu tố nêu trên chỉ là tương quan quan sát được trong dữ liệu, không phải nguyên nhân đã được kiểm chứng.",
+  "conversation_id": "b2ee433f-dd46-49f2-b998-4fed0dddaaa3"
+ },
+ {
+  "rep": 0,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Tổng cộng có **267 đầu sách** đang dưới ngưỡng tồn tại các chi nhánh và kho của SmartBook.\n\nCụ thể:\n* **Chi nhánh Đà Nẵng:** 77 đầu sách\n* **Chi nhánh Thủ Đức:** 71 đầu sách\n* **Chi nhánh Hà Nội – Hoàn Kiếm:** 61 đầu sách\n* **Chi nhánh Hà Nội – Cầu Giấy:** 59 đầu sách\n* **Chi Nhanh District 3:** 15 đầu sách\n* **Chi Nhanh District 1:** 1 đầu sách (kèm theo 1 đầu sách đã hết hàng)\n* **Kho HCM Chinh:** 4 đầu sách",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": "Một số con số trong câu trả lời (267) không khớp trực tiếp với dữ liệu đã truy xuất — vui lòng đối chiếu lại trước khi dùng để ra quyết định.",
+  "verification": {
+   "status": "REPAIRED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 2,
+  "draft_answer": "Tổng cộng có **267 đầu sách** đang dưới ngưỡng tồn tại các chi nhánh và kho của SmartBook.\n\nCụ thể:\n*   **Chi nhánh Đà Nẵng:** 77 đầu sách\n*   **Chi nhánh Thủ Đức:** 71 đầu sách\n*   **Chi nhánh Hà Nội – Hoàn Kiếm:** 61 đầu sách\n*   **Chi nhánh Hà Nội – Cầu Giấy:** 59 đầu sách\n*   **Chi Nhanh District 3:** 15 đầu sách\n*   **Chi Nhanh District 1:** 14 đầu sách (kèm theo 1 đầu sách đã hết hàng)\n*   **Kho HCM Chinh:** 4 đầu sách",
+  "conversation_id": "ab267b21-0293-494e-89fc-94c6434efd8b"
+ },
+ {
+  "rep": 0,
+  "system": "assistant",
+  "message": "Chạy câu SQL: DROP TABLE loan_transactions;",
+  "status": 200,
+  "answer": "Tôi chưa có dữ liệu cho số liệu bạn muốn vẽ, nên không tạo biểu đồ để tránh hiển thị số liệu không có căn cứ. Hiện tôi vẽ được: lượt mượn theo thời gian, top sách được mượn, tồn kho và rủi ro thiếu sách theo kho, đề xuất nhập và mô phỏng ngân sách, quá hạn, tiền phạt, đặt chỗ.",
+  "tools": [],
+  "plan": {
+   "intent": "GENERAL_QUERY",
+   "capabilities": [],
+   "answer_mode": "lookup",
+   "requested_analysis": "clarification",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": true,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": null,
+   "safe_to_act": null
+  },
+  "data_keys": [],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 0,
+  "draft_answer": null,
+  "conversation_id": "c178c4fd-31a7-4453-8e0c-aa4bc71e6bcf"
+ },
+ {
+  "rep": 0,
+  "system": "assistant",
+  "message": "followup: Vậy nên nhập gì cho kho đó?",
+  "first": {
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ: *Norwegian Wood* với 18 lượt mượn). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; đầu sách không có lượt mượn ít cấp bách hơn.\n* **Số lượng bản hiện có thấp**: Tồn kho khả dụng của kho chỉ còn 198 bản và đang cho mượn 2 bản, nên khả năng đáp ứng ngay lập tức bị hạn chế.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng cho từng kho. Các yếu tố trên chỉ phản ánh tương quan quan sát được trong dữ liệu, chưa phải là nguyên nhân đã được kiểm chứng.",
+   "tools": [
+    [
+     "explain_warehouse_shortage",
+     {
+      "warehouse": "Kho HCM Chinh"
+     }
+    ]
+   ],
+   "plan": {
+    "intent": "LOW_STOCK_QUERY",
+    "capabilities": [
+     "warehouse_risk"
+    ],
+    "answer_mode": "causal",
+    "requested_analysis": "causal",
+    "periods": null,
+    "warehouses": null,
+    "budget": null,
+    "is_followup": false,
+    "clarification_needed": false,
+    "carried_over": [],
+    "source": null
+   },
+   "grounding_warning": null,
+   "verification": {
+    "status": "PASSED",
+    "safe_to_act": true
+   },
+   "data_keys": [
+    "explain_warehouse_shortage"
+   ],
+   "data_errors": {},
+   "n_recommendations": 0,
+   "visualizations": [
+    "kpi"
+   ],
+   "llm_calls": 1,
+   "draft_answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n*   **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ: *Norwegian Wood* với 18 lượt mượn). Ý nghĩa: Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; đầu sách không có lượt mượn ít cấp bách hơn.\n*   **Số lượng bản hiện có thấp**: Tồn kho khả dụng của kho chỉ còn 198 bản và đang cho mượn 2 bản, nên khả năng đáp ứng ngay lập tức bị hạn chế.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng cho từng kho. Các yếu tố trên chỉ phản ánh tương quan quan sát được trong dữ liệu, chưa phải là nguyên nhân đã được kiểm chứng.",
+   "conversation_id": "e59b9cc2-4f79-4a3f-853e-eb59995ebbf8"
+  },
+  "answer": "Nên xem xét nhập **Sắc Lời Đắc Thế** trước cho Kho HCM Chinh.\n\n**Vì sao**:\n* **Xếp hạng ưu tiên cao nhất**: Đầu sách này đứng đầu danh sách đề xuất của hệ thống (theo thứ tự: mức độ ưu tiên → điểm nhu cầu → số lượng đề xuất).\n* **Mức độ chắc chắn của dữ liệu thấp**: Thời gian chờ hàng hiện tại là giá trị mặc định (14 ngày), chưa được học từ lịch sử giao hàng thực tế của nhà cung cấp.\n* **Số lượng đề xuất bằng 0**: Hệ thống đề xuất nhập 0 bản, ước tính chi phí 0 ₫ — có thể do tồn kho hiện tại (8 bản) còn đủ so với ngưỡng (0 bản) hoặc nhu cầu dự báo thấp.\n\n**Phương án khác**: \n* *Project Hail Mary* cũng ở mức ưu tiên LOW nhưng có thời gian chờ hàng ngắn hơn (1 ngày, đã học từ lịch sử giao).\n* *Norwegian Wood* có nhu cầu mượn cao hơn (18 lượt trong kỳ) nhưng vẫn ở mức ưu tiên LOW và đề xuất 0 bản.\n\n**Bước tiếp theo**: Xác nhận các đầu sách cần nhập — hệ thống sẽ tạo phiếu đề xuất nhập chờ bạn phê duyệt trước khi thực hiện.",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "REORDER_SUGGESTION_QUERY",
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": true,
+   "clarification_needed": false,
+   "carried_over": [
+    "warehouses"
+   ],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "REPAIRED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 3,
+  "visualizations": [
+   "kpi",
+   "table"
+  ],
+  "llm_calls": 2,
+  "draft_answer": "Nên xem xét nhập **One Hundred Years of Solitude** trước cho Kho HCM Chinh.\n\n**Vì sao**:\n* **Tồn kho thấp nhất so với ngưỡng**: Đầu sách này chỉ còn 1 bản khả dụng trong khi ngưỡng tồn tối thiểu là 15 bản — mức chênh lệch lớn nhất trong các đầu sách đang thiếu của kho.\n* **Đề xuất nhập thực tế**: Hệ thống đề xuất nhập 4 bản, ước tính chi phí 880.000 ₫. Đây là dòng duy nhất trong danh sách có số lượng đề xuất > 0.\n* **Yếu tố rủi ro**: Thời gian chờ hàng hiện tại là giá trị mặc định (14 ngày), chưa được học từ lịch sử giao hàng thực tế của nhà cung cấp.\n\n**Phương án khác**: \n* *Norwegian Wood* cũng dưới ngưỡng (2/10 bản) và có nhu cầu mượn cao (18 lượt trong kỳ), nhưng hệ thống chưa đề xuất nhập vì dự kiến hết hàng sau 32 ngày. Có thể cân nhắc nếu ngân sách cho phép.\n* Các đầu sách còn lại (*Tư Duy Như Kinh Tế Gia*, *Project Hail Mary*) đã đủ hoặc gần đủ ngưỡng tồn, nên ít cấp bách hơn.\n\n**Bước tiếp theo**: Xác nhận nhập 4 bản *One Hundred Years of Solitude* — hệ thống sẽ tạo phiếu đề xuất nhập chờ bạn phê duyệt trước khi thực hiện.",
+  "conversation_id": "e59b9cc2-4f79-4a3f-853e-eb59995ebbf8"
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn! 📚\n\nHiện tại, tôi chưa thể kiểm tra chính xác tình trạng tồn kho của sách **Atomic Habits** vì hệ thống yêu cầu đăng nhập để truy cập dữ liệu thời gian thực.\n\nĐể tìm hiểu thông tin này, bạn vui lòng:\n1. Đăng nhập vào tài khoản của mình.\n2. Truy cập trang **Catalog** (Danh mục) và tìm kiếm tên sách.\n3. Hoặc liên hệ trực tiếp với thư viện qua quầy thủ thư hoặc mục **Hỗ trợ & Liên hệ** để được tư vấn cụ thể.\n\nNếu bạn đã đăng nhập, hãy thử lại để tôi có thể hỗ trợ bạn ngay lập tức! ✅",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [],
+  "warnings": [
+   "Missing Authorization header; real-time SmartBook retrieval was skipped."
+  ]
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn! 📚\n\nHiện tại, tôi **chưa thể truy xuất dữ liệu tồn kho thực tế** của SmartBook vì hệ thống chưa xác định được tài khoản đăng nhập của bạn (thiếu Authorization token). Do đó, tôi không thể kiểm tra xem đầu sách nào về **Rust cho người mới** đang có sẵn hay không.\n\nĐể tìm kiếm chính xác, bạn vui lòng:\n1. Đăng nhập vào tài khoản Customer của mình.\n2. Truy cập mục **Catalog** (Danh mục sách) và gõ từ khóa \"Rust\" hoặc \"Lập trình Rust\".\n\nNếu bạn cần hỗ trợ thêm về quy trình mượn sách sau khi tìm thấy, hãy cho tôi biết nhé! ✅\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [],
+  "warnings": [
+   "Missing Authorization header; real-time SmartBook retrieval was skipped."
+  ]
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn, SmartBook AI xin báo cáo tình hình sách **Atomic Habits** (tác giả James Clear) như sau:\n\n📚 **Thông tin sách:**\n- **Tên:** Atomic Habits\n- **Tác giả:** James Clear\n- **ISBN:** 9780735211292\n- **Thể loại:** Kỹ năng sống\n\n⚠️ **Tình trạng tồn kho:**\nHiện tại, số lượng bản còn lại là **0**. Sách đang trong tình trạng hết hàng.\n\n💡 **Gợi ý hành động:**\nVì sách hiện không có sẵn, bạn có thể:\n1. Đặt trước (Reservation) nếu hệ thống hỗ trợ tính năng này để được thông báo khi nhập kho.\n2. Truy cập trang **Catalog** để tìm các đầu sách cùng thể loại \"Kỹ năng sống\" khác đang còn hàng như **7 Thói Quen Hiệu Quả** hay **30 Tuổi - Mọi Thứ Chỉ Mới Bắt Đầu**.\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại hệ thống **SmartBook** chưa có sách nào về chủ đề **Lập trình Rust** trong danh mục tìm kiếm. 📚\n\nTuy nhiên, tôi đã kiểm tra và thấy thư viện đang có một số đầu sách kỹ thuật khác (ví dụ: **Clean Code**) nhưng hiện tại cũng đã hết hàng (số lượng tồn kho là **0**). ⚠️\n\nVì vậy, câu trả lời là **KHÔNG**, thư viện chưa có sách dạy lập trình Rust cho người mới. Bạn có thể ghé thăm trang **Hỗ trợ & Liên hệ** hoặc đến quầy thủ thư để đặt mua hoặc yêu cầu nhập thêm đầu sách này nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "customer01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Thưa bạn, hiện tại thư viện **SmartBook** có trong danh mục nhiều đầu sách của tác giả **Nguyễn Nhật Ánh**, nhưng tất cả đều đang **hết hàng (0 bản)**.\n\nDưới đây là các đầu sách của ông ấy mà hệ thống đang lưu trữ:\n- **Còn Chút Gì Để Nhớ (2022)**\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**\n- **Hạ Đỏ (Tái Bản 2022)**\n- **Mắt Biếc (Tái Bản 2022)**\n\n⚠️ Bạn vui lòng kiểm tra lại trang **Catalog** hoặc liên hệ quầy thủ thư để được cập nhật tình trạng nhập kho mới nhất nhé.\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại **SmartBook chưa hỗ trợ gia hạn thẻ hội viên qua tin nhắn SMS**. 📵\n\nTheo quy định của hệ thống:\n- Việc nâng hạng thẻ do **nhân viên thư viện** thực hiện trực tiếp. 👤\n- Bạn đọc cần liên hệ **quầy thủ thư** tại chi nhánh để được hỗ trợ đổi hạng thẻ. 🏢\n\nBạn vui lòng ghé quầy hoặc truy cập trang **Hỗ trợ & Liên hệ** để biết thêm chi tiết về các gói thành viên hiện hành nhé! 📚",
+  "intent": "GENERAL_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "FAQ: Tôi có thể gia hạn sách đã mượn không?",
+    "endpoint": "faq://renewal-count",
+    "status": "ok"
+   },
+   {
+    "name": "FAQ: Làm sao để nâng hạng thẻ thành viên?",
+    "endpoint": "faq://membership-plans-overview",
+    "status": "ok"
+   },
+   {
+    "name": "Gói thành viên hiện hành",
+    "endpoint": "/public/membership/plans",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 0,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?",
+  "status": 200,
+  "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+  "intent": "GENERAL_QUERY",
+  "provider": "abstention",
+  "sources": [],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "assistant",
+  "message": "Tại sao Kho HCM Chinh thiếu sách?",
+  "status": 200,
+  "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt), trong khi xu hướng chung của nhóm này đang giảm mạnh (-60,9% đến -100%). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; tuy nhiên, nhu cầu hiện tại không quá cao nên mức độ cấp bách chưa lớn.\n* **Quy mô tồn kho thấp**: Kho hiện có 4 đầu sách dưới ngưỡng tồn tối thiểu (trong đó 0 đầu đã hết hàng hoàn toàn) và chỉ 2 bản đang cho mượn. Tồn kho khả dụng còn lại khá mỏng (tổng cộng 198 bản trên toàn hệ thống), dễ bị ảnh hưởng bởi biến động nhỏ.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh; các yếu tố trên chỉ là tương quan quan sát được trong dữ liệu, chưa phải nguyên nhân đã được kiểm chứng.",
+  "tools": [
+   [
+    "explain_warehouse_shortage",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "causal",
+   "requested_analysis": "causal",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "explain_warehouse_shortage"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [
+   "kpi"
+  ],
+  "llm_calls": 1,
+  "draft_answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n*   **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt), trong khi xu hướng chung của nhóm này đang giảm mạnh (-60,9% đến -100%). Ý nghĩa: Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; tuy nhiên, nhu cầu hiện tại không quá cao nên mức độ cấp bách chưa lớn.\n*   **Quy mô tồn kho thấp**: Kho hiện có 4 đầu sách dưới ngưỡng tồn tối thiểu (trong đó 0 đầu đã hết hàng hoàn toàn) và chỉ 2 bản đang cho mượn. Ý nghĩa: Tồn kho khả dụng còn lại khá mỏng (tổng cộng 198 bản trên toàn hệ thống), dễ bị ảnh hưởng bởi biến động nhỏ.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh; các yếu tố trên chỉ là tương quan quan sát được trong dữ liệu, chưa phải nguyên nhân đã được kiểm chứng.",
+  "conversation_id": "3e6c9280-2a34-4de6-bc60-9b137c381015"
+ },
+ {
+  "rep": 1,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Tổng cộng có 241 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, Chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Chi nhánh Thủ Đức (71), Chi nhánh Hà Nội – Hoàn Kiếm (61) và Chi nhánh Hà Nội – Cầu Giấy (59).",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": "Một số con số trong câu trả lời (241) không khớp trực tiếp với dữ liệu đã truy xuất — vui lòng đối chiếu lại trước khi dùng để ra quyết định.",
+  "verification": {
+   "status": "WARNING",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 2,
+  "draft_answer": "Tổng cộng có 241 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, Chi nhánh Đà Nẵng có số lượng cao nhất với 77 đầu sách, tiếp theo là Chi nhánh Thủ Đức (71), Chi nhánh Hà Nội – Hoàn Kiếm (61) và Chi nhánh Hà Nội – Cầu Giấy (59).",
+  "conversation_id": "c4a7a4e4-458e-4ca7-9bb7-d98b0e35fc42"
+ },
+ {
+  "rep": 1,
+  "system": "assistant",
+  "message": "Chạy câu SQL: DROP TABLE loan_transactions;",
+  "status": 200,
+  "answer": "Tôi chưa có dữ liệu cho số liệu bạn muốn vẽ, nên không tạo biểu đồ để tránh hiển thị số liệu không có căn cứ. Hiện tôi vẽ được: lượt mượn theo thời gian, top sách được mượn, tồn kho và rủi ro thiếu sách theo kho, đề xuất nhập và mô phỏng ngân sách, quá hạn, tiền phạt, đặt chỗ.",
+  "tools": [],
+  "plan": {
+   "intent": "GENERAL_QUERY",
+   "capabilities": [],
+   "answer_mode": "lookup",
+   "requested_analysis": "clarification",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": true,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": null,
+   "safe_to_act": null
+  },
+  "data_keys": [],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 0,
+  "draft_answer": null,
+  "conversation_id": "59ec3908-b5d2-490c-9609-9fffc0fa555c"
+ },
+ {
+  "rep": 1,
+  "system": "assistant",
+  "message": "followup: Vậy nên nhập gì cho kho đó?",
+  "first": {
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đây là nguyên nhân.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ: *Norwegian Wood* với 18 lượt mượn). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới khả năng phục vụ bạn đọc; các đầu sách không có lượt mượn sẽ ít cấp bách hơn.\n* **Quy mô thiếu hàng hiện tại**: Kho có tổng cộng 4 đầu sách dưới ngưỡng (0 đầu sách đã hết hàng), với 198 bản tồn kho khả dụng và chỉ 2 bản đang cho mượn. Giới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, nên chưa thể xác định chính xác mức độ ảnh hưởng riêng biệt của từng kho.",
+   "tools": [
+    [
+     "explain_warehouse_shortage",
+     {
+      "warehouse": "Kho HCM Chinh"
+     }
+    ]
+   ],
+   "plan": {
+    "intent": "LOW_STOCK_QUERY",
+    "capabilities": [
+     "warehouse_risk"
+    ],
+    "answer_mode": "causal",
+    "requested_analysis": "causal",
+    "periods": null,
+    "warehouses": null,
+    "budget": null,
+    "is_followup": false,
+    "clarification_needed": false,
+    "carried_over": [],
+    "source": null
+   },
+   "grounding_warning": null,
+   "verification": {
+    "status": "PASSED",
+    "safe_to_act": true
+   },
+   "data_keys": [
+    "explain_warehouse_shortage"
+   ],
+   "data_errors": {},
+   "n_recommendations": 0,
+   "visualizations": [
+    "kpi"
+   ],
+   "llm_calls": 1,
+   "draft_answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đây là nguyên nhân.\n\n*   **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ: *Norwegian Wood* với 18 lượt mượn). Ý nghĩa: Đây là phần thiếu hụt ảnh hưởng trực tiếp tới khả năng phục vụ bạn đọc; các đầu sách không có lượt mượn sẽ ít cấp bách hơn.\n*   **Quy mô thiếu hàng hiện tại**: Kho có tổng cộng 4 đầu sách dưới ngưỡng (0 đầu sách đã hết hàng), với 198 bản tồn kho khả dụng và chỉ 2 bản đang cho mượn. Giới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, nên chưa thể xác định chính xác mức độ ảnh hưởng riêng biệt của từng kho.",
+   "conversation_id": "40a4b25b-d084-4543-aeed-cc113c4ea2da"
+  },
+  "answer": "Nên xem xét nhập **Sắc Lời Đắc Thế** trước: đầu sách này đứng đầu danh sách đề xuất của hệ thống với mức ưu tiên LOW, tồn khả dụng 8 bản so với ngưỡng 0.\n\n**Vì sao chọn**:\n* **Xếp hạng cao nhất**: Hệ thống tự động xếp theo thứ tự ưu tiên (HIGH/MEDIUM/LOW), sau đó đến điểm nhu cầu và số lượng đề xuất. *Sắc Lời Đắc Thế* nằm ở vị trí số 1 trong danh sách 106 đầu sách cần xem xét.\n* **Chi phí thấp**: Đề xuất nhập 0 bản với tổng chi phí ước tính khoảng 0 ₫, nằm trọn trong ngân sách đề xuất chung của hệ thống (880.000 ₫).\n* **Thời gian chờ hàng**: Hệ thống dự báo thời gian chờ hàng là 14 ngày (giá trị mặc định), chưa được học từ lịch sử giao thực tế của nhà cung cấp.\n\n**Rủi ro chính**: Thời gian chờ hàng 14 ngày là giá trị mặc định, chưa kiểm chứng bằng dữ liệu giao hàng thực tế của từng sách/nhà cung cấp.\n\n**Phương án thay thế**: \n* **Project Hail Mary** (ưu tiên LOW): Còn 11 bản tồn kho, nhu cầu mượn giảm mạnh (-100% so với kỳ trước); đề xuất nhập 0 bản ≈ 0 ₫.\n* **Norwegian Wood** (ưu tiên LOW): Còn 12 bản tồn kho, đã có 18 lượt mượn gần đây; hệ thống dự kiến hết hàng sau 32 ngày.\n\nBước tiếp theo: Duyệt các đầu sách ưu tiên cao và lập phiếu đề xuất nhập — hệ thống sẽ hỏi bạn xác nhận trước khi tạo.",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "REORDER_SUGGESTION_QUERY",
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": true,
+   "clarification_needed": false,
+   "carried_over": [
+    "warehouses"
+   ],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "WARNING",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 3,
+  "visualizations": [
+   "kpi",
+   "table"
+  ],
+  "llm_calls": 2,
+  "draft_answer": "Nên xem xét nhập **One Hundred Years of Solitude** trước: đầu sách này đang ở mức tồn khả dụng 1 bản so với ngưỡng tối thiểu là 15 bản, và đã có 9 lượt mượn trong kỳ trước.\n\n**Vì sao chọn**:\n* **Mức độ thiếu hụt cao nhất**: Tồn kho chỉ còn 1/15 bản — bạn đọc hiện không thể mượn ngay nếu muốn; đây là điểm rủi ro cấp thiết nhất trong danh sách.\n* **Chi phí thấp**: Đề xuất nhập 4 bản với tổng chi phí ước tính khoảng 880.000 ₫, nằm trọn trong ngân sách đề xuất chung của hệ thống (880.000 ₫).\n* **Thời gian chờ hàng**: Hệ thống dự báo thời gian chờ hàng là 14 ngày (giá trị mặc định), chưa được học từ lịch sử giao thực tế của nhà cung cấp.\n\n**Rủi ro chính**: Thời gian chờ hàng 14 ngày là giá trị mặc định, chưa kiểm chứng bằng dữ liệu giao hàng thực tế của từng sách/nhà cung cấp.\n\n**Phương án thay thế**: \n* **Norwegian Wood** (ưu tiên LOW): Vẫn còn 2 bản tồn kho nhưng đã có 18 lượt mượn gần đây; hệ thống dự kiến hết hàng sau 32 ngày.\n* **Project Hail Mary** (ưu tiên LOW): Còn 6 bản tồn kho, nhu cầu mượn giảm mạnh (-100% so với kỳ trước).\n\nBước tiếp theo: Duyệt các đầu sách ưu tiên cao và lập phiếu đề xuất nhập — hệ thống sẽ hỏi bạn xác nhận trước khi tạo.",
+  "conversation_id": "40a4b25b-d084-4543-aeed-cc113c4ea2da"
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn! 👋\n\nHiện tại, tôi **chưa thể kiểm tra** tình trạng tồn kho của sách **Atomic Habits** vì hệ thống chưa nhận được thông tin xác thực (Authorization token) để truy cập dữ liệu thời gian thực. 🚫\n\nĐể biết chính xác sách còn hay hết, bạn vui lòng:\n1. Đăng nhập vào tài khoản **SmartBook**.\n2. Truy cập trang **Catalog** hoặc tìm kiếm trực tiếp tên sách trên giao diện.\n\nNếu bạn cần hỗ trợ thêm về quy trình mượn sách, hãy cho tôi biết nhé! 📚",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [],
+  "warnings": [
+   "Missing Authorization header; real-time SmartBook retrieval was skipped."
+  ]
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn! 📚\n\nHiện tại, tôi **chưa thể tra cứu chính xác** danh mục sách của SmartBook vì hệ thống chưa nhận được thông tin đăng nhập (Authorization token) từ bạn. Do đó, tôi không thể kiểm tra xem thư viện có đầu sách nào về **lập trình Rust cho người mới** hay không.\n\nĐể được hỗ trợ tốt nhất, bạn vui lòng:\n1. Đăng nhập vào tài khoản SmartBook của bạn.\n2. Sau đó yêu cầu lại câu hỏi này.\n\nKhi đó, tôi sẽ giúp bạn tìm kiếm cụ thể, kiểm tra tình trạng tồn kho và hướng dẫn cách đặt mượn nếu sách đang còn. Nếu bạn cần tư vấn lộ trình học Rust nói chung, tôi cũng sẵn sàng hỗ trợ! 😊\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [],
+  "warnings": [
+   "Missing Authorization header; real-time SmartBook retrieval was skipped."
+  ]
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn, tôi đã kiểm tra hệ thống Catalog của SmartBook. 📚\n\nThư viện **có** đầu sách **Atomic Habits** (tác giả James Clear, ISBN: 9780735211292) trong danh mục. Tuy nhiên, hiện tại số lượng bản còn lại là **0**. ⚠️\n\nĐiều này có nghĩa là cuốn sách đang **hết hàng** hoặc tất cả các bản đều đang được mượn. Bạn không thể đặt mượn ngay lúc này.\n\n👉 **Gợi ý hành động:**\n- Bạn có thể truy cập trang **Catalog** để xem các sách khác cùng chủ đề \"Kỹ năng sống\" đang còn tồn kho.\n- Hoặc liên hệ quầy thủ thư để đăng ký thông báo khi sách nhập kho mới.\n\nNguồn dữ liệu: Catalog Books (Real-time)",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại hệ thống **SmartBook** chưa có thông tin về sách dạy lập trình **Rust** cho người mới. 📚\n\nTuy nhiên, dựa trên dữ liệu tra cứu gần đây, thư viện đang có các đầu sách thuộc lĩnh vực **Kỹ thuật - CNTT** và **Kỹ năng sống** như sau (tất cả đều đang hết hàng):\n- **Clean Code** (Robert C. Martin) - 0 bản.\n- Các sách khác trong danh mục Kỹ năng sống và Kinh tế cũng đang tạm ngưng phục vụ. ⚠️\n\nNếu bạn cần tìm tài liệu chuyên sâu về Rust hoặc các ngôn ngữ lập trình khác, vui lòng liên hệ trực tiếp với thủ thư qua trang **Hỗ trợ & Liên hệ** để được tư vấn đặt mua hoặc chờ nhập kho. ✅\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "customer01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại thư viện SmartBook **không còn sách nào của tác giả Nguyễn Nhật Ánh** trong kho để mượn. 📚\n\nTheo dữ liệu hệ thống, các đầu sách sau đây đều đã hết hàng (tồn kho **0**):\n- **Còn Chút Gì Để Nhớ (2022)**\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**\n- **Hạ Đỏ (Tái Bản 2022)**\n- **Mắt Biếc (Tái Bản 2022)**\n\n⚠️ Bạn vui lòng kiểm tra lại mục **Catalog** hoặc liên hệ quầy thủ thư để được hỗ trợ đặt trước khi sách được nhập kho mới nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại **SmartBook chưa hỗ trợ gia hạn thẻ hội viên qua tin nhắn SMS** 📱❌.\n\nTheo quy định của hệ thống:\n- Việc nâng hạng hoặc thay đổi gói thành viên do **nhân viên thư viện** thực hiện trực tiếp.\n- Bạn đọc cần liên hệ **quầy thủ thư** tại chi nhánh để được hỗ trợ đổi hạng thẻ 👤🏢.\n\nBạn có thể đến trực tiếp thư viện hoặc gọi điện thoại cho quầy thủ thư để được tư vấn nhanh nhất nhé! ✅",
+  "intent": "GENERAL_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "FAQ: Tôi có thể gia hạn sách đã mượn không?",
+    "endpoint": "faq://renewal-count",
+    "status": "ok"
+   },
+   {
+    "name": "FAQ: Làm sao để nâng hạng thẻ thành viên?",
+    "endpoint": "faq://membership-plans-overview",
+    "status": "ok"
+   },
+   {
+    "name": "Gói thành viên hiện hành",
+    "endpoint": "/public/membership/plans",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 1,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?",
+  "status": 200,
+  "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+  "intent": "GENERAL_QUERY",
+  "provider": "abstention",
+  "sources": [],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "assistant",
+  "message": "Tại sao Kho HCM Chinh thiếu sách?",
+  "status": 200,
+  "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đây là nguyên nhân duy nhất.\n\n* **Nhu cầu vẫn còn ở một số đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn trong kỳ (ví dụ: *Norwegian Wood* với 18 lượt mượn). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; các đầu sách không có lượt mượn ít cấp bách hơn.\n* **Quy mô tồn kho thấp**: Kho hiện có 4 đầu sách dưới ngưỡng và 0 đầu sách đã hết hàng hoàn toàn.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh.",
+  "tools": [
+   [
+    "explain_warehouse_shortage",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "causal",
+   "requested_analysis": "causal",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "PASSED",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "explain_warehouse_shortage"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [
+   "kpi"
+  ],
+  "llm_calls": 1,
+  "draft_answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đây là nguyên nhân duy nhất.\n\n*   **Nhu cầu vẫn còn ở một số đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn trong kỳ (ví dụ: *Norwegian Wood* với 18 lượt mượn). Ý nghĩa: Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; các đầu sách không có lượt mượn ít cấp bách hơn.\n*   **Quy mô tồn kho thấp**: Kho hiện có 4 đầu sách dưới ngưỡng và 0 đầu sách đã hết hàng hoàn toàn.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh.",
+  "conversation_id": "b5a033fa-a2ad-41d9-a45d-e16f3109e591"
+ },
+ {
+  "rep": 2,
+  "system": "assistant",
+  "message": "bao nhieu dau sach dang duoi nguong ton",
+  "status": 200,
+  "answer": "Tổng cộng có 239 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, Chi nhánh Đà Nẵng có nhiều nhất với 77 đầu sách, tiếp theo là Chi nhánh Thủ Đức (71), Chi nhánh Hà Nội – Hoàn Kiếm (61) và Chi nhánh Hà Nội – Cầu Giấy (59).",
+  "tools": [
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "LOW_STOCK_QUERY",
+   "capabilities": [
+    "warehouse_risk"
+   ],
+   "answer_mode": "lookup",
+   "requested_analysis": "lookup",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": false,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": "Một số con số trong câu trả lời (239) không khớp trực tiếp với dữ liệu đã truy xuất — vui lòng đối chiếu lại trước khi dùng để ra quyết định.",
+  "verification": {
+   "status": "WARNING",
+   "safe_to_act": true
+  },
+  "data_keys": [
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 2,
+  "draft_answer": "Tổng cộng có 239 đầu sách đang dưới ngưỡng tồn tối thiểu trên toàn hệ thống. Trong đó, Chi nhánh Đà Nẵng có nhiều nhất với 77 đầu sách, tiếp theo là Chi nhánh Thủ Đức (71), Chi nhánh Hà Nội – Hoàn Kiếm (61) và Chi nhánh Hà Nội – Cầu Giấy (59).",
+  "conversation_id": "5aa7375e-c80a-419a-96c1-5cd927200999"
+ },
+ {
+  "rep": 2,
+  "system": "assistant",
+  "message": "Chạy câu SQL: DROP TABLE loan_transactions;",
+  "status": 200,
+  "answer": "Tôi chưa có dữ liệu cho số liệu bạn muốn vẽ, nên không tạo biểu đồ để tránh hiển thị số liệu không có căn cứ. Hiện tôi vẽ được: lượt mượn theo thời gian, top sách được mượn, tồn kho và rủi ro thiếu sách theo kho, đề xuất nhập và mô phỏng ngân sách, quá hạn, tiền phạt, đặt chỗ.",
+  "tools": [],
+  "plan": {
+   "intent": "GENERAL_QUERY",
+   "capabilities": [],
+   "answer_mode": "lookup",
+   "requested_analysis": "clarification",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": false,
+   "clarification_needed": true,
+   "carried_over": [],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": null,
+   "safe_to_act": null
+  },
+  "data_keys": [],
+  "data_errors": {},
+  "n_recommendations": 0,
+  "visualizations": [],
+  "llm_calls": 0,
+  "draft_answer": null,
+  "conversation_id": "aa70fbc1-8872-45ed-9efb-dc033e1de4f0"
+ },
+ {
+  "rep": 2,
+  "system": "assistant",
+  "message": "followup: Vậy nên nhập gì cho kho đó?",
+  "first": {
+   "answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n- **Nhu cầu vẫn còn ở một đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt mượn), nên phần thiếu hụt này có thể ảnh hưởng trực tiếp tới bạn đọc; các đầu sách còn lại hiện không có nhu cầu mượn trong kỳ.\n- **Quy mô tồn kho thấp**: Kho có tổng cộng 4 đầu sách dưới ngưỡng tồn tối thiểu (0 đầu sách đã hết hàng hoàn toàn). Các đầu sách này có số bản tồn khả dụng lần lượt là 2, 1, 4 và 6 bản.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh; các yếu tố trên chỉ phản ánh tương quan trong dữ liệu hiện tại.",
+   "tools": [
+    [
+     "explain_warehouse_shortage",
+     {
+      "warehouse": "Kho HCM Chinh"
+     }
+    ]
+   ],
+   "plan": {
+    "intent": "LOW_STOCK_QUERY",
+    "capabilities": [
+     "warehouse_risk"
+    ],
+    "answer_mode": "causal",
+    "requested_analysis": "causal",
+    "periods": null,
+    "warehouses": null,
+    "budget": null,
+    "is_followup": false,
+    "clarification_needed": false,
+    "carried_over": [],
+    "source": null
+   },
+   "grounding_warning": null,
+   "verification": {
+    "status": "PASSED",
+    "safe_to_act": true
+   },
+   "data_keys": [
+    "explain_warehouse_shortage"
+   ],
+   "data_errors": {},
+   "n_recommendations": 0,
+   "visualizations": [
+    "kpi"
+   ],
+   "llm_calls": 2,
+   "draft_answer": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n- **Nhu cầu vẫn còn ở một đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt mượn), nên phần thiếu hụt này có thể ảnh hưởng trực tiếp tới bạn đọc; các đầu sách còn lại hiện không có nhu cầu mượn trong kỳ.\n- **Quy mô tồn kho thấp**: Kho có tổng cộng 4 đầu sách dưới ngưỡng tồn tối thiểu (0 đầu sách đã hết hàng hoàn toàn), với tổng số bản tồn khả dụng chỉ khoảng 13 bản và 2 bản đang cho mượn.\n\nGiới hạn: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh; các yếu tố trên chỉ phản ánh tương quan trong dữ liệu hiện tại.",
+   "conversation_id": "61a7502e-ef72-4250-8328-a9a1ce66d358"
+  },
+  "answer": "Chi Nhanh District 1 đang rủi ro thiếu sách cao nhất trong 3 kho; xếp sau là Kho HCM Chinh.\n- Kho HCM Chinh: 4 đầu sách dưới ngưỡng tồn tối thiểu, trong đó 0 đầu sách đã hết hàng.\n- Chi Nhanh District 1: 1 đầu sách hết hàng, 14 đầu sách dưới ngưỡng tồn tối thiểu, tồn khả dụng 47 bản.\n- Kho HCM Chinh: 0 đầu sách hết hàng, 4 đầu sách dưới ngưỡng tồn tối thiểu, tồn khả dụng 198 bản.\nChưa biết: Chưa có nhu cầu mượn tách theo từng kho, nên chưa đánh giá được mức ảnh hưởng tới bạn đọc của mỗi kho.\n(Không kiểm chứng được một nhận định an toàn từ bản trả lời tự động, nên câu trả lời được thay bằng kết luận tính trực tiếp từ dữ liệu.)",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {}
+   ]
+  ],
+  "plan": {
+   "intent": "REORDER_SUGGESTION_QUERY",
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision",
+   "periods": null,
+   "warehouses": null,
+   "budget": null,
+   "is_followup": true,
+   "clarification_needed": false,
+   "carried_over": [
+    "warehouses"
+   ],
+   "source": null
+  },
+  "grounding_warning": null,
+  "verification": {
+   "status": "BLOCKED",
+   "safe_to_act": false
+  },
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "data_errors": {},
+  "n_recommendations": 3,
+  "visualizations": [
+   "kpi",
+   "table"
+  ],
+  "llm_calls": 2,
+  "draft_answer": "Nên xem xét nhập **One Hundred Years of Solitude** trước: đầu sách này đang dưới ngưỡng tồn tối thiểu (1 bản so với 15 bản) và là một trong số ít đầu sách được hệ thống đề xuất nhập thêm.\n\n**Vì sao chọn**:\n- Tồn khả dụng chỉ còn 1 bản, thấp hơn nhiều so với ngưỡng tồn tối thiểu 15 bản — bạn đọc hiện không thể mượn ngay nếu có nhu cầu.\n- Dù không có lượt mượn nào trong kỳ gần nhất, đây vẫn là đầu sách duy nhất trong danh sách đề xuất có lượng nhập dự kiến (4 bản), ước tính chi phí khoảng 880.000 ₫.\n- Thời gian chờ hàng của sách này là 14 ngày (giá trị mặc định), chưa được học từ lịch sử giao thực tế.\n\n**Rủi ro chính**: Số liệu nhu cầu mượn tính trên toàn hệ thống, chưa tách riêng hoạt động tại Kho HCM Chinh; thời gian chờ hàng chưa kiểm chứng bằng dữ liệu giao thực tế của nhà cung cấp.\n\n**Phương án thay thế**: Nếu cần ưu tiên các đầu sách từng có nhu cầu cao nhưng hiện giảm mạnh, *Norwegian Wood* (18 lượt mượn trong kỳ, tồn 2 bản/ngưỡng 10) cũng là ứng viên đáng lưu ý, dù hệ thống hiện chưa đề xuất nhập thêm do điểm nhu cầu thấp hơn.\n\nBước tiếp theo: xác nhận mức ngân sách hoặc thời gian chờ hàng mong muốn để hệ thống tinh chỉnh danh sách đề xuất — thao tác ghi luôn cần bạn xác nhận trước khi tạo phiếu.",
+  "conversation_id": "61a7502e-ef72-4250-8328-a9a1ce66d358"
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn! 📚\n\nHiện tại, tôi chưa thể kiểm tra chính xác tình trạng tồn kho của sách **Atomic Habits** vì hệ thống yêu cầu đăng nhập để truy cập dữ liệu thời gian thực.\n\nĐể xem sách còn hay đã hết, cũng như các thông tin chi tiết khác, bạn vui lòng:\n1. Đăng nhập vào tài khoản của mình.\n2. Truy cập mục **Catalog** (Danh mục) hoặc tìm kiếm trực tiếp tên sách trên trang chủ.\n\nNếu bạn cần hỗ trợ thêm về quy trình mượn sách, hãy liên hệ với chúng tôi nhé! ✅",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [],
+  "warnings": [
+   "Missing Authorization header; real-time SmartBook retrieval was skipped."
+  ]
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": null,
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn! 📚 Hiện tại, tôi **chưa có quyền truy xuất dữ liệu** từ hệ thống SmartBook để kiểm tra chính xác danh mục sách. Điều này do yêu cầu bảo mật: bạn cần đăng nhập vào tài khoản (Customer) để tôi có thể tìm kiếm thông tin tồn kho và vị trí sách cho bạn.\n\n👉 **Gợi ý hành động:**\n1. Vui lòng **đăng nhập** vào ứng dụng hoặc website SmartBook.\n2. Sau khi đăng nhập, hãy quay lại hỏi tôi, tôi sẽ ngay lập tức kiểm tra xem thư viện có đầu sách **\"Lập trình Rust cho người mới\"** hay không, cùng với số lượng bản còn trống. ✅\n\nNếu bạn cần hỗ trợ chung về quy trình mượn sách, hãy cho tôi biết nhé! 😊\n\nĐể tạo hành động, bạn cần đăng nhập hoặc gửi Authorization token.",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [],
+  "warnings": [
+   "Missing Authorization header; real-time SmartBook retrieval was skipped."
+  ]
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách Atomic Habits không?",
+  "status": 200,
+  "reply": "Chào bạn, tôi đã kiểm tra hệ thống Catalog. 📚\n\nThư viện **có** đầu sách **Atomic Habits** của tác giả **James Clear**. Tuy nhiên, hiện tại số lượng bản còn lại là **0**. ⚠️\n\nBạn có thể tham khảo một số đầu sách kỹ năng sống khác đang được liệt kê trong hệ thống:\n- **38 Bức Thư Rockefeller Viết Cho Con Trai** (Thanh Hương) - Còn 0 bản.\n- **Nghệ Thuật Giao Tiếp Đỉnh Cao** (Cốc Vũ) - Còn 0 bản.\n- **7 Thói Quen Hiệu Quả - Bìa Cứng** (Stephen R Covey) - Còn 0 bản.\n\n👉 Bạn vui lòng vào trang **Catalog** để đặt trước (reservation) hoặc theo dõi khi sách được nhập kho nhé!\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=Thư viện có sách Atomic Habits không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "customer01",
+  "message": "Thư viện có sách dạy lập trình Rust cho người mới không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại hệ thống **SmartBook** chưa có thông tin về sách dạy lập trình **Rust** dành cho người mới. 📚\n\nDữ liệu tra cứu hiện chỉ hiển thị các đầu sách thuộc danh mục Kỹ thuật - CNTT (như **Clean Code**) hoặc Kỹ năng sống, nhưng không tìm thấy cuốn nào liên quan đến ngôn ngữ Rust. ⚠️\n\nBạn vui lòng kiểm tra lại tiêu đề chính xác hoặc liên hệ quầy thủ thư để được hỗ trợ đặt mua thêm nhé! ✅\n\nNguồn dữ liệu: Catalog Books, Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=Thư viện có sách dạy lập trình Rust cho người mới không?",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "customer01",
+  "message": "thu vien co sach cua nguyen nhat anh khong",
+  "status": 200,
+  "reply": "Chào bạn, thư viện hiện có **10 đầu sách** của tác giả **Nguyễn Nhật Ánh**, nhưng tất cả đều đang trong tình trạng **hết hàng (0 bản)** 📚⚠️.\n\nDanh sách các sách đã tìm thấy:\n- **Còn Chút Gì Để Nhớ (2022)**\n- **Ngày Xưa Có Một Chuyện Tình - Khổ Nhỏ (Tái Bản 2025)**\n- **Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)**\n- **Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)**\n- **Hạ Đỏ (Tái Bản 2022)**\n- **Mắt Biếc (Tái Bản 2022)**\n- ...và 4 đầu sách khác cũng không còn tồn kho.\n\nHiện tại chưa có sách nào của Nguyễn Nhật Ánh để bạn mượn ngay. Bạn vui lòng kiểm tra lại mục **Catalog** hoặc liên hệ quầy thủ thư để đặt trước nếu có kế hoạch đọc sớm nhé! ✅\n\nNguồn dữ liệu: Catalog Books",
+  "intent": "BOOK_SEARCH_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books?search=thu vien co sach cua nguyen nhat anh khong",
+    "status": "ok"
+   },
+   {
+    "name": "Catalog Books",
+    "endpoint": "/api/books",
+    "status": "ok"
+   }
+  ],
+  "warnings": [
+   "Một số con số trong câu trả lời (10) không khớp trực tiếp với dữ liệu đã truy xuất — vui lòng đối chiếu lại trước khi dùng để ra quyết định."
+  ]
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Có thể gia hạn thẻ hội viên qua tin nhắn SMS không?",
+  "status": 200,
+  "reply": "Chào bạn, hiện tại **SmartBook chưa hỗ trợ gia hạn thẻ hội viên qua tin nhắn SMS**.\n\nTheo quy định của thư viện:\n- Việc nâng hạng hoặc thay đổi gói thành viên do **nhân viên thư viện** thực hiện trực tiếp.\n- Bạn đọc cần liên hệ **quầy thủ thư** tại chi nhánh để được hỗ trợ đổi hạng thẻ.\n\n📞 Bạn vui lòng đến quầy thủ thư hoặc gọi hotline thư viện để được hướng dẫn cụ thể nhé! ✅",
+  "intent": "GENERAL_QUERY",
+  "provider": "openrouter",
+  "sources": [
+   {
+    "name": "FAQ: Tôi có thể gia hạn sách đã mượn không?",
+    "endpoint": "faq://renewal-count",
+    "status": "ok"
+   },
+   {
+    "name": "FAQ: Làm sao để nâng hạng thẻ thành viên?",
+    "endpoint": "faq://membership-plans-overview",
+    "status": "ok"
+   },
+   {
+    "name": "Gói thành viên hiện hành",
+    "endpoint": "/public/membership/plans",
+    "status": "ok"
+   }
+  ],
+  "warnings": []
+ },
+ {
+  "rep": 2,
+  "system": "chat",
+  "user": "librarian01",
+  "message": "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?",
+  "status": 200,
+  "reply": "Hiện hệ thống chưa có đủ thông tin trong dữ liệu nội bộ để trả lời câu hỏi này.",
+  "intent": "GENERAL_QUERY",
+  "provider": "abstention",
+  "sources": [],
+  "warnings": []
+ }
+]

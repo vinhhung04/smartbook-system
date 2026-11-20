@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 import os
 import re
@@ -10,7 +11,7 @@ import httpx
 
 import faq_retrieval
 import retrieval_confidence
-from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD
+from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD, status_text
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -29,6 +30,8 @@ from intent import (
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 RETRIEVAL_TIMEOUT = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "8"))
+logger = logging.getLogger("uvicorn.error")
+MISSING_AUTH_WARNING = "Chua dang nhap: khong truy xuat du lieu nghiep vu."
 
 
 SOURCE_NAMES = {
@@ -42,6 +45,7 @@ SOURCE_NAMES = {
     "/analytics/reorder-suggestions": "Reorder Suggestions",
     "/analytics/aging-inventory": "Aging Inventory",
     "/api/books": "Catalog Books",
+    "/public/catalog/books": "Catalog Books",
     "/api/stock-balances/low-stock": "Low Stock By Warehouse",
 }
 
@@ -102,15 +106,17 @@ async def _fetch(client: httpx.AsyncClient, endpoint: str, auth_header: str | No
         response = await client.get(f"{GATEWAY_URL}{endpoint}", params=params, headers=headers)
         if response.status_code >= 400:
             source["status"] = f"error:{response.status_code}"
-            return source, None, f"{source['name']} returned HTTP {response.status_code}"
+            # the warning text reaches the prompt: plain Vietnamese, no HTTP code (audit E-4)
+            return source, None, f"{source['name']}: {status_text(source['status'])}"
         source["status"] = "ok"
         return source, response.json(), None
     except httpx.TimeoutException:
         source["status"] = "timeout"
-        return source, None, f"{source['name']} timed out"
+        return source, None, f"{source['name']}: {status_text('timeout')}"
     except Exception as exc:
         source["status"] = "error"
-        return source, None, f"{source['name']} retrieval failed: {type(exc).__name__}"
+        logger.warning("retrieval %s failed: %s", endpoint, type(exc).__name__)
+        return source, None, f"{source['name']}: {status_text('error')}"
 
 
 def _book_quantity(book: dict) -> int:
@@ -184,22 +190,32 @@ def _time_params(intent_info: dict, default_30_days: bool = False) -> dict:
     return params
 
 
-def _filter_books(books: list[dict], query: str, limit: int = 10) -> list[dict]:
+# Function words of a book question: "dạy lập trình Rust CHO người mới" matched
+# "CHO Tôi Xin Một Vé Đi Tuổi Thơ" (audit). Whole words only, these never count.
+_QUERY_STOPWORDS = {
+    "co", "cho", "cua", "va", "khong", "nao", "ve", "day", "sach", "cuon", "quyen", "nguoi", "moi", "cac",
+    "nhung", "mot", "la", "o", "tai", "voi", "thu", "vien", "tim", "giup", "toi", "minh", "ban", "hay", "the",
+}
+
+
+def _filter_books(books: list[dict], query: str, limit: int = 10, compact_fn=None) -> list[dict]:
     normalized_query = normalize_text(query)
-    tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
+    tokens = [token for token in re.split(r"\s+", normalized_query)
+              if len(token) >= 2 and token not in _QUERY_STOPWORDS]
     if not tokens:
         return []
 
     scored = []
     for book in books:
-        compact = _compact_book(book)
+        compact = (compact_fn or _compact_book)(book)
         haystack = normalize_text(" ".join([
             compact["title"],
             compact["author"],
             str(compact.get("category") or ""),
             str(compact.get("isbn") or ""),
         ]))
-        score = sum(1 for token in tokens if token in haystack)
+        words = set(re.split(r"[^\w]+", haystack))
+        score = sum(1 for token in tokens if token in words)
         if normalized_query and normalized_query in haystack:
             score += 3
         if score > 0:
@@ -207,6 +223,17 @@ def _filter_books(books: list[dict], query: str, limit: int = 10) -> list[dict]:
 
     scored.sort(key=lambda item: (-item[0], item[1]["title"]))
     return [item[1] for item in scored[:limit]]
+
+
+_PART_SPLIT = re.compile(r"\s*(?:[,;?]|\s(?:và|va|còn|con|đồng thời|dong thoi)\s)\s*", re.IGNORECASE)
+
+
+def _question_parts(question: str) -> list[str]:
+    """The parts of a question asking two things ("X và Y?"); fewer than 2 parts of
+    at least 3 words each means it is one question."""
+    parts = [p.strip(" ?.!") for p in _PART_SPLIT.split(question or "")]
+    parts = [p for p in parts if len(p.split()) >= 3]
+    return parts if len(parts) >= 2 else []
 
 
 def _filter_by_warehouse_hint(wh_groups: dict, warehouse_hint: str | None) -> tuple[dict, str | None]:
@@ -263,6 +290,21 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             # belt-and-braces so a bug in the embedding layer can never turn
             # /chat into a 500.
             return empty_envelope
+        unanswered_parts: list[str] = []
+        if not faq_matches or confidence_result.decision == retrieval_confidence.NO_EVIDENCE:
+            # A question of several parts: the part with no document must not drag the
+            # answerable one down with it (audit E-7) - each part is looked up alone.
+            parts = _question_parts(intent_info.get("query") or "")
+            if len(parts) >= 2:
+                looked = [(part, *(await asyncio.to_thread(faq_retrieval.find_relevant_with_confidence, part)))
+                          for part in parts]
+                answered = [(m, c) for _p, m, c in looked if m and c.decision != retrieval_confidence.NO_EVIDENCE]
+                if answered:
+                    seen: set = set()
+                    faq_matches = [m for ms, _c in answered for m in ms
+                                   if m.entry["id"] not in seen and not seen.add(m.entry["id"])]
+                    confidence_result = max((c for _m, c in answered), key=lambda c: c.confidence)
+                    unanswered_parts = [p for p, m, c in looked if not m or c.decision == retrieval_confidence.NO_EVIDENCE]
         # NO_EVIDENCE: do not hand the LLM "the nearest thing we have" for a
         # question the corpus has no real answer to (see retrieval_confidence.py) -
         # same empty envelope as today, just reached via the confidence decision
@@ -298,6 +340,10 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             else f"{CONFIDENT_FAQ_LEAD}\n"
         )
         summary = summary_lead + "\n".join(faq_lines)
+        if unanswered_parts:
+            summary += ("\n\nCâu hỏi gồm nhiều ý; tài liệu của thư viện chưa có tài liệu cho: "
+                        + "; ".join(f"\"{p}\"" for p in unanswered_parts)
+                        + ". Trả lời phần có căn cứ ở trên và nói rõ phần này chưa có thông tin, không suy đoán.")
 
         # Hybrid: a policy document explains the rule, but the values it quotes
         # are configuration that can change - read them live; the live value wins.
@@ -316,12 +362,21 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             "reason_codes": list(confidence_result.reason_codes),
         }
 
+    if intent == BOOK_SEARCH_QUERY:
+        # Public catalog for every caller, signed in or not: /api/books counts
+        # copies inside the CALLER's warehouse scope (a reader has none -> 0),
+        # which is not what "còn sách không" asks.
+        return await _search_public_catalog((intent_info.get("query") or "").strip())
+
     if not auth_header:
         return {
-            "summary": "Toi chua co quyen truy xuat du lieu he thong vi request khong co Authorization token.",
+            # Both strings reach the prompt and were echoed to visitors ("thiếu Authorization token"):
+            # say what it means for them instead.
+            "summary": ("Nguoi dung chua dang nhap nen khong co du lieu nghiep vu (muon tra, kho, phat). "
+                        "Hay moi ho dang nhap tai khoan SmartBook neu can xem hoac thuc hien thao tac nay."),
             "raw": raw,
             "sources": sources,
-            "warnings": ["Missing Authorization header; real-time SmartBook retrieval was skipped."],
+            "warnings": [MISSING_AUTH_WARNING],
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -513,24 +568,6 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 f"Cancelled: {_int(data.get('cancelled'))}; expired: {_int(data.get('expired'))}.",
             ])
 
-        elif intent == BOOK_SEARCH_QUERY:
-            query = (intent_info.get("query") or "").strip()
-            source, payload, warning = await _fetch(client, "/api/books", auth_header, {"search": query} if query else None)
-            sources.append(source)
-            if warning:
-                warnings.append(warning)
-            books = _as_list(payload)
-            if not books and query:
-                fallback_source, fallback_payload, fallback_warning = await _fetch(client, "/api/books", auth_header)
-                sources.append(fallback_source)
-                if fallback_warning:
-                    warnings.append(fallback_warning)
-                books = _as_list(fallback_payload)
-            matches = _filter_books(books, query, 10)
-            raw["Catalog Books"] = matches
-            lines = [f"- {book['title']} ({book['author'] or 'khong ro tac gia'}), ISBN {book['isbn'] or '-'}, con {book['quantity']} ban." for book in matches]
-            summary = f"Ket qua tim sach cho '{query}':\n" + _limit_lines(lines, 10)
-
         elif intent == REORDER_SUGGESTION_QUERY:
             results = await asyncio.gather(
                 _fetch(client, "/analytics/reorder-suggestions", auth_header, {"days": 30, "limit": 10}),
@@ -652,6 +689,73 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
     return {
         "summary": summary,
         "raw": raw,
+        "sources": sources,
+        "warnings": warnings,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+PUBLIC_BOOKS_ENDPOINT = "/public/catalog/books"
+_PUBLIC_FALLBACK_PAGES = 3  # x 48 rows (the endpoint's max page size)
+
+
+def _public_book(book: dict) -> dict:
+    """A /public/catalog/books row: copies a reader can borrow now, per public
+    pickup branch. `pickup_warehouse_id` (the branch holding the most copies,
+    None when none) is what agent_planner's reservation draft reads."""
+    branches = [b for b in book.get("pickup_branches") or [] if isinstance(b, dict)]
+    best = max((b for b in branches if _int(b.get("available_quantity")) > 0),
+               key=lambda b: _int(b.get("available_quantity")), default=None)
+    return {
+        **_compact_book(book),
+        "quantity": _int(book.get("available_quantity")),
+        "availability_status": book.get("availability_status"),
+        "pickup_branches": [{"name": b.get("warehouse_name"), "available": _int(b.get("available_quantity"))}
+                            for b in branches],
+        "pickup_warehouse_id": best.get("warehouse_id") if best else None,
+    }
+
+
+def _public_book_line(book: dict) -> str:
+    branches = ", ".join(f"{b['name']} {b['available']}" for b in book["pickup_branches"] if b["available"] > 0)
+    stock = (f"con {book['quantity']} ban co the muon ({branches})" if book["quantity"] > 0
+             else "hien khong con ban nao co the muon tai cac chi nhanh")
+    return f"- {book['title']} ({book['author'] or 'khong ro tac gia'}), ISBN {book['isbn'] or '-'}, {stock}."
+
+
+async def _search_public_catalog(query: str) -> dict:
+    """BOOK_SEARCH for /chat: the public catalog the website shows (no token
+    needed). The catalog's own search first; with no hit, the earlier token
+    match over the whole catalog, so a loosely worded query still finds books."""
+    sources: list[dict] = []
+    warnings: list[str] = []
+    async with httpx.AsyncClient(timeout=httpx.Timeout(RETRIEVAL_TIMEOUT)) as client:
+        params = {"pageSize": 10, **({"search": query} if query else {})}
+        source, payload, warning = await _fetch(client, PUBLIC_BOOKS_ENDPOINT, None, params)
+        sources.append(source)
+        if warning:
+            warnings.append(warning)
+        matches = [_public_book(b) for b in _as_list(payload) if isinstance(b, dict)]
+        if not matches and query and not warning:
+            # shortcut: scans at most _PUBLIC_FALLBACK_PAGES x 48 books; move to the
+            # book index (assistant_tools search) once the catalog outgrows that.
+            books: list[dict] = []
+            for page in range(1, _PUBLIC_FALLBACK_PAGES + 1):
+                # same source as the search above: not listed again ("Nguồn dữ liệu" would repeat it)
+                _source, payload, warning = await _fetch(client, PUBLIC_BOOKS_ENDPOINT, None,
+                                                         {"pageSize": 48, "page": page})
+                if warning:
+                    warnings.append(warning)
+                    break
+                books += _as_list(payload)
+                if page >= _int(((payload or {}).get("meta") or {}).get("totalPages"), 1):
+                    break
+            matches = _filter_books(books, query, 10, compact_fn=_public_book)
+    lines = [_public_book_line(book) for book in matches[:10]]
+    return {
+        "summary": (f"Ket qua tim sach trong danh muc cong khai cho '{query}' "
+                    "(so ban = so ban ban doc co the muon ngay tai cac chi nhanh):\n" + _limit_lines(lines, 10)),
+        "raw": {"Catalog Books": matches[:10]},
         "sources": sources,
         "warnings": warnings,
         "retrieved_at": datetime.now(timezone.utc).isoformat(),

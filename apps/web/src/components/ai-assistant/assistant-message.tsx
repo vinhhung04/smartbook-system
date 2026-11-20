@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Camera, Check, Copy, FileSearch, RotateCw } from 'lucide-react';
 import { SmartBookAiMark } from '@/components/ai-experience/smartbook-icons';
 import { toast } from 'sonner';
-import type { AiEvidenceItem } from '@/services/ai';
+import type { AiDecision, AiEvidenceItem, AiRebalanceDecision } from '@/services/ai';
 import { verificationNotice } from '@/lib/copilot-verification';
 import { EASE_STANDARD } from '@/components/motion-utils';
 import { cn } from '@/components/ui/utils';
@@ -18,6 +18,7 @@ import {
 } from '@/components/ai-copilot-insights';
 import { CopilotVisualizationNotes, CopilotVisualizations } from '@/components/ai-copilot-visualization';
 import { CopilotDecision } from '@/components/ai-copilot-decision';
+import { ExecutionSummary, ExecutionTimeline, RebalanceDecision } from '@/components/ai-copilot-rebalance';
 import { ActionCard } from '@/components/ai-action-card';
 import type { AssistantMessage } from './model';
 import { BookRecognitionCard } from '@/components/ai-experience/book-recognition-card';
@@ -314,9 +315,14 @@ function MessageItemImpl({ message, phase, elapsed, isLast, busy, onAsk, onRetry
           <CopilotVisualizationNotes notes={message.visualizationNotes} />
         )}
 
-        {!streaming && (
-          <CopilotDecision decision={message.decision} onDraft={isLast ? onAsk : undefined} disabled={busy} />
+        {!streaming && message.timeline && message.timeline.length > 0 && <ExecutionTimeline stages={message.timeline} />}
+        {!streaming && message.decision?.kind === 'rebalance' && (
+          <RebalanceDecision decision={message.decision as AiRebalanceDecision} onRetry={isLast && !busy ? onRetry : undefined} />
         )}
+        {!streaming && message.decision?.kind !== 'rebalance' && (
+          <CopilotDecision decision={message.decision as AiDecision | null | undefined} onDraft={isLast ? onAsk : undefined} disabled={busy} />
+        )}
+        {!streaming && <ExecutionSummary execution={message.execution} />}
         {message.pendingAction && (
           <ActionCard action={message.pendingAction} onConfirmed={onActionConfirmed} onCancelled={onActionCancelled} />
         )}

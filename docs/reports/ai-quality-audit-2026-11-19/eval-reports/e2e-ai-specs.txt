@@ -1,0 +1,20 @@
+
+Running 15 tests using 1 worker
+
+  ok  1 [chromium] › e2e\ai-chat-streaming.spec.ts:50:3 › AI chat streaming and cancellation › customer chatbot streams the reply token by token (16.2s)
+  ok  2 [chromium] › e2e\ai-chat-streaming.spec.ts:64:3 › AI chat streaming and cancellation › resetting the chatbot aborts the reply in flight (11.0s)
+  ok  3 [chromium] › e2e\ai-chat-streaming.spec.ts:79:3 › AI chat streaming and cancellation › manager stops a streaming assistant answer; the unverified draft is not kept (13.8s)
+  ok  4 [chromium] › e2e\ai-copilot-decision.spec.ts:89:3 › AI copilot decision experience › manager compares budgets: options side by side, least risk, conditional recommendation, verified (13.4s)
+  ok  5 [chromium] › e2e\ai-copilot-decision.spec.ts:117:3 › AI copilot decision experience › a decision whose answer could not be verified offers no draft (9.8s)
+  ok  6 [chromium] › e2e\ai-copilot-decision.spec.ts:126:3 › AI copilot decision experience › a simple question gets the plain answer, no decision card (9.8s)
+  ok  7 [chromium] › e2e\ai-copilot-decision.spec.ts:134:3 › AI copilot decision experience › the decision card fits a phone screen (table scrolls, page does not) (13.4s)
+  ok  8 [chromium] › e2e\ai-copilot-visualization.spec.ts:138:3 › AI copilot visualizations › trend answer: KPI, line chart with tooltip, series toggle, chart/table switch, expand (10.9s)
+  ok  9 [chromium] › e2e\ai-copilot-visualization.spec.ts:181:3 › AI copilot visualizations › follow-up and budget slider send a new question instead of computing in the browser (11.6s)
+  ok 10 [chromium] › e2e\ai-copilot-visualization.spec.ts:209:7 › AI copilot visualizations › browser in UTC › a reopened conversation shows the stored snapshot, labelled as such (10.3s)
+  ok 11 [chromium] › e2e\ai-copilot-visualization.spec.ts:209:7 › AI copilot visualizations › browser in America/New_York › a reopened conversation shows the stored snapshot, labelled as such (8.8s)
+  ok 12 [chromium] › e2e\ai-copilot-visualization.spec.ts:209:7 › AI copilot visualizations › browser in Asia/Ho_Chi_Minh › a reopened conversation shows the stored snapshot, labelled as such (7.7s)
+  ok 13 [chromium] › e2e\ai-copilot-visualization.spec.ts:234:3 › AI copilot visualizations › an answer the faithfulness check replaced says so; a passing one shows nothing (9.4s)
+  ok 14 [chromium] › e2e\ai-copilot-visualization.spec.ts:256:3 › AI copilot visualizations › Copilot 3.2: a blocked answer says it could not be verified and offers no action; a verified one says it was checked (11.1s)
+  ok 15 [chromium] › e2e\ai-copilot-visualization.spec.ts:290:3 › AI copilot visualizations › dark mode recolours the series and the chart fits a phone screen (8.2s)
+
+  15 passed (3.0m)

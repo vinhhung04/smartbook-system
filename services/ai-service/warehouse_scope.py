@@ -71,20 +71,23 @@ async def readable_warehouses(user_ctx, *, client: httpx.AsyncClient | None = No
     return (await _scopes(user_ctx, client))[0]
 
 
-async def writable_warehouses(user_ctx, *, client: httpx.AsyncClient | None = None) -> frozenset[str] | None:
+async def writable_warehouses(user_ctx, *, client: httpx.AsyncClient | None = None,
+                              fresh: bool = False) -> frozenset[str] | None:
     """None = every warehouse (superuser); otherwise the ids the user may
-    write in (WRITE / OPERATOR / FULL). Raises ScopeUnavailable."""
+    write in (WRITE / OPERATOR / FULL). Raises ScopeUnavailable.
+    `fresh` skips the cache - for confirming an action, so access removed
+    while it was pending is honoured at once."""
     if user_ctx is None or not getattr(user_ctx, "user_id", None):
         return frozenset()
     if getattr(user_ctx, "is_superuser", False):
         return None
-    return (await _scopes(user_ctx, client))[1]
+    return (await _scopes(user_ctx, client, fresh=fresh))[1]
 
 
-async def _scopes(user_ctx, client: httpx.AsyncClient | None) -> tuple:
+async def _scopes(user_ctx, client: httpx.AsyncClient | None, *, fresh: bool = False) -> tuple:
     user_id = str(user_ctx.user_id)
     hit = _cache.get(user_id)
-    if hit and time.monotonic() - hit[0] < TTL_SECONDS:
+    if not fresh and hit and time.monotonic() - hit[0] < TTL_SECONDS:
         return hit[1]
     key = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
     if not key:

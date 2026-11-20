@@ -55,6 +55,53 @@ class RenderTests(unittest.TestCase):
         self.assertIn("-92,2%", text)
         self.assertIn("5,54", text)
 
+    def test_write_request_tells_the_model_the_draft_is_the_systems(self):
+        # 2026-11-20: "Không thể tạo đề xuất nhập..." was written above the draft card
+        note = cr.plan_note(plan("Tạo đề xuất nhập sách Norwegian Wood ở kho Kho Ha Noi"), NOW)
+        self.assertIn("Không viết \"đã tạo\" hay \"không thể tạo\"", note)
+        self.assertNotIn("Không viết \"đã tạo\"", cr.plan_note(plan("Nên nhập sách nào cho Kho Ha Noi?"), NOW))
+
+    def test_sentences_copied_from_the_few_shot_example_are_dropped(self):
+        # audit E-5: "3 đầu sách cần 30 ngày để hàng về... 6 bản đang giữ" came from the CAUSAL example
+        p = plan("Tại sao Kho HCM Chinh thiếu sách?")
+        self.assertIn("30 ngày để hàng về", cr.few_shot(p))
+        answer = ("Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm hai yếu tố.\n"
+                  "- **Nhu cầu vẫn còn**: 1/4 đầu sách dưới ngưỡng vẫn có lượt mượn (Norwegian Wood 18 lượt).\n"
+                  "- **Thời gian chờ hàng dài**: 3 đầu sách cần 30 ngày để hàng về, nên thiếu hụt kéo dài nếu không đặt sớm.\n"
+                  "- **Hàng đang giữ cho đặt chỗ**: 6 bản đang giữ, nên số bản cho mượn ngay ít hơn tồn thực tế.")
+        grounded = '{"low_stock_items": 4, "items_with_recent_demand": 1, "borrow_count": 18, "reserved": 6}'
+        text, removed = cr.strip_example_copies(answer, p, grounded)
+        self.assertEqual(len(removed), 2)
+        self.assertNotIn("30 ngày", text)
+        self.assertNotIn("6 bản đang giữ", text)
+        self.assertIn("Norwegian Wood 18 lượt", text)
+        self.assertIn("đi kèm hai yếu tố", text)  # following the example's wording is fine
+        self.assertEqual(cr.strip_example_copies("Có 446 phiếu quá hạn.", plan("Có bao nhiêu phiếu quá hạn?"), "446"),
+                         ("Có 446 phiếu quá hạn.", []))
+
+    def test_a_brief_request_is_held_to_three_sentences(self):
+        # audit E-15: "Nói ngắn gọn thôi" got an answer as long as the previous one
+        long = ("Chi nhánh Thủ Đức là kho có rủi ro cao thứ hai. Kho này có 71 đầu sách dưới ngưỡng. "
+                "Tồn khả dụng còn 215 bản. Chưa có đầu sách nào hết hàng. Nên bổ sung sớm.")
+        brief = cr.enforce_brief(long, plan("Nói ngắn gọn thôi", {"capabilities": ["warehouse_risk"]}))
+        self.assertEqual(brief, "Chi nhánh Thủ Đức là kho có rủi ro cao thứ hai. Kho này có 71 đầu sách dưới ngưỡng. "
+                                "Tồn khả dụng còn 215 bản.")
+        self.assertEqual(cr.enforce_brief(long, plan("Kho nào rủi ro nhất?")), long)  # no brief asked
+
+    def test_snapshot_figures_are_not_given_the_question_period(self):
+        # audit E-13: "Tuần này có 446 phiếu quá hạn" - 446 is today's count, not the week's
+        note = cr.plan_note(plan("Cho tôi số phiếu quá hạn và 3 sách mượn nhiều nhất tuần này"), NOW)
+        self.assertIn("là số hiện tại", note)
+        self.assertNotIn("là số hiện tại", cr.plan_note(plan("Top 3 sách mượn nhiều nhất tuần này"), NOW))
+        self.assertNotIn("là số hiện tại", cr.plan_note(plan("Có bao nhiêu phiếu quá hạn?"), NOW))
+
+    def test_stock_risk_is_rendered_with_its_all_warehouse_totals(self):
+        rows = [{"warehouse_name": "Kho A", "out_of_stock_variants": 1, "low_stock_variants": 77, "total_available_qty": 248},
+                {"warehouse_name": "Kho B", "out_of_stock_variants": 0, "low_stock_variants": 224, "total_available_qty": 40}]
+        self.assertIn("Tổng 2 kho (cộng theo từng kho): 1 đầu sách hết hàng, 301 đầu sách dưới ngưỡng, tồn khả dụng 288",
+                      cr.render("get_warehouse_stock_risk", rows))
+        self.assertNotIn("Tổng", cr.render("get_warehouse_stock_risk", rows[:1]))
+
     def test_unknown_tool_or_shape_falls_back(self):
         self.assertIsNone(cr.render("get_fine_summary", {"total_unpaid": 1}))
         self.assertIsNone(cr.render("compare_warehouses", ["not", "a", "dict"]))
@@ -80,6 +127,22 @@ class ExtrasTests(unittest.TestCase):
         self.assertEqual(rec["source"], "analytics/reorder-suggestions")
         self.assertTrue(extras["data_as_of"].startswith("2026-10-13T15:02"))
         self.assertTrue(any("cam kết nhà cung cấp" in c for c in extras["caveats"]))
+
+    def test_a_warehouse_scoped_card_shows_the_warehouse_stock_and_the_library_stock(self):
+        scoped = {**self.REORDER, "items": [{**self.REORDER["items"][0], "warehouse_available_qty": 2,
+                                              "warehouse_reorder_point": 5}],
+                  "warehouse_scope": {"warehouse_name": "Kho HCM Chinh"}}
+        extras = cr.build_extras(plan("Kho HCM Chinh nên nhập thêm sách gì?"), {"get_reorder_suggestions": scoped},
+                                 user(superuser=True), WAREHOUSES, NOW)
+        metrics = {m["label"]: m["value"] for m in extras["recommendations"][0]["metrics"]}
+        self.assertEqual((metrics["Tồn tại Kho HCM Chinh"], metrics["Tồn toàn thư viện"]), (2, 5))
+        self.assertNotIn("Tồn khả dụng", metrics)  # one ambiguous label for two different numbers
+        text = cr.render("get_reorder_suggestions", {**scoped, "warehouse_scope": {
+            "warehouse_name": "Kho HCM Chinh", "with_suggestion": 1, "low_stock_titles": 2, "note": "…toàn thư viện…",
+            "without_suggestion": ["One Hundred Years of Solitude"]}})
+        self.assertTrue(text.startswith("Phạm vi: Kho HCM Chinh - 1/2 đầu sách"))
+        self.assertIn("Norwegian Wood — ưu tiên HIGH; tồn tại kho 2 (ngưỡng tại kho 5); tồn toàn thư viện 5", text)
+        self.assertIn("chưa đề xuất nhập: One Hundred Years of Solitude", text)
 
     def test_permission_errors_become_caveats(self):
         extras = cr.build_extras(plan("Có bao nhiêu phiếu quá hạn?"),

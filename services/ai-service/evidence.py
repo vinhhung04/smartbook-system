@@ -83,6 +83,13 @@ def _evidence_warehouse_stock_risk(result: list) -> list[dict]:
                 f"{name} — sách tồn thấp", "get_warehouse_stock_risk", "low_stock_variants",
                 row.get("low_stock_variants"), "đầu sách", description=row.get("reasoning", ""),
             ))
+    if len(ranked) >= 2:
+        # the totals the prompt shows (copilot_response._render_stock_risk) - grounded like any tool value
+        for metric, label in (("low_stock_variants", "dưới ngưỡng"), ("out_of_stock_variants", "hết hàng")):
+            items.append(_item(
+                f"Tổng {len(ranked)} kho — đầu sách {label}", "get_warehouse_stock_risk", metric,
+                sum(row.get(metric) or 0 for row in ranked), "đầu sách", description="Cộng theo từng kho",
+            ))
     return items
 
 
@@ -150,7 +157,9 @@ def _evidence_borrow_trends(result: list) -> list[dict]:
     total_returns = sum(row.get("returns") or 0 for row in days)
     peak = max(days, key=lambda row: row.get("loans") or 0)
     items = [
-        _item("Tổng lượt mượn trong khoảng thời gian", "get_borrow_trends", "total_loans", total_loans, "lượt"),
+        # counted in loan tickets; top books count copies (one loan can hold several) - audit D-2
+        _item("Tổng lượt mượn trong khoảng thời gian", "get_borrow_trends", "total_loans", total_loans, "lượt",
+              description="số phiếu mượn; một phiếu có thể gồm nhiều cuốn, nên khác số bản trong top sách"),
         _item("Tổng lượt trả trong khoảng thời gian", "get_borrow_trends", "total_returns", total_returns, "lượt"),
     ]
     if (peak.get("loans") or 0) > 0:
@@ -176,12 +185,14 @@ def _evidence_fine_summary(result: dict) -> list[dict]:
 
 def _evidence_reservation_funnel(result: dict) -> list[dict]:
     items = []
+    # Counts of reservations, not of books: "5.268" was read as books shipped out (audit E-14).
     if "total" in result:
-        items.append(_item("Tổng số reservation", "get_reservation_funnel", "total", result["total"], "reservation"))
+        items.append(_item("Tổng số lượt đặt chỗ", "get_reservation_funnel", "total", result["total"], "lượt đặt chỗ"))
     if "converted_to_loan" in result:
         items.append(_item(
-            "Đã chuyển thành phiếu mượn", "get_reservation_funnel", "converted_to_loan",
-            result["converted_to_loan"], "reservation",
+            "Đặt chỗ đã chuyển thành phiếu mượn", "get_reservation_funnel", "converted_to_loan",
+            result["converted_to_loan"], "lượt đặt chỗ",
+            description="số lượt đặt chỗ bạn đọc đã đến nhận và mượn - không phải số sách hay số bản xuất kho",
         ))
     if "conversion_rate" in result:
         items.append(_item("Tỷ lệ chuyển đổi", "get_reservation_funnel", "conversion_rate", result["conversion_rate"], "%"))

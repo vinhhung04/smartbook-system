@@ -327,6 +327,9 @@ def strip_internal_labels(answer: str) -> tuple[str, list[Issue]]:
     issues = [Issue(INTERNAL_LABEL, m.group(0).strip(), "Nhãn nội bộ của khung giải thích, đã được bỏ.")
               for m in _LABELS.finditer(answer or "")]
     cleaned = re.sub(rf"(?:{_LABELS.pattern})(\w?)", _drop_label, answer or "")
+    # "**Ý nghĩa:** Kho…" leaves "**** Kho…" once the label is gone: drop the empty emphasis
+    cleaned = re.sub(r"(\*\*|__)[\s:]*\1", "", cleaned)
+    cleaned = re.sub(r"(?m)^[ \t]+(?=\S)", "", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     issues += [Issue(INTERNAL_LABEL, m.group(0), "Tên trường kỹ thuật trong câu trả lời.")
                for m in _FIELDS.finditer(cleaned)]

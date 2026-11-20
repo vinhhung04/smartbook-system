@@ -16,6 +16,7 @@ from agent_actions import (
     CREATE_REPORT_DRAFT,
     CREATE_RESERVATION_DRAFT,
     CREATE_STAFF_TASK_DRAFT,
+    CREATE_REBALANCE_DRAFT,
     CREATE_STOCK_ALERT,
 )
 from agent_permissions import can_confirm_action
@@ -43,6 +44,8 @@ EXPECTED = {
     CREATE_STAFF_TASK_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER"},
     CREATE_RESERVATION_DRAFT: {"ADMIN", "LIBRARIAN", "CUSTOMER"},
     CREATE_REPORT_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN"},
+    # transfer part: manager decision; purchase part: purchase.request (each re-checked at execution)
+    CREATE_REBALANCE_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"},
 }
 ASSISTANT = {"ADMIN", "WAREHOUSE_MANAGER"}
 

@@ -1,0 +1,432 @@
+[
+ {
+  "user": "hung",
+  "q": "Kho HCM Chinh có sách nào tồn thấp cần nhập thêm?",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "table_titles": [
+   "One Hundred Years of Solitude",
+   "Norwegian Wood",
+   "Tư Duy Như Kinh Tế Gia",
+   "Project Hail Mary"
+  ],
+  "cards": [
+   [
+    "Project Hail Mary",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Norwegian Wood",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "One Hundred Years of Solitude",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 4 bản"
+   ]
+  ],
+  "answer": "Kho HCM Chinh hiện có 4 đầu sách tồn thấp cần xem xét nhập thêm, tổng cộng đề xuất 4 bản với chi phí ước tính khoảng 880.000 ₫.\n\nCác căn cứ chính:\n* **One Hundred Years of Solitude**: Tồn kho chỉ còn 1 bản (ngưỡng an toàn là 15). Đây là đầu sách được đề xuất nhập nhiều nhất với số lượng 4 bản để bù đắp mức thiếu hụt lớn này.\n* **Norwegian Wood**: Tồn kho 2 bản so với ngưỡng 10. Dù lượt mượn trong tháng qua đã giảm nhưng hệ thống dự kiến sẽ hết hàng sau khoảng 32 ngày nếu không bổ sung.\n* **Project Hail Mary** và **Tư Duy Như Kinh Tế Gia**: Cả hai đều đang ở mức dưới ngưỡng nhưng chưa được đề xuất nhập ngay do nhu cầu mượn gần đây rất thấp hoặc bằng 0.\n\nLưu ý rằng các con số về nhu cầu và đề xuất nhập trên được hệ thống tính toán dựa trên dữ liệu chung của toàn thư viện, nên việc bổ sung tại Kho HCM Chinh cũng sẽ góp phần tăng nguồn cung cho các khu vực khác.",
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "plan": {
+   "capabilities": [
+    "warehouse_risk",
+    "reorder"
+   ],
+   "answer_mode": "analysis",
+   "requested_analysis": "lookup"
+  }
+ },
+ {
+  "user": "hung",
+  "q": "Chi Nhanh District 1 nên nhập thêm sách gì?",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Chi Nhanh District 1"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {
+     "warehouse": "Chi Nhanh District 1"
+    }
+   ]
+  ],
+  "table_titles": [
+   "Nhà Giả Kim (Tái Bản 2025)",
+   "The Lean Startup",
+   "Giết Con Chim Nhại (Tái Bản)",
+   "The Godfather",
+   "Nỗi Buồn Chiến Tranh",
+   "Nineteen Eighty-Four",
+   "How to Win Friends and Influence People",
+   "The Intelligent Investor",
+   "The Hobbit",
+   "Atomic Habits",
+   "Ông Già Và Biển Cả",
+   "Harry Potter and the Philosopher's Stone",
+   "To Kill a Mockingbird",
+   "A Brief History of Time"
+  ],
+  "cards": [
+   [
+    "Nhà Giả Kim (Tái Bản 2025)",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ]
+  ],
+  "answer": "Nên ưu tiên bổ sung **Nhà Giả Kim (Tái Bản 2025)** cho Chi Nhanh District 1.\n\n**Lý do**: Đây là đầu sách duy nhất đang **hết hàng** tại kho này, trong khi toàn thư viện vẫn còn 40 bản tồn và mức nhu cầu hiện tại thấp (0 lượt mượn trong kỳ gần nhất). Hệ thống xếp mức ưu tiên **THẤP** với số lượng đề xuất nhập là **0 bản**, phản ánh việc chưa cần gấp nhưng nên theo dõi để tránh tình trạng thiếu hụt nếu nhu cầu tăng trở lại.\n\n**Rủi ro chính**: Thời gian chờ hàng chỉ là **1 ngày** (học từ lịch sử giao), có thể không phản ánh đúng thực tế nếu nhà cung cấp thay đổi quy trình. Ngoài ra, các đầu sách khác như *The Lean Startup*, *Giết Con Chim Nhại (Tái Bản)* cũng đang dưới ngưỡng nhưng chưa được đề xuất nhập ngay vì nhu cầu thấp hơn.\n\n**Phương án thay thế**: Nếu ngân sách cho phép, bạn có thể xem xét nhập thêm một vài bản của các đầu sách dưới ngưỡng khác để đảm bảo sẵn sàng phục vụ bạn đọc, đặc biệt là những tựa có xu hướng mượn tăng trong tháng qua.\n\n**Bước tiếp theo**: Bạn có muốn tôi kiểm tra chi tiết nhu cầu mượn của từng đầu sách này trong 30 ngày qua, hoặc mô phỏng ngân sách nhập hàng cụ thể cho Chi Nhanh District 1?",
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "plan": {
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision"
+  }
+ },
+ {
+  "user": "hung",
+  "q": "Sách tồn thấp ở Kho HCM Chinh và đề xuất nhập",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "table_titles": [
+   "One Hundred Years of Solitude",
+   "Norwegian Wood",
+   "Tư Duy Như Kinh Tế Gia",
+   "Project Hail Mary"
+  ],
+  "cards": [
+   [
+    "Project Hail Mary",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Norwegian Wood",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "One Hundred Years of Solitude",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 4 bản"
+   ]
+  ],
+  "answer": "Nên xem xét nhập **Project Hail Mary** trước: đầu sách này đứng đầu danh sách đề xuất của Kho HCM Chinh theo thứ tự ưu tiên và điểm nhu cầu.\n\n**Vì sao chọn**:\n* **Thứ tự ưu tiên cao nhất**: Trong danh sách 4 đầu sách tồn thấp, *Project Hail Mary* được hệ thống xếp vị trí số 1 (trước cả *Norwegian Wood*, *One Hundred Years of Solitude* và *Tư Duy Như Kinh Tế Gia*).\n* **Mức tồn tại kho**: Hiện còn 6 bản (đúng bằng ngưỡng tồn tối thiểu là 6), trong khi tồn toàn thư viện là 11 bản.\n* **Chi phí thấp**: Đề xuất hiện tại là 0 bản với chi phí ước tính khoảng **0 ₫**, nghĩa là chưa cần bổ sung ngay nhưng vẫn nằm trong nhóm cần theo dõi sát sao.\n\n**Rủi ro cần lưu ý**:\n* **Giảm mạnh nhu cầu**: Lượt mượn của *Project Hail Mary* giảm **100%** so với kỳ trước (từ 10 lượt xuống 0 lượt trong kỳ gần nhất). Điều này có thể khiến hệ thống đánh giá thấp nhu cầu thực tế.\n* **Thời gian chờ hàng ngắn**: Thời gian chờ hàng chỉ là 1 ngày (học từ lịch sử giao), nên nếu nhu cầu bất ngờ tăng, khả năng phản ứng nhanh sẽ tốt hơn các sách khác.\n\n**Phương án thay thế**:\n* **One Hundred Years of Solitude**: Dù không đứng đầu danh sách, đây là đầu sách duy nhất có đề xuất nhập thực tế (4 bản, chi phí **880.000 ₫**) do tồn kho toàn thư viện (11 bản) đang dưới ngưỡng (15 bản). Tuy nhiên, lượt mượn cũng giảm **100%** (từ 9 xuống 0).\n* **Norwegian Wood**: Tồn kho tại kho chỉ còn 2 bản (dưới ngưỡng 10), dự kiến hết hàng sau 32 ngày, nhưng đề xuất hiện tại là 0 bản.\n\n**Bước tiếp theo**: Vì tất cả các đầu sách đều có mức ưu tiên LOW và đề xuất nhập chủ yếu là 0 bản, bạn nên kiểm tra lại xu hướng mượn trong 7-14 ngày tới để xác định xem có cần điều chỉnh ngân sách hay thời gian chờ hàng cho đợt nhập tiếp theo hay không.",
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "plan": {
+   "capabilities": [
+    "warehouse_risk",
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision"
+  }
+ },
+ {
+  "user": "hung",
+  "q": "Nên nhập thêm sách gì?",
+  "tools": [
+   [
+    "get_reorder_suggestions",
+    {}
+   ]
+  ],
+  "table_titles": [],
+  "cards": [
+   [
+    "Sắc Lời Đắc Thế",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Project Hail Mary",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Norwegian Wood",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ]
+  ],
+  "answer": "Nên xem xét nhập **Sắc Lời Đắc Thế** trước.\n\n**Vì sao chọn**:\n* Đầu sách này đứng đầu danh sách đề xuất với mức ưu tiên LOW, hiện có 8 bản tồn kho (ngưỡng 0). Số lượt mượn trong kỳ gần nhất là 0, giảm 100% so với kỳ trước (4 lượt).\n* Tổng số lượng đề xuất nhập cho toàn bộ 106 đầu sách cần xem xét là 4 bản, với tổng chi phí ước tính khoảng 880.000 ₫.\n* Thời gian chờ hàng của đầu sách này là 14 ngày (giá trị mặc định), chưa được học từ lịch sử giao thực tế.\n\n**Rủi ro chính**:\n* Nhiều đầu sách khác trong top cũng ghi nhận xu hướng lượt mượn giảm mạnh (ví dụ: *Project Hail Mary*, *Kafka on the Shore* giảm 100%; *Norwegian Wood* giảm 60,9%).\n* Việc dựa vào thời gian chờ hàng mặc định (14 ngày) cho một số đầu sách có thể khiến kế hoạch nhập hàng không sát với thực tế giao nhận.\n\n**Phương án thay thế**:\n* **One Hundred Years of Solitude**: Cũng có mức ưu tiên LOW và đề xuất nhập 4 bản (chi phí ~880.000 ₫). Đầu sách này có tồn kho thấp hơn ngưỡng (11/15) và từng có 9 lượt mượn trong kỳ trước.\n* **Norwegian Wood**: Có 12 bản tồn (ngưỡng 10) và từng có 18 lượt mượn trong kỳ, nhưng đề xuất nhập là 0 bản. Dự kiến hết hàng sau 32 ngày.\n\n**Bước tiếp theo**:\nBạn có muốn hệ thống tạo phiếu đề xuất nhập cho **Sắc Lời Đắc Thế** hay **One Hundred Years of Solitude** không? (Hệ thống sẽ yêu cầu bạn xác nhận trước khi tạo phiếu).",
+  "data_keys": [
+   "get_reorder_suggestions"
+  ],
+  "plan": {
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision"
+  }
+ },
+ {
+  "user": "manager01",
+  "q": "Kho HCM Chinh có sách nào tồn thấp cần nhập thêm?",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "table_titles": [
+   "One Hundred Years of Solitude",
+   "Norwegian Wood",
+   "Tư Duy Như Kinh Tế Gia",
+   "Project Hail Mary"
+  ],
+  "cards": [
+   [
+    "Project Hail Mary",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Norwegian Wood",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "One Hundred Years of Solitude",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 4 bản"
+   ]
+  ],
+  "answer": "Kho HCM Chinh hiện có 4 đầu sách tồn thấp dưới ngưỡng, chưa hết hàng. Trong đó, **One Hundred Years of Solitude** là đầu sách cần nhập thêm nhất với đề xuất 4 bản (chi phí ước tính khoảng 880.000 ₫).\n\nCác căn cứ chính:\n* **One Hundred Years of Solitude:** Tồn kho chỉ còn 1 bản so với ngưỡng an toàn là 15 bản. Dù không có lượt mượn trong tháng qua nhưng nhu cầu trước đó khá cao (9 lượt), hệ thống đề xuất nhập bổ sung 4 bản để đảm bảo nguồn cung.\n* **Norwegian Wood:** Tồn kho giảm xuống còn 2 bản (ngưỡng 10). Sách vẫn đang được bạn đọc quan tâm với 18 lượt mượn trong tháng qua, dù xu hướng có giảm nhẹ so với tháng trước.\n* **Project Hail Mary & Tư Duy Như Kinh Tế Gia:** Cả hai đều ở mức dưới ngưỡng (6 và 4 bản tương ứng) nhưng hiện tại chưa có đề xuất nhập ngay do số lượng tồn khả dụng trên toàn thư viện vẫn đủ đáp ứng hoặc nhu cầu gần đây rất thấp.\n\nLưu ý: Các con số lượt mượn và nhu cầu được tính toán dựa trên dữ liệu chung của toàn hệ thống thư viện, nên việc nhập sách sẽ giúp cân bằng nguồn lực cho tất cả các chi nhánh cùng lúc.",
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "plan": {
+   "capabilities": [
+    "warehouse_risk",
+    "reorder"
+   ],
+   "answer_mode": "analysis",
+   "requested_analysis": "lookup"
+  }
+ },
+ {
+  "user": "manager01",
+  "q": "Chi Nhanh District 1 nên nhập thêm sách gì?",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Chi Nhanh District 1"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {
+     "warehouse": "Chi Nhanh District 1"
+    }
+   ]
+  ],
+  "table_titles": [
+   "Nhà Giả Kim (Tái Bản 2025)",
+   "The Lean Startup",
+   "Giết Con Chim Nhại (Tái Bản)",
+   "The Godfather",
+   "Nỗi Buồn Chiến Tranh",
+   "Nineteen Eighty-Four",
+   "How to Win Friends and Influence People",
+   "The Intelligent Investor",
+   "The Hobbit",
+   "Atomic Habits",
+   "Ông Già Và Biển Cả",
+   "Harry Potter and the Philosopher's Stone",
+   "To Kill a Mockingbird",
+   "A Brief History of Time"
+  ],
+  "cards": [
+   [
+    "Nhà Giả Kim (Tái Bản 2025)",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ]
+  ],
+  "answer": "Chi Nhanh District 1 hiện chỉ có **1 đầu sách** được hệ thống đề xuất nhập là **Nhà Giả Kim (Tái Bản 2025)**.\n\n**Lý do và phân tích:**\n* **Tình trạng tồn kho:** Kho này đang có **14 đầu sách** dưới ngưỡng tồn tối thiểu, trong đó **1 đầu sách đã hết hàng**. Tổng số bản tồn khả dụng tại kho chỉ còn **47 bản**.\n* **Đề xuất cụ thể:** Hệ thống chỉ đề xuất nhập **Nhà Giả Kim (Tái Bản 2025)** với mức ưu tiên **THẤP**. Mặc dù hiện tại sách đã hết hàng (tồn khả dụng 0), nhưng nhu cầu mượn trong kỳ gần đây rất thấp (0 lượt mượn so với 2 lượt của kỳ trước). Do đó, số lượng đề xuất nhập là 0 bản với chi phí ước tính 0 ₫.\n* **Các đầu sách khác:** Các đầu sách còn lại như *The Lean Startup*, *Giết Con Chim Nhại (Tái Bản)*, hay *Atomic Habits*... tuy cũng đang dưới ngưỡng (từ 2-5 bản) nhưng chưa đủ điều kiện để hệ thống đưa ra đề xuất nhập hàng ngay lập tức.\n\n**Rủi ro chính:**\nViệc chờ đợi đến khi nhu cầu tăng lên có thể khiến bạn đọc không thể tiếp cận các đầu sách phổ biến nếu nhu cầu bất ngờ tăng cao. Thời gian chờ hàng hiện tại cho Nhà Giả Kim là 1 ngày (dựa trên lịch sử giao thực tế), nên việc bổ sung sẽ khá nhanh nếu quyết định nhập.\n\n**Phương án thay thế:**\nTrước khi nhập mới, bạn có thể kiểm tra xem các đầu sách đang hết hoặc thiếu tại Chi Nhanh District 1 có còn tồn kho tại **Kho HCM Chinh** (đang có 198 bản tồn khả dụng) để thực hiện điều chuyển nội bộ nhằm lấp đầy khoảng trống tạm thời.",
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "plan": {
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision"
+  }
+ },
+ {
+  "user": "manager01",
+  "q": "Sách tồn thấp ở Kho HCM Chinh và đề xuất nhập",
+  "tools": [
+   [
+    "get_warehouse_low_stock_items",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ],
+   [
+    "get_warehouse_stock_risk",
+    {}
+   ],
+   [
+    "get_reorder_suggestions",
+    {
+     "warehouse": "Kho HCM Chinh"
+    }
+   ]
+  ],
+  "table_titles": [
+   "One Hundred Years of Solitude",
+   "Norwegian Wood",
+   "Tư Duy Như Kinh Tế Gia",
+   "Project Hail Mary"
+  ],
+  "cards": [
+   [
+    "Project Hail Mary",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Norwegian Wood",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "One Hundred Years of Solitude",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 4 bản"
+   ]
+  ],
+  "answer": "Kho HCM Chinh hiện có 4 đầu sách dưới ngưỡng tồn tối thiểu, trong đó **One Hundred Years of Solitude** là ứng viên nhập bổ sung rõ nhất với đề xuất 4 bản (ước tính 880.000 ₫).\n\n**Vì sao chọn One Hundred Years of Solitude:**\n- Tồn kho tại kho chỉ còn 1 bản so với ngưỡng 15 — bạn đọc khó tiếp cận ngay khi muốn mượn.\n- Dù không có lượt mượn nào trong kỳ gần nhất, số lượng đề xuất cao (4 bản) cho thấy hệ thống dự báo nhu cầu phục hồi hoặc cần bù đắp khoảng trống lớn giữa tồn thực tế và ngưỡng an toàn.\n- Thời gian chờ hàng đang ở mức mặc định (14 ngày), chưa được học từ lịch sử giao thực tế của sách này.\n\n**Các đầu sách khác:**\n- *Norwegian Wood* (2 bản, ngưỡng 10): cũng dưới ngưỡng nhưng đề xuất nhập 0 bản; hệ thống dự kiến hết hàng sau 32 ngày.\n- *Project Hail Mary* (6 bản, ngưỡng 6) và *Tư Duy Như Kinh Tế Gia* (4 bản, ngưỡng 0): đều dưới ngưỡng nhưng đề xuất 0 bản, phản ánh nhu cầu thấp hoặc tồn tại thư viện đã đủ đáp ứng.\n\n**Rủi ro chính:**\n- Thời gian chờ hàng của One Hundred Years of Solitude là giá trị mặc định, chưa kiểm chứng bằng dữ liệu giao thực tế — có thể dẫn đến dự báo sai lệch về thời điểm sách về kho.\n- Chưa có dữ liệu nhu cầu tách theo từng kho, nên chưa đánh giá chính xác mức ảnh hưởng trực tiếp tới bạn đọc khu vực này.\n\n**Phương án thay thế:**\n- Nếu ngân sách hạn chế, có thể ưu tiên Norwegian Wood trước vì vẫn còn tồn 2 bản và dự kiến hết hàng sau 32 ngày, tạo hành lang thời gian để chuẩn bị.\n- Có thể kết hợp nhập cả hai nếu nguồn lực cho phép, nhưng cần cân nhắc chi phí và thời gian chờ hàng thực tế.\n\n**Bước tiếp theo:**\n- Xác nhận đề xuất nhập One Hundred Years of Solitude (4 bản) — hệ thống sẽ yêu cầu bạn phê duyệt trước khi tạo phiếu.\n- Nếu muốn điều chỉnh thời gian chờ hàng hoặc ngân sách cụ thể, hãy cung cấp thêm thông tin để hệ thống tinh toán lại đề xuất.",
+  "data_keys": [
+   "get_reorder_suggestions",
+   "get_warehouse_low_stock_items",
+   "get_warehouse_stock_risk"
+  ],
+  "plan": {
+   "capabilities": [
+    "warehouse_risk",
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision"
+  }
+ },
+ {
+  "user": "manager01",
+  "q": "Nên nhập thêm sách gì?",
+  "tools": [
+   [
+    "get_reorder_suggestions",
+    {}
+   ]
+  ],
+  "table_titles": [],
+  "cards": [
+   [
+    "Sắc Lời Đắc Thế",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Project Hail Mary",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ],
+   [
+    "Norwegian Wood",
+    "analytics/reorder-suggestions",
+    "Nhập thêm 0 bản"
+   ]
+  ],
+  "answer": "Nên xem xét nhập **Sắc Lời Đắc Thế** trước.\n\n**Vì sao chọn**:\n* Đầu sách này đứng đầu danh sách đề xuất của hệ thống (xếp theo mức ưu tiên, điểm nhu cầu và số lượng đề xuất).\n* Mặc dù tồn kho hiện tại là 8 bản (trên ngưỡng 0) và chưa có lượt mượn trong kỳ gần đây, nhưng dữ liệu cho thấy nhu cầu đã từng cao hơn (4 lượt mượn trong kỳ trước).\n* Thời gian chờ hàng hiện tại là giá trị mặc định (14 ngày), chưa được học từ lịch sử giao thực tế.\n\n**Rủi ro chính**:\n* Đề xuất nhập là 0 bản, nghĩa là hệ thống không khuyến nghị bổ sung ngay lập tức do nhu cầu hiện tại thấp hoặc tồn kho đủ đáp ứng.\n* Dữ liệu về thời gian chờ hàng dựa trên giá trị mặc định, có thể không phản ánh chính xác thời gian giao hàng thực tế.\n\n**Phương án thay thế**:\n* **Project Hail Mary**: Cũng có mức ưu tiên LOW, tồn kho 11 bản (ngưỡng 6), nhưng đề xuất nhập là 0 bản.\n* **Norwegian Wood**: Có 18 lượt mượn trong kỳ, nhưng tồn kho 12 bản vẫn cao hơn ngưỡng 10 bản, nên chưa cần nhập.\n\n**Bước tiếp theo**: Bạn có muốn xem chi tiết lý do tại sao các đầu sách khác không được đề xuất nhập hay không? Hoặc bạn có ngân sách cụ thể nào để tối ưu hóa việc nhập hàng không?",
+  "data_keys": [
+   "get_reorder_suggestions"
+  ],
+  "plan": {
+   "capabilities": [
+    "reorder"
+   ],
+   "answer_mode": "decision",
+   "requested_analysis": "decision"
+  }
+ }
+]

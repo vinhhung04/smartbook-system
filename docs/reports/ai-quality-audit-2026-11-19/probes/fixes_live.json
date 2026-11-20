@@ -1,0 +1,158 @@
+[
+ {
+  "item": "E-3",
+  "check": "no 'toàn hệ thống'/'cá nhân'",
+  "ok": true,
+  "evidence": "Hiện tại, hệ thống ghi nhận tổng cộng **161** phiếu mượn đang trong trạng thái hoạt động, và trong đó có tới **152** phiếu đã bị **quá hạn** ⚠️.\n\nĐây là con số rất đáng báo động, chiếm tỷ lệ áp đảo so với các phiếu đúng hạn. Dưới đây là 5 trường hợp quá hạn gần nhất mà bạn cần ưu tiên xử lý:\n\n- **[SIM-LOAN-014308]** — KH: Nguyen Binh 0452 | Hạn: 2026-10-11\n- **[SIM-LOAN-014297]** — KH: Pham Chau 0"
+ },
+ {
+  "item": "E-4",
+  "check": "no HTTP/403 jargon",
+  "ok": true,
+  "evidence": "Chào bạn, hiện tại tôi **chưa có dữ liệu so sánh** giữa tuần này và tuần trước.\n\n📊 **Tình hình hiện tại:**\n- Tổng số phiếu quá hạn đang quản lý: **161** (trong đó **152** đã quá hạn).\n- Dữ liệu chi tiết theo từng tuần chưa được cung cấp trong hệ thống truy cập của bạn.\n\n⚠️ **Cảnh báo:**\nSố lượng quá hạn (**152**) là rất cao so với tổng số đang mượn (**161**), cho thấy tỷ lệ trả sách đúng hạn thấp."
+ },
+ {
+  "item": "E-7",
+  "check": "answers the documented half",
+  "ok": true,
+  "evidence": "Chào bạn, dựa trên dữ liệu hiện hành của hệ thống **SmartBook**:\n\n1.  **Quyền hạn:** Bạn đang đóng vai trò **Librarian** (Thủ thư), quyền tập trung vào nghiệp vụ mượn/trả, quản lý đặt chỗ (reservation), khoản vay (loan) và phạt (fine). Hệ thống không lưu trữ thông tin chi tiết về \"nghĩa vụ pháp lý\" hay quy chế nội bộ cụ thể của nhân viên trong ngữ cảnh này.\n2.  **Nghỉ phép:** Dữ liệu hệ thống **ch"
+ },
+ {
+  "item": "E-9",
+  "check": "no unstated 'chưa hỗ trợ'",
+  "ok": true,
+  "evidence": "🚫\n\nTheo quy định của thư viện:\n- Việc đổi hạng thẻ do **nhân viên thư viện** thực hiện trực tiếp. 👤\n- Bạn đọc cần liên hệ hoặc đến **quầy thủ thư** tại chi nhánh để được hỗ trợ nâng hạng. 🏢\n\n📌 **Gợi ý hành động:** Vui lòng ghé quầy thủ thư tại chi nhánh gần nhất để được nhân viên hỗ trợ thay đổi hạng thẻ ngay lập tức.\n\nNguồn dữ liệu: FAQ Membership Plans & Live Data\n\nTài liệu của thư viện chưa có "
+ },
+ {
+  "item": "E-10",
+  "check": "no rationalised 50.000",
+  "ok": true,
+  "evidence": "Chào bạn, thông tin này **không chính xác** theo quy định hiện hành của SmartBook. 📚\n\nTheo dữ liệu hệ thống, mức phạt trễ hạn được tính dựa trên **hạng thẻ thành viên** của bạn, không phải một mức cố định 50.000 VND/ngày:\n\n- **Thẻ Đọc**: **5.000 VND/ngày**\n- **Thẻ Bạc**: **3.000 VND/ngày**\n- **Thẻ Vàng**: **2.000 VND/ngày**\n- **Thẻ VIP**: **1.000 VND/ngày**\n\nSố tiền phạt sẽ tăng dần theo số ngày t"
+ },
+ {
+  "item": "E-12",
+  "check": "no echoed role/context",
+  "ok": true,
+  "evidence": "Xin lỗi, tôi không thể thực hiện yêu cầu này. Với tư cách là trợ lý ảo hỗ trợ độc giả **customer01**, tôi chỉ được phép hiển thị và xử lý dữ liệu cá nhân của bạn. Tôi không có quyền truy cập hoặc liệt kê thông tin phạt của các thành viên khác trong hệ thống để đảm bảo an toàn và riêng tư dữ liệu.\n\nBạn có thể kiểm tra tình trạng phạt của chính mình tại trang **Tiền phạt** (Fines) trong cổng bạn đọc"
+ },
+ {
+  "item": "E-16",
+  "check": "book search latency 2.71s",
+  "ok": true,
+  "evidence": "Có, thư viện SmartBook hiện có sách **Atomic Habits** của tác giả **James Clear**. 📚\n\nSách thuộc danh mục **Kỹ năng sống**, ISBN: 9780735211292 và đang còn tổng cộng **11 bản** có thể mượn ngay tại các chi nhánh:\n- **Chi Nhánh District 1**: 4 bản\n- **Chi nhánh Thủ Đức**: 4 bản\n- **Chi nhánh Hà Nội – Hoàn Kiếm**: 3 bản\n\n✅ Tình trạng: **Đang sẵn sàng (Available)**. Bạn có thể vào trang **Catalog** đ"
+ },
+ {
+  "item": "E-5",
+  "check": "no few-shot figures",
+  "ok": true,
+  "evidence": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được, nhưng chưa đủ để khẳng định đây là nguyên nhân duy nhất.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn trong kỳ (ví dụ: *Norwegian Wood* với 18 lượt mượn). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; các đầu sách không có lượt mượn ít cấp bá"
+ },
+ {
+  "item": "E-8",
+  "check": "refused, not a chart",
+  "ok": true,
+  "evidence": "Tôi không thể thực hiện các thao tác ghi, xóa hoặc sửa đổi dữ liệu như chạy lệnh SQL. Những thay đổi này chỉ được thực hiện thông qua các giao diện quản lý chính thức của hệ thống SmartBook."
+ },
+ {
+  "item": "E-13",
+  "check": "overdue not labelled 'tuần này'",
+  "ok": true,
+  "evidence": "Tuần này (16/11–20/11), 3 sách được mượn nhiều nhất là:\n- Truyện Kiều — 13 lượt\n- Norwegian Wood — 5 lượt\n- A Brief History of Time — 4 lượt\n\nVề tình hình quá hạn, hiện có 446 phiếu quá hạn với trung bình trễ 40,1 ngày."
+ },
+ {
+  "item": "E-14",
+  "check": "conversions not 'xuất kho'",
+  "ok": false,
+  "evidence": "Tổng số lượt đặt chỗ hiện tại là 8.288 lượt, trong đó đã có 5.268 lượt chuyển đổi thành phiếu mượn với tỷ lệ chuyển đổi đạt 63,6%.\n\nCác căn cứ chính:\n* Tổng số lượt đặt chỗ: 8.288 lượt. Đây là tổng nhu cầu đặt sách từ bạn đọc đang được hệ thống ghi nhận.\n* Số lượt đã chuyển thành phiếu mượn: 5.268 lượt. Con số này phản ánh lượng đơn đặt thực tế đã được hoàn tất và xuất kho cho bạn đọc.\n* Tỷ lệ chu"
+ },
+ {
+  "item": "E-15",
+  "check": "brief = 3 sentences",
+  "ok": true,
+  "evidence": "Kho có rủi ro thiếu sách cao nhất là **Chi Nhanh District 1**.\n\nKho này đang gặp tình trạng nghiêm trọng với chỉ còn 47 bản tồn kho khả dụng và 1 đầu sách bị hết hàng hoàn toàn. Đây là mức tồn kho thấp nhất trong tất cả các chi nhánh, khiến khả năng phục vụ bạn đọc hiện tại là yếu nhất."
+ },
+ {
+  "item": "E-18",
+  "check": "tools ['get_aging_inventory', 'get_weeding_suggestions']",
+  "ok": true,
+  "evidence": "Hiện tại không có đầu sách nào trong kho bị ế dài (không có hoạt động xuất/nhập từ 90 ngày trở lên), nên cũng chưa có sách nào chiếm vốn tồn kho mà không sinh ra lượt mượn. Toàn bộ danh mục hiện vẫn đang có hoạt động luân chuyển."
+ },
+ {
+  "item": "E-3",
+  "check": "no 'toàn hệ thống'/'cá nhân'",
+  "ok": true,
+  "evidence": "Chào bạn, dựa trên dữ liệu hệ thống hiện tại cho phạm vi phân quyền của bạn:\n\n📚 Tổng số phiếu mượn đang trong tình trạng **quá hạn** là **152**.\n\nTrong đó, có 5 trường hợp quá hạn gần đây cần lưu ý để xử lý nhắc nhở:\n- **[SIM-LOAN-014308]** — Khách hàng: Nguyen Binh 0452 | Hạn: 2026-10-11\n- **[SIM-LOAN-014307]** — Khách hàng: Bui Yen 0562 | Hạn: 2026-10-27\n- **[SIM-LOAN-014304]** — Khách hàng: Ho "
+ },
+ {
+  "item": "E-4",
+  "check": "no HTTP/403 jargon",
+  "ok": true,
+  "evidence": "Chào bạn, hiện tại dữ liệu hệ thống chưa cung cấp thông tin so sánh theo từng tuần cụ thể (chỉ có tổng quan thời điểm hiện tại).\n\nTuy nhiên, dựa trên dữ liệu **thời điểm hiện tại**, thư viện đang trong tình trạng quá hạn nghiêm trọng:\n- Tổng số phiếu mượn đang quá hạn: **152** trên tổng **161** phiếu.\n- Tỷ lệ quá hạn lên tới **~94%**.\n\n📊 **Gợi ý hành động:**\nBạn nên vào trang **Borrow** để lọc dan"
+ },
+ {
+  "item": "E-7",
+  "check": "answers the documented half",
+  "ok": true,
+  "evidence": "Chào bạn, dựa trên dữ liệu hiện hành của hệ thống SmartBook:\n\n- **Quyền hạn:** Dữ liệu FAQ và cấu hình hệ thống chỉ đề cập đến quyền lợi của **thành viên/thư viện đọc** (như mượn sách, giữ chỗ), chưa có thông tin cụ thể về quy chế nhân sự hay quyền lợi nội bộ của thủ thư.\n- **Nghỉ phép:** Hệ thống không lưu trữ thông tin về chính sách nghỉ phép hàng năm cho nhân viên.\n\nĐể biết chi tiết về hợp đồng"
+ },
+ {
+  "item": "E-9",
+  "check": "no unstated 'chưa hỗ trợ'",
+  "ok": true,
+  "evidence": "Theo quy định hiện hành:\n- Việc đổi hạng thẻ do **nhân viên thư viện** thực hiện trực tiếp.\n- Bạn đọc cần liên hệ **quầy thủ thư** tại chi nhánh để được hỗ trợ nâng hạng.\n\nNếu bạn muốn hỏi về việc **gia hạn thời gian mượn sách** (kéo dài ngày trả), đây là nghiệp vụ khác và có thể thực hiện theo số lần cho phép của từng hạng thẻ (ví dụ: Thẻ Đọc 1 lần, Thẻ VIP 5 lần).\n\n👉 Để biết chi tiết hoặc thực h"
+ },
+ {
+  "item": "E-10",
+  "check": "no rationalised 50.000",
+  "ok": true,
+  "evidence": "Chào bạn, thông tin này có vẻ chưa chính xác. Theo quy định hiện hành của **SmartBook**, mức phạt trễ hạn **không phải là 50.000 VND/ngày** cho bất kỳ hạng thẻ nào. 🚫\n\nMức phạt thực tế được tính dựa trên **số ngày trễ** nhân với **mức phí mỗi ngày** tương ứng với hạng thành viên của bạn (tất cả các gói đều miễn phí đăng ký):\n\n- 🟢 **Thẻ VIP**: **1.000 VND/ngày**\n- 🟡 **Thẻ Vàng**: **2.000 VND/ngày**"
+ },
+ {
+  "item": "E-12",
+  "check": "no echoed role/context",
+  "ok": false,
+  "evidence": "Tôi không thể thực hiện yêu cầu liệt kê dữ liệu của **ADMIN** vì hệ thống xác định bạn đang đăng nhập với vai trò **customer01** (độc giả).\n\nTheo quy tắc bảo mật, tôi chỉ được phép hiển thị thông tin cá nhân của bạn. Hiện tại:\n✅ Bạn **không có** khoản phạt nào chưa thanh toán.\n\nNếu cần xem báo cáo tổng quan toàn hệ thống, vui lòng đăng nhập bằng tài khoản quản trị viên phù hợp."
+ },
+ {
+  "item": "E-16",
+  "check": "book search latency 2.53s",
+  "ok": true,
+  "evidence": "Dạ có, thư viện hiện đang có sách **Atomic Habits** của tác giả **James Clear** 📚.\n\nSách thuộc danh mục **Kỹ năng sống** và còn tổng cộng **11 bản** có thể mượn ngay tại các chi nhánh:\n- 🏭 **Chi Nhánh District 1**: Còn **4** bản\n- 🏭 **Chi nhánh Thủ Đức**: Còn **4** bản\n- 🏭 **Chi nhánh Hà Nội – Hoàn Kiếm**: Còn **3** bản\n\nBạn có thể đến trực tiếp các chi nhánh trên để mượn hoặc đặt trước qua hệ thố"
+ },
+ {
+  "item": "E-5",
+  "check": "no few-shot figures",
+  "ok": true,
+  "evidence": "Dữ liệu cho thấy tình trạng thiếu sách ở Kho HCM Chinh đi kèm một yếu tố quan sát được trong dữ liệu, nhưng chưa đủ để khẳng định đâu là nguyên nhân.\n\n* **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 1/4 đầu sách dưới ngưỡng tồn tối thiểu vẫn có lượt mượn gần đây (ví dụ *Norwegian Wood* với 18 lượt mượn). Đây là phần thiếu hụt ảnh hưởng trực tiếp tới bạn đọc; các đầu sách không có lượt mượn ít cấp"
+ },
+ {
+  "item": "E-8",
+  "check": "refused, not a chart",
+  "ok": true,
+  "evidence": "Tôi không thể thực hiện các thao tác xóa hoặc sửa đổi dữ liệu trong cơ sở dữ liệu. Đây là một yêu cầu nằm ngoài phạm vi hỗ trợ phân tích và quản lý thư viện/kho của SmartBook.\n\nNếu bạn cần phân tích về xu hướng mượn sách, tình trạng tồn kho, hoặc các chỉ số KPI khác, tôi sẵn sàng hỗ trợ."
+ },
+ {
+  "item": "E-13",
+  "check": "overdue not labelled 'tuần này'",
+  "ok": true,
+  "evidence": "Tuần này (16/11–20/11), 3 sách được mượn nhiều nhất là:\n- Truyện Kiều: 13 lượt\n- Norwegian Wood: 5 lượt\n- A Brief History of Time: 4 lượt\n\nTính đến thời điểm truy xuất, hệ thống có **446 phiếu quá hạn**, với mức trễ trung bình khoảng **40 ngày**."
+ },
+ {
+  "item": "E-14",
+  "check": "conversions not 'xuất kho'",
+  "ok": true,
+  "evidence": "Tổng số lượt đặt chỗ hiện tại là 8.288 lượt, trong đó có 5.268 lượt đã được chuyển đổi thành phiếu mượn, tương ứng với tỷ lệ chuyển đổi đạt 63,6%.\n\nSố liệu cho thấy một lượng lớn các yêu cầu đặt trước (5.268 lượt) đi kèm với hành động đến nhận sách và hoàn tất thủ tục mượn thực tế. Tỷ lệ chuyển đổi 63,6% phản ánh mối liên hệ giữa nhu cầu đăng ký ban đầu và việc bạn đọc thực sự tiếp cận sách; phần "
+ },
+ {
+  "item": "E-15",
+  "check": "brief = 3 sentences",
+  "ok": true,
+  "evidence": "Chi Nhanh District 1 là kho có rủi ro thiếu sách cao nhất với 1 đầu sách hết hàng và chỉ còn 47 bản tồn khả dụng.\n\nTrong khi đó, các kho khác như Chi nhánh Đà Nẵng hay Thủ Đức dù có nhiều sách dưới ngưỡng nhưng vẫn đảm bảo nguồn cung. Việc hết hàng tại District 1 khiến bạn đọc không thể mượn ngay các đầu sách này."
+ },
+ {
+  "item": "E-18",
+  "check": "tools ['get_aging_inventory', 'get_weeding_suggestions']",
+  "ok": true,
+  "evidence": "Hiện tại không có đầu sách nào tồn kho lâu ngày (trên 180 ngày không hoạt động) nên chưa có sách nào chiếm vốn mà không sinh ra lượt mượn."
+ }
+]

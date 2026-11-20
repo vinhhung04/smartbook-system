@@ -13,6 +13,7 @@ from agent_actions import (
     CREATE_RESERVATION_DRAFT,
     CREATE_STOCK_ALERT,
     CREATE_STAFF_TASK_DRAFT,
+    CREATE_REBALANCE_DRAFT,
     get_action_config,
     is_dangerous_action,
     policy_allows,
@@ -631,5 +632,8 @@ async def execute_agent_action(
         return await _exec_stock_alert(pending_action.payload, auth_header)
     if action_type == CREATE_STAFF_TASK_DRAFT:
         return await _exec_staff_task(pending_action.payload, auth_header)
+    if action_type == CREATE_REBALANCE_DRAFT:
+        import rebalance_actions  # local: it imports copilot_tools, which imports this module's peers
+        return await rebalance_actions.execute(pending_action, auth_header, user_context)
 
     raise HTTPException(status_code=400, detail=f"Unknown action type: '{action_type}'.")

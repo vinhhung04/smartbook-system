@@ -110,8 +110,27 @@ class PersonalContextFormatterTest(unittest.TestCase):
         page = {"data": [{"loan_number": f"L{i}", "status": "RETURNED"} for i in range(20)],
                 "meta": {"total": 22688, "status_counts": {"BORROWED": 24, "OVERDUE": 436, "RETURNED": 22688}}}
         self.assertIn("460 đang mượn, trong đó 436 quá hạn", upc._fmt_borrow_loans_all(page))
+        # audit E-3: these are the caller's scope (a librarian's branches), never "toàn hệ thống"
+        self.assertNotIn("toàn hệ thống:", upc._fmt_borrow_loans_all(page))
+        self.assertIn("trong phạm vi bạn được xem", upc._fmt_borrow_loans_all(page))
         no_meta = upc._fmt_borrow_loans_all({"data": page["data"]})
         self.assertIn("không phải toàn hệ thống", no_meta)
+
+    def test_librarian_fines_and_reservations_use_the_service_totals(self):
+        # audit E-3: one 20-row page was reported as "Phạt hệ thống: 20 khoản tổng" (real: 8715 in scope)
+        fines = {"data": [{"status": "UNPAID", "amount": 5000}] * 20,
+                 "meta": {"total": 8715, "status_counts": {"UNPAID": 2370, "PARTIALLY_PAID": 13, "PAID": 6083, "WAIVED": 249}}}
+        text = upc._fmt_borrow_fines_all(fines)
+        self.assertIn("8715 khoản", text)
+        self.assertIn("2383 chưa thanh toán xong", text)
+        self.assertIn("trong phạm vi bạn được xem", text)
+        self.assertNotIn("hệ thống:", text)
+        res = {"data": [{"status": "PENDING"}] * 20,
+               "meta": {"total": 2422, "status_counts": {"PENDING": 7, "READY_FOR_PICKUP": 3, "EXPIRED": 503}}}
+        text = upc._fmt_reservations_all(res)
+        self.assertIn("2422 lượt", text)
+        self.assertIn("10 đang chờ xử lý", text)
+        self.assertIn("20 khoản gần nhất", upc._fmt_borrow_fines_all({"data": fines["data"]}))  # no meta: say it is a page
 
     def test_finished_reservations_are_not_pending(self):
         rows = {"data": [{"status": "FULFILLED", "book_title": "Cũ"}] * 18 + [{"status": "READY_FOR_PICKUP", "book_title": "Mới"}]}
@@ -167,6 +186,18 @@ class PrivacyThroughTheChatTurnTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Dữ liệu cá nhân người dùng", self.prompts[-1])
         for private in ("5000", "SILVER", "2027-01-01", "120,000", "Đang đọc"):
             self.assertNotIn(private, self.prompts[-1])
+
+    async def test_librarian_circulation_data_is_not_called_personal(self):
+        # audit E-3: "dựa trên dữ liệu cá nhân của bạn" for a librarian's branch loans
+        DATA["/borrow/loans"] = {"data": [{"loan_number": "L1", "status": "OVERDUE"}],
+                                 "meta": {"total": 161, "status_counts": {"BORROWED": 9, "OVERDUE": 152}}}
+        try:
+            await self._ask("Hiện có bao nhiêu phiếu mượn quá hạn?", "OVERDUE_LOAN_QUERY", token="Bearer lib")
+        finally:
+            DATA.pop("/borrow/loans")
+        self.assertIn("/borrow/loans", self.fetched)
+        self.assertNotIn("Dữ liệu cá nhân người dùng", self.prompts[-1])
+        self.assertIn("Dữ liệu nghiệp vụ trong phạm vi được phân quyền", self.prompts[-1])
 
     async def test_fine_question_prompt_has_fines_only(self):
         await self._ask("Tôi còn khoản phạt nào chưa thanh toán?", "FINE_SUMMARY_QUERY")
