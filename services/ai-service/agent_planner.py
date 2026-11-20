@@ -288,10 +288,18 @@ _QUOTED_TITLE = re.compile(r"[\"“‘']([^\"”’']{2,80})[\"”’']")
 _CAPITALISED_TITLE = re.compile(
     r"(?i:sách|sach|cuốn|cuon|quyển|quyen)\s+(?:(?i:cho)\s+(?i:sách|sach|cuốn|cuon|quyển|quyen)\s+)?"
     r"(\w[^?,.;!\"“”]{1,80}?)\s*(?:\s(?i:ở|tại|cho|vào|o|tai|vao)\s|[?,.;!]|$)")
+# "đề xuất nhập [thêm] [10 bản] X [5 cuốn] cho kho Y" with no "sách" before the title
+# (normalized). Only after "đề xuất / phiếu / yêu cầu nhập", never "bản nháp".
+_TITLE_AFTER_NHAP = re.compile(
+    r"\b(?:de xuat|phieu|yeu cau)\s+nhap\s+(?:them\s+|bo sung\s+)?(?:\d{1,4}\s*(?:cuon|quyen|ban)\s+)?(?:cho\s+)?"
+    r"(?:(?:sach|cuon|quyen|dau sach)\s+)?(.+?)(?:\s+\d{1,4}\s*(?:cuon|quyen|ban))?"
+    r"(?:\s+(?:o|tai|cho|vao)\s+(?:kho|chi nhanh)\b|\s+(?:kho|chi nhanh)\b|\s*[?.!]*$)")
 _NOT_A_TITLE_START = {
     "nay", "do", "moi", "cac", "nhung", "dang", "bi", "nao", "ton", "het", "sap", "thieu", "can", "duoi", "con",
     "it", "nhieu", "ban", "tat", "ca", "khac", "theo", "tu", "voi", "ve", "duoc", "uu", "hot", "trong", "da",
 }
+# Words that follow "nhập" without naming a book ("nhập cho kho", "nhập hàng", "nhập bổ sung").
+_NOT_A_TITLE_AFTER_NHAP = {"cho", "kho", "hang", "sach", "them", "bo", "phieu", "de", "lam", "mot"}
 
 
 def _core_title(title: str) -> str:
@@ -307,11 +315,15 @@ def _named_title(message: str, intent_info: dict) -> str | None:
         quoted = _QUOTED_TITLE.search(message or "")
         before_place = _TITLE_BEFORE_PLACE.search(normalize_text(message or ""))
         capital = _CAPITALISED_TITLE.search(message or "")
+        after_nhap = _TITLE_AFTER_NHAP.search(normalize_text(message or ""))
+        if after_nhap and after_nhap.group(1).split()[0] in _NOT_A_TITLE_AFTER_NHAP:
+            after_nhap = None
         named = (quoted.group(1) if quoted else
                  capital.group(1) if capital and capital.group(1)[0].isupper() else
-                 before_place.group(1) if before_place else None)
+                 before_place.group(1) if before_place else
+                 after_nhap.group(1) if after_nhap else None)
     core = _core_title(named) if named else ""
-    if len(core) < 3 or core.split()[0] in _NOT_A_TITLE_START:
+    if len(core) < 3 or core.split()[0] in _NOT_A_TITLE_START or core[0].isdigit():
         return None
     return named.strip()
 
