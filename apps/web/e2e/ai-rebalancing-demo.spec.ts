@@ -10,6 +10,8 @@ import { loginStaff } from './helpers';
 // the next seed removes again. Needs the dev stack with the ai profile up.
 //
 //   pnpm test:e2e:ai-rebalancing-demo   (BASE_URL=http://localhost:5174 PLAYWRIGHT_CHANNEL=chrome)
+//
+// Off unless E2E_LIVE_AI=1: CI has no LLM key and the fixture needs the dev databases.
 
 const QUESTIONS = [
   'Hãy phân tích tồn kho và nhu cầu của tất cả các kho tôi được phép truy cập. Kho nào đang thiếu, kho nào đang dư sách?',
@@ -20,6 +22,8 @@ const QUESTIONS = [
   'Tôi đồng ý với phương án 15 triệu ban đầu. Hãy tạo bản nháp yêu cầu điều chuyển và mua mới cho những hành động tôi đủ quyền thực hiện.',
   'Tôi xác nhận. Hãy kiểm tra lại quyền và tồn kho rồi thực hiện các yêu cầu hợp lệ theo workflow hiện tại.',
 ];
+
+test.skip(process.env.E2E_LIVE_AI !== '1', 'Live LLM demo: set E2E_LIVE_AI=1 (needs the dev stack with the ai profile)');
 
 test.describe.configure({ mode: 'serial', timeout: 900_000 });
 

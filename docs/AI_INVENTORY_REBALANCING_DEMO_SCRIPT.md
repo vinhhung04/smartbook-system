@@ -12,7 +12,7 @@ pnpm demo:rebalancing:validate
 - Tài khoản: `rebalance.manager` (mật khẩu demo giống các tài khoản e2e — `DEMO_PASSWORD`), WAREHOUSE_MANAGER.
 - Phạm vi: **WH-HCM-01 FULL, WH-HN-01 READ, WH-DN-01 FULL**.
 - Fixture: 6 đầu sách có giá, Hà Nội và Đà Nẵng có tồn, TP.HCM thiếu; 292 phiếu mượn đã trả tại TP.HCM trong 4 tuần (nhu cầu). Mọi bản ghi gắn `DEMO-REB`; `pnpm demo:rebalancing:reset` xóa đúng phần đó và các yêu cầu tài khoản demo đã tạo.
-- Mở `/ai-assistant`, đăng nhập `rebalance.manager`. Kiểm thử tự động: `pnpm test:e2e:ai-rebalancing-demo` (cần stack có profile `ai`, đặt `BASE_URL` / `PLAYWRIGHT_CHANNEL` nếu cần).
+- Mở `/ai-assistant`, đăng nhập `rebalance.manager`. Kiểm thử tự động: `pnpm test:e2e:ai-rebalancing-demo` (đặt `E2E_LIVE_AI=1`, cần stack có profile `ai`, đặt `BASE_URL` / `PLAYWRIGHT_CHANNEL` nếu cần; CI bỏ qua spec này vì không có LLM).
 
 Số liệu dưới đây là của lần chạy 20/11/2026 trên dữ liệu dev; chúng do analytics tính từ fixture và thay đổi theo dữ liệu thật.
 
