@@ -5,6 +5,7 @@ const { parseId, normalizeText } = require("../utils/validation");
 const {
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
+  requireAssignableUser,
   scopedWarehouseWhere,
   scopeErrorStatus,
 } = require("../utils/warehouse-scope.utils");
@@ -252,10 +253,13 @@ async function claimPackingTask(req, res) {
       return res.status(409).json({ message: "Task đã được nhân viên khác nhận" });
     }
 
+    const packerId = assignToSelf ? actorUserId : parseId(req.body?.packer_id) || actorUserId;
+    if (packerId !== actorUserId && !(await requireAssignableUser(res, packerId, task.warehouse_id))) return undefined;
+
     const updated = await prisma.packing_tasks.update({
       where: { id: taskId },
       data: {
-        assigned_packer_id: assignToSelf ? actorUserId : req.body?.packer_id || actorUserId,
+        assigned_packer_id: packerId,
         assigned_at: new Date(),
         assigned_by_user_id: actorUserId,
         status: task.status === "PENDING" ? "IN_PROGRESS" : task.status,

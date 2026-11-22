@@ -65,6 +65,7 @@ function normalizeOutboundReferenceType(value) {
 
 const {
   requireWarehouseWriteAccess,
+  requireAssignableUser,
   scopedWarehouseWhere,
   scopeErrorStatus,
 } = require("../utils/warehouse-scope.utils");
@@ -468,6 +469,8 @@ async function createOutboundRequest(req, res) {
     return res.status(400).json({ message: "Thiếu lines" });
   }
 
+  if (assignedPickerUserId && !(await requireAssignableUser(res, assignedPickerUserId, warehouseId))) return undefined;
+
   const normalizedLines = [];
   for (const line of lines) {
     const sourceLocationId = parseId(line?.source_location_id);
@@ -681,6 +684,9 @@ async function createTransferRequest(req, res) {
   if (lines.length === 0) {
     return res.status(400).json({ message: "Thiếu lines" });
   }
+
+  // the picker works in the source warehouse
+  if (assignedPickerUserId && !(await requireAssignableUser(res, assignedPickerUserId, fromWarehouseId))) return undefined;
 
   const normalizedLines = [];
   for (const line of lines) {
