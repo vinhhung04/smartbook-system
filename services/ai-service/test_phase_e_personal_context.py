@@ -232,3 +232,12 @@ class LibrarianFineTotalsTests(unittest.TestCase):
         self.assertIn("2686 khoản, 766 chưa thanh toán xong", text)
         self.assertIn("33,649,000 VND", text)
         self.assertEqual(upc._ENDPOINT_PARAMS["/borrow/fines"], {"summary": "1"})
+
+
+class LibrarianDeskWorkTests(unittest.TestCase):
+    def test_a_librarians_own_work_is_the_desk(self):
+        desk = ["/borrow/loans", "/borrow/reservations", "/borrow/fines"]
+        self.assertEqual(upc.with_desk_work({"tasks"}, desk), {"tasks", "loans", "reservations"})
+        # warehouse staff keep their task list only
+        self.assertEqual(upc.with_desk_work({"tasks"}, ["/api/my-warehouse-tasks"]), {"tasks"})
+        self.assertEqual(upc.with_desk_work({"fines"}, desk), {"fines"})

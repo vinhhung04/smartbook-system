@@ -108,6 +108,14 @@ _WHOLE_ACCOUNT = ("tai khoan cua toi", "thong tin cua toi", "ho so cua toi", "ti
                   "tong quan tai khoan", "tat ca thong tin")
 
 
+def with_desk_work(topics: set[str], endpoints: list[str]) -> set[str]:
+    """A librarian has no task list: their own work is the desk - overdue loans to
+    chase and reservations waiting. "Tôi có việc gì cần làm?" used to find nothing."""
+    if "tasks" in topics and not any(_ENDPOINT_TOPIC.get(ep) == "tasks" for ep in endpoints):
+        return topics | {"loans", "reservations"}
+    return topics
+
+
 def select_personal_topics(message: str | None, intent: str | None) -> set[str]:
     """The personal topics a question is about - by NLU intent and by what the
     question names. Not by the word "tôi" alone: "Tôi muốn biết giờ mở cửa"
@@ -549,7 +557,9 @@ async def build_user_personal_context(
 
     topics = select_personal_topics(message if message is not None else intent_info.get("query"),
                                     intent_info.get("intent"))
-    endpoints = [ep for ep in capabilities.personal_endpoints(user_ctx) if _ENDPOINT_TOPIC.get(ep) in topics]
+    allowed_endpoints = capabilities.personal_endpoints(user_ctx)
+    topics = with_desk_work(topics, allowed_endpoints)
+    endpoints = [ep for ep in allowed_endpoints if _ENDPOINT_TOPIC.get(ep) in topics]
     if not topics:
         # Nothing personal was asked: no personal data is fetched or prompted.
         return {"role": role, "persona": persona, "summary": "", "sources": [], "warnings": [], "topics": []}
