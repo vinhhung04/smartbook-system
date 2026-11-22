@@ -122,14 +122,36 @@ function parseReorderDateRanges(queryParams) {
   };
 }
 
+// req.warehouseScope (attachWarehouseScope) as a SQL parameter: null = every
+// warehouse (superuser / internal service key), otherwise the readable ids
+// (possibly none). Used as ($n::uuid[] IS NULL OR <col> = ANY($n::uuid[])).
+function scopeParam(req) {
+  return req.warehouseScope ? [...req.warehouseScope] : null;
+}
+
+// Borrow-domain figures (loans, reservations, fines) need analytics.borrow.read,
+// like /overdue-summary: a WAREHOUSE_MANAGER does not hold it. A service-key
+// call (no req.user) and a superuser see them.
+function canReadBorrowAnalytics(req) {
+  const user = req.user;
+  if (!user || user.is_superuser === true || user.is_superuser === 'true') return true;
+  return Array.isArray(user.permissions) && user.permissions.includes('analytics.borrow.read');
+}
+
 function rowsToNumberMap(rows, keyField, valueField) {
   return new Map(rows.map((row) => [row[keyField], number(row[valueField])]));
 }
 
-async function getInventoryKpis() {
+async function getInventoryKpis(wh = null) {
   const [titleRow, copiesRow, lowStockRow] = await Promise.all([
-    queryOne(inventoryPool, 'SELECT COUNT(*) AS total_titles FROM books WHERE is_active = true'),
-    queryOne(inventoryPool, 'SELECT COALESCE(SUM(on_hand_qty), 0) AS total_copies FROM stock_balances'),
+    // scoped: the titles held in the caller's warehouses
+    queryOne(inventoryPool, `
+      SELECT COUNT(*) AS total_titles FROM books b
+      WHERE b.is_active = true
+        AND ($1::uuid[] IS NULL OR EXISTS (
+          SELECT 1 FROM book_variants bv JOIN stock_balances sb ON sb.variant_id = bv.id
+          WHERE bv.book_id = b.id AND sb.warehouse_id = ANY($1::uuid[])))`, [wh]),
+    queryOne(inventoryPool, `SELECT COALESCE(SUM(on_hand_qty), 0) AS total_copies FROM stock_balances sb WHERE ($1::uuid[] IS NULL OR sb.warehouse_id = ANY($1::uuid[]))`, [wh]),
     queryOne(
       inventoryPool,
       `
@@ -141,12 +163,12 @@ async function getInventoryKpis() {
           MAX(COALESCE(NULLIF(sb.reorder_point, 0), $1)) AS threshold
         FROM stock_balances sb
         JOIN book_variants bv ON bv.id = sb.variant_id
-        WHERE bv.is_active = true
+        WHERE bv.is_active = true AND ($2::uuid[] IS NULL OR sb.warehouse_id = ANY($2::uuid[]))
         GROUP BY sb.variant_id
         HAVING SUM(sb.available_qty) <= MAX(COALESCE(NULLIF(sb.reorder_point, 0), $1))
       ) low_stock
       `,
-      [LOW_STOCK_THRESHOLD],
+      [LOW_STOCK_THRESHOLD, wh],
     ),
   ]);
 
@@ -157,15 +179,16 @@ async function getInventoryKpis() {
   };
 }
 
-async function getBorrowKpis() {
+async function getBorrowKpis(wh = null) {
   const [loanRow, overdueRow, reservationRows, pickupRow, fineRow, conversionRow] = await Promise.all([
     queryOne(
       borrowPool,
       `
       SELECT COUNT(*) AS active_loans
       FROM loan_transactions
-      WHERE status IN ('BORROWED', 'OVERDUE')
+      WHERE status IN ('BORROWED', 'OVERDUE') AND ($1::uuid[] IS NULL OR warehouse_id = ANY($1::uuid[]))
       `,
+      [wh],
     ),
     queryOne(
       borrowPool,
@@ -173,22 +196,25 @@ async function getBorrowKpis() {
       SELECT COUNT(DISTINCT lt.id) AS overdue_loans
       FROM loan_transactions lt
       LEFT JOIN loan_items li ON li.loan_id = lt.id
-      WHERE lt.status = 'OVERDUE'
+      WHERE (lt.status = 'OVERDUE'
          OR (
            li.status IN ('BORROWED', 'OVERDUE')
            AND li.due_date < NOW()
            AND li.return_date IS NULL
-         )
+         ))
+        AND ($1::uuid[] IS NULL OR lt.warehouse_id = ANY($1::uuid[]))
       `,
+      [wh],
     ),
     query(
       borrowPool,
       `
       SELECT status, COUNT(*) AS count
       FROM loan_reservations
-      WHERE status IN ('PENDING', 'CONFIRMED', 'READY_FOR_PICKUP')
+      WHERE status IN ('PENDING', 'CONFIRMED', 'READY_FOR_PICKUP') AND ($1::uuid[] IS NULL OR warehouse_id = ANY($1::uuid[]))
       GROUP BY status
       `,
+      [wh],
     ),
     queryOne(
       borrowPool,
@@ -200,7 +226,9 @@ async function getBorrowKpis() {
         AND pickup_code_used_at IS NULL
         AND pickup_code_expires_at > NOW()
         AND pickup_code_expires_at <= NOW() + INTERVAL '24 hours'
+        AND ($1::uuid[] IS NULL OR warehouse_id = ANY($1::uuid[]))
       `,
+      [wh],
     ),
     queryOne(
       borrowPool,
@@ -213,7 +241,12 @@ async function getBorrowKpis() {
       SELECT COALESCE(SUM(GREATEST(f.amount - COALESCE(f.waived_amount, 0) - COALESCE(p.paid_amount, 0), 0)), 0) AS unpaid_fine_amount
       FROM fines f
       LEFT JOIN payments p ON p.fine_id = f.id
+      -- scoped: fines of loans lent by the caller's warehouses
+      WHERE $1::uuid[] IS NULL OR EXISTS (
+        SELECT 1 FROM loan_items li JOIN loan_transactions lt ON lt.id = li.loan_id
+        WHERE li.id = f.loan_item_id AND lt.warehouse_id = ANY($1::uuid[]))
       `,
+      [wh],
     ),
     queryOne(
       borrowPool,
@@ -223,7 +256,9 @@ async function getBorrowKpis() {
         COUNT(*) FILTER (WHERE status = 'CONVERTED_TO_LOAN') AS converted_reservations
       FROM loan_reservations
       WHERE status IN ('PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CONVERTED_TO_LOAN', 'CANCELLED', 'EXPIRED')
+        AND ($1::uuid[] IS NULL OR warehouse_id = ANY($1::uuid[]))
       `,
+      [wh],
     ),
   ]);
 
@@ -242,16 +277,19 @@ async function getBorrowKpis() {
   };
 }
 
-const getDashboardKpis = asyncHandler(async (_req, res) => {
-  const [inventory, borrow] = await Promise.all([getInventoryKpis(), getBorrowKpis()]);
-  res.json({ data: { ...inventory, ...borrow } });
+const getDashboardKpis = asyncHandler(async (req, res) => {
+  const wh = scopeParam(req);
+  const borrowAllowed = canReadBorrowAnalytics(req);
+  // without the permission the borrow fields are left out (not 0): the figure is not theirs to see
+  const [inventory, borrow] = await Promise.all([getInventoryKpis(wh), borrowAllowed ? getBorrowKpis(wh) : {}]);
+  res.json({ data: { ...inventory, ...borrow }, ...(borrowAllowed ? {} : { meta: { borrow_figures: 'NOT_PERMITTED' } }) });
 });
 
 const getBorrowTrends = asyncHandler(async (req, res) => {
   const { from, to } = parseDateRange(req.query);
   const granularity = parseGranularity(req.query.granularity);
 
-  const rows = await query(borrowPool, BORROW_TRENDS_SQL, borrowTrendsParams({ from, to, granularity }));
+  const rows = await query(borrowPool, BORROW_TRENDS_SQL, borrowTrendsParams({ from, to, granularity, warehouseIds: scopeParam(req) }));
 
   res.json({
     data: rows.map((row) => ({
@@ -274,13 +312,14 @@ const getTopBooks = asyncHandler(async (req, res) => {
     FROM loan_items li
     JOIN loan_transactions lt ON lt.id = li.loan_id
     WHERE lt.borrow_date >= $1::timestamptz AND lt.borrow_date <= $2::timestamptz
+      AND ($4::uuid[] IS NULL OR lt.warehouse_id = ANY($4::uuid[]))
     GROUP BY li.variant_id
     ORDER BY COUNT(*) DESC
     LIMIT $3
     `,
     // Loans can outlive a title removed from the catalog; over-fetch so the
     // ranking still has `limit` books that exist once those are dropped.
-    [from, to, limit * 3],
+    [from, to, limit * 3, scopeParam(req)],
   );
 
   if (!borrowRows.length) {
@@ -320,7 +359,8 @@ const getTopBooks = asyncHandler(async (req, res) => {
   });
 });
 
-const getOverdueSummary = asyncHandler(async (_req, res) => {
+const getOverdueSummary = asyncHandler(async (req, res) => {
+  const wh = scopeParam(req);
   const rows = await query(
     borrowPool,
     `
@@ -337,10 +377,12 @@ const getOverdueSummary = asyncHandler(async (_req, res) => {
     WHERE li.status IN ('BORROWED', 'OVERDUE')
       AND li.return_date IS NULL
       AND li.due_date < NOW()
+      AND ($1::uuid[] IS NULL OR lt.warehouse_id = ANY($1::uuid[]))
     GROUP BY lt.id, lt.loan_number, lt.customer_id, c.full_name
     ORDER BY overdue_days DESC, due_date ASC
     LIMIT 50
     `,
+    [wh],
   );
 
   const totalItemsRow = await queryOne(
@@ -356,7 +398,9 @@ const getOverdueSummary = asyncHandler(async (_req, res) => {
     WHERE li.status IN ('BORROWED', 'OVERDUE')
       AND li.return_date IS NULL
       AND li.due_date < NOW()
+      AND ($1::uuid[] IS NULL OR lt.warehouse_id = ANY($1::uuid[]))
     `,
+    [wh],
   );
 
   res.json({
@@ -377,7 +421,9 @@ const getOverdueSummary = asyncHandler(async (_req, res) => {
   });
 });
 
-const getFineSummary = asyncHandler(async (_req, res) => {
+const getFineSummary = asyncHandler(async (req, res) => {
+  // scoped: fines of loans lent by the caller's warehouses
+  const wh = scopeParam(req);
   const [summaryRow, typeRows] = await Promise.all([
     queryOne(
       borrowPool,
@@ -397,6 +443,9 @@ const getFineSummary = asyncHandler(async (_req, res) => {
           GREATEST(f.amount - COALESCE(f.waived_amount, 0) - COALESCE(p.paid_amount, 0), 0) AS remaining_amount
         FROM fines f
         LEFT JOIN payments p ON p.fine_id = f.id
+        WHERE ($1::uuid[] IS NULL OR EXISTS (
+          SELECT 1 FROM loan_items li JOIN loan_transactions lt ON lt.id = li.loan_id
+          WHERE li.id = f.loan_item_id AND lt.warehouse_id = ANY($1::uuid[])))
       )
       SELECT
         COALESCE(SUM(remaining_amount), 0) AS total_unpaid,
@@ -406,15 +455,20 @@ const getFineSummary = asyncHandler(async (_req, res) => {
         COUNT(*) FILTER (WHERE remaining_amount = 0 OR status = 'PAID') AS paid_count
       FROM fine_totals
       `,
+      [wh],
     ),
     query(
       borrowPool,
       `
-      SELECT fine_type, COALESCE(SUM(amount), 0) AS amount, COUNT(*) AS count
-      FROM fines
-      GROUP BY fine_type
+      SELECT f.fine_type, COALESCE(SUM(f.amount), 0) AS amount, COUNT(*) AS count
+      FROM fines f
+      WHERE ($1::uuid[] IS NULL OR EXISTS (
+          SELECT 1 FROM loan_items li JOIN loan_transactions lt ON lt.id = li.loan_id
+          WHERE li.id = f.loan_item_id AND lt.warehouse_id = ANY($1::uuid[])))
+      GROUP BY f.fine_type
       ORDER BY amount DESC
       `,
+      [wh],
     ),
   ]);
 
@@ -583,7 +637,7 @@ const getWarehouseStockItems = asyncHandler(async (req, res) => {
   });
 });
 
-async function getBorrowDemandByVariant(from, to) {
+async function getBorrowDemandByVariant(from, to, wh = null) {
   const rows = await query(
     borrowPool,
     `
@@ -591,16 +645,17 @@ async function getBorrowDemandByVariant(from, to) {
     FROM loan_items li
     JOIN loan_transactions lt ON lt.id = li.loan_id
     WHERE lt.borrow_date >= $1::timestamptz AND lt.borrow_date <= $2::timestamptz
+      AND ($3::uuid[] IS NULL OR lt.warehouse_id = ANY($3::uuid[]))
     GROUP BY li.variant_id
     `,
-    [from, to],
+    [from, to, wh],
   );
   return rowsToNumberMap(rows, 'variant_id', 'borrow_count');
 }
 
-async function getYearlyBorrowCountByVariant(to) {
+async function getYearlyBorrowCountByVariant(to, wh = null) {
   const from = new Date(to.getTime() - YEAR_MS);
-  return getBorrowDemandByVariant(from, to);
+  return getBorrowDemandByVariant(from, to, wh);
 }
 
 // Daily borrow-count series per variant (oldest -> newest, zero-filled) over
@@ -617,7 +672,7 @@ async function getYearlyBorrowCountByVariant(to) {
 // called in the morning than in the evening (see
 // docs/ANALYSIS/REORDER_DECISION_EVALUATION.md). The reorder backtest
 // (eval/point-in-time.js dailySeries) mirrors exactly this window.
-async function getDailyBorrowSeriesByVariant(from, to) {
+async function getDailyBorrowSeriesByVariant(from, to, wh = null) {
   const rows = await query(
     borrowPool,
     `
@@ -634,6 +689,7 @@ async function getDailyBorrowSeriesByVariant(from, to) {
       JOIN loan_transactions lt ON lt.id = li.loan_id
       WHERE lt.borrow_date >= date_trunc('day', $1::timestamptz)
         AND lt.borrow_date < date_trunc('day', $2::timestamptz)
+        AND ($3::uuid[] IS NULL OR lt.warehouse_id = ANY($3::uuid[]))
       GROUP BY 1, 2
     ),
     active_variants AS (
@@ -650,7 +706,7 @@ async function getDailyBorrowSeriesByVariant(from, to) {
       AND variant_days.bucket = buckets.bucket
     ORDER BY active_variants.variant_id, buckets.bucket ASC
     `,
-    [from, to],
+    [from, to, wh],
   );
 
   const series = new Map();
@@ -666,13 +722,13 @@ async function getDailyBorrowSeriesByVariant(from, to) {
 // year) / (expected count for a window this size, based on the trailing-year
 // average). Clamped to avoid wild swings on thin history, and left at neutral
 // (no entry) for variants without enough trailing-year samples.
-async function getSeasonalIndexByVariant(ranges) {
+async function getSeasonalIndexByVariant(ranges, wh = null) {
   const lastYearFrom = new Date(ranges.from.getTime() - YEAR_MS);
   const lastYearTo = new Date(ranges.to.getTime() - YEAR_MS);
 
   const [samePeriodLastYearByVariant, yearlyTotalByVariant] = await Promise.all([
-    getBorrowDemandByVariant(lastYearFrom, lastYearTo),
-    getYearlyBorrowCountByVariant(ranges.to),
+    getBorrowDemandByVariant(lastYearFrom, lastYearTo, wh),
+    getYearlyBorrowCountByVariant(ranges.to, wh),
   ]);
 
   const index = new Map();
@@ -687,7 +743,7 @@ async function getSeasonalIndexByVariant(ranges) {
   return index;
 }
 
-async function getReservationDemandByVariant(from, to) {
+async function getReservationDemandByVariant(from, to, wh = null) {
   const rows = await query(
     borrowPool,
     `
@@ -696,9 +752,10 @@ async function getReservationDemandByVariant(from, to) {
     WHERE reserved_at >= $1::timestamptz
       AND reserved_at <= $2::timestamptz
       AND status IN ('PENDING', 'CONFIRMED', 'READY_FOR_PICKUP')
+      AND ($3::uuid[] IS NULL OR warehouse_id = ANY($3::uuid[]))
     GROUP BY variant_id
     `,
-    [from, to],
+    [from, to, wh],
   );
   return rowsToNumberMap(rows, 'variant_id', 'reservation_count');
 }
@@ -799,7 +856,7 @@ async function getLeadTimeHistory() {
   return { observationsByVariant, observationsBySupplier, supplierByVariant, declaredByVariant };
 }
 
-async function getInventorySnapshot() {
+async function getInventorySnapshot(wh = null) {
   return query(
     inventoryPool,
     `
@@ -834,7 +891,7 @@ async function getInventorySnapshot() {
       ORDER BY c.name ASC
       LIMIT 1
     ) category_row ON true
-    LEFT JOIN stock_balances sb ON sb.variant_id = bv.id
+    LEFT JOIN stock_balances sb ON sb.variant_id = bv.id AND ($1::uuid[] IS NULL OR sb.warehouse_id = ANY($1::uuid[]))
     WHERE bv.is_active = true AND b.is_active = true
     GROUP BY
       bv.id,
@@ -848,6 +905,7 @@ async function getInventorySnapshot() {
       bv.sku,
       bv.unit_cost
     `,
+    [wh],
   );
 }
 
@@ -855,7 +913,7 @@ async function getInventorySnapshot() {
 // every loan still out (censored at its age) and the loans returned in the
 // last year (observed durations), pooled over the catalog for one
 // Kaplan-Meier curve (expected-returns.js), as in the backtest.
-async function getLoanReturnView(to) {
+async function getLoanReturnView(to, wh = null) {
   const rows = await query(
     borrowPool,
     `
@@ -869,8 +927,9 @@ async function getLoanReturnView(to) {
     WHERE lt.borrow_date <= $1::timestamptz
       AND ((li.return_date IS NULL AND li.status IN ('BORROWED', 'OVERDUE'))
            OR li.return_date >= $1::timestamptz - INTERVAL '365 days')
+      AND ($2::uuid[] IS NULL OR lt.warehouse_id = ANY($2::uuid[]))
     `,
-    [to],
+    [to, wh],
   );
   const openAgesByVariant = new Map();
   const openAges = [];
@@ -893,7 +952,7 @@ async function getLoanReturnView(to) {
 // remaining PO lines. Only explicitly closed lines stop being incoming.
 const INCOMING_PO_STATUSES = ['APPROVED', 'SENT_TO_SUPPLIER', 'SUPPLIER_CONFIRMED', 'PARTIALLY_RECEIVED', 'SHORTAGE_REPORTED'];
 
-async function getIncomingQtyByVariant() {
+async function getIncomingQtyByVariant(wh = null) {
   const rows = await query(
     inventoryPool,
     `
@@ -905,9 +964,10 @@ async function getIncomingQtyByVariant() {
       -- will never actually arrive, even though the parent PO's own status can stay
       -- PARTIALLY_RECEIVED/APPROVED/etc. because another line on it is still open.
       AND poi.closure_status != 'CLOSED_WITH_REMAINING'
+      AND ($2::uuid[] IS NULL OR po.warehouse_id = ANY($2::uuid[]))
     GROUP BY poi.variant_id
     `,
-    [INCOMING_PO_STATUSES],
+    [INCOMING_PO_STATUSES, wh],
   );
   return rowsToNumberMap(rows, 'variant_id', 'incoming_qty');
 }
@@ -958,6 +1018,10 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   if (!REORDER_PRIORITIES.has(priority)) {
     throw createHttpError(400, 'priority phải là một trong ALL, HIGH, MEDIUM, LOW');
   }
+  // Scoped caller: stock, loans, reservations and incoming POs of their own
+  // warehouses only. Wishlists / availability alerts and supplier lead times
+  // belong to no warehouse and stay library-wide.
+  const wh = scopeParam(req);
 
   const [
     inventoryRows,
@@ -970,14 +1034,14 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
     dailySeriesByVariant,
     leadTimeHistory,
   ] = await Promise.all([
-    getInventorySnapshot(),
-    getBorrowDemandByVariant(ranges.from, ranges.to),
-    getBorrowDemandByVariant(ranges.previousFrom, ranges.previousTo),
-    getReservationDemandByVariant(ranges.from, ranges.to),
+    getInventorySnapshot(wh),
+    getBorrowDemandByVariant(ranges.from, ranges.to, wh),
+    getBorrowDemandByVariant(ranges.previousFrom, ranges.previousTo, wh),
+    getReservationDemandByVariant(ranges.from, ranges.to, wh),
     getWishlistDemandByBook(),
     getAvailabilityAlertDemandByBook(),
-    getSeasonalIndexByVariant(ranges),
-    getDailyBorrowSeriesByVariant(ranges.from, ranges.to),
+    getSeasonalIndexByVariant(ranges, wh),
+    getDailyBorrowSeriesByVariant(ranges.from, ranges.to, wh),
     getLeadTimeHistory(),
   ]);
 
@@ -1038,7 +1102,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   let budget = null;
   if (budgetVnd !== null) {
     const [loanView, incomingByVariant, priorityStock] = await Promise.all([
-      getLoanReturnView(ranges.to), getIncomingQtyByVariant(),
+      getLoanReturnView(ranges.to, wh), getIncomingQtyByVariant(wh),
       priorityWarehouseId ? getWarehouseVariantStock(priorityWarehouseId) : Promise.resolve(null),
     ]);
     // lines out of stock / under their threshold AT the priority warehouse are funded first
@@ -1834,15 +1898,17 @@ const getWeedingSuggestions = asyncHandler(async (req, res) => {
   });
 });
 
-const getReservationFunnel = asyncHandler(async (_req, res) => {
+const getReservationFunnel = asyncHandler(async (req, res) => {
   const rows = await query(
     borrowPool,
     `
     SELECT status, COUNT(*) AS count
     FROM loan_reservations
     WHERE status IN ('PENDING', 'CONFIRMED', 'READY_FOR_PICKUP', 'CONVERTED_TO_LOAN', 'CANCELLED', 'EXPIRED')
+      AND ($1::uuid[] IS NULL OR warehouse_id = ANY($1::uuid[]))
     GROUP BY status
     `,
+    [scopeParam(req)],
   );
 
   const data = {

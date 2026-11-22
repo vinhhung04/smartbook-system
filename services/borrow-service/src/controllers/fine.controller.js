@@ -4,6 +4,32 @@ const { createNotificationRecord } = require('../lib/notifications');
 const { writeAuditLog } = require('../lib/audit');
 const { normalizeMoney, recomputeCustomerFineBalance, lockFineAccrual, refreshFineAccrual } = require('../services/fine.service');
 const { parseStatusFilter, searchTerm, countByStatus } = require('../lib/list-query');
+const {
+  readableWarehouseFilter,
+  requireWarehouseReadAccess,
+  requireWarehouseWriteAccess,
+  scopeErrorStatus,
+  WarehouseScopeUnavailableError,
+} = require('../utils/warehouse-scope.utils');
+
+// A fine belongs to the branch that lent the copy (loan_transactions.warehouse_id).
+// A fine with no loan item (not tied to a branch) stays visible to every borrow staff.
+async function fineScopeWhere(user) {
+  const readable = await readableWarehouseFilter(user);
+  if (readable === null) return {};
+  return { OR: [{ loan_item_id: null }, { loan_items: { loan_transactions: { warehouse_id: { in: readable } } } }] };
+}
+
+/** Usage: if (!(await requireFineWarehouse(req, res, fineId, 'write'))) return; (unknown fine: the handler's 404) */
+async function requireFineWarehouse(req, res, fineId, access) {
+  const fine = await prisma.fines.findUnique({
+    where: { id: fineId },
+    select: { loan_items: { select: { loan_transactions: { select: { warehouse_id: true } } } } },
+  });
+  const warehouseId = fine?.loan_items?.loan_transactions?.warehouse_id;
+  if (!warehouseId) return true;
+  return (access === 'write' ? requireWarehouseWriteAccess : requireWarehouseReadAccess)(req, res, warehouseId);
+}
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value || '').trim());
@@ -29,7 +55,9 @@ function summarizeFine(fine) {
 
 // Money totals over ALL fines (not just one page). `outstanding` uses the same formula as the
 // analytics dashboard's unpaid_fine_amount so both screens show one number.
-async function fineMoneySummary() {
+async function fineMoneySummary(readable) {
+  // readable: null = every branch; otherwise only fines of those branches' loans (+ unlinked fines)
+  const all = readable === null;
   const [row] = await prisma.$queryRaw`
     WITH payments AS (
       SELECT fine_id, COALESCE(SUM(amount), 0) AS paid_amount
@@ -43,6 +71,9 @@ async function fineMoneySummary() {
         GREATEST(f.amount - COALESCE(f.waived_amount, 0) - COALESCE(p.paid_amount, 0), 0) AS remaining
       FROM fines f
       LEFT JOIN payments p ON p.fine_id = f.id
+      WHERE ${all} OR f.loan_item_id IS NULL OR EXISTS (
+        SELECT 1 FROM loan_items li JOIN loan_transactions lt ON lt.id = li.loan_id
+        WHERE li.id = f.loan_item_id AND lt.warehouse_id = ANY(${all ? [] : readable}::uuid[]))
     )
     SELECT
       COALESCE(SUM(remaining), 0) AS outstanding,
@@ -80,9 +111,11 @@ async function listFines(req, res) {
       }
       : {}),
   };
-  const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
-
   try {
+    // only the caller's branches (enforced here, never from a client filter)
+    const readable = await readableWarehouseFilter(req.user);
+    whereWithoutStatus.AND = [await fineScopeWhere(req.user)];
+    const where = status ? { ...whereWithoutStatus, status } : whereWithoutStatus;
     const [items, total, statusCounts, summary] = await Promise.all([
       prisma.fines.findMany({
         where,
@@ -114,7 +147,7 @@ async function listFines(req, res) {
       }),
       prisma.fines.count({ where }),
       countByStatus(prisma.fines, whereWithoutStatus),
-      req.query?.summary ? fineMoneySummary() : undefined,
+      req.query?.summary ? fineMoneySummary(readable) : undefined,
     ]);
 
     return res.json({
@@ -129,6 +162,9 @@ async function listFines(req, res) {
       },
     });
   } catch (error) {
+    if (error instanceof WarehouseScopeUnavailableError) {
+      return res.status(scopeErrorStatus(error)).json({ message: error.message, code: error.code });
+    }
     console.error('listFines error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -141,6 +177,7 @@ async function getFineById(req, res) {
   }
 
   try {
+    if (!(await requireFineWarehouse(req, res, fineId, 'read'))) return undefined;
     const fine = await prisma.fines.findUnique({
       where: { id: fineId },
       include: {
@@ -200,6 +237,8 @@ async function recordFinePayment(req, res) {
   const amount = normalizeMoney(requestedAmount);
   if (amount <= 0) return res.status(400).json({ message: 'amount phải lớn hơn 0 sau làm tròn' });
   const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ actor: actorUserId, fine: fineId.toLowerCase(), amount, paymentMethod, reference, note })).digest('hex');
+  // a fine of another branch's loan is taken there, not here (write scope on the lending branch)
+  if (!(await requireFineWarehouse(req, res, fineId, 'write'))) return undefined;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -359,6 +398,7 @@ async function waiveFine(req, res) {
   if (waiveFuture && !(req.user?.is_superuser || req.user?.permissions?.includes('borrow.fines.manage'))) {
     return res.status(403).json({ message: 'Cần quyền quản lý tiền phạt để miễn toàn bộ kỳ quá hạn' });
   }
+  if (!(await requireFineWarehouse(req, res, fineId, 'write'))) return undefined;
 
   try {
     const result = await prisma.$transaction(async (tx) => {

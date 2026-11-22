@@ -20,6 +20,7 @@ const BORROW_TRENDS_SQL = `
       SELECT date_trunc($3, borrow_date AT TIME ZONE $5) AS bucket, COUNT(*) AS count
       FROM loan_transactions
       WHERE borrow_date >= $1::timestamptz AND borrow_date <= $2::timestamptz
+        AND ($7::uuid[] IS NULL OR warehouse_id = ANY($7::uuid[]))
       GROUP BY 1
     ),
     returns AS (
@@ -29,12 +30,15 @@ const BORROW_TRENDS_SQL = `
       WHERE COALESCE(li.return_date, lt.closed_at) >= $1::timestamptz
         AND COALESCE(li.return_date, lt.closed_at) <= $2::timestamptz
         AND COALESCE(li.return_date, lt.closed_at) IS NOT NULL
+        -- a return counts for the branch that took the copy back
+        AND ($7::uuid[] IS NULL OR COALESCE(li.returned_to_warehouse_id, lt.warehouse_id) = ANY($7::uuid[]))
       GROUP BY 1
     ),
     reservations AS (
       SELECT date_trunc($3, reserved_at AT TIME ZONE $5) AS bucket, COUNT(*) AS count
       FROM loan_reservations
       WHERE reserved_at >= $1::timestamptz AND reserved_at <= $2::timestamptz
+        AND ($7::uuid[] IS NULL OR warehouse_id = ANY($7::uuid[]))
       GROUP BY 1
     )
     SELECT
@@ -49,10 +53,11 @@ const BORROW_TRENDS_SQL = `
     ORDER BY buckets.bucket ASC
     `;
 
-function borrowTrendsParams({ from, to, granularity }) {
+// warehouseIds: null = every warehouse, otherwise only these (the caller's scope)
+function borrowTrendsParams({ from, to, granularity, warehouseIds = null }) {
   const interval = granularity === 'month' ? '1 month' : '1 day';
   const labelFormat = granularity === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
-  return [from, to, granularity, interval, BUSINESS_TIME_ZONE, labelFormat];
+  return [from, to, granularity, interval, BUSINESS_TIME_ZONE, labelFormat, warehouseIds];
 }
 
 module.exports = { BORROW_TRENDS_SQL, BUSINESS_TIME_ZONE, borrowTrendsParams };
