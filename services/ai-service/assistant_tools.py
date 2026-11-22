@@ -119,7 +119,7 @@ async def get_reorder_suggestions(
     budget_vnd: float | None = None,
     warehouse: str | None = None,
 ) -> dict:
-    # A budget allocation is library-wide by definition: only a plain list is scoped.
+    # A budget allocation spans the caller's warehouses: only a plain list is narrowed to one.
     scoped = bool(warehouse) and budget_vnd is None
     result = await _get(
         "/analytics/reorder-suggestions",
@@ -171,7 +171,7 @@ async def _scope_reorder_to_warehouse(result: dict, warehouse: str, auth_header:
         rows.append({
             "variant_id": s.get("variant_id"), "title": s.get("title"), "priority": s.get("priority"),
             "warehouse_id": wh["id"], "warehouse_name": wh.get("name"), "warehouse_code": wh.get("code"),
-            "available_qty": lib.get("available_qty"),  # library-wide, for context
+            "available_qty": lib.get("available_qty"),  # all of the caller's warehouses, for context
             "warehouse_available_qty": available,
             "warehouse_incoming_qty": s.get("incoming_qty"),
             "warehouse_status": "OUT_OF_STOCK" if available <= 0 else "LOW_STOCK",

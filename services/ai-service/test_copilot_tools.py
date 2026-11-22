@@ -188,7 +188,7 @@ class ExplainTests(unittest.TestCase):
         factors = {f["factor"] for f in r["factors"]}
         self.assertIn("Nhu cầu đang tăng so với kỳ trước", factors)
         self.assertTrue(any("không có tín hiệu nhu cầu" in f for f in factors))
-        self.assertTrue(any("toàn hệ thống" in x for x in r["limitations"]))
+        self.assertTrue(any("các kho bạn được xem" in x for x in r["limitations"]))
 
     def test_unknown_warehouse_is_an_error_listing_the_real_ones(self):
         gw = FakeGateway({"/api/warehouses": WAREHOUSES})
@@ -321,6 +321,28 @@ class PositionCoveredLinesTests(unittest.TestCase):
         s = r["scenarios"][0]
         self.assertEqual((s["unfunded_high_priority"], s["lines_covered_by_position"]), (0, 1))
         self.assertEqual(r["full_need"]["need_with_position_vnd"], 200_000)
+
+    def test_a_line_held_for_a_data_mismatch_is_not_called_unfunded(self):
+        # audit 2026-11-22: "bỏ lại do không đủ ngân sách" with 2.67M left - the line was
+        # held because borrow_db and inventory_db disagree on its loans
+        items = [reorder_item("v-1", "A", suggested_reorder_qty=5, estimated_cost=500_000),
+                 reorder_item("v-2", "B", suggested_reorder_qty=5, estimated_cost=500_000)]
+
+        def reorder(params):
+            result = {"summary": {"total_candidates": 2, "high_priority": 2, "estimated_total_cost": 1_000_000,
+                                  "estimated_total_reorder_qty": 10}, "items": [dict(i) for i in items]}
+            if params.get("budgetVnd") is not None:
+                result["items"][0].update(funded_qty=5, funded_cost=500_000, within_budget=True,
+                                          budget_plan={"cap_qty": 5, "inventory_position": 0})
+                result["items"][1].update(funded_qty=0, funded_cost=0, within_budget=False,
+                                          budget_plan={"cap_qty": 5, "inventory_position": 0, "data_issue": "BORROW_INVENTORY_MISMATCH"})
+                result["budget"] = {"budget_vnd": params["budgetVnd"], "funded_cost": 500_000, "remaining_vnd": 500_000,
+                                    "unreliable_lines": 1, "funding_order": "MARGINAL_SERVICE_PER_COST"}
+            return result
+        with patch.object(ct, "_cached_get", FakeGateway({"/analytics/reorder-suggestions": reorder})):
+            r = run(ct.simulate_reorder_budget("Bearer t", budgets_vnd=[1_000_000]))
+        s = r["scenarios"][0]
+        self.assertEqual((s["unfunded_high_priority"], s["held_for_data_issue_lines"], s["held_high_examples"]), (0, 1, ["B"]))
 
 
 class ReorderWarehouseScopeTests(unittest.TestCase):

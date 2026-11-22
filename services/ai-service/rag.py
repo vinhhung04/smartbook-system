@@ -29,6 +29,9 @@ RAG_SYSTEM_RULES = f"""
 - Tài liệu (câu hỏi thường gặp) giải thích quy định và quy trình; số liệu cấu hình (hạn mức gói thẻ, mức phí, địa chỉ, giờ mở cửa) lấy từ khối "{LIVE_DATA_LEAD}" nếu có. Khi hai nguồn khác nhau, dùng giá trị hiện hành và nói ngắn gọn rằng tài liệu ghi khác.
 - Số liệu nghiệp vụ động (tồn kho, phiếu mượn, đặt chỗ, tiền phạt, số dư) chỉ được lấy từ dữ liệu hệ thống trong context, không lấy từ tài liệu.
 - Nếu chỉ trả lời được một phần câu hỏi, nói rõ phần nào đã có căn cứ và phần nào chưa xác minh được.
+- Số liệu kho/mượn trả chỉ thuộc phạm vi ghi ở dòng "Pham vi" (các kho/chi nhánh người dùng được xem). Không gọi đó là "toàn hệ thống" hay "toàn thư viện" và không gợi ý xin quyền "toàn thư viện".
+- Dòng ghi "chua co so lieu" nghĩa là tài khoản không đọc được nguồn đó: nói là chưa có số liệu cho tài khoản này, không viết thành 0.
+- Giữ đúng đơn vị của dữ liệu: "phiếu" mượn khác "đầu sách" và "bản" sách; không đổi đơn vị.
 - Nếu câu hỏi chứa thông tin trái với context (ví dụ một mức phí hay thời hạn khác), chỉ ra điểm sai và nêu giá trị đúng theo context.
 
 ## Quy tắc RAG bắt buộc

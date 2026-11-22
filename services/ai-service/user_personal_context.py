@@ -95,7 +95,8 @@ _TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
     "membership": ("the thu vien", "the hoi vien", "the cua toi", "hoi vien", "hang the", "hang thanh vien",
                    "goi thanh vien", "het han the", "membership"),
     "wallet": ("vi cua toi", "vi dien tu", "so du", "nap tien", "tien trong vi", "vi con"),
-    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "picking", "lay hang", "cat hang",
+    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "viec gi can lam", "nhung viec gi",
+              "viec can xu ly", "picking", "lay hang", "cat hang",
               "putaway", "nhan hang", "kiem ke", "ngoai le", "duoc giao"),
     "analytics": ("tong quan", "kpi", "chi so", "bao cao"),
     "stock": ("ton kho", "het hang", "sap het", "nhap them"),
@@ -143,6 +144,11 @@ def get_primary_role(user_ctx: Any) -> str:
     return roles[0] if roles else "CUSTOMER"
 
 
+# /borrow/fines?summary=1 adds the money totals of every fine in the caller's scope,
+# not just the page: "tiền phạt chưa thu là bao nhiêu" has a real answer.
+_ENDPOINT_PARAMS = {"/borrow/fines": {"summary": "1"}}
+
+
 async def _fetch_one(
     client: httpx.AsyncClient,
     endpoint: str,
@@ -153,6 +159,7 @@ async def _fetch_one(
     try:
         resp = await client.get(
             f"{GATEWAY_URL}{endpoint}",
+            params=_ENDPOINT_PARAMS.get(endpoint),
             headers=headers,
             timeout=_TIMEOUT,
         )
@@ -399,7 +406,9 @@ def _fmt_borrow_loans_all(data: Any) -> str:
         n_overdue = int(counts.get("OVERDUE") or 0)
         n_active = int(counts.get("BORROWED") or 0) + n_overdue
         # borrow-service counts within the CALLER's scope (a librarian: their branches), never "toàn hệ thống"
-        lines = [f"📚 Phiếu mượn trong phạm vi bạn được xem: {n_active} đang mượn, trong đó {n_overdue} quá hạn."]
+        # unit stated explicitly: the model reported "161 đầu sách" for 161 loans (audit 2026-11-22)
+        lines = [f"📚 Phiếu mượn trong phạm vi bạn được xem: {n_active} phiếu đang mượn, trong đó {n_overdue} phiếu quá hạn "
+                 "(đơn vị là phiếu mượn, không phải số cuốn hay số đầu sách)."]
     else:
         n_overdue = sum(1 for l in items if str(l.get("status", "")).upper() == "OVERDUE")
         n_active = sum(1 for l in items if str(l.get("status", "")).upper() in ("BORROWED", "OVERDUE"))
@@ -429,6 +438,10 @@ def _fmt_borrow_fines_all(data: Any) -> str:
     if isinstance(counts, dict) and (meta or {}).get("total") is not None:
         # the list is one page: the service's totals are the counts; amounts exist for the page only
         open_count = int(counts.get("UNPAID") or 0) + int(counts.get("PARTIALLY_PAID") or 0)
+        money = (meta or {}).get("summary")
+        if isinstance(money, dict) and money.get("outstanding") is not None:
+            return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong; "
+                    f"tổng còn phải thu {_n(money['outstanding']):,.0f} VND, đã thu {_n(money.get('collected')):,.0f} VND.")
         return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong. "
                 f"Số tiền chỉ có cho {len(items)} khoản gần nhất ({total:,.0f} VND chưa thu trong các khoản đó), "
                 "không phải tổng tiền.")

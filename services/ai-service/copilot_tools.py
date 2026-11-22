@@ -233,8 +233,9 @@ def data_confidence(item: dict) -> dict:
 async def explain_warehouse_shortage(auth_header: str | None = None, warehouse: str = "") -> dict:
     """Contributing factors behind a warehouse's shortage: what is out/low there
     (per variant), joined by variant_id with demand signals from the reorder
-    model. Demand is library-wide - the analytics model has no per-warehouse
-    demand - and the factors are correlations, which the result states."""
+    model. Demand covers every warehouse the caller can read (the reorder model
+    follows their scope), not this warehouse alone - and the factors are
+    correlations, which the result states."""
     w, err = await _resolve_or_error(auth_header, warehouse)
     if err:
         return err
@@ -266,7 +267,7 @@ async def explain_warehouse_shortage(auth_header: str | None = None, warehouse: 
             "ton_kha_dung": risk_row.get("total_available_qty"), "dang_giu_dat_cho": risk_row.get("total_reserved_qty"),
             "dang_cho_muon": risk_row.get("total_borrowed_qty")}})
     if with_demand:
-        factors.append({"factor": "Sách thiếu hàng vẫn đang có nhu cầu mượn (toàn hệ thống)", "count": len(with_demand),
+        factors.append({"factor": "Sách thiếu hàng vẫn đang có nhu cầu mượn (các kho bạn được xem)", "count": len(with_demand),
                         "examples": [f"{j['title']}: {j['borrow_count']} lượt mượn" for j in
                                      sorted(with_demand, key=lambda j: -(j["borrow_count"] or 0))[:3]]})
     if rising:
@@ -289,7 +290,7 @@ async def explain_warehouse_shortage(auth_header: str | None = None, warehouse: 
         "items": sorted(joined, key=lambda j: (j["status"] != "HẾT HÀNG", -(j.get("borrow_count") or 0)))[:15],
         "join_key": "variant_id",
         "limitations": [
-            "Nhu cầu mượn lấy từ mô hình đề xuất nhập, tính trên toàn hệ thống, không tách riêng theo kho.",
+            "Nhu cầu mượn lấy từ mô hình đề xuất nhập, tính gộp trên các kho bạn được xem, không tách riêng kho này.",
             "Các yếu tố là tương quan quan sát được trong dữ liệu, không phải nguyên nhân đã được kiểm chứng.",
         ] + ([] if demand else ["Không lấy được dữ liệu nhu cầu (reorder-suggestions) nên thiếu phần nhu cầu."]),
     }
@@ -527,7 +528,12 @@ async def simulate_reorder_budget(
         funded = [i for i in items if i.get("within_budget")]
         # a 3.3 line re-sized to 0 (copies incoming / expected back cover it) needs no money
         needs_none = lambda i: (i.get("budget_plan") or {}).get("cap_qty") == 0 and (i.get("suggested_reorder_qty") or 0) > 0  # noqa: E731
-        unfunded_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH" and not needs_none(i)]
+        # a line analytics would not fund because borrow_db and inventory_db disagree
+        # on its loans (data_issue) is held for reconciliation, not left out for money
+        held = lambda i: bool((i.get("budget_plan") or {}).get("data_issue"))  # noqa: E731
+        unfunded_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH"
+                         and not needs_none(i) and not held(i)]
+        held_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH" and held(i)]
         # Since 3.3 a line can be funded in part (funded_qty); older responses
         # fund whole lines (suggested_reorder_qty).
         qty = lambda i: i.get("funded_qty", i.get("suggested_reorder_qty")) or 0  # noqa: E731
@@ -561,6 +567,8 @@ async def simulate_reorder_budget(
                              for i in funded[:8]],
             "unfunded_high_examples": [{"title": i.get("title"), "estimated_cost": i.get("estimated_cost")}
                                        for i in unfunded_high[:5]],
+            "held_for_data_issue_lines": budget_info.get("unreliable_lines") or 0,
+            "held_high_examples": [i.get("title") for i in held_high[:5]],
         })
     reference = next((s for s in scenarios if not s.get("error")), None)
     for s in scenarios:

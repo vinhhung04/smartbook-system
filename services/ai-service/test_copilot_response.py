@@ -135,13 +135,13 @@ class ExtrasTests(unittest.TestCase):
         extras = cr.build_extras(plan("Kho HCM Chinh nên nhập thêm sách gì?"), {"get_reorder_suggestions": scoped},
                                  user(superuser=True), WAREHOUSES, NOW)
         metrics = {m["label"]: m["value"] for m in extras["recommendations"][0]["metrics"]}
-        self.assertEqual((metrics["Tồn tại Kho HCM Chinh"], metrics["Tồn toàn thư viện"]), (2, 5))
+        self.assertEqual((metrics["Tồn tại Kho HCM Chinh"], metrics["Tồn các kho bạn được xem"]), (2, 5))
         self.assertNotIn("Tồn khả dụng", metrics)  # one ambiguous label for two different numbers
         text = cr.render("get_reorder_suggestions", {**scoped, "warehouse_scope": {
             "warehouse_name": "Kho HCM Chinh", "with_suggestion": 1, "low_stock_titles": 2, "note": "…toàn thư viện…",
             "without_suggestion": ["One Hundred Years of Solitude"]}})
         self.assertTrue(text.startswith("Phạm vi: Kho HCM Chinh - 1/2 đầu sách"))
-        self.assertIn("Norwegian Wood — ưu tiên HIGH; tồn tại kho 2 (ngưỡng tại kho 5); tồn toàn thư viện 5", text)
+        self.assertIn("Norwegian Wood — ưu tiên HIGH; tồn tại kho 2 (ngưỡng tại kho 5); tồn các kho bạn được xem 5", text)
         self.assertIn("chưa đề xuất nhập: One Hundred Years of Solitude", text)
 
     def test_permission_errors_become_caveats(self):

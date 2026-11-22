@@ -39,6 +39,8 @@ COPILOT_SYSTEM_PROMPT = (
     "- Khi câu hỏi cần dữ liệu mà chưa có, gọi tool phù hợp (có thể gọi nhiều tool trong một lượt). Chỉ dùng các tool "
     "được cung cấp.\n"
     "- Tool báo lỗi hoặc không có quyền: nói rõ phần dữ liệu nào chưa lấy được, không đoán thay.\n"
+    "- Số liệu kho, mượn trả và đề xuất nhập chỉ thuộc các kho người dùng được xem (quản trị viên: mọi kho). Không gọi "
+    "đó là \"toàn hệ thống\" hay \"toàn thư viện\", không so sánh với kho ngoài danh sách đó.\n"
     "- Bằng chứng yếu (ít mẫu, thời gian chờ hàng mặc định, kết quả tìm kiếm chưa chắc chắn): dùng từ ngữ thận trọng "
     "(\"dữ liệu cho thấy\", \"có thể\"); không dùng \"chắc chắn\", \"rõ ràng là\".\n"
     "- Câu hỏi \"tại sao\": trình bày các yếu tố góp phần quan sát được trong dữ liệu; không khẳng định quan hệ nhân quả.\n"
@@ -153,7 +155,7 @@ _FEW_SHOTS: list[tuple[str, set, str]] = [
      "- **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 5/9 đầu sách dưới ngưỡng vẫn có lượt mượn, ví dụ Sách A 40 lượt.\n"
      "- **Thời gian chờ hàng dài**: 3 đầu sách cần 30 ngày để hàng về, nên thiếu hụt kéo dài nếu không đặt sớm.\n"
      "- **Hàng đang giữ cho đặt chỗ**: 6 bản đang giữ, nên số bản cho mượn ngay ít hơn tồn thực tế.\n"
-     "Giới hạn: lượt mượn đang tính trên toàn hệ thống, chưa tách riêng cho Kho B."),
+     "Giới hạn: lượt mượn tính gộp trên các kho bạn được xem, chưa tách riêng cho Kho B."),
     (DECISION, {REORDER, TOP_BORROWED},
      "Hỏi: Nên nhập sách nào trước?\n"
      "Đáp: Nên xem xét nhập **Sách A** trước: đầu sách này đã hết hàng trong khi vẫn có 40 lượt mượn trong kỳ.\n"
@@ -385,7 +387,7 @@ def _reorder_line(i: int, x: dict) -> str:
     parts = [f"{i}. {x.get('title')} — ưu tiên {x.get('priority')}"]
     if x.get("warehouse_available_qty") is not None:  # a warehouse-scoped list: that warehouse's stock first
         parts.append(f"tồn tại kho {_f(x['warehouse_available_qty'])} (ngưỡng tại kho {_f(x.get('warehouse_reorder_point'))}); "
-                     f"tồn toàn thư viện {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
+                     f"tồn các kho bạn được xem {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
     elif x.get("available_qty") is not None:
         parts.append(f"tồn khả dụng {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
     if x.get("borrow_count") is not None:
@@ -616,6 +618,11 @@ def _render_simulation(r: dict) -> str:
             lines.append(f"  {_f(s['lines_covered_by_position'])} dòng không cần nhập thêm vì bản đang về/dự kiến trả đã đủ.")
         if s.get("unfunded_high_examples"):
             lines.append("  Ưu tiên cao bị bỏ lại: " + ", ".join(x["title"] for x in s["unfunded_high_examples"][:5]))
+        if s.get("held_for_data_issue_lines"):
+            lines.append(f"  {_f(s['held_for_data_issue_lines'])} dòng KHÔNG được cấp ngân sách vì số phiếu mượn đang mở lệch "
+                         "với số bản kho ghi nhận đang cho mượn - cần đối soát dữ liệu, KHÔNG phải do thiếu ngân sách"
+                         + (" (ưu tiên cao: " + ", ".join(s["held_high_examples"]) + ")" if s.get("held_high_examples") else "")
+                         + ".")
     least = r.get("least_risk_scenario")
     if least:
         lines.append(f"Phương án ít rủi ro hết sách nhất (do hệ thống xếp, không phải mô hình): {least['label']} — "
@@ -749,7 +756,7 @@ def _reorder_recommendation(x: dict, source: str, retrieved_at: str, warehouse_n
     # A warehouse-scoped line carries two stocks: that warehouse's (what its table shows)
     # and the library's (what analytics computed the suggestion from).
     stock = ([{"label": f"Tồn tại {warehouse_name or 'kho'}", "value": x["warehouse_available_qty"], "unit": "bản"},
-              {"label": "Tồn toàn thư viện", "value": x.get("available_qty"), "unit": "bản"}]
+              {"label": "Tồn các kho bạn được xem", "value": x.get("available_qty"), "unit": "bản"}]
              if x.get("warehouse_available_qty") is not None
              else [{"label": "Tồn khả dụng", "value": x.get("available_qty"), "unit": "bản"}])
     metrics = [
@@ -817,12 +824,12 @@ def _recommendations(collected: dict, now_iso: str) -> list[dict]:
         urgent = [x for x in r.get("items") or [] if x.get("status") == "HẾT HÀNG" and (x.get("borrow_count") or 0) > 0]
         for x in urgent[:3]:
             recs.append({"title": x["title"], "action": f"Bổ sung cho {r.get('warehouse_name')}"
-                         + (f" (đề xuất {x['suggested_reorder_qty']} bản toàn hệ thống)" if x.get("suggested_reorder_qty") else ""),
+                         + (f" (đề xuất {x['suggested_reorder_qty']} bản cho các kho bạn được xem)" if x.get("suggested_reorder_qty") else ""),
                          "priority": x.get("reorder_priority"),
                          "metrics": [{"label": "Tồn khả dụng tại kho", "value": x.get("available_qty"), "unit": "bản"},
-                                     {"label": "Lượt mượn (toàn hệ thống)", "value": x.get("borrow_count"), "unit": "lượt"}],
+                                     {"label": "Lượt mượn (các kho bạn được xem)", "value": x.get("borrow_count"), "unit": "lượt"}],
                          "reason": "Đã hết hàng tại kho trong khi vẫn có nhu cầu mượn.",
-                         "risks": ["Nhu cầu tính trên toàn hệ thống, chưa tách theo kho."],
+                         "risks": ["Nhu cầu tính gộp trên các kho bạn được xem, chưa tách riêng kho này."],
                          "confidence": {"level": "TRUNG BÌNH" if (x.get("borrow_count") or 0) >= 3 else "THẤP",
                                         "basis": f"{x.get('borrow_count')} lượt mượn trong kỳ"},
                          "source": "analytics/warehouse-stock-items + analytics/reorder-suggestions (nối theo variant_id)",

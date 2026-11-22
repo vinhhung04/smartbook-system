@@ -1850,7 +1850,7 @@ def decompose(caps: list[str], tools: list[dict], warehouses: list[dict], curren
             part["period"] = current.label + (f" so với {comparison.label}" if comparison else "")
         if cap == BORROW_TREND and warehouses:
             part["status"] = "partial"
-            part["note"] = "Số liệu mượn là toàn hệ thống, chưa tách theo kho/chi nhánh."
+            part["note"] = "Số liệu mượn tính gộp trên các kho bạn được xem, chưa tách riêng từng kho/chi nhánh."
         part["depends_on"] = [p["id"] for p in parts if (cap, p["capability"]) in _BUILDS_ON]
         parts.append(part)
     return parts
