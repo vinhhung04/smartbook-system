@@ -17,7 +17,9 @@
 | ADMIN (superuser trong seed) | analytics.reports.view, reports.read, inventory.operation.decide, inventory.purchase.request, borrow.write + các quyền borrow ghi, customer.self.* |
 | WAREHOUSE_MANAGER | analytics.reports.view, reports.read, inventory.operation.decide, inventory.purchase.request |
 | WAREHOUSE_STAFF | inventory.purchase.request, inventory.task.read |
-| LIBRARIAN | borrow.write, borrow.customers.write, borrow.loans.write, borrow.fine.write, borrow.membership.write, … |
+| LIBRARIAN | borrow.write, borrow.customers.write, borrow.loans.write, borrow.fine.write, borrow.membership.write, analytics.borrow.read (từ 2026-11-25), … |
+
+**Manager kho kiêm thư viện** (2026-11-25): một tài khoản giữ cả WAREHOUSE_MANAGER và LIBRARIAN, không có role gộp. Quyền là hợp của hai role, nên tài khoản này vào được trang trợ lý (role WAREHOUSE_MANAGER + analytics.reports.view) và trợ lý đọc được số liệu mượn trả (analytics.borrow.read), luôn trong phạm vi kho/chi nhánh của `user_warehouse_scopes`. Mọi route analytics có tên bạn đọc (`/late-return-risk`, `/reservation-no-show-risk`, `/overdue-summary`) lọc theo phạm vi đó. Test: `test_unified_manager.py`, `services/analytics-service/test/risk-scope.test.js`, `scripts/unified-manager-integration.mjs`.
 | CUSTOMER | customer.self.read, customer.self.write |
 | SUPPLIER | supplier.portal.read, supplier.portal.write |
 
@@ -26,7 +28,7 @@
 | Khả năng | ADMIN | WAREHOUSE_MANAGER | WAREHOUSE_STAFF | LIBRARIAN | CUSTOMER | SUPPLIER |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Chatbot nổi (`/chat`) | – (dùng trang trợ lý) | – (dùng trang trợ lý) | ✓ | ✓ | ✓ | – (cổng riêng) |
-| Trang Decision Assistant (`/assistant`, lịch sử hội thoại) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Trang Decision Assistant (`/assistant`, lịch sử hội thoại) | ✓ | ✓ | ✗ | ✗ (✓ khi kiêm WAREHOUSE_MANAGER) | ✗ | ✗ |
 | Xem dữ liệu analytics toàn hệ thống qua AI | ✓ | ✓ (theo phạm vi kho) | theo quyền service đích | theo quyền service đích | ✗ (chỉ dữ liệu của mình) | ✗ |
 | Xác nhận `CREATE_REORDER_DRAFT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | Xác nhận `CREATE_STOCK_ALERT` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |

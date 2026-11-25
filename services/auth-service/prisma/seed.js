@@ -298,6 +298,10 @@ async function main() {
     'borrow.fine.write',
     'borrow.membership.write',
     'borrow.payments.process',
+    // Borrow-domain analytics of the librarian's own branches (every route is
+    // branch-scoped). A manager holding WAREHOUSE_MANAGER + LIBRARIAN gets
+    // warehouse and library analytics - and the AI assistant reads both.
+    'analytics.borrow.read',
   ];
   await setRolePermissions(librarianRole, librarianPermCodes);
   console.log(`✅ Assigned ${librarianPermCodes.length} permissions to LIBRARIAN`);

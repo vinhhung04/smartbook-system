@@ -44,7 +44,7 @@ router.get('/book-turnover', declareDataScope('SYSTEM'), authenticateInternalOrU
 router.get('/catalog-signals', declareDataScope('SYSTEM'), authenticateInternalOrUser(), analyticsController.getCatalogSignals);
 // The borrow-service due-soon reminder job calls this with the internal
 // service key, not a user JWT - same convention as the two routes above.
-router.get('/late-return-risk', declareDataScope('SYSTEM'), authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getLateReturnRisk);
+router.get('/late-return-risk', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(readBorrowAnalytics), attachWarehouseScope(), analyticsController.getLateReturnRisk);
 // ai-service's nightly briefing agent (services/ai-service/nightly_briefing.py) calls
 // these six with the internal service key - same convention as the routes above.
 router.get('/overdue-summary', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(readBorrowAnalytics), attachWarehouseScope(), analyticsController.getOverdueSummary);
@@ -65,6 +65,6 @@ router.get('/dashboard/kpis', declareDataScope('WAREHOUSE_SCOPED'), attachWareho
 router.get('/borrow-trends', declareDataScope('WAREHOUSE_SCOPED'), readBorrowAnalytics, attachWarehouseScope(), analyticsController.getBorrowTrends);
 router.get('/top-books', declareDataScope('WAREHOUSE_SCOPED'), attachWarehouseScope(), analyticsController.getTopBooks);
 router.get('/forecast-accuracy', declareDataScope('SYSTEM'), analyticsController.getForecastAccuracy);
-router.get('/reservation-no-show-risk', declareDataScope('SYSTEM'), readBorrowAnalytics, analyticsController.getReservationNoShowRisk);
+router.get('/reservation-no-show-risk', declareDataScope('WAREHOUSE_SCOPED'), readBorrowAnalytics, attachWarehouseScope(), analyticsController.getReservationNoShowRisk);
 
 module.exports = router;

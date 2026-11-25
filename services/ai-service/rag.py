@@ -38,7 +38,7 @@ RAG_SYSTEM_RULES = f"""
 - Nếu có [RAG CONTEXT], phải ưu tiên trả lời dựa trên context đó.
 - Không bịa số liệu. Nếu context không có số liệu cần thiết, nói rõ là chưa đủ dữ liệu.
 - Luôn trả lời bằng tiếng Việt.
-- Nếu có dùng dữ liệu từ endpoint, cuối câu trả lời thêm dòng: "Nguồn dữ liệu: ...".
+- Không tự viết dòng "Nguồn dữ liệu": hệ thống tự thêm nguồn đã dùng.
 - Không hiện URL nội bộ cho người dùng.
 - Với gợi ý nhập thêm, nói rõ đây là gợi ý hỗ trợ, không phải quyết định bắt buộc.
 
@@ -46,13 +46,12 @@ RAG_SYSTEM_RULES = f"""
 - TUYỆT ĐỐI KHÔNG dùng markdown table (ký tự `|`, dòng `---`). UI không render được bảng.
 - Dùng danh sách có đánh số hoặc bullet (`- `) thay cho bảng.
 - Khi [RAG CONTEXT] có phần "Data summary" đã format sẵn (với 🏭 kho, 🔴🟡 sách), hãy dùng trực tiếp format đó — KHÔNG reformat lại thành bảng hay cách trình bày khác.
-- Dùng emoji/icon phù hợp: 📚 sách, 📦 tồn kho, ⚠️ cảnh báo, ✅ OK, 🔴 hết hàng, 🟡 sắp hết, 📊 số liệu, 🏭 kho, 🛒 nhập hàng, 📋 phiếu, 👤 nhân viên.
 - Câu trả lời phải ngắn gọn — không giải thích dài dòng.
 - Khi trả lời về tồn kho thấp: nhóm theo kho (🏭 Tên kho (MÃ)) rồi liệt kê sách bên dưới.
 - Mỗi đầu sách chỉ cần 1 dòng: icon + tên + số liệu. Không thêm thông tin không có trong dữ liệu.
 - Dùng **bold** cho tên sách và số liệu nổi bật.
 - Với danh sách > 5 mục, chỉ liệt kê top 5 rồi ghi "...và X sách khác".
-- Tổng kết ở cuối bằng 1–2 câu gợi ý hành động cụ thể.
+- Không thêm đoạn tổng kết hay gợi ý hành động ở cuối, trừ khi người dùng hỏi nên làm gì.
 
 ## Quy tắc nghiệp vụ tồn kho bắt buộc
 - Không bịa số tồn kho. Không tự suy luận warehouse_id nếu API không cung cấp.

@@ -88,6 +88,15 @@ class RenderTests(unittest.TestCase):
                                 "Tồn khả dụng còn 215 bản.")
         self.assertEqual(cr.enforce_brief(long, plan("Kho nào rủi ro nhất?")), long)  # no brief asked
 
+    def test_a_brief_answer_keeps_its_caveat_and_its_bullets(self):
+        answer = ("Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng.\n- 4 đầu sách đã hết hàng.\n"
+                  "- 6 bản đang giữ cho đặt chỗ.\n- Tồn khả dụng 40 bản.\n"
+                  "Lưu ý: thời gian chờ hàng là giá trị mặc định, chưa kiểm chứng.")
+        brief = cr.enforce_brief(answer, plan("Nói ngắn gọn thôi", {"capabilities": ["warehouse_risk"]}))
+        self.assertEqual(brief, "Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng.\n- 4 đầu sách đã hết hàng.\n"
+                                "- 6 bản đang giữ cho đặt chỗ.\n"
+                                "Lưu ý: thời gian chờ hàng là giá trị mặc định, chưa kiểm chứng.")
+
     def test_snapshot_figures_are_not_given_the_question_period(self):
         # audit E-13: "Tuần này có 446 phiếu quá hạn" - 446 is today's count, not the week's
         note = cr.plan_note(plan("Cho tôi số phiếu quá hạn và 3 sách mượn nhiều nhất tuần này"), NOW)

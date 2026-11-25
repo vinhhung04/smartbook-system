@@ -30,7 +30,7 @@ from copilot_visualization import build_visualizations, consistency_issues
 
 COPILOT_SYSTEM_PROMPT = (
     "Bạn là trợ lý phân tích và hỗ trợ ra quyết định cho quản lý thư viện/kho của SmartBook "
-    "(người dùng là ADMIN hoặc WAREHOUSE_MANAGER).\n\n"
+    "(người dùng là quản lý kho - có thể kiêm quản lý thư viện - hoặc quản trị viên).\n\n"
 
     "## Nguyên tắc dữ liệu\n"
     "- Mọi số liệu, tên sách, tên kho trong câu trả lời phải lấy từ kết quả tool trong hội thoại. Không ước lượng, "
@@ -193,15 +193,29 @@ def few_shot(plan: QueryPlan) -> str:
 
 
 BRIEF_MAX_SENTENCES = 3
+# A limit or caveat sentence: shortening must not drop the one warning the answer carries.
+_CAVEAT_SENTENCE = re.compile(r"^\W*(lưu ý|giới hạn|rủi ro|cảnh báo|giả định)\b|chưa (có|đủ) (dữ liệu|số liệu)|"
+                              r"chưa (được )?kiểm chứng|giá trị mặc định", re.IGNORECASE)
 
 
 def enforce_brief(answer: str, plan: QueryPlan) -> str:
     """"Nói ngắn gọn": at most three sentences (the conclusion comes first by the
-    prompt's rule). The model answered as long as before (audit E-15)."""
+    prompt's rule). The model answered as long as before (audit E-15). The first
+    caveat sentence past the cut is kept too, and line breaks (bullets) stay."""
     if not (getattr(plan, "style", None) or {}).get("brief") or not answer:
         return answer
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", answer.strip()) if s.strip()]
-    return " ".join(s.strip() for s in sentences[:BRIEF_MAX_SENTENCES]) if len(sentences) > BRIEF_MAX_SENTENCES else answer
+    units = [(n, s.strip()) for n, line in enumerate(answer.strip().split("\n"))
+             for s in re.split(r"(?<=[.!?])\s+", line) if s.strip()]
+    if len(units) <= BRIEF_MAX_SENTENCES:
+        return answer
+    kept = units[:BRIEF_MAX_SENTENCES]
+    caveat = next((u for u in units[BRIEF_MAX_SENTENCES:] if _CAVEAT_SENTENCE.search(u[1])), None)
+    if caveat and not any(_CAVEAT_SENTENCE.search(s) for _n, s in kept):
+        kept.append(caveat)
+    lines: dict[int, list[str]] = {}
+    for n, s in kept:
+        lines.setdefault(n, []).append(s)
+    return "\n".join(" ".join(parts) for _n, parts in sorted(lines.items()))
 
 
 def strip_example_copies(answer: str, plan: QueryPlan, grounded: str) -> tuple[str, list[str]]:

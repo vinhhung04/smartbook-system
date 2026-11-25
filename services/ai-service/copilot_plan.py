@@ -148,7 +148,7 @@ _STYLE_PATTERNS: dict[str, re.Pattern] = {
                        r"phan tich sau|noi them|(noi|giai thich|trinh bay) ro hon)\b"),
     "plain": re.compile(r"\b(de hieu|don gian hon|noi don gian|khong chuyen|nghia la gi|thuat ngu|binh dan)\b"),
     "why_not": re.compile(r"\b(sao|tai sao|vi sao) (lai )?khong (chon|nhap|uu tien|lay|dung|de xuat)\b|"
-                          r"\b(phuong an|lua chon) (khac|thay the)\b|\bthay vi\b"),
+                          r"\b(phuong an|lua chon|giai phap|cach)( nao)? (khac|thay the|tot hon)\b|\bthay vi\b"),
 }
 
 

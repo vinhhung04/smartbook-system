@@ -1410,11 +1410,13 @@ async function getLateReturnTrainingRows() {
 }
 
 // Every open item is scored: `limit` is applied after ranking (riskiest first), never to the candidates.
-async function getLateReturnScoringRows(dueWithinDays) {
-  const params = [];
-  let where = `WHERE li.return_date IS NULL AND li.status IN ('BORROWED', 'OVERDUE')`;
+// The rows carry reader names: only loans lent by the caller's branches (null = every branch).
+async function getLateReturnScoringRows(dueWithinDays, warehouseIds) {
+  const params = [warehouseIds];
+  let where = `WHERE li.return_date IS NULL AND li.status IN ('BORROWED', 'OVERDUE')
+    AND ($1::uuid[] IS NULL OR lt.warehouse_id = ANY($1::uuid[]))`;
   if (dueWithinDays !== null) {
-    where += ` AND li.due_date <= now() + ($1 || ' days')::interval`;
+    where += ` AND li.due_date <= now() + ($2 || ' days')::interval`;
     params.push(dueWithinDays);
   }
   return query(borrowPool, `${LATE_RETURN_ROW_SQL} ${where}`, params);
@@ -1449,7 +1451,7 @@ const getLateReturnRisk = asyncHandler(async (req, res) => {
     return res.json({ data: { generated_at: new Date().toISOString(), status: trained.status, reason: trained.reason, items: [] } });
   }
 
-  const scoringRows = await getLateReturnScoringRows(dueWithinDays);
+  const scoringRows = await getLateReturnScoringRows(dueWithinDays, scopeParam(req));
   const scoredRows = topByRisk(scoreRows(trained.model, scoringRows, toLateReturnSample), limit);
   const titleByVariant = await getTitlesByVariantIds(scoredRows.map((item) => item.variant_id));
   const scored = scoredRows
@@ -1530,11 +1532,13 @@ async function getNoShowTrainingRows() {
 }
 
 // Every waiting reservation is scored; `limit` is applied after ranking (see getLateReturnScoringRows).
-async function getNoShowScoringRows() {
+// Reader names again: only reservations held at the caller's branches (null = every branch).
+async function getNoShowScoringRows(warehouseIds) {
   return query(
     borrowPool,
-    `${NO_SHOW_ROW_SQL} WHERE r.status = 'READY_FOR_PICKUP' AND r.pickup_code_used_at IS NULL`,
-    [],
+    `${NO_SHOW_ROW_SQL} WHERE r.status = 'READY_FOR_PICKUP' AND r.pickup_code_used_at IS NULL
+       AND ($1::uuid[] IS NULL OR r.warehouse_id = ANY($1::uuid[]))`,
+    [warehouseIds],
   );
 }
 
@@ -1552,7 +1556,7 @@ const getReservationNoShowRisk = asyncHandler(async (req, res) => {
     return res.json({ data: { generated_at: new Date().toISOString(), status: trained.status, reason: trained.reason, items: [] } });
   }
 
-  const scoringRows = await getNoShowScoringRows();
+  const scoringRows = await getNoShowScoringRows(scopeParam(req));
   const scoredRows = topByRisk(scoreRows(trained.model, scoringRows, toNoShowSample), limit);
   const titleByVariant = await getTitlesByVariantIds(scoredRows.map((item) => item.variant_id));
   const scored = scoredRows
