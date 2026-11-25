@@ -308,7 +308,7 @@ function StockAuditListView() {
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={5} className="whitespace-normal">
                     {audits.length === 0 ? (
-                      <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description={isManager ? "Tạo phiếu ở trên để bắt đầu đối chiếu tồn kho." : "Quản lý kho sẽ giao phiếu kiểm kê cho bạn tại đây."} className="py-12" />
+                      <EmptyState variant="no-data" title="Chưa có phiếu kiểm kê" description={isManager ? "Tạo phiếu ở trên để bắt đầu đối chiếu tồn kho." : "Quản lý sẽ giao phiếu kiểm kê cho bạn tại đây."} className="py-12" />
                     ) : (
                       <EmptyState variant="no-results" title="Không tìm thấy phiếu nào" description="Thử đổi từ khóa hoặc trạng thái." className="py-12" />
                     )}

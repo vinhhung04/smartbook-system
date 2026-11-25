@@ -108,7 +108,7 @@ function assertCanManageTarget(actor, target, { allowSelf = false } = {}) {
     const roles = normalizeRoleCodes(target.roles);
     const onlyStaff = roles.length > 0 && roles.every((r) => MANAGER_ASSIGNABLE_ROLES.includes(r));
     if (!onlyStaff || target.is_superuser) {
-      throw new AssignmentError(403, 'TARGET_NOT_STAFF', 'Quản lý kho chỉ phân công được tài khoản nhân viên kho');
+      throw new AssignmentError(403, 'TARGET_NOT_STAFF', 'Quản lý chỉ phân công được tài khoản nhân viên kho');
     }
   }
 }

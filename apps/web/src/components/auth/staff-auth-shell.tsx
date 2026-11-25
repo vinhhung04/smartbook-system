@@ -95,7 +95,7 @@ export function StaffAuthShell({ title, subtitle, children, footer }: StaffAuthS
             <div data-auth="copy" className="mt-10"><OperationsSchematic /></div>
           </div>
           <p data-auth="copy" className="max-w-md text-[13px] leading-relaxed text-indigo-100/70">
-            Dành cho quản trị viên, quản lý kho, nhân viên kho và thủ thư. Sau khi đăng nhập, mỗi tài khoản vào thẳng khu vực của vai trò mình.
+            Dành cho quản trị viên, quản lý, nhân viên kho và thủ thư. Sau khi đăng nhập, mỗi tài khoản vào thẳng khu vực của vai trò mình.
           </p>
         </aside>
 

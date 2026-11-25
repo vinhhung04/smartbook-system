@@ -123,7 +123,7 @@ export default function PutawayReceiptScreen() {
     try {
       const { receivings } = await putawayApi.getWarehouseReceivings(detail.warehouse_id);
       if (receivings.length === 0) {
-        setStepError('Kho này chưa có khu vực chờ cất (RECEIVING), liên hệ quản lý kho.');
+        setStepError('Kho này chưa có khu vực chờ cất (RECEIVING), liên hệ quản lý.');
         return;
       }
       const stock = await Promise.all(
@@ -135,7 +135,7 @@ export default function PutawayReceiptScreen() {
       if (requestId !== selectionRequestRef.current) return;
       const holding = sourcesHoldingVariant(stock, item.variant_id);
       if (holding.length === 0) {
-        setStepError('Không thấy sách này ở khu chờ cất của kho. Có thể hàng chưa được nhập vào khu chờ — liên hệ quản lý kho.');
+        setStepError('Không thấy sách này ở khu chờ cất của kho. Có thể hàng chưa được nhập vào khu chờ — liên hệ quản lý.');
         return;
       }
       setSources(holding);
@@ -351,7 +351,7 @@ export default function PutawayReceiptScreen() {
               {isLoadingCandidates ? (
                 <LoadingState label="Đang tìm vị trí trống…" />
               ) : source && candidates.length === 0 && !stepError ? (
-                <InlineAlert tone="warning" message="Không tìm được vị trí trống phù hợp — liên hệ quản lý kho để mở thêm vị trí." />
+                <InlineAlert tone="warning" message="Không tìm được vị trí trống phù hợp — liên hệ quản lý để mở thêm vị trí." />
               ) : (
                 <View style={{ gap: space.sm }} accessibilityRole="radiogroup">
                   {visibleCandidates.map((candidate, index) => {

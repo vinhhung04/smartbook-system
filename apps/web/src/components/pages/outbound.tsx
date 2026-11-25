@@ -562,7 +562,7 @@ export function OutboundPage() {
                     </Button>
                     <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
                       {detail.task_type === 'transfer'
-                        ? 'Sau khi xác nhận, hàng chuyển sang trạng thái đang vận chuyển. Quản lý kho đích cần giao việc nhận hàng cho nhân viên.'
+                        ? 'Sau khi xác nhận, hàng chuyển sang trạng thái đang vận chuyển. Quản lý chi nhánh đích cần giao việc nhận hàng cho nhân viên.'
                         : 'Sau khi xác nhận, đơn chuyển sang trạng thái hoàn tất.'}
                     </p>
                     {loadingDetail ? <p className="mt-3 text-[12px] text-muted-foreground">Đang tải chi tiết...</p> : null}
