@@ -832,6 +832,11 @@ async def analyze_inventory_rebalancing(auth_header: str | None = None, destinat
     names = {w.get("warehouse_id"): w.get("name") or w.get("code") for w in scope}
     options = data.get("options") or {}
     rec = data.get("recommendation") or {}
+    diagnosis = [{**{k: v for k, v in row.items() if k not in ("name", "code")},
+                  "warehouse": row.get("name") or row.get("code")} for row in data.get("diagnosis") or []]
+    # any shortage makes a warehouse "short" (TP.HCM is short 92 while holding 203 surplus copies of other titles)
+    short = [d for d in diagnosis if (d.get("shortage_qty") or 0) > 0]
+    surplus = [d for d in diagnosis if d not in short and (d.get("surplus_qty") or 0) > 0]
     return {
         "source": "analytics/rebalancing-plan",
         "retrieved_at": data.get("generated_at") or _now_iso(),
@@ -846,8 +851,15 @@ async def analyze_inventory_rebalancing(auth_header: str | None = None, destinat
             "safety_stock_multiplier": safety_stock_multiplier, "priority": priority,
             "lead_time_delay_days": lead_time_delay_days}.items() if v},
         "notice": data.get("notice"),
-        "diagnosis": [{**{k: v for k, v in row.items() if k not in ("name", "code")},
-                       "warehouse": row.get("name") or row.get("code")} for row in data.get("diagnosis") or []],
+        "diagnosis": diagnosis,
+        # sums the answer may quote (live 2026-11-26: the model added every warehouse's surplus, 323 / 449,
+        # and called it the surplus of the two surplus warehouses, 246)
+        "diagnosis_totals": {
+            "shortage_qty_all": sum(d.get("shortage_qty") or 0 for d in diagnosis),
+            "short_warehouses": [d.get("warehouse") for d in short],
+            "surplus_warehouses": [d.get("warehouse") for d in surplus],
+            "surplus_qty_surplus_warehouses": sum(d.get("surplus_qty") or 0 for d in surplus),
+        },
         "top_shortages": [{**s, "warehouse": names.get(s.get("warehouse_id"))} for s in (data.get("shortages") or [])[:8]],
         "top_surpluses": [{**s, "warehouse": names.get(s.get("warehouse_id"))} for s in (data.get("surpluses") or [])[:8]],
         "options": {code: _rebalance_option(opt, names) for code, opt in options.items()},

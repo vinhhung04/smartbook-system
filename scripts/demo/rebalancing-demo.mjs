@@ -95,6 +95,9 @@ function reset() {
     DELETE FROM transfer_orders WHERE requested_by_user_id = ${lit(user)};
     DELETE FROM purchase_requests WHERE created_by_user_id = ${lit(user)};` : ""}
     DELETE FROM stock_balances WHERE location_id IN (SELECT id FROM locations WHERE location_code LIKE '${MARK}-%');
+    -- an audit started on a demo shelf would otherwise block the delete below (its FKs are not SET NULL)
+    DELETE FROM stock_audit_lines WHERE location_id IN (SELECT id FROM locations WHERE location_code LIKE '${MARK}-%');
+    DELETE FROM stock_audit_location_sessions WHERE location_id IN (SELECT id FROM locations WHERE location_code LIKE '${MARK}-%');
     DELETE FROM locations WHERE location_code LIKE '${MARK}-%' AND warehouse_id IN (${lit(wh.HCM)}, ${lit(wh.HN)}, ${lit(wh.DN)});
     COMMIT;`);
   console.log("reset: demo loans, stock, locations and the demo account's transfer / purchase requests removed");

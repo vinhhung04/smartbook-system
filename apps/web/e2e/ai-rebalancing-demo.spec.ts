@@ -74,6 +74,8 @@ test('seven-step rebalancing demo through the chatbox', async ({ page }) => {
   const whatIf = a.getByTestId('rebalance-whatif');
   await expect(whatIf).toContainText('12.000.000 ₫');
   await expect(whatIf).toContainText('15.000.000 ₫');
+  // the hybrid is not budget-bound at 12 M; the plan the user runs alone is, so it must be shown too
+  await expect(whatIf.locator('[data-row="executable"]').first()).toBeVisible();
 
   // 6. draft of what the user may do; Hà Nội stays a proposal
   a = await ask(page, QUESTIONS[5]);

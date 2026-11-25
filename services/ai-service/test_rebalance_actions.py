@@ -237,6 +237,61 @@ class DecisionAndTimelineTests(unittest.TestCase):
         self.assertEqual(decision["comparison"]["diff"]["shortage_covered_pct"], -20)
         self.assertEqual(decision["comparison"]["diff"]["purchase_cost_vnd"], -3e6)
 
+    def test_what_if_also_compares_the_executable_plan(self):
+        """Live demo 2026-11-26: budget 15 M -> 12 M kept the hybrid at 100 % (not budget-bound)
+        while the plan the user can run alone fell to 88 %; the card and brief must show both."""
+        def result(budget, ex_cov, ex_cost):
+            r = self._result(100, 9.5e6, budget)
+            r["options"]["HYBRID_EXECUTABLE"] = {**r["options"]["HYBRID"], "code": "HYBRID_EXECUTABLE", "label": "Tự thực hiện",
+                                                 "shortage_covered_pct": ex_cov, "remaining_shortage_qty": 100 - ex_cov,
+                                                 "purchase_cost_vnd": ex_cost}
+            r["recommendation"]["executable_option"] = "HYBRID_EXECUTABLE"
+            return r
+        collected = {"analyze_inventory_rebalancing": result(15e6, 100, 14.4e6),
+                     "analyze_inventory_rebalancing#2": result(12e6, 88, 11.98e6)}
+        cmp = rd.build(None, collected)["comparison"]
+        self.assertEqual(cmp["diff"]["shortage_covered_pct"], 0)
+        self.assertEqual(cmp["executable"]["diff"]["shortage_covered_pct"], -12)
+        brief = rd.comparison_brief(collected)
+        self.assertIn("không bị ngân sách mới giới hạn", brief)
+        self.assertIn("Tự thực hiện", brief)
+        self.assertIn("100% → 88%", brief)
+        self.assertIn(12, rd.numbers_in(collected))  # "giảm 12 điểm %" quoted from the brief is grounded
+        # no executable entry when the best plan is also the one the user runs alone
+        same = {"analyze_inventory_rebalancing": self._result(90, 15e6, 15e6),
+                "analyze_inventory_rebalancing#2": self._result(70, 12e6, 12e6)}
+        for r in same.values():
+            r["recommendation"]["executable_option"] = "HYBRID"
+        self.assertNotIn("executable", rd.build(None, same)["comparison"])
+
+    def test_diagnosis_totals_call_a_warehouse_with_any_shortage_short(self):
+        """TP.HCM is short 92 copies yet holds 203 surplus copies of other titles: it is short,
+        and its surplus is not counted with the surplus warehouses (live demo 2026-11-26)."""
+        import asyncio
+        import copilot_tools
+        data = {"scope": {"warehouses": [{"warehouse_id": HCM, "name": "HCM"}, {"warehouse_id": HN, "name": "HN"},
+                                         {"warehouse_id": DN, "name": "DN"}]},
+                "diagnosis": [{"warehouse_id": HCM, "name": "HCM", "shortage_qty": 92, "surplus_qty": 203},
+                              {"warehouse_id": HN, "name": "HN", "shortage_qty": 0, "surplus_qty": 126},
+                              {"warehouse_id": DN, "name": "DN", "shortage_qty": 0, "surplus_qty": 120}]}
+        with patch.object(copilot_tools, "fetch_rebalancing_plan", AsyncMock(return_value=(data, []))):
+            totals = asyncio.run(copilot_tools.analyze_inventory_rebalancing("Bearer x"))["diagnosis_totals"]
+        self.assertEqual(totals["short_warehouses"], ["HCM"])
+        self.assertEqual(totals["surplus_warehouses"], ["HN", "DN"])
+        self.assertEqual(totals["surplus_qty_surplus_warehouses"], 246)
+
+    def test_naming_the_engines_best_option_is_not_an_unsupported_recommendation(self):
+        import copilot_faithfulness as cf
+        collected = {"analyze_inventory_rebalancing": {"recommendation": {
+            "best_business_option": "HYBRID", "best_business_label": "Kết hợp điều chuyển + mua mới",
+            "executable_option": "HYBRID_EXECUTABLE"}}}
+        ctx = cf.build_context(collected)
+        kinds = lambda text: [i.type for i in cf.validate(text, ctx)]
+        self.assertNotIn(cf.UNSUPPORTED_RECOMMENDATION, kinds("Phương án kết hợp là hiệu quả nhất: đáp ứng 100%."))
+        self.assertIn(cf.UNSUPPORTED_RECOMMENDATION, kinds("Chỉ mua mới là lựa chọn tốt nhất."))
+        # outside a ranked rebalancing turn the claim stays unsupported
+        self.assertIn(cf.UNSUPPORTED_RECOMMENDATION, [i.type for i in cf.validate("Kết hợp là phương án tốt nhất.", cf.build_context({}))])
+
     def test_timeline_reports_only_what_ran(self):
         ok = rd.timeline(None, {"analyze_inventory_rebalancing": self._result(90, 1, 2)}, {"status": "PASSED"})
         self.assertEqual({s["key"]: s["status"] for s in ok}["scenario"], "skipped")

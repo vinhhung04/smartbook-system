@@ -537,7 +537,11 @@ export interface AiRebalanceDecision {
   purchases?: AiRebalancePurchase[];
   budget_vnd?: number | null;
   what_if?: Record<string, unknown>;
-  comparison?: { base: AiRebalanceSide; current: AiRebalanceSide; diff: Record<string, number | null> } | null;
+  comparison?: {
+    base: AiRebalanceSide; current: AiRebalanceSide; diff: Record<string, number | null>;
+    /** The plan the user can carry out alone, when it is not the best one. */
+    executable?: { label: string; code: string; base: Partial<AiRebalanceSide>; current: Partial<AiRebalanceSide>; diff: Record<string, number | null> };
+  } | null;
   assumptions?: string[];
   data_quality?: { transfer_lead_time_days?: number | null; transfer_lead_time_samples?: number; unpriced_variants?: number };
   evidence?: { source?: string | null; retrieved_at?: string | null };

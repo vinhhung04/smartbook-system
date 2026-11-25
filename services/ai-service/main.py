@@ -4895,7 +4895,8 @@ async def _finalize_assistant_turn(
     grounded_context = (f"{plan_note_text}\n{copilot_explain.explanation_brief(explanation)}\n"
                         f"{copilot_visualization.visualization_brief(*visualizations)}")
     grounded_values = copilot_explain.numbers_in(explanation) \
-        + copilot_visualization.numbers_in_visualizations(visualizations[0])
+        + copilot_visualization.numbers_in_visualizations(visualizations[0]) \
+        + copilot_rebalance_decision.numbers_in(collected_data)
 
     # Semantic faithfulness (copilot_faithfulness): what the answer MEANS
     # against what the system computed - trend, ranking, scope, causation,
