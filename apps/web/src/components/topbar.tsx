@@ -39,7 +39,7 @@ const breadcrumbMap: Record<string, { crumbs: Crumb[]; color: string }> = {
 const sidebarBreadcrumbMap: Record<string, { crumbs: Crumb[]; color: string }> = Object.fromEntries(
   navGroups.flatMap((group) => group.items.map((item) => [
     item.to,
-    { crumbs: [{ labelKey: item.labelKey }], color: item.textColor },
+    { crumbs: [{ labelKey: item.labelKey }], color: "text-foreground" },
   ])),
 );
 
