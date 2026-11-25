@@ -4920,6 +4920,8 @@ async def _finalize_assistant_turn(
     verify_context = "\n".join([message_text] + [
         m["content"] for m in messages[:current_question]
         if m.get("role") == "assistant" and isinstance(m.get("content"), str)])
+    previous_answer = next((m["content"] for m in reversed(messages[:current_question])
+                            if m.get("role") == "assistant" and isinstance(m.get("content"), str) and m["content"]), "")
 
     def check(text: str):
         semantic_ = copilot_faithfulness.validate(text, faith_ctx)
@@ -4979,11 +4981,15 @@ async def _finalize_assistant_turn(
     contradicted_before_retry = bool(report.critical)
     retried = retry_discarded = False
     permission_wrong = copilot_rebalance_decision.answer_issues(answer, collected_data)
-    if (grounding_warning or language_flags or semantic or report.problems or permission_wrong) and answered_normally:
+    copied = copilot_response.copied_previous(answer, previous_answer, plan)
+    if (grounding_warning or language_flags or semantic or report.problems or permission_wrong or copied) \
+            and answered_normally:
         # One corrective turn covers all of it: numbers with no basis, wording
         # stronger than the evidence, claims the data contradicts (with the
-        # value the data holds). An answer that passes costs no extra LLM call.
+        # value the data holds), a restyle answered with the previous text.
+        # An answer that passes costs no extra LLM call.
         problems = " ".join(p for p in (
+            copied,
             copilot_rebalance_decision.answer_instruction(permission_wrong, collected_data),
             grounding_warning,
             copilot_verification.retry_instruction(report),
@@ -5011,7 +5017,12 @@ async def _finalize_assistant_turn(
             repairs += more_repairs
             grounding_warning, language_flags, semantic, report = check(answer)
             report = revalidated(answer, checked_text, report)
-        if copilot_verification.score(report, grounding_warning) > copilot_verification.score(before[4], before[1]):
+        # A rewrite asked because the draft copied the previous answer is longer
+        # by design, so it carries more minor problems: only contradictions and
+        # numbers with no basis count as "worse" then (else the copy comes back).
+        depth = 3 if copied else None
+        if copilot_verification.score(report, grounding_warning)[:depth] \
+                > copilot_verification.score(before[4], before[1])[:depth]:
             # the retry made it worse (a contradiction the draft did not have):
             # keep the checked draft - never trade one error for another
             answer, grounding_warning, language_flags, semantic, report, label_issues, repairs = before

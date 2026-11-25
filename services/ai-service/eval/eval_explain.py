@@ -273,10 +273,18 @@ def dup_number_rate(text: str) -> float | None:
     return (len(tokens) - len(set(tokens))) / len(tokens)
 
 
-def card_duplication(answer: str, recommendations: list | None) -> float | None:
+# The figures the prompt forbids repeating ("với đầu sách đã có thẻ đề xuất, không nêu lại
+# số lượng đề xuất nhập và chi phí"). card_duplication counts every card figure, including
+# the borrow counts and stock an answer must cite as evidence; the strict rate counts these.
+CARD_RULE_LABELS = ("Đề xuất nhập", "Chi phí ước tính")
+
+
+def card_duplication(answer: str, recommendations: list | None, labels: tuple | None = None) -> float | None:
     values = []
     for rec in recommendations or []:
         for metric in rec.get("metrics") or []:
+            if labels and metric.get("label") not in labels:
+                continue
             v = metric.get("value")
             if isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) >= 10:
                 values.append(v)
@@ -318,6 +326,7 @@ def score_turn(turn: dict, res: dict, prev: dict | None, mods, context: dict | N
         "overclaims": oc,
         "hedged": any(h in text for h in HEDGES) if turn.get("hedge") else None,
         "card_dup": card_duplication(answer, res.get("recommendations")),
+        "card_dup_strict": card_duplication(answer, res.get("recommendations"), CARD_RULE_LABELS),
         "llm_calls": len(((res.get("debug") or {}).get("llm_calls")) or []),
         "answer": answer,
     }
@@ -451,6 +460,7 @@ def summarize(rows: list[dict], stream: list[dict]) -> dict:
         "filler_rate": _rate([r["filler"] for r in ok]),
         "technical_field_rate": _rate([r["technical_fields"] for r in ok]),
         "card_duplication": _mean([r["card_dup"] for r in ok]),
+        "card_duplication_strict": _mean([r.get("card_dup_strict") for r in ok]),
         "explanation_present": _rate([isinstance(r.get("explanation"), dict) for r in expl_rows]) if expl_rows else None,
         "explanation_evidence_backed": _mean([(r.get("explanation") or {}).get("evidence_backed") for r in ok]),
         "explanation_mode_accuracy": _rate([r["plan_mode"] == r["mode"] for r in ok if r["plan_mode"] and r["mode"]]),

@@ -251,6 +251,26 @@ def strip_example_copies(answer: str, plan: QueryPlan, grounded: str) -> tuple[s
     return ("\n".join(lines).strip(), removed) if removed else (answer, [])
 
 
+RESTYLE_COPY_RATIO = 0.85
+
+
+def copied_previous(answer: str, previous: str, plan: QueryPlan) -> str | None:
+    """The retry instruction when a restyle follow-up ("kỹ hơn", "dễ hiểu hơn",
+    "vì sao không...") came back as the previous answer again: the model
+    copied the earlier assistant message from the history verbatim in about
+    half of the eval runs (2026-11-25), despite style_request(). "Ngắn gọn" is
+    left out: enforce_brief() shortens a copy, and an already short answer may
+    rightly stay the same."""
+    asked = [s for s in ("deep", "plain", "why_not") if (getattr(plan, "style", None) or {}).get(s)]
+    if not asked or not answer or not previous:
+        return None
+    import difflib
+    if difflib.SequenceMatcher(None, normalize_query(answer), normalize_query(previous)).ratio() < RESTYLE_COPY_RATIO:
+        return None
+    return ("Câu trả lời vừa viết gần như lặp lại nguyên văn câu trả lời trước. Viết lại theo đúng yêu cầu trình bày: "
+            + " ".join(_STYLE_GUIDE[s] for s in asked))
+
+
 def style_request(plan: QueryPlan) -> str:
     """The style instructions repeated next to the user's message: placed only
     in the system prompt, "giải thích kỹ hơn" was sometimes answered with the

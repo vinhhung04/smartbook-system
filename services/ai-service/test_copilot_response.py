@@ -88,6 +88,15 @@ class RenderTests(unittest.TestCase):
                                 "Tồn khả dụng còn 215 bản.")
         self.assertEqual(cr.enforce_brief(long, plan("Kho nào rủi ro nhất?")), long)  # no brief asked
 
+    def test_a_restyle_answered_with_the_previous_text_is_flagged(self):
+        previous = "Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng, 4 đầu sách đã hết hàng."
+        deep = plan("Giải thích kỹ hơn", {"capabilities": ["warehouse_risk"]})
+        self.assertIn("lặp lại nguyên văn", cr.copied_previous(previous, previous, deep))
+        self.assertIsNone(cr.copied_previous("Một câu trả lời khác hẳn, giải thích từng căn cứ và mức chắc chắn.",
+                                             previous, deep))
+        self.assertIsNone(cr.copied_previous(previous, previous, plan("Nói ngắn gọn thôi")))  # brief: trimmed instead
+        self.assertIsNone(cr.copied_previous(previous, previous, plan("Kho nào thiếu nhất?")))  # no restyle asked
+
     def test_a_brief_answer_keeps_its_caveat_and_its_bullets(self):
         answer = ("Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng.\n- 4 đầu sách đã hết hàng.\n"
                   "- 6 bản đang giữ cho đặt chỗ.\n- Tồn khả dụng 40 bản.\n"
