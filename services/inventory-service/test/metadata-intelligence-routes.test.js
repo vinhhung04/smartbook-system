@@ -47,8 +47,8 @@ test('catalog import capability (asked by ai-service before a paid OCR scan) nee
     return res;
   };
   assert.equal(run({ roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.catalog.read'] }).statusCode, 403);
-  assert.equal(run({ roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.catalog.read'] }).statusCode, 403);
-  const allowed = run({ roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.catalog.write'] });
+  assert.equal(run({ roles: ['MANAGER'], permissions: ['inventory.catalog.read'] }).statusCode, 403);
+  const allowed = run({ roles: ['MANAGER'], permissions: ['inventory.catalog.write'] });
   assert.equal(allowed.statusCode, 200);
   assert.deepEqual(allowed.body, { catalogImport: true });
 });

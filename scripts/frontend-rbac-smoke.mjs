@@ -65,7 +65,7 @@ async function runStaticSmoke() {
   expect('Putaway page drops the scanned location barcode when the target is changed by hand (server verifies it)', receivingPutaway.includes('target_location_id: value === "none" ? "" : value, scanned_location_barcode: ""'));
   expect('RBAC helper exists', rbac.includes('function canAccess') && rbac.includes('getHomePathForUser'));
   expect('WAREHOUSE_STAFF home path is my warehouse tasks', rbac.includes('role === "WAREHOUSE_STAFF"') && rbac.includes('return "/my-warehouse-tasks"'));
-  expect('WAREHOUSE_MANAGER home path is reports', rbac.includes('role === "WAREHOUSE_MANAGER"') && rbac.includes('return "/reports"'));
+  expect('MANAGER home path is reports', rbac.includes('role === "MANAGER"') && rbac.includes('return "/reports"'));
   expect('LIBRARIAN home path is borrow', rbac.includes('role === "LIBRARIAN"') && rbac.includes('return "/borrow"'));
   expect('CUSTOMER home path is customer portal', rbac.includes('role === "CUSTOMER"') && rbac.includes('return "/customer"'));
   expect('ADMIN home path is users', rbac.includes('role === "ADMIN"') && rbac.includes('return "/users"'));

@@ -518,7 +518,7 @@ async def amain(args) -> None:
     async with httpx.AsyncClient(timeout=30) as client:
         tokens = {
             "ADMIN": await ec.login(client, gateway, os.getenv("COPILOT_EVAL_ADMIN", "hung"), password),
-            "WAREHOUSE_MANAGER": await ec.login(client, gateway, os.getenv("COPILOT_EVAL_MANAGER", "manager01"), password),
+            "MANAGER": await ec.login(client, gateway, os.getenv("COPILOT_EVAL_MANAGER", "manager01"), password),
         }
     sem = asyncio.Semaphore(args.concurrency)
     print(f"Running {len(cases)} cases ({sum(len(c['turns']) for c in cases)} turns) on {args.code_dir}", flush=True)

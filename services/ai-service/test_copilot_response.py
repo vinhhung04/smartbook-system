@@ -20,7 +20,7 @@ def plan(message, state=None):
 
 
 def user(permissions=(), superuser=False):
-    return UserContext(user_id="u", username="u", email=None, roles=["WAREHOUSE_MANAGER"],
+    return UserContext(user_id="u", username="u", email=None, roles=["MANAGER"],
                        permissions=list(permissions), is_superuser=superuser)
 
 

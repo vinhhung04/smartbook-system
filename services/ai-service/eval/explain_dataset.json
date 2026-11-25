@@ -87,11 +87,11 @@
       {"q": "So sánh ngân sách 10 triệu và 20 triệu", "mode": "what_if", "advice": true, "facts": ["sim_funded_cost"]},
       {"q": "Vì sao không chọn phương án khác?", "mode": "what_if", "why_not": true, "facts": ["sim_second_funded_cost"]}]},
 
-    {"id": "na-01", "category": "no_access", "role": "WAREHOUSE_MANAGER", "turns": [
-      {"q": "Tình hình quá hạn thế nào?", "mode": "analysis", "no_access": true}]},
-    {"id": "na-02", "category": "no_access", "role": "WAREHOUSE_MANAGER", "turns": [
-      {"q": "Lượt mượn tháng này so với tháng trước thế nào?", "mode": "comparison", "no_access": true}]},
-    {"id": "na-03", "category": "no_access", "role": "WAREHOUSE_MANAGER", "turns": [
+    {"id": "na-01", "category": "manager_borrow", "role": "MANAGER", "turns": [
+      {"q": "Tình hình quá hạn thế nào?", "mode": "analysis"}]},
+    {"id": "na-02", "category": "manager_borrow", "role": "MANAGER", "turns": [
+      {"q": "Lượt mượn tháng này so với tháng trước thế nào?", "mode": "comparison"}]},
+    {"id": "na-03", "category": "no_access", "role": "MANAGER", "turns": [
       {"q": "Nên ưu tiên xử lý việc gì hôm nay?", "mode": "ranking", "advice": true, "facts": ["priority_first_value"]}]},
     {"id": "md-01", "category": "missing_data", "role": "ADMIN", "turns": [
       {"q": "Tại sao cuốn \"Lập Trình Lượng Tử Cho Mèo\" được đề xuất nhập?", "mode": "causal", "not_found": true}]},

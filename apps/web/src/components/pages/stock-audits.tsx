@@ -30,7 +30,7 @@ import {
 import { getPaginationRange } from "@/lib/pagination";
 import { cn } from "@/components/ui/utils";
 
-const MANAGER_ROLES = ["ADMIN", "WAREHOUSE_MANAGER"];
+const MANAGER_ROLES = ["ADMIN", "MANAGER"];
 const PAGE_SIZE = 10;
 
 function statusMeta(status: string) {

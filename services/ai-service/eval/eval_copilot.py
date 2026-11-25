@@ -366,12 +366,12 @@ async def access_checks(mods, tokens: dict) -> dict:
     out["customer_blocked"] = res["status"] == 403
     cid = str(uuid.uuid4())
     await call_assistant(mods, tokens["ADMIN"], "Top 3 sách được mượn nhiều nhất tháng này là gì?", cid)
-    res = await call_assistant(mods, tokens["WAREHOUSE_MANAGER"], "Câu hỏi trước của tôi là gì?", cid)
+    res = await call_assistant(mods, tokens["MANAGER"], "Câu hỏi trước của tôi là gì?", cid)
     out["foreign_conversation_blocked"] = res["status"] == 403
     out["foreign_conversation_answer"] = (res.get("answer") or "")[:300]
     cid2 = str(uuid.uuid4())
     await call_assistant(mods, tokens["ADMIN"], "Có bao nhiêu phiếu quá hạn?", cid2)
-    res = await call_stream(mods, tokens["WAREHOUSE_MANAGER"], "Nhắc lại câu trả lời trước", cid2)
+    res = await call_stream(mods, tokens["MANAGER"], "Nhắc lại câu trả lời trước", cid2)
     out["foreign_conversation_stream_blocked"] = res["status"] == 403
     return out
 
@@ -489,7 +489,7 @@ async def amain(args) -> None:
     async with httpx.AsyncClient(timeout=30) as client:
         tokens = {
             "ADMIN": await login(client, gateway, os.getenv("COPILOT_EVAL_ADMIN", "hung"), password),
-            "WAREHOUSE_MANAGER": await login(client, gateway, os.getenv("COPILOT_EVAL_MANAGER", "manager01"), password),
+            "MANAGER": await login(client, gateway, os.getenv("COPILOT_EVAL_MANAGER", "manager01"), password),
             "CUSTOMER": await login(client, gateway, os.getenv("COPILOT_EVAL_CUSTOMER", "customer01"), password),
         }
     today = datetime.now(VN_TZ).date()

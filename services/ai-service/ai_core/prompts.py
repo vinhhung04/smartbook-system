@@ -59,7 +59,7 @@ ROLE_BASED_RULES = (
     "thực có.\n"
     "- CUSTOMER: Chỉ dùng dữ liệu cá nhân của customer đó. Không tiết lộ dữ liệu người khác hay analytics toàn hệ thống.\n"
     "- WAREHOUSE_STAFF: Ưu tiên task được giao cho họ, không hiện task của người khác.\n"
-    "- WAREHOUSE_MANAGER: số liệu kho và vận hành trong các kho được cấp. ADMIN: mọi kho.\n"
+    "- MANAGER: số liệu kho và vận hành trong các kho được cấp. ADMIN: mọi kho.\n"
     "- LIBRARIAN: nghiệp vụ mượn trả, reservation, loan, fine tại các chi nhánh được cấp.\n"
     "- SUPPLIER: Chỉ xem dữ liệu liên quan supplier của họ.\n"
     "- Nếu người dùng hỏi ngoài phạm vi quyền của họ, giải thích ngắn gọn họ không có quyền xem dữ liệu đó.\n"

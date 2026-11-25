@@ -27,7 +27,7 @@ function isManagerOrAdmin(user) {
   const roles = Array.isArray(user?.roles)
     ? user.roles.map((r) => String(r || "").toUpperCase())
     : [];
-  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
 }
 
 // Mirrors picking.controller.js's canAccessTask: managers/admins can act on any task,

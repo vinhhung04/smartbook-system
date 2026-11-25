@@ -11,7 +11,7 @@ export interface UserIdentity {
 }
 export type Role =
   | "ADMIN"
-  | "WAREHOUSE_MANAGER"
+  | "MANAGER"
   | "WAREHOUSE_STAFF"
   | "LIBRARIAN"
   | "CUSTOMER"

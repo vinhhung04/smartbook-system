@@ -5,7 +5,7 @@ const ROLE_LABELS: Record<string, string> = {
   CUSTOMER: 'Bạn đọc',
   LIBRARIAN: 'Thủ thư',
   SUPPLIER: 'Nhà cung cấp',
-  WAREHOUSE_MANAGER: 'Quản lý kho',
+  MANAGER: 'Quản lý',
   WAREHOUSE_STAFF: 'Nhân viên kho',
 };
 

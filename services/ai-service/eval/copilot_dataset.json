@@ -2519,8 +2519,8 @@
   },
   {
    "id": "rbac-001",
-   "category": "access_control",
-   "role": "WAREHOUSE_MANAGER",
+   "category": "manager_borrow",
+   "role": "MANAGER",
    "turns": [
     {
      "q": "Có bao nhiêu phiếu quá hạn?",
@@ -2533,8 +2533,8 @@
   },
   {
    "id": "rbac-002",
-   "category": "access_control",
-   "role": "WAREHOUSE_MANAGER",
+   "category": "manager_borrow",
+   "role": "MANAGER",
    "turns": [
     {
      "q": "Xu hướng mượn tháng này",
@@ -2549,7 +2549,7 @@
   {
    "id": "rbac-003",
    "category": "access_control",
-   "role": "WAREHOUSE_MANAGER",
+   "role": "MANAGER",
    "turns": [
     {
      "q": "Kho nào rủi ro nhất?",

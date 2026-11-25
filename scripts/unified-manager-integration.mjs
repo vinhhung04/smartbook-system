@@ -1,5 +1,5 @@
 // Unified manager - integration checks against a running stack (docker compose up; demo seed).
-// A manager of warehouse AND library work is one account holding WAREHOUSE_MANAGER + LIBRARIAN;
+// A manager of warehouse AND library work is one account holding MANAGER + LIBRARIAN;
 // the warehouse/branch scope (user_warehouse_scopes) decides where. Calls the gateway like a client.
 //
 //   node scripts/unified-manager-integration.mjs     (DEMO_PASSWORD, GATEWAY_URL optional)
@@ -66,11 +66,11 @@ assert.ok(WH_HCM && BR_HCM && WH_HN && BR_HN, 'seeded warehouses WH-HCM-01, BR-H
 
 const stamp = `um-${Date.now()}`;
 const accounts = {
-  a: { roles: ['WAREHOUSE_MANAGER', 'LIBRARIAN'], scopes: [[WH_HCM, 'FULL'], [BR_HCM, 'FULL']] },
-  b: { roles: ['WAREHOUSE_MANAGER', 'LIBRARIAN'], scopes: [[WH_HN, 'FULL'], [BR_HN, 'FULL']] },
-  v: { roles: ['WAREHOUSE_MANAGER', 'LIBRARIAN'], scopes: [[WH_HCM, 'READ'], [BR_HCM, 'READ']] },
+  a: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HCM, 'FULL'], [BR_HCM, 'FULL']] },
+  b: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HN, 'FULL'], [BR_HN, 'FULL']] },
+  v: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HCM, 'READ'], [BR_HCM, 'READ']] },
   l: { roles: ['LIBRARIAN'], scopes: [[BR_HCM, 'OPERATOR']] },
-  w: { roles: ['WAREHOUSE_MANAGER'], scopes: [[WH_HCM, 'FULL']] },
+  w: { roles: ['MANAGER'], scopes: [[WH_HCM, 'FULL']] },
 };
 const userId = {};
 const token = {};
@@ -92,7 +92,7 @@ try {
   await check('1. one account holds both roles: its permissions are the union, borrow analytics included', async () => {
     const me = (await call(token.a, '/auth/me')).body;
     const user = me.user || me.data || me;
-    assert.deepEqual([...user.roles].sort(), ['LIBRARIAN', 'WAREHOUSE_MANAGER']);
+    assert.deepEqual([...user.roles].sort(), ['LIBRARIAN', 'MANAGER']);
     for (const p of ['inventory.stock.read', 'inventory.operation.decide', 'borrow.loans.read', 'borrow.loans.write',
       'analytics.reports.view', 'analytics.borrow.read']) assert.ok(user.permissions.includes(p), p);
   });
@@ -138,12 +138,15 @@ try {
     assert.ok([...a].every((x) => !b.has(x)), `shared warehouse rows: ${[...a].filter((x) => b.has(x))}`);
   });
 
-  await check('6. warehouse-only manager: inventory yes, library data no', async () => {
+  await check('6. manager with one role: inventory and library analytics yes (own scope), circulation desk no', async () => {
     assert.equal((await call(token.w, '/api/inventory')).status, 200);
-    for (const path of ['/borrow/loans?pageSize=5', '/analytics/overdue-summary', '/analytics/late-return-risk?limit=5',
+    for (const path of ['/analytics/overdue-summary', '/analytics/late-return-risk?limit=5',
       `/analytics/borrow-trends?from=2026-10-01&to=2026-10-31&granularity=day`]) {
-      assert.equal((await call(token.w, path)).status, 403, path);
+      const res = await call(token.w, path);
+      assert.equal(res.status, 200, path);
+      assert.equal(res.body?.meta?.data_scope, 'WAREHOUSE_SCOPED', path);
     }
+    assert.equal((await call(token.w, '/borrow/loans?pageSize=5')).status, 403);
   });
 
   await check('7. librarian only: own branch borrow analytics yes, warehouse inventory and borrow trends no', async () => {
@@ -167,13 +170,13 @@ try {
     assert.equal(task.status, 403, JSON.stringify(task.body));
   });
 
-  await check('9. removing the LIBRARIAN role ends the old token; the new one has no library access', async () => {
-    const res = await patch(hung, `/iam/users/${userId.a}`, { role_codes: ['WAREHOUSE_MANAGER'] });
+  await check('9. removing the LIBRARIAN role ends the old token; the new one keeps analytics, loses the desk', async () => {
+    const res = await patch(hung, `/iam/users/${userId.a}`, { role_codes: ['MANAGER'] });
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal((await call(token.a, '/analytics/overdue-summary')).status, 401);
     await new Promise((r) => setTimeout(r, 1100)); // tokens-valid-after has 1 s resolution
     token.a = await login(`${stamp}-a`, TEMP_PASSWORD);
-    assert.equal((await call(token.a, '/analytics/overdue-summary')).status, 403);
+    assert.equal((await call(token.a, '/analytics/overdue-summary')).status, 200);
     assert.equal((await call(token.a, '/borrow/loans?pageSize=5')).status, 403);
     assert.equal((await call(token.a, '/api/inventory')).status, 200);
   });

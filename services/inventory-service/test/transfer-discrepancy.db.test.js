@@ -15,7 +15,7 @@ test('SB12 PostgreSQL custody, approval and replay invariants', { skip: !url }, 
   const { updateGoodsReceipt } = require('../src/controllers/goods-receipt.controller');
   const { resolveDiscrepancy } = require('../src/controllers/transfer-discrepancy.controller');
   const { caseDetail, resolveTransferDiscrepancy } = require('../src/services/transfer-discrepancy.service');
-  const actor = { id: randomUUID(), is_superuser: true, roles: ['WAREHOUSE_MANAGER'] };
+  const actor = { id: randomUUID(), is_superuser: true, roles: ['MANAGER'] };
   const invoke = async (fn, id, body = {}, key = randomUUID()) => {
     for (let attempt = 0; attempt < 4; attempt++) {
       const res = { statusCode: 200, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };

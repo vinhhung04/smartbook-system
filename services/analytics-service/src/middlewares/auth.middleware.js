@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { revocationGuard } = require('@smartbook/shared/token-revocation');
+const { canonicalRoles } = require('@smartbook/shared/roles');
 const { checkTokenRevocation } = require('../lib/token-revocation');
 
 async function authenticateToken(req, res, next) {
@@ -25,7 +26,7 @@ async function authenticateToken(req, res, next) {
     ...payload,
     id: payload.id || payload.sub,
     permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
-    roles: Array.isArray(payload.roles) ? payload.roles : [],
+    roles: Array.isArray(payload.roles) ? canonicalRoles(payload.roles) : [],
   };
   return next();
 }

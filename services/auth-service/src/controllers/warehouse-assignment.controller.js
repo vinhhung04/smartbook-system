@@ -37,7 +37,7 @@ function sendError(res, error, label) {
  * PUT  /iam/users/:id/warehouse-scopes   { scopes: [{ warehouse_id, access_level }], primary_warehouse_id? }
  * GET  /iam/warehouses/:warehouseId/staff[?assignable=1]
  *
- * Admins (superuser / auth.users.write) manage everyone; a WAREHOUSE_MANAGER
+ * Admins (superuser / auth.users.write) manage everyone; a MANAGER
  * manages WAREHOUSE_STAFF in the warehouses where they hold WRITE-level scope
  * (rules in lib/warehouse-assignment.js). The caller's own scope is read from
  * the database in the same transaction, never from the token.
@@ -182,7 +182,7 @@ function createWarehouseAssignmentController({ prisma = defaultPrisma, directory
               changed: plan.changed,
               primary_before: target.primary_warehouse_id,
               primary_after: plan.primary_warehouse_id,
-              actor_mode: actor.isAdmin ? 'ADMIN' : 'WAREHOUSE_MANAGER',
+              actor_mode: actor.isAdmin ? 'ADMIN' : 'MANAGER',
             }),
             req.ip || null,
             req.headers['user-agent'] || null,

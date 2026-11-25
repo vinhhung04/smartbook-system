@@ -79,9 +79,9 @@ export interface SuggestionGroup {
   questions: string[];
 }
 
-/** Starter questions by what the role can actually read: a warehouse manager
- * has no borrow analytics (analytics.borrow.read), so loans/fines questions
- * would only come back as "không có quyền". Grouped by the management need. */
+/** Starter questions by what the account can actually read: without borrow
+ * analytics (analytics.borrow.read) loans/fines questions would only come back
+ * as "không có quyền". Grouped by the management need. */
 export function suggestionGroupsFor(user: AuthUser | null): SuggestionGroup[] {
   const readsBorrow = Boolean(user?.is_superuser) || hasAnyPermission(user, ['analytics.borrow.read']);
   const restock: SuggestionGroup = {

@@ -4,7 +4,7 @@ Ngày 25/11/2026, nhánh `hungg`. Commit chính: `ff09fd5`. Phần bổ sung tro
 
 ## 1. Kết luận
 
-- **Phân quyền.** Một Manager quản lý cả hai mảng là một tài khoản giữ hai role có sẵn, WAREHOUSE_MANAGER và LIBRARIAN. Không tạo role gộp. Phạm vi kho và chi nhánh vẫn lấy từ `user_warehouse_scopes`. LIBRARIAN được thêm `analytics.borrow.read`; mọi route analytics cần quyền này đều lọc theo chi nhánh.
+- **Phân quyền.** Một Manager quản lý cả hai mảng là một tài khoản giữ hai role có sẵn, MANAGER và LIBRARIAN. Không tạo role gộp. Phạm vi kho và chi nhánh vẫn lấy từ `user_warehouse_scopes`. LIBRARIAN được thêm `analytics.borrow.read`; mọi route analytics cần quyền này đều lọc theo chi nhánh.
 - **Lỗ hổng đã sửa.** `/analytics/late-return-risk` và `/analytics/reservation-no-show-risk` trả về tên bạn đọc của mọi chi nhánh. Hôm nay chỉ ADMIN có quyền gọi, nên chưa rò rỉ thật. Nhưng nếu cấp quyền cho một Manager có phạm vi giới hạn mà không sửa thì sẽ rò rỉ. Hai endpoint này giờ chỉ chấm điểm phiếu mượn và đặt chỗ thuộc chi nhánh của người gọi.
 - **Chatbot `/chat`.** Trung vị độ dài giảm 73% (477 → 131 ký tự). Độ đúng của câu trả lời tăng (0,879 → 0,909) và không còn từ chối nhầm.
 - **Trợ lý ra quyết định.** Thử thêm mức số từ theo từng loại câu hỏi (C6) thì độ bao phủ căn cứ giảm, nên đã bỏ. Độ dài câu trả lời của trợ lý giữ nguyên. Lỗi model chép lại nguyên văn câu trước khi người dùng hỏi "kỹ hơn" hoặc "dễ hiểu hơn" đã được sửa.

@@ -121,7 +121,7 @@ const profiles = {
   'staff-hn': { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
   'staff-hcm': { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
   'reader-hn': { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
-  'manager-hn': { status: 'ACTIVE', roles: ['WAREHOUSE_MANAGER'] },
+  'manager-hn': { status: 'ACTIVE', roles: ['MANAGER'] },
   'librarian-hn': { status: 'ACTIVE', roles: ['LIBRARIAN'] },
   'locked-hn': { status: 'LOCKED', roles: ['WAREHOUSE_STAFF'] },
 };
@@ -161,7 +161,7 @@ const { createInternalWarehousesRouter } = require('../src/routes/internal-wareh
 
 const STAFF_HN = { id: 'staff-hn', roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.task.read', 'inventory.task.progress'] };
 const READER_HN = { id: 'reader-hn', roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.task.read'] };
-const MANAGER_HN = { id: 'manager-hn', roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide'] };
+const MANAGER_HN = { id: 'manager-hn', roles: ['MANAGER'], permissions: ['inventory.operation.decide'] };
 const NOBODY = { id: 'nobody', roles: ['WAREHOUSE_STAFF'] };
 
 function res() {
@@ -392,11 +392,11 @@ Object.assign(scopes, {
   [STAFF_HCM_ID]: { read: [HCM], write: [HCM] },
 });
 Object.assign(profiles, {
-  [MGR_HCM_ID]: { status: 'ACTIVE', roles: ['WAREHOUSE_MANAGER'] },
+  [MGR_HCM_ID]: { status: 'ACTIVE', roles: ['MANAGER'] },
   [STAFF_HN_ID]: { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
   [STAFF_HCM_ID]: { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
 });
-const MANAGER_HCM = { id: MGR_HCM_ID, roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide'] };
+const MANAGER_HCM = { id: MGR_HCM_ID, roles: ['MANAGER'], permissions: ['inventory.operation.decide'] };
 
 test('G1 a packing task can only be handed to staff with WRITE scope in its warehouse', async () => {
   const { claimPackingTask } = require('../src/controllers/packing.controller');

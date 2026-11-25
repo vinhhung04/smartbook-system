@@ -18,6 +18,7 @@ const {
   securityHeaders,
 } = require("@smartbook/shared/runtime");
 const { getMeter } = require("@smartbook/shared/metrics");
+const { canonicalRoles } = require("@smartbook/shared/roles");
 
 const websocketConnectionsCounter = getMeter("api-gateway").createUpDownCounter("websocket_connections");
 
@@ -169,7 +170,7 @@ io.on("connection", async (socket) => {
   websocketConnectionsCounter.add(1);
   const user = socket.user;
   const userId = user.id;
-  const roles = Array.isArray(user.roles) ? user.roles : [];
+  const roles = Array.isArray(user.roles) ? canonicalRoles(user.roles) : [];
 
   // Always join personal room
   socket.join(`user:${userId}`);
@@ -192,7 +193,7 @@ io.on("connection", async (socket) => {
     joinedRooms.push("monitoring");
   }
 
-  if (roles.includes("WAREHOUSE_MANAGER")) {
+  if (roles.includes("MANAGER")) {
     socket.join("warehouse_manager");
     joinedRooms.push("warehouse_manager");
   }
@@ -387,7 +388,7 @@ function requireAdminToken(req, res, next) {
   } catch {
     return res.status(401).json({ message: "Invalid token", code: "UNAUTHORIZED" });
   }
-  const roles = Array.isArray(payload.roles) ? payload.roles.map((role) => String(role).toUpperCase()) : [];
+  const roles = Array.isArray(payload.roles) ? canonicalRoles(payload.roles.map((role) => String(role).toUpperCase())) : [];
   const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
   const allowed = payload.is_superuser === true
     || roles.includes("ADMIN")

@@ -130,7 +130,7 @@ function scopeParam(req) {
 }
 
 // Borrow-domain figures (loans, reservations, fines) need analytics.borrow.read,
-// like /overdue-summary: a WAREHOUSE_MANAGER does not hold it. A service-key
+// like /overdue-summary: a MANAGER does not hold it. A service-key
 // call (no req.user) and a superuser see them.
 function canReadBorrowAnalytics(req) {
   const user = req.user;

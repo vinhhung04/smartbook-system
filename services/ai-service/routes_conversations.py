@@ -67,7 +67,7 @@ def _masked_summary(row: MessageRow, notice: str) -> dict:
 
 NO_ACCESS_NOTICE = ("Tài khoản của bạn hiện không còn quyền dùng trợ lý phân tích, nên nội dung các câu trả lời trước đây "
                     "được ẩn. Bản ghi gốc vẫn được lưu.")
-ASSISTANT_ROLES = {"ADMIN", "WAREHOUSE_MANAGER"}
+ASSISTANT_ROLES = {"ADMIN", "MANAGER"}
 # Must equal ROUTE_ACCESS.aiAssistant in apps/web/src/lib/rbac.ts: who sees the
 # /ai-assistant page (and loses the floating chatbot) is exactly who may call it.
 ASSISTANT_PERMISSIONS = {"analytics.reports.view", "analytics.read", "reports.read"}

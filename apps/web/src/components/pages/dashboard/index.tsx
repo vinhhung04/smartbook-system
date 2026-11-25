@@ -172,7 +172,7 @@ export function DashboardPage() {
   const periodRef = useRef(period);
 
   const canViewAnalytics = hasAnyPermission(ANALYTICS_PERMISSIONS);
-  // Borrow-domain analytics need analytics.borrow.read (warehouse managers don't have it).
+  // Borrow-domain analytics need analytics.borrow.read (admin, manager, librarian; own scope).
   const canViewBorrowAnalytics = hasPermission('analytics.borrow.read');
   const currentUser = authService.getCurrentUser();
   const roles = (currentUser?.roles || []).map((role) => role.toUpperCase());

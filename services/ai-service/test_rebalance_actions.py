@@ -26,9 +26,9 @@ from agent_schemas import UserContext
 from db_models import Base
 
 HCM, HN, DN = "w-hcm", "w-hn", "w-dn"
-MANAGER = UserContext(user_id="u-m", username="m", roles=["WAREHOUSE_MANAGER"],
+MANAGER = UserContext(user_id="u-m", username="m", roles=["MANAGER"],
                       permissions=["inventory.operation.decide", "inventory.purchase.request", "analytics.read"])
-OTHER = UserContext(user_id="u-x", username="x", roles=["WAREHOUSE_MANAGER"],
+OTHER = UserContext(user_id="u-x", username="x", roles=["MANAGER"],
                     permissions=["inventory.operation.decide", "inventory.purchase.request"])
 
 

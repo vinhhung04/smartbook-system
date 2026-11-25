@@ -5,7 +5,7 @@
 //   node scripts/demo/rebalancing-demo.mjs validate  check the plan the real backend computes from it
 //
 // What it creates (every row is marked DEMO-REB so reset removes exactly that):
-// - account `rebalance.manager` (WAREHOUSE_MANAGER) with WH-HCM-01 FULL, WH-HN-01 READ,
+// - account `rebalance.manager` (MANAGER) with WH-HCM-01 FULL, WH-HN-01 READ,
 //   WH-DN-01 FULL; its password hash is copied from the existing demo manager, so it
 //   signs in with the same demo password as the other e2e users (DEMO_PASSWORD);
 // - a shelf location DEMO-REB-<WH> in each of the three warehouses with stock of six
@@ -104,8 +104,8 @@ function seed() {
   reset();
   const wh = warehouses();
   // account + scopes (idempotent)
-  const role = psql(DB.auth, "SELECT id FROM roles WHERE code = 'WAREHOUSE_MANAGER'")[0]?.[0];
-  if (!role) throw new Error("role WAREHOUSE_MANAGER missing: run pnpm demo:seed first");
+  const role = psql(DB.auth, "SELECT id FROM roles WHERE code = 'MANAGER'")[0]?.[0];
+  if (!role) throw new Error("role MANAGER missing: run pnpm demo:seed first");
   psql(DB.auth, `
     INSERT INTO users (username, email, password_hash, full_name, status, primary_warehouse_id, updated_at, email_verified_at)
     SELECT ${lit(USERNAME)}, 'rebalance.manager@smartbook.test', password_hash, 'Demo Rebalance Manager', 'ACTIVE',

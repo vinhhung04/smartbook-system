@@ -17,8 +17,9 @@ const readAnalytics = authorizeAnyPermission([
 
 // Separate gate for routes that expose borrow-domain business data (some with direct
 // customer PII: overdue-summary and late-return-risk return customer_name per record).
-// WAREHOUSE_MANAGER intentionally has no borrow.* access (see auth-service/prisma/seed.js)
-// and previously fell through to the broad `readAnalytics` set above for these too.
+// Held by ADMIN, LIBRARIAN and MANAGER (auth-service/prisma/seed.js); every route
+// behind it is limited to the caller's warehouse/branch scope. A manager still has no borrow.*
+// desk access - these are the analytics, read-only.
 const readBorrowAnalytics = authorizeAnyPermission(['analytics.borrow.read']);
 
 // Allows the inventory-service periodic job to call this read-only endpoint

@@ -152,7 +152,7 @@ function sanitizeUser(user) {
 
 // Maps legacy role codes to canonical codes for JWT backward compatibility.
 const LEGACY_ROLE_MAP = {
-  MANAGER: 'WAREHOUSE_MANAGER',
+  MANAGER: 'MANAGER',
   STAFF: 'WAREHOUSE_STAFF',
   WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF',
   CUSTOMER_SERVICE: 'LIBRARIAN',
@@ -391,7 +391,7 @@ async function listWarehouseStaff(req, res) {
   try {
     const roles = normalizeRoles(Array.isArray(req.auth?.roles) ? req.auth.roles.map((role) => String(role).toUpperCase()) : []);
     const isAdmin = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN');
-    const canManageAssignments = isAdmin || roles.includes('WAREHOUSE_MANAGER');
+    const canManageAssignments = isAdmin || roles.includes('MANAGER');
 
     if (!canManageAssignments) {
       return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });

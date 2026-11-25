@@ -9,7 +9,7 @@ const HCM = '11111111-1111-4111-8111-111111111111';
 const HN = '22222222-2222-4222-8222-222222222222';
 const DN = '33333333-3333-4333-8333-333333333333';
 const ACTIVE = [{ id: HCM, code: 'WH-HCM-01' }, { id: HN, code: 'WH-HN-01' }, { id: DN, code: 'WH-DN-01' }];
-const MANAGER = actionCapabilities({ roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide', 'inventory.purchase.request'] });
+const MANAGER = actionCapabilities({ roles: ['MANAGER'], permissions: ['inventory.operation.decide', 'inventory.purchase.request'] });
 const FULL3 = accessibleWarehouses(ACTIVE, { all: false, read: new Set([HCM, HN, DN]), write: new Set([HCM, HN, DN]) });
 const DEMO = accessibleWarehouses(ACTIVE, { all: false, read: new Set([HCM, HN, DN]), write: new Set([HCM, DN]) }); // HN READ
 

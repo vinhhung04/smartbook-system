@@ -68,7 +68,7 @@ const docs = require('../src/services/procurement-document.service');
 const controller = require('../src/controllers/procurement-document.controller');
 
 const supplierUser = (sup) => ({ id: sup === SUP_A ? 'user-sup-a' : 'user-sup-b', roles: ['SUPPLIER'], permissions: ['supplier.portal.read', 'supplier.portal.write'], email: sup === SUP_A ? 'a@supplier.test' : 'b@supplier.test' });
-const managerUser = { id: MANAGER, roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.purchase.read', 'inventory.purchase.write', 'inventory.purchase.approve'] };
+const managerUser = { id: MANAGER, roles: ['MANAGER'], permissions: ['inventory.purchase.read', 'inventory.purchase.write', 'inventory.purchase.approve'] };
 const staffUser = { id: STAFF, roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.task.read', 'inventory.task.progress'] };
 const otherStaffUser = { id: OTHER_STAFF, roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.task.read', 'inventory.task.progress'] };
 

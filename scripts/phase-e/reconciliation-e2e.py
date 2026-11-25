@@ -6,7 +6,7 @@ is produced by stopping inventory-service while the confirmed action runs.
     python scripts/phase-e/reconciliation-e2e.py --password <demo password>
 
 Needs: the docker compose stack up (gateway on :3000), docker CLI on PATH,
-demo users manager01 (WAREHOUSE_MANAGER), hung (ADMIN), librarian01,
+demo users manager01 (MANAGER), hung (ADMIN), librarian01,
 customer01. Prints PASS/FAIL per step and exits non-zero on any FAIL.
 """
 from __future__ import annotations

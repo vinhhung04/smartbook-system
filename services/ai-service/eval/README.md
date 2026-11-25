@@ -310,7 +310,7 @@ Grades what the copilot SAYS (section 4 grades which tools it picks).
 causal, decision, what-if, incomplete simulations (no budget; a budget larger
 than the need with rows outside the 100-line listing), multi-turn
 re-explanation ("giải thích kỹ hơn", "nói ngắn gọn", "dễ hiểu hơn", "vì sao
-không chọn phương án khác"), no permission (WAREHOUSE_MANAGER on borrow data),
+không chọn phương án khác"), no permission (MANAGER on borrow data),
 missing data (a book that does not exist) and ambiguous questions.
 
 Reference answers are not hard-coded numbers: each turn names `GOLD`

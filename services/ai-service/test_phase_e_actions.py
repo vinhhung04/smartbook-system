@@ -33,9 +33,9 @@ from agent_executor import ActionOutcomeUnknown, reservation_route
 from agent_schemas import CancelActionRequest, ConfirmActionRequest, UserContext
 from db_models import ActionAuditLogRow, Base
 
-OWNER = UserContext(user_id="u-owner", roles=["WAREHOUSE_MANAGER"],
+OWNER = UserContext(user_id="u-owner", roles=["MANAGER"],
                     permissions=["inventory.operation.decide", "inventory.purchase.request"])
-OTHER = UserContext(user_id="u-other", roles=["WAREHOUSE_MANAGER"], permissions=["inventory.operation.decide"])
+OTHER = UserContext(user_id="u-other", roles=["MANAGER"], permissions=["inventory.operation.decide"])
 ADMIN = UserContext(user_id="u-admin", roles=["ADMIN"], permissions=[])
 LIBRARIAN = UserContext(user_id="u-lib", roles=["LIBRARIAN"], permissions=["borrow.write"])
 CUSTOMER = UserContext(user_id="u-cust", roles=["CUSTOMER"], permissions=["customer.self.write"])

@@ -133,11 +133,11 @@ async function loadStaff(url, warehouses, fallbackIds) {
         SELECT u.id::text, u.primary_warehouse_id::text AS warehouse_id, r.code AS role
           FROM users u JOIN user_roles ur ON ur.user_id = u.id JOIN roles r ON r.id = ur.role_id
          WHERE u.deleted_at IS NULL AND u.status = 'ACTIVE'
-           AND r.code IN ('WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER', 'LIBRARIAN', 'ADMIN')
+           AND r.code IN ('WAREHOUSE_STAFF', 'MANAGER', 'LIBRARIAN', 'ADMIN')
            AND u.username !~* '(e2e|debug|test|admin_user_|tmp)'
          ORDER BY u.username, r.code`);
       for (const r of rows) {
-        const bucket = r.role === 'WAREHOUSE_MANAGER' || r.role === 'ADMIN' ? 'managers' : 'staff';
+        const bucket = r.role === 'MANAGER' || r.role === 'ADMIN' ? 'managers' : 'staff';
         if (!global[bucket].includes(r.id)) global[bucket].push(r.id);
         if (r.warehouse_id && byWarehouse.has(r.warehouse_id)) byWarehouse.get(r.warehouse_id)[bucket].push(r.id);
       }

@@ -25,11 +25,11 @@ from test_copilot_endpoints import FakeProvider, _request
 from test_copilot_visualization import COMPARE, NOW, WAREHOUSES, FakeStoreWithData
 
 HN, HCM = "w-hn", "w-hcm"
-MANAGER = UserContext(user_id="11111111-1111-4111-8111-111111111111", username="m", roles=["WAREHOUSE_MANAGER"],
+MANAGER = UserContext(user_id="11111111-1111-4111-8111-111111111111", username="m", roles=["MANAGER"],
                       permissions=["analytics.read", "inventory.purchase.request"], is_superuser=False)
 NO_ASSISTANT = UserContext(user_id=MANAGER.user_id, username="m", roles=["WAREHOUSE_STAFF"], permissions=["inventory.task.read"],
                            is_superuser=False)
-OTHER = UserContext(user_id="22222222-2222-4222-8222-222222222222", username="o", roles=["WAREHOUSE_MANAGER"],
+OTHER = UserContext(user_id="22222222-2222-4222-8222-222222222222", username="o", roles=["MANAGER"],
                     permissions=["analytics.read"], is_superuser=False)
 ADMIN = UserContext(user_id="admin-1", username="a", roles=["ADMIN"], permissions=[], is_superuser=True)
 COMPARE_IDS = {**COMPARE, "ranking": [{**COMPARE["ranking"][0], "warehouse_id": HCM},
@@ -80,16 +80,16 @@ class AuthenticationFailsClosedTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unverifiable_revocation_is_carried_to_the_context(self):
         # Phase 5: auth-service answers GET /auth/me while Redis is down but marks it
-        body = {"user": {"id": "u", "status": "ACTIVE", "roles": ["WAREHOUSE_MANAGER"]}}
+        body = {"user": {"id": "u", "status": "ACTIVE", "roles": ["MANAGER"]}}
         ctx = await self._ctx(lambda r: httpx.Response(200, json=body, headers={"X-Token-Revocation-Check": "unverified"}))
         self.assertFalse(ctx.revocation_verified)
         ctx = await self._ctx(lambda r: httpx.Response(200, json=body))
         self.assertTrue(ctx.revocation_verified)
 
     async def test_roles_come_from_the_live_auth_answer(self):
-        body = {"user": {"id": "u", "status": "ACTIVE", "roles": ["WAREHOUSE_MANAGER"], "permissions": ["analytics.read"]}}
+        body = {"user": {"id": "u", "status": "ACTIVE", "roles": ["MANAGER"], "permissions": ["analytics.read"]}}
         ctx = await self._ctx(lambda r: httpx.Response(200, json=body))
-        self.assertEqual((ctx.roles, ctx.is_superuser), (["WAREHOUSE_MANAGER"], False))
+        self.assertEqual((ctx.roles, ctx.is_superuser), (["MANAGER"], False))
 
     async def test_a_revoked_user_reaches_no_tool(self):
         tool = AsyncMock(return_value={"ranking": []})
@@ -246,7 +246,7 @@ class StoredDataReauthorisationTests(unittest.IsolatedAsyncioTestCase):
 
 def _action(payload, *, type_="CREATE_REORDER_DRAFT", owner=MANAGER.user_id):
     return PendingAction(id="a1", type=type_, status="PENDING_CONFIRMATION", summary="s", payload=payload, risk="MEDIUM",
-                         requires_confirmation=True, allowed_roles=["WAREHOUSE_MANAGER", "ADMIN"], allowed_permissions=[],
+                         requires_confirmation=True, allowed_roles=["MANAGER", "ADMIN"], allowed_permissions=[],
                          created_from_message="m", created_at="2026-10-16T00:00:00", expires_at="2099-01-01T00:00:00",
                          created_by_user_id=owner)
 

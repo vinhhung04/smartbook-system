@@ -271,7 +271,7 @@ function canViewAllReceivingTasks(user = {}) {
   const roles = Array.isArray(user.roles)
     ? user.roles.map((role) => String(role).toUpperCase())
     : [];
-  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
 }
 
 function canManageReceiving(user = {}) {

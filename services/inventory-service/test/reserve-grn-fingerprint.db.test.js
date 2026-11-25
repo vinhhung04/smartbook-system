@@ -16,7 +16,7 @@ test('PRA20: reserve and delivery receipt retries bind normalized actor/resource
   require('../src/utils/warehouse-scope.utils').setWarehouseScopeResolver({ canWrite: async () => true });
   const { reserveFromBorrow, releaseBorrowReservation } = require('../src/controllers/borrow-integration.controller');
   const { createGoodsReceiptFromInvoice } = require('../src/controllers/supplier-delivery.controller');
-  const actor = { id: randomUUID(), is_superuser: true, roles: ['WAREHOUSE_MANAGER'] };
+  const actor = { id: randomUUID(), is_superuser: true, roles: ['MANAGER'] };
   // Exact claims of inventory-integration.service.js:createServiceAuthHeader.
   // Controller tests receive this only after authenticateToken has verified it.
   const borrowService = { id: '00000000-0000-0000-0000-000000000001', sub: '00000000-0000-0000-0000-000000000001',

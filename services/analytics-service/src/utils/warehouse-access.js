@@ -6,12 +6,12 @@
 // whether the analysis may read it and whether an action there is something the
 // user can execute now or only propose. The rules mirror what inventory-service
 // enforces on the write, so nothing is offered that the target would refuse:
-//   POST /api/order-requests/transfer  WAREHOUSE_MANAGER|ADMIN + inventory.operation.decide,
+//   POST /api/order-requests/transfer  MANAGER|ADMIN + inventory.operation.decide,
 //                                      WRITE on the source, READ on the destination
 //   POST /api/purchase-requests        inventory.purchase.request, WRITE on the warehouse
 // A warehouse id named by a client is a claim to check, never a grant.
 
-const TRANSFER_ROLES = ['WAREHOUSE_MANAGER', 'ADMIN'];
+const TRANSFER_ROLES = ['MANAGER', 'ADMIN'];
 const TRANSFER_PERMISSION = 'inventory.operation.decide';
 const PURCHASE_PERMISSION = 'inventory.purchase.request';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

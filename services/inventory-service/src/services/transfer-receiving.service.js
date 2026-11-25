@@ -144,7 +144,7 @@ function getTaskPermissionScope(user = {}) {
     canManageAssignment:
       Boolean(user.is_superuser) ||
       roles.includes("ADMIN") ||
-      roles.includes("WAREHOUSE_MANAGER"),
+      roles.includes("MANAGER"),
   };
 }
 

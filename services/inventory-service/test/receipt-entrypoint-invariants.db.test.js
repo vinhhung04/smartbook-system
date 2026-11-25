@@ -21,7 +21,7 @@ test('PRA02/03: receipt entrypoints preserve delivery uniqueness and transfer cu
   const { createGoodsReceipt, updateGoodsReceipt } = require('../src/controllers/goods-receipt.controller');
   const { createGoodsReceiptFromInvoice } = require('../src/controllers/supplier-delivery.controller');
   const { confirmTransferReceiving } = require('../src/controllers/transfer-receiving.controller');
-  const actor = { id: randomUUID(), is_superuser: true, roles: ['WAREHOUSE_MANAGER'] };
+  const actor = { id: randomUUID(), is_superuser: true, roles: ['MANAGER'] };
   async function invoke(fn, id, body = {}, key = randomUUID()) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(value) { this.body = value; return this; } };

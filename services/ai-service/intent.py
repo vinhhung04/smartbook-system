@@ -79,6 +79,8 @@ _POLICY_CUES = [
     "bac si", "vang hoang", "thuong de", "chua cap nhat", "co nhung", "ra sao", "kieu gi", "bi sao",
     "nhung gi", "nhung buoc", "mot luc", "ngay nao", "may gio", "dia chi", "may lop", "nghia vu", "ai duyet",
     "cho ai", "hang thanh vien", "thanh vien moi", "menh gia", "goi thanh vien", "dang ky", "co can",
+    # a fee amount is a rule: "Phí phạt trả sách muộn là bao nhiêu?", "Trả muộn 1 ngày mất bao nhiêu?"
+    "phi phat", "phi tre han", "phi lam the", "phi thanh vien", "moi ngay", "mot ngay", " 1 ngay",
 ]
 # "có ... không" (yes/no about a rule or a service), kept short so it stays one clause
 _YES_NO = re.compile(r"\bco\b[^?.!]{1,60}\bkhong\b")
@@ -98,6 +100,8 @@ _DATA_CUES = [
     "dang thieu", "ton lau", "ton kho lau", "liet ke", "khach hang qua han",
     # "Tôi có những việc gì cần làm?" asks for the user's own work, not a procedure
     "viec can lam", "viec gi can lam", "nhung viec gi", "viec can xu ly", "nhiem vu cua toi",
+    # money owed or collected is current data, not the fee rule
+    "chua thu", "da thu", "phai thu", "chua thanh toan",
 ]
 
 

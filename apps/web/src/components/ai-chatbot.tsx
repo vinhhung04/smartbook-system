@@ -115,7 +115,7 @@ function getRoleSuggestions(user: AuthUser | null): string[] {
         'Tôi có phiếu putaway nào được giao?',
         'Báo cáo ngoại lệ của tôi.',
       ];
-    case 'WAREHOUSE_MANAGER':
+    case 'MANAGER':
     case 'ADMIN':
       return [
         'Tổng quan vận hành hôm nay.',

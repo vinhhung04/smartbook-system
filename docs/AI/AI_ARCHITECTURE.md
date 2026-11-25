@@ -6,7 +6,7 @@ SmartBook có **hai trải nghiệm AI** chạy trong **một service** (`ai-ser
 
 | | General AI Chatbot | AI Decision Assistant |
 |---|---|---|
-| Người dùng | Bạn đọc (cổng `/customer`), thủ thư, nhân viên kho (chatbot nổi) | ADMIN, WAREHOUSE_MANAGER có quyền analytics (trang `/ai-assistant`) |
+| Người dùng | Bạn đọc (cổng `/customer`), thủ thư, nhân viên kho (chatbot nổi) | ADMIN, MANAGER có quyền analytics (trang `/ai-assistant`) |
 | Endpoint | `POST /chat`, `POST /chat/stream` | `POST /assistant`, `POST /assistant/stream` |
 | Cổng truy cập | Mọi người dùng đã đăng nhập (và khách ẩn danh: chỉ FAQ/danh mục) | `can_use_assistant`: role quản lý **và** quyền analytics (giống `canAccess` của web) |
 | Điều phối | NLU → dữ liệu cá nhân → truy xuất (RAG FAQ hoặc API nghiệp vụ) → **một** lần gọi LLM (stream token) → grounding số → lớp đề xuất hành động | Planner → tool đọc song song (vòng lặp tool tối đa 4 vòng) → giải thích/biểu đồ → kiểm chứng (grounding, faithfulness, claim) → sửa/thử lại một lần → đề xuất hành động nếu `safe_to_act` |

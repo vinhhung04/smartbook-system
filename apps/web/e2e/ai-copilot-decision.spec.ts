@@ -44,7 +44,7 @@ const PENDING = {
   id: 'act-e2e-1', type: 'CREATE_REORDER_DRAFT', status: 'PENDING_CONFIRMATION', summary: 'Phiếu đề xuất nhập nháp (2 đầu sách)',
   payload: { items: [{ book_variant_id: 'v1', title: 'Dac trung tam ly hoc cua nguoi Viet', suggested_quantity: 130, priority: 'HIGH' }],
              warehouse_resolution_status: 'RESOLVED', warehouse_id: 'w1', warehouse_name: 'Kho HCM Chinh' },
-  risk: 'MEDIUM', requires_confirmation: true, allowed_roles: ['WAREHOUSE_MANAGER', 'ADMIN'], sources: [], warnings: [],
+  risk: 'MEDIUM', requires_confirmation: true, allowed_roles: ['MANAGER', 'ADMIN'], sources: [], warnings: [],
 };
 
 function payload(answerText: string, extra: object) {

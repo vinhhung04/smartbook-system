@@ -370,7 +370,7 @@ AI Service hỗ trợ tự động hóa nhập liệu và ra quyết định:
 - 📚 **Nhập sách từ ảnh** (`POST /book-metadata/scan-images`, trang `/ai-import`): 1–3 ảnh có nhãn (bìa trước, bìa sau, trang bản quyền) trong một lần gọi; kiểm tra checksum ISBN, phát hiện mâu thuẫn giữa các ảnh, so sánh nghiêm ngặt giữ dấu tiếng Việt; ISBN đọc được đi qua tra cứu ở trên rồi đối soát từng trường. Trường người dùng đã sửa không bao giờ bị ghi đè, bản ghi khác ấn bản không bao giờ tự áp dụng. Chỉ đọc, cần quyền quản lý + `inventory.catalog.write`. Đánh giá: `docs/ANALYSIS/BOOK_OCR_IMPORT.md`, `BOOK_OCR_EVALUATION.md`.
 - Gợi ý mô tả/tóm tắt sách, chat/agent hỗ trợ nghiệp vụ (nhận diện ý định, gợi ý kho/hàng cần nhập).
 - `llm_provider.py` **đã bỏ hẳn Anthropic, Groq và Ollama** — OpenRouter (Qwen) là provider duy nhất cho `/chat`, `/assistant`, NLU và vision/OCR, qua `get_openrouter_provider()`.
-- 🧭 **AI Copilot cho quản lý** (`POST /ai/assistant`, bản stream `POST /ai/assistant/stream`; trang `/ai-assistant` cho ADMIN/WAREHOUSE_MANAGER):
+- 🧭 **AI Copilot cho quản lý** (`POST /ai/assistant`, bản stream `POST /ai/assistant/stream`; trang `/ai-assistant` cho ADMIN/MANAGER):
   - **Lập kế hoạch truy vấn bằng code** (`copilot_plan.py`, không dùng LLM): chuẩn hóa tiếng Việt (không dấu, viết tắt, sửa lỗi gõ), kỳ theo lịch Việt Nam và kỳ so sánh, kho khớp với danh sách thật, câu hỏi nối tiếp ("trong số đó", "kho kia") và hỏi lại khi mơ hồ. Chỉ gọi công cụ đọc trong danh sách cho phép (`copilot_tools.py`), phép tính làm trong code.
   - **Biểu đồ, thẻ KPI, bảng** (`copilot_visualization.py`): spec do backend dựng từ dữ liệu công cụ, LLM không tự vẽ; frontend kiểm tra lại từng spec trước khi vẽ.
   - **Giải thích** (`copilot_explain.py`): nhận định chia FACT / INFERENCE / ASSUMPTION / UNKNOWN kèm bằng chứng, panel "Vì sao AI đưa ra nhận định này?".
@@ -420,7 +420,7 @@ Analytics Service là module dành cho báo cáo vận hành:
 - Phục vụ dashboard staff/manager/admin qua API Gateway prefix `/analytics`.
 - Là nơi duy nhất gom dữ liệu chéo domain cho báo cáo; các service nghiệp vụ khác không query chéo database.
 - Không dùng fake data hoặc số liệu hardcode ở frontend.
-- Phân quyền theo domain: các báo cáo phía thư viện (xu hướng mượn, quá hạn, phạt, reservation — có thể chứa thông tin khách hàng) cần quyền `analytics.borrow.read`, mặc định chỉ ADMIN có; WAREHOUSE_MANAGER bị từ chối (403).
+- Phân quyền theo domain: các báo cáo phía thư viện (xu hướng mượn, quá hạn, phạt, reservation — có thể chứa thông tin khách hàng) cần quyền `analytics.borrow.read`, mặc định chỉ ADMIN có; MANAGER bị từ chối (403).
 - Dashboard hiển thị xu hướng dạng đường có điền 0 cho ngày trống, tách reservation **đang mở** khỏi **kết quả tích lũy**, top sách dạng danh sách xếp hạng và phí phạt chia theo số tiền/lý do.
 
 Các endpoint chính:

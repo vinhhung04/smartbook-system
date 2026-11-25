@@ -4,7 +4,7 @@ from seqauto import SeqDiagram
 
 OUT = pathlib.Path(sys.argv[1])
 XS6 = [92, 220, 348, 484, 596, 708]
-QL = ("Q", "Quản lý kho", "WAREHOUSE_MANAGER", "input")
+QL = ("Q", "Quản lý kho", "MANAGER", "input")
 W = ("W", "Web App", "React · apps/web")
 G = ("G", "API Gateway", "api-gateway")
 AI = ("AI", "AI Service", "FastAPI")
@@ -103,7 +103,7 @@ SeqDiagram(f"{S}-dd-p1", [QM, WC, G, AI, ADB, ("OR", "OpenRouter", "Qwen", "exte
     ("msg", "Q", "W", "1. Đặt câu hỏi tiếng Việt", "call"),
     ("msg", "W", "G", "2. POST\n`/ai/assistant/stream (JWT)`", "link"),
     ("msg", "G", "AI", "3. Chuyển tiếp kèm JWT", "link"),
-    ("frame", "break", "[Vai trò không thuộc ADMIN, WAREHOUSE_MANAGER]"),
+    ("frame", "break", "[Vai trò không thuộc ADMIN, MANAGER]"),
     ("msg", "AI", "W", "4. 403", "return"),
     ("end",),
     ("msg", "AI", "DB", "5. Đọc lịch sử và trạng thái hội thoại (copilot_state)", "call"),

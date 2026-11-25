@@ -44,7 +44,7 @@
 | Role | Trải nghiệm (`experience`) | Nơi dùng | Đọc được | Không được |
 |---|---|---|---|---|
 | ADMIN | decision_assistant | trang `/ai-assistant` (+ ảnh) | toàn bộ theo quyền; đối chiếu action | vượt phê duyệt hiện có |
-| WAREHOUSE_MANAGER | decision_assistant | `/ai-assistant` (+ ảnh) | kho trong phạm vi, KPI, đề xuất nhập | dữ liệu mượn trả (không có quyền borrow) |
+| MANAGER | decision_assistant | `/ai-assistant` (+ ảnh) | kho trong phạm vi, KPI, đề xuất nhập | dữ liệu mượn trả (không có quyền borrow) |
 | WAREHOUSE_STAFF | warehouse_work | chatbot nổi (+ ảnh) | nhiệm vụ, picking, putaway, ngoại lệ | Decision Assistant, báo cáo quản lý |
 | LIBRARIAN | library_operations | chatbot nổi (+ ảnh) | phiếu mượn, đặt trước, phạt | báo cáo kho nội bộ |
 | CUSTOMER | reader | chatbot cổng độc giả (+ ảnh), app mobile (quét bìa) | dữ liệu của chính mình, tồn công khai | dữ liệu người khác, analytics |

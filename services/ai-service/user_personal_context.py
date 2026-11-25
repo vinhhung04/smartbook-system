@@ -13,14 +13,14 @@ _TIMEOUT = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "8"))
 
 # Legacy role codes mapped to their canonical replacements (backward compat).
 _LEGACY_ROLE_MAP: dict[str, str] = {
-    "MANAGER": "WAREHOUSE_MANAGER",
+    "MANAGER": "MANAGER",
     "STAFF": "WAREHOUSE_STAFF",
     "WAREHOUSE_OPERATOR": "WAREHOUSE_STAFF",
     "CUSTOMER_SERVICE": "LIBRARIAN",
 }
 
 _ROLE_PRIORITY = [
-    "ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN",
+    "ADMIN", "MANAGER", "LIBRARIAN",
     "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER",
 ]
 
@@ -38,7 +38,7 @@ _ROLE_PERSONAS: dict[str, str] = {
         "Bạn đang hỗ trợ nhân viên kho {name}. "
         "Ưu tiên các task picking/putaway/receiving được giao cho họ."
     ),
-    "WAREHOUSE_MANAGER": (
+    "MANAGER": (
         "Bạn đang hỗ trợ quản lý kho {name}. "
         "Có thể xem tổng quan vận hành, tồn kho, task nhân viên và báo cáo."
     ),

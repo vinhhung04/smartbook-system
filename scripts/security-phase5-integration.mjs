@@ -6,8 +6,8 @@
 //   node scripts/security-phase5-integration.mjs --redis    also stops Redis for ~70 s (docker) to check
 //                                                          the revocation fallback, then starts it again
 //
-// Users (demo seed): hung = superuser; manager01 = WAREHOUSE_MANAGER with FULL scope on
-// WH-HCM-01, BR-HCM-01, WH-HN-01 but NOT BR-HCM-02; curator01 = WAREHOUSE_MANAGER with READ
+// Users (demo seed): hung = superuser; manager01 = MANAGER with FULL scope on
+// WH-HCM-01, BR-HCM-01, WH-HN-01 but NOT BR-HCM-02; curator01 = MANAGER with READ
 // on WH-HCM-01 only. Fixtures are created by hung in BR-HCM-02, tagged PHASE5-TEST, and
 // closed again at the end. Every refused write is shaped so that, had the guard failed, it
 // would hit a validation error instead of changing data.

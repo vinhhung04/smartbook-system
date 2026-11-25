@@ -628,7 +628,7 @@ function canManageFullCatalog(user = {}) {
     : [];
   const permissions = Array.isArray(user.permissions) ? user.permissions : [];
   return (
-    (roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER')) &&
+    (roles.includes('ADMIN') || roles.includes('MANAGER')) &&
     permissions.includes('inventory.catalog.write')
   );
 }

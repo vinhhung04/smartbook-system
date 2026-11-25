@@ -93,7 +93,7 @@ async function main() {
   if (!createRole?.id) fail('Could not choose role for create test', { roles });
   const updateRole = chooseRole(
     roles,
-    ['LIBRARIAN', 'WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF', 'CUSTOMER'],
+    ['LIBRARIAN', 'MANAGER', 'WAREHOUSE_STAFF', 'CUSTOMER'],
     new Set([createRole.id])
   );
   if (!updateRole?.id) fail('Could not choose different role for update test', { roles, createRole });

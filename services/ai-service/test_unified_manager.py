@@ -1,10 +1,11 @@
-"""A manager of both warehouse and library work = one account holding
-WAREHOUSE_MANAGER + LIBRARIAN (no merged role). Permissions are the union of
-the two roles as auth-service issues them (services/auth-service/prisma/seed.js);
-LIBRARIAN carries analytics.borrow.read since the unified-manager change.
+"""Manager and library analytics. Since 2026-11-25 MANAGER and
+LIBRARIAN both carry analytics.borrow.read (services/auth-service/prisma/seed.js),
+so one manager role reads the library's analytics, read-only. The circulation
+desk (borrow.*: loan lists, reservations for customers) stays with LIBRARIAN;
+an account holding both roles gets the union.
 
-The AI must open both domains to that account and keep each one closed to an
-account holding only the other role. Warehouse/branch scope is enforced by the
+The AI must open each side only through the permission or role that grants it.
+Warehouse/branch scope is enforced by the
 target services with the caller's token (test_warehouse_scope,
 test_copilot_security); these tests cover the AI-side gates.
 """
@@ -21,16 +22,17 @@ from ai_core import capabilities
 from copilot_response import _can_read_borrow
 from routes_conversations import can_use_assistant
 
-WM_PERMS = ["analytics.reports.view", "analytics.reports.export", "analytics.forecast.view", "reports.read",
-            "inventory.stock.read", "inventory.operation.decide", "inventory.purchase.request",
+WM_PERMS = ["analytics.reports.view", "analytics.reports.export", "analytics.forecast.view", "analytics.borrow.read",
+            "reports.read", "inventory.stock.read", "inventory.operation.decide", "inventory.purchase.request",
             "inventory.transfer.write", "inventory.catalog.read"]
+NO_BORROW_ANALYTICS = [p for p in WM_PERMS if p != "analytics.borrow.read"]
 LIB_PERMS = ["inventory.catalog.read", "borrow.read", "borrow.write", "borrow.customers.read", "borrow.customers.write",
              "borrow.loans.read", "borrow.loans.write", "borrow.fines.manage", "borrow.payments.process",
              "analytics.borrow.read"]
 
-WAREHOUSE_ONLY = UserContext(user_id="wm", roles=["WAREHOUSE_MANAGER"], permissions=WM_PERMS)
+WAREHOUSE_ONLY = UserContext(user_id="wm", roles=["MANAGER"], permissions=WM_PERMS)
 LIBRARY_ONLY = UserContext(user_id="lib", roles=["LIBRARIAN"], permissions=LIB_PERMS)
-UNIFIED = UserContext(user_id="um", roles=["LIBRARIAN", "WAREHOUSE_MANAGER"],
+UNIFIED = UserContext(user_id="um", roles=["LIBRARIAN", "MANAGER"],
                       permissions=sorted(set(WM_PERMS) | set(LIB_PERMS)))
 
 
@@ -48,11 +50,17 @@ class UnifiedManagerAccessTests(unittest.TestCase):
         self.assertTrue({"decision.assistant", "ops.overview", "library.circulation"} <= held)
         self.assertEqual(capabilities.experience(UNIFIED), "decision_assistant")
 
-    def test_each_single_role_keeps_only_its_own_domain(self):
-        # warehouse manager: assistant yes, borrow analytics no
+    def test_manager_reads_library_analytics_without_the_librarian_role(self):
+        # 2026-11-25: one manager role, read-only library analytics - not the circulation desk
         self.assertTrue(can_use_assistant(WAREHOUSE_ONLY))
-        self.assertFalse(_can_read_borrow(WAREHOUSE_ONLY))
+        self.assertTrue(_can_read_borrow(WAREHOUSE_ONLY))
         self.assertNotIn("library.circulation", {c.id for c in capabilities.allowed(WAREHOUSE_ONLY)})
+        self.assertFalse(can_confirm_action(WAREHOUSE_ONLY, _action(CREATE_RESERVATION_DRAFT)))
+        # the permission, not the role, opens borrow analytics
+        no_borrow = UserContext(user_id="wm2", roles=["MANAGER"], permissions=NO_BORROW_ANALYTICS)
+        self.assertFalse(_can_read_borrow(no_borrow))
+
+    def test_librarian_keeps_only_the_library_side(self):
         # librarian: borrow data yes, the warehouse decision assistant no
         self.assertFalse(can_use_assistant(LIBRARY_ONLY))
         self.assertTrue(_can_read_borrow(LIBRARY_ONLY))
@@ -75,9 +83,10 @@ class UnifiedManagerAccessTests(unittest.TestCase):
         self.assertFalse(can_confirm_action(WAREHOUSE_ONLY, _action(CREATE_RESERVATION_DRAFT)))
         self.assertFalse(can_confirm_action(LIBRARY_ONLY, _action(CREATE_STOCK_ALERT)))
 
-    def test_losing_the_librarian_role_closes_the_library_side(self):
-        revoked = UserContext(**{**UNIFIED.model_dump(), "roles": ["WAREHOUSE_MANAGER"], "permissions": WM_PERMS})
-        self.assertFalse(_can_read_borrow(revoked))
+    def test_losing_the_librarian_role_closes_the_desk_not_the_analytics(self):
+        revoked = UserContext(**{**UNIFIED.model_dump(), "roles": ["MANAGER"], "permissions": WM_PERMS})
+        self.assertTrue(_can_read_borrow(revoked))
+        self.assertNotIn("library.circulation", {c.id for c in capabilities.allowed(revoked)})
         self.assertFalse(can_confirm_action(revoked, _action(CREATE_RESERVATION_DRAFT)))
         self.assertTrue(can_use_assistant(revoked))
 
@@ -97,7 +106,7 @@ class UnifiedManagerCacheTests(unittest.IsolatedAsyncioTestCase):
                             main._assistant_cache_key("c1", "Kho nào thiếu sách?", b))
 
     async def test_a_role_change_changes_the_cache_partition(self):
-        revoked = UserContext(**{**UNIFIED.model_dump(), "roles": ["WAREHOUSE_MANAGER"], "permissions": WM_PERMS})
+        revoked = UserContext(**{**UNIFIED.model_dump(), "roles": ["MANAGER"], "permissions": WM_PERMS})
         with patch("warehouse_scope.readable_warehouses", new=AsyncMock(return_value=frozenset({"wh-a"}))):
             self.assertNotEqual(await main._access_fingerprint(UNIFIED), await main._access_fingerprint(revoked))
 

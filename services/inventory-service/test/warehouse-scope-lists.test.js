@@ -101,11 +101,11 @@ const pr = require('../src/controllers/purchase-request.controller');
 const { listPackingTasks, getPackingTaskDetail } = require('../src/controllers/packing.controller');
 const { listTransferReceivingQueue } = require('../src/controllers/transfer-receiving.controller');
 
-const MANAGER = { id: 'manager-hn', roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.stock.read'] };
-const READER = { id: 'reader-hn', roles: ['WAREHOUSE_MANAGER'], permissions: [] };
-const NOBODY = { id: 'nobody', roles: ['WAREHOUSE_MANAGER'], permissions: [] };
+const MANAGER = { id: 'manager-hn', roles: ['MANAGER'], permissions: ['inventory.stock.read'] };
+const READER = { id: 'reader-hn', roles: ['MANAGER'], permissions: [] };
+const NOBODY = { id: 'nobody', roles: ['MANAGER'], permissions: [] };
 const ADMIN = { id: 'admin', is_superuser: true, roles: ['ADMIN'] };
-const DOWN = { id: 'auth-down', roles: ['WAREHOUSE_MANAGER'] };
+const DOWN = { id: 'auth-down', roles: ['MANAGER'] };
 
 function res() {
   return { statusCode: 200, body: undefined, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };

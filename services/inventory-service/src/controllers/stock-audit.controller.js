@@ -28,7 +28,7 @@ function createMovementNumber(baseTimestamp, index) {
 
 function isManager(req) {
   const roles = Array.isArray(req.user?.roles) ? req.user.roles.map((r) => String(r).toUpperCase()) : [];
-  return Boolean(req.user?.is_superuser) || roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER');
+  return Boolean(req.user?.is_superuser) || roles.includes('ADMIN') || roles.includes('MANAGER');
 }
 
 function canEditLines(req, audit) {

@@ -20,7 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 GW = os.getenv("SMARTBOOK_GATEWAY", "http://localhost:3000")
 PASSWORD = "123456"
-USERS = {"ADMIN": "hung", "WAREHOUSE_MANAGER": "manager01", "WAREHOUSE_STAFF": "staff01", "LIBRARIAN": "librarian01",
+USERS = {"ADMIN": "hung", "MANAGER": "manager01", "WAREHOUSE_STAFF": "staff01", "LIBRARIAN": "librarian01",
          "CUSTOMER": "customer01", "SUPPLIER": "supplier-sv"}
 OUT = os.path.join(os.path.dirname(__file__), "reports", "phase_f_e2e.json")
 results: list[dict] = []
@@ -59,7 +59,7 @@ def main() -> None:
     H = {role: {"Authorization": f"Bearer {t}"} for role, t in tokens.items()}
 
     # ── F1: capabilities per role ──────────────────────────────────────────
-    expect = {"ADMIN": "decision_assistant", "WAREHOUSE_MANAGER": "decision_assistant",
+    expect = {"ADMIN": "decision_assistant", "MANAGER": "decision_assistant",
               "WAREHOUSE_STAFF": "warehouse_work", "LIBRARIAN": "library_operations", "CUSTOMER": "reader",
               "SUPPLIER": "supplier"}
     caps = {}
@@ -146,11 +146,11 @@ def main() -> None:
         check(f"vision:{role}:identify", r.status_code == 200 and (r.json().get("candidates") or [{}])[0].get("book_id")
               == str(book["id"]), r.status_code)
         time.sleep(1)
-    r = identify("WAREHOUSE_MANAGER")
+    r = identify("MANAGER")
     maid = r.json().get("attachment_id") if r.status_code == 200 else None
-    check("vision:WAREHOUSE_MANAGER:identify", r.status_code == 200, r.status_code)
+    check("vision:MANAGER:identify", r.status_code == 200, r.status_code)
     if maid:
-        r = c.post("/ai/assistant", headers=H["WAREHOUSE_MANAGER"],
+        r = c.post("/ai/assistant", headers=H["MANAGER"],
                    json={"message": "Sách này có được mượn nhiều không, tồn kho thế nào?", "attachment_id": maid,
                          "image_turn": True})
         body = r.json() if r.status_code == 200 else {}

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 // picking.controller.js does `new PrismaClient()` at module scope, so a fake
 // @prisma/client is registered in require.cache (node --test isolates each file).
-const MANAGER = { id: '11111111-1111-4111-8111-111111111111', roles: ['WAREHOUSE_MANAGER'] };
+const MANAGER = { id: '11111111-1111-4111-8111-111111111111', roles: ['MANAGER'] };
 const ORDER_ID = '22222222-2222-4222-8222-222222222222';
 
 function createFakeRes() {

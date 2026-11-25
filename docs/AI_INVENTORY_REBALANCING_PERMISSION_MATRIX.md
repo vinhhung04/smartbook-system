@@ -18,7 +18,7 @@ Fail-closed: user không ACTIVE / không tồn tại → không kho nào; auth-s
 | Hành động | Quyền chức năng | Quyền kho | Ai kiểm tra |
 |---|---|---|---|
 | Xem phân tích rebalancing | `analytics.read` (hoặc nhóm analytics) | READ ở mọi kho được phân tích | analytics (route + SQL lọc theo kho) |
-| Tạo yêu cầu điều chuyển | WAREHOUSE_MANAGER/ADMIN + `inventory.operation.decide` | **WRITE kho nguồn**, READ kho đích | analytics (nhãn), ai-service executor (fresh), inventory (middleware) |
+| Tạo yêu cầu điều chuyển | MANAGER/ADMIN + `inventory.operation.decide` | **WRITE kho nguồn**, READ kho đích | analytics (nhãn), ai-service executor (fresh), inventory (middleware) |
 | Tạo phiếu yêu cầu nhập | `inventory.purchase.request` | WRITE kho nhận | như trên |
 | Duyệt / từ chối điều chuyển | `inventory.operation.decide` hoặc `inventory.purchase.approve` | WRITE kho nguồn (fresh) | inventory — **AI không làm** |
 | Lấy hàng, xuất kho | task progress | WRITE kho nguồn | inventory — **AI không làm** |

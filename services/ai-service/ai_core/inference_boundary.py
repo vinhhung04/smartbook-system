@@ -45,7 +45,7 @@ async def authorize(request: Request, path: str):
     elif path in WAREHOUSE_PATHS:
         roles = {str(role).upper() for role in user.roles}
         permissions = set(user.permissions)
-        if not (policy.is_admin(user) or (roles & {"WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"} and
+        if not (policy.is_admin(user) or (roles & {"MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"} and
                 permissions & {"inventory.stock.write", "inventory.task.progress", "inventory.operation.decide"})):
             raise HTTPException(403, "Không có quyền sử dụng AI kho.")
     elif path in {"/find-book-by-cover", "/vision/identify"}:

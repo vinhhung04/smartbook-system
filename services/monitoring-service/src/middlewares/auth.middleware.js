@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const jwt = require('jsonwebtoken');
 const { revocationGuard } = require('@smartbook/shared/token-revocation');
+const { canonicalRoles } = require('@smartbook/shared/roles');
 const { checkTokenRevocation } = require('../lib/token-revocation');
 
 // Monitoring is an administrator capability. ADMIN keeps access even on a
@@ -26,7 +27,7 @@ async function authenticateToken(req, res, next) {
   req.user = {
     id: String(payload.sub || payload.id || ''),
     name: payload.username || payload.email || null,
-    roles: Array.isArray(payload.roles) ? payload.roles.map(role => String(role).toUpperCase()) : [],
+    roles: Array.isArray(payload.roles) ? canonicalRoles(payload.roles.map(role => String(role).toUpperCase())) : [],
     permissions: Array.isArray(payload.permissions) ? payload.permissions : [],
     isSuperuser: payload.is_superuser === true || payload.is_superuser === 'true',
   };

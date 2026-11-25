@@ -29,10 +29,10 @@ from dataclasses import dataclass, field
 from agent_actions import ACTION_CONFIG, normalize_role, policy_allows
 
 # Display order only (persona, greeting). Never an authorization input.
-ROLE_ORDER = ["ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER"]
-ROLE_LABELS = {"ADMIN": "Quản trị viên", "WAREHOUSE_MANAGER": "Quản lý kho", "LIBRARIAN": "Thủ thư",
+ROLE_ORDER = ["ADMIN", "MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER"]
+ROLE_LABELS = {"ADMIN": "Quản trị viên", "MANAGER": "Quản lý", "LIBRARIAN": "Thủ thư",
                "WAREHOUSE_STAFF": "Nhân viên kho", "SUPPLIER": "Nhà cung cấp", "CUSTOMER": "Độc giả"}
-INTERNAL_ROLES = ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"]
+INTERNAL_ROLES = ["ADMIN", "MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"]
 ANALYTICS_PERMS = ["analytics.reports.view", "analytics.read", "reports.read"]
 CATALOG_PERMS = ["inventory.catalog.read", "inventory.catalog.write"]
 _BORROW_READ = ["borrow.read", "borrow.loans.read", "borrow.customers.read", "borrow.write", "borrow.loans.write"]
@@ -87,7 +87,7 @@ CAPABILITIES: tuple[Capability, ...] = (
                "MEDIUM", True, actions=("CREATE_RESERVATION_DRAFT",)),
     # ── warehouse staff ───────────────────────────────────────────────────
     Capability("warehouse.my_tasks", "Nhiệm vụ kho được giao cho tôi",
-               [{"roles": ["WAREHOUSE_STAFF", "WAREHOUSE_MANAGER", "ADMIN"], "permissions": ["inventory.task.read"]}],
+               [{"roles": ["WAREHOUSE_STAFF", "MANAGER", "ADMIN"], "permissions": ["inventory.task.read"]}],
                "self", "LOW", True, endpoints=("/api/my-warehouse-tasks",),
                starters=("Hôm nay tôi có nhiệm vụ kho nào?",)),
     Capability("warehouse.picking", "Lấy hàng (picking) được giao",
@@ -116,7 +116,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("analytics.chat", "Số liệu nghiệp vụ theo quyền của bạn",
                [{"roles": INTERNAL_ROLES, "permissions": []}], "warehouse_scope", "MEDIUM"),
     Capability("ops.overview", "Tổng quan vận hành và rủi ro tồn kho",
-               [{"roles": ["WAREHOUSE_MANAGER", "ADMIN"], "permissions": ANALYTICS_PERMS}], "warehouse_scope",
+               [{"roles": ["MANAGER", "ADMIN"], "permissions": ANALYTICS_PERMS}], "warehouse_scope",
                "MEDIUM", endpoints=("/analytics/dashboard/kpis", "/analytics/warehouse-stock-risk"),
                starters=("Tổng quan vận hành hôm nay.", "Sách nào tồn kho thấp?")),
     Capability("ops.decide", "Cảnh báo tồn kho, giao việc cho nhân viên (cần xác nhận)",
@@ -126,7 +126,7 @@ CAPABILITIES: tuple[Capability, ...] = (
                "warehouse_scope", actions=("CREATE_REPORT_DRAFT",)),
     # ── Decision Assistant (same gate as routes_conversations.can_use_assistant) ─
     Capability("decision.assistant", "Trợ lý ra quyết định: phân tích, so sánh, mô phỏng ngân sách",
-               [{"roles": ["ADMIN", "WAREHOUSE_MANAGER"], "permissions": ANALYTICS_PERMS}], "warehouse_scope",
+               [{"roles": ["ADMIN", "MANAGER"], "permissions": ANALYTICS_PERMS}], "warehouse_scope",
                "MEDIUM", tools=("*",),
                starters=("Kho nào đang có rủi ro thiếu sách cao nhất?",
                          "Sách nào được mượn nhiều nhưng tồn kho thấp?",

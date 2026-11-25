@@ -20,7 +20,7 @@ const router = express.Router();
 const canReadCatalog = authorizeAnyPermission(['inventory.catalog.read', 'inventory.catalog.write']);
 const canWriteCatalog = authorizeManagerDecision(['inventory.catalog.write']);
 const canCreateIncompleteFromReceiving = authorizeTaskProgress(['inventory.task.progress']);
-const canUpdateCatalogDetails = authorizeAnyRole(['ADMIN', 'WAREHOUSE_MANAGER', 'LIBRARIAN']);
+const canUpdateCatalogDetails = authorizeAnyRole(['ADMIN', 'MANAGER', 'LIBRARIAN']);
 
 router.get('/', canReadCatalog, getAllBooks);
 router.get('/barcode/:barcode', canReadCatalog, findBookByBarcode);

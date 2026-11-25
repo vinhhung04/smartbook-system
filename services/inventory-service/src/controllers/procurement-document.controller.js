@@ -7,7 +7,7 @@ const { sendMail } = require("../lib/email-sender");
 const { openReadStream } = require("../services/procurement-document-storage.service");
 const docs = require("../services/procurement-document.service");
 
-const MANAGER_ROLES = new Set(["ADMIN", "WAREHOUSE_MANAGER", "MANAGER"]);
+const MANAGER_ROLES = new Set(["ADMIN", "MANAGER", "MANAGER"]);
 
 function httpError(message, statusCode) {
   const error = new Error(message);

@@ -29,7 +29,7 @@ import type { PurchaseOrderPrefill } from './purchase-order-form';
 export function ReorderSuggestionsPage() {
   const navigate = useNavigate();
   const canCreatePo = canAccess(authService.getCurrentUser(), ROUTE_ACCESS.purchaseWrite);
-  // Borrow-domain risk models are gated by analytics.borrow.read; roles without it (e.g. warehouse manager) get 403.
+  // Borrow-domain risk models are gated by analytics.borrow.read; accounts without it get 403.
   const canViewBorrowRisk = hasPermission('analytics.borrow.read');
   const [searchParams] = useSearchParams();
   // /dashboard's AI risk block links straight to a risk tab with ?tab=.

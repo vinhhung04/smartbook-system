@@ -129,9 +129,9 @@ export function BookDetailPage() {
   });
   const currentUser = authService.getCurrentUser();
   const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("WAREHOUSE_MANAGER");
+  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
   const canCompleteIncompleteBook = currentUserRoles.includes("LIBRARIAN");
-  const canCreateReceivingDraft = currentUserRoles.some((role) => ["WAREHOUSE_STAFF", "WAREHOUSE_MANAGER", "ADMIN"].includes(role));
+  const canCreateReceivingDraft = currentUserRoles.some((role) => ["WAREHOUSE_STAFF", "MANAGER", "ADMIN"].includes(role));
   const canEditBook = Boolean(book && (canManageCatalog || (canCompleteIncompleteBook && book.is_incomplete)));
   // AI import (managers) completes this very book: its duplicate check matches the code
   const canUseAiImport = canAccess(currentUser, ROUTE_ACCESS.managerStockDecision);

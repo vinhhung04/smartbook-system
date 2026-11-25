@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { revocationGuard } = require('@smartbook/shared/token-revocation');
+const { canonicalRoles } = require('@smartbook/shared/roles');
 // Redis unreachable = revocation UNKNOWN, not "not revoked": reads continue,
 // writes get 503 (packages/shared/runtime/token-revocation.cjs). Shared with
 // lib/token-revocation.js so this service's own logouts are known first-hand.
@@ -35,7 +36,7 @@ async function authenticateToken(req, res, next) {
     if (revocationGuard(req, res, revocationResult, { allowWhenUnknown: isLogout })) return undefined;
     req.revocationState = revocationResult.state;
 
-    req.auth = payload;
+    req.auth = { ...payload, roles: canonicalRoles(payload.roles) };
     return next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });

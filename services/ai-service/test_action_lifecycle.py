@@ -31,10 +31,10 @@ from agent_executor import ActionOutcomeUnknown
 from agent_schemas import ConfirmActionRequest, UserContext
 from db_models import ActionAuditLogRow, Base, PendingActionRow
 
-# permissions as the auth seed grants them to WAREHOUSE_MANAGER / CUSTOMER
-OWNER = UserContext(user_id="u-owner", roles=["WAREHOUSE_MANAGER"],
+# permissions as the auth seed grants them to MANAGER / CUSTOMER
+OWNER = UserContext(user_id="u-owner", roles=["MANAGER"],
                     permissions=["inventory.operation.decide", "inventory.purchase.request"])
-OTHER = UserContext(user_id="u-other", roles=["WAREHOUSE_MANAGER"], permissions=["inventory.operation.decide"])
+OTHER = UserContext(user_id="u-other", roles=["MANAGER"], permissions=["inventory.operation.decide"])
 ADMIN = UserContext(user_id="u-admin", roles=["ADMIN"], permissions=[])
 CUSTOMER = UserContext(user_id="u-cust", roles=["CUSTOMER"], permissions=["customer.self.write"])
 TOKENS = {"Bearer owner": OWNER, "Bearer other": OTHER, "Bearer admin": ADMIN, "Bearer cust": CUSTOMER}
