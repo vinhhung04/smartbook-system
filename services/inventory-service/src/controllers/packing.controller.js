@@ -15,7 +15,8 @@ const {
   isTaskFullyVerified,
   markPackingTaskCompleted,
 } = require("../services/packing.service");
-const { toStorageRef } = require("../services/packing-video-storage.service");
+const fs = require("fs");
+const { toStorageRef, resolveVideoPath } = require("../services/packing-video-storage.service");
 const { verifyPackingPhoto } = require("../services/packing-evidence-ai.service");
 const { pushEvent } = require("../lib/socket-emitter");
 
@@ -475,6 +476,10 @@ async function uploadPackingVideoEvidence(req, res) {
     return res.status(400).json({ message: "Thiếu tệp video" });
   }
 
+  // recording start sent by the client; captured_at (upload time) is the session end
+  const startedAt = req.body?.started_at ? new Date(req.body.started_at) : null;
+  const validStart = startedAt && !Number.isNaN(startedAt.getTime()) && startedAt.getTime() <= Date.now() ? startedAt.toISOString() : null;
+
   try {
     const evidence = await prisma.packing_camera_evidence.create({
       data: {
@@ -486,6 +491,7 @@ async function uploadPackingVideoEvidence(req, res) {
           original_name: req.file.originalname,
           size: req.file.size,
           mimetype: req.file.mimetype,
+          started_at: validStart,
         },
       },
     });
@@ -512,7 +518,7 @@ async function completePackingTask(req, res) {
     const result = await prisma.$transaction(async (tx) => {
       const task = await tx.packing_tasks.findUnique({
         where: { id: taskId },
-        include: { packing_task_items: true },
+        include: { packing_task_items: true, outbound_orders: { select: { id: true, outbound_number: true, status: true } } },
       });
       if (!task) {
         return { invalid: true, statusCode: 404, message: "Không tìm thấy công việc đóng gói" };
@@ -520,8 +526,12 @@ async function completePackingTask(req, res) {
       if (!canAccessTask(req.user || {}, task.assigned_packer_id)) {
         return { invalid: true, statusCode: 403, message: "Bạn không có quyền thực hiện thao tác này" };
       }
+      // A retried/double-clicked complete is a success, not an error — nothing is written twice.
       if (task.status === "COMPLETED") {
-        return { invalid: true, statusCode: 400, message: "Công việc đã hoàn thành" };
+        return { invalid: false, task, alreadyCompleted: true };
+      }
+      if (task.status === "CANCELLED") {
+        return { invalid: true, statusCode: 409, message: "Công việc đóng gói đã bị hủy" };
       }
       if (!isTaskFullyVerified(task.packing_task_items)) {
         return {
@@ -576,15 +586,26 @@ async function completePackingTask(req, res) {
         actorUserId,
         rootOrderId: task.root_order_id,
       });
+      if (!updated) {
+        // lost the race to a concurrent complete call; roll back this call's override audit row
+        throw Object.assign(new Error("already completed"), { alreadyCompleted: true });
+      }
 
       return { invalid: false, task: updated };
+    }).catch(async (error) => {
+      if (!error.alreadyCompleted) throw error;
+      return {
+        invalid: false,
+        task: await prisma.packing_tasks.findUnique({ where: { id: taskId }, include: { outbound_orders: { select: { id: true, outbound_number: true, status: true } } } }),
+        alreadyCompleted: true,
+      };
     });
 
     if (result.invalid) {
       return res.status(result.statusCode || 400).json({ message: result.message, code: result.code });
     }
 
-    return res.json({ task: result.task });
+    return res.json({ task: result.task, already_completed: Boolean(result.alreadyCompleted) });
   } catch (error) {
     console.error("Error while completing packing task:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -657,6 +678,92 @@ async function getPackingTaskHistory(req, res) {
   }
 }
 
+/** Packing evidence is visible to managers/admins in the task's warehouse (route checks READ
+ *  scope), and to staff only for the task they packed or a session they recorded. */
+function canViewEvidence(user, task, evidence) {
+  if (canAccessTask(user, task.assigned_packer_id)) return true;
+  const me = parseId(user?.id);
+  return Boolean(me && evidence && evidence.captured_by_user_id === me);
+}
+
+async function listPackingEvidence(req, res) {
+  const taskId = parseId(req.params.taskId);
+  if (!taskId) return res.status(400).json({ message: "taskId không hợp lệ" });
+
+  try {
+    const task = await prisma.packing_tasks.findUnique({
+      where: { id: taskId },
+      include: {
+        outbound_orders: { select: { id: true, outbound_number: true, status: true } },
+        warehouses: { select: { id: true, code: true, name: true } },
+        packing_camera_evidence: { where: { evidence_type: "VIDEO" }, orderBy: { captured_at: "asc" } },
+      },
+    });
+    if (!task) return res.status(404).json({ message: "Không tìm thấy công việc đóng gói" });
+    const visible = task.packing_camera_evidence.filter((ev) => canViewEvidence(req.user || {}, task, ev));
+    if (task.packing_camera_evidence.length > 0 && visible.length === 0) {
+      return res.status(403).json({ message: "Bạn không có quyền xem bằng chứng của đơn này" });
+    }
+
+    const sessions = visible.map((ev) => {
+      const filePath = resolveVideoPath(ev.storage_ref);
+      return {
+        id: ev.id,
+        captured_by_user_id: ev.captured_by_user_id,
+        started_at: ev.metadata?.started_at || null,
+        ended_at: ev.captured_at,
+        size: ev.metadata?.size ?? null,
+        mimetype: ev.metadata?.mimetype || null,
+        // AVAILABLE: file on disk; MISSING: row exists but the file was lost/removed
+        storage_status: filePath && fs.existsSync(filePath) ? "AVAILABLE" : "MISSING",
+      };
+    });
+
+    return res.json({
+      task: {
+        id: task.id,
+        task_number: task.task_number,
+        status: task.status,
+        assigned_packer_id: task.assigned_packer_id,
+        completed_at: task.completed_at,
+        outbound_order: task.outbound_orders,
+        warehouse: task.warehouses,
+      },
+      sessions,
+    });
+  } catch (error) {
+    console.error("Error while listing packing evidence:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+async function streamPackingEvidenceVideo(req, res) {
+  const taskId = parseId(req.params.taskId);
+  const evidenceId = parseId(req.params.evidenceId);
+  if (!taskId || !evidenceId) return res.status(400).json({ message: "Mã không hợp lệ" });
+
+  try {
+    const evidence = await prisma.packing_camera_evidence.findFirst({
+      where: { id: evidenceId, packing_task_id: taskId, evidence_type: "VIDEO" },
+      include: { packing_tasks: { select: { assigned_packer_id: true } } },
+    });
+    if (!evidence) return res.status(404).json({ message: "Không tìm thấy video bằng chứng" });
+    if (!canViewEvidence(req.user || {}, evidence.packing_tasks, evidence)) {
+      return res.status(403).json({ message: "Bạn không có quyền xem video này" });
+    }
+    const filePath = resolveVideoPath(evidence.storage_ref);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(410).json({ message: "Tệp video không còn trên máy chủ", code: "PACKING_VIDEO_FILE_MISSING" });
+    }
+    res.set("Cache-Control", "private, no-store");
+    // sendFile answers Range requests, so the player can seek without downloading everything first
+    return res.sendFile(filePath, { headers: { "Content-Type": evidence.metadata?.mimetype || "video/webm" } });
+  } catch (error) {
+    console.error("Error while streaming packing evidence video:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   scanInvoice,
   listPackingTasks,
@@ -666,6 +773,8 @@ module.exports = {
   uploadPackingEvidence,
   attachTaskNumberForUpload,
   uploadPackingVideoEvidence,
+  listPackingEvidence,
+  streamPackingEvidenceVideo,
   completePackingTask,
   cancelPackingTask,
   getPackingTaskHistory,

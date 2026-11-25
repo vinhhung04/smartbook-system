@@ -345,7 +345,12 @@ export function StaffTasksPage() {
       }
       setLoadError(null);
     } catch (err) {
-      const message = getApiErrorMessage(err, "Không tải được danh sách task");
+      // no response / gateway 502-504 means inventory-service is down, not that the request was wrong
+      const status = (err as { isAxiosError?: boolean; response?: { status?: number } }).response?.status;
+      const unreachable = (err as { isAxiosError?: boolean }).isAxiosError && (!status || status >= 502);
+      const message = unreachable
+        ? "Dịch vụ kho không phản hồi. Kiểm tra dịch vụ đang chạy rồi bấm Thử lại."
+        : getApiErrorMessage(err, "Không tải được danh sách task");
       setLoadError(message);
       if (mode === "refresh") toast.error(message);
     } finally {
@@ -608,8 +613,8 @@ export function StaffTasksPage() {
       : []),
   ].filter(Boolean);
   const scopeText = `${statusFilter === "ALL" ? "" : ` ${STATUS_LABELS[statusFilter].toLowerCase()}`}${isManager && selectedWarehouse ? ` ở ${selectedWarehouse.code}` : ""}`;
-  const lede = loading
-    ? (isManager ? "Giao việc cho nhân viên kho, theo dõi tiến độ và giao lại khi cần." : "Việc quản lý giao cho bạn: bắt đầu khi nhận làm, đánh dấu hoàn thành khi xong.")
+  const lede = loading || (loadError && tasks.length === 0)
+    ?(isManager ? "Giao việc cho nhân viên kho, theo dõi tiến độ và giao lại khi cần." : "Việc quản lý giao cho bạn: bắt đầu khi nhận làm, đánh dấu hoàn thành khi xong.")
     : tasks.length === 0
       ? (isManager ? `Chưa có task${scopeText}. Bấm Giao việc để giao cho nhân viên kho.` : `Quản lý chưa giao task${scopeText} nào cho bạn.`)
       : `${isManager ? "" : "Bạn có "}${tasks.length} task${scopeText}${ledeParts.length ? `: ${ledeParts.join(", ")}` : ""}.`;
@@ -732,7 +737,7 @@ export function StaffTasksPage() {
                 {loading ? (
                   <RowsSkeleton rows={5} />
                 ) : loadError && tasks.length === 0 ? (
-                  <div className="p-4 sm:p-5"><BlockError what="danh sách task" onRetry={() => void load(statusFilter, "initial")} /></div>
+                  <div className="p-4 sm:p-5"><BlockError what="danh sách task" detail={loadError} onRetry={() => void load(statusFilter, "initial")} /></div>
                 ) : pagedTasks.length === 0 ? (
                   <div className="px-5 py-8">{emptyState}</div>
                 ) : (

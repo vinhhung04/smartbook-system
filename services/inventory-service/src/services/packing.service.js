@@ -137,9 +137,16 @@ function isTaskFullyVerified(items) {
  * Caller is responsible for having already verified isTaskFullyVerified(items).
  */
 async function markPackingTaskCompleted(tx, { taskId, actorUserId, rootOrderId }) {
-  const updated = await tx.packing_tasks.update({
-    where: { id: taskId },
+  // Conditional update: a concurrent complete call blocks on the row lock, then matches 0 rows,
+  // so the task is completed and audited exactly once. Returns null when it already was.
+  const { count } = await tx.packing_tasks.updateMany({
+    where: { id: taskId, status: { not: "COMPLETED" } },
     data: { status: "COMPLETED", completed_at: new Date() },
+  });
+  if (count === 0) return null;
+  const updated = await tx.packing_tasks.findUnique({
+    where: { id: taskId },
+    include: { outbound_orders: { select: { id: true, outbound_number: true, status: true } } },
   });
 
   await tx.inventory_audit_logs.create({

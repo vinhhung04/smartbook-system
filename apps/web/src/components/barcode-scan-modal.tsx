@@ -56,6 +56,8 @@ export function BarcodeScanModal({
       if (!normalized) return;
 
       await stopScanner();
+      // clear now: the modal stays mounted, and a leftover code would be prefixed to the next scan
+      setManualCode("");
       onDetected(normalized);
       onClose();
     },

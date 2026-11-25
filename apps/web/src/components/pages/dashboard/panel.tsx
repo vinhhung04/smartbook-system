@@ -56,11 +56,14 @@ export function PanelLink({ to, children }: { to: string; children: ReactNode })
 }
 
 /** A failed block keeps its frame; the rest of the dashboard stays usable. */
-export function BlockError({ what, onRetry, className }: { what: string; onRetry: () => void; className?: string }) {
+export function BlockError({ what, detail, onRetry, className }: { what: string; detail?: string | null; onRetry: () => void; className?: string }) {
   return (
-    <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed border-border px-4 py-3 text-[13px]', className)}>
+    <div role="alert" className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-dashed border-border px-4 py-3 text-[13px]', className)}>
       <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
-      <span className="min-w-0 flex-1 text-foreground">Không tải được {what}.</span>
+      <span className="min-w-0 flex-1 text-foreground">
+        Không tải được {what}.
+        {detail ? <span className="block text-muted-foreground">{detail}</span> : null}
+      </span>
       <button
         type="button"
         onClick={onRetry}
