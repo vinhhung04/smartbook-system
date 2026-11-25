@@ -61,7 +61,9 @@ function assertReserveReplay(movement, identity) {
 }
 function receiptIdentity(req, invoice) {
   const lines = new Map((invoice.supplier_delivery_invoice_items || []).map(line => [identifier(line.id), line]));
+  // unassigned only appears when requested, so fingerprints saved before the option existed still match
   return { version: 1, operation: 'delivery-receipt', actor_id: identifier(req.user?.id), invoice_id: identifier(invoice.id),
+    ...(req.body.unassigned === true ? { unassigned: true } : {}),
     warehouse_id: identifier(req.body.warehouse_id), note: text(req.body.note) || `Created from supplier invoice ${invoice.invoice_number}`,
     items: (Array.isArray(req.body.items) ? req.body.items : []).map(item => {
       const invoiceItemId = identifier(item.invoice_item_id), line = lines.get(invoiceItemId);

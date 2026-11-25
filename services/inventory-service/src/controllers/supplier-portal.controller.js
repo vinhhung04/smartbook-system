@@ -10,6 +10,14 @@ const {
   assertSupplierMayDeliver,
   SHORTAGE_PROPOSAL_ACTIONS,
 } = require("../services/purchase-order-response.service");
+const { isInvoiceFirst, poItemTitle, poItemCode } = require("../services/purchase-order-line.service");
+const {
+  FulfillmentError,
+  normalizeDeliveryAgainstInvoice,
+  loadInvoiceFulfillment,
+} = require("../services/invoice-fulfillment.service");
+
+const SIGN_IN_FOR_NEW_FLOW = "Đơn này theo quy trình mới (đề xuất giá, hóa đơn, phiếu giao theo hóa đơn). Vui lòng đăng nhập tài khoản nhà cung cấp để xử lý.";
 
 // Centralizing token lookup here means every portal endpoint (read + all writes) picks up
 // the expiry check below for free. A leaked/forwarded portal link stops working once
@@ -39,15 +47,20 @@ function mapPortalOrder(dispatch) {
       po_number: po.po_number,
       status: po.status,
       supplier_response_status: po.supplier_response_status || null,
+      procurement_flow: po.procurement_flow || "LEGACY",
       expected_date: po.expected_date,
       warehouse: po.warehouses,
       supplier: po.suppliers,
       items: po.purchase_order_items.map((item) => ({
         id: item.id,
         variant_id: item.variant_id,
-        title: item.book_variants?.books?.title || null,
+        title: poItemTitle(item),
         sku: item.book_variants?.sku || null,
         isbn13: item.book_variants?.isbn13 || null,
+        item_code: poItemCode(item),
+        item_author: item.item_author || null,
+        item_publish_year: item.item_publish_year ?? null,
+        requested_qty: item.requested_qty ?? Number(item.ordered_qty || 0),
         ordered_qty: Number(item.ordered_qty || 0),
         received_qty: Number(item.received_qty || 0),
         remaining_qty: Math.max(0, Number(item.ordered_qty || 0) - Number(item.received_qty || 0)),
@@ -58,6 +71,8 @@ function mapPortalOrder(dispatch) {
       id: invoice.id,
       invoice_number: invoice.invoice_number,
       delivery_number: invoice.delivery_number,
+      invoice_document_id: invoice.invoice_document_id || null,
+      tracking_number: invoice.tracking_number || null,
       status: invoice.status,
       invoice_date: invoice.invoice_date,
       expected_delivery_date: invoice.expected_delivery_date,
@@ -74,7 +89,7 @@ function mapPortalOrder(dispatch) {
         id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
         variant_id: item.variant_id,
-        title: item.book_variants?.books?.title || null,
+        title: poItemTitle(poItemsById.get(String(item.purchase_order_item_id))) || item.book_variants?.books?.title || null,
         sku: item.book_variants?.sku || null,
         isbn13: item.book_variants?.isbn13 || null,
         ordered_qty: Number(poItemsById.get(String(item.purchase_order_item_id))?.ordered_qty || 0),
@@ -266,7 +281,9 @@ async function getPortalOrder(req, res) {
   try {
     const dispatch = await findDispatchByToken(token);
     if (!dispatch) return res.status(404).json({ message: "Không tìm thấy đơn trên cổng nhà cung cấp" });
-    return res.json({ data: mapPortalOrder(dispatch) });
+    const order = mapPortalOrder(dispatch);
+    if (isInvoiceFirst(dispatch.purchase_orders)) order.account_required_message = SIGN_IN_FOR_NEW_FLOW;
+    return res.json({ data: order });
   } catch (error) {
     logSupplierFailure("Error while loading supplier portal order:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
@@ -287,6 +304,10 @@ async function confirmPortalOrder(req, res) {
       const po = dispatch.purchase_orders;
       if (po.status !== "SENT_TO_SUPPLIER") {
         return { invalid: true, message: "Nhà cung cấp chỉ xác nhận được đơn đặt hàng đã gửi" };
+      }
+      if (isInvoiceFirst(po)) {
+        // no price on the PO: acceptance must go through a priced proposal SmartBook reviews
+        return { invalid: true, statusCode: 409, message: "Đơn này cần đề xuất số lượng và đơn giá để SmartBook duyệt, không xác nhận một chạm được" };
       }
 
       await tx.supplier_order_dispatches.update({
@@ -337,6 +358,11 @@ async function createPortalInvoice(req, res) {
       });
       if (!dispatch) return { invalid: true, statusCode: 404, message: "Không tìm thấy đơn trên cổng nhà cung cấp" };
       const po = dispatch.purchase_orders;
+      const invoiceFirst = isInvoiceFirst(po);
+      if (invoiceFirst && !req.viaSupplierAccount) return { invalid: true, statusCode: 403, message: SIGN_IN_FOR_NEW_FLOW };
+      if (invoiceFirst && po.status === "SENT_TO_SUPPLIER") {
+        return { invalid: true, statusCode: 409, message: "SmartBook chưa duyệt đề xuất số lượng và đơn giá của đơn này" };
+      }
       if (!["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(po.status)) {
         return { invalid: true, message: "Đơn đặt hàng chưa sẵn sàng để lập hóa đơn nhà cung cấp" };
       }
@@ -404,9 +430,22 @@ async function createPortalInvoice(req, res) {
       }
 
       const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
-      const invoiceItems = [];
+      let invoiceItems = [];
+      let invoiceDocumentId = null;
+      if (invoiceFirst && !sourceShortageReportId) {
+        // ships against one approved invoice: lines, quantities and prices come from it
+        const checked = await normalizeDeliveryAgainstInvoice(tx, po, parseId(req.body?.invoice_document_id), items);
+        invoiceItems = checked.items;
+        invoiceDocumentId = checked.invoice.id;
+      } else if (invoiceFirst && sourceShortageReportId) {
+        // a redelivery re-ships what an earlier note of the same invoice lacked
+        const source = shortageReport.invoice_id
+          ? await tx.supplier_delivery_invoices.findUnique({ where: { id: shortageReport.invoice_id }, select: { invoice_document_id: true } })
+          : null;
+        invoiceDocumentId = source?.invoice_document_id || null;
+      }
       const seen = new Set();
-      for (const rawLine of items) {
+      for (const rawLine of invoiceFirst && !sourceShortageReportId ? [] : items) {
         const poItemId = parseId(rawLine?.purchase_order_item_id);
         const poItem = poItemsById.get(String(poItemId));
         const invoicedQty = toInt(rawLine?.invoiced_qty);
@@ -414,8 +453,8 @@ async function createPortalInvoice(req, res) {
         if (!poItem) return { invalid: true, message: "Dòng hóa đơn phải thuộc đơn đặt hàng này" };
         if (!invoicedQty || invoicedQty <= 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có invoiced_qty > 0" };
         if (!Number.isFinite(unitCost) || unitCost < 0) return { invalid: true, message: "Mỗi dòng hóa đơn phải có unit_cost >= 0" };
-        if (seen.has(poItem.variant_id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
-        seen.add(poItem.variant_id);
+        if (seen.has(poItem.id)) return { invalid: true, message: "Hóa đơn có ấn bản bị lặp" };
+        seen.add(poItem.id);
         if (poItem.closure_status === "CLOSED_WITH_REMAINING") {
           return { invalid: true, message: "Dòng đơn đặt hàng đã được đóng phần còn lại, không thể lập hóa đơn thêm" };
         }
@@ -458,6 +497,8 @@ async function createPortalInvoice(req, res) {
           expected_delivery_date: req.body?.expected_delivery_date ? new Date(req.body.expected_delivery_date) : null,
           carrier_name: normalizeText(req.body?.carrier_name),
           deliverer_name: normalizeText(req.body?.deliverer_name),
+          tracking_number: normalizeText(req.body?.tracking_number),
+          invoice_document_id: invoiceDocumentId,
           status: "SUBMITTED",
           supplier_note: normalizeText(req.body?.supplier_note),
           raw_payload: {
@@ -498,6 +539,7 @@ async function createPortalInvoice(req, res) {
     if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
     return res.status(201).json({ message: "Supplier invoice created", data: result.data });
   } catch (error) {
+    if (error instanceof FulfillmentError) return res.status(error.statusCode).json({ message: error.message });
     if (error.code === "P2002") return res.status(409).json({ message: "Số hóa đơn này đã tồn tại với nhà cung cấp" });
     logSupplierFailure("Error while creating supplier portal invoice:", error, req.requestId);
     return res.status(500).json({ message: "Internal server error" });
@@ -657,10 +699,17 @@ async function getSupplierAccountOrders(req, res) {
       orderBy: { created_at: "desc" },
     });
 
+    const orders = await Promise.all(dispatches.map(async (dispatch) => {
+      const order = mapPortalOrder(dispatch);
+      if (isInvoiceFirst(dispatch.purchase_orders)) {
+        order.invoice_fulfillment = await loadInvoiceFulfillment(prisma, dispatch.purchase_orders.id);
+      }
+      return order;
+    }));
     return res.json({
       data: {
         supplier: { id: supplier.id, code: supplier.code, name: supplier.name, email: supplier.email },
-        orders: dispatches.map(mapPortalOrder),
+        orders,
       },
     });
   } catch (error) {
@@ -682,6 +731,7 @@ async function createSupplierAccountInvoice(req, res) {
   try {
     const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
     req.params.token = token;
+    req.viaSupplierAccount = true;
     return createPortalInvoice(req, res);
   } catch (error) {
     return handleSupplierAccountError(res, error, "Error while creating supplier account invoice:");
@@ -754,7 +804,7 @@ async function respondSupplierAccountOrder(req, res) {
           responded_by_user_id: userId,
         },
       });
-      const confirmsNow = response.decision !== "REJECTED" && !response.has_variance;
+      const confirmsNow = response.decision !== "REJECTED" && response.review_status === "NOT_REQUIRED";
       await tx.purchase_orders.update({
         where: { id: po.id },
         data: {

@@ -35,7 +35,8 @@ function num(value) {
 }
 
 function isActiveInvoice(doc) {
-  return INVOICE_TYPES.has(doc.document_type) && doc.status === "ISSUED";
+  // an invoice SmartBook rejected (invoice-first flow) is not a claim on the order any more
+  return INVOICE_TYPES.has(doc.document_type) && doc.status === "ISSUED" && doc.approval_status !== "REJECTED";
 }
 
 function checkInvoiceHeader(doc) {

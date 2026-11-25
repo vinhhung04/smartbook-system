@@ -6,6 +6,10 @@ const { prisma } = require("../lib/prisma");
 const { parseId, toInt, normalizeText } = require("../utils/validation");
 const { computeLineOutcome, assertInvoiceQtyWithinRemaining, assertLineNotClosed } = require("../services/procurement-receipt.service");
 const { registerDeliveryNote } = require("../services/procurement-document.service");
+const { isInvoiceFirst } = require("../services/purchase-order-line.service");
+const { classifyBookCode } = require("../services/catalog-metadata.validation");
+const { buildManualSku, getOrCreateUncategorizedCategory, getOrCreateUncategorizedPublisher } = require("./book.controller");
+const { normalizeDeliveryAgainstInvoice } = require("../services/invoice-fulfillment.service");
 const {
   getReadableWarehouseIds,
   canWriteWarehouse,
@@ -40,6 +44,9 @@ function mapInvoice(invoice) {
     expected_delivery_date: invoice.expected_delivery_date,
     carrier_name: invoice.carrier_name || null,
     deliverer_name: invoice.deliverer_name || null,
+    tracking_number: invoice.tracking_number || null,
+    invoice_document_id: invoice.invoice_document_id || null,
+    procurement_flow: invoice.purchase_orders?.procurement_flow || "LEGACY",
     status: invoice.status,
     supplier_note: invoice.supplier_note,
     goods_receipts: (invoice.goods_receipts || []).map((receipt) => ({ id: receipt.id, receipt_number: receipt.receipt_number, status: receipt.status })),
@@ -52,9 +59,14 @@ function mapInvoice(invoice) {
         id: item.id,
         purchase_order_item_id: item.purchase_order_item_id,
         variant_id: item.variant_id,
-        title: item.book_variants?.books?.title || null,
+        title: item.purchase_order_items?.item_title || item.book_variants?.books?.title || null,
         sku: item.book_variants?.sku || null,
         isbn13: item.book_variants?.isbn13 || null,
+        // ordered snapshot, shown when linking a typed book to the catalog at receiving
+        item_code: item.purchase_order_items?.item_code || null,
+        item_author: item.purchase_order_items?.item_author || null,
+        item_publish_year: item.purchase_order_items?.item_publish_year ?? null,
+        linked_to_catalog: Boolean(item.variant_id),
         ordered_qty: orderedQty,
         previously_received_qty: receivedQty,
         remaining_qty: Math.max(0, orderedQty - receivedQty),
@@ -77,13 +89,16 @@ function invoiceInclude() {
         id: true,
         po_number: true,
         status: true,
+        procurement_flow: true,
         warehouse_id: true,
         warehouses: { select: { id: true, code: true, name: true } },
       },
     },
     supplier_delivery_invoice_items: {
       include: {
-        purchase_order_items: { select: { id: true, ordered_qty: true, received_qty: true } },
+        purchase_order_items: {
+          select: { id: true, ordered_qty: true, received_qty: true, item_title: true, item_code: true, item_author: true, item_publish_year: true },
+        },
         book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
       },
       orderBy: { id: "asc" },
@@ -179,10 +194,17 @@ async function createSupplierDelivery(req, res) {
       const freshPoItems = await tx.purchase_order_items.findMany({ where: { purchase_order_id: po.id } });
       const poItemsById = new Map(freshPoItems.map((item) => [String(item.id), item]));
       const poItemsByVariant = new Map(freshPoItems.map((item) => [String(item.variant_id), item]));
-      const invoiceItems = [];
+      let invoiceItems = [];
+      let invoiceDocumentId = null;
+      if (isInvoiceFirst(po)) {
+        // SmartBook recording a paper delivery note still ships against the approved invoice
+        const checked = await normalizeDeliveryAgainstInvoice(tx, { ...po, purchase_order_items: freshPoItems }, parseId(req.body?.invoice_document_id), items);
+        invoiceItems = checked.items;
+        invoiceDocumentId = checked.invoice.id;
+      }
       const seen = new Set();
 
-      for (const rawLine of items) {
+      for (const rawLine of invoiceDocumentId ? [] : items) {
         const poItemId = parseId(rawLine?.purchase_order_item_id);
         const variantId = parseId(rawLine?.variant_id);
         const poItem = poItemId ? poItemsById.get(poItemId) : poItemsByVariant.get(String(variantId));
@@ -218,6 +240,8 @@ async function createSupplierDelivery(req, res) {
           expected_delivery_date: req.body?.expected_delivery_date ? new Date(req.body.expected_delivery_date) : null,
           carrier_name: normalizeText(req.body?.carrier_name),
           deliverer_name: normalizeText(req.body?.deliverer_name),
+          tracking_number: normalizeText(req.body?.tracking_number),
+          invoice_document_id: invoiceDocumentId,
           status: "SUBMITTED",
           supplier_note: normalizeText(req.body?.supplier_note),
           raw_payload: req.body || {},
@@ -310,6 +334,18 @@ async function createGoodsReceiptFromInvoice(req, res) {
         };
       }
 
+      // Invoice-first lines may be typed books not in the catalog yet: stock needs a real variant.
+      const unlinked = invoice.supplier_delivery_invoice_items.filter((item) => !item.variant_id);
+      if (unlinked.length > 0) {
+        const titles = unlinked.map((item) => po.purchase_order_items.find((row) => row.id === item.purchase_order_item_id)?.item_title || "sách");
+        return {
+          invalid: true,
+          statusCode: 409,
+          code: "PO_LINE_NOT_LINKED",
+          message: `Cần liên kết sách với danh mục trước khi nhập kho: ${titles.join(", ")}`,
+        };
+      }
+
       const invoiceItemsById = new Map(invoice.supplier_delivery_invoice_items.map((item) => [String(item.id), item]));
       const poItemsById = new Map(po.purchase_order_items.map((item) => [String(item.id), item]));
       const receiptItems = [];
@@ -379,7 +415,8 @@ async function createGoodsReceiptFromInvoice(req, res) {
           source_reference_id: invoice.id,
           idempotency_key: idempotencyKey,
           status: "DRAFT",
-          received_by_user_id: userId,
+          // unassigned: left for warehouse staff to claim (Công việc kho của tôi) or for a later assignment
+          received_by_user_id: req.body?.unassigned === true ? null : userId,
           note: note || `Created from supplier invoice ${invoice.invoice_number}`,
         },
       });
@@ -407,6 +444,7 @@ async function createGoodsReceiptFromInvoice(req, res) {
     if (result.invalid) {
       return res.status(result.statusCode || 400).json({
         message: result.message,
+        ...(result.code ? { code: result.code } : {}),
         ...(result.existing_goods_receipt_id ? { existing_goods_receipt_id: result.existing_goods_receipt_id } : {}),
       });
     }
@@ -422,6 +460,187 @@ async function createGoodsReceiptFromInvoice(req, res) {
       if (previous) return await replayCreatedReceipt(req, res, previous, invoiceId, warehouseId);
     }
     console.error("Error while creating goods receipt from supplier invoice:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/**
+ * Receiving a typed book: the code scanned or typed from the physical book decides how a new
+ * catalog variant is identified. ISBN-13 / EAN-13 are standard codes, an ISBN-10 is converted to
+ * its ISBN-13, anything else (no standard barcode) becomes the internal barcode.
+ * Pure; throws a 400-style error object for unusable input.
+ */
+function classifyReceivingCode(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { error: "Nhập hoặc quét mã in trên sách" };
+  const { kind, code } = classifyBookCode(raw);
+  if (kind === "ISBN13") return { isbn13: code, internal_barcode: code, standard: true };
+  if (kind === "EAN13") return { isbn13: null, internal_barcode: code, standard: true };
+  if (kind === "ISBN10") {
+    const core = `978${code.slice(0, 9)}`;
+    const sum = [...core].reduce((total, digit, index) => total + Number(digit) * (index % 2 ? 3 : 1), 0);
+    const isbn13 = `${core}${(10 - (sum % 10)) % 10}`;
+    return { isbn13, isbn10: code, internal_barcode: isbn13, standard: true };
+  }
+  // same rule as the catalog's internal barcode: only a 13-digit code with a wrong EAN/ISBN check
+  // digit is refused (almost surely a misread barcode); other shapes are internal codes
+  if (kind === "INVALID" && code.length === 13) return { error: `Mã ${code} có dạng ISBN-13/EAN-13 nhưng sai số kiểm tra — kiểm tra lại mã in trên sách` };
+  if (raw.length > 50) return { error: "Mã nội bộ tối đa 50 ký tự" };
+  return { isbn13: null, internal_barcode: raw, standard: false };
+}
+
+/**
+ * Inside a transaction: link a typed PO line (invoice-first, not in the catalog when ordered)
+ * to a catalog variant. The PO snapshot (title, code, author, year) is kept as ordered and the
+ * catalog record is not modified. Returns { data } or { invalid, statusCode, message }.
+ */
+async function linkPoItemInTx(tx, { user, deliveryId, poItemId, variantId, userId, createdBookId = null }) {
+  await tx.$queryRawUnsafe("SELECT id FROM purchase_order_items WHERE id = $1::uuid FOR UPDATE", poItemId);
+  const delivery = await tx.supplier_delivery_invoices.findUnique({
+    where: { id: deliveryId },
+    include: { purchase_orders: true, supplier_delivery_invoice_items: { select: { purchase_order_item_id: true } } },
+  });
+  if (!delivery) return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu giao hàng" };
+  if (!(await canWriteWarehouse(user, delivery.purchase_orders.warehouse_id))) {
+    return { invalid: true, statusCode: 403, message: "Bạn không có quyền thao tác trên kho này" };
+  }
+  if (!delivery.supplier_delivery_invoice_items.some((item) => item.purchase_order_item_id === poItemId)) {
+    return { invalid: true, message: "Dòng sách này không có trên phiếu giao" };
+  }
+  const poItem = await tx.purchase_order_items.findUnique({ where: { id: poItemId } });
+  if (variantId && poItem.variant_id === variantId) return { data: poItem, unchanged: true };
+  if (poItem.variant_id) return { invalid: true, statusCode: 409, message: "Dòng này đã được liên kết với một sách khác" };
+  if (!variantId) return { data: poItem, poItem };
+
+  const variant = await tx.book_variants.findFirst({ where: { id: variantId, is_active: true }, select: { id: true } });
+  if (!variant) return { invalid: true, statusCode: 404, message: "Không tìm thấy sách trong danh mục hoặc sách đã ngừng hoạt động" };
+  const clash = await tx.purchase_order_items.findFirst({
+    where: { purchase_order_id: poItem.purchase_order_id, variant_id: variantId, id: { not: poItemId } },
+    select: { item_title: true },
+  });
+  if (clash) return { invalid: true, statusCode: 409, message: `Sách này đã có trên dòng "${clash.item_title || "khác"}" của cùng đơn` };
+
+  const updated = await tx.purchase_order_items.update({ where: { id: poItemId }, data: { variant_id: variantId } });
+  await tx.supplier_delivery_invoice_items.updateMany({ where: { purchase_order_item_id: poItemId, variant_id: null }, data: { variant_id: variantId } });
+  await tx.procurement_document_lines.updateMany({ where: { purchase_order_item_id: poItemId, variant_id: null }, data: { variant_id: variantId } });
+  await audit(tx, userId, "PURCHASE_ORDER_ITEM_LINKED_TO_CATALOG", "PURCHASE_ORDER", poItem.purchase_order_id, {
+    purchase_order_item_id: poItemId,
+    variant_id: variantId,
+    created_book_id: createdBookId,
+    ordered_snapshot: { title: poItem.item_title, code: poItem.item_code, author: poItem.item_author, publish_year: poItem.item_publish_year },
+    delivery_id: deliveryId,
+  });
+  return { data: updated };
+}
+
+/** Receiving links a typed PO line to an existing catalog book. */
+async function linkDeliveryItemToCatalog(req, res) {
+  const deliveryId = parseId(req.params.id);
+  const poItemId = parseId(req.body?.purchase_order_item_id);
+  const variantId = parseId(req.body?.variant_id);
+  if (!deliveryId || !poItemId || !variantId) return res.status(400).json({ message: "Thiếu phiếu giao, dòng đơn hoặc sách cần liên kết" });
+
+  try {
+    const result = await prisma.$transaction((tx) => linkPoItemInTx(tx, { user: req.user, deliveryId, poItemId, variantId, userId: parseId(req.user?.id) }));
+    if (result.invalid) return res.status(result.statusCode || 400).json({ message: result.message });
+    return res.json({ message: result.unchanged ? "Dòng đã được liên kết với sách này" : "Đã liên kết sách với danh mục", data: result.data });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ message: "Sách này đã có trên một dòng khác của cùng đơn" });
+    console.error("Error while linking PO item to catalog:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/**
+ * Receiving a book that is not in the catalog: create it from the ordered snapshot (title, author,
+ * publish year) with the code read from the physical book, then link the PO line - one transaction.
+ * A code already used by another catalog book is refused with that book, so the UI can link it instead.
+ */
+async function createCatalogBookAndLink(req, res) {
+  const deliveryId = parseId(req.params.id);
+  const poItemId = parseId(req.body?.purchase_order_item_id);
+  const userId = parseId(req.user?.id);
+  const price = Number(req.body?.price);
+  if (!deliveryId || !poItemId) return res.status(400).json({ message: "Thiếu phiếu giao hoặc dòng đơn" });
+  const code = classifyReceivingCode(req.body?.code);
+  if (code.error) return res.status(400).json({ message: code.error, code: "INVALID_BOOK_CODE" });
+  if (!Number.isFinite(price) || price < 0) return res.status(400).json({ message: "Giá bán phải là số lớn hơn hoặc bằng 0" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // same access / state checks as linking, without a variant yet
+      const check = await linkPoItemInTx(tx, { user: req.user, deliveryId, poItemId, variantId: null, userId });
+      if (check.invalid) return check;
+      const poItem = check.poItem;
+
+      const codes = [...new Set([code.internal_barcode, code.isbn13, code.isbn10].filter(Boolean))];
+      const existing = await tx.book_variants.findFirst({
+        where: { OR: codes.flatMap((value) => [{ isbn13: value }, { isbn10: value }, { internal_barcode: value }, { sku: value }]) },
+        select: { id: true, books: { select: { title: true } } },
+      });
+      if (existing) {
+        return {
+          invalid: true,
+          statusCode: 409,
+          code: "BOOK_CODE_EXISTS",
+          existing: { variant_id: existing.id, title: existing.books?.title || null },
+          message: `Mã ${code.internal_barcode} đã thuộc sách "${existing.books?.title || "khác"}" trong danh mục`,
+        };
+      }
+
+      const [category, publisher] = await Promise.all([getOrCreateUncategorizedCategory(tx), getOrCreateUncategorizedPublisher(tx)]);
+      const book = await tx.books.create({
+        data: {
+          title: poItem.item_title,
+          default_language: "vi",
+          publisher_id: publisher.id,
+          metadata: {
+            is_incomplete: true,
+            requires_librarian_review: true,
+            incomplete_reason: "Created at receiving from a purchase order line",
+            purchase_order_item_id: poItem.id,
+            created_by_user_id: userId,
+          },
+        },
+      });
+      await tx.book_categories.create({ data: { book_id: book.id, category_id: category.id } });
+      if (poItem.item_author) {
+        const author = await tx.authors.upsert({ where: { full_name: poItem.item_author.slice(0, 150) }, update: {}, create: { full_name: poItem.item_author.slice(0, 150) } });
+        await tx.book_authors.create({ data: { book_id: book.id, author_id: author.id } });
+      }
+      const variant = await tx.book_variants.create({
+        data: {
+          book_id: book.id,
+          sku: buildManualSku(code.internal_barcode),
+          internal_barcode: code.internal_barcode,
+          ...(code.isbn13 ? { isbn13: code.isbn13 } : {}),
+          ...(code.isbn10 ? { isbn10: code.isbn10 } : {}),
+          unit_cost: Number(poItem.unit_cost || 0),
+          list_price: price,
+          language_code: "vi",
+          ...(poItem.item_publish_year ? { publish_year: poItem.item_publish_year } : {}),
+        },
+      });
+      await audit(tx, userId, "INCOMPLETE_BOOK_CREATED_FROM_PURCHASE_ORDER", "BOOK", book.id, {
+        title: poItem.item_title,
+        author: poItem.item_author,
+        internal_barcode: code.internal_barcode,
+        isbn13: code.isbn13,
+        standard_code: code.standard,
+        purchase_order_item_id: poItem.id,
+      });
+      const linked = await linkPoItemInTx(tx, { user: req.user, deliveryId, poItemId, variantId: variant.id, userId, createdBookId: book.id });
+      if (linked.invalid) throw Object.assign(new Error(linked.message), { statusCode: linked.statusCode });
+      return { data: { variant_id: variant.id, book_id: book.id, internal_barcode: code.internal_barcode, isbn13: code.isbn13 } };
+    });
+    if (result.invalid) {
+      return res.status(result.statusCode || 400).json({ message: result.message, ...(result.code ? { code: result.code } : {}), ...(result.existing ? { existing: result.existing } : {}) });
+    }
+    return res.status(201).json({ message: "Đã tạo sách trong danh mục và liên kết", data: result.data });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ message: error.message });
+    if (error.code === "P2002") return res.status(409).json({ message: "Mã sách vừa được dùng cho sách khác, hãy tải lại", code: "BOOK_CODE_EXISTS" });
+    console.error("Error while creating catalog book at receiving:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -465,6 +684,9 @@ function mapCreatedReceipt(receipt, invoiceId) {
 }
 
 module.exports = {
+  linkDeliveryItemToCatalog,
+  createCatalogBookAndLink,
+  classifyReceivingCode,
   getSupplierDeliveries,
   getSupplierDeliveryById,
   createSupplierDelivery,

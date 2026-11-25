@@ -20,7 +20,7 @@ import { canSeeSystemNotifications, useSystemNotifications } from "@/lib/use-sys
 type Crumb = { labelKey: string; to?: string };
 
 // Two-level (parent -> child) routes, plus a handful of flat routes that have
-// no sidebar nav item to derive a label from (receiving-smart, transfer-receiving,
+// no sidebar nav item to derive a label from (transfer-receiving,
 // forbidden). Every other single-level route is derived from `navGroups` below,
 // so a route only needs an entry here if it needs a *different* label/hierarchy
 // than its sidebar item, or has no sidebar item at all.
@@ -29,7 +29,6 @@ const breadcrumbMap: Record<string, { crumbs: Crumb[]; color: string }> = {
   "/orders/new": { crumbs: [{ labelKey: "breadcrumb.goods_receipts", to: "/orders" }, { labelKey: "breadcrumb.new_receipt" }], color: "text-indigo-600" },
   "/purchase-orders/new": { crumbs: [{ labelKey: "sidebar.purchase_orders", to: "/purchase-orders" }, { labelKey: "breadcrumb.new_purchase_order" }], color: "text-indigo-600" },
   "/forbidden": { crumbs: [{ labelKey: "breadcrumb.forbidden" }], color: "text-slate-600" },
-  "/receiving-smart": { crumbs: [{ labelKey: "breadcrumb.receiving_smart" }], color: "text-cyan-600" },
   "/transfer-receiving": { crumbs: [{ labelKey: "breadcrumb.transfer_receiving" }], color: "text-sky-700" },
 };
 

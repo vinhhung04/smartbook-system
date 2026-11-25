@@ -6,6 +6,7 @@ const {
 	createGoodsReceipt,
 	updateGoodsReceipt,
 	assignGoodsReceipt,
+	claimSelfGoodsReceipt,
 	getMyDraftReceiptsForVerification,
 } = require('../controllers/goods-receipt.controller');
 const {
@@ -27,5 +28,6 @@ router.get('/:id', canReadAssignedReceiving, getGoodsReceiptById);
 router.post('/', canUpdateAssignedReceiving, createGoodsReceipt);
 router.patch('/:id', canUpdateAssignedReceiving, updateGoodsReceipt);
 router.patch('/:id/assign', canDecideReceiving, assignGoodsReceipt);
+router.patch('/:id/claim-self', canUpdateAssignedReceiving, claimSelfGoodsReceipt);
 
 module.exports = router;

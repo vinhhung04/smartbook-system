@@ -931,6 +931,10 @@ async function deleteBook(req, res) {
 }
 
 module.exports = {
+  // shared with receiving (supplier-delivery.controller createCatalogBookAndLink)
+  buildManualSku,
+  getOrCreateUncategorizedCategory,
+  getOrCreateUncategorizedPublisher,
   getAllBooks,
   getBookById,
   findBookByBarcode,

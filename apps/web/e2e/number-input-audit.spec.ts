@@ -22,7 +22,7 @@ const STAFF_ROUTES = [
   '/dashboard', '/account', '/my-warehouse-tasks', '/my-purchase-requests', '/my-exception-reports',
   '/purchase-requests', '/exception-reports', '/staff-tasks', '/catalog', '/inventory', '/orders', '/orders/new',
   '/purchase-orders', '/purchase-orders/new', '/supplier-deliveries', '/receiving-check', '/putaway',
-  '/receiving-putaway', '/receiving-smart', '/picking', '/packing', '/order-requests', '/movements', '/stock-audits',
+  '/receiving-putaway', '/picking', '/packing', '/order-requests', '/movements', '/stock-audits',
   '/outbound', '/transfer-receiving', '/warehouses', '/shelves', '/ai-import', '/recommendations',
   '/reorder-suggestions', '/borrow', '/borrow/customers', '/borrow/reservations', '/borrow/loans', '/borrow/fines',
   '/reports', '/ai-assistant', '/audit-trail', '/admin/monitor', '/membership-plans', '/suppliers', '/users', '/roles',

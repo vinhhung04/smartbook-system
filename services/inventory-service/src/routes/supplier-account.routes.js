@@ -34,6 +34,7 @@ router.post("/orders/:poId/documents", canWriteSupplierPortal, handleDocumentUpl
 router.get("/documents/:docId", canUseSupplierPortal, supplierDocuments.get);
 router.get("/documents/:docId/files/:fileId/download", canUseSupplierPortal, supplierDocuments.download);
 router.post("/documents/:docId/files", canWriteSupplierPortal, handleDocumentUpload, supplierDocuments.uploadVersion);
+router.patch("/documents/:docId", canWriteSupplierPortal, supplierDocuments.updateDraft);
 router.post("/documents/:docId/issue", canWriteSupplierPortal, supplierDocuments.issue);
 router.post("/documents/:docId/cancel", canWriteSupplierPortal, supplierDocuments.cancel);
 router.post("/documents/:docId/acknowledge", canWriteSupplierPortal, supplierDocuments.acknowledge);

@@ -7,10 +7,18 @@ export interface SupplierDeliveryDetail extends SupplierInvoice {
   warehouse_id?: string | null;
   warehouse_code?: string | null;
   warehouse_name?: string | null;
+  procurement_flow?: 'LEGACY' | 'INVOICE_FIRST';
+  invoice_document_id?: string | null;
+  tracking_number?: string | null;
   items: Array<SupplierInvoice['items'][number] & {
     ordered_qty: number;
     previously_received_qty: number;
     remaining_qty: number;
+    /** ordered snapshot, for linking a typed book to the catalog at receiving */
+    item_code?: string | null;
+    item_author?: string | null;
+    item_publish_year?: number | null;
+    linked_to_catalog?: boolean;
   }>;
 }
 
@@ -31,10 +39,12 @@ export function supplierDeliveryStatusLabel(status: string): string {
 export interface CreateGoodsReceiptFromInvoicePayload {
   warehouse_id: string;
   note?: string | null;
+  /** leave the receipt without a counter: staff claim it, or a manager assigns it later */
+  unassigned?: boolean;
   items: Array<{
     invoice_item_id: string;
     purchase_order_item_id?: string | null;
-    variant_id: string;
+    variant_id: string | null;
     delivered_qty: number;
     damaged_qty?: number;
     rejected_qty?: number;
@@ -45,6 +55,18 @@ export interface CreateGoodsReceiptFromInvoicePayload {
 }
 
 export const supplierDeliveryService = {
+  /** Create the catalog book from a typed PO line (code read from the physical book) and link it. */
+  createCatalogBook: async (deliveryId: string, payload: { purchase_order_item_id: string; code: string; price: number }) => {
+    const response = await inventoryAPI.post(`/api/supplier-deliveries/${deliveryId}/create-catalog-book`, payload);
+    return response.data as { message: string; data: { variant_id: string; internal_barcode: string; isbn13: string | null } };
+  },
+
+  /** Link a PO line ordered as a typed book (not in the catalog then) to a catalog variant. */
+  linkItem: async (deliveryId: string, purchaseOrderItemId: string, variantId: string) => {
+    const response = await inventoryAPI.post(`/api/supplier-deliveries/${deliveryId}/link-item`, { purchase_order_item_id: purchaseOrderItemId, variant_id: variantId });
+    return response.data as { message: string };
+  },
+
   getAll: async (params?: Record<string, unknown>): Promise<{ data: SupplierDeliveryDetail[] }> => {
     const response = await inventoryAPI.get('/api/supplier-deliveries', { params });
     return response.data as { data: SupplierDeliveryDetail[] };

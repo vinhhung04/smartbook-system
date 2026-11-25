@@ -12,6 +12,7 @@ const {
   sendToSupplier,
   supplierConfirm,
   getSupplierDocuments,
+  getInvoiceFulfillment,
   getShortageReports,
   sendShortageReport,
   resolveShortageReport,
@@ -61,6 +62,7 @@ router.get("/", canRead, getPurchaseOrders);
 router.post("/", canWrite, createPurchaseOrder);
 router.get("/:id/reconciliation", canRead, getPurchaseOrderReconciliation);
 router.get("/:id/supplier-documents", canRead, getSupplierDocuments);
+router.get("/:id/invoice-fulfillment", canRead, getInvoiceFulfillment);
 router.get("/:id/shortage-reports", canRead, getShortageReports);
 router.get("/:id/document-reconciliation", canRead, getDocumentReconciliation);
 router.post("/:id/document-reconciliation/complete", canWrite, completeDocumentReconciliation);

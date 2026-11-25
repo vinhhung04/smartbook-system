@@ -30,6 +30,10 @@ import {
   PaginationNext, PaginationPrevious,
 } from "@/components/ui/pagination";
 import { cn } from "@/components/ui/utils";
+import { LinkCatalogBookDialog, type UnlinkedLine } from "@/components/procurement/link-catalog-book-dialog";
+
+// select value for "create the receipt without a counter"
+const UNASSIGNED = "__unassigned__";
 import { getPaginationRange } from "@/lib/pagination";
 import { getStatusVariant } from "@/lib/status-registry";
 
@@ -456,10 +460,14 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
   ), [lines]);
 
   const canReceive = invoice ? RECEIVABLE_STATUSES.includes(invoice.status) : false;
+  // invoice-first lines ordered as typed books must be linked to the catalog before stock moves
+  const [linking, setLinking] = useState<UnlinkedLine | null>(null);
+  const unlinked = (invoice?.items || []).filter((item) => item.linked_to_catalog === false);
 
+  const unassigned = selectedStaffId === UNASSIGNED;
   const createAndAssign = async () => {
     if (!invoice) return;
-    if (!selectedStaffId) return toast.error("Vui lòng chọn nhân viên kho để giao phiếu");
+    if (!selectedStaffId) return toast.error("Vui lòng chọn nhân viên kho, hoặc chọn \"Chưa giao\"");
 
     const items = lines
       .map(({ item, willReceive, damaged, rejected, over }) => ({
@@ -482,12 +490,19 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
         warehouse_id: invoice.warehouse_id || "",
         note,
         items,
+        ...(unassigned ? { unassigned: true } : {}),
       }, idempotencyKey);
       const receiptId = response.data.id;
       const receiptNumber = response.data.receipt_number;
-      await goodsReceiptService.assign(receiptId, selectedStaffId);
-      const staff = warehouseStaff.find((s) => s.id === selectedStaffId);
-      toast.success(`Đã tạo phiếu ${receiptNumber} và giao cho ${staff?.full_name || staff?.username || "nhân viên"}`);
+      if (unassigned) {
+        toast.success(`Đã tạo phiếu ${receiptNumber}, chưa giao việc`, {
+          description: "Nhân viên kho tự nhận ở \"Công việc kho của tôi\", hoặc giao sau trong trang phiếu nhập.",
+        });
+      } else {
+        await goodsReceiptService.assign(receiptId, selectedStaffId);
+        const staff = warehouseStaff.find((s) => s.id === selectedStaffId);
+        toast.success(`Đã tạo phiếu ${receiptNumber} và giao cho ${staff?.full_name || staff?.username || "nhân viên"}`);
+      }
       navigate(`/orders/${receiptId}`);
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Tạo và giao phiếu thất bại"));
@@ -700,6 +715,7 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                     <SelectValue placeholder="Chọn nhân viên kho" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={UNASSIGNED}>Chưa giao — nhân viên tự nhận hoặc giao sau</SelectItem>
                     {warehouseStaff.map((staff) => (
                       <SelectItem key={staff.id} value={staff.id}>{staff.full_name || staff.username || staff.email}</SelectItem>
                     ))}
@@ -711,13 +727,39 @@ function SupplierDeliveryDetailView({ id }: { id: string }) {
                 <Input id="receipt-note" type="text" value={note} onChange={(e) => setNote(e.target.value)} />
               </div>
             </div>
+            {unlinked.length > 0 ? (
+              <div role="alert" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                <p className="font-medium">Có sách chưa có trong danh mục. Liên kết trước khi nhập kho:</p>
+                <ul className="mt-2 space-y-1.5">
+                  {unlinked.map((item) => (
+                    <li key={item.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span>{item.title || "-"} <span className="font-mono text-[12px]">{item.item_code || ""}</span></span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => item.purchase_order_item_id && setLinking({
+                          purchase_order_item_id: item.purchase_order_item_id,
+                          title: item.title || "",
+                          item_code: item.item_code,
+                          item_author: item.item_author,
+                          item_publish_year: item.item_publish_year,
+                        })}
+                      >
+                        Liên kết sách
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-              {!selectedStaffId ? <p className="text-[12px] text-muted-foreground">Chọn nhân viên để tạo phiếu.</p> : null}
-              <Button onClick={() => void createAndAssign()} disabled={!selectedStaffId || totals.planned <= 0} loading={saving} data-testid="goods-receipt-submit">
+              {!selectedStaffId ? <p className="text-[12px] text-muted-foreground">Chọn nhân viên, hoặc "Chưa giao" để nhân viên tự nhận.</p> : null}
+              <Button onClick={() => void createAndAssign()} disabled={!selectedStaffId || totals.planned <= 0 || unlinked.length > 0} loading={saving} data-testid="goods-receipt-submit">
                 <UserCheck className="h-4 w-4" />
-                Tạo phiếu nhập {totals.planned} cuốn và giao việc
+                {unassigned ? `Tạo phiếu nhập ${totals.planned} cuốn (chưa giao việc)` : `Tạo phiếu nhập ${totals.planned} cuốn và giao việc`}
               </Button>
             </div>
+            <LinkCatalogBookDialog key={linking?.purchase_order_item_id || "none"} deliveryId={invoice.id} line={linking} onClose={() => setLinking(null)} onLinked={load} />
           </section>
         ) : (
           <p className="flex items-start gap-2 rounded-2xl border border-border bg-muted/30 px-5 py-4 text-[13px] text-muted-foreground">

@@ -462,12 +462,21 @@ export function PurchaseOrderDetailPage() {
             )}
           </NextStep>
         ) : (
-          <NextStep
-            tone="info"
-            icon={Clock}
-            title="Chờ NCC gửi hóa đơn hoặc phiếu giao hàng"
-            description={`Còn ${remainingQty} cuốn chưa nhận. Hóa đơn mới sẽ xuất hiện ở mục Chứng từ.`}
-          />
+          po.procurement_flow === "INVOICE_FIRST" ? (
+            <NextStep
+              tone="info"
+              icon={Clock}
+              title="Chờ NCC lập hóa đơn theo giá đã duyệt"
+              description={`Hóa đơn NCC gửi cần bạn duyệt ở mục "Hóa đơn và tiến độ giao hàng" bên dưới; NCC chỉ lập phiếu giao sau khi hóa đơn được duyệt. Còn ${remainingQty} cuốn chưa nhận.`}
+            />
+          ) : (
+            <NextStep
+              tone="info"
+              icon={Clock}
+              title="Chờ NCC gửi hóa đơn hoặc phiếu giao hàng"
+              description={`Còn ${remainingQty} cuốn chưa nhận. Hóa đơn mới sẽ xuất hiện ở mục Chứng từ.`}
+            />
+          )
         );
       case "SHORTAGE_REPORTED":
         return (
@@ -605,7 +614,18 @@ export function PurchaseOrderDetailPage() {
                         <TableRow key={item.id}>
                           <TableCell className="whitespace-normal">
                             <p className="text-[13px] font-medium text-foreground">{item.title}</p>
-                            <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{item.isbn13 || item.sku || "-"}</p>
+                            <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{item.item_code || item.isbn13 || item.sku || "-"}</p>
+                            {item.item_author || item.item_publish_year ? (
+                              <p className="mt-0.5 text-[12px] text-muted-foreground">{[item.item_author, item.item_publish_year ? `năm ${item.item_publish_year}` : null].filter(Boolean).join(" · ")}</p>
+                            ) : null}
+                            {po.procurement_flow === "INVOICE_FIRST" && !item.linked_to_catalog ? (
+                              <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-400">Chưa có trong danh mục — liên kết khi nhập kho</p>
+                            ) : null}
+                            {po.procurement_flow === "INVOICE_FIRST" && item.requested_qty !== undefined && item.requested_qty !== item.ordered_qty ? (
+                              <p className="mt-1 text-[12px] text-muted-foreground">
+                                Yêu cầu {item.requested_qty} · nhà cung cấp chấp nhận {item.ordered_qty} · <span className="font-medium text-amber-700 dark:text-amber-400">không chấp nhận {item.not_accepted_qty}</span>
+                              </p>
+                            ) : null}
                             {item.note ? <p className="mt-1 text-[12px] text-muted-foreground">{item.note}</p> : null}
                           </TableCell>
                           <TableCell>
@@ -615,7 +635,9 @@ export function PurchaseOrderDetailPage() {
                             </div>
                             <div className="mt-1.5"><ProgressBar value={item.received_qty} max={item.ordered_qty} tone={over ? "danger" : item.received_qty < item.ordered_qty && item.received_qty > 0 ? "warning" : "success"} /></div>
                           </TableCell>
-                          <TableCell className={cn("text-right font-mono text-[12px] tabular-nums", Number(item.unit_cost) === 0 && "text-muted-foreground")}>{formatCurrency(item.unit_cost)}</TableCell>
+                          <TableCell className={cn("text-right font-mono text-[12px] tabular-nums", Number(item.unit_cost) === 0 && "text-muted-foreground")}>
+                            {po.procurement_flow === "INVOICE_FIRST" && Number(item.unit_cost) === 0 ? "Chờ báo giá" : formatCurrency(item.unit_cost)}
+                          </TableCell>
                           <TableCell className="text-right font-mono text-[12px] tabular-nums">{formatCurrency(item.line_total)}</TableCell>
                           <TableCell><StatusBadge label={statusLabel(item.reconciliation_status)} variant={statusVariant(item.reconciliation_status)} /></TableCell>
                         </TableRow>
@@ -805,7 +827,11 @@ export function PurchaseOrderDetailPage() {
               <dl className="-my-2.5 divide-y divide-border">
                 <InfoRow label="Tổng tiền">
                   <span className="font-mono text-[15px] font-semibold tabular-nums">{formatCurrency(po.total_amount)}</span>
-                  {missingPrices ? <span className="mt-0.5 block text-[12px] text-amber-700 dark:text-amber-400">Có dòng chưa nhập đơn giá</span> : null}
+                  {missingPrices ? (
+                    <span className="mt-0.5 block text-[12px] text-amber-700 dark:text-amber-400">
+                      {po.procurement_flow === "INVOICE_FIRST" ? "Chờ nhà cung cấp báo giá, SmartBook duyệt" : "Có dòng chưa nhập đơn giá"}
+                    </span>
+                  ) : null}
                 </InfoRow>
                 <InfoRow label="Nhà cung cấp">
                   {supplierName}

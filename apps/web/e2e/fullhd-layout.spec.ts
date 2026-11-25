@@ -12,7 +12,7 @@ const FULL_HD_VIEWPORTS = [
   { name: 'Full HD 150%', width: 1280, height: 595 },
 ] as const;
 
-const STAFF_ROUTES = ['/dashboard', '/receiving-smart', '/purchase-requests', '/exception-reports', '/borrow/fines', '/shelves', '/warehouses', '/purchase-orders', '/orders', '/inventory', '/order-requests', '/picking', '/outbound', '/receiving-check', '/putaway', '/receiving-putaway', '/movements', '/stock-audits', '/my-warehouse-tasks', '/my-purchase-requests', '/staff-tasks', '/my-exception-reports', '/catalog', '/supplier-deliveries', '/suppliers', '/borrow', '/borrow/customers', '/borrow/reservations', '/borrow/loans', '/membership-plans', '/reorder-suggestions', '/reports', '/users', '/roles', '/admin/monitor', '/audit-trail', '/orders/new', '/purchase-orders/new', '/transfer-receiving', '/account'];
+const STAFF_ROUTES = ['/dashboard', '/purchase-requests', '/exception-reports', '/borrow/fines', '/shelves', '/warehouses', '/purchase-orders', '/orders', '/inventory', '/order-requests', '/picking', '/outbound', '/receiving-check', '/putaway', '/receiving-putaway', '/movements', '/stock-audits', '/my-warehouse-tasks', '/my-purchase-requests', '/staff-tasks', '/my-exception-reports', '/catalog', '/supplier-deliveries', '/suppliers', '/borrow', '/borrow/customers', '/borrow/reservations', '/borrow/loans', '/membership-plans', '/reorder-suggestions', '/reports', '/users', '/roles', '/admin/monitor', '/audit-trail', '/orders/new', '/purchase-orders/new', '/transfer-receiving', '/account'];
 const CUSTOMER_ROUTES = ['/customer', '/customer/fines', '/customer/membership', '/customer/notifications'];
 const PUBLIC_ROUTES = ['/', '/books', '/branches'];
 

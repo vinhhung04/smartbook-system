@@ -17,10 +17,12 @@ import {
   procurementDocumentService,
   type ActivityEntry,
   type DocumentReconciliation,
+  type InvoiceFulfillment,
   type ProcurementDocument,
   type ProcurementDocumentType,
 } from "@/services/procurement-documents";
 import { ProcurementDocumentList } from "./procurement-document-list";
+import { InvoiceFulfillmentPanel } from "./invoice-fulfillment-panel";
 import {
   ACCEPTED_FILE_TYPES,
   ACTIVITY_LABEL,
@@ -52,6 +54,8 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
   const [documents, setDocuments] = useState<ProcurementDocument[]>([]);
   const [reconciliation, setReconciliation] = useState<DocumentReconciliation | null>(null);
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [fulfillment, setFulfillment] = useState<InvoiceFulfillment[]>([]);
+  const invoiceFirst = po.procurement_flow === "INVOICE_FIRST";
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,12 +83,14 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [docs, rec, acts] = await Promise.all([
+      const [docs, rec, acts, progress] = await Promise.all([
         procurementDocumentService.list(po.id),
         procurementDocumentService.reconciliation(po.id),
         procurementDocumentService.activity(po.id),
+        invoiceFirst ? procurementDocumentService.invoiceFulfillment(po.id) : Promise.resolve([]),
       ]);
       setDocuments(docs);
+      setFulfillment(progress);
       setReconciliation(rec);
       setActivity(acts);
     } catch (error) {
@@ -92,9 +98,22 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
     } finally {
       setLoading(false);
     }
-  }, [po.id]);
+  }, [po.id, invoiceFirst]);
 
   useEffect(() => { void load(); }, [load, po.updated_at]);
+
+  const reviewInvoice = async (docId: string, decision: "APPROVE" | "REJECT", note: string) => {
+    try {
+      setSaving(true);
+      await procurementDocumentService.reviewInvoice(docId, { decision, note: note || undefined });
+      toast.success(decision === "APPROVE" ? "Đã duyệt hóa đơn — nhà cung cấp có thể lập phiếu giao" : "Đã từ chối hóa đơn, nhà cung cấp sẽ lập hóa đơn mới");
+      await load();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Không xử lý được hóa đơn"));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const refreshAll = async () => {
     await load();
@@ -212,14 +231,26 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
   return (
     <div id="po-procurement-documents" className="scroll-mt-20 space-y-5">
       {pendingResponse ? (
-        <SectionCard title="Phản hồi của nhà cung cấp chờ duyệt" subtitle={`Gửi lúc ${formatDateTime(pendingResponse.created_at)} · ${supplierResponseMeta(pendingResponse.decision)?.label}`}>
+        <SectionCard title={invoiceFirst ? "Đề xuất số lượng và đơn giá của nhà cung cấp chờ duyệt" : "Phản hồi của nhà cung cấp chờ duyệt"} subtitle={`Gửi lúc ${formatDateTime(pendingResponse.created_at)} · ${supplierResponseMeta(pendingResponse.decision)?.label}`}>
           {pendingResponse.reason ? <p className="mb-3 text-[13px]"><span className="text-muted-foreground">Lý do nhà cung cấp: </span>{pendingResponse.reason}</p> : null}
           {pendingResponse.proposed_delivery_date ? <p className="mb-3 text-[13px]"><span className="text-muted-foreground">Đề xuất ngày giao: </span>{formatDay(pendingResponse.proposed_delivery_date)}</p> : null}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-[13px]">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-1.5 pr-3">Sách</th><th className="py-1.5 pr-3 text-right">Số lượng đặt → nhà cung cấp xác nhận</th><th className="py-1.5 text-right">Đơn giá PO → nhà cung cấp</th></tr></thead>
+              <thead><tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground"><th className="py-1.5 pr-3">Sách</th><th className="py-1.5 pr-3 text-right">Số lượng đặt → nhà cung cấp xác nhận</th><th className="py-1.5 text-right">{invoiceFirst ? "Đơn giá nhà cung cấp đề xuất" : "Đơn giá PO → nhà cung cấp"}</th></tr></thead>
               <tbody>
                 {pendingResponse.lines.map((line) => {
+                  if (invoiceFirst) {
+                    const notAccepted = line.ordered_qty - line.confirmed_qty;
+                    return (
+                      <tr key={line.purchase_order_item_id} className="border-t border-border">
+                        <td className="py-1.5 pr-3">{itemTitle(line.purchase_order_item_id)}</td>
+                        <td className={cn("py-1.5 pr-3 text-right tabular-nums", notAccepted > 0 && "font-semibold text-amber-700 dark:text-amber-400")}>
+                          {line.ordered_qty} → {line.confirmed_qty}{notAccepted > 0 ? ` (không chấp nhận ${notAccepted})` : ""}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">{line.confirmed_qty > 0 ? formatMoney(line.confirmed_unit_cost) : "-"}</td>
+                      </tr>
+                    );
+                  }
                   const qtyChanged = line.confirmed_qty !== line.ordered_qty;
                   const priceChanged = Math.abs(line.confirmed_unit_cost - line.unit_cost) > 0.005;
                   return (
@@ -233,13 +264,33 @@ export function ProcurementDocumentCenter({ po, canManage, canApprove, onChanged
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-[12px] text-muted-foreground">Đơn gốc chưa bị thay đổi. Duyệt sẽ áp dụng số lượng/giá nhà cung cấp xác nhận (lịch sử được lưu); từ chối giữ nguyên đơn và nhà cung cấp phải phản hồi lại.</p>
+          <p className="mt-3 text-[12px] text-muted-foreground">
+            {invoiceFirst
+              ? "Duyệt: số lượng được chấp nhận và đơn giá đề xuất trở thành căn cứ để nhà cung cấp lập hóa đơn (số lượng yêu cầu ban đầu vẫn được lưu). Từ chối: nhà cung cấp đề xuất lại."
+              : "Đơn gốc chưa bị thay đổi. Duyệt sẽ áp dụng số lượng/giá nhà cung cấp xác nhận (lịch sử được lưu); từ chối giữ nguyên đơn và nhà cung cấp phải phản hồi lại."}
+          </p>
           {canApprove ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => setReview({ decision: "REJECT", note: "" })} disabled={saving}><XCircle className="h-3.5 w-3.5" />Không chấp nhận</Button>
-              <Button size="sm" onClick={() => setReview({ decision: "APPROVE", note: "" })} disabled={saving}><CheckCircle2 className="h-3.5 w-3.5" />Duyệt thay đổi</Button>
+              <Button size="sm" onClick={() => setReview({ decision: "APPROVE", note: "" })} disabled={saving}><CheckCircle2 className="h-3.5 w-3.5" />{invoiceFirst ? "Duyệt đề xuất" : "Duyệt thay đổi"}</Button>
             </div>
           ) : <p className="mt-3 text-[12px] text-muted-foreground">Cần quyền duyệt mua hàng để xử lý.</p>}
+        </SectionCard>
+      ) : null}
+
+      {invoiceFirst ? (
+        <SectionCard
+          title="Hóa đơn và tiến độ giao hàng"
+          subtitle="Nhà cung cấp lập hóa đơn theo giá đã duyệt; chỉ hóa đơn được duyệt mới được lập phiếu giao. Hàng chỉ tính là giao thành công khi kho xác nhận nhập."
+          noPadding
+        >
+          <InvoiceFulfillmentPanel
+            invoices={documents.filter((doc) => ["VAT_INVOICE", "SALES_INVOICE"].includes(doc.document_type))}
+            fulfillment={fulfillment}
+            titleOf={itemTitle}
+            onReview={canApprove ? reviewInvoice : undefined}
+            busy={saving}
+          />
         </SectionCard>
       ) : null}
 

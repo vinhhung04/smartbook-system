@@ -1,4 +1,5 @@
 import { inventoryAPI } from './http-clients';
+import type { InvoiceFulfillment } from './procurement-documents';
 
 export interface SupplierPortalOrder {
   dispatch: {
@@ -13,21 +14,31 @@ export interface SupplierPortalOrder {
     po_number: string;
     status: string;
     supplier_response_status?: string | null;
+    /** INVOICE_FIRST: priced proposal -> approved invoice -> delivery notes against it */
+    procurement_flow?: 'LEGACY' | 'INVOICE_FIRST';
     expected_date?: string | null;
     warehouse?: { id: string; code?: string | null; name: string } | null;
     supplier?: { id: string; code?: string | null; name: string } | null;
     items: Array<{
       id: string;
-      variant_id: string;
+      variant_id: string | null;
       title?: string | null;
       sku?: string | null;
       isbn13?: string | null;
+      item_code?: string | null;
+      item_author?: string | null;
+      item_publish_year?: number | null;
+      requested_qty?: number;
       ordered_qty: number;
       received_qty: number;
       remaining_qty: number;
       unit_cost: number;
     }>;
   };
+  /** INVOICE_FIRST orders only (supplier account) */
+  invoice_fulfillment?: InvoiceFulfillment[];
+  /** emailed-link portal: new-flow orders must be handled from the supplier account */
+  account_required_message?: string;
   invoices: Array<{
     id: string;
     invoice_number: string;
@@ -130,10 +141,13 @@ export interface SupplierPortalInvoicePayload {
   supplier_note?: string;
   source_shortage_report_id?: string;
   redelivery?: boolean;
+  /** INVOICE_FIRST: the approved invoice this delivery ships against (prices come from it) */
+  invoice_document_id?: string;
+  tracking_number?: string;
   items: Array<{
     purchase_order_item_id: string;
     invoiced_qty: number;
-    unit_cost: number;
+    unit_cost?: number;
     note?: string;
   }>;
 }

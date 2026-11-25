@@ -74,11 +74,15 @@ export interface ProcurementDocument {
   metadata: Record<string, unknown>;
   internal_note?: string | null;
   cancel_reason?: string | null;
+  /** SmartBook approval of an invoice-first supplier invoice */
+  approval_status?: InvoiceApprovalStatus | null;
+  approval_note?: string | null;
+  approval_at?: string | null;
   issued_at?: string | null;
   cancelled_at?: string | null;
   created_at: string;
   updated_at: string;
-  lines: { id: string; purchase_order_item_id?: string | null; title?: string | null; isbn13?: string | null; quantity: number; unit_price: number; line_amount: number }[];
+  lines: { id: string; purchase_order_item_id?: string | null; title?: string | null; isbn13?: string | null; item_code?: string | null; quantity: number; unit_price: number; line_amount: number }[];
   files: ProcurementDocumentFile[];
   shares: ProcurementDocumentShare[];
   sharing: { recipient_party: 'SUPPLIER' | 'SMARTBOOK'; status: ShareStatus; shared_at?: string | null; delivered_at?: string | null; acknowledged_at?: string | null; channels?: string[] };
@@ -224,6 +228,46 @@ function makeClient(prefix: string, poPath: (poId: string) => string) {
 }
 
 /** SmartBook side (warehouse manager / staff). */
+export type InvoiceApprovalStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+
+/** Invoice-first progress of one invoice (per-line and total), from delivery notes and posted receipts. */
+export interface InvoiceFulfillmentLine {
+  purchase_order_item_id: string;
+  invoiced_qty: number;
+  shipped_qty: number;
+  remaining_to_ship_qty: number;
+  in_transit_qty: number;
+  received_qty: number;
+  discrepancy_qty: number;
+  missing_qty: number;
+}
+
+export interface InvoiceFulfillment {
+  invoice_id: string;
+  document_number: string;
+  external_number?: string | null;
+  approval_status?: InvoiceApprovalStatus | null;
+  status: 'AWAITING_SHIPMENT' | 'IN_TRANSIT' | 'PARTIALLY_RECEIVED' | 'RECEIVED';
+  invoiced_qty: number;
+  shipped_qty: number;
+  in_transit_qty: number;
+  received_qty: number;
+  missing_qty: number;
+  discrepancy_qty: number;
+  lines: InvoiceFulfillmentLine[];
+  deliveries: Array<{
+    id: string;
+    delivery_number?: string | null;
+    expected_delivery_date?: string | null;
+    carrier_name?: string | null;
+    tracking_number?: string | null;
+    created_at: string;
+    status: 'IN_TRANSIT' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED';
+    redelivery: boolean;
+    items: Array<{ purchase_order_item_id: string; shipped_qty: number; received_qty: number | null }>;
+  }>;
+}
+
 export const procurementDocumentService = {
   ...makeClient('/api/procurement-documents', (poId) => `/api/procurement-documents/purchase-orders/${poId}`),
   share: async (docId: string, channel: 'PORTAL' | 'EMAIL') =>
@@ -238,6 +282,10 @@ export const procurementDocumentService = {
     (await inventoryAPI.get(`/api/purchase-orders/${poId}/document-reconciliation`)).data.data as DocumentReconciliation,
   completeReconciliation: async (poId: string, payload: { exception_approved?: boolean; note?: string }) =>
     (await inventoryAPI.post(`/api/purchase-orders/${poId}/document-reconciliation/complete`, payload)).data,
+  reviewInvoice: async (docId: string, payload: { decision: 'APPROVE' | 'REJECT'; note?: string }) =>
+    (await inventoryAPI.post(`/api/procurement-documents/${docId}/approval`, payload)).data.data as ProcurementDocument,
+  invoiceFulfillment: async (poId: string) =>
+    (await inventoryAPI.get(`/api/purchase-orders/${poId}/invoice-fulfillment`)).data.data as InvoiceFulfillment[],
   reviewSupplierResponse: async (poId: string, responseId: string, payload: { decision: 'APPROVE' | 'REJECT'; note?: string }) =>
     (await inventoryAPI.post(`/api/purchase-orders/${poId}/supplier-responses/${responseId}/review`, payload)).data,
   verifyReceiptCounts: async (grId: string, items: { id: string; actual_quantity?: number; damaged_qty: number; rejected_qty: number }[]) =>
@@ -247,4 +295,7 @@ export const procurementDocumentService = {
 /** Supplier portal side (authenticated supplier account). */
 export const supplierDocumentService = {
   ...makeClient('/api/supplier-account/documents', (poId) => `/api/supplier-account/orders/${poId}/documents`),
+  /** Edit an invoice draft (invoice-first POs only; a sent invoice is locked). */
+  updateDraft: async (docId: string, payload: { external_number?: string; invoice_series?: string; issue_date?: string; tax_rate?: string; metadata?: Record<string, unknown>; lines: { purchase_order_item_id: string; quantity: number }[] }) =>
+    (await inventoryAPI.patch(`/api/supplier-account/documents/${docId}`, payload)).data.data as ProcurementDocument,
 };

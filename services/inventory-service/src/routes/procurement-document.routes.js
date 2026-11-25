@@ -3,6 +3,7 @@ const express = require("express");
 const {
   internal,
   shareInternalDocument,
+  reviewInternalInvoice,
   issueGoodsReceiptConfirmation,
   getGoodsReceiptDocuments,
   getPurchaseOrderActivity,
@@ -36,5 +37,6 @@ router.post("/:docId/issue", canWrite, internal.issue);
 router.post("/:docId/cancel", canWrite, internal.cancel);
 router.post("/:docId/acknowledge", canWrite, internal.acknowledge);
 router.post("/:docId/share", canManage, shareInternalDocument);
+router.post("/:docId/approval", canManage, reviewInternalInvoice);
 
 module.exports = router;

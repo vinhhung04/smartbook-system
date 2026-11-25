@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import { useReducedMotion } from "motion/react";
 import { AlertTriangle, ChevronDown, FileText, X } from "lucide-react";
 import { toast } from "sonner";
@@ -71,7 +72,12 @@ type PanelTab = Exclude<WorkspaceTab, "metadata">;
 
 export function AIImportPage() {
   const shouldReduceMotion = useReducedMotion();
-  const [isbnInput, setIsbnInput] = useState("");
+  // ?isbn=<code>: opened from an incomplete book ("Hoàn thiện bằng AI") - prefill and look it up once.
+  // The duplicate check then finds that book, so its metadata is completed instead of a new copy.
+  const [searchParams] = useSearchParams();
+  const prefillCode = searchParams.get("isbn") || "";
+  const prefillDoneRef = useRef(false);
+  const [isbnInput, setIsbnInput] = useState(prefillCode);
   const [pipelineEnabled, setPipelineEnabled] = useState(false);
   const [sourceText, setSourceText] = useState('');
   const [sourceType, setSourceType] = useState<'text' | 'html'>('text');
@@ -96,6 +102,13 @@ export function AIImportPage() {
   const formRef = useRef(form);
   const userEditedRef = useRef(userEditedFields);
   useEffect(() => { formRef.current = form; }, [form]);
+  useEffect(() => {
+    if (!prefillCode || prefillDoneRef.current) return;
+    prefillDoneRef.current = true;
+    void handleLookup(prefillCode);
+    // runs once for the code in the URL; handleLookup reads the latest state itself
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillCode]);
   useEffect(() => { userEditedRef.current = userEditedFields; }, [userEditedFields]);
   const ocr = useBookOcr();
 

@@ -111,7 +111,7 @@ async function loadReconciliationInput(poId) {
     poItems: po.purchase_order_items.map((item) => ({
       id: item.id,
       variant_id: item.variant_id,
-      title: item.book_variants?.books?.title || null,
+      title: item.item_title || item.book_variants?.books?.title || null,
       isbn13: item.book_variants?.isbn13 || null,
       ordered_qty: item.ordered_qty,
       unit_cost: item.unit_cost,

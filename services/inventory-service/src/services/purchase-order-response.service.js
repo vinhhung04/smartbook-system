@@ -60,11 +60,18 @@ function buildSupplierResponse(po, body = {}) {
     if (!items.some((item) => String(item.id) === key)) throw new ResponseError("Dòng phản hồi không thuộc đơn đặt hàng này");
   }
 
+  // Invoice-first POs carry no price: the supplier quotes one for every line it accepts, and
+  // SmartBook always reviews the proposal (quantity and price) before invoicing starts.
+  const invoiceFirst = po.procurement_flow === "INVOICE_FIRST";
   const lines = items.map((item) => {
     const raw = byId.get(String(item.id));
     const ordered = Number(item.ordered_qty);
     const confirmedQty = raw && raw.confirmed_qty !== undefined && raw.confirmed_qty !== "" ? Number(raw.confirmed_qty) : ordered;
-    const confirmedCost = raw && raw.confirmed_unit_cost !== undefined && raw.confirmed_unit_cost !== "" ? Number(raw.confirmed_unit_cost) : Number(item.unit_cost);
+    const hasCost = raw && raw.confirmed_unit_cost !== undefined && raw.confirmed_unit_cost !== null && raw.confirmed_unit_cost !== "";
+    if (invoiceFirst && confirmedQty > 0 && (!hasCost || !(Number(raw.confirmed_unit_cost) > 0))) {
+      throw new ResponseError(`Nhập đơn giá đề xuất (lớn hơn 0) cho "${item.item_title || "sách"}"`);
+    }
+    const confirmedCost = hasCost ? Number(raw.confirmed_unit_cost) : Number(item.unit_cost);
     if (!Number.isInteger(confirmedQty) || confirmedQty < 0) throw new ResponseError("Số lượng xác nhận phải là số nguyên không âm");
     if (confirmedQty > ordered) throw new ResponseError("Số lượng xác nhận không được vượt số lượng đặt — đề xuất tăng cần đơn bổ sung");
     if (!Number.isFinite(confirmedCost) || confirmedCost < 0) throw new ResponseError("Giá xác nhận phải là số không âm");
@@ -92,7 +99,7 @@ function buildSupplierResponse(po, body = {}) {
     proposed_delivery_date: proposedDate,
     lines,
     has_variance: hasVariance,
-    review_status: hasVariance ? "PENDING_REVIEW" : "NOT_REQUIRED",
+    review_status: hasVariance || invoiceFirst ? "PENDING_REVIEW" : "NOT_REQUIRED",
   };
 }
 

@@ -54,6 +54,7 @@ const db = {
   inventory_audit_logs: [],
   warehouse_exception_reports: [{ id: 'ex-hcm', warehouse_id: HCM }],
   purchase_requests: [],
+  goods_receipts: [], // unassigned supplier receipts in the available-tasks feed
   stock_alerts: [{ id: 'alert-hn', warehouse_id: HN }, { id: 'alert-hcm', warehouse_id: HCM }],
 };
 
