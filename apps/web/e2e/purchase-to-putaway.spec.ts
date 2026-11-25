@@ -131,7 +131,7 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   const receiptUrl = page.url();
   const managerToken = await page.evaluate(() => localStorage.getItem('token'));
   const receiptId = receiptUrl.split('/').at(-1)!;
-  const receipt = await (await page.request.get(`http://localhost:3000/api/goods-receipts/${receiptId}`, { headers: { Authorization: `Bearer ${managerToken}` } })).json();
+  const receipt = await (await page.request.get(`${process.env.GATEWAY_URL || 'http://localhost:3000'}/api/goods-receipts/${receiptId}`, { headers: { Authorization: `Bearer ${managerToken}` } })).json();
   const receiptNumber = (receipt.data?.receipt_number || receipt.receipt_number) as string;
   expect(receiptNumber).toBeTruthy();
 

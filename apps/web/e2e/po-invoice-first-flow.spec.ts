@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { test, expect, type Page } from '@playwright/test';
 import { DEMO_PASSWORD, loginStaff } from './helpers';
 import { loginAs } from './helpers/auth';
@@ -9,7 +9,15 @@ import { loginAs } from './helpers/auth';
 // price -> SmartBook approves the invoice -> supplier ships a first batch -> SmartBook links the
 // new book to the catalog and receives -> both sides see "Giao thành công x/y, còn thiếu z".
 
-const API = 'http://localhost:3000';
+const API = (process.env.GATEWAY_URL || 'http://localhost:3000').replace(/\/$/, '');
+// a catalog book every seed has (prisma/seed.js BK-EXT-001)
+const catalogBook = 'Dế Mèn Phiêu Lưu Ký';
+
+function randomIsbn13() {
+  const core = `978${Array.from({ length: 9 }, () => randomInt(10)).join('')}`;
+  const sum = [...core].reduce((total, digit, index) => total + Number(digit) * (index % 2 ? 3 : 1), 0);
+  return `${core}${(10 - (sum % 10)) % 10}`;
+}
 const tag = randomBytes(3).toString('hex').toUpperCase();
 const newBook = `Sách mới E2E ${tag}`;
 
@@ -30,6 +38,12 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
 
   // ── SmartBook creates the PO ───────────────────────────────────────────────
   await loginStaff(page, 'hung');
+  // a catalog book whose code the receiving step must refuse, the same on any database
+  const takenIsbn = randomIsbn13();
+  const takenTitle = `Sách có sẵn E2E ${tag}`;
+  const hungToken = await page.evaluate(() => localStorage.getItem('token'));
+  const taken = await page.request.post(`${API}/api/books/incomplete`, { headers: { Authorization: `Bearer ${hungToken}` }, data: { isbn13: takenIsbn, title: takenTitle, price: 0 } });
+  expect(taken.status()).toBe(201);
   await page.goto('/purchase-orders/new');
   await page.getByRole('combobox', { name: 'Nhà cung cấp' }).click();
   await page.getByRole('option', { name: /Sach Viet|Sách Việt/i }).first().click();
@@ -47,9 +61,9 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
 
   await page.getByRole('button', { name: 'Thêm dòng' }).click();
   await page.getByRole('button', { name: /Bấm để chọn dòng này/ }).last().click();
-  await page.getByRole('textbox', { name: 'Tìm sách trong danh mục để điền cho dòng đang chọn' }).fill('Clean Code');
+  await page.getByRole('textbox', { name: 'Tìm sách trong danh mục để điền cho dòng đang chọn' }).fill(catalogBook);
   await page.getByRole('button', { name: 'Gợi ý từ danh mục' }).click();
-  await page.getByRole('button', { name: /Clean Code/ }).first().click();
+  await page.getByRole('button', { name: new RegExp(catalogBook) }).first().click();
   await expect(page.getByText(/Liên kết danh mục/)).toBeVisible();
   await page.getByRole('spinbutton', { name: 'Số lượng, cuốn' }).last().fill('10');
 
@@ -68,7 +82,7 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
   await page.getByTestId('send-to-supplier-button').click();
   await confirm(page);
 
-  // ── Supplier proposes: 6 of 8 new books, all 10 Clean Code, with prices ────
+  // ── Supplier proposes: 6 of 8 new books, all 10 catalog books, with prices ────
   const supplierContext = await browser.newContext();
   const supplier = await supplierContext.newPage();
   await loginAs(supplier, { identifier: 'supplier-sv', password: DEMO_PASSWORD });
@@ -78,7 +92,7 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
   await supplier.getByLabel(`Số lượng chấp nhận — ${newBook}`).fill('6');
   await expect(supplier.getByText('Không chấp nhận 2')).toBeVisible();
   await supplier.getByLabel(`Đơn giá — ${newBook}`).fill('30000');
-  await supplier.getByLabel('Đơn giá — Clean Code').fill('50000');
+  await supplier.getByLabel(`Đơn giá — ${catalogBook}`).fill('50000');
   await supplier.getByPlaceholder('Ví dụ: chỉ còn 7 cuốn trong kho').fill('Chỉ còn 6 cuốn sách mới');
   await supplier.getByRole('button', { name: 'Gửi đề xuất cho SmartBook duyệt' }).click();
   await expect(supplier.getByText('Đã gửi đề xuất — chờ SmartBook duyệt')).toBeVisible();
@@ -112,12 +126,12 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
   await page.getByRole('button', { name: 'Duyệt hóa đơn' }).click();
   await expect(page.getByText('Đã duyệt hóa đơn — nhà cung cấp có thể lập phiếu giao')).toBeVisible();
 
-  // ── Supplier ships a first batch: 4 Clean Code + 2 new books ───────────────
+  // ── Supplier ships a first batch: 4 catalog books + 2 new books ───────────────
   await supplier.goto('/supplier');
   await supplier.getByRole('button', { name: new RegExp(poNumber) }).first().click();
   await expect(supplier.getByText('Hóa đơn đã được duyệt — lập phiếu giao hàng (giao được nhiều đợt)')).toBeVisible();
   // the order opens on the delivery tab now
-  await supplier.getByLabel('Số lượng giao đợt này, Clean Code').fill('4');
+  await supplier.getByLabel(`Số lượng giao đợt này, ${catalogBook}`).fill('4');
   await supplier.getByLabel(`Số lượng giao đợt này, ${newBook}`).fill('2');
   await supplier.getByLabel('Đơn vị vận chuyển').fill('GHN');
   await supplier.getByRole('button', { name: 'Gửi phiếu giao hàng' }).click();
@@ -140,9 +154,9 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
   await expect(codeField).toHaveValue(`NCC-${tag}`);
   await dialog.getByRole('spinbutton', { name: 'Giá bán, VND' }).fill('99000');
   // a code that already belongs to another catalog book is refused, with that book offered
-  await codeField.fill('9780132350884');
+  await codeField.fill(takenIsbn);
   await dialog.getByRole('button', { name: 'Tạo và liên kết' }).click();
-  await expect(dialog.getByText(/Mã này đã thuộc sách "Clean Code"/)).toBeVisible();
+  await expect(dialog.getByText(`Mã này đã thuộc sách "${takenTitle}"`, { exact: false })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Liên kết sách này' })).toBeVisible();
   // a book without a standard barcode: the free-text code becomes its internal code
   await codeField.fill(`NCC-${tag}`);

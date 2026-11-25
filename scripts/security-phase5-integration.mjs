@@ -242,7 +242,8 @@ await check('9b. legacy /ai/chat: a logged-out token is 401 (not answered as ano
 
 await check('9c. analytics answers declare whether they are library-wide or warehouse-scoped', async () => {
   const t = tokens.curator01;
-  const sys = await call(t, '/analytics/reorder-suggestions?limit=1');
+  // reorder suggestions follow the warehouse scope since 2424dc8; book turnover stays library-wide
+  const sys = await call(t, '/analytics/book-turnover?limit=1');
   assert.equal(sys.body?.meta?.data_scope, 'SYSTEM');
   const scoped = await call(t, '/analytics/warehouse-stock-risk');
   assert.equal(scoped.body?.meta?.data_scope, 'WAREHOUSE_SCOPED');

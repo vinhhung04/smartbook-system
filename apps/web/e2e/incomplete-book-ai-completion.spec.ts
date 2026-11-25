@@ -16,7 +16,7 @@ test('incomplete book: "Hoàn thiện bằng AI" opens the AI import prefilled w
   const title = `Sách chưa hoàn chỉnh ${isbn.slice(-5)}`;
   await loginStaff(page, 'hung');
   const token = await page.evaluate(() => localStorage.getItem('token'));
-  const created = await page.request.post('http://localhost:3000/api/books/incomplete', {
+  const created = await page.request.post(`${process.env.GATEWAY_URL || 'http://localhost:3000'}/api/books/incomplete`, {
     headers: { Authorization: `Bearer ${token}` },
     data: { isbn13: isbn, title, price: 0 },
   });

@@ -10,6 +10,7 @@ import { loginStaff } from './helpers';
 //    and a manager can replay the stored recording from "Đơn đã đóng gói".
 // Chromium's fake camera stands in for the packing-station webcam.
 
+const GATEWAY = (process.env.GATEWAY_URL || 'http://localhost:3000').replace(/\/$/, '');
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const dbUser = process.env.DB_USER || /^DB_USER=(.*)$/m.exec(readFileSync(resolve(repoRoot, '.env'), 'utf8'))?.[1]?.trim();
 const sql = (query: string) => execFileSync('docker', ['compose', 'exec', '-T', 'db', 'psql', '-U', dbUser!, '-d', 'inventory_db', '-v', 'ON_ERROR_STOP=1', '-At', '-c', query], { cwd: repoRoot, encoding: 'utf8' }).trim();
@@ -135,10 +136,10 @@ test('packing evidence: a staff member who did not pack the order cannot open it
     ORDER BY e.captured_at DESC LIMIT 1`);
   test.skip(!evidence, 'no stored packing video yet');
   const [taskId, evidenceId] = evidence.split('|');
-  const login = await request.post('http://localhost:3000/auth/login', { data: { identifier: 'staff02', password: process.env.DEMO_PASSWORD || '123456' } });
+  const login = await request.post(`${GATEWAY}/auth/login`, { data: { identifier: 'staff02', password: process.env.DEMO_PASSWORD || '123456' } });
   const { token } = await login.json();
-  const res = await request.get(`http://localhost:3000/api/packing/tasks/${taskId}/evidence/${evidenceId}/video`, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await request.get(`${GATEWAY}/api/packing/tasks/${taskId}/evidence/${evidenceId}/video`, { headers: { Authorization: `Bearer ${token}` } });
   expect([403, 404]).toContain(res.status());
-  const anonymous = await request.get(`http://localhost:3000/api/packing/tasks/${taskId}/evidence/${evidenceId}/video`);
+  const anonymous = await request.get(`${GATEWAY}/api/packing/tasks/${taskId}/evidence/${evidenceId}/video`);
   expect(anonymous.status()).toBe(401);
 });

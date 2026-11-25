@@ -76,24 +76,28 @@ function assertObject(value, field) {
   }
 }
 
+const KPI_BORROW_FIELDS = [
+  'active_loans',
+  'overdue_loans',
+  'pending_reservations',
+  'confirmed_reservations',
+  'ready_for_pickup_reservations',
+  'pickup_codes_expiring_soon',
+  'unpaid_fine_amount',
+  'reservation_conversion_rate',
+];
+
 const endpointChecks = [
   {
     name: 'analytics/dashboard/kpis',
     path: '/analytics/dashboard/kpis',
-    validate(data) {
-      [
-        'total_titles',
-        'total_copies',
-        'active_loans',
-        'overdue_loans',
-        'pending_reservations',
-        'confirmed_reservations',
-        'ready_for_pickup_reservations',
-        'pickup_codes_expiring_soon',
-        'unpaid_fine_amount',
-        'low_stock_variants',
-        'reservation_conversion_rate',
-      ].forEach((field) => assertNumber(data[field], field));
+    // manager01 lacks analytics.borrow.read: borrow figures are left out (not 0) and flagged
+    validate(data, body) {
+      ['total_titles', 'total_copies', 'low_stock_variants'].forEach((field) => assertNumber(data[field], field));
+      KPI_BORROW_FIELDS.forEach((field) => {
+        if (data[field] !== undefined) throw new Error(`${field} must be left out without analytics.borrow.read`);
+      });
+      if (body?.meta?.borrow_figures !== 'NOT_PERMITTED') throw new Error('meta.borrow_figures must be NOT_PERMITTED');
     },
   },
   {
@@ -183,10 +187,15 @@ async function run() {
     if (!Object.prototype.hasOwnProperty.call(body, 'data')) {
       throw new Error(`${check.name} response must include data`);
     }
-    check.validate(body.data);
+    check.validate(body.data, body);
     passed += 1;
     console.log(`PASS ${check.name}`);
   }
+
+  const adminKpis = await request('/analytics/dashboard/kpis', adminToken);
+  if (!adminKpis.response.ok) throw new Error(`analytics/dashboard/kpis failed for ${adminUsername} (${adminKpis.response.status})`);
+  KPI_BORROW_FIELDS.forEach((field) => assertNumber(adminKpis.body.data?.[field], `admin ${field}`));
+  console.log(`PASS analytics/dashboard/kpis (borrow figures for ${adminUsername})`);
 
   for (const check of endpointChecks.filter((item) => item.borrowDomain)) {
     const denied = await request(check.path, staffToken);
