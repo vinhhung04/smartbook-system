@@ -10,6 +10,7 @@
   "analytics-integration.mjs",
   "warehouse-scope-integration.mjs",
   "warehouse-assignment-integration.mjs",
+  "unified-manager-integration.mjs",
   "borrow-limit-item-count-integration.mjs",
   "borrow-warehouse-scope-integration.mjs",
   "borrow-renewal-fine-concurrency-integration.mjs",

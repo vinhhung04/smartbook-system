@@ -61,13 +61,13 @@ async function visibleOpenLoans(token) {
 const hung = await login('hung', PASSWORD);
 const warehouses = (await call(hung, '/api/warehouses')).body;
 const id = Object.fromEntries(warehouses.map((w) => [w.code, w.id]));
-const [WH_HCM, BR_HCM, WH_HN, BR_HN] = [id['WH-HCM-01'], id['BR-HCM-01'], id['WH-HN-01'], id['BR-HN-01']];
-assert.ok(WH_HCM && BR_HCM && WH_HN && BR_HN, 'seeded warehouses WH-HCM-01, BR-HCM-01, WH-HN-01, BR-HN-01 are required');
+const [WH_HCM, BR_HCM, WH_HN, BR_B] = [id['WH-HCM-01'], id['BR-HCM-01'], id['WH-HN-01'], id['BR-HCM-02']];
+assert.ok(WH_HCM && BR_HCM && WH_HN && BR_B, 'seeded warehouses WH-HCM-01, BR-HCM-01, WH-HN-01, BR-HCM-02 are required');
 
 const stamp = `um-${Date.now()}`;
 const accounts = {
   a: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HCM, 'FULL'], [BR_HCM, 'FULL']] },
-  b: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HN, 'FULL'], [BR_HN, 'FULL']] },
+  b: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HN, 'FULL'], [BR_B, 'FULL']] },
   v: { roles: ['MANAGER', 'LIBRARIAN'], scopes: [[WH_HCM, 'READ'], [BR_HCM, 'READ']] },
   l: { roles: ['LIBRARIAN'], scopes: [[BR_HCM, 'OPERATOR']] },
   w: { roles: ['MANAGER'], scopes: [[WH_HCM, 'FULL']] },
@@ -113,7 +113,7 @@ try {
 
   await check('3. naming a branch outside the scope never returns its rows', async () => {
     // the list ignores a client warehouse filter it may not apply: the caller's own scope stays the limit
-    const res = await call(token.a, `/borrow/loans?warehouse_id=${BR_HN}&pageSize=100`);
+    const res = await call(token.a, `/borrow/loans?warehouse_id=${BR_B}&pageSize=100`);
     assert.ok(res.status === 403 || (res.status === 200 && res.body.data.every((l) => [WH_HCM, BR_HCM].includes(l.warehouse_id))),
       `${res.status} ${JSON.stringify(res.body).slice(0, 160)}`);
   });

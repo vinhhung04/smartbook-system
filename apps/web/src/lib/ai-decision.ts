@@ -219,7 +219,13 @@ export interface ConfirmingUser {
   permissions?: string[];
 }
 
-const normalizeRole = (role: string) => String(role).toUpperCase().replace(/-/g, '_');
+// Renamed role codes (same map as rbac.ts LEGACY_ROLE_MAP; this file stays import-free):
+// a session from before 2026-11-25 still lists WAREHOUSE_MANAGER.
+const RENAMED_ROLES: Record<string, string> = { WAREHOUSE_MANAGER: 'MANAGER' };
+const normalizeRole = (role: string) => {
+  const code = String(role).toUpperCase().replace(/-/g, '_');
+  return RENAMED_ROLES[code] ?? code;
+};
 
 export function canUserConfirmAction(
   user: ConfirmingUser | null | undefined,
