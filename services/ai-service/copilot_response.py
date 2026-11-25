@@ -713,8 +713,9 @@ def _render_rebalancing(r: dict) -> str:
                      f"({rec0.get('best_business_option')}): đáp ứng {best0.get('shortage_covered_pct')}%, còn thiếu "
                      f"{best0.get('remaining_shortage_qty')} bản, điều chuyển {best0.get('transfer_qty')} bản, mua "
                      f"{best0.get('purchase_qty')} bản ({n(best0.get('purchase_cost_vnd'))} ₫), ngân sách còn "
-                     f"{n(best0.get('remaining_budget_vnd'))} ₫. Câu trả lời nêu phương án này với đúng các số này; "
-                     "\"tối ưu ngân sách\" không có nghĩa là tiêu hết ngân sách.")
+                     f"{n(best0.get('remaining_budget_vnd'))} ₫. Khi nói về phương án tốt nhất, dùng đúng phương án này "
+                     "và các số này; \"tối ưu ngân sách\" không có nghĩa là tiêu hết ngân sách. Trả lời đúng ý câu hỏi "
+                     "của lượt này, không mở đầu bằng kết luận này nếu câu hỏi không hỏi về phương án.")
     if r.get("notice"):
         lines.append(f"Thông báo: {r['notice']}")
     lines.append("Phạm vi kho: " + "; ".join(f"{w.get('warehouse')} ({_ACCESS_VI.get(w.get('access'), w.get('access'))})"
@@ -781,7 +782,31 @@ def _render_rebalancing(r: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_search_books(r: dict) -> str:
+    """Books found, with each one's copies per warehouse the user may read, spelled out
+    (live demo 2026-11-26: given the raw JSON the model split 15 copies into 8 + 7)."""
+    if r.get("error"):
+        return f"Lỗi tìm sách: {r['error']}"
+    lines = [f"Kết quả tìm sách cho \"{r.get('query')}\" (độ tin cậy: {r.get('retrievalStatus')})."]
+    if not r.get("results"):
+        lines.append("Không tìm thấy sách phù hợp trong catalog.")
+    for b in (r.get("results") or [])[:5]:
+        lines.append(f"- {b.get('title')} — {b.get('author') or 'chưa rõ tác giả'} — ISBN {b.get('isbn') or 'không có'}; "
+                     f"tổng {b.get('quantity')} bản trong các kho bạn được xem.")
+        wh = b.get("by_warehouse")
+        if wh:
+            lines.append("  Theo kho (đầy đủ, ngoài các kho này thì không có bản nào trong phạm vi bạn được xem): "
+                         + "; ".join(f"{w.get('warehouse_name')}: {w.get('available_quantity')} bản sẵn sàng" for w in wh))
+        elif wh is not None:
+            lines.append("  Không có bản nào sẵn sàng ở các kho bạn được xem.")
+        if b.get("description"):
+            lines.append(f"  Mô tả: {b['description']}")
+    lines.append("Số bản theo kho lấy nguyên văn từ dòng \"Theo kho\"; không tự chia hay cộng.")
+    return "\n".join(lines)
+
+
 RENDERERS = {
+    "search_books": (_render_search_books, dict),
     "analyze_inventory_rebalancing": (_render_rebalancing, dict),
     "get_reorder_suggestions": (_render_reorder, dict),
     "get_top_books": (_render_top_books, list),

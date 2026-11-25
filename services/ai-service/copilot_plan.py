@@ -1230,6 +1230,9 @@ class SemanticHint:
     references_previous: bool = False
 
 
+_RISK_WORDS = re.compile(r"\b(rui ro|het hang|duoi nguong|thieu sach)\b")
+
+
 def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, now: datetime | None = None,
                hint: SemanticHint | None = None) -> QueryPlan:
     """The deterministic plan for one turn. `state` is the previous turn's
@@ -1289,6 +1292,11 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             named_warehouses = list(hint.warehouses)
         if not periods and hint.periods:
             periods = list(hint.periods)
+    if book_title and WAREHOUSE_RISK in caps and not _RISK_WORDS.search(text):
+        # "Cuốn "Số đỏ" còn ở kho nào?" is about ONE book's copies per warehouse, not the warehouses'
+        # stock risk (live demo 2026-11-26: whole-warehouse totals were given as the book's stock).
+        # After the semantic hint, which once added the risk capability back.
+        caps = [c for c in caps if c != WAREHOUSE_RISK] + ([] if BOOK_SEARCH in caps else [BOOK_SEARCH])
     rebalance = _plan_rebalance(message, text, caps, budgets, budget_pct, budget_delta, named_warehouses, wh, state,
                                 warehouses, assumptions, sensitive)
     if rebalance is not None:
