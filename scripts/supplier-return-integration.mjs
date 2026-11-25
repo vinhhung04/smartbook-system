@@ -8,9 +8,12 @@
 // GRN-must-be-POSTED gate.
 //
 // Usage: node scripts/supplier-return-integration.mjs
+import { acceptInvoiceAndShip, supplierIdOf } from './lib/invoice-first-po.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const managerName = process.env.PURCHASE_TEST_USERNAME || 'hung';
+const supplierName = process.env.SUPPLIER_TEST_USERNAME || 'supplier-sv';
 
 async function request(method, path, token, body) {
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
@@ -42,9 +45,9 @@ function check(name, condition, detail = '') {
   console.log(`${condition ? 'PASS' : 'FAIL'} ${name}${condition || !detail ? '' : ` -- ${detail}`}`);
 }
 
-async function getSetup(token) {
-  const suppliers = await ok('GET', '/api/suppliers', token);
-  const supplier = suppliers.find((row) => row.status === 'ACTIVE') || suppliers[0];
+async function getSetup(token, supplierToken) {
+  // invoice-first POs are answered on the supplier account, so order from that account's supplier
+  const supplier = { id: await supplierIdOf(supplierToken) };
   const warehouses = await ok('GET', '/api/warehouses', token);
   const warehouse = warehouses.find((row) => row.is_active !== false);
   const books = (await ok('GET', '/api/books', token)).filter((row) => row.variant_id);
@@ -61,9 +64,9 @@ async function getVariantAvailableQty(token, variantId) {
   return Number(row?.quantity || 0);
 }
 
-/** Create+approve+send+confirm (with a full invoice) a PO, then post a GRN receiving it all into
- * setup.receivingLocation, returning the resulting GRN id and its (only) goods_receipt_item. */
-async function setupPostedGrn(M, setup, orderedQty, note) {
+/** Create+approve+send a PO, run the invoice-first supplier side (priced acceptance, approved
+ * invoice, one delivery note), then post a GRN receiving it all into setup.receivingLocation. */
+async function setupPostedGrn(M, S, setup, orderedQty, note) {
   const created = await ok('POST', '/api/purchase-orders', M, {
     supplier_id: setup.supplier.id,
     warehouse_id: setup.warehouse.id,
@@ -75,16 +78,7 @@ async function setupPostedGrn(M, setup, orderedQty, note) {
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
   await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
-  const poSent = await ok('GET', `/api/purchase-orders/${poId}`, M);
-  const item = poSent.items[0];
-
-  const confirmed = await ok('POST', `/api/purchase-orders/${poId}/supplier-confirm`, M, {
-    invoice_number: `RET-INV-${poId.slice(0, 8)}-${Date.now()}`,
-    invoice_date: new Date().toISOString().slice(0, 10),
-    expected_delivery_date: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-    items: [{ purchase_order_item_id: item.id, variant_id: item.variant_id, invoiced_qty: orderedQty, unit_cost: setup.unitCost }],
-  });
-  const invoiceId = confirmed.data.invoice_id;
+  const invoiceId = (await acceptInvoiceAndShip(M, S, poId, setup.unitCost)).deliveryId;
   const invoiceDetail = (await ok('GET', `/api/supplier-deliveries/${invoiceId}`, M)).data;
   const draftReceipt = await ok('POST', `/api/supplier-deliveries/${invoiceId}/create-goods-receipt`, M, {
     warehouse_id: setup.warehouse.id,
@@ -108,10 +102,11 @@ async function setupPostedGrn(M, setup, orderedQty, note) {
 async function main() {
   const manager = await login(managerName);
   const M = manager.token;
-  const setup = await getSetup(M);
+  const S = (await login(supplierName)).token;
+  const setup = await getSetup(M, S);
 
   // ── A: full lifecycle with supplier confirmation required ──
-  const a = await setupPostedGrn(M, setup, 10, 'E2E supplier-return - full lifecycle');
+  const a = await setupPostedGrn(M, S, setup, 10, 'E2E supplier-return - full lifecycle');
   const grnDetailA = await ok('GET', `/api/purchase-orders/${a.poId}/supplier-documents`, M);
   // goods_receipt_items are not exposed on supplier-documents; fetch via the GRN items we posted.
   const receiptA = await ok('GET', `/api/goods-receipts/${a.goodsReceiptId}`, M).catch(() => null);
@@ -170,7 +165,7 @@ async function main() {
   check('a request for exactly the remaining 6 is accepted', Boolean(exactRemainder.data?.id));
 
   // ── C: reject leaves stock untouched ──
-  const c = await setupPostedGrn(M, setup, 5, 'E2E supplier-return - reject');
+  const c = await setupPostedGrn(M, S, setup, 5, 'E2E supplier-return - reject');
   const receiptC = await ok('GET', `/api/goods-receipts/${c.goodsReceiptId}`, M);
   const grItemC = (receiptC.data?.items || receiptC.items || [])[0];
   const beforeQtyC = await getVariantAvailableQty(M, setup.book.variant_id);
@@ -181,7 +176,7 @@ async function main() {
   check('a rejected return never touches stock', afterQtyC === beforeQtyC, `before=${beforeQtyC} after=${afterQtyC}`);
 
   // ── D: cancel after approval also leaves stock untouched, and blocks execution ──
-  const d = await setupPostedGrn(M, setup, 5, 'E2E supplier-return - cancel');
+  const d = await setupPostedGrn(M, S, setup, 5, 'E2E supplier-return - cancel');
   const receiptD = await ok('GET', `/api/goods-receipts/${d.goodsReceiptId}`, M);
   const grItemD = (receiptD.data?.items || receiptD.items || [])[0];
   const returnD = await ok('POST', `/api/purchase-orders/${d.poId}/returns`, M, { goods_receipt_id: d.goodsReceiptId, reason: 'x', requires_supplier_confirmation: false, lines: [{ goods_receipt_item_id: grItemD.id, return_qty: 2 }] });
@@ -192,7 +187,7 @@ async function main() {
   check('a cancelled return cannot be executed', executeAfterCancel.response.status === 409, `status=${executeAfterCancel.response.status}`);
 
   // ── E: supplier-reject blocks execution too ──
-  const e = await setupPostedGrn(M, setup, 5, 'E2E supplier-return - supplier reject');
+  const e = await setupPostedGrn(M, S, setup, 5, 'E2E supplier-return - supplier reject');
   const receiptE = await ok('GET', `/api/goods-receipts/${e.goodsReceiptId}`, M);
   const grItemE = (receiptE.data?.items || receiptE.items || [])[0];
   const returnE = await ok('POST', `/api/purchase-orders/${e.poId}/returns`, M, { goods_receipt_id: e.goodsReceiptId, reason: 'x', lines: [{ goods_receipt_item_id: grItemE.id, return_qty: 2 }] });
@@ -213,13 +208,9 @@ async function main() {
   await ok('POST', `/api/purchase-orders/${fPoId}/submit`, M);
   await ok('POST', `/api/purchase-orders/${fPoId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${fPoId}/send-to-supplier`, M);
-  const fPoSent = await ok('GET', `/api/purchase-orders/${fPoId}`, M);
-  const fConfirmed = await ok('POST', `/api/purchase-orders/${fPoId}/supplier-confirm`, M, {
-    invoice_number: `RET-INV-DRAFT-${Date.now()}`,
-    items: [{ purchase_order_item_id: fPoSent.items[0].id, variant_id: fPoSent.items[0].variant_id, invoiced_qty: 5, unit_cost: setup.unitCost }],
-  });
-  const fInvoiceDetail = (await ok('GET', `/api/supplier-deliveries/${fConfirmed.data.invoice_id}`, M)).data;
-  const fDraftReceipt = await ok('POST', `/api/supplier-deliveries/${fConfirmed.data.invoice_id}/create-goods-receipt`, M, {
+  const fDeliveryId = (await acceptInvoiceAndShip(M, S, fPoId, setup.unitCost)).deliveryId;
+  const fInvoiceDetail = (await ok('GET', `/api/supplier-deliveries/${fDeliveryId}`, M)).data;
+  const fDraftReceipt = await ok('POST', `/api/supplier-deliveries/${fDeliveryId}/create-goods-receipt`, M, {
     warehouse_id: setup.warehouse.id,
     items: fInvoiceDetail.items.map((line) => ({ invoice_item_id: line.id, purchase_order_item_id: line.purchase_order_item_id, variant_id: line.variant_id, delivered_qty: 5, unit_cost: line.unit_cost, location_id: setup.receivingLocation.id })),
   });
@@ -229,7 +220,7 @@ async function main() {
   check('a return cannot be requested against a DRAFT (not yet posted) GRN', draftGrnAttempt.response.status === 400, `status=${draftGrnAttempt.response.status}`);
 
   // ── G: concurrency — two return requests racing for the same GRN item's remaining qty ──
-  const g = await setupPostedGrn(M, setup, 10, 'E2E supplier-return - concurrency race');
+  const g = await setupPostedGrn(M, S, setup, 10, 'E2E supplier-return - concurrency race');
   const receiptG = await ok('GET', `/api/goods-receipts/${g.goodsReceiptId}`, M);
   const grItemG = (receiptG.data?.items || receiptG.items || [])[0];
   const [resG1, resG2] = await Promise.all([

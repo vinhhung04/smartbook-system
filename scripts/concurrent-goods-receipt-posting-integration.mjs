@@ -15,6 +15,8 @@
 // against the same shortage report instead, which is the live P0.5/P0.9 exposure today.
 //
 // Usage: node scripts/concurrent-goods-receipt-posting-integration.mjs
+import { acceptAtPrice, approvedInvoice, supplierIdOf } from './lib/invoice-first-po.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const managerName = process.env.PURCHASE_TEST_USERNAME || 'hung';
@@ -50,8 +52,7 @@ async function main() {
   const supplierA = await login(supplierAName);
   const M = manager.token;
 
-  const suppliers = await ok('GET', '/api/suppliers', M);
-  const supplier = suppliers.find((row) => String(row.email || '').toLowerCase() === String(supplierA.user.email || '').toLowerCase());
+  const supplier = { id: await supplierIdOf(supplierA.token) };
   const warehouses = await ok('GET', '/api/warehouses', M);
   let warehouse = null;
   let receivingLocation = null;
@@ -79,14 +80,17 @@ async function main() {
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
   await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
-  await ok('POST', `/api/supplier-account/orders/${poId}/respond`, supplierA.token, { decision: 'ACCEPTED' });
+  // invoice-first: priced acceptance approved, then an approved invoice for the whole order
+  await acceptAtPrice(M, supplierA.token, poId, unitCost);
+  const invoice = await approvedInvoice(M, supplierA.token, poId);
   let po = await ok('GET', `/api/purchase-orders/${poId}`, M);
   const item = po.items[0];
 
   // Ordinary delivery note for the full 100, but only 60 actually arrive -> 40 missing.
   const dn = (await ok('POST', `/api/supplier-account/orders/${poId}/invoices`, supplierA.token, {
     delivery_number: `DN-BASE-${Date.now()}`,
-    items: [{ purchase_order_item_id: item.id, invoiced_qty: orderedQty, unit_cost: unitCost }],
+    invoice_document_id: invoice.id,
+    items: [{ purchase_order_item_id: item.id, invoiced_qty: orderedQty }],
   })).data;
   const dnDetail = (await ok('GET', `/api/supplier-deliveries/${dn.id}`, M)).data;
   const gr = (await ok('POST', `/api/supplier-deliveries/${dn.id}/create-goods-receipt`, M, {

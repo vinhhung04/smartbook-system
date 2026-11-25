@@ -19,9 +19,10 @@ async function withFixture(fn) {
     await client.query('BEGIN');
     // The session zone is irrelevant by design: run as if the server were UTC.
     await client.query("SET LOCAL TIME ZONE 'UTC'");
-    await client.query('CREATE TEMP TABLE loan_transactions (id int PRIMARY KEY, borrow_date timestamptz, closed_at timestamptz) ON COMMIT DROP');
-    await client.query('CREATE TEMP TABLE loan_items (loan_id int, return_date timestamptz) ON COMMIT DROP');
-    await client.query('CREATE TEMP TABLE loan_reservations (reserved_at timestamptz) ON COMMIT DROP');
+    // warehouse columns the query filters on since the warehouse-scope change (NULL scope = every warehouse)
+    await client.query('CREATE TEMP TABLE loan_transactions (id int PRIMARY KEY, borrow_date timestamptz, closed_at timestamptz, warehouse_id uuid) ON COMMIT DROP');
+    await client.query('CREATE TEMP TABLE loan_items (loan_id int, return_date timestamptz, returned_to_warehouse_id uuid) ON COMMIT DROP');
+    await client.query('CREATE TEMP TABLE loan_reservations (reserved_at timestamptz, warehouse_id uuid) ON COMMIT DROP');
     await client.query(`INSERT INTO loan_transactions (id, borrow_date) VALUES
       (1, '2026-09-30T16:59:59Z'),  -- 23:59:59 30/09 VN -> September
       (2, '2026-09-30T17:00:00Z'),  -- 00:00:00 01/10 VN -> October (was September in UTC buckets)

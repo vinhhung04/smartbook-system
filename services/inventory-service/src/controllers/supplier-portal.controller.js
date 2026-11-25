@@ -762,6 +762,7 @@ async function createSupplierAccountRedeliveryInvoice(req, res) {
   try {
     const { token } = await findAuthenticatedDispatch(req, parseId(req.params.poId));
     req.params.token = token;
+    req.viaSupplierAccount = true;
     return createRedeliveryInvoice(req, res);
   } catch (error) {
     return handleSupplierAccountError(res, error, "Error while creating supplier account redelivery:");

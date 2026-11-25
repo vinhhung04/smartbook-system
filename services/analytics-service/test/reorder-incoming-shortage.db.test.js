@@ -26,10 +26,11 @@ test('SB-18: open lines on a shortage PO remain incoming; closed lines and draft
     await client.connect();
     try {
       await client.query('BEGIN');
-      await client.query('CREATE TEMP TABLE purchase_orders (id int PRIMARY KEY, status text) ON COMMIT DROP');
+      // warehouse_id: incoming stock is filtered by the caller's warehouse scope (NULL here = every warehouse)
+      await client.query('CREATE TEMP TABLE purchase_orders (id int PRIMARY KEY, status text, warehouse_id uuid) ON COMMIT DROP');
       await client.query(`CREATE TEMP TABLE purchase_order_items (purchase_order_id int, variant_id uuid,
         ordered_qty int, received_qty int, closure_status text) ON COMMIT DROP`);
-      await client.query(`INSERT INTO purchase_orders VALUES (1, 'SHORTAGE_REPORTED'), (2, 'CANCELLED'), (3, 'DRAFT')`);
+      await client.query(`INSERT INTO purchase_orders (id, status) VALUES (1, 'SHORTAGE_REPORTED'), (2, 'CANCELLED'), (3, 'DRAFT')`);
       await client.query(`INSERT INTO purchase_order_items VALUES
         (1, '00000000-0000-4000-8000-000000000001', 10, 4, 'OPEN'),
         (1, '00000000-0000-4000-8000-000000000001', 10, 0, 'CLOSED_WITH_REMAINING'),

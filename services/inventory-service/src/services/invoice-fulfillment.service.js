@@ -7,6 +7,8 @@
 //   missing   - invoiced - received: still owed
 // Shipping is never "delivered": only a posted goods receipt counts as received.
 
+const { assertInvoiceQtyWithinRemaining } = require("./procurement-receipt.service");
+
 const INVOICE_TYPES = ["VAT_INVOICE", "SALES_INVOICE"];
 // Invoices that hold quantity: everything alive except those SmartBook rejected.
 const LIVE_INVOICE_STATUSES = ["DRAFT", "ISSUED", "PENDING_SIGNED_DOCUMENT", "SCAN_UPLOADED"];
@@ -163,6 +165,8 @@ async function normalizeInvoiceFirstLines(tx, po, rawLines, { excludeDocumentId 
  */
 async function normalizeDeliveryAgainstInvoice(tx, po, invoiceDocumentId, rawItems) {
   if (!invoiceDocumentId) throw new FulfillmentError("Chọn hóa đơn đã được SmartBook duyệt cho phiếu giao này");
+  // PO lines before the invoice, the order the staff path uses, so the two never deadlock
+  await tx.$queryRawUnsafe("SELECT id FROM purchase_order_items WHERE purchase_order_id = $1::uuid ORDER BY id FOR UPDATE", po.id);
   await tx.$queryRawUnsafe("SELECT id FROM procurement_documents WHERE id = $1::uuid FOR UPDATE", invoiceDocumentId);
   const invoice = await tx.procurement_documents.findFirst({
     where: { id: invoiceDocumentId, purchase_order_id: po.id, document_type: { in: INVOICE_TYPES } },
@@ -188,12 +192,20 @@ async function normalizeDeliveryAgainstInvoice(tx, po, invoiceDocumentId, rawIte
     if (!remainingById.has(key)) throw new FulfillmentError("Dòng phiếu giao phải có trên hóa đơn đã chọn");
     if (seen.has(key)) throw new FulfillmentError("Phiếu giao có dòng sách bị lặp");
     seen.add(key);
+    if (poItemsById.get(key)?.closure_status === "CLOSED_WITH_REMAINING") {
+      throw new FulfillmentError("Dòng đơn đặt hàng đã đóng phần còn lại, không thể lập phiếu giao thêm", 409);
+    }
     const qty = Number(raw?.invoiced_qty ?? raw?.quantity);
     if (!Number.isInteger(qty) || qty <= 0) throw new FulfillmentError("Số lượng giao của mỗi dòng phải là số nguyên > 0");
     const remaining = remainingById.get(key);
     if (qty > remaining) {
       const title = poItemsById.get(key)?.item_title || "sách";
       throw new FulfillmentError(`Số lượng giao của "${title}" vượt số lượng còn phải giao theo hóa đơn (còn ${remaining})`, 409);
+    }
+    // the invoice may predate a revision that lowered ordered_qty: never ship past the live order
+    const leftOnPo = await assertInvoiceQtyWithinRemaining(tx, { id: key, ordered_qty: poItemsById.get(key)?.ordered_qty }, qty);
+    if (leftOnPo !== null) {
+      throw new FulfillmentError(`Số lượng giao vượt số lượng đặt còn lại của đơn (còn ${Math.max(0, leftOnPo)})`, 409);
     }
     items.push({
       purchase_order_item_id: key,

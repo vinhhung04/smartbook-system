@@ -12,6 +12,8 @@
 // approved it.
 //
 // Usage: node scripts/three-way-matching-integration.mjs
+import { acceptAtPrice, supplierIdOf } from './lib/invoice-first-po.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const managerName = process.env.PURCHASE_TEST_USERNAME || 'hung';
@@ -48,9 +50,7 @@ function check(name, condition, detail = '') {
 }
 
 async function getSetup(token, supplierAccount) {
-  const suppliers = await ok('GET', '/api/suppliers', token);
-  const supplier = suppliers.find((row) => String(row.email || '').toLowerCase() === String(supplierAccount.user.email || '').toLowerCase())
-    || suppliers.find((row) => row.status === 'ACTIVE') || suppliers[0];
+  const supplier = { id: await supplierIdOf(supplierAccount.token) };
   const warehouses = await ok('GET', '/api/warehouses', token);
   const warehouse = warehouses.find((row) => row.is_active !== false);
   const books = (await ok('GET', '/api/books', token)).filter((row) => row.variant_id);
@@ -77,10 +77,12 @@ async function createDispatchedPo(M, setup, orderedQty, note) {
   return { poId, item: po.items[0] };
 }
 
-async function invoiceAndReceive(M, S, poId, item, setup, { invoiceQty, deliverQty = invoiceQty }) {
+// invoice-first: a delivery note ships against an approved invoice (invoiceDocumentId)
+async function invoiceAndReceive(M, S, poId, item, setup, { invoiceDocumentId, invoiceQty, deliverQty = invoiceQty }) {
   const note = await ok('POST', `/api/supplier-account/orders/${poId}/invoices`, S, {
     delivery_number: `TWM-DN-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    items: [{ purchase_order_item_id: item.id, invoiced_qty: invoiceQty, unit_cost: setup.unitCost }],
+    invoice_document_id: invoiceDocumentId,
+    items: [{ purchase_order_item_id: item.id, invoiced_qty: invoiceQty }],
   });
   const invoiceId = note.data.id;
   const invoiceDetail = (await ok('GET', `/api/supplier-deliveries/${invoiceId}`, M)).data;
@@ -119,7 +121,7 @@ async function uploadFile(path, token, pdfBytes) {
  * the only thing that actually drives invoiced_qty/invoiced_amount in the reconciliation engine
  * (a supplier_delivery_invoice / delivery note does not by itself count as an "invoice" for
  * three-way matching; only an ISSUED VAT_INVOICE/SALES_INVOICE document does). */
-async function issueFormalInvoice(S, poId, item, qty, unitCost, series) {
+async function issueFormalInvoice(M, S, poId, item, qty, unitCost, series) {
   const created = await ok('POST', `/api/supplier-account/orders/${poId}/documents`, S, {
     document_type: 'VAT_INVOICE',
     external_number: `${series}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -131,6 +133,8 @@ async function issueFormalInvoice(S, poId, item, qty, unitCost, series) {
   const uploaded = await uploadFile(`/api/supplier-account/documents/${docId}/files`, S, FAKE_PDF_BYTES);
   if (!uploaded.response.ok) throw new Error(`upload file for document ${docId} -> ${uploaded.response.status} ${JSON.stringify(uploaded.data)}`);
   const issued = await ok('POST', `/api/supplier-account/documents/${docId}/issue`, S, {});
+  // invoice-first: SmartBook approves the issued invoice before anything ships against it
+  await ok('POST', `/api/procurement-documents/${docId}/approval`, M, { decision: 'APPROVE' });
   return issued.data;
 }
 
@@ -143,12 +147,11 @@ async function main() {
 
   // ── A: multiple invoices + multiple GRNs on one PO -> MATCHED, no double counting, traceable ──
   const a = await createDispatchedPo(M, setup, 100, 'E2E three-way-matching - matched multi-doc');
-  await ok('POST', `/api/supplier-account/orders/${a.poId}/respond`, S, { decision: 'ACCEPTED' });
-  const aPo = await ok('GET', `/api/purchase-orders/${a.poId}`, M);
-  await invoiceAndReceive(M, S, a.poId, aPo.items[0], setup, { invoiceQty: 60 });
-  await invoiceAndReceive(M, S, a.poId, aPo.items[0], setup, { invoiceQty: 40 });
-  await issueFormalInvoice(S, a.poId, aPo.items[0], 60, setup.unitCost, 'AA/26E');
-  await issueFormalInvoice(S, a.poId, aPo.items[0], 40, setup.unitCost, 'AA/26E');
+  const aPo = await acceptAtPrice(M, S, a.poId, setup.unitCost);
+  const invoiceA1 = await issueFormalInvoice(M, S, a.poId, aPo.items[0], 60, setup.unitCost, 'AA/26E');
+  const invoiceA2 = await issueFormalInvoice(M, S, a.poId, aPo.items[0], 40, setup.unitCost, 'AA/26E');
+  await invoiceAndReceive(M, S, a.poId, aPo.items[0], setup, { invoiceDocumentId: invoiceA1.id, invoiceQty: 60 });
+  await invoiceAndReceive(M, S, a.poId, aPo.items[0], setup, { invoiceDocumentId: invoiceA2.id, invoiceQty: 40 });
 
   const reconA = await ok('GET', `/api/purchase-orders/${a.poId}/document-reconciliation`, M);
   check('multi-invoice/multi-GRN PO reconciles to MATCHED', reconA.data.status === 'MATCHED', `status=${reconA.data.status}`);
@@ -164,10 +167,9 @@ async function main() {
 
   // ── B: a discrepancy can never be auto-approved; completing it requires an explicit, reasoned exception ──
   const b = await createDispatchedPo(M, setup, 100, 'E2E three-way-matching - discrepancy exception');
-  await ok('POST', `/api/supplier-account/orders/${b.poId}/respond`, S, { decision: 'ACCEPTED' });
-  const bPo = await ok('GET', `/api/purchase-orders/${b.poId}`, M);
-  await invoiceAndReceive(M, S, b.poId, bPo.items[0], setup, { invoiceQty: 100, deliverQty: 95 }); // 5 missing -> shortage report opened
-  await issueFormalInvoice(S, b.poId, bPo.items[0], 100, setup.unitCost, 'BB/26E');
+  const bPo = await acceptAtPrice(M, S, b.poId, setup.unitCost);
+  const invoiceB = await issueFormalInvoice(M, S, b.poId, bPo.items[0], 100, setup.unitCost, 'BB/26E');
+  await invoiceAndReceive(M, S, b.poId, bPo.items[0], setup, { invoiceDocumentId: invoiceB.id, invoiceQty: 100, deliverQty: 95 }); // 5 missing -> shortage report opened
 
   const reconB = await ok('GET', `/api/purchase-orders/${b.poId}/document-reconciliation`, M);
   check('a short delivery reconciles to DISCREPANCY', reconB.data.status === 'DISCREPANCY', `status=${reconB.data.status}`);

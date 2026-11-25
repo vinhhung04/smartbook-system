@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
+import { acceptInvoiceAndShip, supplierIdOf } from './lib/invoice-first-po.mjs';
 
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const username = process.env.PURCHASE_TEST_USERNAME || 'hung';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
+const supplierUsername = process.env.SUPPLIER_TEST_USERNAME || 'supplier-sv';
 
 async function request(method, path, token, body) {
   const response = await fetch(`${baseUrl}${path}`, {
@@ -18,9 +20,9 @@ async function request(method, path, token, body) {
   return { response, data };
 }
 
-async function login() {
+async function login(identifier = username) {
   const { response, data } = await request('POST', '/auth/login', null, {
-    identifier: username,
+    identifier,
     password,
   });
   if (!response.ok || !data?.token) {
@@ -41,14 +43,13 @@ async function okRequest(method, path, token, body) {
   return result.data;
 }
 
-async function getSetup(token) {
-  const [suppliers, warehouses, books] = await Promise.all([
-    okRequest('GET', '/api/suppliers', token),
+async function getSetup(token, supplierToken) {
+  const [warehouses, books] = await Promise.all([
     okRequest('GET', '/api/warehouses', token),
     okRequest('GET', '/api/books', token),
   ]);
-  const supplier = suppliers.find((item) => item.status === 'ACTIVE') || suppliers[0];
-  expect(supplier?.id, 'No supplier available');
+  // invoice-first POs are answered on the supplier account, so order from that account's supplier
+  const supplier = { id: await supplierIdOf(supplierToken) };
 
   let warehouse = null;
   let receivingLocation = null;
@@ -96,24 +97,12 @@ async function createApprovedPo(token, setup, lines) {
   return poId;
 }
 
-async function sendAndConfirmWithInvoice(token, poId, invoicePrefix) {
+// send -> supplier quotes the catalog cost -> approve -> approved invoice -> one delivery note
+async function sendAndConfirmWithInvoice(token, supplierToken, setup, poId) {
   const sent = await okRequest('POST', `/api/purchase-orders/${poId}/send-to-supplier`, token);
-  const po = await okRequest('GET', `/api/purchase-orders/${poId}`, token);
-  const invoicePayload = {
-    invoice_number: `${invoicePrefix}-${Date.now()}`,
-    invoice_date: new Date().toISOString().slice(0, 10),
-    expected_delivery_date: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-    items: po.items
-      .filter((item) => item.remaining_qty > 0)
-      .map((item) => ({
-        purchase_order_item_id: item.id,
-        variant_id: item.variant_id,
-        invoiced_qty: item.remaining_qty,
-        unit_cost: item.unit_cost,
-      })),
-  };
-  const confirmed = await okRequest('POST', `/api/purchase-orders/${poId}/supplier-confirm`, token, invoicePayload);
-  return { sent: sent.data, invoiceId: confirmed.data.invoice_id };
+  const costOf = (item) => setup.variants.find((v) => v.variant_id === item.variant_id)?.unit_cost || 1000;
+  const shipped = await acceptInvoiceAndShip(token, supplierToken, poId, costOf);
+  return { sent: sent.data, invoiceId: shipped.deliveryId };
 }
 
 async function createReceiptFromInvoice(token, invoiceId, setup, qtyByVariant) {
@@ -151,7 +140,8 @@ function pass(name) {
 
 async function run() {
   const token = await login();
-  const setup = await getSetup(token);
+  const supplierToken = await login(supplierUsername);
+  const setup = await getSetup(token, supplierToken);
 
   const fullLines = [
     { ...setup.variants[0], qty: 2 },
@@ -168,7 +158,7 @@ async function run() {
   pass('no auto goods receipt after approve');
 
   const beforeFullStock = await getVariantAvailableQty(token, setup.variants[0].variant_id);
-  const fullDoc = await sendAndConfirmWithInvoice(token, fullPoId, 'INV-FULL');
+  const fullDoc = await sendAndConfirmWithInvoice(token, supplierToken, setup, fullPoId);
   const sentPo = await getPurchaseOrder(token, fullPoId);
   expect(['SUPPLIER_CONFIRMED'].includes(sentPo.status), `PO should be SUPPLIER_CONFIRMED, got ${sentPo.status}`);
   pass('send to supplier');
@@ -192,7 +182,7 @@ async function run() {
   pass('full receipt updates PO RECEIVED');
 
   const overPoId = await createApprovedPo(token, setup, [{ ...setup.variants[2], qty: 1 }]);
-  const overDoc = await sendAndConfirmWithInvoice(token, overPoId, 'INV-OVER');
+  const overDoc = await sendAndConfirmWithInvoice(token, supplierToken, setup, overPoId);
   const overInvoice = (await okRequest('GET', `/api/supplier-deliveries/${overDoc.invoiceId}`, token)).data;
   const overAttempt = await request('POST', `/api/supplier-deliveries/${overDoc.invoiceId}/create-goods-receipt`, token, {
     warehouse_id: setup.warehouse.id,
@@ -210,7 +200,7 @@ async function run() {
 
   const shortageVariant = setup.variants[3] || setup.variants[0];
   const shortagePoId = await createApprovedPo(token, setup, [{ ...shortageVariant, qty: 5 }]);
-  const shortageDoc = await sendAndConfirmWithInvoice(token, shortagePoId, 'INV-SHORT');
+  const shortageDoc = await sendAndConfirmWithInvoice(token, supplierToken, setup, shortagePoId);
   const beforeShortStock = await getVariantAvailableQty(token, shortageVariant.variant_id);
   const shortageReceipt = await createReceiptFromInvoice(token, shortageDoc.invoiceId, setup, {
     [shortageVariant.variant_id]: 3,
@@ -230,17 +220,15 @@ async function run() {
   const portalToken = portalSent.data.portal_token;
   expect(portalToken, 'send-to-supplier should return portal token');
   const portalOrder = await okRequest('GET', `/api/supplier-portal/orders/${portalToken}`, null);
-  await okRequest('POST', `/api/supplier-portal/orders/${portalToken}/confirm`, null);
-  await okRequest('POST', `/api/supplier-portal/orders/${portalToken}/invoices`, null, {
-    invoice_number: `PORTAL-${Date.now()}`,
-    invoice_date: new Date().toISOString().slice(0, 10),
-    expected_delivery_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    items: portalOrder.data.purchase_order.items.map((item) => ({
-      purchase_order_item_id: item.id,
-      invoiced_qty: item.remaining_qty,
-      unit_cost: item.unit_cost,
-    })),
+  // the emailed link only shows an invoice-first PO: no one-click confirm, no delivery note
+  expect(portalOrder.data.account_required_message, 'token portal should point to the supplier account');
+  const portalConfirm = await request('POST', `/api/supplier-portal/orders/${portalToken}/confirm`, null);
+  expect(portalConfirm.response.status === 409, `token portal confirm should be 409, got ${portalConfirm.response.status}`);
+  const portalNote = await request('POST', `/api/supplier-portal/orders/${portalToken}/invoices`, null, {
+    delivery_number: `PORTAL-${Date.now()}`,
+    items: portalOrder.data.purchase_order.items.map((item) => ({ purchase_order_item_id: item.id, invoiced_qty: item.remaining_qty, unit_cost: 1000 })),
   });
+  expect(portalNote.response.status === 403, `token portal delivery note should be 403, got ${portalNote.response.status}`);
   const portalForbidden = await request('POST', `/api/supplier-portal/orders/${portalToken}/create-goods-receipt`, null, {});
   expect(portalForbidden.response.status === 403, 'Supplier portal must not create/post stock');
   pass('supplier portal cannot post stock');
