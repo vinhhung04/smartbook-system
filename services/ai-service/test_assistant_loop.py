@@ -176,6 +176,20 @@ class RetryOnceIfUngroundedTests(unittest.TestCase):
         self.assertIsNone(usage)
         self.assertEqual(called, [])
 
+    def test_a_failing_retry_keeps_the_checked_draft_instead_of_failing_the_turn(self):
+        # audit E-17: a malformed OpenRouter body during the retry (JSONDecodeError) became HTTP 500
+        import json
+
+        async def call_model(messages, tools, *, num_predict, timeout):
+            raise json.JSONDecodeError("Expecting value", "\n\n", 2)
+
+        messages = [{"role": "system", "content": "sys"}]
+        answer, usage = _run(retry_once_if_ungrounded(
+            messages, "Có 9999 phiếu.", "Số 9999 không khớp dữ liệu.", call_model, [], 700, 30,
+        ))
+        self.assertEqual((answer, usage), ("Có 9999 phiếu.", None))
+        self.assertEqual(messages, [{"role": "system", "content": "sys"}])  # the correction turn is withdrawn
+
     def test_warning_triggers_one_corrective_turn_appended_to_messages(self):
         seen_messages = []
 

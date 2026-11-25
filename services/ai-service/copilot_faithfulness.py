@@ -261,7 +261,7 @@ def _scope_confusion(sentences: list[str], ctx: Context) -> list[Issue]:
     for s in sentences:
         n = normalize_text(s)
         stat = _BORROW_STAT.search(n)
-        if not stat or re.search(r"\b(toan he thong|toan thu vien|tat ca cac kho|chua tach|khong tach)\b", n):
+        if not stat or re.search(r"\b(toan he thong|toan thu vien|tat ca cac kho|cac kho ban duoc xem|tinh gop|chua tach|khong tach)\b", n):
             continue
         tail = n[stat.end():stat.end() + 40]
         attrib = _WH_ATTRIB.search(tail)
@@ -270,12 +270,12 @@ def _scope_confusion(sentences: list[str], ctx: Context) -> list[Issue]:
         named_before = _mentions(n[:stat.start()], ctx.warehouses)
         subject_figure = bool(named_before) and re.search(r"\b(co|ghi nhan|dat)\s+[\d.,]+\s*$", n[:stat.start()].strip() + " ")
         if (attrib and named_after) or (attrib and re.search(r"\b(kho|chi nhanh) \w+", tail)) or subject_figure:
-            out.append(Issue(SCOPE_CONFUSION, s[:160], "Lượt mượn/nhu cầu trong hệ thống được tính trên toàn thư viện, "
-                                                       "chưa tách theo kho.", True))
+            out.append(Issue(SCOPE_CONFUSION, s[:160], "Lượt mượn/nhu cầu ở đây tính gộp trên các kho bạn được xem, "
+                                                       "chưa tách riêng từng kho.", True))
     return out
 
 
-_CAUSAL = re.compile(r"\b(nguyen nhan (chinh |chu yeu )?(la|do|nam o)|la do|chu yeu do|chinh la do|bat nguon tu|gay ra|"
+_CAUSAL = re.compile(r"\b(nguyen nhan (chinh |chu yeu )?(la|do|nam o)|la do|chu yeu do|chu yeu (den )?tu|chinh la do|bat nguon tu|gay ra|"
                      r"dan den viec|dan toi viec|khien cho|do nhu cau|vi nhu cau|do luot muon|vi luot muon)\b")
 
 
@@ -327,6 +327,9 @@ def strip_internal_labels(answer: str) -> tuple[str, list[Issue]]:
     issues = [Issue(INTERNAL_LABEL, m.group(0).strip(), "Nhãn nội bộ của khung giải thích, đã được bỏ.")
               for m in _LABELS.finditer(answer or "")]
     cleaned = re.sub(rf"(?:{_LABELS.pattern})(\w?)", _drop_label, answer or "")
+    # "**Ý nghĩa:** Kho…" leaves "**** Kho…" once the label is gone: drop the empty emphasis
+    cleaned = re.sub(r"(\*\*|__)[\s:]*\1", "", cleaned)
+    cleaned = re.sub(r"(?m)^[ \t]+(?=\S)", "", cleaned)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     issues += [Issue(INTERNAL_LABEL, m.group(0), "Tên trường kỹ thuật trong câu trả lời.")
                for m in _FIELDS.finditer(cleaned)]

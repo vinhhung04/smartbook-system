@@ -120,7 +120,7 @@ async def require_write_scope(action_type: str, payload: dict, user_ctx) -> None
     if not ids:
         return  # the executor itself refuses to write without a warehouse (draft_only)
     try:
-        writable = await warehouse_scope.writable_warehouses(user_ctx)
+        writable = await warehouse_scope.writable_warehouses(user_ctx, fresh=True)
     except warehouse_scope.ScopeUnavailable:
         raise HTTPException(status_code=503, detail="Chưa xác minh được quyền kho lúc này; đề xuất vẫn được giữ, hãy thử lại sau.")
     if writable is not None and not ids <= writable:

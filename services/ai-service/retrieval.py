@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 import os
 import re
@@ -10,7 +11,7 @@ import httpx
 
 import faq_retrieval
 import retrieval_confidence
-from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD
+from rag import CONFIDENT_FAQ_LEAD, LIVE_DATA_LEAD, UNCERTAIN_FAQ_LEAD, status_text
 from intent import (
     AGING_INVENTORY_QUERY,
     BOOK_SEARCH_QUERY,
@@ -29,6 +30,8 @@ from intent import (
 
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 RETRIEVAL_TIMEOUT = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "8"))
+logger = logging.getLogger("uvicorn.error")
+MISSING_AUTH_WARNING = "Chua dang nhap: khong truy xuat du lieu nghiep vu."
 
 
 SOURCE_NAMES = {
@@ -42,6 +45,7 @@ SOURCE_NAMES = {
     "/analytics/reorder-suggestions": "Reorder Suggestions",
     "/analytics/aging-inventory": "Aging Inventory",
     "/api/books": "Catalog Books",
+    "/public/catalog/books": "Catalog Books",
     "/api/stock-balances/low-stock": "Low Stock By Warehouse",
 }
 
@@ -57,6 +61,20 @@ def _number(value: Any, default: float = 0) -> float:
 
 def _int(value: Any, default: int = 0) -> int:
     return int(_number(value, default))
+
+
+# A source the caller may not read (403) or that failed returns nothing: its
+# figures are UNKNOWN, never 0 - the model used to quote "0 phieu qua han" to a
+# librarian whose branch has 154 (audit 2026-11-22).
+NO_DATA = "chua co so lieu (tai khoan nay khong doc duoc nguon nay hoac nguon loi) - KHONG phai bang 0"
+SCOPE_LINE = "Pham vi: chi cac kho/chi nhanh tai khoan nay duoc xem (quan tri vien: toan he thong)."
+
+
+def _count(data: Any, key: str) -> str:
+    """The figure as text, or NO_DATA when the source returned none."""
+    if not isinstance(data, dict) or data.get(key) is None:
+        return NO_DATA
+    return str(_int(data.get(key)))
 
 
 def _as_list(payload: Any) -> list:
@@ -102,15 +120,17 @@ async def _fetch(client: httpx.AsyncClient, endpoint: str, auth_header: str | No
         response = await client.get(f"{GATEWAY_URL}{endpoint}", params=params, headers=headers)
         if response.status_code >= 400:
             source["status"] = f"error:{response.status_code}"
-            return source, None, f"{source['name']} returned HTTP {response.status_code}"
+            # the warning text reaches the prompt: plain Vietnamese, no HTTP code (audit E-4)
+            return source, None, f"{source['name']}: {status_text(source['status'])}"
         source["status"] = "ok"
         return source, response.json(), None
     except httpx.TimeoutException:
         source["status"] = "timeout"
-        return source, None, f"{source['name']} timed out"
+        return source, None, f"{source['name']}: {status_text('timeout')}"
     except Exception as exc:
         source["status"] = "error"
-        return source, None, f"{source['name']} retrieval failed: {type(exc).__name__}"
+        logger.warning("retrieval %s failed: %s", endpoint, type(exc).__name__)
+        return source, None, f"{source['name']}: {status_text('error')}"
 
 
 def _book_quantity(book: dict) -> int:
@@ -184,22 +204,32 @@ def _time_params(intent_info: dict, default_30_days: bool = False) -> dict:
     return params
 
 
-def _filter_books(books: list[dict], query: str, limit: int = 10) -> list[dict]:
+# Function words of a book question: "dạy lập trình Rust CHO người mới" matched
+# "CHO Tôi Xin Một Vé Đi Tuổi Thơ" (audit). Whole words only, these never count.
+_QUERY_STOPWORDS = {
+    "co", "cho", "cua", "va", "khong", "nao", "ve", "day", "sach", "cuon", "quyen", "nguoi", "moi", "cac",
+    "nhung", "mot", "la", "o", "tai", "voi", "thu", "vien", "tim", "giup", "toi", "minh", "ban", "hay", "the",
+}
+
+
+def _filter_books(books: list[dict], query: str, limit: int = 10, compact_fn=None) -> list[dict]:
     normalized_query = normalize_text(query)
-    tokens = [token for token in re.split(r"\s+", normalized_query) if len(token) >= 2]
+    tokens = [token for token in re.split(r"\s+", normalized_query)
+              if len(token) >= 2 and token not in _QUERY_STOPWORDS]
     if not tokens:
         return []
 
     scored = []
     for book in books:
-        compact = _compact_book(book)
+        compact = (compact_fn or _compact_book)(book)
         haystack = normalize_text(" ".join([
             compact["title"],
             compact["author"],
             str(compact.get("category") or ""),
             str(compact.get("isbn") or ""),
         ]))
-        score = sum(1 for token in tokens if token in haystack)
+        words = set(re.split(r"[^\w]+", haystack))
+        score = sum(1 for token in tokens if token in words)
         if normalized_query and normalized_query in haystack:
             score += 3
         if score > 0:
@@ -207,6 +237,17 @@ def _filter_books(books: list[dict], query: str, limit: int = 10) -> list[dict]:
 
     scored.sort(key=lambda item: (-item[0], item[1]["title"]))
     return [item[1] for item in scored[:limit]]
+
+
+_PART_SPLIT = re.compile(r"\s*(?:[,;?]|\s(?:và|va|còn|con|đồng thời|dong thoi)\s)\s*", re.IGNORECASE)
+
+
+def _question_parts(question: str) -> list[str]:
+    """The parts of a question asking two things ("X và Y?"); fewer than 2 parts of
+    at least 3 words each means it is one question."""
+    parts = [p.strip(" ?.!") for p in _PART_SPLIT.split(question or "")]
+    parts = [p for p in parts if len(p.split()) >= 3]
+    return parts if len(parts) >= 2 else []
 
 
 def _filter_by_warehouse_hint(wh_groups: dict, warehouse_hint: str | None) -> tuple[dict, str | None]:
@@ -226,7 +267,8 @@ def _filter_by_warehouse_hint(wh_groups: dict, warehouse_hint: str | None) -> tu
             matched[wh_code] = wh_items
     if matched:
         return matched, None
-    return wh_groups, f"Khong tim thay kho khop voi '{warehouse_hint}' trong du lieu; hien thi tat ca cac kho."
+    return wh_groups, (f"Khong co dong ton thap nao cua kho khop voi '{warehouse_hint}': kho do khong co sach duoi nguong, "
+                       "hoac tai khoan khong duoc xem kho do. Dung noi la kho khong ton tai; danh sach duoi la cac kho khac ban duoc xem.")
 
 
 async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
@@ -263,6 +305,21 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             # belt-and-braces so a bug in the embedding layer can never turn
             # /chat into a 500.
             return empty_envelope
+        unanswered_parts: list[str] = []
+        if not faq_matches or confidence_result.decision == retrieval_confidence.NO_EVIDENCE:
+            # A question of several parts: the part with no document must not drag the
+            # answerable one down with it (audit E-7) - each part is looked up alone.
+            parts = _question_parts(intent_info.get("query") or "")
+            if len(parts) >= 2:
+                looked = [(part, *(await asyncio.to_thread(faq_retrieval.find_relevant_with_confidence, part)))
+                          for part in parts]
+                answered = [(m, c) for _p, m, c in looked if m and c.decision != retrieval_confidence.NO_EVIDENCE]
+                if answered:
+                    seen: set = set()
+                    faq_matches = [m for ms, _c in answered for m in ms
+                                   if m.entry["id"] not in seen and not seen.add(m.entry["id"])]
+                    confidence_result = max((c for _m, c in answered), key=lambda c: c.confidence)
+                    unanswered_parts = [p for p, m, c in looked if not m or c.decision == retrieval_confidence.NO_EVIDENCE]
         # NO_EVIDENCE: do not hand the LLM "the nearest thing we have" for a
         # question the corpus has no real answer to (see retrieval_confidence.py) -
         # same empty envelope as today, just reached via the confidence decision
@@ -298,6 +355,10 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             else f"{CONFIDENT_FAQ_LEAD}\n"
         )
         summary = summary_lead + "\n".join(faq_lines)
+        if unanswered_parts:
+            summary += ("\n\nCâu hỏi gồm nhiều ý; tài liệu của thư viện chưa có tài liệu cho: "
+                        + "; ".join(f"\"{p}\"" for p in unanswered_parts)
+                        + ". Trả lời phần có căn cứ ở trên và nói rõ phần này chưa có thông tin, không suy đoán.")
 
         # Hybrid: a policy document explains the rule, but the values it quotes
         # are configuration that can change - read them live; the live value wins.
@@ -316,12 +377,21 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             "reason_codes": list(confidence_result.reason_codes),
         }
 
+    if intent == BOOK_SEARCH_QUERY:
+        # Public catalog for every caller, signed in or not: /api/books counts
+        # copies inside the CALLER's warehouse scope (a reader has none -> 0),
+        # which is not what "còn sách không" asks.
+        return await _search_public_catalog((intent_info.get("query") or "").strip())
+
     if not auth_header:
         return {
-            "summary": "Toi chua co quyen truy xuat du lieu he thong vi request khong co Authorization token.",
+            # Both strings reach the prompt and were echoed to visitors ("thiếu Authorization token"):
+            # say what it means for them instead.
+            "summary": ("Nguoi dung chua dang nhap nen khong co du lieu nghiep vu (muon tra, kho, phat). "
+                        "Hay moi ho dang nhap tai khoan SmartBook neu can xem hoac thuc hien thao tac nay."),
             "raw": raw,
             "sources": sources,
-            "warnings": ["Missing Authorization header; real-time SmartBook retrieval was skipped."],
+            "warnings": [MISSING_AUTH_WARNING],
             "retrieved_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -340,19 +410,25 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 if payload is not None:
                     raw[source["name"]] = _data(payload)
 
-            kpis = raw.get("Dashboard KPIs") or {}
-            stock = raw.get("Warehouse Stock Risk") or []
-            fines = raw.get("Fine Summary") or {}
-            high_risk = [row for row in stock if isinstance(row, dict) and (_int(row.get("low_stock_variants")) or _int(row.get("out_of_stock_variants")))]
-            summary = "\n".join([
-                "Tong quan thu vien:",
-                f"- Tong dau sach: {_int(kpis.get('total_titles'))}; tong ban sao: {_int(kpis.get('total_copies'))}.",
-                f"- Dang muon: {_int(kpis.get('active_loans'))}; qua han: {_int(kpis.get('overdue_loans'))}.",
-                f"- Reservation pending/confirmed/ready: {_int(kpis.get('pending_reservations'))}/{_int(kpis.get('confirmed_reservations'))}/{_int(kpis.get('ready_for_pickup_reservations'))}.",
-                f"- Pickup code sap het han: {_int(kpis.get('pickup_codes_expiring_soon'))}.",
-                f"- Fine chua thu: {_format_vnd(kpis.get('unpaid_fine_amount') or fines.get('total_unpaid'))}.",
-                f"- Warehouse co rui ro ton kho: {len(high_risk)}.",
-            ])
+            kpis = raw.get("Dashboard KPIs")
+            stock = raw.get("Warehouse Stock Risk")
+            lines = ["Tong quan cac kho ban duoc xem:", SCOPE_LINE]
+            if isinstance(kpis, dict):
+                lines += [
+                    f"- Tong dau sach: {_count(kpis, 'total_titles')}; tong ban sao: {_count(kpis, 'total_copies')}.",
+                    f"- Dang muon: {_count(kpis, 'active_loans')}; qua han: {_count(kpis, 'overdue_loans')}.",
+                    f"- Reservation pending/confirmed/ready: {_count(kpis, 'pending_reservations')}/{_count(kpis, 'confirmed_reservations')}/{_count(kpis, 'ready_for_pickup_reservations')}.",
+                    f"- Pickup code sap het han: {_count(kpis, 'pickup_codes_expiring_soon')}.",
+                    f"- Fine chua thu: {_format_vnd(kpis['unpaid_fine_amount']) if kpis.get('unpaid_fine_amount') is not None else NO_DATA}.",
+                ]
+            else:
+                lines.append(f"- Chi so tong quan (dau sach, ban sao, muon, qua han, dat truoc, tien phat): {NO_DATA}.")
+            if isinstance(stock, list):
+                high_risk = [row for row in stock if isinstance(row, dict) and (_int(row.get("low_stock_variants")) or _int(row.get("out_of_stock_variants")))]
+                lines.append(f"- Kho co rui ro ton kho: {len(high_risk)}/{len(stock)} kho.")
+            else:
+                lines.append(f"- Rui ro ton kho theo kho: {NO_DATA}.")
+            summary = "\n".join(lines)
 
         elif intent == LOW_STOCK_QUERY:
             results = await asyncio.gather(
@@ -367,7 +443,11 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 if payload is not None:
                     raw[source["name"]] = _data(payload)
 
-            books = [_compact_book(book) for book in _as_list(raw.get("Catalog Books"))]
+            # /api/books counts copies in the caller's warehouses only; a title with
+            # no stock row there (location_count 0) is not carried there at all and
+            # must not be listed as "het hang".
+            books = [_compact_book(book) for book in _as_list(raw.get("Catalog Books"))
+                     if not isinstance(book, dict) or _int(book.get("location_count"), 1) > 0]
             low_books = sorted(
                 [book for book in books if _book_quantity(book) <= 10],
                 key=lambda book: (book["quantity"], book["title"]),
@@ -426,9 +506,11 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                     for b in low_books
                 ]
                 summary = "\n".join([
-                    f"⚠️ **{len(low_books)} sách** tồn kho thấp (🔴 {len(out_of_stock)} hết hàng, 🟡 {len(low)} sắp hết):",
+                    SCOPE_LINE,
+                    f"⚠️ **{len(low_books)} sách** tồn kho thấp trong các kho bạn được xem, cộng gộp mọi kho "
+                    f"(không tách được theo từng kho) (🔴 {len(out_of_stock)} hết hàng, 🟡 {len(low)} sắp hết):",
                     _limit_lines(lines, 8),
-                ])
+                ]) if "Catalog Books" in raw else f"Sach ton kho thap: {NO_DATA}."
 
         elif intent == TOP_BORROWED_BOOKS_QUERY:
             params = {"limit": 10, **_time_params(intent_info, default_30_days=True)}
@@ -439,7 +521,8 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             rows = _as_list(payload)
             raw["Top Books"] = rows
             lines = [f"- {idx + 1}. {row.get('title', 'Khong ro ten')}: {_int(row.get('borrow_count'))} luot muon." for idx, row in enumerate(rows[:10])]
-            summary = "Top sach duoc muon nhieu:\n" + _limit_lines(lines, 10)
+            summary = (f"Top sach duoc muon nhieu (cac kho ban duoc xem):\n{SCOPE_LINE}\n" + _limit_lines(lines, 10)
+                       if payload is not None else f"Top sach duoc muon nhieu: {NO_DATA}.")
 
         elif intent == OVERDUE_LOAN_QUERY:
             source, payload, warning = await _fetch(client, "/analytics/overdue-summary", auth_header)
@@ -457,10 +540,11 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                     if isinstance(item, dict)
                 ]
             summary = "\n".join([
-                f"Tong loan qua han: {_int(data.get('total_overdue_loans'))}; tong item qua han: {_int(data.get('total_overdue_items'))}.",
+                SCOPE_LINE,
+                f"Tong loan qua han: {_count(data, 'total_overdue_loans')}; tong item qua han: {_count(data, 'total_overdue_items')}.",
                 f"Qua han trung binh: {_number(data.get('average_overdue_days')):.1f} ngay; lau nhat: {_int(data.get('oldest_overdue_days'))} ngay.",
                 _limit_lines(lines, 10),
-            ])
+            ]) if payload is not None else f"Phieu muon qua han: {NO_DATA}."
 
         elif intent == FINE_SUMMARY_QUERY:
             source, payload, warning = await _fetch(client, "/analytics/fine-summary", auth_header)
@@ -474,10 +558,11 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             if isinstance(by_type, list):
                 lines = [f"- {row.get('fine_type', '?')}: {_format_vnd(row.get('amount'))}, {row.get('count', 0)} khoan." for row in by_type[:8] if isinstance(row, dict)]
             summary = "\n".join([
+                SCOPE_LINE,
                 f"Fine chua thu: {_format_vnd(data.get('total_unpaid'))}; da thu: {_format_vnd(data.get('total_paid'))}; da waive: {_format_vnd(data.get('total_waived'))}.",
                 f"So khoan chua thu: {_int(data.get('unpaid_count'))}; da thanh toan: {_int(data.get('paid_count'))}.",
                 _limit_lines(lines, 8),
-            ])
+            ]) if payload is not None else f"Tien phat: {NO_DATA}."
 
         elif intent == BORROW_TREND_QUERY:
             params = {
@@ -496,9 +581,10 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
             recent = rows[-6:] if isinstance(rows, list) else []
             lines = [f"- {row.get('date')}: muon {row.get('loans', 0)}, tra {row.get('returns', 0)}, dat {row.get('reservations', 0)}." for row in recent if isinstance(row, dict)]
             summary = "\n".join([
+                SCOPE_LINE,
                 f"Xu huong co {len(rows)} moc thoi gian: tong muon {total_loans}, tong tra {total_returns}, tong reservation {total_reservations}.",
                 _limit_lines(lines, 6),
-            ])
+            ]) if payload is not None else f"Xu huong muon tra: {NO_DATA}."
 
         elif intent == RESERVATION_QUERY:
             source, payload, warning = await _fetch(client, "/analytics/reservation-funnel", auth_header)
@@ -507,29 +593,12 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 warnings.append(warning)
             data = _data(payload) or {}
             raw["Reservation Funnel"] = data
-            summary = "\n".join([
+            summary = NO_DATA if payload is None else "\n".join([
+                SCOPE_LINE,
                 f"Tong reservation: {_int(data.get('total'))}; conversion rate: {_number(data.get('conversion_rate')):.1f}%.",
                 f"Pending: {_int(data.get('pending'))}; confirmed: {_int(data.get('confirmed'))}; ready: {_int(data.get('ready_for_pickup'))}; converted: {_int(data.get('converted_to_loan'))}.",
                 f"Cancelled: {_int(data.get('cancelled'))}; expired: {_int(data.get('expired'))}.",
             ])
-
-        elif intent == BOOK_SEARCH_QUERY:
-            query = (intent_info.get("query") or "").strip()
-            source, payload, warning = await _fetch(client, "/api/books", auth_header, {"search": query} if query else None)
-            sources.append(source)
-            if warning:
-                warnings.append(warning)
-            books = _as_list(payload)
-            if not books and query:
-                fallback_source, fallback_payload, fallback_warning = await _fetch(client, "/api/books", auth_header)
-                sources.append(fallback_source)
-                if fallback_warning:
-                    warnings.append(fallback_warning)
-                books = _as_list(fallback_payload)
-            matches = _filter_books(books, query, 10)
-            raw["Catalog Books"] = matches
-            lines = [f"- {book['title']} ({book['author'] or 'khong ro tac gia'}), ISBN {book['isbn'] or '-'}, con {book['quantity']} ban." for book in matches]
-            summary = f"Ket qua tim sach cho '{query}':\n" + _limit_lines(lines, 10)
 
         elif intent == REORDER_SUGGESTION_QUERY:
             results = await asyncio.gather(
@@ -594,7 +663,8 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 summary = "\n".join([
                     f"📦 **Gợi ý nhập thêm theo từng kho** ({filtered_low_items} dòng, {len(wh_groups)} kho):",
                     *wh_section_lines,
-                    f"\n📊 Tổng analytics: {total} đầu sách (🔴 {high} HIGH, 🟡 {med} MEDIUM) — {total_qty} bản.",
+                    (f"\n📊 Tổng analytics (các kho bạn được xem): {total} đầu sách (🔴 {high} HIGH, 🟡 {med} MEDIUM) — {total_qty} bản."
+                     if summary_data else f"\n📊 Tổng analytics: {NO_DATA}."),
                     "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
                 ])
             else:
@@ -616,7 +686,8 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                     for row in items_raw[:5]
                     if isinstance(row, dict)
                 ]
-                summary = "\n".join([
+                summary = f"Goi y nhap hang: {NO_DATA}." if not summary_data else "\n".join([
+                    SCOPE_LINE,
                     f"📦 **{total} đầu sách** cần xem xét nhập thêm (🔴 {high} HIGH, 🟡 {med} MEDIUM) — tổng {total_qty} bản.",
                     "📋 Đây là gợi ý hỗ trợ ra quyết định, không phải lệnh bắt buộc.",
                     "Top sách cần ưu tiên:",
@@ -642,9 +713,10 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
                 if isinstance(it, dict)
             ]
             summary = "\n".join([
+                SCOPE_LINE,
                 f"📦 **{len(items)} dòng tồn kho** không có hoạt động mượn/di chuyển trong 90 ngày gần đây:",
                 _limit_lines(lines, 10),
-            ])
+            ]) if payload is not None else f"Ton kho lau ngay: {NO_DATA}."
 
         else:
             summary = ""
@@ -652,6 +724,73 @@ async def retrieve_context(intent_info: dict, auth_header: str | None) -> dict:
     return {
         "summary": summary,
         "raw": raw,
+        "sources": sources,
+        "warnings": warnings,
+        "retrieved_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+PUBLIC_BOOKS_ENDPOINT = "/public/catalog/books"
+_PUBLIC_FALLBACK_PAGES = 3  # x 48 rows (the endpoint's max page size)
+
+
+def _public_book(book: dict) -> dict:
+    """A /public/catalog/books row: copies a reader can borrow now, per public
+    pickup branch. `pickup_warehouse_id` (the branch holding the most copies,
+    None when none) is what agent_planner's reservation draft reads."""
+    branches = [b for b in book.get("pickup_branches") or [] if isinstance(b, dict)]
+    best = max((b for b in branches if _int(b.get("available_quantity")) > 0),
+               key=lambda b: _int(b.get("available_quantity")), default=None)
+    return {
+        **_compact_book(book),
+        "quantity": _int(book.get("available_quantity")),
+        "availability_status": book.get("availability_status"),
+        "pickup_branches": [{"name": b.get("warehouse_name"), "available": _int(b.get("available_quantity"))}
+                            for b in branches],
+        "pickup_warehouse_id": best.get("warehouse_id") if best else None,
+    }
+
+
+def _public_book_line(book: dict) -> str:
+    branches = ", ".join(f"{b['name']} {b['available']}" for b in book["pickup_branches"] if b["available"] > 0)
+    stock = (f"con {book['quantity']} ban co the muon ({branches})" if book["quantity"] > 0
+             else "hien khong con ban nao co the muon tai cac chi nhanh")
+    return f"- {book['title']} ({book['author'] or 'khong ro tac gia'}), ISBN {book['isbn'] or '-'}, {stock}."
+
+
+async def _search_public_catalog(query: str) -> dict:
+    """BOOK_SEARCH for /chat: the public catalog the website shows (no token
+    needed). The catalog's own search first; with no hit, the earlier token
+    match over the whole catalog, so a loosely worded query still finds books."""
+    sources: list[dict] = []
+    warnings: list[str] = []
+    async with httpx.AsyncClient(timeout=httpx.Timeout(RETRIEVAL_TIMEOUT)) as client:
+        params = {"pageSize": 10, **({"search": query} if query else {})}
+        source, payload, warning = await _fetch(client, PUBLIC_BOOKS_ENDPOINT, None, params)
+        sources.append(source)
+        if warning:
+            warnings.append(warning)
+        matches = [_public_book(b) for b in _as_list(payload) if isinstance(b, dict)]
+        if not matches and query and not warning:
+            # shortcut: scans at most _PUBLIC_FALLBACK_PAGES x 48 books; move to the
+            # book index (assistant_tools search) once the catalog outgrows that.
+            books: list[dict] = []
+            for page in range(1, _PUBLIC_FALLBACK_PAGES + 1):
+                # same source as the search above: not listed again ("Nguồn dữ liệu" would repeat it)
+                _source, payload, warning = await _fetch(client, PUBLIC_BOOKS_ENDPOINT, None,
+                                                         {"pageSize": 48, "page": page})
+                if warning:
+                    warnings.append(warning)
+                    break
+                books += _as_list(payload)
+                if page >= _int(((payload or {}).get("meta") or {}).get("totalPages"), 1):
+                    break
+            matches = _filter_books(books, query, 10, compact_fn=_public_book)
+    lines = [_public_book_line(book) for book in matches[:10]]
+    return {
+        "summary": (f"Ket qua tim sach trong danh muc cong khai cho '{query}' "
+                    "(so ban = so ban ban doc co the muon ngay tai cac chi nhanh):\n" + _limit_lines(lines, 10)),
+        "raw": {"Catalog Books": matches[:10]},
         "sources": sources,
         "warnings": warnings,
         "retrieved_at": datetime.now(timezone.utc).isoformat(),

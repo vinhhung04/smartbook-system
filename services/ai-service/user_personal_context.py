@@ -95,7 +95,8 @@ _TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
     "membership": ("the thu vien", "the hoi vien", "the cua toi", "hoi vien", "hang the", "hang thanh vien",
                    "goi thanh vien", "het han the", "membership"),
     "wallet": ("vi cua toi", "vi dien tu", "so du", "nap tien", "tien trong vi", "vi con"),
-    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "picking", "lay hang", "cat hang",
+    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "viec gi can lam", "nhung viec gi",
+              "viec can xu ly", "picking", "lay hang", "cat hang",
               "putaway", "nhan hang", "kiem ke", "ngoai le", "duoc giao"),
     "analytics": ("tong quan", "kpi", "chi so", "bao cao"),
     "stock": ("ton kho", "het hang", "sap het", "nhap them"),
@@ -105,6 +106,14 @@ _TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
 # An explicit request for one's whole account loads every topic of the role.
 _WHOLE_ACCOUNT = ("tai khoan cua toi", "thong tin cua toi", "ho so cua toi", "tinh hinh cua toi",
                   "tong quan tai khoan", "tat ca thong tin")
+
+
+def with_desk_work(topics: set[str], endpoints: list[str]) -> set[str]:
+    """A librarian has no task list: their own work is the desk - overdue loans to
+    chase and reservations waiting. "Tôi có việc gì cần làm?" used to find nothing."""
+    if "tasks" in topics and not any(_ENDPOINT_TOPIC.get(ep) == "tasks" for ep in endpoints):
+        return topics | {"loans", "reservations"}
+    return topics
 
 
 def select_personal_topics(message: str | None, intent: str | None) -> set[str]:
@@ -143,6 +152,11 @@ def get_primary_role(user_ctx: Any) -> str:
     return roles[0] if roles else "CUSTOMER"
 
 
+# /borrow/fines?summary=1 adds the money totals of every fine in the caller's scope,
+# not just the page: "tiền phạt chưa thu là bao nhiêu" has a real answer.
+_ENDPOINT_PARAMS = {"/borrow/fines": {"summary": "1"}}
+
+
 async def _fetch_one(
     client: httpx.AsyncClient,
     endpoint: str,
@@ -153,6 +167,7 @@ async def _fetch_one(
     try:
         resp = await client.get(
             f"{GATEWAY_URL}{endpoint}",
+            params=_ENDPOINT_PARAMS.get(endpoint),
             headers=headers,
             timeout=_TIMEOUT,
         )
@@ -398,7 +413,10 @@ def _fmt_borrow_loans_all(data: Any) -> str:
     if isinstance(counts, dict) and counts:
         n_overdue = int(counts.get("OVERDUE") or 0)
         n_active = int(counts.get("BORROWED") or 0) + n_overdue
-        lines = [f"📚 Loan toàn hệ thống: {n_active} đang mượn, trong đó {n_overdue} quá hạn."]
+        # borrow-service counts within the CALLER's scope (a librarian: their branches), never "toàn hệ thống"
+        # unit stated explicitly: the model reported "161 đầu sách" for 161 loans (audit 2026-11-22)
+        lines = [f"📚 Phiếu mượn trong phạm vi bạn được xem: {n_active} phiếu đang mượn, trong đó {n_overdue} phiếu quá hạn "
+                 "(đơn vị là phiếu mượn, không phải số cuốn hay số đầu sách)."]
     else:
         n_overdue = sum(1 for l in items if str(l.get("status", "")).upper() == "OVERDUE")
         n_active = sum(1 for l in items if str(l.get("status", "")).upper() in ("BORROWED", "OVERDUE"))
@@ -423,8 +441,20 @@ def _fmt_borrow_fines_all(data: Any) -> str:
         return "Không có dữ liệu phạt trong hệ thống."
     unpaid = [f for f in items if str(f.get("status", "")).upper() not in ("PAID", "WAIVED")]
     total = sum(_n(f.get("amount")) for f in unpaid)
-    return (f"💸 Phạt hệ thống: {len(items)} khoản tổng, "
-            f"{len(unpaid)} chưa thanh toán (tổng {total:,.0f} VND).")
+    meta = data.get("meta") if isinstance(data, dict) else None
+    counts = (meta or {}).get("status_counts")
+    if isinstance(counts, dict) and (meta or {}).get("total") is not None:
+        # the list is one page: the service's totals are the counts; amounts exist for the page only
+        open_count = int(counts.get("UNPAID") or 0) + int(counts.get("PARTIALLY_PAID") or 0)
+        money = (meta or {}).get("summary")
+        if isinstance(money, dict) and money.get("outstanding") is not None:
+            return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong; "
+                    f"tổng còn phải thu {_n(money['outstanding']):,.0f} VND, đã thu {_n(money.get('collected')):,.0f} VND.")
+        return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong. "
+                f"Số tiền chỉ có cho {len(items)} khoản gần nhất ({total:,.0f} VND chưa thu trong các khoản đó), "
+                "không phải tổng tiền.")
+    return (f"💸 Phạt trong {len(items)} khoản gần nhất (không phải toàn bộ): "
+            f"{len(unpaid)} chưa thanh toán ({total:,.0f} VND).")
 
 
 def _fmt_reservations_all(data: Any) -> str:
@@ -432,8 +462,14 @@ def _fmt_reservations_all(data: Any) -> str:
     items = _normalise_to_items(data)
     if not items:
         return "Không có dữ liệu đặt sách."
-    pending = [r for r in items if str(r.get("status", "")).upper() in ("PENDING", "WAITING", "READY", "CONFIRMED")]
-    return f"📋 Đặt sách hệ thống: {len(items)} tổng, {len(pending)} đang chờ xử lý."
+    waiting = ("PENDING", "WAITING", "READY", "CONFIRMED", "READY_FOR_PICKUP")
+    meta = data.get("meta") if isinstance(data, dict) else None
+    counts = (meta or {}).get("status_counts")
+    if isinstance(counts, dict) and (meta or {}).get("total") is not None:
+        pending_count = sum(int(counts.get(s) or 0) for s in waiting)
+        return f"📋 Đặt sách trong phạm vi bạn được xem: {int(meta['total'])} lượt, {pending_count} đang chờ xử lý."
+    pending = [r for r in items if str(r.get("status", "")).upper() in waiting]
+    return f"📋 Đặt sách trong {len(items)} lượt gần nhất (không phải toàn bộ): {len(pending)} đang chờ xử lý."
 
 
 def _fmt_wallet(data: Any) -> str:
@@ -521,7 +557,9 @@ async def build_user_personal_context(
 
     topics = select_personal_topics(message if message is not None else intent_info.get("query"),
                                     intent_info.get("intent"))
-    endpoints = [ep for ep in capabilities.personal_endpoints(user_ctx) if _ENDPOINT_TOPIC.get(ep) in topics]
+    allowed_endpoints = capabilities.personal_endpoints(user_ctx)
+    topics = with_desk_work(topics, allowed_endpoints)
+    endpoints = [ep for ep in allowed_endpoints if _ENDPOINT_TOPIC.get(ep) in topics]
     if not topics:
         # Nothing personal was asked: no personal data is fetched or prompted.
         return {"role": role, "persona": persona, "summary": "", "sources": [], "warnings": [], "topics": []}
@@ -556,6 +594,9 @@ async def build_user_personal_context(
     if warnings and not summaries:
         # Asked about their own data but it could not be read: say so, never invent it.
         summaries.append("⚠️ Không tải được dữ liệu cá nhân lúc này; không được suy đoán số liệu của người dùng.")
+    # Only the user's OWN records are "personal": a librarian's /borrow/loans is the
+    # circulation data of their branches (audit E-3: answered as "dữ liệu cá nhân của bạn").
+    own = {ep for c in capabilities.CAPABILITIES if c.data_scope in ("self", "supplier_self") for ep in c.endpoints}
     return {
         "role": role,
         "persona": persona,
@@ -563,4 +604,5 @@ async def build_user_personal_context(
         "sources": sources,
         "warnings": warnings,
         "topics": sorted(topics),
+        "data_scope": "self" if all(ep in own for ep in endpoints) else "role",
     }

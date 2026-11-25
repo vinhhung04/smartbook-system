@@ -8,7 +8,7 @@ import faq_retrieval
 import retrieval
 import retrieval_confidence as confidence
 from faq_retrieval import FAQMatch
-from intent import GENERAL_QUERY
+from intent import BOOK_SEARCH_QUERY, GENERAL_QUERY
 from rag import LIVE_DATA_LEAD, RAG_SYSTEM_RULES, UNCERTAIN_FALLBACK_REPLY, UNCERTAIN_FAQ_LEAD, build_fallback_reply
 
 
@@ -150,5 +150,168 @@ class GeneralQueryRetrievalTests(unittest.TestCase):
         self.assertNotIn("Nguồn dữ liệu", reply)
 
 
+class MultiPartQuestionTests(unittest.TestCase):
+    """Audit E-7: "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?" -
+    the half without documents pulled the WHOLE question to NO_EVIDENCE, so the
+    answerable half was refused too."""
+
+    def _retrieve(self, question, decisions):
+        entry = {"id": "roles-permissions", "question": "Thủ thư làm được gì?", "answer": "Quản lý mượn trả, đặt trước."}
+
+        def find(query):
+            decision = next((d for part, d in decisions.items() if part in query), confidence.NO_EVIDENCE)
+            matches = [] if decision == confidence.NO_EVIDENCE else [FAQMatch(entry=entry, score=0.8)]
+            return matches, _confidence(decision, 0.8 if matches else 0.1)
+
+        with mock.patch.object(faq_retrieval, "find_relevant_with_confidence", side_effect=find),              mock.patch.object(retrieval, "_live_policy_data", new=mock.AsyncMock(return_value="")):
+            return asyncio.run(retrieval.retrieve_context({"intent": GENERAL_QUERY, "query": question}, auth_header=None))
+
+    def test_the_answerable_part_is_retrieved_and_the_gap_is_named(self):
+        q = "Thủ thư có những quyền gì và được nghỉ phép bao nhiêu ngày một năm?"
+        result = self._retrieve(q, {q: confidence.NO_EVIDENCE, "Thủ thư có những quyền gì": confidence.CONFIDENT_MATCH})
+        self.assertNotEqual(result["retrieval_status"], confidence.NO_EVIDENCE)
+        self.assertIn("Quản lý mượn trả", result["summary"])
+        self.assertIn("được nghỉ phép bao nhiêu ngày một năm", result["summary"])  # the part with no document, named
+        self.assertIn("chưa có tài liệu", result["summary"])
+
+    def test_no_part_answerable_still_abstains(self):
+        q = "Lương nhân viên kho trả ngày nào và có thưởng Tết không?"
+        self.assertEqual(self._retrieve(q, {})["retrieval_status"], confidence.NO_EVIDENCE)
+
+    def test_a_single_question_is_not_split(self):
+        q = "Có được mang thú cưng vào thư viện không?"
+        calls = []
+        with mock.patch.object(faq_retrieval, "find_relevant_with_confidence",
+                               side_effect=lambda query: calls.append(query) or ([], _confidence(confidence.NO_EVIDENCE, 0.1))):
+            asyncio.run(retrieval.retrieve_context({"intent": GENERAL_QUERY, "query": q}, auth_header=None))
+        self.assertEqual(calls, [q])
+
+
+class FilterBooksTests(unittest.TestCase):
+    def test_function_words_do_not_match_titles(self):
+        # "dạy lập trình Rust CHO người mới" matched "CHO Tôi Xin Một Vé Đi Tuổi Thơ"
+        books = [{"title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ", "author": "Nguyễn Nhật Ánh"},
+                 {"title": "Clean Code", "author": "Robert C. Martin", "category": "Lập trình"}]
+        self.assertEqual(retrieval._filter_books(books, "day lap trinh rust cho nguoi moi")[0]["title"], "Clean Code")
+        self.assertEqual(len(retrieval._filter_books(books, "day lap trinh rust cho nguoi moi")), 1)
+        self.assertEqual(retrieval._filter_books(books, "cua nguyen nhat anh")[0]["title"], "Cho Tôi Xin Một Vé Đi Tuổi Thơ")
+
+
+class FetchWarningTests(unittest.TestCase):
+    def test_http_errors_become_plain_vietnamese(self):
+        # audit E-4: the warning text reaches the prompt verbatim
+        class Client:
+            def __init__(self, code): self.code = code
+            async def get(self, *a, **k): return mock.Mock(status_code=self.code)
+        for code, words in ((403, "không có quyền xem"), (401, "không có quyền xem"), (502, "lỗi máy chủ")):
+            source, payload, warning = asyncio.run(retrieval._fetch(Client(code), "/analytics/overdue-summary", "Bearer t"))
+            self.assertEqual(source["status"], f"error:{code}")  # machine status unchanged
+            self.assertIn(words, warning)
+            self.assertNotIn("HTTP", warning)
+
+
+ATOMIC = {"id": "b-1", "variant_id": "v-1", "title": "Atomic Habits", "author": "James Clear", "isbn": "9780735211292",
+          "available_quantity": 11, "availability_status": "AVAILABLE",
+          "pickup_branches": [{"warehouse_id": "w-d1", "warehouse_name": "Chi Nhanh District 1", "available_quantity": 4},
+                              {"warehouse_id": "w-hk", "warehouse_name": "Chi nhánh Hà Nội – Hoàn Kiếm", "available_quantity": 7}]}
+
+
+class BookSearchTests(unittest.TestCase):
+    """Audit 2026-11-19 (P0-1): /chat book search read /api/books, whose counts are the
+    caller's warehouse scope (a reader: 0 -> "hết hàng" for every book), and was
+    refused outright without a token."""
+
+    def _search(self, query, pages, auth_header):
+        calls = []
+
+        async def fetch(_client, endpoint, auth, params=None):
+            calls.append((endpoint, auth, dict(params or {})))
+            payload = pages(params or {})
+            return {"name": "Catalog Books", "endpoint": endpoint, "status": "ok"}, payload, None
+
+        with mock.patch.object(retrieval, "_fetch", new=fetch):
+            result = asyncio.run(retrieval.retrieve_context(
+                {"intent": BOOK_SEARCH_QUERY, "query": query}, auth_header=auth_header))
+        return result, calls
+
+    def test_public_catalog_is_used_with_or_without_a_token(self):
+        for auth in (None, "Bearer reader-token"):
+            result, calls = self._search("atomic habits", lambda p: {"data": [ATOMIC], "meta": {"totalPages": 1}}, auth)
+            self.assertEqual(calls, [(retrieval.PUBLIC_BOOKS_ENDPOINT, None, {"pageSize": 10, "search": "atomic habits"})])
+            self.assertIn("con 11 ban co the muon (Chi Nhanh District 1 4, Chi nhánh Hà Nội – Hoàn Kiếm 7)", result["summary"])
+            self.assertNotIn("Authorization", result["summary"])
+            book = result["raw"]["Catalog Books"][0]
+            self.assertEqual((book["quantity"], book["pickup_warehouse_id"]), (11, "w-hk"))  # most copies
+
+    def test_no_copies_says_none_can_be_borrowed(self):
+        gone = {**ATOMIC, "available_quantity": 0, "pickup_branches": []}
+        result, _ = self._search("atomic habits", lambda p: {"data": [gone]}, None)
+        self.assertIn("hien khong con ban nao co the muon", result["summary"])
+        self.assertIsNone(result["raw"]["Catalog Books"][0]["pickup_warehouse_id"])
+
+    def test_no_direct_hit_token_matches_the_catalog_pages(self):
+        other = {"id": "b-2", "title": "Clean Code", "author": "Robert C. Martin", "available_quantity": 2}
+
+        def pages(p):
+            if "search" in p:
+                return {"data": [], "meta": {"totalPages": 1}}
+            return {"data": [ATOMIC] if p["page"] == 1 else [other], "meta": {"totalPages": 2}}
+
+        result, calls = self._search("sach atomic cua james", pages, None)
+        self.assertEqual([c[2].get("page") for c in calls], [None, 1, 2])  # stops at totalPages
+        self.assertEqual([b["title"] for b in result["raw"]["Catalog Books"]], ["Atomic Habits"])
+        self.assertEqual(len(result["sources"]), 1)  # cited once, not once per page
+
+    def test_anonymous_data_question_context_has_no_technical_auth_words(self):
+        # audit E-11: the prompt said "khong co Authorization token" and the model repeated it
+        result = asyncio.run(retrieval.retrieve_context({"intent": "OVERDUE_LOAN_QUERY", "query": "qua han"}, None))
+        text = result["summary"] + " ".join(result["warnings"])
+        self.assertNotIn("Authorization", text)
+        self.assertNotIn("token", text)
+        self.assertIn("dang nhap", result["summary"])
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnreadableSourceTests(unittest.TestCase):
+    """Audit 2026-11-22: a source the caller may not read (403) was summarised as
+    0 - a librarian was told "dang muon 0, qua han 0" for a branch with 161 loans."""
+
+    def _context(self, intent, readable: dict, message="x"):
+        async def fetch(_client, endpoint, auth, params=None):
+            name = retrieval._source_name(endpoint)
+            if endpoint in readable:
+                return {"name": name, "endpoint": endpoint, "status": "ok"}, readable[endpoint], None
+            return {"name": name, "endpoint": endpoint, "status": "error:403"}, None, f"{name}: khong co quyen xem"
+
+        with mock.patch.object(retrieval, "_fetch", new=fetch):
+            return asyncio.run(retrieval.retrieve_context({"intent": intent, "query": message}, auth_header="Bearer t"))
+
+    def test_denied_sources_are_unknown_never_zero(self):
+        import intent as it
+        for name in ("DASHBOARD_SUMMARY_QUERY", "OVERDUE_LOAN_QUERY", "TOP_BORROWED_BOOKS_QUERY", "BORROW_TREND_QUERY",
+                     "FINE_SUMMARY_QUERY", "RESERVATION_QUERY", "REORDER_SUGGESTION_QUERY", "AGING_INVENTORY_QUERY",
+                     "LOW_STOCK_QUERY"):
+            summary = self._context(getattr(it, name), {})["summary"]
+            self.assertIn(retrieval.NO_DATA, summary, name)
+            self.assertNotRegex(summary, r"(Dang muon|qua han|Tong loan qua han|tong muon): 0\b", name)
+
+    def test_readable_kpis_are_quoted_with_their_scope(self):
+        import intent as it
+        kpis = {"total_titles": 32, "total_copies": 558, "active_loans": 343, "overdue_loans": 335,
+                "pending_reservations": 0, "confirmed_reservations": 0, "ready_for_pickup_reservations": 0,
+                "pickup_codes_expiring_soon": 0, "unpaid_fine_amount": 69192000}
+        summary = self._context(it.DASHBOARD_SUMMARY_QUERY, {"/analytics/dashboard/kpis": {"data": kpis}})["summary"]
+        self.assertIn("Dang muon: 343; qua han: 335.", summary)
+        self.assertIn(retrieval.SCOPE_LINE, summary)
+        self.assertIn(f"Rui ro ton kho theo kho: {retrieval.NO_DATA}", summary)  # that source was denied
+
+    def test_titles_never_stocked_in_the_callers_warehouses_are_not_out_of_stock(self):
+        import intent as it
+        books = [{"id": "a", "title": "Co o kho", "quantity": 0, "location_count": 1},
+                 {"id": "b", "title": "Khong co o kho", "quantity": 0, "location_count": 0}]
+        result = self._context(it.LOW_STOCK_QUERY, {"/api/books": {"data": books}})
+        self.assertIn("Co o kho", result["summary"])
+        self.assertNotIn("Khong co o kho", result["summary"])

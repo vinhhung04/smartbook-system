@@ -96,6 +96,8 @@ _DATA_CUES = [
     # "có <sách X> không" is a catalog lookup; "có nên ..." asks for advice on the data
     "co cuon", "co bo ", "co truyen", "truyen tranh", "co giao trinh", "co nen", "nen nhap", "thanh ly",
     "dang thieu", "ton lau", "ton kho lau", "liet ke", "khach hang qua han",
+    # "Tôi có những việc gì cần làm?" asks for the user's own work, not a procedure
+    "viec can lam", "viec gi can lam", "nhung viec gi", "viec can xu ly", "nhiem vu cua toi",
 ]
 
 

@@ -188,7 +188,7 @@ class ExplainTests(unittest.TestCase):
         factors = {f["factor"] for f in r["factors"]}
         self.assertIn("Nhu cầu đang tăng so với kỳ trước", factors)
         self.assertTrue(any("không có tín hiệu nhu cầu" in f for f in factors))
-        self.assertTrue(any("toàn hệ thống" in x for x in r["limitations"]))
+        self.assertTrue(any("các kho bạn được xem" in x for x in r["limitations"]))
 
     def test_unknown_warehouse_is_an_error_listing_the_real_ones(self):
         gw = FakeGateway({"/api/warehouses": WAREHOUSES})
@@ -321,3 +321,91 @@ class PositionCoveredLinesTests(unittest.TestCase):
         s = r["scenarios"][0]
         self.assertEqual((s["unfunded_high_priority"], s["lines_covered_by_position"]), (0, 1))
         self.assertEqual(r["full_need"]["need_with_position_vnd"], 200_000)
+
+    def test_a_line_held_for_a_data_mismatch_is_not_called_unfunded(self):
+        # audit 2026-11-22: "bỏ lại do không đủ ngân sách" with 2.67M left - the line was
+        # held because borrow_db and inventory_db disagree on its loans
+        items = [reorder_item("v-1", "A", suggested_reorder_qty=5, estimated_cost=500_000),
+                 reorder_item("v-2", "B", suggested_reorder_qty=5, estimated_cost=500_000)]
+
+        def reorder(params):
+            result = {"summary": {"total_candidates": 2, "high_priority": 2, "estimated_total_cost": 1_000_000,
+                                  "estimated_total_reorder_qty": 10}, "items": [dict(i) for i in items]}
+            if params.get("budgetVnd") is not None:
+                result["items"][0].update(funded_qty=5, funded_cost=500_000, within_budget=True,
+                                          budget_plan={"cap_qty": 5, "inventory_position": 0})
+                result["items"][1].update(funded_qty=0, funded_cost=0, within_budget=False,
+                                          budget_plan={"cap_qty": 5, "inventory_position": 0, "data_issue": "BORROW_INVENTORY_MISMATCH"})
+                result["budget"] = {"budget_vnd": params["budgetVnd"], "funded_cost": 500_000, "remaining_vnd": 500_000,
+                                    "unreliable_lines": 1, "funding_order": "MARGINAL_SERVICE_PER_COST"}
+            return result
+        with patch.object(ct, "_cached_get", FakeGateway({"/analytics/reorder-suggestions": reorder})):
+            r = run(ct.simulate_reorder_budget("Bearer t", budgets_vnd=[1_000_000]))
+        s = r["scenarios"][0]
+        self.assertEqual((s["unfunded_high_priority"], s["held_for_data_issue_lines"], s["held_high_examples"]), (0, 1, ["B"]))
+
+
+class ReorderWarehouseScopeTests(unittest.TestCase):
+    """2026-11-20: asked about one warehouse, the "Đề xuất có căn cứ" cards were the top of
+    the LIBRARY-wide reorder list - books absent from that warehouse's low-stock table."""
+
+    def _gateway(self):
+        reorder = {"summary": {"total_candidates": 106, "high_priority": 0, "medium_priority": 0, "low_priority": 106,
+                               "estimated_total_reorder_qty": 9, "estimated_total_cost": 900_000},
+                   "budget": None,
+                   "items": [reorder_item("v-x", "Sắc Lời Đắc Thế", priority="LOW", suggested_reorder_qty=3, estimated_cost=300_000),
+                             reorder_item("v-nw", "Norwegian Wood", priority="MEDIUM", suggested_reorder_qty=2,
+                                          estimated_cost=200_000, available_qty=12),
+                             reorder_item("v-ph", "Project Hail Mary", priority="LOW", suggested_reorder_qty=4, estimated_cost=400_000)]}
+        low = {"counts": {"low_stock_including_out": 2, "out_of_stock": 0}, "truncated": False,
+               "items": [{"variant_id": "v-nw", "title": "Norwegian Wood", "status": "LOW_STOCK", "available_qty": 2,
+                          "reorder_point": 5},
+                         {"variant_id": "v-oh", "title": "One Hundred Years of Solitude", "status": "LOW_STOCK",
+                          "available_qty": 1, "reorder_point": 15}]}
+        # the warehouse's own need (analytics /rebalancing-plan): Dune has copies elsewhere
+        # in the library but none here, so it is short here although not on the library list
+        plan = {"generated_at": "t", "scope": {"warehouses": []}, "options": {}, "recommendation": {},
+                "shortages": [{"variant_id": "v-nw", "title": "Norwegian Wood", "priority": "MEDIUM", "available_qty": 2,
+                               "incoming_qty": 0, "lead_time_demand": 6.2, "safety_stock": 3, "lead_time_days": 14,
+                               "unit_cost": 100_000, "shortage_qty": 8},
+                              {"variant_id": "v-dune", "title": "Dune - Xứ Cát", "priority": "HIGH", "available_qty": 0,
+                               "incoming_qty": 0, "lead_time_demand": 12, "safety_stock": 2, "lead_time_days": 14,
+                               "unit_cost": 200_000, "shortage_qty": 14}]}
+        return FakeGateway({"/analytics/reorder-suggestions": reorder, "/api/warehouses": WAREHOUSES,
+                            "/analytics/warehouse-stock-items": low, "/analytics/rebalancing-plan": plan})
+
+    def _run(self, **kw):
+        import assistant_tools as at
+        gw = self._gateway()
+        with patch.object(at, "_get", new=lambda e, a, p=None, truncate=True: gw(e, a, p)), \
+             patch.object(ct, "_cached_get", gw):
+            return run(at.get_reorder_suggestions("Bearer t", **kw)), gw
+
+    def test_a_named_warehouse_gets_its_own_need(self):
+        r, gw = self._run(warehouse="Kho HCM Chinh")
+        self.assertEqual([i["title"] for i in r["items"]], ["Norwegian Wood", "Dune - Xứ Cát"])
+        nw, dune = r["items"]
+        # the warehouse's own figures; the library-wide line stays for context
+        self.assertEqual((nw["warehouse_available_qty"], nw["suggested_reorder_qty"], nw["available_qty"]), (2, 8, 12))
+        self.assertEqual((dune["warehouse_status"], dune["suggested_reorder_qty"], dune["estimated_cost"]),
+                         ("OUT_OF_STOCK", 14, 2_800_000))
+        self.assertEqual(r["summary"]["total_candidates"], 2)
+        self.assertEqual(r["summary"]["estimated_total_cost"], 3_600_000)
+        self.assertEqual(r["system_summary"]["total_candidates"], 106)
+        self.assertEqual(r["warehouse_scope"]["warehouse_name"], "Kho HCM Chinh")
+        self.assertIn("riêng kho này", r["warehouse_scope"]["note"])
+        plan_calls = [c for c in gw.calls if c[0] == "/analytics/rebalancing-plan"]
+        self.assertEqual(len(plan_calls), 1)
+        self.assertIn("destinationWarehouseIds", plan_calls[0][1])
+
+    def test_no_warehouse_or_a_budget_keeps_the_library_list(self):
+        r, _ = self._run()
+        self.assertEqual(len(r["items"]), 3)
+        self.assertNotIn("warehouse_scope", r)
+        r, _ = self._run(warehouse="Kho HCM Chinh", budget_vnd=1_000_000)  # a budget allocation is library-wide
+        self.assertEqual(len(r["items"]), 3)
+
+    def test_unknown_warehouse_is_an_error_not_the_library_list(self):
+        r, _ = self._run(warehouse="Kho Mặt Trăng")
+        self.assertIn("error", r)
+        self.assertNotIn("items", r)

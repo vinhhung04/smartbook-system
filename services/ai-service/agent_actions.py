@@ -6,6 +6,7 @@ CREATE_REPORT_DRAFT = "CREATE_REPORT_DRAFT"
 CREATE_RESERVATION_DRAFT = "CREATE_RESERVATION_DRAFT"
 CREATE_STOCK_ALERT = "CREATE_STOCK_ALERT"
 CREATE_STAFF_TASK_DRAFT = "CREATE_STAFF_TASK_DRAFT"
+CREATE_REBALANCE_DRAFT = "CREATE_REBALANCE_DRAFT"
 
 # ── Action status ─────────────────────────────────────────────────────────────
 PENDING_CONFIRMATION = "PENDING_CONFIRMATION"
@@ -47,9 +48,13 @@ RISK_HIGH = "HIGH"
 #   POST /api/staff-tasks         same as stock alerts
 #   POST /borrow/my/reservations  borrow authorizeCustomerSelf: CUSTOMER + customer.self.read|write
 #   POST /borrow/reservations     borrow authorizeBorrowAdminWrite: LIBRARIAN|ADMIN + borrow write permission
+#   POST /api/order-requests/transfer  inventory authorizeManagerDecision: WAREHOUSE_MANAGER|ADMIN +
+#                                 inventory.operation.decide, WRITE on the source warehouse
 _BORROW_WRITE = ["borrow.write", "borrow.customers.write", "borrow.loans.write", "borrow.fines.manage",
                  "borrow.fine.write", "borrow.membership.write"]
 _MANAGER_DECISION = [{"roles": ["ADMIN", "WAREHOUSE_MANAGER"], "permissions": ["inventory.operation.decide"]}]
+PURCHASE_REQUEST_POLICY = [{"roles": [], "permissions": ["inventory.purchase.request"]}]
+TRANSFER_REQUEST_POLICY = _MANAGER_DECISION
 
 ACTION_CONFIG: dict[str, dict] = {
     CREATE_REORDER_DRAFT: {
@@ -79,6 +84,16 @@ ACTION_CONFIG: dict[str, dict] = {
         "risk": RISK_LOW,
         "requires_confirmation": True,
         "description": "Tạo cảnh báo tồn kho thấp/hết hàng từ warehouse-stock-risk, không chỉnh tồn kho.",
+    },
+    CREATE_REBALANCE_DRAFT: {
+        # one bundle of transfer requests and purchase requests; each part is
+        # re-checked at execution against its own rule (transfer: manager
+        # decision + WRITE on the source; purchase: purchase.request + WRITE)
+        "policy": [*_MANAGER_DECISION, *PURCHASE_REQUEST_POLICY],
+        "risk": RISK_MEDIUM,
+        "requires_confirmation": True,
+        "description": "Tạo yêu cầu điều chuyển (REQUESTED, chờ duyệt) và phiếu yêu cầu nhập theo phương án đã chọn; "
+                       "không duyệt, không xuất/nhập kho.",
     },
     CREATE_STAFF_TASK_DRAFT: {
         "policy": _MANAGER_DECISION,
@@ -119,6 +134,9 @@ DANGEROUS_ACTION_DENYLIST: frozenset[str] = frozenset([
     "COLLECT_FINE",
     "APPROVE_LOAN_DIRECTLY",
     "APPROVE_PURCHASE_ORDER",
+    "APPROVE_TRANSFER_REQUEST",
+    "SHIP_TRANSFER",
+    "RECEIVE_TRANSFER",
     "POST_GOODS_RECEIPT",
     "RAW_SQL",
     "INVENTORY_INBOUND_DIRECT",

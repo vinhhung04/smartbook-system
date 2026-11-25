@@ -62,7 +62,8 @@ export function CopilotDecision({ decision, onDraft, disabled }: {
   onDraft?: (message: string) => void;
   disabled?: boolean;
 }) {
-  if (!decision || !decision.options?.length) return null;
+  // a rebalancing decision has its own cards (ai-copilot-rebalance.tsx)
+  if (!decision || decision.kind === 'rebalance' || !decision.options?.length) return null;
   const status = decision.verification?.status ?? '';
   const badge = VERIFICATION[status];
   return (

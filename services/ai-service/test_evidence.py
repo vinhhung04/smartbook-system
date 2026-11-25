@@ -40,6 +40,18 @@ def test_warehouse_stock_risk_ranks_by_severity():
     assert items[0]["label"].startswith("Kho B")
 
 
+def test_warehouse_stock_risk_adds_the_all_warehouse_totals():
+    result = [
+        {"warehouse_name": "Kho A", "low_stock_variants": 2, "out_of_stock_variants": 0},
+        {"warehouse_name": "Kho B", "low_stock_variants": 1, "out_of_stock_variants": 5},
+    ]
+    totals = {i["metric"]: i["value"] for i in extract_evidence("get_warehouse_stock_risk", result)
+              if i["label"].startswith("Tổng 2 kho")}
+    assert totals == {"low_stock_variants": 3, "out_of_stock_variants": 5}
+    one = extract_evidence("get_warehouse_stock_risk", result[:1])
+    assert not any(i["label"].startswith("Tổng") for i in one)
+
+
 def test_reorder_suggestions_extracts_summary_and_items():
     result = {
         "summary": {"total_candidates": 3},
@@ -192,3 +204,21 @@ def test_empty_containers_return_empty():
     assert extract_evidence("get_top_books", []) == []
     assert extract_evidence("get_warehouse_stock_risk", []) == []
     assert extract_evidence("get_reorder_suggestions", {}) == []
+
+
+def test_reservation_conversions_are_not_read_as_books_shipped():
+    # audit E-14: "5.268 đầu sách/bản sao đã được xuất kho" for 5268 reservations turned into loans
+    from tool_context import render_tool_result
+    text = render_tool_result("get_reservation_funnel", {"total": 8288, "converted_to_loan": 5268, "conversion_rate": 63.6})
+    assert "5.268 lượt đặt chỗ" in text
+    assert "không phải số sách" in text
+
+
+def test_loan_counts_and_top_book_counts_name_their_unit():
+    # audit D-2: top books (13+5+4 = 22 "lượt") exceeded the week's 19 "lượt mượn" - copies vs loan tickets
+    from tool_context import render_tool_result
+    import copilot_response as cr
+    trends = render_tool_result("get_borrow_trends", [{"date": "2026-11-19", "loans": 19, "returns": 0}])
+    assert "phiếu mượn" in trends
+    top = cr.render("get_top_books", [{"title": "Truyện Kiều", "borrow_count": 13}])
+    assert "bản sách được mượn" in top

@@ -76,6 +76,37 @@ class ScopeHelpersTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(await warehouse_scope.can_view(MANAGER, {HN}))
             self.assertTrue(await warehouse_scope.can_view(MANAGER, set()))
 
+    async def test_fresh_write_scope_ignores_the_cache_after_revocation(self):
+        """Write access cached when an action was proposed must not be trusted
+        when it is confirmed: fresh=True reads auth-service again."""
+        current = {"level": "FULL"}
+
+        def handler(_request):
+            return httpx.Response(200, json={"data": {"status": "ACTIVE", "is_superuser": False, "scopes": [
+                {"warehouse_id": HCM, "access_level": current["level"]}]}})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with patch.dict("os.environ", {"INTERNAL_SERVICE_KEY": "k"}):
+                self.assertEqual(await warehouse_scope.writable_warehouses(MANAGER, client=client), frozenset({HCM}))
+                current["level"] = "READ"  # revoked to read-only while the action is pending
+                self.assertEqual(await warehouse_scope.writable_warehouses(MANAGER, client=client), frozenset({HCM}))
+                self.assertEqual(await warehouse_scope.writable_warehouses(MANAGER, client=client, fresh=True), frozenset())
+                # the fresh read also refreshed the cache for later reads
+                self.assertEqual(await warehouse_scope.readable_warehouses(MANAGER, client=client), frozenset({HCM}))
+                self.assertEqual(await warehouse_scope.writable_warehouses(MANAGER, client=client), frozenset())
+
+    async def test_confirm_reads_write_scope_fresh(self):
+        import action_guard
+        seen = {}
+
+        async def writable(_user_ctx, **kw):
+            seen.update(kw)
+            return frozenset({HCM})
+
+        with patch("warehouse_scope.writable_warehouses", new=writable):
+            await action_guard.require_write_scope("CREATE_REORDER_DRAFT", {"warehouse_id": HCM}, MANAGER)
+        self.assertEqual(seen, {"fresh": True})
+
 
 class RevokedScopeTests(unittest.IsolatedAsyncioTestCase):
     """Manager A could read HN and HCM, asked for a chart, then lost HCM."""

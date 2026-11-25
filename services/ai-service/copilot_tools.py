@@ -233,8 +233,9 @@ def data_confidence(item: dict) -> dict:
 async def explain_warehouse_shortage(auth_header: str | None = None, warehouse: str = "") -> dict:
     """Contributing factors behind a warehouse's shortage: what is out/low there
     (per variant), joined by variant_id with demand signals from the reorder
-    model. Demand is library-wide - the analytics model has no per-warehouse
-    demand - and the factors are correlations, which the result states."""
+    model. Demand covers every warehouse the caller can read (the reorder model
+    follows their scope), not this warehouse alone - and the factors are
+    correlations, which the result states."""
     w, err = await _resolve_or_error(auth_header, warehouse)
     if err:
         return err
@@ -266,7 +267,7 @@ async def explain_warehouse_shortage(auth_header: str | None = None, warehouse: 
             "ton_kha_dung": risk_row.get("total_available_qty"), "dang_giu_dat_cho": risk_row.get("total_reserved_qty"),
             "dang_cho_muon": risk_row.get("total_borrowed_qty")}})
     if with_demand:
-        factors.append({"factor": "Sách thiếu hàng vẫn đang có nhu cầu mượn (toàn hệ thống)", "count": len(with_demand),
+        factors.append({"factor": "Sách thiếu hàng vẫn đang có nhu cầu mượn (các kho bạn được xem)", "count": len(with_demand),
                         "examples": [f"{j['title']}: {j['borrow_count']} lượt mượn" for j in
                                      sorted(with_demand, key=lambda j: -(j["borrow_count"] or 0))[:3]]})
     if rising:
@@ -289,7 +290,7 @@ async def explain_warehouse_shortage(auth_header: str | None = None, warehouse: 
         "items": sorted(joined, key=lambda j: (j["status"] != "HẾT HÀNG", -(j.get("borrow_count") or 0)))[:15],
         "join_key": "variant_id",
         "limitations": [
-            "Nhu cầu mượn lấy từ mô hình đề xuất nhập, tính trên toàn hệ thống, không tách riêng theo kho.",
+            "Nhu cầu mượn lấy từ mô hình đề xuất nhập, tính gộp trên các kho bạn được xem, không tách riêng kho này.",
             "Các yếu tố là tương quan quan sát được trong dữ liệu, không phải nguyên nhân đã được kiểm chứng.",
         ] + ([] if demand else ["Không lấy được dữ liệu nhu cầu (reorder-suggestions) nên thiếu phần nhu cầu."]),
     }
@@ -527,7 +528,12 @@ async def simulate_reorder_budget(
         funded = [i for i in items if i.get("within_budget")]
         # a 3.3 line re-sized to 0 (copies incoming / expected back cover it) needs no money
         needs_none = lambda i: (i.get("budget_plan") or {}).get("cap_qty") == 0 and (i.get("suggested_reorder_qty") or 0) > 0  # noqa: E731
-        unfunded_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH" and not needs_none(i)]
+        # a line analytics would not fund because borrow_db and inventory_db disagree
+        # on its loans (data_issue) is held for reconciliation, not left out for money
+        held = lambda i: bool((i.get("budget_plan") or {}).get("data_issue"))  # noqa: E731
+        unfunded_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH"
+                         and not needs_none(i) and not held(i)]
+        held_high = [i for i in items if not i.get("within_budget") and i.get("priority") == "HIGH" and held(i)]
         # Since 3.3 a line can be funded in part (funded_qty); older responses
         # fund whole lines (suggested_reorder_qty).
         qty = lambda i: i.get("funded_qty", i.get("suggested_reorder_qty")) or 0  # noqa: E731
@@ -561,6 +567,8 @@ async def simulate_reorder_budget(
                              for i in funded[:8]],
             "unfunded_high_examples": [{"title": i.get("title"), "estimated_cost": i.get("estimated_cost")}
                                        for i in unfunded_high[:5]],
+            "held_for_data_issue_lines": budget_info.get("unreliable_lines") or 0,
+            "held_high_examples": [i.get("title") for i in held_high[:5]],
         })
     reference = next((s for s in scenarios if not s.get("error")), None)
     for s in scenarios:
@@ -715,7 +723,147 @@ async def rank_priority_tasks(auth_header: str | None = None) -> dict:
     return {"ranking_rule": _RANKING_RULE, "tasks": tasks, "unavailable": unavailable, "retrieved_at": _now_iso()}
 
 
+# ── inventory rebalancing & procurement decision ─────────────────────────────
+
+_REBALANCE_OPTION_VI = {
+    "TRANSFER_ONLY": "Chỉ điều chuyển", "PROCUREMENT_ONLY": "Chỉ mua mới", "HYBRID": "Kết hợp điều chuyển + mua mới",
+    "HYBRID_EXECUTABLE": "Kết hợp, chỉ gồm việc bạn tự thực hiện được",
+}
+_REBALANCE_LINES = 12  # rows per option sent back; the counts cover the rest
+
+
+def _rebalance_option(option: dict, names: dict) -> dict:
+    def wh(wid):
+        return names.get(wid, wid)
+    keep = {k: v for k, v in option.items() if k not in ("transfers", "purchases", "unpriced_lines")}
+    keep["label"] = _REBALANCE_OPTION_VI.get(option.get("code"), option.get("code"))
+    keep["transfers"] = [{
+        "variant_id": t.get("variant_id"), "title": t.get("title"), "quantity": t.get("quantity"),
+        "from_warehouse_id": t.get("from_warehouse_id"), "from_warehouse": wh(t.get("from_warehouse_id")),
+        "to_warehouse_id": t.get("to_warehouse_id"), "to_warehouse": wh(t.get("to_warehouse_id")),
+        "source_available_after": t.get("source_available_after"), "source_protected_qty": t.get("source_protected_qty"),
+        "permission": t.get("permission"), "permission_reason": t.get("permission_reason"),
+    } for t in (option.get("transfers") or [])[:_REBALANCE_LINES]]
+    keep["purchases"] = [{
+        "variant_id": p.get("variant_id"), "title": p.get("title"), "quantity": p.get("quantity"),
+        "warehouse_id": p.get("warehouse_id"), "warehouse": wh(p.get("warehouse_id")), "cost_vnd": p.get("cost"),
+        "lead_time_days": p.get("lead_time_days"), "permission": p.get("permission"),
+    } for p in (option.get("purchases") or [])[:_REBALANCE_LINES]]
+    keep["unpriced_lines"] = len(option.get("unpriced_lines") or [])
+    return keep
+
+
+async def fetch_rebalancing_plan(auth_header: str | None = None, destination_warehouses: list[str] | None = None,
+                                 budget_vnd: float | None = None, demand_change_pct: float | None = None,
+                                 exclude_source_warehouses: list[str] | None = None,
+                                 only_source_warehouses: list[str] | None = None,
+                                 closed_warehouses: list[str] | None = None,
+                                 safety_stock_multiplier: float | None = None, priority: str | None = None,
+                                 lead_time_delay_days: int | None = None) -> tuple[dict, list[dict]]:
+    """The full analytics /rebalancing-plan for these arguments (or an error
+    dict), plus the resolved destinations. Shared by the read tool (which
+    compacts it for the model) and the draft builder (which needs every line).
+    Warehouse names are resolved against the user's own warehouse list;
+    analytics re-checks the scope of every id (never trusted from here)."""
+    params: dict = {}
+
+    async def ids(hints: list[str] | None) -> tuple[list[dict], dict | None]:
+        found: list[dict] = []
+        for hint in hints or []:
+            match, err = await _resolve_or_error(auth_header, hint)
+            if err:
+                return [], err
+            if match["id"] not in [d["id"] for d in found]:
+                found.append(match)
+        return found, None
+
+    destinations, err = await ids(destination_warehouses)
+    if err:
+        return err, []
+    if destinations:
+        params["destinationWarehouseIds"] = ",".join(d["id"] for d in destinations)
+    for hints, key in ((exclude_source_warehouses, "excludeSourceIds"), (only_source_warehouses, "onlySourceIds"),
+                       (closed_warehouses, "closedWarehouseIds")):
+        found, err = await ids(hints)
+        if err:
+            return err, []
+        if found:
+            params[key] = ",".join(d["id"] for d in found)
+    if budget_vnd is not None:
+        if budget_vnd < 0:
+            return {"error": "ngân sách không được âm"}, []
+        params["budgetVnd"] = int(round(budget_vnd))
+    if demand_change_pct:
+        params["demandChangePct"] = demand_change_pct
+    if safety_stock_multiplier is not None:
+        params["safetyStockMultiplier"] = safety_stock_multiplier
+    if priority in ("HIGH", "MEDIUM", "LOW"):
+        params["priority"] = priority
+    if lead_time_delay_days:
+        params["leadTimeDelayDays"] = int(lead_time_delay_days)
+    data = await _cached_get("/analytics/rebalancing-plan", auth_header, params)
+    if _error(data):
+        message = str(data.get("error"))
+        if "403" in message:
+            return {"error": "Bạn không có quyền xem kho được yêu cầu.", "permission_denied": True}, []
+        if "503" in message:
+            return {"error": "Chưa xác minh được quyền kho lúc này nên không phân tích (an toàn mặc định).",
+                    "scope_unavailable": True}, []
+        return data, []
+    return data, destinations
+
+
+async def analyze_inventory_rebalancing(auth_header: str | None = None, destination_warehouses: list[str] | None = None,
+                                        budget_vnd: float | None = None, demand_change_pct: float | None = None,
+                                        exclude_source_warehouses: list[str] | None = None,
+                                        only_source_warehouses: list[str] | None = None,
+                                        closed_warehouses: list[str] | None = None,
+                                        safety_stock_multiplier: float | None = None, priority: str | None = None,
+                                        lead_time_delay_days: int | None = None) -> dict:
+    """Shortage / surplus per warehouse, safe transfers, and the transfer-only /
+    procurement-only / hybrid options (fetch_rebalancing_plan), compacted for
+    the model, optionally under what-if conditions."""
+    data, destinations = await fetch_rebalancing_plan(
+        auth_header, destination_warehouses, budget_vnd, demand_change_pct, exclude_source_warehouses,
+        only_source_warehouses, closed_warehouses, safety_stock_multiplier, priority, lead_time_delay_days)
+    if _error(data):
+        return data
+    scope = (data.get("scope") or {}).get("warehouses") or []
+    names = {w.get("warehouse_id"): w.get("name") or w.get("code") for w in scope}
+    options = data.get("options") or {}
+    rec = data.get("recommendation") or {}
+    return {
+        "source": "analytics/rebalancing-plan",
+        "retrieved_at": data.get("generated_at") or _now_iso(),
+        "scope": [{"warehouse_id": w.get("warehouse_id"), "warehouse": w.get("name") or w.get("code"),
+                   "access": w.get("access")} for w in scope],
+        "capabilities": (data.get("scope") or {}).get("capabilities"),
+        "destinations": [_wh_public(d) for d in destinations],
+        "budget_vnd": (data.get("parameters") or {}).get("budget_vnd"),
+        "what_if": {k: v for k, v in {
+            "demand_change_pct": demand_change_pct, "exclude_source_warehouses": exclude_source_warehouses,
+            "only_source_warehouses": only_source_warehouses, "closed_warehouses": closed_warehouses,
+            "safety_stock_multiplier": safety_stock_multiplier, "priority": priority,
+            "lead_time_delay_days": lead_time_delay_days}.items() if v},
+        "notice": data.get("notice"),
+        "diagnosis": [{**{k: v for k, v in row.items() if k not in ("name", "code")},
+                       "warehouse": row.get("name") or row.get("code")} for row in data.get("diagnosis") or []],
+        "top_shortages": [{**s, "warehouse": names.get(s.get("warehouse_id"))} for s in (data.get("shortages") or [])[:8]],
+        "top_surpluses": [{**s, "warehouse": names.get(s.get("warehouse_id"))} for s in (data.get("surpluses") or [])[:8]],
+        "options": {code: _rebalance_option(opt, names) for code, opt in options.items()},
+        "recommendation": {
+            **rec,
+            "best_business_label": _REBALANCE_OPTION_VI.get(rec.get("best_business_option")),
+            "executable_label": _REBALANCE_OPTION_VI.get(rec.get("executable_option")),
+        },
+        "totals": data.get("totals"),
+        "data_quality": data.get("data_quality"),
+        "assumptions": data.get("assumptions"),
+    }
+
+
 COPILOT_TOOL_FUNCTIONS = {
+    "analyze_inventory_rebalancing": analyze_inventory_rebalancing,
     "get_warehouse_low_stock_items": get_warehouse_low_stock_items,
     "compare_warehouses": compare_warehouses,
     "explain_warehouse_shortage": explain_warehouse_shortage,
@@ -782,6 +930,25 @@ COPILOT_TOOLS = [
             {"title": {"type": "string", "description": "Tên sách"},
              "rank": {"type": "integer", "description": "Vị trí trong danh sách đề xuất hiện tại (1 = đầu tiên)"},
              "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]}}),
+    _schema("analyze_inventory_rebalancing",
+            "Cân bằng tồn kho giữa các kho người dùng được xem: kho/đầu sách thiếu và dư theo nhu cầu riêng của từng kho, "
+            "số lượng điều chuyển an toàn (kho nguồn giữ đủ mức cần), so sánh 3 phương án chỉ điều chuyển / chỉ mua mới / "
+            "kết hợp theo ngân sách mua, và quyền của người dùng với từng hành động. Dùng cho câu hỏi điều chuyển, kho dư, "
+            "nguồn hàng nội bộ, nên chuyển hay nhập.",
+            {"destination_warehouses": {"type": "array", "items": {"type": "string"},
+                                        "description": "Tên hoặc mã kho cần bổ sung; bỏ trống = mọi kho được xem"},
+             "budget_vnd": {"type": "number", "description": "Ngân sách mua mới (VNĐ); bỏ trống = không giới hạn"},
+             "demand_change_pct": {"type": "number", "description": "Giả định nhu cầu kho đích thay đổi %, âm là giảm"},
+             "exclude_source_warehouses": {"type": "array", "items": {"type": "string"},
+                                           "description": "Kho không thể điều chuyển đi"},
+             "only_source_warehouses": {"type": "array", "items": {"type": "string"},
+                                        "description": "Chỉ cho phép điều chuyển từ các kho này"},
+             "closed_warehouses": {"type": "array", "items": {"type": "string"},
+                                   "description": "Giả định kho ngừng hoạt động"},
+             "safety_stock_multiplier": {"type": "number", "description": "Hệ số tồn an toàn, 1 = như hiện tại"},
+             "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"],
+                          "description": "Chỉ phục vụ dòng thiếu có mức ưu tiên này"},
+             "lead_time_delay_days": {"type": "integer", "description": "Nhà cung cấp giao chậm thêm N ngày"}}),
     _schema("rank_priority_tasks",
             "Xếp hạng các việc cần ưu tiên xử lý hôm nay từ số liệu thật (hết hàng có nhu cầu, quá hạn, phạt chưa thu, "
             "đề xuất nhập, kho dưới ngưỡng) theo quy tắc cố định."),

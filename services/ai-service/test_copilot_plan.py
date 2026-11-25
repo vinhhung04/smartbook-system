@@ -148,7 +148,12 @@ class PlanToolTests(unittest.TestCase):
         self.assertEqual(p.requested_analysis, "out_of_scope")
 
     def test_write_requests_keep_the_confirmation_route(self):
-        self.assertEqual(plan("Tạo phiếu nhập cho sách cần bổ sung").required_tools, [])
+        # Only the read the draft needs is seeded (live run 2026-11-20: left to the
+        # model, it called nothing and invented the answer); the draft itself still
+        # waits for the user's confirmation.
+        p = plan("Tạo phiếu nhập cho sách cần bổ sung")
+        self.assertEqual(p.required_tools, [{"name": "get_reorder_suggestions", "args": {"limit": 100}}])
+        self.assertTrue(p.style.get("write_request"))
 
     def test_every_planned_tool_is_whitelisted_for_the_whole_dataset(self):
         path = os.path.join(os.path.dirname(__file__), "eval", "copilot_dataset.json")
@@ -304,8 +309,10 @@ class BookTitleIsNotAVerbTests(unittest.TestCase):
                          ["explain_reorder_item"])
         self.assertEqual(tools(plan("Có sách Lập Trình Lượng Tử Cho Mèo không?")), ["search_books"])
 
-    def test_a_real_write_request_still_leaves_tool_choice_to_the_action_flow(self):
-        self.assertEqual(plan("Lập phiếu đề xuất nhập cho sách ưu tiên cao").required_tools, [])
+    def test_a_real_write_request_still_goes_to_the_action_flow(self):
+        p = plan("Lập phiếu đề xuất nhập cho sách ưu tiên cao")
+        self.assertEqual(p.required_tools, [{"name": "get_reorder_suggestions", "args": {"limit": 100, "priority": "HIGH"}}])
+        self.assertTrue(p.style.get("write_request"))
 
 
 class Copilot33PlannerGapTests(unittest.TestCase):
@@ -381,3 +388,47 @@ class Phase6DecisionPlannerTests(unittest.TestCase):
     def test_a_draft_request_with_a_budget_reads_that_budget_allocation(self):
         p = plan("Lập phiếu đề xuất nhập nháp với ngân sách 15.000.000 ₫")
         self.assertEqual(p.required_tools, [{"name": "get_reorder_suggestions", "args": {"budget_vnd": 15000000, "limit": 100}}])
+
+
+class ReorderWarehouseArgTests(unittest.TestCase):
+    def test_one_named_warehouse_is_passed_to_the_reorder_list(self):
+        p = plan("Kho HCM Chinh có sách nào tồn thấp cần nhập thêm?")
+        calls = {t["name"]: t["args"] for t in p.required_tools}
+        self.assertEqual(calls["get_reorder_suggestions"].get("warehouse"), "Kho HCM Chinh")
+        p = plan("Nên nhập thêm sách gì?")
+        self.assertNotIn("warehouse", {t["name"]: t["args"] for t in p.required_tools}["get_reorder_suggestions"])
+
+
+class SqlRequestTests(unittest.TestCase):
+    def test_an_sql_statement_is_out_of_scope_not_a_table_request(self):
+        # audit E-8: "DROP TABLE" read as a request for a table chart ("chưa có dữ liệu để vẽ")
+        for text in ("Chạy câu SQL: DROP TABLE loan_transactions;", "SELECT * FROM users WHERE role='ADMIN'",
+                     "delete from loans where id = 1"):
+            with self.subTest(text=text):
+                p = plan(text)
+                self.assertEqual(p.requested_analysis, "out_of_scope")
+                self.assertFalse(p.clarification_needed)
+                self.assertFalse((p.visualization or {}).get("requested"))
+                self.assertEqual(tools(p), [])
+        self.assertTrue((plan("Hiển thị dưới dạng bảng số liệu lượt mượn tháng này").visualization or {}).get("requested"))
+
+
+class IdleStockTests(unittest.TestCase):
+    def test_capital_tied_up_without_loans_is_aging_stock(self):
+        # audit E-18: "lượt mượn" won and the turn read borrow trends instead of idle stock
+        for text in ("Sách nào đang chiếm vốn tồn kho nhiều nhất mà không sinh ra lượt mượn nào?",
+                     "Sách nào tồn đọng vốn mà không có lượt mượn?"):
+            with self.subTest(text=text):
+                p = plan(text)
+                self.assertIn("get_aging_inventory", tools(p))
+                self.assertNotIn("get_borrow_trends", tools(p))
+        self.assertIn("get_borrow_trends", tools(plan("Xu hướng lượt mượn tháng này")))
+
+
+class FollowUpWarehouseReorderTests(unittest.TestCase):
+    def test_reorder_follow_up_keeps_the_warehouse_of_the_previous_turn(self):
+        # audit E-6: "Vậy nên nhập gì cho kho đó?" drafted the library-wide list
+        first = plan("Tại sao Kho HCM Chinh thiếu sách?")
+        follow = plan("Vậy nên nhập gì cho kho đó?", cp.next_state(first, {}, None))
+        calls = {t["name"]: t["args"] for t in follow.required_tools}
+        self.assertEqual(calls["get_reorder_suggestions"].get("warehouse"), "Kho HCM Chinh")

@@ -946,7 +946,11 @@ def _check_counts(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
             unit = "phiếu" if role == "overdue_loans" else "cuốn" if role == "overdue_items" else "đầu sách"
             if role in ("oos", "low") and m and m.unit != "titles" and m.unit is not None:
                 continue
-            if role in ("oos", "low") and sys_ctx and sheet.warehouses:
+            # "Tổng cộng có N đầu sách dưới ngưỡng" with no warehouse named is the
+            # all-warehouse total too (audit 2026-11-19: 4/4 such sums were wrong, none checked)
+            summed = warehouse is None and not whs and len(sheet.warehouses) >= 2 \
+                and re.search(r"\btong (cong|so)\b", clause)
+            if role in ("oos", "low") and (sys_ctx or summed) and sheet.warehouses:
                 key = "out_of_stock_variants" if role == "oos" else "low_stock_variants"
                 total = sum((r.get(key) or 0) for r in sheet.warehouses.values())
                 ok = any(abs(v - total) < 0.5 for v in vals)
@@ -960,8 +964,13 @@ def _check_counts(sent: str, norm: str, sheet: Sheet, out: list, line: int, carr
                            evidence=[{"label": f"Tổng {len(sheet.warehouses)} kho", "value": total, "unit": "đầu sách",
                                       "derived": True}], line=line)
                 else:
-                    _claim(out, sent, "SCOPE", UNSUPPORTED,
-                           f"Tổng các kho trong dữ liệu (theo phạm vi kho của bạn) là {_fmt(total)} đầu sách.", line=line)
+                    # the sum of every warehouse in the data is certain: repairable, not just unsupported
+                    _claim(out, sent, "COUNT", CONTRADICTED,
+                           f"Tổng các kho trong dữ liệu (theo phạm vi kho của bạn) là {_fmt(total)} đầu sách.",
+                           expected=_fmt(total, "đầu sách"),
+                           evidence=[{"label": f"Tổng {len(sheet.warehouses)} kho", "value": total, "unit": "đầu sách",
+                                      "derived": True}],
+                           token=m.raw if m else None, replacement=_replacement(m.raw, total) if m else None, line=line)
                 continue
             truth, label, others = _count_truth(role, warehouse, sheet)
             if truth is None:

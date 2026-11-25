@@ -15,7 +15,7 @@ import { AIRecommendationNotice } from "@/components/ai/decision-card";
 import { RecommendationCard } from "@/components/ai/recommendation-card";
 
 // Aggregated server-side (SQL GROUP BY over the whole loan_items table), not a
-// client-side sample — so this is an honest "toàn thư viện" ranking regardless
+// client-side sample, over the caller's readable warehouses — an honest ranking regardless
 // of how many loan records the library has accumulated.
 const TOP_BOOKS_SINCE = "2000-01-01";
 const TOP_BOOKS_ANALYSIS_LIMIT = 50;
@@ -69,7 +69,7 @@ export function RecommendationsPage() {
       setCategoryData(catEntries.slice(0, 8).map(([name, value]) => ({ name, value })));
       setCategoryCount(catEntries.length);
 
-      // topBooks is already ranked library-wide by the analytics service (SQL
+      // topBooks is already ranked (caller's warehouses) by the analytics service (SQL
       // GROUP BY over every loan, not just a recent sample). The chart shows the
       // top 6; the "Sách đã phân tích" stat sums the same fetched set so the two
       // numbers can never disagree.
@@ -102,7 +102,7 @@ export function RecommendationsPage() {
   const providerLabel = provider === "openrouter" ? "OpenRouter" : provider === "fallback" ? "Dự phòng (không có AI)" : provider || "-";
   const leader = demandData[0];
   const lede = loading
-    ? "Thống kê mượn sách toàn thư viện và gợi ý đầu sách."
+    ? "Thống kê mượn sách trong các kho bạn được xem và gợi ý đầu sách."
     : leader
       ? `${leader.name} dẫn đầu với ${leader.demand.toLocaleString("vi-VN")} lượt mượn. ${recommendations.length} gợi ý ${personalized ? "theo lịch sử đọc của bạn" : "chung của thư viện"}${basis?.candidate_pool ? `, chọn từ ${basis.candidate_pool} sách ứng viên` : ""}.`
       : `${recommendations.length} gợi ý ${personalized ? "theo lịch sử đọc của bạn" : "chung của thư viện"}. Chưa có thống kê mượn sách.`;
@@ -156,7 +156,7 @@ export function RecommendationsPage() {
         <FadeItem>
           <section aria-labelledby="top-books-title" className="rounded-2xl border border-border bg-card p-5">
             <h2 id="top-books-title" className="font-display text-[18px] font-semibold tracking-tight">Sách mượn nhiều nhất</h2>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">Toàn thư viện, tính trên mọi lượt mượn từ trước đến nay.</p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">Trong các kho bạn được xem, tính trên mọi lượt mượn từ trước đến nay.</p>
             {demandData.length > 0 ? (
               <ol className="mt-4 space-y-3">
                 {demandData.map((d, i) => (

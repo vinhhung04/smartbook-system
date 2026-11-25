@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
-import { CheckCircle, AlertTriangle, FileText, ShoppingCart, Bell, ClipboardList, BookOpen, Sparkles, Building2, XCircle, SlidersHorizontal } from 'lucide-react';
+import { CheckCircle, AlertTriangle, FileText, ShoppingCart, Bell, ClipboardList, BookOpen, Sparkles, Building2, XCircle, SlidersHorizontal, Truck } from 'lucide-react';
 import { aiService, type PendingAction } from '@/services/ai';
 import { warehouseService, type Warehouse } from '@/services/warehouse';
 import { userService, type WarehouseStaffOption } from '@/services/user';
@@ -39,6 +39,7 @@ const CONFIRM_LABEL: Record<string, string> = {
   CREATE_STAFF_TASK_DRAFT: 'Tạo nhiệm vụ',
   CREATE_RESERVATION_DRAFT: 'Tạo đặt trước',
   CREATE_REPORT_DRAFT: 'Tạo báo cáo nháp',
+  CREATE_REBALANCE_DRAFT: 'Xác nhận tạo yêu cầu',
 };
 
 function ActionTypeIcon({ type }: { type: string }) {
@@ -49,6 +50,7 @@ function ActionTypeIcon({ type }: { type: string }) {
     CREATE_RESERVATION_DRAFT: <BookOpen className={cls} aria-hidden="true" />,
     CREATE_STOCK_ALERT: <Bell className={cls} aria-hidden="true" />,
     CREATE_STAFF_TASK_DRAFT: <ClipboardList className={cls} aria-hidden="true" />,
+    CREATE_REBALANCE_DRAFT: <Truck className={cls} aria-hidden="true" />,
   };
   return <>{icons[type] ?? <Sparkles className={cls} aria-hidden="true" />}</>;
 }
@@ -175,6 +177,7 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
   const isStaffTask = action.type === 'CREATE_STAFF_TASK_DRAFT';
   const isReservation = action.type === 'CREATE_RESERVATION_DRAFT';
   const isReport = action.type === 'CREATE_REPORT_DRAFT';
+  const isRebalance = action.type === 'CREATE_REBALANCE_DRAFT';
   const isDone = localStatus !== 'PENDING_CONFIRMATION';
   const canConfirm = canUserConfirmAction(authService.getCurrentUser(), action);
 
@@ -395,6 +398,65 @@ export function ActionCard({ action, onConfirmed, onCancelled }: ActionCardProps
         <dt className="text-muted-foreground">variant_id</dt><dd className="break-all font-mono text-foreground">{p.variant_id || p.book_variant_id || '—'}</dd>
         <dt className="text-muted-foreground">warehouse_id</dt><dd className="break-all font-mono text-foreground">{p.warehouse_id || '—'}</dd>
       </dl>
+    );
+  } else if (isRebalance) {
+    // F. Pending action preview: only what the user can create now; the rest is shown as a proposal.
+    type Group = { from_warehouse?: string; to_warehouse?: string; lines: Array<{ title?: string; quantity: number; source_available_after?: number | null }> };
+    type Buy = { title?: string; warehouse?: string; quantity: number; cost?: number | null };
+    type Proposal = { kind: string; title?: string; quantity: number; from_warehouse?: string; to_warehouse?: string; warehouse?: string; reason?: string };
+    const groups = (p.transfers || []) as Group[];
+    const buys = (p.purchases || []) as Buy[];
+    const proposals = (p.proposals || []) as Proposal[];
+    const metrics = (p.option_metrics || {}) as Record<string, number | null>;
+    const transferQty = groups.reduce((sum, g) => sum + g.lines.reduce((a, l) => a + l.quantity, 0), 0);
+    const cost = buys.reduce((sum, b) => sum + Number(b.cost || 0), 0);
+    eyebrow = 'Bản nháp điều chuyển và mua mới';
+    title = action.summary;
+    facts = [
+      { label: 'Yêu cầu điều chuyển', value: groups.length },
+      { label: 'Bản điều chuyển', value: fmt(transferQty) },
+      { label: 'Phiếu yêu cầu nhập', value: buys.length },
+      { label: 'Chi phí mua', value: `${fmt(Math.round(cost))} ₫` },
+    ];
+    if (metrics.shortage_covered_pct !== undefined && metrics.shortage_covered_pct !== null) {
+      why.push({ tone: 'info', text: `Phương án đáp ứng ${metrics.shortage_covered_pct}% thiếu hụt; còn thiếu ${metrics.remaining_shortage_qty ?? '—'} bản.` });
+    }
+    if (proposals.length) why.push({ tone: 'warning', text: `${proposals.length} việc cần Manager khác phối hợp: chỉ là đề xuất, sẽ không được tạo.` });
+    onConfirmEffect = [
+      'Kiểm tra lại quyền ghi tại từng kho và tồn kho kho nguồn ngay lúc xác nhận; phần không còn hợp lệ sẽ được bỏ qua và báo lại.',
+      `Tạo ${groups.length} yêu cầu điều chuyển ở trạng thái REQUESTED (chờ duyệt) và ${buys.length} phiếu yêu cầu nhập (chờ duyệt).`,
+      'Không duyệt, không xuất kho, không nhập kho thay bạn: các bước đó vẫn theo quy trình hiện tại.',
+    ];
+    detailsTitle = 'Xem chi tiết bản nháp';
+    details = (
+      <div className="space-y-2 text-[12.5px]" data-testid="rebalance-draft-preview">
+        {groups.map((g, i) => (
+          <div key={`t${i}`} className="rounded-lg border border-border p-2">
+            <p className="font-medium text-foreground">Điều chuyển {g.from_warehouse} → {g.to_warehouse} <span className="font-normal text-emerald-700 dark:text-emerald-400">· bạn tự tạo được</span></p>
+            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+              {g.lines.map((l, j) => <li key={j}>{l.title}: {fmt(l.quantity)} bản{l.source_available_after !== undefined && l.source_available_after !== null ? ` (kho nguồn còn ${fmt(l.source_available_after)})` : ''}</li>)}
+            </ul>
+          </div>
+        ))}
+        {buys.length > 0 && (
+          <div className="rounded-lg border border-border p-2">
+            <p className="font-medium text-foreground">Mua mới <span className="font-normal text-emerald-700 dark:text-emerald-400">· bạn tự tạo được</span></p>
+            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+              {buys.map((b, j) => <li key={j}>{b.title} ({b.warehouse}): {fmt(b.quantity)} bản{b.cost ? ` · ${fmt(Math.round(b.cost))} ₫` : ''}</li>)}
+            </ul>
+          </div>
+        )}
+        {proposals.length > 0 && (
+          <div className="rounded-lg border border-dashed border-amber-300 p-2 dark:border-amber-500/40">
+            <p className="font-medium text-amber-800 dark:text-amber-300">Chỉ đề xuất — cần Manager khác</p>
+            <ul className="mt-1 space-y-0.5 text-muted-foreground">
+              {proposals.map((x, j) => (
+                <li key={j}>{x.title}: {fmt(x.quantity)} bản {x.kind === 'TRANSFER' ? `${x.from_warehouse} → ${x.to_warehouse}` : `tại ${x.warehouse}`} — {x.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     );
   } else if (isReport) {
     eyebrow = 'Đề xuất tạo báo cáo';

@@ -9,6 +9,8 @@ import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from fastapi import HTTPException
+
 import main
 from agent_schemas import UserContext
 from main import AssistantRequest
@@ -113,6 +115,47 @@ class CopilotEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(events[0].startswith("event: token"))
         self.assertEqual(set(body) - {"debug"}, set(done) - {"debug"})
         self.assertEqual([t["name"] for t in body["tools_used"]], [t["name"] for t in done["tools_used"]])
+
+    async def test_stream_answer_is_only_the_final_rounds_text(self):
+        # audit S-1: text the model wrote in a tool-calling round was glued to the answer
+        class TwoRounds(FakeProvider):
+            async def chat_stream(self, messages, tools, **_kw):
+                self.calls.append(messages)
+                usage = SimpleNamespace(as_dict=lambda: {"prompt_tokens": 1})
+                if len(self.calls) == 1:
+                    call = {"function": {"name": "get_top_books", "arguments": {"limit": 3}}}
+                    yield SimpleNamespace(delta="Để tôi xem số liệu. ", done=False)
+                    yield SimpleNamespace(delta="", done=True, tool_calls=[call], usage=usage,
+                                          assistant_message={"role": "assistant", "content": "", "tool_calls": [call]})
+                else:
+                    yield SimpleNamespace(delta="Norwegian Wood dẫn đầu với 30 lượt.", done=False)
+                    yield SimpleNamespace(delta="", done=True, tool_calls=[], usage=usage,
+                                          assistant_message={"role": "assistant", "content": "Norwegian Wood dẫn đầu với 30 lượt."})
+
+        provider = TwoRounds()
+        with patch("main._get_assistant_provider", return_value=provider):
+            done, _events = await self._stream_done("Tạo báo cáo tổng quan giúp tôi", "c-s1")
+        self.assertEqual(len(provider.calls), 2)
+        self.assertNotIn("Để tôi xem số liệu", done["answer"])
+        self.assertTrue(done["answer"].startswith("Norwegian Wood dẫn đầu với 30 lượt."))
+
+    async def test_a_failed_model_call_still_records_an_answer_after_the_question(self):
+        # audit S-2: the question was stored with no answer, so the next prompt held two user turns
+        class Broken(FakeProvider):
+            async def chat(self, messages, tools, **_kw):
+                raise RuntimeError("provider down")
+
+            async def chat_stream(self, messages, tools, **_kw):
+                raise RuntimeError("provider down")
+                yield  # pragma: no cover
+
+        with patch("main._get_assistant_provider", return_value=Broken()):
+            with self.assertRaises(HTTPException):
+                await main.assistant(_request(), AssistantRequest(message="Tạo báo cáo tổng quan giúp tôi", conversation_id="c-e1"))
+            await self._stream_done("Tạo báo cáo tổng quan giúp tôi", "c-e2")
+        for cid in ("c-e1", "c-e2"):
+            roles = [m.role for m in self.store.messages if m.conversation_id == cid]
+            self.assertEqual(roles, ["user", "assistant"], cid)
 
     async def test_follow_up_inherits_topic_and_limit_but_takes_the_new_period(self):
         await main.assistant(_request(), AssistantRequest(message="Top 5 sách mượn nhiều tháng này", conversation_id="c2"))

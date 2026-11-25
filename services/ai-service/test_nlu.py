@@ -15,6 +15,7 @@ from intent import (
     FINE_SUMMARY_QUERY,
     GENERAL_QUERY,
     BORROW_TREND_QUERY,
+    BOOK_SEARCH_QUERY,
 )
 import nlu as nlu_module
 from nlu import (
@@ -190,6 +191,17 @@ class TestFastPath(unittest.TestCase):
             result = _run(classify_user_message("sach qua han hom nay"))
         self.assertFalse(result["wants_action"])
         self.assertIsNone(result["action_type"])
+
+
+    def test_plain_book_search_skips_the_llm_classifier(self):
+        # audit E-16: rule confidence 0.82 < 0.85 sent every book question to a ~2.4 s LLM call
+        nlu_module._nlu_cache.clear()
+        with patch.object(nlu_module, "_call_llm", new_callable=AsyncMock) as mock:
+            mock.return_value = ({}, False)
+            result = _run(classify_user_message("Thư viện có sách Atomic Habits không?"))
+        self.assertEqual((result["intent"], result["source"]), (BOOK_SEARCH_QUERY, "rule_based"))
+        self.assertEqual(result["query"], "atomic habits")
+        mock.assert_not_called()
 
 
 class TestLLMPath(unittest.TestCase):

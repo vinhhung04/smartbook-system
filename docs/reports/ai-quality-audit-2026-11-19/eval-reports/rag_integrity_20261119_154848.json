@@ -1,0 +1,2545 @@
+{
+ "dataset": "rag_dataset.json",
+ "catalog": {
+  "books": 136,
+  "sha256": "e7036b802701492003b2eac92a4cc6a2c52a861e1a8b3ba5153ec46b0cabf516"
+ },
+ "structural_errors": [],
+ "cases": {
+  "bm-001": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+     "missing_title": "So do",
+     "candidate": "ff5ec777-a2b8-5b6c-9879-3c6552bc6c87",
+     "candidate_title": "Số đỏ",
+     "candidate_author": "Vũ Trọng Phụng",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-002": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-003": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+     "missing_title": "Toi thay hoa vang tren co xanh",
+     "candidate": "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+     "candidate_title": "Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-004": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-005": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "44d1360d-1974-4e8e-8ce9-04e35facedec"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-006": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-007": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+     "missing_title": "Dế Mèn Phiêu Lưu Ký",
+     "candidate": "ea72ef14-a4bf-5b88-9ea7-a717757f6595",
+     "candidate_title": "Dế Mèn Phiêu Lưu Ký (Tái Bản)",
+     "candidate_author": "Tô Hoài",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-008": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-009": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "0820b86b-9deb-4713-bed9-d8f1a8bfc6f4"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "TITLE"
+  },
+  "bm-010": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "cb780777-916e-4d15-a3d7-a321436d9ea9"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "TITLE"
+  },
+  "bm-011": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "8702650d-2a96-42fc-8e5c-9872ad55400e"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "TITLE"
+  },
+  "bm-012": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "646f7364-013d-4848-aa62-b1f2b2099544"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-013": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "26a9abaf-f277-496d-b082-374983ede77a"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-014": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "9d889004-907e-45bb-9a20-31fb7e74bf32"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "TITLE"
+  },
+  "bm-015": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "efc23f75-42c5-488b-9f9f-6238a083c737"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "ISBN"
+  },
+  "bm-016": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+     "missing_title": "So do",
+     "candidate": "ff5ec777-a2b8-5b6c-9879-3c6552bc6c87",
+     "candidate_title": "Số đỏ",
+     "candidate_author": "Vũ Trọng Phụng",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-017": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+     "missing_title": "So do",
+     "candidate": "ff5ec777-a2b8-5b6c-9879-3c6552bc6c87",
+     "candidate_title": "Số đỏ",
+     "candidate_author": "Vũ Trọng Phụng",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-018": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-019": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-020": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-021": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-022": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-023": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-024": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+     "missing_title": "Toi thay hoa vang tren co xanh",
+     "candidate": "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+     "candidate_title": "Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-025": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+     "missing_title": "Toi thay hoa vang tren co xanh",
+     "candidate": "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+     "candidate_title": "Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-026": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-027": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-028": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-029": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-030": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "ffb24f62-48e3-4075-8374-df0fd16096d2",
+     "missing_title": "Cho toi xin mot ve di tuoi tho",
+     "candidate": "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+     "candidate_title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-031": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "ffb24f62-48e3-4075-8374-df0fd16096d2",
+     "missing_title": "Cho toi xin mot ve di tuoi tho",
+     "candidate": "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+     "candidate_title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-032": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-033": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-034": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "44d1360d-1974-4e8e-8ce9-04e35facedec"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-035": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "44d1360d-1974-4e8e-8ce9-04e35facedec"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-036": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [
+    "QUESTIONABLE_LABEL"
+   ],
+   "detail": "",
+   "review": {
+    "flag": "QUESTIONABLE_LABEL",
+    "needs_human": true,
+    "reason": "Author fan-out built on the 2026-09 seed catalog, whose author field was wrong: it expects 'Chiec la cuoi cung' (O. Henry), 'Dế Mèn Phiêu Lưu Ký' (Tô Hoài) and 'Dac trung tam ly hoc cua nguoi Viet' as Nam Cao's. All four expected books are also gone from the catalog."
+   },
+   "remap_candidates": [
+    {
+     "missing": "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+     "missing_title": "So do",
+     "candidate": "ff5ec777-a2b8-5b6c-9879-3c6552bc6c87",
+     "candidate_title": "Số đỏ",
+     "candidate_author": "Vũ Trọng Phụng",
+     "match": "edition-free title"
+    },
+    {
+     "missing": "1b12d33e-9e08-4a2d-84d5-47e54cd40a2d",
+     "missing_title": "Dế Mèn Phiêu Lưu Ký",
+     "candidate": "ea72ef14-a4bf-5b88-9ea7-a717757f6595",
+     "candidate_title": "Dế Mèn Phiêu Lưu Ký (Tái Bản)",
+     "candidate_author": "Tô Hoài",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "AUTHOR"
+  },
+  "bm-037": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [
+    "QUESTIONABLE_LABEL"
+   ],
+   "detail": "",
+   "review": {
+    "flag": "QUESTIONABLE_LABEL",
+    "needs_human": true,
+    "reason": "Expects 'Tư Duy Phản Biện' as a work of Xuân Diệu (seed-catalog author error). Both expected books are gone from the catalog."
+   },
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "AUTHOR"
+  },
+  "bm-038": {
+   "status": "PARTIALLY_REACHABLE",
+   "reachable_ids": [
+    "b4079b3f-3308-41a1-8ca3-a78e3294c41d"
+   ],
+   "flags": [
+    "LABEL_AUTHOR_MISMATCH",
+    "QUESTIONABLE_LABEL"
+   ],
+   "detail": "expects `Project Hail Mary` by 'Andy Weir', author not named in the question",
+   "review": {
+    "flag": "QUESTIONABLE_LABEL",
+    "needs_human": true,
+    "reason": "Expects 'Project Hail Mary' as a work of Tô Hoài (seed-catalog author error; the live catalog now says Andy Weir) and folk tale 'Tam Cam' (gone). Also detected automatically (LABEL_AUTHOR_MISMATCH)."
+   },
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "AUTHOR"
+  },
+  "bm-039": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "8635f1e6-de10-431d-ba2d-0ac3028e3977",
+    "44d1360d-1974-4e8e-8ce9-04e35facedec",
+    "5b1493c9-fc87-4fb9-b29d-e71242f0243e"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "AUTHOR"
+  },
+  "bm-040": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-041": {
+   "status": "PARTIALLY_REACHABLE",
+   "reachable_ids": [
+    "d736b4be-0e40-4157-ae69-8322c83a2c39",
+    "14a22cde-bee6-4590-a0b8-df26877d45d6",
+    "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+    "afa04903-053e-4248-af61-da2e37a848b5",
+    "cb780777-916e-4d15-a3d7-a321436d9ea9",
+    "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+    "8f823d9f-b14e-4d79-b78a-7060a76eb55a",
+    "4ac8d302-8574-4cb7-bd44-b60b25255bd9"
+   ],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "ffb24f62-48e3-4075-8374-df0fd16096d2",
+     "missing_title": "Cho toi xin mot ve di tuoi tho",
+     "candidate": "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+     "candidate_title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "AUTHOR"
+  },
+  "bm-042": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "71f4f774-61d3-4e35-8d8d-957513bbd6d6",
+    "463658e9-cf90-4e53-9536-852cd550fbb1",
+    "871990a8-98e6-4325-8d56-690bb6f73ed7",
+    "e274df90-3e39-4bd7-afdf-94ab10583b48",
+    "0d3fbad3-d2b8-48b5-b58a-c73ad70cbdab",
+    "9d889004-907e-45bb-9a20-31fb7e74bf32"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "AUTHOR"
+  },
+  "bm-043": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-044": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-045": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-046": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "699f3d1e-7133-4fd2-8ebe-27fc627f6922",
+     "missing_title": "So do",
+     "candidate": "ff5ec777-a2b8-5b6c-9879-3c6552bc6c87",
+     "candidate_title": "Số đỏ",
+     "candidate_author": "Vũ Trọng Phụng",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-047": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "TITLE"
+  },
+  "bm-048": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-049": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-050": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "12976f9f-fd46-47ed-8ea1-4a93579311c7",
+     "missing_title": "Toi thay hoa vang tren co xanh",
+     "candidate": "ccfeb71b-dae8-4bd0-93fa-591ace5f682d",
+     "candidate_title": "Tôi Thấy Hoa Vàng Trên Cỏ Xanh (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-051": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "8635f1e6-de10-431d-ba2d-0ac3028e3977"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-052": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "e1184385-1e57-4e2a-a9f0-919a8d41c9e3"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-053": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [
+    {
+     "missing": "ffb24f62-48e3-4075-8374-df0fd16096d2",
+     "missing_title": "Cho toi xin mot ve di tuoi tho",
+     "candidate": "47b3acaa-496a-4a80-a426-f0ffa9d3b337",
+     "candidate_title": "Cho Tôi Xin Một Vé Đi Tuổi Thơ (Tái Bản 2023)",
+     "candidate_author": "Nguyễn Nhật Ánh",
+     "match": "edition-free title"
+    }
+   ],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-054": {
+   "status": "UNREACHABLE",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "remap_candidates": [],
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-055": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "44d1360d-1974-4e8e-8ce9-04e35facedec"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-056": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-057": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-058": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-059": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-060": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "doc-001": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-loan-limit"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-002": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-loan-limit"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-003": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-loan-limit"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-004": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fine-calculation"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-005": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fine-calculation"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-006": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fine-calculation"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-007": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "renewal-count"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-008": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "renewal-count"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-009": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "renewal-count"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-010": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reservation-hold"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-011": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reservation-hold"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-012": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "lost-item-fee"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-013": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "lost-item-fee"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-014": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "lost-item-fee"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-015": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "goods-receipt-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-016": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "goods-receipt-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-017": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "purchase-order-flow"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-018": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "purchase-order-flow"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-019": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "purchase-order-flow"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-020": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "supplier-portal"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-021": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "supplier-portal"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-022": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "storage-suggestion-ai"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-023": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "storage-suggestion-ai"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-024": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "ai-assistant-scope"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-025": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "ai-assistant-scope"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-026": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-loan-limit"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-027": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fine-calculation"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-028": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "renewal-count"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-029": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reservation-hold"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-030": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "lost-item-fee"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-031": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "goods-receipt-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-032": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "purchase-order-flow"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-033": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "supplier-portal"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-034": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "storage-suggestion-ai"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-035": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "ai-assistant-scope"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-036": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-037": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-038": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-039": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "branches-opening-hours"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-040": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "bm-061": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-062": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-063": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-064": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-065": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-066": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-067": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-068": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-069": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-070": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-071": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-072": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-073": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-074": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-075": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "doc-041": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-042": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-043": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-044": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-045": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-046": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-047": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-048": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-049": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reader-features"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-050": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-051": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-052": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-053": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-054": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-055": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "bm-076": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-077": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-078": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-079": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-080": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-081": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-082": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-083": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-084": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-085": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-086": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-087": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-088": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-089": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-090": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-091": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-092": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-093": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [
+    "STALE_NO_ANSWER_MANUAL"
+   ],
+   "detail": "",
+   "review": {
+    "flag": "STALE_NO_ANSWER_MANUAL",
+    "needs_human": true,
+    "reason": "Labelled no-answer against the 2026-10-08 catalog; the catalog now has 3d1c247f 'Harry Potter and the Philosopher's Stone' (added 2026-10-19). 'Hòn đá Phù thủy' is the Vietnamese title of that book.",
+    "proposed_expected_ids": [
+     "3d1c247f-1103-520d-91ee-f748f6cfeaa4"
+    ]
+   },
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-094": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [
+    "STALE_NO_ANSWER_MANUAL"
+   ],
+   "detail": "",
+   "review": {
+    "flag": "STALE_NO_ANSWER_MANUAL",
+    "needs_human": true,
+    "reason": "Labelled no-answer against the 2026-10-08 catalog; the catalog now has dd94f886 'How to Win Friends and Influence People' by Dale Carnegie (added 2026-10-19). 'Đắc Nhân Tâm' is the Vietnamese title of that book.",
+    "proposed_expected_ids": [
+     "dd94f886-e05c-5b06-8e8b-db203317072c"
+    ]
+   },
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-095": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "TITLE"
+  },
+  "bm-096": {
+   "status": "STALE_NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [
+    "STALE_NO_ANSWER_MANUAL"
+   ],
+   "detail": "catalog now has 56d3541c-b609-5d62-80de-91acaaff0606 `Atomic Habits`",
+   "review": {
+    "flag": "STALE_NO_ANSWER_MANUAL",
+    "needs_human": true,
+    "reason": "Labelled no-answer against the 2026-10-08 catalog; the catalog now has 56d3541c 'Atomic Habits' by James Clear (added 2026-10-19). Also detected automatically (STALE_NO_ANSWER).",
+    "proposed_expected_ids": [
+     "56d3541c-b609-5d62-80de-91acaaff0606"
+    ]
+   },
+   "trusted": false,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-097": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-098": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-099": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-100": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-101": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-102": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-103": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-104": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-105": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "CATEGORY"
+  },
+  "bm-106": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "bm-107": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "BOOK_METADATA",
+   "query_type": "DESCRIPTION"
+  },
+  "doc-056": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-057": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-058": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-059": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-060": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-061": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-062": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-063": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-064": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-065": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-066": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-067": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-068": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-069": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-070": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-071": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-072": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-073": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-074": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-075": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-076": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-077": {
+   "status": "NO_ANSWER",
+   "reachable_ids": [],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-078": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "branches-opening-hours"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-079": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "branches-opening-hours"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-080": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "branches-opening-hours"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-081": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "borrowing-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-082": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "borrowing-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-083": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "borrowing-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-084": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "borrowing-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-085": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "borrowing-process"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-086": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fines-payment"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-087": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fines-payment"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-088": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fines-payment"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-089": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "fines-payment"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-090": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "lost-item-fee"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-091": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "wallet-vnpay"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-092": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "wallet-vnpay"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-093": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "account-security"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-094": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "account-security"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-095": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "account-security"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-096": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "account-security"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-097": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-plans-overview"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-098": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-plans-overview"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-099": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "membership-plans-overview"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-100": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "renewal-count"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-101": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reader-features"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-102": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reader-features"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-103": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reader-features"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-104": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reader-features"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-105": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "reader-features"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-106": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "ai-assistant-scope"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-107": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "ai-assistant-scope"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-108": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "roles-permissions"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-109": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "roles-permissions"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-110": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "warehouse-operations"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-111": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "warehouse-operations"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-112": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "warehouse-operations"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-113": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "warehouse-operations"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-114": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "isbn-classification"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-115": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "isbn-classification"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-116": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "library-law-reading-culture"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-117": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "library-law-reading-culture"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-118": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "book-care"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  },
+  "doc-119": {
+   "status": "REACHABLE",
+   "reachable_ids": [
+    "book-care"
+   ],
+   "flags": [],
+   "detail": "",
+   "trusted": true,
+   "corpus": "INTERNAL_DOC",
+   "query_type": "INTERNAL_DOC"
+  }
+ },
+ "summary": {
+  "BOOK_METADATA": {
+   "total": 107,
+   "trusted": 73,
+   "by_status": {
+    "UNREACHABLE": 30,
+    "REACHABLE": 23,
+    "PARTIALLY_REACHABLE": 2,
+    "NO_ANSWER": 51,
+    "STALE_NO_ANSWER": 1
+   },
+   "by_flag": {
+    "QUESTIONABLE_LABEL": 3,
+    "LABEL_AUTHOR_MISMATCH": 1,
+    "STALE_NO_ANSWER_MANUAL": 3
+   },
+   "by_query_type": {
+    "ISBN": {
+     "answerable": 11,
+     "no_answer": 0,
+     "trusted": 6
+    },
+    "TITLE": {
+     "answerable": 5,
+     "no_answer": 1,
+     "trusted": 5
+    },
+    "DESCRIPTION": {
+     "answerable": 28,
+     "no_answer": 49,
+     "trusted": 57
+    },
+    "CATEGORY": {
+     "answerable": 5,
+     "no_answer": 2,
+     "trusted": 2
+    },
+    "AUTHOR": {
+     "answerable": 6,
+     "no_answer": 0,
+     "trusted": 3
+    }
+   }
+  },
+  "INTERNAL_DOC": {
+   "total": 119,
+   "trusted": 119,
+   "by_status": {
+    "REACHABLE": 79,
+    "NO_ANSWER": 40
+   },
+   "by_flag": {},
+   "by_query_type": {
+    "INTERNAL_DOC": {
+     "answerable": 79,
+     "no_answer": 40,
+     "trusted": 119
+    }
+   }
+  }
+ }
+}

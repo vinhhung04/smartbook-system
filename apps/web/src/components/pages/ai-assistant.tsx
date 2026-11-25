@@ -15,7 +15,7 @@ import { formatDataAsOf } from '@/lib/copilot-visualization';
 import { getApiErrorMessage } from '@/services/http-clients';
 import { toast } from 'sonner';
 import { AIActionCenter } from '@/components/ai-action-center';
-import type { AiActionListItem } from '@/services/ai';
+import type { AiActionListItem, AiExecutionResult } from '@/services/ai';
 import { useAIActionRealtime } from '@/hooks/useAIActionRealtime';
 import { cn } from '@/components/ui/utils';
 import { extrasToMessageFields, suggestionGroupsFor, type AssistantMessage } from '@/components/ai-assistant/model';
@@ -339,7 +339,16 @@ export function AIAssistantPage() {
   };
   const chooseBook = useCallback((rec: BookRecognition, c: RecognitionCandidate) => chooseRef.current(rec, c), []);
 
-  const handleActionConfirmed = useCallback((_actionId: string, result: unknown) => {
+  const handleActionConfirmed = useCallback((actionId: string, result: unknown) => {
+    const rebalance = result as AiExecutionResult | null;
+    if (rebalance && ('created_transfers' in rebalance || 'proposals' in rebalance)) {
+      // G. Execution summary of a rebalancing draft: real codes and statuses from the executor
+      setMessages((prev) => [...prev, {
+        role: 'assistant', content: rebalance.message || 'Đã xác nhận bản nháp.',
+        execution: { action_id: actionId, status: 'EXECUTED', result: rebalance },
+      }]);
+      return;
+    }
     const res = result as { created_requests?: Array<{ warehouse_name?: string; request_number?: string }>; skipped_items?: string[]; no_warehouse_items?: string[] } | null;
     const createdReqs = res?.created_requests ?? [];
     const skippedItems = res?.skipped_items ?? [];

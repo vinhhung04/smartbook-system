@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 
+from intent import normalize_text
 from number_grounding import display_number, numbers_match, parse_number_candidates, parse_numbers
 from retrieval_confidence import UNCERTAIN
 
@@ -27,6 +29,9 @@ RAG_SYSTEM_RULES = f"""
 - Tài liệu (câu hỏi thường gặp) giải thích quy định và quy trình; số liệu cấu hình (hạn mức gói thẻ, mức phí, địa chỉ, giờ mở cửa) lấy từ khối "{LIVE_DATA_LEAD}" nếu có. Khi hai nguồn khác nhau, dùng giá trị hiện hành và nói ngắn gọn rằng tài liệu ghi khác.
 - Số liệu nghiệp vụ động (tồn kho, phiếu mượn, đặt chỗ, tiền phạt, số dư) chỉ được lấy từ dữ liệu hệ thống trong context, không lấy từ tài liệu.
 - Nếu chỉ trả lời được một phần câu hỏi, nói rõ phần nào đã có căn cứ và phần nào chưa xác minh được.
+- Số liệu kho/mượn trả chỉ thuộc phạm vi ghi ở dòng "Pham vi" (các kho/chi nhánh người dùng được xem). Không gọi đó là "toàn hệ thống" hay "toàn thư viện" và không gợi ý xin quyền "toàn thư viện".
+- Dòng ghi "chua co so lieu" nghĩa là tài khoản không đọc được nguồn đó: nói là chưa có số liệu cho tài khoản này, không viết thành 0.
+- Giữ đúng đơn vị của dữ liệu: "phiếu" mượn khác "đầu sách" và "bản" sách; không đổi đơn vị.
 - Nếu câu hỏi chứa thông tin trái với context (ví dụ một mức phí hay thời hạn khác), chỉ ra điểm sai và nêu giá trị đúng theo context.
 
 ## Quy tắc RAG bắt buộc
@@ -78,13 +83,29 @@ def source_names(sources: list[dict]) -> list[str]:
     return names
 
 
+def status_text(status) -> str:
+    """What a source status means to the reader. The prompt quotes it, and "error:403"
+    became "lỗi HTTP 403, hãy liên hệ kỹ thuật" in a librarian's answer (audit E-4)."""
+    status = str(status or "")
+    code = status.split(":", 1)[1] if status.startswith("error:") else ""
+    if status == "ok":
+        return "ok"
+    if code in ("401", "403"):
+        return "tài khoản không có quyền xem dữ liệu này (theo phân quyền, không phải lỗi hệ thống)"
+    if status == "timeout":
+        return "hệ thống phản hồi quá lâu, chưa lấy được dữ liệu"
+    if code == "404":
+        return "không tìm thấy dữ liệu"
+    return "lỗi máy chủ, chưa lấy được dữ liệu"
+
+
 def build_rag_context(intent_info: dict, retrieval: dict) -> str:
     sources = retrieval.get("sources") or []
     warnings = retrieval.get("warnings") or []
     raw = retrieval.get("raw") or {}
     source_lines = []
     for source in sources:
-        source_lines.append(f"  - {source.get('name')}: {source.get('status')}")
+        source_lines.append(f"  - {source.get('name')}: {status_text(source.get('status'))}")
 
     warning_lines = [f"  - {warning}" for warning in warnings] or ["  - none"]
     summary = retrieval.get("summary") or "Khong co du lieu retrieve duoc."
@@ -192,6 +213,54 @@ def unverified_numbers(reply: str, retrieval: dict, question: str | None = None)
         group[0] for group in candidate_groups
         if not any(numbers_match(value, grounded) for value in group)
     ]
+
+
+# ── Rules the model broke although RAG_SYSTEM_RULES state them (audit E-9, E-10) ──
+_NOT_SUPPORTED = re.compile(r"\b(chua|khong) (ho tro|co dich vu|cung cap dich vu|cho phep)\b")
+_REFUTES = re.compile(r"\b(khong (chinh xac|dung|phai|ap dung)|sai|nham|chua dung|khong co muc)\b")
+_SENTENCE = re.compile(r"(?<=[.!?])\s+")
+_PRESUPPOSES = re.compile(r"\b(vi sao|tai sao|sao lai|ly do|dung khong|phai khong|co phai|that la)\b")
+GAP_SENTENCE = ("Tài liệu của thư viện chưa có thông tin về điều này; bạn có thể liên hệ quầy thủ thư "
+                "hoặc trang Hỗ trợ & Liên hệ để được giải đáp.")
+
+
+def sanitize_reply(reply: str, question: str | None, context: dict) -> tuple[str, list[str]]:
+    """Drops the sentences that (a) say the library does NOT offer something when
+    the context says no such thing, or (b) repeat a figure only the QUESTION gave
+    (not the data) without refuting it - the model explaining why a wrong fee
+    "applies in special cases". Returns (text, removed sentences)."""
+    context_text = normalize_text(f"{context.get('summary') or ''} "
+                                  f"{json.dumps(context.get('raw') or {}, ensure_ascii=False, default=str)}")
+    grounded = parse_numbers(context_text) + parse_numbers(str(context.get("summary") or ""))
+    # (b) only for a question that PRESUPPOSES its figure ("vì sao phí là 50.000?"): echoing a
+    # number the user simply mentioned ("mượn 12 cuốn được không?") is a normal answer.
+    presupposes = bool(_PRESUPPOSES.search(normalize_text(question or "")))
+    premise = [g for g in parse_number_candidates(question) if presupposes and g[0] >= 10
+               and not any(numbers_match(v, grounded) for v in g)]
+    removed: list[str] = []
+    gap = False
+    out_lines = []
+    for line in (reply or "").split("\n"):
+        kept = []
+        for sentence in _SENTENCE.split(line):
+            norm = normalize_text(sentence)
+            claim = _NOT_SUPPORTED.search(norm)
+            if claim and claim.group(0) not in context_text:
+                removed.append(sentence)
+                gap = True
+                continue
+            numbers = [g for g in parse_number_candidates(sentence)]
+            echoes = any(any(numbers_match(v, p) for v in g) for g in numbers for p in premise)
+            if echoes and not _REFUTES.search(norm):
+                removed.append(sentence)
+                continue
+            kept.append(sentence)
+        if kept or not line.strip():
+            out_lines.append(" ".join(kept))
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(out_lines)).strip()
+    if gap and GAP_SENTENCE not in text:
+        text = f"{text}\n\n{GAP_SENTENCE}" if text else GAP_SENTENCE
+    return (text, removed) if removed else (reply, [])
 
 
 def merge_grounding_context(retrieval: dict, personal: dict | None) -> dict:

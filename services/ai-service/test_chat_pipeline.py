@@ -152,6 +152,17 @@ class ChatPipelineTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Cập nhật tại thời điểm", system_prompt)
         self.assertEqual(body["context_sources"][0]["name"], "Legacy Frontend System Context")
 
+    def test_client_page_sample_counts_are_not_presented_as_totals(self):
+        # audit S-3: the web client counts overdue loans / unpaid fines in ONE page (30 loans,
+        # 20 fines) and sends them as library totals
+        block = main._build_context_block({"summary": {"totalBooks": 137, "activeLoans": 12, "overdueLoans": 9,
+                                                       "totalFines": 50000},
+                                           "recentLoans": [{"loan_number": "L1", "status": "OVERDUE"}]})
+        self.assertNotIn("Phiếu mượn quá hạn: **9**", block)
+        self.assertNotIn("Tổng tiền phạt chưa thu", block)
+        self.assertIn("Tổng đầu sách: **137**", block)
+        self.assertIn("mẫu", block)
+
     async def test_chat_llm_call_never_offers_tools(self):
         provider = SimpleNamespace(name="openrouter", chat=AsyncMock(return_value=SimpleNamespace(text="Được.")))
         with patch("main.rate_limiter.acquire", new=AsyncMock(return_value=(True, ""))), \
@@ -248,3 +259,25 @@ class CustomerPolicyQuestionTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(auth)                                       # no analytics call with the reader's token
         self.assertEqual(body["intent"], "FINE_SUMMARY_QUERY")       # so the GENERAL_QUERY abstention cannot fire
         self.assertIn("5.000", body["reply"])
+
+
+class AnonymousActionHintTests(unittest.IsolatedAsyncioTestCase):
+    """Audit 2026-11-19 (E-11): "lập trình" matched the substring keyword "lap", so
+    an anonymous book question got "…gửi Authorization token" appended."""
+
+    def _turn(self, message, action_type=None):
+        return {"user_ctx": None, "is_action_request": main._wants_agent_action(message),
+                "intent_info": {"intent": "BOOK_SEARCH_QUERY", "action_type": action_type}}
+
+    async def test_question_with_action_like_substring_gets_no_login_hint(self):
+        reply, action = await main._apply_chat_agent_layer(
+            self._turn("Thư viện có sách dạy lập trình Rust cho người mới không?"), "Chưa có sách phù hợp.")
+        self.assertEqual((reply, action), ("Chưa có sách phù hợp.", None))
+
+    async def test_real_action_request_asks_to_sign_in_without_technical_words(self):
+        reply, action = await main._apply_chat_agent_layer(
+            self._turn("Đặt sách Atomic Habits giúp tôi", "CREATE_RESERVATION_DRAFT"), "OK.")
+        self.assertIsNone(action)
+        self.assertIn("đăng nhập", reply)
+        self.assertNotIn("Authorization", reply)
+        self.assertNotIn("token", reply)

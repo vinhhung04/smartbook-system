@@ -344,8 +344,9 @@ def _cand(role: str, auto: bool, **spec) -> dict:
     return {"role": role, "auto": auto, "spec": spec}
 
 
-def _system() -> VizScope:
-    return VizScope(level="system", label="Toàn hệ thống")
+# Analytics answers follow the caller's warehouse scope (superuser: every warehouse).
+def _readable() -> VizScope:
+    return VizScope(level="warehouses", label="Các kho bạn được xem")
 
 
 def _interactions(kind: str, fields: int = 1, followups: list[str] | None = None, **extra) -> VizInteractions:
@@ -448,7 +449,7 @@ def _b_borrow_trends(result, ctx: _Ctx, key: str) -> list[dict]:
                            + ", ".join(p["label"] for p in partial_points)
                            + ") - không dùng để xác định xu hướng.")
     limitations.append("Lượt mượn tính theo ngày lập phiếu mượn, trên toàn hệ thống.")
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/borrow-trends"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/borrow-trends"]), "scope": _readable(),
            "time_range": time_range, "data_as_of": ctx.now_iso}
     cands = []
     if len(pts) >= 2:
@@ -518,7 +519,7 @@ def _b_compare_periods(result, ctx: _Ctx, key: str) -> list[dict]:
     unit, kind = (U_PER_DAY, "rate") if unequal else (U_LUOT, "count")
     limitations = [result["note"]] if result.get("note") else []
     loans = result["metrics"].get("loans") or {}
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/borrow-trends"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/borrow-trends"]), "scope": _readable(),
            "time_range": VizTimeRange(label=f"{cur_label} so với {prev_label}", start=a.get("from"), end=a.get("to")),
            "data_as_of": _retrieved_at(result, ctx.now_iso)}
     pct_key = "per_day_change_pct" if unequal else "change_pct"
@@ -562,7 +563,7 @@ def _b_top_books(result, ctx: _Ctx, key: str) -> list[dict]:
     data = [{"rank": i, "title": _text(r["title"]), "borrow_count": _num(r.get("borrow_count"))}
             for i, r in enumerate(rows, start=1)]
     limitations = ["Chỉ hiển thị 12 dòng đầu của kết quả."] if truncated else []
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/top-books"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/top-books"]), "scope": _readable(),
            "time_range": _plan_range(ctx.plan) or VizTimeRange(label="30 ngày gần nhất (mặc định)"),
            "data_as_of": ctx.now_iso, "is_partial": truncated, "limitations": limitations}
     top = data[0]
@@ -596,7 +597,7 @@ def _b_compare_top(result, ctx: _Ctx, key: str) -> list[dict]:
     limitations = []
     if missing_prev:
         limitations.append(f"{missing_prev} đầu sách không có trong top kỳ so sánh: để trống, không tính là 0 lượt.")
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/top-books"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/top-books"]), "scope": _readable(),
            "time_range": VizTimeRange(label=f"{cur_label} so với {prev_label}", start=a.get("from"), end=a.get("to")),
            "data_as_of": _retrieved_at(result, ctx.now_iso), "limitations": limitations}
     chart = _cand("chart", True, type="bar", title="Lượt mượn của top sách: kỳ hiện tại so với kỳ trước",
@@ -673,7 +674,7 @@ def _b_stock_risk(result, ctx: _Ctx, key: str) -> list[dict]:
     named = len((ctx.plan.entities.get("warehouses") if ctx.plan else None) or [])
     auto = ctx.explicit or (ctx.mode in (COMPARISON, RANKING, CAUSAL, ANALYSIS, DECISION) and len(rows) >= 2 and named != 1)
     return _warehouse_cands(rows, ctx, key, "/analytics/warehouse-stock-risk",
-                            VizScope(level="warehouses", label=f"Tất cả {len(rows)} kho đang hoạt động"), auto,
+                            VizScope(level="warehouses", label=f"{len(rows)} kho bạn được xem"), auto,
                             ctx.now_iso, [])
 
 
@@ -797,7 +798,7 @@ def _b_reorder(result, ctx: _Ctx, key: str) -> list[dict]:
         return []
     s = result.get("summary") or {}
     rng = result.get("range") or {}
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/reorder-suggestions"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/reorder-suggestions"]), "scope": _readable(),
            "time_range": VizTimeRange(label=f"Nhu cầu tính từ {_vn_date(str(rng.get('from') or '')[:10])} đến "
                                             f"{_vn_date(str(rng.get('to') or '')[:10])}") if rng.get("from") else None,
            "data_as_of": ctx.now_iso}
@@ -865,7 +866,7 @@ def _b_simulation(result, ctx: _Ctx, key: str) -> list[dict]:
                      "funded_high": _num(s.get("funded_high_priority")) if ok else None,
                      "unfunded_high": _num(s.get("unfunded_high_priority")) if ok else None,
                      "covered_pct": _num(s.get("shortfall_covered_pct")) if ok else None})
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/reorder-suggestions?budgetVnd"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/reorder-suggestions?budgetVnd"]), "scope": _readable(),
            "time_range": VizTimeRange(label="Nhu cầu nhập tại thời điểm mô phỏng"),
            "data_as_of": _retrieved_at(result, ctx.now_iso), "is_partial": partial, "limitations": limitations}
     budgets = [r["budget"] for r in rows if r["budget"] is not None]
@@ -915,7 +916,7 @@ def _b_demand_vs_stock(result, ctx: _Ctx, key: str) -> list[dict]:
     c = result.get("counts") or {}
     p = result.get("period") or {}
     src = {"source": VizSource(tools=[key], endpoints=["/analytics/top-books", "/analytics/reorder-suggestions"]),
-           "scope": _system(), "data_as_of": _retrieved_at(result, ctx.now_iso),
+           "scope": _readable(), "data_as_of": _retrieved_at(result, ctx.now_iso),
            "time_range": VizTimeRange(label=f"Lượt mượn từ {_vn_date(p.get('from'))} đến {_vn_date(p.get('to'))}",
                                       start=p.get("from"), end=p.get("to")) if p.get("from") else None}
     cands = [_cand("kpi", ctx.explicit, type="kpi", title="Đối chiếu nhu cầu và tồn kho", kpis=[
@@ -955,7 +956,7 @@ def _b_dashboard(result, ctx: _Ctx, key: str) -> list[dict]:
     if not kpis:
         return []
     return [_cand("kpi", ctx.explicit or ctx.analytic, type="kpi", title="KPI tổng quan", kpis=kpis,
-                  source=VizSource(tools=[key], endpoints=["/analytics/dashboard/kpis"]), scope=_system(),
+                  source=VizSource(tools=[key], endpoints=["/analytics/dashboard/kpis"]), scope=_readable(),
                   time_range=VizTimeRange(label="Tại thời điểm truy xuất"), data_as_of=ctx.now_iso,
                   interactions=_interactions("kpi"))]
 
@@ -966,7 +967,7 @@ _OVERDUE_BUCKETS = [("1–7 ngày", 1, 7), ("8–30 ngày", 8, 30), ("31–90 ng
 def _b_overdue(result, ctx: _Ctx, key: str) -> list[dict]:
     if not isinstance(result, dict) or "total_overdue_loans" not in result:
         return []
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/overdue-summary"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/overdue-summary"]), "scope": _readable(),
            "time_range": VizTimeRange(label="Tại thời điểm truy xuất"), "data_as_of": ctx.now_iso}
     cands = [_cand("kpi", ctx.explicit or ctx.analytic, type="kpi", title="Tình hình quá hạn", kpis=[
         KpiItem(key="loans", label="Phiếu quá hạn", value=_num(result.get("total_overdue_loans")), unit=U_PHIEU),
@@ -998,7 +999,7 @@ _FINE_TYPES = {"OVERDUE": "Quá hạn", "LOST": "Mất sách", "DAMAGE": "Hư h�
 def _b_fines(result, ctx: _Ctx, key: str) -> list[dict]:
     if not isinstance(result, dict) or "total_unpaid" not in result:
         return []
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/fine-summary"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/fine-summary"]), "scope": _readable(),
            "time_range": VizTimeRange(label="Toàn bộ lịch sử phạt, tại thời điểm truy xuất"), "data_as_of": ctx.now_iso}
     cands = [_cand("kpi", ctx.explicit or ctx.analytic, type="kpi", title="Tiền phạt", kpis=[
         KpiItem(key="unpaid", label="Chưa thu", value=_num(result.get("total_unpaid")), unit=U_VND, kind="currency"),
@@ -1027,7 +1028,7 @@ def _b_reservations(result, ctx: _Ctx, key: str) -> list[dict]:
     if not isinstance(result, dict) or "total" not in result:
         return []
     data = [{"status": label, "count": _num(result.get(k))} for k, label in _FUNNEL if k in result]
-    src = {"source": VizSource(tools=[key], endpoints=["/analytics/reservation-funnel"]), "scope": _system(),
+    src = {"source": VizSource(tools=[key], endpoints=["/analytics/reservation-funnel"]), "scope": _readable(),
            "time_range": VizTimeRange(label="Toàn bộ lượt đặt chỗ, tại thời điểm truy xuất"), "data_as_of": ctx.now_iso}
     cands = [_cand("kpi", ctx.explicit or ctx.analytic, type="kpi", title="Đặt chỗ", kpis=[
         KpiItem(key="total", label="Tổng lượt đặt chỗ", value=_num(result.get("total")), unit=U_LUOT),
@@ -1052,7 +1053,7 @@ def _b_aging(result, ctx: _Ctx, key: str) -> list[dict]:
         return []
     src = {"source": VizSource(tools=[key], endpoints=["/analytics/aging-inventory" if key == "get_aging_inventory"
                                                        else "/analytics/weeding-suggestions"]),
-           "scope": _system(), "data_as_of": ctx.now_iso,
+           "scope": _readable(), "data_as_of": ctx.now_iso,
            "time_range": VizTimeRange(label=f"Không hoạt động từ {result.get('threshold_days')} ngày trở lên")}
     weeding = key == "get_weeding_suggestions"
     series = [VizField(key="title", label="Đầu sách", kind="text"), VizField(key="warehouse", label="Kho", kind="text"),
@@ -1088,7 +1089,7 @@ def _b_priorities(result, ctx: _Ctx, key: str) -> list[dict]:
                         for t in tasks[:MAX_TABLE_ROWS]],
                   source=VizSource(tools=[key], endpoints=["/analytics/dashboard/kpis", "/analytics/overdue-summary",
                                                           "/analytics/warehouse-stock-risk", "/analytics/reorder-suggestions"]),
-                  scope=_system(), time_range=VizTimeRange(label="Tại thời điểm truy xuất"),
+                  scope=_readable(), time_range=VizTimeRange(label="Tại thời điểm truy xuất"),
                   data_as_of=_retrieved_at(result, ctx.now_iso), interactions=_interactions("table"))]
 
 

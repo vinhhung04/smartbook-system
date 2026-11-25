@@ -390,12 +390,15 @@ async function me(req, res) {
 async function listWarehouseStaff(req, res) {
   try {
     const roles = normalizeRoles(Array.isArray(req.auth?.roles) ? req.auth.roles.map((role) => String(role).toUpperCase()) : []);
-    const canManageAssignments = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER');
+    const isAdmin = Boolean(req.auth?.is_superuser) || roles.includes('ADMIN');
+    const canManageAssignments = isAdmin || roles.includes('WAREHOUSE_MANAGER');
 
     if (!canManageAssignments) {
       return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
+    // A manager only sees staff who can work (write scope) in a warehouse the
+    // manager can write in - their own scope rows, read from the database.
     const users = await prisma.$queryRawUnsafe(
       `
       SELECT DISTINCT
@@ -411,8 +414,20 @@ async function listWarehouseStaff(req, res) {
         AND u.status = 'ACTIVE'
         AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
         AND r.code = 'WAREHOUSE_STAFF'
+        AND ($1::boolean OR EXISTS (
+          SELECT 1
+          FROM user_warehouse_scopes s
+          JOIN user_warehouse_scopes mine ON mine.warehouse_id = s.warehouse_id
+          WHERE s.user_id = u.id
+            AND s.access_level = ANY($3::text[])
+            AND mine.user_id = $2::uuid
+            AND mine.access_level = ANY($3::text[])
+        ))
       ORDER BY u.full_name ASC, u.username ASC
-      `
+      `,
+      isAdmin,
+      isAdmin ? null : req.auth?.sub,
+      ['WRITE', 'OPERATOR', 'FULL']
     );
 
     return res.json({ data: users });
