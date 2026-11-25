@@ -174,10 +174,10 @@ await check('6. putaway: manager01 sees no BR-HCM-02 receipt and cannot open or 
   assert.equal(list.filter((r) => (r.warehouse_id || r.warehouse?.id) === D3).length, 0, 'BR-HCM-02 receipts listed');
   assert.equal((await call(tokens.manager01, `/api/putaway/receipts/${d3Receipts[0].id}`)).status, 403);
   assert.equal((await call(tokens.manager01, `/api/putaway/receipts/${d3Receipts[0].id}/locations`)).status, 403);
-  const r = await call(tokens.manager01, `/api/putaway/receipts/${d3Receipts[0].id}/confirm`, {
-    method: 'POST', body: JSON.stringify({ allocations: [{ item_id: randomUUID(), putaway_quantity: 0 }] }),
+  const r = await call(tokens.manager01, '/api/receiving-putaway/transfer', {
+    method: 'POST', body: JSON.stringify({ warehouse_id: D3, goods_receipt_id: d3Receipts[0].id, source_receiving_location_id: randomUUID(), variant_id: randomUUID(), allocations: [] }),
   });
-  assert.equal(r.status, 403, `confirm -> ${r.status}`);
+  assert.equal(r.status, 403, `putaway transfer -> ${r.status}`);
 });
 
 // ── 6. smart receiving (fixture) ────────────────────────────────────────────

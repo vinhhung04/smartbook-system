@@ -59,6 +59,9 @@ pnpm test:e2e
   resized in place, so it stays well inside the gateway's 600 requests / 15 min limit.
 - `number-input-audit.spec.ts` — opt-in audit (`NUMBER_INPUT_AUDIT=1`) of every number field
   across staff, reader and supplier screens; writes `test-results/number-input-audit.json`.
+- `putaway-repick-logic.spec.ts` — API-level (`SMARTBOOK_TEST_ISOLATED=1`, `GATEWAY_URL`,
+  `DB_USER`): putting 4 of 10 received copies away keeps the total at 10, a receipt never puts
+  away more than it received, and every declared shortage in a repick chain gets a new repick.
 
 ## Notes
 

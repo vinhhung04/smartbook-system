@@ -176,9 +176,8 @@ export function OutboundPage() {
         setWarehouses(list);
         setWarehouseStaff(Array.isArray(staffRows?.data) ? staffRows.data : []);
 
-        const preferredWarehouseId = list[0]?.id || '';
-        setSelectedWarehouseId(preferredWarehouseId);
-        await loadQueue(canManageQueue ? (preferredWarehouseId || undefined) : undefined);
+        // No warehouse picked = every warehouse the user may read.
+        await loadQueue();
       } catch (error) {
         toast.error(getApiErrorMessage(error, 'Không tải được hàng đợi xuất kho'));
       } finally {
@@ -194,12 +193,7 @@ export function OutboundPage() {
       return;
     }
 
-    if (!selectedWarehouseId) {
-      setQueue([]);
-      return;
-    }
-
-    void loadQueue(selectedWarehouseId).catch((error) => {
+    void loadQueue(selectedWarehouseId || undefined).catch((error) => {
       toast.error(getApiErrorMessage(error, 'Không tải được hàng đợi theo kho'));
     });
   }, [canManageQueue, selectedWarehouseId]);
@@ -298,7 +292,7 @@ export function OutboundPage() {
         <SelectValue placeholder="Chọn kho" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all">Chọn kho</SelectItem>
+        <SelectItem value="all">Tất cả kho</SelectItem>
         {warehouses.map((warehouse) => (
           <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</SelectItem>
         ))}
@@ -646,6 +640,7 @@ export function OutboundPage() {
               {canManageQueue && warehouses.length > 0 && (
                 <div className="mt-3 border-t border-border pt-3">
                   <p className="px-3 pb-1.5 text-[12px] font-semibold text-muted-foreground">Kho xuất</p>
+                  {railButton(!selectedWarehouseId, () => setSelectedWarehouseId(''), 'Tất cả kho')}
                   {warehouses.map((warehouse) => (
                     <div key={warehouse.id}>{railButton(selectedWarehouseId === warehouse.id, () => setSelectedWarehouseId(warehouse.id), warehouse.name)}</div>
                   ))}

@@ -91,18 +91,6 @@ export interface PutawayLocationResponse {
   compartments: PutawayCompartment[];
 }
 
-export interface PutawayAllocationItem {
-  item_id: string;
-  zone_id: string;
-  shelf_id: string;
-  compartment_id: string;
-  putaway_quantity: number;
-}
-
-export interface ConfirmPutawayPayload {
-  allocations: PutawayAllocationItem[];
-}
-
 export const putawayService = {
   getReadyReceipts: async () => {
     const response = await inventoryAPI.get('/api/putaway/receipts');
@@ -117,11 +105,6 @@ export const putawayService = {
   getPutawayLocations: async (receiptId: string) => {
     const response = await inventoryAPI.get(`/api/putaway/receipts/${receiptId}/locations`);
     return response.data as PutawayLocationResponse;
-  },
-
-  confirmPutaway: async (receiptId: string, payload: ConfirmPutawayPayload) => {
-    const response = await inventoryAPI.post(`/api/putaway/receipts/${receiptId}/confirm`, payload);
-    return response.data;
   },
 
   claimSelf: async (receiptId: string) => {

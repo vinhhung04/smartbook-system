@@ -139,7 +139,6 @@ async function run() {
   await expectStatus('WAREHOUSE_STAFF approve PO forbidden', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', staffToken, {}, (status) => status === 403);
   await expectStatus('WAREHOUSE_STAFF create supplier forbidden', 'POST', '/api/suppliers', staffToken, {}, (status) => status === 403);
   await expectStatus('WAREHOUSE_STAFF picking confirm reaches assignment/controller guard', 'POST', '/api/picking/tasks/outbound/00000000-0000-4000-8000-000000000000/lines/00000000-0000-4000-8000-000000000001/confirm', staffToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_STAFF putaway confirm reaches assignment/controller guard', 'POST', '/api/putaway/receipts/00000000-0000-4000-8000-000000000000/confirm', staffToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('WAREHOUSE_STAFF receiving transfer reaches task validation', 'POST', '/api/receiving-putaway/transfer', staffToken, {}, (status) => status === 400);
   await expectStatus('WAREHOUSE_STAFF outbound confirm reaches assignment/controller guard', 'POST', '/api/outbound/orders/outbound/00000000-0000-4000-8000-000000000000/confirm', staffToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('WAREHOUSE_STAFF IAM forbidden', 'GET', '/iam/users', staffToken, undefined, (status) => status === 403);

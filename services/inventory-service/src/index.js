@@ -160,6 +160,18 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           // Exclude terminal statuses — completed/cancelled orders are history, not active tasks.
           // Picking page only shows APPROVED/PICKING; outbound page shows up to READY_TO_SHIP.
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
+          // Outbound phase mirrors the /outbound queue: a REPICK order is confirmed through its root,
+          // and an unpacked order is still Packing work (/confirm answers 409 for both).
+          // `not: null` keeps the condition NULL-safe so root orders (no external_reference) stay.
+          NOT: {
+            AND: [
+              { status: { in: ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'] } },
+              { OR: [
+                { external_reference: { not: null, startsWith: 'REPICK:' } },
+                { packing_tasks: { none: { status: 'COMPLETED' } } },
+              ] },
+            ],
+          },
           ...inScope,
         },
         select: {

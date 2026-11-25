@@ -4,6 +4,13 @@ const { prisma } = require("../lib/prisma");
 
 const OUTBOUND_READY_STATUS = ["APPROVED", "PICKING"];
 const TRANSFER_READY_STATUS = ["APPROVED", "PICKING"];
+// A declared shortage moves the line's remainder to a repick order; picking it here too would ship it twice.
+const LINE_SHORTAGE_HANDED_OFF = {
+  invalid: true,
+  statusCode: 409,
+  code: "LINE_SHORTAGE_HANDED_TO_REPICK",
+  message: "Phần còn thiếu của dòng này đã chuyển sang đơn lấy bù. Hãy lấy tiếp ở đơn lấy bù.",
+};
 const {
   REPICK_META_MARKER,
   REPICK_LINE_MARKER,
@@ -545,16 +552,7 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
   const rootTaskId = parentMeta?.root_task_id || order.id;
   const repickSequence = Number(parentMeta?.repick_sequence || 0) + 1;
 
-  // Check existing REPICK via relational picking_tasks first (new), then fall back to note-based check
-  const existingRepickTask = await tx.picking_tasks.findFirst({
-    where: {
-      root_order_id: rootTaskId,
-      picking_type: "REPICK",
-      status: { not: "CANCELLED" },
-    },
-    select: { id: true },
-  });
-
+  // Idempotent per parent order: each declared shortage in a chain gets its own repick.
   const existingChild = await tx.outbound_orders.findFirst({
     where: {
       note: { contains: `[${REPICK_META_MARKER}]` },
@@ -572,11 +570,11 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
     },
   });
 
-  if (existingRepickTask || existingChild) {
+  if (existingChild) {
     return {
       task_type: "outbound",
-      task_id: existingChild?.id || null,
-      order_number: existingChild?.outbound_number || null,
+      task_id: existingChild.id,
+      order_number: existingChild.outbound_number,
       repick_sequence: repickSequence,
       reused_existing: true,
     };
@@ -624,9 +622,11 @@ async function maybeCreateRepickFromOutbound(tx, order, lines, actorUserId) {
     })),
   });
 
-  // Dual-write: create picking_tasks REPICK linked via parent_id (relational, no note-parsing)
+  // Dual-write: create picking_tasks REPICK linked via parent_id (relational, no note-parsing).
+  // The parent is the root's PICK task, or for a repick order the root's newest REPICK task.
   const parentPickingTask = await tx.picking_tasks.findFirst({
-    where: { root_order_id: order.id, picking_type: "PICK" },
+    where: { root_order_id: rootTaskId, picking_type: parentMeta ? "REPICK" : "PICK" },
+    orderBy: { created_at: "desc" },
     select: { id: true, root_order_id: true, warehouse_id: true },
   });
   if (parentPickingTask) {
@@ -2255,6 +2255,7 @@ async function confirmPickingLine(req, res) {
               message: "Không tìm thấy dòng trong công việc xuất kho",
             };
           }
+          if (getLineShortPickedQty(line.note) > 0) return LINE_SHORTAGE_HANDED_OFF;
 
           const requestedQty = Number(line.quantity || 0);
           const pickedQty = Number(line.processed_qty || 0);
@@ -2744,67 +2745,7 @@ async function confirmPickingLine(req, res) {
             }
           }
 
-          // Auto-create repick when the PICK task completes with short-picked items.
-          // Only for PICK orders (not REPICK) — maybeCreateRepickFromOutbound handles chains.
-          if (allDone && !isRepickOrder) {
-            const itemsAfterPick = await tx.outbound_order_items.findMany({
-              where: { outbound_order_id: order.id },
-              select: {
-                id: true,
-                variant_id: true,
-                source_location_id: true,
-                quantity: true,
-                processed_qty: true,
-                note: true,
-              },
-            });
-
-            // Write SHORT_PICK note for each item that was not fully picked,
-            // then pass the updated items to maybeCreateRepickFromOutbound.
-            const itemsForRepick = [];
-            for (const item of itemsAfterPick) {
-              const remaining = Math.max(
-                0,
-                Number(item.quantity || 0) - Number(item.processed_qty || 0),
-              );
-              if (remaining > 0) {
-                const newNote = withLineShortPickedQty(item.note || "", remaining);
-                await tx.outbound_order_items.update({
-                  where: { id: item.id },
-                  data: { note: newNote },
-                });
-                itemsForRepick.push({ ...item, note: newNote });
-              } else {
-                itemsForRepick.push(item);
-              }
-            }
-
-            const hasShortPicks = itemsForRepick.some(
-              (item) => item.note && item.note.includes(`[${SHORT_PICK_MARKER}]`),
-            );
-
-            if (hasShortPicks) {
-              const orderForRepick = await tx.outbound_orders.findUnique({
-                where: { id: order.id },
-                select: {
-                  id: true,
-                  outbound_number: true,
-                  warehouse_id: true,
-                  requested_by_user_id: true,
-                  processed_by_user_id: true,
-                  note: true,
-                },
-              });
-              if (orderForRepick) {
-                await maybeCreateRepickFromOutbound(
-                  tx,
-                  orderForRepick,
-                  itemsForRepick,
-                  scope.currentUserId,
-                );
-              }
-            }
-          }
+          // A short line stays on this task: the picker opens a repick with declare-shortage.
 
           await tx.inventory_audit_logs.create({
             data: {
@@ -2923,6 +2864,7 @@ async function confirmPickingLine(req, res) {
             message: "Không tìm thấy dòng trong công việc chuyển kho",
           };
         }
+        if (getLineShortPickedQty(line.note) > 0) return LINE_SHORTAGE_HANDED_OFF;
 
         const requestedQty = Number(line.quantity || 0);
         const pickedQty = Number(line.shipped_qty || 0);
@@ -4030,11 +3972,15 @@ async function declareOutboundShortage(req, res) {
         }
       }
 
-      // Complete the active PICK task so it no longer appears in queue
+      // For REPICK orders, the root order is the original PICK order (via REPICK_META).
+      const repickMeta = parseRepickMeta(order.note);
+      const rootOrderId = repickMeta?.root_task_id || taskId;
+
+      // Complete this order's active task (PICK, or the root's REPICK) so it no longer appears in queue
       const activePickTask = await tx.picking_tasks.findFirst({
         where: {
-          root_order_id: taskId,
-          picking_type: 'PICK',
+          root_order_id: rootOrderId,
+          picking_type: repickMeta ? 'REPICK' : 'PICK',
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
         },
         select: { id: true },
@@ -4053,9 +3999,6 @@ async function declareOutboundShortage(req, res) {
       );
 
       // Ensure root order status is REPICKING regardless of whether a picking_task exists.
-      // For REPICK orders, the root order is the original PICK order (via REPICK_META).
-      const repickMeta = parseRepickMeta(order.note);
-      const rootOrderId = repickMeta?.root_task_id || taskId;
       const rootToCheck = rootOrderId !== taskId
         ? await tx.outbound_orders.findUnique({ where: { id: rootOrderId }, select: { status: true } })
         : await tx.outbound_orders.findUnique({ where: { id: taskId }, select: { status: true } });
@@ -4063,6 +4006,14 @@ async function declareOutboundShortage(req, res) {
         await tx.outbound_orders.update({
           where: { id: rootOrderId },
           data: { status: 'REPICKING', updated_at: new Date() },
+        });
+      }
+      // A REPICK order handed its remainder to the next repick, so nothing is left to pick on it
+      // (same end state as a fully picked repick in confirmPickingLine).
+      if (repickMeta) {
+        await tx.outbound_orders.update({
+          where: { id: taskId },
+          data: { status: 'READY_TO_SHIP', updated_at: new Date() },
         });
       }
 

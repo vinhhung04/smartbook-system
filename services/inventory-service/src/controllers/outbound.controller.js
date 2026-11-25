@@ -102,8 +102,9 @@ async function listOutboundQueue(req, res) {
       prisma.outbound_orders.findMany({
         where: {
           status: { in: OUTBOUND_VISIBLE_STATUSES },
-          // Exclude REPICK orders — they are accounted for in the root order's aggregate
-          external_reference: { not: { startsWith: "REPICK:" } },
+          // Exclude REPICK orders — they are accounted for in the root order's aggregate.
+          // NULL must be kept explicitly: SQL `NOT (NULL LIKE ...)` drops every root order.
+          AND: [{ OR: [{ external_reference: null }, { NOT: { external_reference: { startsWith: "REPICK:" } } }] }],
           ...outboundScope,
           ...outboundAssignment,
           // Orders that finished Picking must complete Packing before showing up as
