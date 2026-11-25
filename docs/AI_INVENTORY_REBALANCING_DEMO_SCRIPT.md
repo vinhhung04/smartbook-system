@@ -1,4 +1,6 @@
-# AI Inventory Rebalancing — Kịch bản demo (7 câu)
+# AI Inventory Rebalancing — Kịch bản demo (7 lượt, ngân sách tùy chọn)
+
+Trang demo: `/ai-assistant` · Thời lượng: 6–7 phút · Tài khoản: `rebalance.manager`.
 
 ## Chuẩn bị (chỉ môi trường dev / test)
 
@@ -9,25 +11,61 @@ pnpm demo:rebalancing:seed
 pnpm demo:rebalancing:validate
 ```
 
-- Tài khoản: `rebalance.manager` (mật khẩu demo giống các tài khoản e2e — `DEMO_PASSWORD`), WAREHOUSE_MANAGER.
+- Tài khoản `rebalance.manager` (vai trò MANAGER, mật khẩu demo giống các tài khoản e2e — `DEMO_PASSWORD`).
 - Phạm vi: **WH-HCM-01 FULL, WH-HN-01 READ, WH-DN-01 FULL**.
-- Fixture: 6 đầu sách có giá, Hà Nội và Đà Nẵng có tồn, TP.HCM thiếu; 292 phiếu mượn đã trả tại TP.HCM trong 4 tuần (nhu cầu). Mọi bản ghi gắn `DEMO-REB`; `pnpm demo:rebalancing:reset` xóa đúng phần đó và các yêu cầu tài khoản demo đã tạo.
-- Mở `/ai-assistant`, đăng nhập `rebalance.manager`. Kiểm thử tự động: `pnpm test:e2e:ai-rebalancing-demo` (đặt `E2E_LIVE_AI=1`, cần stack có profile `ai`, đặt `BASE_URL` / `PLAYWRIGHT_CHANNEL` nếu cần; CI bỏ qua spec này vì không có LLM).
+- Fixture: TP.HCM thiếu sách, Hà Nội và Đà Nẵng dư; nhu cầu là các phiếu mượn đã trả tại TP.HCM trong 4 tuần. Mọi bản ghi gắn `DEMO-REB`; `seed` chạy `reset` trước, nên chạy lại `seed` ngay trước buổi demo (lượt 6 tạo yêu cầu thật).
+- Kiểm thử tự động đúng kịch bản này (LLM thật):
 
-Số liệu dưới đây là của lần chạy 20/11/2026 trên dữ liệu dev; chúng do analytics tính từ fixture và thay đổi theo dữ liệu thật.
+```powershell
+$env:E2E_LIVE_AI='1'; $env:BASE_URL='http://localhost:5174'; $env:PLAYWRIGHT_CHANNEL='chrome'; pnpm test:e2e:ai-rebalancing-demo
+```
 
-| # | Câu hỏi (nguyên văn) | Mục tiêu | Planner / tool thực tế | Backend xử lý | Kết quả quan sát | Thẻ | Lời thuyết trình ngắn |
-|---|---|---|---|---|---|---|---|
-| 1 | Hãy phân tích tồn kho và nhu cầu của tất cả các kho tôi được phép truy cập. Kho nào đang thiếu, kho nào đang dư sách? | Chẩn đoán | focus SURPLUS/SHORTAGE/DEMAND/DIAGNOSIS → `analyze_inventory_rebalancing {}` | Scope từ auth-service; SQL theo kho × variant; dự báo theo nhu cầu của từng kho | 3 kho (HN chỉ xem); TP.HCM thiếu 5 đầu sách / 62 bản; HN dư 125, ĐN dư 120 bản | A + timeline | "AI tự xác định tôi được xem 3 kho, Hà Nội chỉ đọc; số liệu tính theo nhu cầu riêng của từng kho." |
-| 2 | Tìm các cơ hội điều chuyển sách về kho TP.HCM. Tính số lượng điều chuyển an toàn và kiểm tra quyền của tôi. | Cơ hội + số lượng an toàn + quyền | focus TRANSFER_QUANTITY, TRANSFER_OPPORTUNITY → kho đích Kho HCM Chinh | Ghép nguồn dư → đích thiếu, giữ mức cần giữ ở kho nguồn | ĐN → HCM 10 bản *Beartown 2* (ĐN còn 2 = mức giữ, **tự tạo được**); HN → HCM 12 + 14 bản (**cần Manager kho nguồn**) | B | "Kho nguồn không bao giờ bị rút dưới mức cần giữ; hàng từ Hà Nội là việc cần người khác." |
-| 3 | So sánh ba phương án: chỉ điều chuyển, chỉ mua mới và kết hợp cả hai. Phương án nào hiệu quả nhất? | So sánh | focus DECISION_COMPARISON, HYBRID_DECISION | 4 phương án, xếp hạng theo quy tắc cố định | Chỉ chuyển 58,1%; chỉ mua 100% / 12.025.000 ₫; kết hợp 100% / 4.473.000 ₫ (**tốt nhất**); kết hợp tự làm được 100% / 8.689.000 ₫ | C | "Không mặc định Hybrid; quy tắc xếp hạng in ngay dưới bảng; chi phí điều chuyển không có dữ liệu nên không tính." |
-| 4 | Tối ưu phương án tốt nhất với ngân sách mua sách 15 triệu đồng. | Ngân sách | focus BUDGET_OPTIMIZATION, `budget_vnd: 15000000`, giữ kho đích | Phân bổ biên theo Poisson, không vượt ngân sách | Kết hợp: mua 4.473.000 ₫, còn 10.527.000 ₫ | D | "Ngân sách chỉ dùng cho mua mới; điều chuyển không tốn ngân sách mua." |
-| 5 | Nếu ngân sách giảm 20%, phương án và mức đáp ứng nhu cầu thay đổi thế nào? | What-if | focus WHAT_IF → 2 lần gọi: 15 tr (kịch bản cũ) và 12 tr (do planner tính) | Chạy lại engine, code tính chênh lệch | Kết hợp vẫn 100%; ngân sách còn **giảm 3.000.000 ₫**; chỉ mua mới tụt 100% → 98,4% | E | "Giảm 20% không ảnh hưởng phương án kết hợp, nhưng làm hỏng phương án chỉ mua — đó là giá trị của điều chuyển." |
-| 6 | Tôi đồng ý với phương án 15 triệu ban đầu. Hãy tạo bản nháp yêu cầu điều chuyển và mua mới cho những hành động tôi đủ quyền thực hiện. | Bản nháp | focus CREATE_DRAFT, khôi phục kịch bản 15 tr | Đọc lại kế hoạch, chỉ lấy phương án thực thi được | Bản nháp: 1 yêu cầu điều chuyển ĐN → HCM (2 dòng, 16 bản) + 4 phiếu nhập (46 bản, ~8.689.000 ₫); 2 việc HN chỉ là đề xuất | F | "'15 triệu ban đầu' được khôi phục từ bộ nhớ kịch bản; chưa có gì được tạo." |
-| 7 | Tôi xác nhận. Hãy kiểm tra lại quyền và tồn kho rồi thực hiện các yêu cầu hợp lệ theo workflow hiện tại. | Thực hiện | focus CONFIRM_ACTION → không gọi tool đọc; đi qua `confirm_action` | Quyền đọc fresh, chống trùng, inventory kiểm tồn, audit | EXECUTED: 1 mã TO-… (REQUESTED) + 4 mã PR-… (PENDING); việc của HN được liệt kê cho Manager kho đó | G + timeline | "Câu 'tôi xác nhận' đi đúng con đường của nút Xác nhận; yêu cầu được tạo ở trạng thái chờ duyệt, AI không duyệt, không xuất kho." |
+  Ngân sách lấy ngẫu nhiên 5–20 triệu (bước 0,5 triệu) và được in ra; đặt `$env:DEMO_BUDGET_TRIEU='8'` để chạy lại đúng một mức. Spec chỉ kiểm tra các thẻ; sau khi chạy nên đọc lại câu trả lời (bảng `ai_messages` của hội thoại mới nhất) rồi `seed` lại.
+
+## Ngân sách: người thuyết trình chọn tùy ý
+
+Lượt 3 dùng ngân sách **X triệu** nói tại chỗ (ví dụ "8 triệu", "8,5 triệu", "12.000.000 đồng"). Planner đọc số đó; lượt 4 tự tính X × 80%; lượt 5 ("phương án ngân sách ban đầu") lấy lại kịch bản X. Hai trường hợp đều trình bày được:
+
+| X so với chi phí mua của phương án kết hợp (≈ 9,75 triệu trên dữ liệu ngày 26/11/2026) | Điều hội đồng thấy ở lượt 3–4 |
+|---|---|
+| **X nhỏ hơn** (ví dụ 8 triệu) | Ngân sách ràng buộc: kết hợp chỉ đáp ứng ~91%, hệ thống phân bổ ưu tiên; giảm 20% (6,4 triệu) → ~82%, còn thiếu tăng 8 → 17 bản. |
+| **X lớn hơn** (ví dụ 15–17,5 triệu) | Kết hợp đủ 100% và còn dư ngân sách; giảm 20% không ảnh hưởng phương án kết hợp, nhưng phương án tự thực hiện và "chỉ mua mới" giảm — đó là giá trị của điều chuyển. |
+
+Muốn cho thấy phân bổ ngân sách rõ nhất thì chọn X khoảng 6–9 triệu. Số liệu phụ thuộc dữ liệu dev lúc chạy; chạy `validate` hoặc e2e với đúng X trước buổi demo.
+
+## Mở đầu tùy chọn (≈ 1 phút): nhận diện sách từ ảnh bìa
+
+1. Trong `/ai-assistant` bấm nút ảnh, xác nhận thông báo xử lý ảnh bên ngoài, gửi ảnh bìa. Hệ thống trả IDENTIFIED (hoặc AMBIGUOUS + danh sách để chọn) kèm bằng chứng OCR và so khớp ảnh.
+2. Hỏi: **"Cuốn này còn ở những kho nào? Kho nào đang có nhiều nhất?"** — trả lời theo tồn từng kho trong phạm vi Manager được xem (không phải chi nhánh công khai).
+3. Chuyển sang lượt 1 bên dưới.
+
+- Dùng ảnh chụp **đúng ấn bản trong catalog** (bìa trong thư viện ảnh CLIP là ảnh bìa của catalog); ảnh một ấn bản khác vẫn đọc được tên bằng OCR nhưng chỉ ra AMBIGUOUS. Nối vào phần sau tốt nhất là một cuốn TP.HCM đang thiếu (ví dụ *Sứ Mệnh Hail Mary*); thử ảnh đó trước buổi demo.
+- Kiểm tra ngày 26/11/2026 bằng ảnh *Số đỏ* (bộ dữ liệu nghiên cứu): bản bị che một phần → IDENTIFIED; bản chụp nghiêng → AMBIGUOUS, chọn "Số đỏ" → "15 bản, tất cả ở Kho HCM Chinh" (đúng dữ liệu). Ảnh sách ngoài thư viện → AMBIGUOUS, không bị kết luận nhầm.
+- Kiểm tra trên giao diện web ngày 26/11/2026 (Playwright, `rebalance.manager`): ảnh bìa *Sứ Mệnh Hail Mary* đúng ấn bản catalog, chụp nghiêng → IDENTIFIED; trả lời "không có bản nào trong các kho bạn được xem" (đúng: TP.HCM đang thiếu 16 bản) — nối thẳng sang lượt 1.
+- Cần mạng (OCR qua OpenRouter, ~3–4 giây). Thư viện ảnh nạp lười: lần nhận diện đầu tiên sau khi khởi động lại ai-service có thể bị timeout phần so khớp ảnh. Trước buổi demo gửi thử một ảnh (hoặc admin gọi `POST /ai/find-book-by-cover/reindex`; Manager bị 403).
+- Xóa lịch sử hội thoại của tài khoản demo trước khi trình bày (nút "Xóa toàn bộ lịch sử").
+
+## Kịch bản
+
+| # | Câu hỏi (nguyên văn) | Mục tiêu | Thẻ | Lời thuyết trình ngắn |
+|---|---|---|---|---|
+| 1 | Hãy phân tích tồn kho và nhu cầu của tất cả các kho tôi được phép truy cập. Kho nào đang thiếu, kho nào đang dư, và có thể điều chuyển an toàn những sách nào về kho TP.HCM? | Chẩn đoán + cơ hội điều chuyển | Chẩn đoán, Cơ hội điều chuyển, tiến trình | "AI tự xác định tôi xem được 3 kho, Hà Nội chỉ đọc. Kho nguồn không bao giờ bị rút dưới mức cần giữ; hàng từ Hà Nội là việc của Manager kho đó." |
+| 2 | So sánh ba phương án: chỉ điều chuyển, chỉ mua mới và kết hợp cả hai. Phương án nào hiệu quả nhất? | So sánh | So sánh phương án | "Engine xếp hạng theo quy tắc cố định in dưới bảng; tách phương án tốt nhất về nghiệp vụ và phương án tôi tự làm được. Chi phí điều chuyển không có dữ liệu nên không tính." |
+| 3 | Tối ưu phương án tốt nhất với ngân sách mua sách **X triệu đồng**. | Phân bổ ngân sách | Phân bổ ngân sách | "Ngân sách chỉ dành cho mua mới; nếu không đủ, hệ thống ưu tiên đầu sách thiếu nhiều và ưu tiên cao." |
+| 4 | Nếu ngân sách giảm 20%, phương án và mức đáp ứng nhu cầu thay đổi thế nào? | What-if | So sánh kịch bản (trước → sau), có dòng "Bạn tự thực hiện" | "Hệ thống chạy lại engine với ngân sách mới; chênh lệch do code tính, không phải LLM tự suy." |
+| 5 | Tôi đồng ý với phương án ngân sách ban đầu. Hãy tạo bản nháp yêu cầu điều chuyển và mua mới cho những hành động tôi đủ quyền thực hiện. | Bản nháp | Bản nháp điều chuyển và mua mới | "'Ban đầu' được lấy lại từ bộ nhớ kịch bản; việc của Hà Nội chỉ là đề xuất; chưa có gì được tạo." |
+| 6 | Tôi xác nhận. Hãy kiểm tra lại quyền và tồn kho rồi thực hiện các yêu cầu hợp lệ theo workflow hiện tại. | Thực hiện | Kết quả thực hiện, tiến trình | "Kiểm tra lại quyền (không dùng cache), chống tạo trùng, kiểm tồn; yêu cầu ở trạng thái chờ duyệt, có mã TO-/PR-." |
+| 7 | Phê duyệt luôn yêu cầu điều chuyển vừa tạo giúp tôi. | Ranh giới an toàn | — | "AI từ chối theo luật cố định, không qua LLM: duyệt, xuất kho, nhận hàng vẫn là việc của người duyệt trên màn hình Yêu cầu." |
+
+Nếu còn thời gian: mở trang Yêu cầu xuất/chuyển kho để thấy mã `TO-…` vừa tạo ở trạng thái REQUESTED.
 
 ## Câu hỏi dự phòng khi thuyết trình
 
-- "Tại sao không chọn Hà Nội?" → giải thích quyền chỉ xem.
+- "Tại sao không lấy hàng Hà Nội?" → quyền chỉ xem; phương án tự thực hiện mua bù phần đó. Nếu Manager Hà Nội đồng ý chuyển, phiếu nhập tương ứng có thể giảm.
 - "Nếu kho Hà Nội không thể điều chuyển thì sao?" → what-if loại kho nguồn.
-- "Phê duyệt luôn giúp tôi" → AI từ chối, chỉ ra bước duyệt trên màn hình Yêu cầu.
+- "Nếu nhu cầu tăng 30%?" → what-if nhu cầu.
+
+## Giới hạn cần biết
+
+- Câu chữ do LLM (`OPENROUTER_ASSISTANT_MODEL`) viết và khác nhau giữa các lần; số liệu trên thẻ do analytics tính và không đổi theo LLM.
+- Chi phí và thời gian điều chuyển chưa có dữ liệu lịch sử, nên không được đưa vào xếp hạng.
