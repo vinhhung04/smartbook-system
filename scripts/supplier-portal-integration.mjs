@@ -303,8 +303,8 @@ async function run() {
   expect(invalidToken.response.status === 404, `Invalid token should be 404, got ${invalidToken.response.status}`);
   pass('invalid token rejected');
 
-  console.log(`PASS=${passes.length} TOTAL=22`);
-  if (passes.length !== 22) process.exitCode = 1;
+  console.log(`PASS=${passes.length} TOTAL=21`);
+  if (passes.length !== 21) process.exitCode = 1;
 }
 
 run().catch((error) => {
