@@ -70,7 +70,6 @@ async function createPo(M, setup, orderedQty, note) {
 
 async function approvePo(M, poId) {
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
 }
 
 /** Invoice-first: the supplier accepts and invoices the full order, ships exactly invoicedQty,

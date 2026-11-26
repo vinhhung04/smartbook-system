@@ -180,30 +180,6 @@ await check('6. putaway: manager01 sees no BR-HCM-02 receipt and cannot open or 
   assert.equal(r.status, 403, `putaway transfer -> ${r.status}`);
 });
 
-// ── 6. smart receiving (fixture) ────────────────────────────────────────────
-const draft = await call(tokens.hung, '/api/receiving-smart/drafts', {
-  method: 'POST',
-  body: JSON.stringify({ warehouse_id: D3, supplier_name: TAG, user_id: me.manager01, items: [{ title: `${TAG} item`, quantity: 1 }] }),
-});
-const draftId = draft.body?.draft_id || null;
-if (draftId) cleanup.push(() => call(tokens.hung, `/api/receiving-smart/drafts/${draftId}`, { method: 'DELETE' }));
-
-await check('7. smart receiving: the creator is the caller (a body user_id is ignored)', async () => {
-  assert.ok(draftId, 'fixture: draft created');
-  assert.equal(draft.body.draft.created_by_user_id, me.hung);
-});
-
-await check('8. smart receiving: manager01 cannot list, open, edit, convert or cancel a BR-HCM-02 draft', async () => {
-  const list = (await call(tokens.manager01, '/api/receiving-smart/drafts?limit=100')).body?.drafts || [];
-  assert.equal(list.filter((d) => d.id === draftId).length, 0, 'draft listed');
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}`)).status, 403);
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}`, { method: 'PUT', body: JSON.stringify({ items: [] }) })).status, 403);
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}/convert`, { method: 'POST', body: JSON.stringify({}) })).status, 403);
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}`, { method: 'DELETE' })).status, 403);
-  const after = await call(tokens.hung, `/api/receiving-smart/drafts/${draftId}`);
-  assert.equal(after.body.draft.status, 'DRAFT', 'draft changed');
-});
-
 // ── 7. order requests (fixture) ─────────────────────────────────────────────
 const stock = d3Line;
 let outboundId = null;

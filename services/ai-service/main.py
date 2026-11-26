@@ -138,7 +138,7 @@ from routes_ai_experience import image_prompt_block, resolve_turn_image, router 
 from ai_core import explainability as ai_explainability
 from routes_public_discover import router as public_discover_router
 from prometheus_fastapi_instrumentator import Instrumentator
-from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls, ocr_request_duration
+from metrics import ai_isbn_field_status_total, isbn_lookup_duration, isbn_provider_calls
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -563,118 +563,6 @@ async def verify_packing_photo(file: UploadFile = File(...)):
         raise HTTPException(status_code=502, detail="AI vision không trả về kết quả hợp lệ.")
     except Exception as e:
         logger.warning("verify_packing_photo: AI call failed: %s", type(e).__name__)
-        raise HTTPException(status_code=502, detail=f"AI vision lỗi: {e}")
-
-
-# ────────────────────────────────────────────────────────────────────────────────
-# Smart Receiving AI — Receipt/Invoice OCR Scanning
-# ────────────────────────────────────────────────────────────────────────────────
-
-RECEIPT_VISION_MAX_TOKENS = int(os.getenv("RECEIPT_VISION_MAX_TOKENS", "1200"))
-RECEIPT_VISION_TIMEOUT_SECONDS = float(os.getenv("RECEIPT_VISION_TIMEOUT_SECONDS", "30"))
-
-PROMPT_RECEIPT = (
-    "Bạn là một chuyên gia nhập liệu kho sách cho hệ thống thư viện SmartBook. "
-    "Nhìn vào hình ảnh hóa đơn / phiếu giao hàng / phiếu nhập kho này. "
-    "Hãy trích xuất tất cả thông tin một cách chính xác nhất.\n\n"
-    "YÊU CẦU ĐẦU RA:\n"
-    "Trả về DUY NHẤT một JSON hợp lệ, không có markdown, không có giải thích, theo định dạng:\n\n"
-    "{\n"
-    '  "supplier_name": "...",\n'
-    '  "invoice_number": "...",\n'
-    '  "invoice_date": "YYYY-MM-DD",\n'
-    '  "line_items": [\n'
-    '    {\n'
-    '      "title": "...",\n'
-    '      "isbn": "...",\n'
-    '      "quantity": số_nguyên,\n'
-    '      "unit_price": số_thập_phân\n'
-    '    }\n'
-    '  ]\n'
-    "}\n\n"
-    "QUY TẮC:\n"
-    "- supplier_name: tên nhà cung cấp (nếu không thấy ghi null)\n"
-    "- invoice_number: số hóa đơn (nếu không thấy ghi null)\n"
-    "- invoice_date: ngày tháng theo định dạng YYYY-MM-DD (nếu không thấy ghi null)\n"
-    "- line_items: MẢNG các dòng sản phẩm, mỗi dòng gồm:\n"
-    "  * title: tên sách (bắt buộc)\n"
-    "  * isbn: mã ISBN (10 hoặc 13 số, có thể ghi null nếu không thấy)\n"
-    "  * quantity: số lượng (số nguyên dương, mặc định 1 nếu không thấy)\n"
-    "  * unit_price: đơn giá (số, có thể làm tròn, mặc định 0 nếu không thấy)\n"
-    "- Nếu không trích xuất được gì, trả về {\"error\": \"Không thể đọc nội dung hóa đơn\"}\n"
-    "- Đọc tất cả các dòng sản phẩm trong hóa đơn, không bỏ sót\n"
-    "- Ưu tiên ISBN chuẩn (13 số bắt đầu bằng 978)"
-)
-
-
-async def _scan_receipt_from_bytes(image_bytes: bytes) -> dict:
-    """Extract structured data from receipt/invoice image using OpenRouter vision.
-    Returns the parsed JSON dict as-is - callers validate/normalize it (analyze_image
-    already guarantees this is a JSON object; it never returns free text)."""
-    provider = get_openrouter_provider(VISION_MODEL)
-    parsed, _usage = await provider.analyze_image(
-        image_bytes, PROMPT_RECEIPT,
-        max_tokens=RECEIPT_VISION_MAX_TOKENS, timeout=RECEIPT_VISION_TIMEOUT_SECONDS,
-        feature="receipt_ocr",
-    )
-    return parsed
-
-
-@app.post("/scan-receipt")
-async def scan_receipt(file: UploadFile = File(...)):
-    """
-    Trích xuất dữ liệu cấu trúc từ hình ảnh hóa đơn / phiếu giao hàng / phiếu nhập kho.
-    Trả về: supplier_name, invoice_number, invoice_date, line_items[]
-    """
-    # Validate file type
-    content_type = file.content_type or ""
-    allowed_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
-    if not any(content_type.startswith(t) for t in allowed_types):
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type không hợp lệ. Chỉ chấp nhận: {', '.join(allowed_types)}"
-        )
-
-    image_bytes = await _validate_and_read_image(file)
-
-    try:
-        with ocr_request_duration.time():
-            result = await _scan_receipt_from_bytes(image_bytes)
-
-        # Model-reported failure (it was told to return {"error": "..."} when it
-        # can't read the receipt at all) - a normal 200 with success=False, not
-        # an HTTP error.
-        if "error" in result:
-            return {"success": False, "error": str(result["error"])}
-
-        # Normalize line_items
-        line_items = result.get("line_items") or []
-        normalized_items = []
-        for item in line_items:
-            if not isinstance(item, dict):
-                continue
-            normalized_item = {
-                "title": item.get("title") or "Không rõ",
-                "isbn": item.get("isbn"),
-                "quantity": max(1, int(item.get("quantity") or 1)),
-                "unit_price": float(item.get("unit_price") or 0),
-            }
-            normalized_items.append(normalized_item)
-
-        return {
-            "success": True,
-            "supplier_name": result.get("supplier_name"),
-            "invoice_number": result.get("invoice_number"),
-            "invoice_date": result.get("invoice_date"),
-            "line_items": normalized_items,
-            "total_items": len(normalized_items),
-        }
-
-    except VisionResponseError as e:
-        logger.warning("scan_receipt: invalid AI response: %s", e)
-        raise HTTPException(status_code=502, detail="AI vision không trả về kết quả hợp lệ.")
-    except Exception as e:
-        logger.warning("scan_receipt: AI call failed: %s", type(e).__name__)
         raise HTTPException(status_code=502, detail=f"AI vision lỗi: {e}")
 
 

@@ -106,7 +106,7 @@ test('Grafana provisions only Prometheus, and every panel and alert uses it', ()
 test('the AI dashboard keeps the latency, token, cost, OCR and catalog-sync metrics', () => {
   const dashboard = read('observability/grafana/dashboards/ai-performance.json');
   for (const metric of ['ai_request_duration_seconds', 'ai_llm_tokens_total', 'ai_llm_cost_usd_total',
-    'ocr_request_duration_seconds', 'ai_catalog_sync_last_success_timestamp_seconds', 'http_requests_total']) {
+    'ai_book_ocr_scans_total', 'ai_catalog_sync_last_success_timestamp_seconds', 'http_requests_total']) {
     assert.match(dashboard, new RegExp(metric), metric);
   }
 });

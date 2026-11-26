@@ -10,6 +10,8 @@ export interface CoverSearchEvidence {
 export interface CoverSearchCandidate extends CustomerCatalogBook {
   confidence: number;
   evidence: CoverSearchEvidence[];
+  /** Edition to reserve (public catalog: most copies on a pickup shelf); variant_id is the matched edition. */
+  reserve_variant_id?: string | null;
 }
 
 export interface CoverSearchResponse {

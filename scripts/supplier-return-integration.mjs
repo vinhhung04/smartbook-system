@@ -76,7 +76,6 @@ async function setupPostedGrn(M, S, setup, orderedQty, note) {
   });
   const poId = created.data.id;
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   const invoiceId = (await acceptInvoiceAndShip(M, S, poId, setup.unitCost)).deliveryId;
   const invoiceDetail = (await ok('GET', `/api/supplier-deliveries/${invoiceId}`, M)).data;
@@ -206,7 +205,6 @@ async function main() {
   });
   const fPoId = fCreated.data.id;
   await ok('POST', `/api/purchase-orders/${fPoId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${fPoId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${fPoId}/send-to-supplier`, M);
   const fDeliveryId = (await acceptInvoiceAndShip(M, S, fPoId, setup.unitCost)).deliveryId;
   const fInvoiceDetail = (await ok('GET', `/api/supplier-deliveries/${fDeliveryId}`, M)).data;

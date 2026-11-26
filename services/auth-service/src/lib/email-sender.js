@@ -171,6 +171,13 @@ const OTP_COPY = {
     cautionLead: 'Không phải bạn đăng nhập?',
     caution: 'Đừng chia sẻ mã này với ai. Ai đó có thể đã biết mật khẩu của bạn — hãy đổi mật khẩu ngay.',
   },
+  PASSWORD_RESET: {
+    eyebrow: 'Bảo mật tài khoản',
+    title: 'Đặt lại mật khẩu',
+    intro: 'Chúng tôi vừa nhận được yêu cầu đặt lại mật khẩu cho tài khoản SmartBook của bạn. Nhập mã dưới đây cùng mật khẩu mới để hoàn tất.',
+    cautionLead: 'Không phải bạn yêu cầu?',
+    caution: 'Hãy bỏ qua email này — mật khẩu của bạn vẫn giữ nguyên. Đừng chia sẻ mã này với ai.',
+  },
 };
 
 function otpEmail(data) {
@@ -218,43 +225,7 @@ function otpEmail(data) {
   };
 }
 
-function passwordResetEmail(data) {
-  const url = escapeHtml(data.reset_url);
-  const body = [
-    paragraph(`Xin chào ${strong(data.full_name || 'bạn')},`),
-    paragraph('Chúng tôi vừa nhận được yêu cầu đặt lại mật khẩu cho tài khoản SmartBook của bạn. Bấm nút dưới đây để tạo mật khẩu mới.', { last: true }),
-    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 0;"><tr>
-      <td style="border-radius:12px;background:${BRAND.ink};">
-        <a href="${url}" style="display:inline-block;padding:14px 28px;font-family:${SANS};font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:12px;">Đặt lại mật khẩu &rarr;</a>
-      </td></tr></table>`,
-    `<p class="sb-muted" style="margin:16px 0 0;font-size:12.5px;line-height:1.6;color:${BRAND.muted};">Liên kết có hiệu lực trong 1 giờ. Nếu nút không hoạt động, mở địa chỉ này:<br><a class="sb-link" href="${url}" style="color:${BRAND.indigo};word-break:break-all;">${url}</a></p>`,
-    note(`${strong('Không phải bạn yêu cầu?')} Hãy bỏ qua email này — mật khẩu của bạn vẫn giữ nguyên.`),
-  ].join('\n');
-
-  return {
-    subject: '[SmartBook] Yêu cầu đặt lại mật khẩu',
-    html: brandedEmail({
-      preheader: 'Đặt lại mật khẩu SmartBook của bạn — liên kết có hiệu lực trong 1 giờ.',
-      eyebrow: 'Bảo mật tài khoản',
-      title: 'Đặt lại mật khẩu',
-      bodyHtml: body,
-    }),
-    text: [
-      `Xin chào ${data.full_name || 'bạn'},`,
-      '',
-      'Chúng tôi vừa nhận được yêu cầu đặt lại mật khẩu cho tài khoản SmartBook của bạn.',
-      `Đặt lại mật khẩu (hiệu lực 1 giờ): ${data.reset_url}`,
-      '',
-      'Nếu bạn không yêu cầu, hãy bỏ qua email này — mật khẩu của bạn vẫn giữ nguyên.',
-      '',
-      'SmartBook — https://smartbook.io.vn',
-    ].join('\n'),
-    attachments: [LOGO_ATTACHMENT],
-  };
-}
-
 const EMAIL_TEMPLATES = {
-  PASSWORD_RESET_REQUESTED: passwordResetEmail,
   EMAIL_OTP: otpEmail,
 };
 
@@ -279,14 +250,4 @@ async function deliverEmail(to, templateCode, data) {
   }
 }
 
-/** Fire-and-forget variant for mail whose failure must not change the response (password reset). */
-async function sendEmail(to, templateCode, data) {
-  try {
-    await deliverEmail(to, templateCode, data);
-    return true;
-  } catch (_err) {
-    return false;
-  }
-}
-
-module.exports = { sendEmail, deliverEmail, isEmailConfigured, EmailDeliveryError, EMAIL_TEMPLATES, escapeHtml };
+module.exports = { deliverEmail, isEmailConfigured, EmailDeliveryError, EMAIL_TEMPLATES, escapeHtml };

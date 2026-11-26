@@ -842,7 +842,25 @@ async function updatePurchaseOrder(req, res) {
   }
 }
 
+// A submitter who may approve purchase orders would only approve their own
+// order next, so the order is approved on submit (still audited as an approval).
+function canApprovePurchaseOrders(user) {
+  if (user?.is_superuser) return true;
+  return Array.isArray(user?.permissions) && user.permissions.includes("inventory.purchase.approve");
+}
+
 async function submitPurchaseOrder(req, res) {
+  if (canApprovePurchaseOrders(req.user)) {
+    return transitionPurchaseOrder(req, res, {
+      allowedFrom: [PO_STATUSES.DRAFT, PO_STATUSES.REJECTED],
+      nextStatus: PO_STATUSES.APPROVED,
+      actionName: "PURCHASE_ORDER_APPROVED",
+      message: "Purchase order submitted and auto-approved",
+      approvedBy: true,
+      notePrefix: "APPROVED_NOTE",
+      auditExtra: { auto_approved_on_submit: true },
+    });
+  }
   return transitionPurchaseOrder(req, res, {
     allowedFrom: [PO_STATUSES.DRAFT, PO_STATUSES.REJECTED],
     nextStatus: PO_STATUSES.PENDING_APPROVAL,
@@ -923,6 +941,7 @@ async function transitionPurchaseOrder(req, res, options) {
         status_before: po.status,
         status_after: options.nextStatus,
         total_ordered_qty: totalOrderedQty,
+        ...(options.auditExtra || {}),
       });
 
       if (options.actionName === "PURCHASE_ORDER_APPROVED") {

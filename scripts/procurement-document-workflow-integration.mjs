@@ -104,7 +104,6 @@ async function main() {
   });
   const poId = created.data.id;
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   let po = await ok('GET', `/api/purchase-orders/${poId}`, M);
   check('PO sent: waiting for the supplier (PENDING_SUPPLIER)', po.status === 'SENT_TO_SUPPLIER' && po.supplier_response_status === 'PENDING_SUPPLIER', `${po.status}/${po.supplier_response_status}`);

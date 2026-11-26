@@ -35,7 +35,6 @@ const legacyExplicitAnyFiles = [
   'src/components/pages/customer/reservations.tsx',
   'src/components/pages/customer/wishlist.tsx',
   'src/components/pages/goods-receipt.tsx',
-  'src/components/pages/receiving-smart.tsx',
   'src/components/pages/recommendations.tsx',
   'src/components/pages/reports.tsx',
   'src/lib/export-utils.ts',
@@ -43,7 +42,6 @@ const legacyExplicitAnyFiles = [
   'src/services/ai.ts',
   'src/services/book.ts',
   'src/services/goods-receipt.ts',
-  'src/services/receiving-smart.ts',
   'src/services/role.ts',
   'src/services/user.ts',
 ]

@@ -72,10 +72,9 @@ async function createPo(M, setup, orderedQty, note) {
   return created.data.id;
 }
 
-/** DRAFT -> PENDING_APPROVAL -> APPROVED. */
+/** DRAFT -> APPROVED: a manager who may approve has the order approved on submit. */
 async function approvePo(M, poId) {
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
 }
 
 /** APPROVED -> SENT_TO_SUPPLIER -> SUPPLIER_CONFIRMED: the supplier's priced acceptance approved,

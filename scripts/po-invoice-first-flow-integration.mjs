@@ -122,7 +122,6 @@ async function run() {
   pass('C10-13: PO with a catalog book and a book not in the catalog, no unit price');
 
   await ok('POST', `/api/purchase-orders/${poId}/submit`, token);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, token, { note: 'integration' });
   const sent = await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, token);
   const portalToken = sent.data.portal_token;
 

@@ -19,7 +19,7 @@ Toàn bộ `/api/*` (trừ `/api/supplier-portal`) yêu cầu JWT. Có 34 route 
 | Catalog & metadata | /api/books, /api/metadata-reconciliations, /api/duplicate-intelligence |
 | Kho & tồn | /api/warehouses, /api/locations, /api/shelves, /api/stock-balances, /api/stock-movements, /api/stock-alerts |
 | Mua hàng | /api/purchase-requests, /api/purchase-orders, /api/suppliers, /api/supplier-account, /api/supplier-deliveries |
-| Nhập kho | /api/goods-receipts, /api/receiving-smart, /api/receiving-putaway, /api/putaway, /api/transfer-receiving |
+| Nhập kho | /api/goods-receipts, /api/receiving-putaway, /api/putaway, /api/transfer-receiving |
 | Xuất kho | /api/order-requests, /api/picking, /api/packing, /api/outbound |
 | Vận hành kho | /api/stock-audits, /api/exception-reports, /api/storage-suggestions, /api/reslotting-suggestions, /api/staff-tasks, /api/my-warehouse-tasks |
 | Tích hợp Borrow | /api/borrow-integration |

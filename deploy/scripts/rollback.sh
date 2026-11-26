@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Put a previous release back (application images only - the database is not touched).
+# Put a previous release back by re-running deploy.sh with its SHA: application
+# images change, the schema is never rolled back (deploy.sh still stops the apps,
+# takes a predeploy backup and runs that release's migrations, which are no-ops).
 #
 #   rollback.sh            # the release deployed before the current one
 #   rollback.sh <sha>      # a specific earlier release (its images must still be on the server)

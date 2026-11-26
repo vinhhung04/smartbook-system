@@ -108,13 +108,15 @@ function buildSteps(status: PurchaseOrderStatus): WorkflowStep[] {
   }));
 }
 
-function getActionDialogConfig(pendingAction: PendingAction | null, poNumber: string | undefined) {
+function getActionDialogConfig(pendingAction: PendingAction | null, poNumber: string | undefined, selfApproves = false) {
   const label = poNumber || "đơn đặt hàng này";
   if (!pendingAction) return null;
 
   switch (pendingAction.type) {
     case "submit":
-      return { title: "Gửi duyệt đơn đặt hàng", description: `Gửi ${label} cho quản lý duyệt?`, confirmLabel: "Gửi duyệt", variant: "default" as const };
+      return selfApproves
+        ? { title: "Gửi và duyệt đơn đặt hàng", description: `Bạn có quyền duyệt nên ${label} sẽ được duyệt ngay khi gửi. Tiếp tục?`, confirmLabel: "Gửi và duyệt", variant: "default" as const }
+        : { title: "Gửi duyệt đơn đặt hàng", description: `Gửi ${label} cho quản lý duyệt?`, confirmLabel: "Gửi duyệt", variant: "default" as const };
     case "approve":
       return { title: "Duyệt đơn đặt hàng", description: `Duyệt ${label}? Sau khi duyệt, đơn có thể được gửi cho nhà cung cấp.`, confirmLabel: "Duyệt đơn", variant: "default" as const };
     case "send":
@@ -281,7 +283,7 @@ export function PurchaseOrderDetailPage() {
 
     let ok = false;
     if (pendingAction.type === "submit") {
-      ok = await runAction("Đã gửi duyệt đơn đặt hàng", () => purchaseOrderService.submit(id));
+      ok = await runAction(canApprovePurchaseOrder ? "Đã gửi và duyệt đơn đặt hàng" : "Đã gửi duyệt đơn đặt hàng", () => purchaseOrderService.submit(id));
     } else if (pendingAction.type === "approve") {
       ok = await runAction("Đã duyệt đơn đặt hàng", () => purchaseOrderService.approve(id, "Approved from UI"));
     } else if (pendingAction.type === "send") {
@@ -345,7 +347,7 @@ export function PurchaseOrderDetailPage() {
   const latestOpenInvoice = invoices.find((invoice) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status));
   const latestPortalToken = dispatches.find((dispatch) => dispatch.portal_token)?.portal_token;
   const openShortages = shortageReports.filter((report) => report.status !== "RESOLVED");
-  const dialogConfig = getActionDialogConfig(pendingAction, po.po_number);
+  const dialogConfig = getActionDialogConfig(pendingAction, po.po_number, canApprovePurchaseOrder);
 
   const supplierName = po.supplier?.name || po.supplier_name || "-";
   const warehouseCode = po.warehouse?.code || po.warehouse_code || "-";
@@ -373,14 +375,14 @@ export function PurchaseOrderDetailPage() {
             title={rejected ? "Đơn bị từ chối — chỉnh sửa và gửi duyệt lại" : canSubmit ? "Kiểm tra lại rồi gửi duyệt" : "Đơn đang ở dạng nháp"}
             description={rejected
               ? (rejectReasonNote ? `Lý do: ${rejectReasonNote}` : "Xem lại số lượng, đơn giá và nhà cung cấp trước khi gửi lại.")
-              : canSubmit ? "Quản lý sẽ nhận được yêu cầu duyệt ngay khi bạn gửi." : "Người tạo đơn cần gửi duyệt trước khi quản lý có thể duyệt."}
+              : canSubmit ? (canApprovePurchaseOrder ? "Bạn có quyền duyệt nên đơn được duyệt ngay khi gửi." : "Quản lý sẽ nhận được yêu cầu duyệt ngay khi bạn gửi.") : "Người tạo đơn cần gửi duyệt trước khi quản lý có thể duyệt."}
           >
             {canEdit && (
               <Button asChild variant="outline" size="sm">
                 <NavLink to={`/purchase-orders/${po.id}/edit`}><Edit className="h-3.5 w-3.5" />Chỉnh sửa</NavLink>
               </Button>
             )}
-            {canSubmit && <Button size="sm" onClick={submit} disabled={working} data-testid="submit-po-button"><Send className="h-3.5 w-3.5" />Gửi duyệt</Button>}
+            {canSubmit && <Button size="sm" onClick={submit} disabled={working} data-testid="submit-po-button"><Send className="h-3.5 w-3.5" />{canApprovePurchaseOrder ? "Gửi và duyệt" : "Gửi duyệt"}</Button>}
           </NextStep>
         );
       }

@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
-const { sendEmail, deliverEmail, isEmailConfigured } = require('../lib/email-sender');
+const { deliverEmail, isEmailConfigured } = require('../lib/email-sender');
 const { revokeUserTokensIssuedBefore, blacklistToken } = require('../lib/token-revocation');
 const redis = require('../lib/redis');
 const { createRefreshTokenService, RefreshTokenError } = require('../lib/refresh-tokens');
@@ -16,8 +16,9 @@ const refreshTokens = createRefreshTokenService({
   del: (key) => redis.delStrict(key),
 });
 
+const otpStore = createPrismaOtpStore(prisma);
 const emailOtp = createEmailOtpService({
-  store: createPrismaOtpStore(prisma),
+  store: otpStore,
   deliver: (to, data) => deliverEmail(to, 'EMAIL_OTP', data),
   secret: resolveOtpSecret(),
   lookupUser: (id) => prisma.user.findUnique({ where: { id }, select: { full_name: true, deleted_at: true } }),
@@ -121,8 +122,6 @@ function signAccessToken(user, roles, permissions) {
   );
 }
 
-const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
-const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 const MAX_FAILED_LOGIN_ATTEMPTS = Number(process.env.MAX_FAILED_LOGIN_ATTEMPTS || 5);
 const BCRYPT_ROUNDS = 12;
 
@@ -824,84 +823,88 @@ async function changePassword(req, res) {
   }
 }
 
+// Password reset by emailed code (no link/token in the mail). Both steps answer the
+// same way whether or not the account exists, and the code is sent off the request
+// path, so neither the response nor its timing tells an account apart.
+async function findResettableUser(identifier) {
+  const users = await prisma.$queryRawUnsafe(
+    `
+    SELECT id, email, full_name
+    FROM users
+    WHERE deleted_at IS NULL
+      AND status = 'ACTIVE'
+      AND (
+        lower(username::text) = lower($1)
+        OR lower(email::text) = lower($1)
+      )
+    LIMIT 1
+    `,
+    identifier
+  );
+  return users[0] || null;
+}
+
+// POST /auth/password-reset/request { identifier } — emails a 6-digit code. Asking
+// again within the cooldown keeps the code already sent; after it, a new code
+// replaces the old one (limits in lib/email-otp.js).
 async function requestPasswordReset(req, res) {
   try {
     const identifier = normalizeIdentifier(req.body?.identifier || req.body?.email || req.body?.username);
-    const genericResponse = { message: 'If the account exists, a reset link has been sent' };
-
     if (!identifier) {
       return res.status(400).json({ message: 'Thiếu tài khoản đăng nhập (identifier)' });
     }
 
-    const users = await prisma.$queryRawUnsafe(
-      `
-      SELECT id, email, full_name
-      FROM users
-      WHERE deleted_at IS NULL
-        AND status = 'ACTIVE'
-        AND (
-          lower(username::text) = lower($1)
-          OR lower(email::text) = lower($1)
-        )
-      LIMIT 1
-      `,
-      identifier
-    );
-
-    const user = users[0];
-    if (!user) {
-      return res.json(genericResponse);
+    const user = await findResettableUser(identifier);
+    if (user) {
+      emailOtp.issue({ user, purpose: PURPOSES.PASSWORD_RESET }).catch((err) => {
+        console.error('requestPasswordReset code not sent:', err.code || err.message);
+      });
     }
-
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    await prisma.passwordResetToken.create({
-      data: {
-        user_id: user.id,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
-      },
-    });
-
-    const resetUrl = `${FRONTEND_URL}/reset-password?token=${rawToken}`;
-    sendEmail(user.email, 'PASSWORD_RESET_REQUESTED', { full_name: user.full_name, reset_url: resetUrl }).catch((err) => {
-      console.error('requestPasswordReset email error:', err);
-    });
-
-    return res.json(genericResponse);
+    return res.json({ message: 'If the account exists, a reset code has been sent' });
   } catch (error) {
     console.error('requestPasswordReset error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 }
 
+// POST /auth/password-reset/confirm { identifier, code, new_password }
 async function confirmPasswordReset(req, res) {
+  const identifier = normalizeIdentifier(req.body?.identifier);
+  const code = String(req.body?.code ?? '').trim();
+  const newPassword = String(req.body?.new_password || '');
+
+  if (!identifier || !code || !newPassword) {
+    return res.status(400).json({ message: 'Cần có đủ identifier, code và new_password' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  }
+
   try {
-    const token = String(req.body?.token || '').trim();
-    const newPassword = String(req.body?.new_password || '');
-
-    if (!token || !newPassword) {
-      return res.status(400).json({ message: 'Cần có đủ token và new_password' });
-    }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
-    }
-
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token_hash: tokenHash } });
-
-    if (!resetToken || resetToken.used_at || resetToken.expires_at < new Date()) {
-      return res.status(400).json({ message: 'Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn' });
+    const user = await findResettableUser(identifier);
+    const challenge = user ? await otpStore.findLatestOpen(user.id, PURPOSES.PASSWORD_RESET) : null;
+    if (!challenge) {
+      return res.status(400).json({ message: 'Mã không đúng hoặc đã hết hạn. Vui lòng yêu cầu mã mới.', code: 'OTP_INVALID' });
     }
 
     const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    try {
+      await emailOtp.verify({
+        challengeId: challenge.id,
+        purpose: PURPOSES.PASSWORD_RESET,
+        code,
+        apply: async (tx, consumed) => {
+          await tx.user.update({ where: { id: user.id }, data: { password_hash: newHash } });
+          // The code reached this address, so it is confirmed as well.
+          await markEmailVerified(tx, consumed);
+        },
+      });
+    } catch (error) {
+      return sendOtpError(res, error, 'confirmPasswordReset');
+    }
 
-    await prisma.$transaction([
-      prisma.user.update({ where: { id: resetToken.user_id }, data: { password_hash: newHash } }),
-      prisma.passwordResetToken.update({ where: { id: resetToken.id }, data: { used_at: new Date() } }),
-    ]);
-
+    // Sessions opened with the old password end, as on a password change.
+    await revokeUserTokensIssuedBefore(user.id);
     return res.json({ message: 'Password reset successful' });
   } catch (error) {
     console.error('confirmPasswordReset error:', error);

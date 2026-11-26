@@ -97,7 +97,7 @@ export function AuditCoverConfirmSheet({ visible, matches, photoTitle, saving, o
                   </View>
                   <Text style={{ fontFamily: fontFamily.mono, fontSize: 13, color: colors.textSecondary }}>ISBN {match.line.isbn13 ?? match.line.isbn10 ?? '—'}</Text>
                   <Text style={type.caption}>
-                    Vị trí <Text style={{ fontFamily: fontFamily.monoBold, color: colors.textPrimary }}>{match.line.location_code ?? '—'}</Text>, đã đếm {match.line.counted_qty ?? 0}, hệ thống {match.line.expected_qty}
+                    Vị trí <Text style={{ fontFamily: fontFamily.monoBold, color: colors.textPrimary }}>{match.line.location_code ?? '—'}</Text>, đã đếm {match.line.counted_qty ?? 0}{match.line.expected_qty !== null ? `, hệ thống ${match.line.expected_qty}` : ''}
                   </Text>
                   <View style={{ alignSelf: 'flex-start' }}>
                     <StatusBadge

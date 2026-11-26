@@ -99,7 +99,6 @@ async function createPo(token, setup, lines) {
 
 async function approvePo(token, poId) {
   await okRequest('POST', `/api/purchase-orders/${poId}/submit`, token);
-  await okRequest('POST', `/api/purchase-orders/${poId}/approve`, token, { note: 'integration approve' });
 }
 
 async function getPurchaseOrder(token, poId) {
@@ -170,9 +169,7 @@ async function run() {
   ]);
   pass('create PO');
   await okRequest('POST', `/api/purchase-orders/${fullPoId}/submit`, token);
-  pass('submit PO');
-  await okRequest('POST', `/api/purchase-orders/${fullPoId}/approve`, token, { note: 'integration approve' });
-  pass('approve PO');
+  pass('submit PO (auto-approved: the manager may approve)');
 
   const approvedPo = await getPurchaseOrder(token, fullPoId);
   expect(approvedPo.status === 'APPROVED', `Expected APPROVED, got ${approvedPo.status}`);

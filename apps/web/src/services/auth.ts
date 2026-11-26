@@ -214,8 +214,8 @@ export const authService = {
     return response.data;
   },
 
-  confirmPasswordReset: async (token: string, newPassword: string): Promise<{ message: string }> => {
-    const response = await authAPI.post('/auth/password-reset/confirm', { token, new_password: newPassword });
+  confirmPasswordReset: async (identifier: string, code: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await authAPI.post('/auth/password-reset/confirm', { identifier, code, new_password: newPassword });
     return response.data;
   },
 

@@ -750,7 +750,9 @@ export function PackingPage() {
                                 {evidence.ai_verification_status === "MATCH"
                                   ? "AI: Khớp"
                                   : evidence.ai_verification_status === "MISMATCH"
-                                    ? "AI: Lệch số lượng"
+                                    ? evidence.ai_verification_result?.count_matches === true
+                                      ? "AI: Lệch tên sách"
+                                      : "AI: Lệch số lượng"
                                     : "AI: Chưa xác minh"}
                               </span>
                               {unexpectedTitles.length > 0 && (

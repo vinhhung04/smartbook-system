@@ -18,10 +18,6 @@ ai_llm_cost_usd_total = Counter(
     "OpenRouter cost in USD by feature and model, as reported by OpenRouter's usage.cost",
     ["feature", "model"],
 )
-ocr_request_duration = Histogram(
-    "ocr_request_duration_seconds",
-    "OCR scan-receipt duration",
-)
 
 # book_ocr/service.py - one count per multi-image scan request; tokens, cost
 # and latency of the model calls are already in ai_llm_* (feature="book_ocr").
