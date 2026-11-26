@@ -15,6 +15,10 @@ import { authService } from '@/services/auth';
 import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
 import { purchaseRequestService } from '@/services/purchase-requests';
 import { exceptionReportService } from '@/services/exception-reports';
+import { stockAuditService } from '@/services/stock-audit';
+import { transferReceivingService } from '@/services/transfer-receiving';
+import { WarehouseFilter } from '@/components/analytics/warehouse-filter';
+import { useWarehouseFilter, WAREHOUSE_PARAM } from '@/hooks/useWarehouseFilter';
 import { useBorrowRealtime } from '@/hooks/useBorrowRealtime';
 import { useInventoryRealtime } from '@/hooks/useInventoryRealtime';
 import { DashboardSkeleton } from './dashboard-skeleton';
@@ -74,6 +78,8 @@ function routeAccess() {
     reorder: canAccess(user, ROUTE_ACCESS.reports),
     reports: canAccess(user, ROUTE_ACCESS.reports),
     audit: canAccess(user, ROUTE_ACCESS.admin),
+    stockAudits: canAccess(user, ROUTE_ACCESS.inventoryAuditRead),
+    transferReceiving: canAccess(user, ROUTE_ACCESS.staffTaskProgress),
   };
 }
 
@@ -86,36 +92,47 @@ async function fetchActivity(): Promise<AuditLogEntry[]> {
 }
 
 /** The two period-scoped reads; also reloaded on their own when the period changes. */
-function fetchPeriodBlocks(period: Period) {
+/** `warehouseId` ('' = every warehouse in the caller's scope) narrows each scoped read. */
+function fetchPeriodBlocks(period: Period, warehouseId: string) {
   const { from, granularity } = periodParams(period);
+  const wh = warehouseId ? { warehouseId } : {};
   return [
-    analyticsService.getBorrowTrends({ granularity, from }),
-    analyticsService.getTopBooks({ limit: TOP_BOOKS_LIMIT, from }),
+    analyticsService.getBorrowTrends({ granularity, from, ...wh }),
+    analyticsService.getTopBooks({ limit: TOP_BOOKS_LIMIT, from, ...wh }),
   ] as const;
 }
 
-async function fetchDashboard(borrow: boolean, period: Period): Promise<FetchResult> {
-  const { borrow: canSeeAudit, purchaseRequests: canSeePR, exceptions: canSeeER, reorder: canSeeReorder } = routeAccess();
+async function fetchDashboard(borrow: boolean, period: Period, warehouseId: string): Promise<FetchResult> {
+  const {
+    borrow: canSeeAudit, purchaseRequests: canSeePR, exceptions: canSeeER, reorder: canSeeReorder,
+    stockAudits: canSeeAudits, transferReceiving: canSeeTransfers,
+  } = routeAccess();
   const skip = Promise.resolve(undefined);
-  const [trendsRequest, topBooksRequest] = borrow ? fetchPeriodBlocks(period) : [skip, skip];
+  const [trendsRequest, topBooksRequest] = borrow ? fetchPeriodBlocks(period, warehouseId) : [skip, skip];
+  const wh = warehouseId ? { warehouseId } : undefined;
+  const whId = warehouseId || undefined;
+  // The borrow audit log has no warehouse filter: the feed is shown only for "all warehouses".
+  const withActivity = borrow && canSeeAudit && !warehouseId;
 
   const results = await Promise.allSettled([
-    analyticsService.getDashboardKpis(),
+    analyticsService.getDashboardKpis(wh),
     trendsRequest,
     topBooksRequest,
-    borrow ? analyticsService.getOverdueSummary() : skip,
-    borrow ? analyticsService.getFineSummary() : skip,
-    analyticsService.getWarehouseStockRisk(),
-    borrow ? analyticsService.getReservationFunnel() : skip,
-    canSeePR ? purchaseRequestService.getAll({ status: 'PENDING', limit: 1 }) : skip,
-    canSeeER ? exceptionReportService.getAll({ status: 'OPEN', limit: 1 }) : skip,
-    canSeeReorder ? analyticsService.getReorderSuggestions({ priority: 'ALL', limit: 1 }) : skip,
-    borrow ? analyticsService.getLateReturnRisk({ limit: AI_RISK_LIMIT }) : skip,
-    borrow ? analyticsService.getReservationNoShowRisk({ limit: AI_RISK_LIMIT }) : skip,
-    borrow && canSeeAudit ? fetchActivity() : skip,
+    borrow ? analyticsService.getOverdueSummary(wh) : skip,
+    borrow ? analyticsService.getFineSummary(wh) : skip,
+    analyticsService.getWarehouseStockRisk(wh),
+    borrow ? analyticsService.getReservationFunnel(wh) : skip,
+    canSeePR ? purchaseRequestService.getAll({ status: 'PENDING', limit: 1, warehouse_id: whId }) : skip,
+    canSeeER ? exceptionReportService.getAll({ status: 'OPEN', limit: 1, warehouse_id: whId }) : skip,
+    canSeeReorder ? analyticsService.getReorderSuggestions({ priority: 'ALL', limit: 1, ...wh }) : skip,
+    borrow ? analyticsService.getLateReturnRisk({ limit: AI_RISK_LIMIT, ...wh }) : skip,
+    borrow ? analyticsService.getReservationNoShowRisk({ limit: AI_RISK_LIMIT, ...wh }) : skip,
+    withActivity ? fetchActivity() : skip,
+    canSeeAudits ? stockAuditService.getAll({ status: 'SUBMITTED', warehouse_id: whId }) : skip,
+    canSeeTransfers ? transferReceivingService.getQueue(whId) : skip,
   ]);
-  const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel, pr, er, reorder, lateRisk, noShowRisk, activity] = results;
-  const requested = [true, borrow, borrow, borrow, borrow, true, borrow, canSeePR, canSeeER, canSeeReorder, borrow, borrow, borrow && canSeeAudit];
+  const [kpis, trends, topBooks, overdue, fines, stockRisk, funnel, pr, er, reorder, lateRisk, noShowRisk, activity, audits, transfers] = results;
+  const requested = [true, borrow, borrow, borrow, borrow, true, borrow, canSeePR, canSeeER, canSeeReorder, borrow, borrow, withActivity, canSeeAudits, canSeeTransfers];
   const failures = results.filter((result, index) => requested[index] && result.status === 'rejected') as PromiseRejectedResult[];
   if (failures.length === requested.filter(Boolean).length) {
     return { error: getApiErrorMessage(failures[0]?.reason, 'Không tải được bảng điều khiển.') };
@@ -136,10 +153,12 @@ async function fetchDashboard(borrow: boolean, period: Period): Promise<FetchRes
       funnel: borrow ? settled(funnel, emptyFunnel) : null,
       pendingPR: count(pr, canSeePR),
       openER: count(er, canSeeER),
+      submittedAudits: count(audits, canSeeAudits),
+      inboundTransfers: count(transfers, canSeeTransfers),
       reorder: canSeeReorder && reorder.status === 'fulfilled' ? (reorder.value?.summary || emptyReorderSummary) : null,
       lateRisk: borrow && lateRisk.status === 'fulfilled' ? lateRisk.value ?? null : null,
       noShowRisk: borrow && noShowRisk.status === 'fulfilled' ? noShowRisk.value ?? null : null,
-      activity: borrow && canSeeAudit ? settledList(activity) : null,
+      activity: withActivity ? settledList(activity) : null,
     },
   };
 }
@@ -166,6 +185,13 @@ export function DashboardPage() {
   const [live, setLive] = useState<LiveEvent[]>([]);
   const [period, setPeriod] = useState<Period>(DEFAULT_PERIOD);
   const [periodLoading, setPeriodLoading] = useState(false);
+  const { warehouses, warehouseId, setWarehouseId, selected: selectedWarehouse } = useWarehouseFilter();
+  // The figures on screen stay until the picked warehouse's figures land (the header says it is updating).
+  const pickWarehouse = (next: string) => {
+    if (next === warehouseId) return;
+    setRefreshing(true);
+    setWarehouseId(next);
+  };
   const hasData = useRef(false);
   const liveSeq = useRef(0);
   // Refresh keeps whatever period is on screen; changePeriod moves it.
@@ -206,13 +232,13 @@ export function DashboardPage() {
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    void fetchDashboard(canViewBorrowAnalytics, periodRef.current).then((result) => {
+    void fetchDashboard(canViewBorrowAnalytics, periodRef.current, warehouseId).then((result) => {
       if (!cancelled) applyResult(result);
     });
     return () => {
       cancelled = true;
     };
-  }, [enabled, canViewBorrowAnalytics, applyResult]);
+  }, [enabled, canViewBorrowAnalytics, applyResult, warehouseId]);
 
   const markChanged = useCallback((source: ChangeSource) => {
     if (status !== 'ready') return;
@@ -249,6 +275,8 @@ export function DashboardPage() {
       pendingPR: dashboard.pendingPR,
       openER: dashboard.openER,
       reorder: dashboard.reorder,
+      submittedAudits: dashboard.submittedAudits,
+      inboundTransfers: dashboard.inboundTransfers,
     })
     : [];
 
@@ -260,7 +288,7 @@ export function DashboardPage() {
     if (!enabled) return;
     setRefreshing(true);
     setRefreshError(null);
-    void fetchDashboard(canViewBorrowAnalytics, periodRef.current).then(applyResult);
+    void fetchDashboard(canViewBorrowAnalytics, periodRef.current, warehouseId).then(applyResult);
   };
 
   /** Only the trend and the ranking depend on the period; the rest of the page stays as it is. */
@@ -269,7 +297,7 @@ export function DashboardPage() {
     setPeriod(next);
     periodRef.current = next;
     setPeriodLoading(true);
-    void Promise.allSettled(fetchPeriodBlocks(next)).then(([trends, topBooks]) => {
+    void Promise.allSettled(fetchPeriodBlocks(next, warehouseId)).then(([trends, topBooks]) => {
       if (periodRef.current !== next) return;
       setDashboard((current) => (current ? { ...current, trends: settledList(trends), topBooks: settledList(topBooks) } : current));
       setPeriodLoading(false);
@@ -281,9 +309,15 @@ export function DashboardPage() {
     <PageWrapper className="@container space-y-5">
       <PageHeader
         title="Tổng quan vận hành"
-        description={<>{greeting} <span className="text-foreground">{finding}</span></>}
+        description={(
+          <>
+            {greeting} <span className="text-foreground">{finding}</span>
+            {selectedWarehouse ? <> Đang xem riêng <strong className="font-semibold text-foreground">{selectedWarehouse.name}</strong>.</> : null}
+          </>
+        )}
         actions={(
           <>
+            {canViewAnalytics ? <WarehouseFilter warehouses={warehouses} value={warehouseId} onChange={pickWarehouse} /> : null}
             <p className="mr-2 text-[12px] leading-5 text-muted-foreground sm:text-right">
               <span className="block capitalize">{todayLabel}</span>
               <span className="block tabular-nums" aria-live="polite">
@@ -296,7 +330,7 @@ export function DashboardPage() {
             </Button>
             {canViewAnalytics && access.reports ? (
               <Button type="button" asChild>
-                <NavLink to="/reports">
+                <NavLink to={warehouseId ? `/reports?${WAREHOUSE_PARAM}=${warehouseId}` : '/reports'}>
                   Báo cáo <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </NavLink>
               </Button>
@@ -349,7 +383,7 @@ export function DashboardPage() {
           />
         </Panel>
       ) : status === 'loading' ? (
-        <DashboardSkeleton canViewBorrow={canViewBorrowAnalytics} />
+        <DashboardSkeleton canViewBorrow={canViewBorrowAnalytics} withFeed={access.borrow && !warehouseId} />
       ) : status === 'error' || !dashboard ? (
         <Panel titleId="dashboard-error-title">
           <h2 id="dashboard-error-title" className="sr-only">Không tải được bảng điều khiển</h2>
@@ -373,8 +407,15 @@ export function DashboardPage() {
 
           {canViewBorrowAnalytics ? (
             <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
-              <AiRiskSection late={dashboard.lateRisk} noShow={dashboard.noShowRisk} canOpen={access.reorder} onRetry={retry} />
-              <ActivityFeed logs={dashboard.activity} live={live} canOpenAudit={access.audit} onRetry={retry} />
+              {/* The feed reads the borrow desk's audit log (no per-warehouse filter); without it the risk block takes the row. */}
+              {access.borrow && !warehouseId ? (
+                <>
+                  <AiRiskSection late={dashboard.lateRisk} noShow={dashboard.noShowRisk} canOpen={access.reorder} onRetry={retry} />
+                  <ActivityFeed logs={dashboard.activity} live={live} canOpenAudit={access.audit} onRetry={retry} />
+                </>
+              ) : (
+                <AiRiskSection late={dashboard.lateRisk} noShow={dashboard.noShowRisk} canOpen={access.reorder} onRetry={retry} className="@5xl:col-span-12" />
+              )}
             </div>
           ) : null}
 

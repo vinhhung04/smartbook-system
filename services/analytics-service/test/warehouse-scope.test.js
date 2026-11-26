@@ -39,3 +39,16 @@ test('no scope means no rows; scope unavailable is 503', async () => {
   assert.equal(down.passed, false);
   assert.equal(down.res.statusCode, 503);
 });
+
+test('?warehouseId= narrows the scope to one readable warehouse; others are 403, garbage is 400', async () => {
+  const hn = await run({ user: { id: 'hn' }, query: { warehouseId: HN } });
+  assert.equal(hn.passed, true);
+  assert.deepEqual([...hn.scope], [HN]);
+  const su = await run({ user: { id: 'su', is_superuser: true }, query: { warehouseId: HCM } });
+  assert.deepEqual([...su.scope], [HCM]);
+  const other = await run({ user: { id: 'hn' }, query: { warehouseId: HCM } });
+  assert.equal(other.passed, false);
+  assert.equal(other.res.statusCode, 403);
+  const bad = await run({ user: { id: 'su', is_superuser: true }, query: { warehouseId: 'x; drop' } });
+  assert.equal(bad.res.statusCode, 400);
+});

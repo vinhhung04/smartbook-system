@@ -5,7 +5,7 @@ import { cn } from '@/components/ui/utils';
 import { CountUp } from '@/components/ui/count-up';
 import { SPOTLIGHT_CLASS, spotlightMove } from '@/components/ui/spotlight';
 import { BlockError, Panel, PanelHeader } from './panel';
-import { formatNumber, formatPercent, formatShare } from './utils';
+import { formatNumber, formatPercent } from './utils';
 
 interface Stat {
   key: string;
@@ -48,7 +48,8 @@ function libraryStats(kpis: DashboardKpis, access: KpiAccess): Stat[] {
       label: 'Đang cho mượn',
       value: formatNumber(kpis.active_loans),
       count: { to: kpis.active_loans, format: formatNumber },
-      detail: `bản sao · ${formatShare(kpis.active_loans, kpis.total_copies)} vốn sách`,
+      // active_loans counts loan slips (loan_transactions), not copies
+      detail: 'phiếu mượn chưa trả xong',
       to: access.borrow ? '/borrow/loans' : undefined,
     },
     {

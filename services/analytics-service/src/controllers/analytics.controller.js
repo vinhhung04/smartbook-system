@@ -193,15 +193,14 @@ async function getBorrowKpis(wh = null) {
     queryOne(
       borrowPool,
       `
+      -- same rule as /overdue-summary (an unreturned item past due), so the two figures agree;
+      -- lt.status = 'OVERDUE' alone is not trusted: it can outlive a renewed or shifted due date
       SELECT COUNT(DISTINCT lt.id) AS overdue_loans
       FROM loan_transactions lt
-      LEFT JOIN loan_items li ON li.loan_id = lt.id
-      WHERE (lt.status = 'OVERDUE'
-         OR (
-           li.status IN ('BORROWED', 'OVERDUE')
-           AND li.due_date < NOW()
-           AND li.return_date IS NULL
-         ))
+      JOIN loan_items li ON li.loan_id = lt.id
+      WHERE li.status IN ('BORROWED', 'OVERDUE')
+        AND li.due_date < NOW()
+        AND li.return_date IS NULL
         AND ($1::uuid[] IS NULL OR lt.warehouse_id = ANY($1::uuid[]))
       `,
       [wh],
