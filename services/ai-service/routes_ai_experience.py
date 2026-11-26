@@ -255,5 +255,10 @@ def image_prompt_block(ctx: dict | None) -> str:
     else:
         names = "; ".join(c.get("title") or "?" for c in ctx.get("candidates") or [])
         lines.append(f"- Chưa xác định chắc chắn. Các khả năng: {names}. Không chọn hộ người dùng; đề nghị họ chọn đúng sách.")
-    lines.append("- Chỉ dùng thông tin ở trên cho sách trong ảnh; không suy đoán thêm thông tin không có ở đây.")
+    lines.append("- Chỉ dùng thông tin ở trên (và kết quả tool của lượt này) cho sách trong ảnh; không suy đoán thêm.")
+    # a manager asking "còn ở kho nào?" means their warehouses (search_books.by_warehouse, scoped),
+    # not the public pickup branches (live demo 2026-11-26)
+    lines.append("- Hỏi về tồn ở các kho: nếu kết quả search_books có by_warehouse thì trả lời theo by_warehouse (đúng phạm vi "
+                 "kho người dùng được xem) và gọi là \"kho\"; danh mục công khai ở trên là chi nhánh nhận sách cho độc giả, "
+                 "chỉ nhắc nếu người dùng hỏi về chi nhánh.")
     return "\n".join(lines) + "\n"

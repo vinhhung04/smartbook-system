@@ -20,7 +20,7 @@ test('gateway counts actual streamed bytes before any proxy forwards the request
   const gateway = await new Promise(resolve => { const server = app.listen(0, '127.0.0.1', () => resolve(server)); });
   function request(chunks, headers = {}) {
     return new Promise((resolve, reject) => {
-      const req = http.request({ host: '127.0.0.1', port: gateway.address().port, method: 'POST', path: '/ai/scan-receipt', headers }, res => {
+      const req = http.request({ host: '127.0.0.1', port: gateway.address().port, method: 'POST', path: '/ai/verify-packing-photo', headers }, res => {
         const data = [];
         res.on('data', chunk => data.push(chunk));
         res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(data).toString() }));
@@ -53,7 +53,7 @@ test('gateway counts actual streamed bytes before any proxy forwards the request
       const before = upstreamCalls;
       let started;
       const waiting = new Promise(resolve => {
-        started = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST' }, res => {
+        started = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/verify-packing-photo', method: 'POST' }, res => {
           res.resume();
           res.on('end', () => resolve(res.statusCode));
         });
@@ -69,7 +69,7 @@ test('gateway counts actual streamed bytes before any proxy forwards the request
     await t.test('small declared JSON bodies are not starved by a busy upload slot', async () => {
       let slow;
       const waiting = new Promise(resolve => {
-        slow = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST' }, res => {
+        slow = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/verify-packing-photo', method: 'POST' }, res => {
           res.resume();
           res.on('end', () => resolve(res.statusCode));
         });
@@ -84,7 +84,7 @@ test('gateway counts actual streamed bytes before any proxy forwards the request
     await t.test('small declared body that stalls still times out and is not forwarded', async () => {
       const before = upstreamCalls;
       const status = await new Promise(resolve => {
-        const stalled = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST', headers: { 'content-length': 20 } }, res => {
+        const stalled = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/verify-packing-photo', method: 'POST', headers: { 'content-length': 20 } }, res => {
           res.resume();
           res.on('end', () => resolve(res.statusCode));
         });
@@ -96,7 +96,7 @@ test('gateway counts actual streamed bytes before any proxy forwards the request
     });
     await t.test('client abort releases a partially received body without forwarding', async () => {
       const before = upstreamCalls;
-      const aborted = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/scan-receipt', method: 'POST' });
+      const aborted = http.request({ host: '127.0.0.1', port: gateway.address().port, path: '/ai/verify-packing-photo', method: 'POST' });
       aborted.on('error', () => {});
       aborted.write('partial');
       await new Promise(resolve => setTimeout(resolve, 15));

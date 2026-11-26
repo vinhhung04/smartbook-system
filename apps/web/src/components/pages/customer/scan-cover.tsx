@@ -218,7 +218,7 @@ export function CustomerScanCoverPage() {
       )}
 
       <ReserveModal
-        book={reserveTarget}
+        book={reserveTarget && { ...reserveTarget, variant_id: reserveTarget.reserve_variant_id ?? reserveTarget.variant_id }}
         onClose={() => setReserveTarget(null)}
         onSuccess={() => setReserveTarget(null)}
       />

@@ -43,6 +43,7 @@ const fakePrisma = {
   $queryRawUnsafe: async (sql, ...params) => {
     if (/SELECT id\s+FROM users\s+WHERE lower\(username/.test(sql)) return byIdentifier(params[0]).concat(byIdentifier(params[1]));
     if (/SELECT \*\s+FROM users/.test(sql)) return byIdentifier(params[0]).map((u) => ({ ...u }));
+    if (/SELECT id, email, full_name\s+FROM users/.test(sql)) return byIdentifier(params[0]).filter((u) => u.status === 'ACTIVE').map((u) => ({ ...u }));
     if (/SELECT DISTINCT r\.code/.test(sql)) return (userRoles.get(params[0]) || []).map((code) => ({ code }));
     if (/SELECT DISTINCT p\.code/.test(sql)) return [];
     if (/UPDATE users\s+SET email_verified_at/.test(sql)) {
@@ -71,7 +72,7 @@ const fakeMail = {
     if (smtp.failing) throw new Error('SMTP rejected');
     mailbox.push({ to, template, ...data });
   },
-  sendEmail: async () => true,
+
 };
 
 const realLoad = Module._load;
@@ -411,4 +412,53 @@ test('the code is never in a response or a log line', async () => {
   } finally {
     Object.assign(console, originals);
   }
+});
+
+// ---- password reset by emailed code ---------------------------------------------
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('password reset: same answer for unknown and known accounts; the mail holds a code, not a link', async () => {
+  await seedUser({ username: 'reset-reader', roles: ['CUSTOMER'] });
+  const before = mailbox.length;
+  const unknown = await call(controller.requestPasswordReset, { identifier: 'nobody-here' });
+  const known = await call(controller.requestPasswordReset, { identifier: 'reset-reader' });
+  await settle();
+  assert.equal(unknown.statusCode, 200);
+  assert.deepEqual(unknown.body, known.body);
+  assert.equal(known.body.challenge, undefined, 'no challenge id or masked email leaks the account');
+  assert.equal(mailbox.length, before + 1);
+  const mail = mailbox[mailbox.length - 1];
+  assert.equal(mail.purpose, 'PASSWORD_RESET');
+  assert.match(mail.code, /^\d{6}$/);
+  assert.equal(mail.reset_url, undefined);
+});
+
+test('password reset: wrong code counts an attempt; the right one sets the password, ends old sessions, and is single use', async () => {
+  const user = await seedUser({ username: 'reset-staff' });
+  await call(controller.requestPasswordReset, { identifier: 'reset-staff@smartbook.test' });
+  await settle();
+  const code = lastCode();
+
+  const wrong = await call(controller.confirmPasswordReset, { identifier: 'reset-staff', code: code === '000000' ? '111111' : '000000', new_password: 'NewPass1' });
+  assert.equal(wrong.statusCode, 400);
+  assert.equal(wrong.body.code, 'OTP_INVALID');
+
+  const ok = await call(controller.confirmPasswordReset, { identifier: 'reset-staff', code, new_password: 'NewPass1' });
+  assert.equal(ok.statusCode, 200, JSON.stringify(ok.body));
+  assert.ok(await bcrypt.compare('NewPass1', users.get(user.id).password_hash));
+  assert.ok(users.get(user.id).email_verified_at, 'the code proves the address');
+  assert.ok(redisData.has(`user:tokens-valid-after:${user.id}`), 'tokens issued before the reset are revoked');
+
+  const again = await call(controller.confirmPasswordReset, { identifier: 'reset-staff', code, new_password: 'Other123' });
+  assert.equal(again.statusCode, 400);
+  assert.equal(again.body.code, 'OTP_INVALID');
+});
+
+test('password reset: an unknown account gets the same refusal as a missing code', async () => {
+  const unknown = await call(controller.confirmPasswordReset, { identifier: 'nobody-here', code: '123456', new_password: 'NewPass1' });
+  assert.equal(unknown.statusCode, 400);
+  assert.equal(unknown.body.code, 'OTP_INVALID');
+  const short = await call(controller.confirmPasswordReset, { identifier: 'nobody-here', code: '123456', new_password: '123' });
+  assert.equal(short.statusCode, 400);
 });

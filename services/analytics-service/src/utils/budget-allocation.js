@@ -71,6 +71,14 @@ function poissonTail(lambda, k) {
   return Math.max(0, 1 - cdf);
 }
 
+// A copy funded at a review must serve demand until the NEXT order can arrive (lead time +
+// review period), not only the lead time. Weekly review assumed: selected on held-out seeds,
+// docs/ANALYSIS/BUDGET_REALISTIC_BASELINES.md (SB_NOFLOOR_PROTECT).
+const REVIEW_PERIOD_DAYS = 7;
+function protectionDemand(avgDailyDemand, leadTimeDays) {
+  return Math.max(0, Number(avgDailyDemand) || 0) * (Math.max(0, Number(leadTimeDays) || 0) + REVIEW_PERIOD_DAYS);
+}
+
 /**
  * Budget allocation by marginal expected service per VND (Copilot 3.3 /
  * docs/ANALYSIS/REORDER_OPTIMIZATION_EVALUATION.md): copies are funded one at
@@ -172,6 +180,8 @@ module.exports = {
   allocateBudget,
   allocateBudgetInOrder,
   allocateMarginal,
+  protectionDemand,
+  REVIEW_PERIOD_DAYS,
   poissonTail,
   serviceCurve,
 };

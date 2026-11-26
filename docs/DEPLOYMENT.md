@@ -66,8 +66,8 @@ Kiểm tra: `nslookup api.smartbook.io.vn 1.1.1.1`. Chứng chỉ do Caddy tự 
 | `deploy/Caddyfile` | HTTPS, reverse proxy, HSTS, redirect www |
 | `.env.production.example` | Mẫu biến môi trường (không chứa secret) |
 | `deploy/scripts/dc` | `docker compose` kèm sẵn `.env` và `IMAGE_TAG` hiện hành |
-| `deploy/scripts/deploy.sh` | Pull image theo SHA, backup trước deploy, rollout, kiểm tra sức khỏe, tự rollback |
-| `deploy/scripts/rollback.sh` | Quay về release trước (chỉ image, không đụng database) |
+| `deploy/scripts/deploy.sh` | Pull image theo SHA (đối chiếu digest), backup trước deploy, migration, rollout, smoke test; lỗi thì dừng ứng dụng, không tự rollback |
+| `deploy/scripts/rollback.sh` | Quay về release trước bằng cách chạy lại `deploy.sh` với SHA cũ (chỉ đổi image; schema không bị quay lui, nhưng vẫn có backup predeploy) |
 | `deploy/scripts/backup.sh` / `restore.sh` / `verify-backup.sh` | Sao lưu / khôi phục / thử khôi phục |
 | `deploy/scripts/healthcheck.sh` | Giám sát gọn nhẹ (cron 5 phút) |
 | `deploy/scripts/seed-demo.sh` | Nạp bộ dữ liệu demo |
@@ -143,8 +143,8 @@ rm ci_key
    - `pg_dump` toàn bộ database trước khi migration chạy (`backups/*-predeploy-*`, giữ 5 bản gần nhất);
    - `docker compose up -d --wait`: service chạy `prisma migrate deploy` (chỉ áp migration mới, không reset), sau đó chờ healthcheck;
    - smoke test `https://api.smartbook.io.vn/ready` và trang chủ qua Caddy;
-   - nếu fail: **tự rollback** về release trước (chỉ image), log ghi vào `state/releases.log`;
-   - giữ image của 3 release gần nhất để rollback, xóa image cũ hơn.
+   - nếu fail: **dừng các service ứng dụng** (database giữ nguyên), ghi `failed` vào `state/releases.log` và cần sửa xuôi (forward-fix). Chỉ quay về image của release trước khi operator đã đặt file bằng chứng tương thích đã kiểm thử trên QA tại `state/compatibility/<sha-mới>-<sha-cũ>.json`;
+   - không tự xóa image cũ: release nào muốn rollback thủ công thì image và manifest `state/images/<sha>.env` phải còn trên VPS.
 4. **Verify from the internet**: `/ready` trả 200; `https://smartbook.io.vn/version.json` phải đúng SHA vừa deploy; `/login` trả 200; `www` redirect về domain chính; CORS preflight từ `https://smartbook.io.vn` được chấp nhận.
 
 Mức gián đoạn: **low-downtime, không phải zero-downtime.** Docker Compose tạo lại từng container (mỗi service một bản), nên gateway có một khoảng ngắn không phục vụ. Caddy giữ request tối đa 30 giây (`lb_try_duration`) trong lúc chờ container mới, vì vậy người dùng thường chỉ thấy request chậm hơn chứ không gặp lỗi 502. Kết nối WebSocket sẽ bị ngắt và client Socket.IO tự kết nối lại.
@@ -219,13 +219,14 @@ docker stats --no-stream                               # CPU/RAM từng containe
 
 ## 13. Rollback
 
-- **Tự động:** `deploy.sh` tự quay về release trước khi healthcheck/smoke test fail.
+- **Tự động:** không có. Khi healthcheck/smoke test fail, `deploy.sh` dừng các service ứng dụng và chờ sửa xuôi; chỉ quay về image cũ khi có file bằng chứng QA (xem mục 7).
 - **Thủ công qua GitHub:** revert commit lỗi trên `production` rồi push. Cách này nên dùng vì giữ lịch sử git đúng.
 - **Thủ công nhanh trên VPS:**
   ```bash
   deploy/scripts/rollback.sh            # về release liền trước
-  deploy/scripts/rollback.sh <sha>      # về SHA cụ thể (image phải còn trên VPS, 3 bản gần nhất)
+  deploy/scripts/rollback.sh <sha>      # về SHA cụ thể (image và state/images/<sha>.env phải còn trên VPS)
   ```
+  `rollback.sh` chạy lại toàn bộ `deploy.sh` với SHA cũ: vẫn dừng service, backup predeploy và chạy migration của bản cũ (không làm gì vì schema đã mới hơn); schema **không** bị quay lui.
   Lưu ý: lần push tiếp theo vào `production` sẽ deploy lại theo code trên nhánh.
 
 ## 14. Dữ liệu ban đầu

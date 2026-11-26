@@ -349,7 +349,8 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
         lines.append("- Dữ liệu cần thiết đã được truy xuất sẵn ở các kết quả tool bên dưới; chỉ gọi thêm tool nếu thật sự thiếu.")
     reb = (plan.entities or {}).get("rebalance")
     if reb:
-        lines.append("- Lượt này về cân bằng tồn kho giữa các kho (ý chính: " + ", ".join(reb.get("focus") or []) + "). "
+        # focus codes stay out of the prompt: the model once named the hybrid option "HYBRID_DECISION" (2026-11-26)
+        lines.append("- Lượt này về cân bằng tồn kho giữa các kho. "
                      "Trả lời từ kết quả analyze_inventory_rebalancing; mọi con số lấy nguyên văn từ đó. Tách rõ: phương án "
                      "tốt nhất về nghiệp vụ, phần bạn tự thực hiện được, và phần cần Manager kho khác phối hợp. Chi phí "
                      "điều chuyển không có dữ liệu - nói rõ, không ước đoán. Không nói đã tạo, đã duyệt hay đã chuyển hàng. "
@@ -368,7 +369,9 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
                          "nhất và của phương án bạn tự thực hiện được.")
         if len([c for c in plan.required_tools if c.get("name") == "analyze_inventory_rebalancing"]) >= 2:
             lines.append("- Có hai kết quả: kết quả đầu là kịch bản trước, kết quả sau là kịch bản mới. So sánh hai kịch bản "
-                         "(mức đáp ứng, thiếu còn lại, chi phí mua, ngân sách còn) và giải thích tác động của điều kiện thay đổi.")
+                         "(mức đáp ứng, thiếu còn lại, chi phí mua, ngân sách còn) và giải thích tác động của điều kiện thay đổi. "
+                         "Nêu riêng tác động lên phương án tốt nhất và lên phương án bạn tự thực hiện được, theo đúng "
+                         "bảng chênh lệch đã tính sẵn.")
         if (plan.style or {}).get("rebalance_draft"):
             lines.append("- Người dùng yêu cầu tạo bản nháp. Hệ thống chuẩn bị bản nháp sau câu trả lời này, chỉ gồm việc "
                          "họ đủ quyền làm; việc cần Manager khác vẫn là đề xuất. Tóm tắt phương án sẽ được lập bản nháp; không "
@@ -701,6 +704,18 @@ def _render_rebalancing(r: dict) -> str:
     def n(v):
         return "không có dữ liệu" if v is None else (f"{int(v):,}".replace(",", ".") if float(v).is_integer() else f"{v}")
     lines = [f"Nguồn: {r.get('source')} lúc {r.get('retrieved_at')}. Chỉ dùng các số dưới đây; không tự tính thêm."]
+    rec0 = r.get("recommendation") or {}
+    best0 = (r.get("options") or {}).get(rec0.get("best_business_option")) or {}
+    if best0:
+        # live demo 2026-11-26: asked to "tối ưu với ngân sách 15 triệu", the model twice gave the
+        # procurement-only figures (the option that spends the most) as the best plan's
+        lines.append(f"KẾT LUẬN ĐÃ TÍNH SẴN — phương án tốt nhất về nghiệp vụ là {best0.get('label')} "
+                     f"({rec0.get('best_business_option')}): đáp ứng {best0.get('shortage_covered_pct')}%, còn thiếu "
+                     f"{best0.get('remaining_shortage_qty')} bản, điều chuyển {best0.get('transfer_qty')} bản, mua "
+                     f"{best0.get('purchase_qty')} bản ({n(best0.get('purchase_cost_vnd'))} ₫), ngân sách còn "
+                     f"{n(best0.get('remaining_budget_vnd'))} ₫. Khi nói về phương án tốt nhất, dùng đúng phương án này "
+                     "và các số này; \"tối ưu ngân sách\" không có nghĩa là tiêu hết ngân sách. Trả lời đúng ý câu hỏi "
+                     "của lượt này, không mở đầu bằng kết luận này nếu câu hỏi không hỏi về phương án.")
     if r.get("notice"):
         lines.append(f"Thông báo: {r['notice']}")
     lines.append("Phạm vi kho: " + "; ".join(f"{w.get('warehouse')} ({_ACCESS_VI.get(w.get('access'), w.get('access'))})"
@@ -719,14 +734,26 @@ def _render_rebalancing(r: dict) -> str:
                      f"thiếu {d.get('shortage_variants')} đầu sách / {d.get('shortage_qty')} bản; dư {d.get('surplus_variants')} "
                      f"đầu sách / {d.get('surplus_qty')} bản; nhu cầu dự kiến {d.get('forecast_demand_qty')} bản; "
                      f"đang về {d.get('incoming_qty')}, đã hứa chuyển đi {d.get('outgoing_qty')}")
+    t = r.get("diagnosis_totals") or {}
+    if t:
+        lines.append(f"Tổng đã tính sẵn (dùng nguyên các số này, không tự cộng): kho đang thiếu là "
+                     f"{', '.join(t.get('short_warehouses') or []) or 'không có'}; kho đang dư là "
+                     f"{', '.join(t.get('surplus_warehouses') or []) or 'không có'} (tổng dư ở các kho này "
+                     f"{t.get('surplus_qty_surplus_warehouses')} bản); tổng thiếu mọi kho {t.get('shortage_qty_all')} bản. "
+                     "Một kho đang thiếu vẫn có thể dư một số đầu sách khác: số dư và ví dụ sách dư của kho đó chỉ nêu "
+                     "trong mục của chính kho đó, không gộp vào số dư hay mục của các kho đang dư.")
     for label, key, qty in (("Thiếu nhiều nhất", "top_shortages", "shortage_qty"), ("Dư nhiều nhất", "top_surpluses", "surplus_qty")):
         rows = r.get(key) or []
         if rows:
             lines.append(f"{label}: " + "; ".join(f"{x.get('title')} @ {x.get('warehouse')}: {x.get(qty)} bản "
                                                   f"(tồn {x.get('available_qty')}, nhu cầu {x.get('lead_time_demand')})"
                                                   for x in rows[:5]))
+    rec = r.get("recommendation") or {}
     for code, o in (r.get("options") or {}).items():
-        lines.append(f"Phương án {code} – {o.get('label')}: thiếu {o.get('total_shortage_qty')} bản; điều chuyển "
+        # the role tag sits on the line itself, so no figure drifts to another option (live 2026-11-26)
+        role = " / ".join(x for x, ok in (("TỐT NHẤT VỀ NGHIỆP VỤ", code == rec.get("best_business_option")),
+                                          ("BẠN TỰ THỰC HIỆN ĐƯỢC", code == rec.get("executable_option"))) if ok)
+        lines.append(f"Phương án {code} – {o.get('label')}{f' [{role}]' if role else ''}: thiếu {o.get('total_shortage_qty')} bản; điều chuyển "
                      f"{o.get('transfer_qty')} bản; mua {o.get('purchase_qty')} bản ({n(o.get('purchase_cost_vnd'))} ₫); còn "
                      f"thiếu {o.get('remaining_shortage_qty')} (HIGH {o.get('remaining_high_priority_qty')}); đáp ứng "
                      f"{o.get('shortage_covered_pct')}%; ngân sách còn {n(o.get('remaining_budget_vnd'))}; chi phí điều "
@@ -739,7 +766,7 @@ def _render_rebalancing(r: dict) -> str:
         for p in (o.get("purchases") or [])[:5]:
             lines.append(f"  · mua {p.get('quantity')} '{p.get('title')}' cho {p.get('warehouse')} ({n(p.get('cost_vnd'))} ₫; "
                          f"{_PERM_VI.get(p.get('permission'), p.get('permission'))})")
-    rec = r.get("recommendation") or {}
+    lines.append("Mỗi con số ở trên thuộc đúng phương án của dòng đó; không gán số của phương án này cho phương án khác.")
     ex = (r.get("options") or {}).get(rec.get("executable_option")) or {}
     if ex:
         lines.append(f"Nếu người dùng muốn tự làm, không chờ ai phối hợp: dùng phương án {ex.get('label')} "
@@ -755,7 +782,31 @@ def _render_rebalancing(r: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_search_books(r: dict) -> str:
+    """Books found, with each one's copies per warehouse the user may read, spelled out
+    (live demo 2026-11-26: given the raw JSON the model split 15 copies into 8 + 7)."""
+    if r.get("error"):
+        return f"Lỗi tìm sách: {r['error']}"
+    lines = [f"Kết quả tìm sách cho \"{r.get('query')}\" (độ tin cậy: {r.get('retrievalStatus')})."]
+    if not r.get("results"):
+        lines.append("Không tìm thấy sách phù hợp trong catalog.")
+    for b in (r.get("results") or [])[:5]:
+        lines.append(f"- {b.get('title')} — {b.get('author') or 'chưa rõ tác giả'} — ISBN {b.get('isbn') or 'không có'}; "
+                     f"tổng {b.get('quantity')} bản trong các kho bạn được xem.")
+        wh = b.get("by_warehouse")
+        if wh:
+            lines.append("  Theo kho (đầy đủ, ngoài các kho này thì không có bản nào trong phạm vi bạn được xem): "
+                         + "; ".join(f"{w.get('warehouse_name')}: {w.get('available_quantity')} bản sẵn sàng" for w in wh))
+        elif wh is not None:
+            lines.append("  Không có bản nào sẵn sàng ở các kho bạn được xem.")
+        if b.get("description"):
+            lines.append(f"  Mô tả: {b['description']}")
+    lines.append("Số bản theo kho lấy nguyên văn từ dòng \"Theo kho\"; không tự chia hay cộng.")
+    return "\n".join(lines)
+
+
 RENDERERS = {
+    "search_books": (_render_search_books, dict),
     "analyze_inventory_rebalancing": (_render_rebalancing, dict),
     "get_reorder_suggestions": (_render_reorder, dict),
     "get_top_books": (_render_top_books, list),

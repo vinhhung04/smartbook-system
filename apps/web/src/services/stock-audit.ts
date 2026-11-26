@@ -10,13 +10,15 @@ export interface StockAuditLine {
   sku: string | null;
   isbn13: string | null;
   title: string | null;
-  expected_qty: number;
+  /** null for the person counting (blind count); managers get the system quantity. */
+  expected_qty: number | null;
   counted_qty: number | null;
   variance_qty: number | null;
   adjustment_posted: boolean;
   counted_at?: string | null;
   baseline_on_hand_qty?: number | null;
   baseline_borrowed_qty?: number | null;
+  needs_recount?: boolean;
   note: string | null;
 }
 

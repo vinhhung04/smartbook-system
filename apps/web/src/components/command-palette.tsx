@@ -13,8 +13,6 @@ interface PaletteResult {
   labelKey: string;
   groupLabelKey: string;
   icon: (typeof navGroups)[number]["items"][number]["icon"];
-  iconBg: string;
-  textColor: string;
 }
 
 // Finds every screen the current user can actually open — reusing the exact same
@@ -56,8 +54,6 @@ export function CommandPalette() {
         labelKey: item.labelKey,
         groupLabelKey: group.labelKey,
         icon: item.icon,
-        iconBg: item.iconBg,
-        textColor: item.textColor,
       })),
   );
 
@@ -170,8 +166,8 @@ export function CommandPalette() {
                             : "text-foreground hover:bg-accent/60"
                         }`}
                       >
-                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${item.iconBg}`}>
-                          <item.icon className={`h-3.5 w-3.5 ${item.textColor}`} />
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors ${isActive ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                          <item.icon className="h-3.5 w-3.5" />
                         </div>
                         <span className="flex-1 truncate" style={{ fontWeight: isActive ? 550 : 400 }}>
                           {t(item.labelKey)}

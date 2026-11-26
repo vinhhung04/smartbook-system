@@ -10,6 +10,7 @@ is actually pure and where a merge/ranking mistake would be easy to miss.
 from __future__ import annotations
 
 import asyncio
+import unittest.mock
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -151,3 +152,38 @@ class MergeCandidatesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AttachPublicAvailabilityTests(unittest.TestCase):
+    """/api/books counts only the caller's warehouse scope, so a reader saw 0
+    copies everywhere ("Hết sách"); the public catalog figure replaces it."""
+
+    def _client(self, responses):
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=responses)
+        client.__aenter__.return_value = client
+        return patch.object(cover_search.httpx, "AsyncClient", return_value=client)
+
+    @staticmethod
+    def _response(status, body=None):
+        response = unittest.mock.Mock(status_code=status)
+        response.json.return_value = body or {}
+        return response
+
+    def test_public_figures_replace_scoped_ones_and_keep_matched_variant(self):
+        candidates = [{"id": "b1", "variant_id": "v-matched", "available_quantity": 0, "reservable": False}]
+        public = {"available_quantity": 12, "reservable": True, "variant_id": "v-shelf",
+                  "pickup_branches": [{"warehouse_id": "w1", "available_quantity": 12}]}
+        with self._client([self._response(200, public)]):
+            _run(cover_search._attach_public_availability(candidates))
+        self.assertEqual(candidates[0]["available_quantity"], 12)
+        self.assertTrue(candidates[0]["reservable"])
+        self.assertEqual(candidates[0]["variant_id"], "v-matched")
+        self.assertEqual(candidates[0]["reserve_variant_id"], "v-shelf")
+        self.assertEqual(len(candidates[0]["pickup_branches"]), 1)
+
+    def test_failed_lookup_keeps_existing_figures(self):
+        candidates = [{"id": "b1", "available_quantity": 3}, {"id": "b2", "available_quantity": 1}]
+        with self._client([self._response(404), RuntimeError("down")]):
+            _run(cover_search._attach_public_availability(candidates))
+        self.assertEqual([c["available_quantity"] for c in candidates], [3, 1])

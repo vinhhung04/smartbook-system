@@ -29,6 +29,8 @@ export type DashboardState = {
   funnel: ReservationFunnel | null;
   pendingPR: number | null;
   openER: number | null;
+  submittedAudits: number | null;
+  inboundTransfers: number | null;
   reorder: ReorderSummary | null;
   lateRisk: RiskModelData<LateReturnRiskItem> | null;
   noShowRisk: RiskModelData<ReservationNoShowRiskItem> | null;

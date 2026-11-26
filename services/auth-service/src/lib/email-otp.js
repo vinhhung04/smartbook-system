@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
-// Email one-time codes for registration verification and the optional staff second
-// factor. Storage is injected (lib/email-otp-store.js in production, an in-memory
+// Email one-time codes for registration verification, the optional staff second
+// factor and password reset. Storage is injected (lib/email-otp-store.js in production, an in-memory
 // store in tests) so the rules below are tested without a database.
 //
 // - The code is 6 digits from crypto.randomInt. Only HMAC-SHA256(secret, purpose |
@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const PURPOSES = Object.freeze({
   EMAIL_VERIFICATION: 'EMAIL_VERIFICATION',
   LOGIN_2FA: 'LOGIN_2FA',
+  PASSWORD_RESET: 'PASSWORD_RESET',
 });
 
 const DEFAULT_POLICY = Object.freeze({

@@ -45,6 +45,8 @@ export interface DecisionAccess {
   exceptions: boolean;
   reorder: boolean;
   inventory: boolean;
+  stockAudits: boolean;
+  transferReceiving: boolean;
 }
 
 export interface DecisionInputs {
@@ -57,20 +59,22 @@ export interface DecisionInputs {
   pendingPR: number | null;
   openER: number | null;
   reorder: ReorderSummary | null;
+  submittedAudits: number | null;
+  inboundTransfers: number | null;
 }
 
 /**
  * One list feeds both the header sentence and the Decision Center, so they never disagree.
  * A row exists only when the user may see its data; it links only when they may open the destination.
  */
-export function buildDecisionItems({ canViewBorrow, access, kpis, overdue, fines, pendingPR, openER, reorder }: DecisionInputs): ActionItem[] {
+export function buildDecisionItems({ canViewBorrow, access, kpis, overdue, fines, pendingPR, openER, reorder, submittedAudits, inboundTransfers }: DecisionInputs): ActionItem[] {
   const items: ActionItem[] = [];
   if (canViewBorrow) {
     items.push({
       key: 'overdue',
       severity: 'urgent',
       label: 'Phiếu mượn quá hạn',
-      count: kpis ? kpis.overdue_loans : null,
+      count: overdue ? overdue.total_overdue_loans : kpis ? kpis.overdue_loans : null,
       detail: overdue && overdue.total_overdue_loans > 0
         ? `${formatNumber(overdue.total_overdue_items)} cuốn chưa trả · lâu nhất ${formatNumber(overdue.oldest_overdue_days)} ngày`
         : 'Bạn đọc chưa trả sách đúng hạn',
@@ -98,6 +102,28 @@ export function buildDecisionItems({ canViewBorrow, access, kpis, overdue, fines
       detail: 'Duyệt để chuyển thành đơn mua',
       to: '/purchase-requests',
       action: 'Duyệt',
+    });
+  }
+  if (access.stockAudits) {
+    items.push({
+      key: 'stock-audits',
+      severity: 'decide',
+      label: 'Phiếu kiểm kê chờ duyệt',
+      count: submittedAudits,
+      detail: 'Đã đếm xong, chờ duyệt chênh lệch tồn',
+      to: '/stock-audits',
+      action: 'Duyệt',
+    });
+  }
+  if (access.transferReceiving) {
+    items.push({
+      key: 'inbound-transfers',
+      severity: 'decide',
+      label: 'Chuyển kho đang đến',
+      count: inboundTransfers,
+      detail: 'Hàng đã xuất từ kho khác, chờ nhận',
+      to: '/transfer-receiving',
+      action: 'Nhận hàng',
     });
   }
   if (access.reorder) {

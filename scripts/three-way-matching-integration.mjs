@@ -71,7 +71,6 @@ async function createDispatchedPo(M, setup, orderedQty, note) {
   });
   const poId = created.data.id;
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   const po = await ok('GET', `/api/purchase-orders/${poId}`, M);
   return { poId, item: po.items[0] };

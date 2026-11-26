@@ -17,7 +17,7 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 - `OPENROUTER_API_KEY` chỉ nằm server-side (biến môi trường của `ai-service`) — không gửi xuống
   frontend, không log, không commit vào repo. Đã quét toàn bộ repo + git history, không có key
   thật nào bị commit.
-- **Ảnh gửi ra bên thứ ba**: `/verify-packing-photo`, `/scan-receipt`, và OCR bìa sách
+- **Ảnh gửi ra bên thứ ba**: `/verify-packing-photo` và OCR bìa sách
   (`/find-book-by-cover`) gửi ảnh (đóng gói, hóa đơn nhập kho, bìa sách) tới OpenRouter qua
   HTTPS để chạy vision/OCR — khác với trước đây khi Ollama chạy local, ảnh không rời máy. Đây
   là thay đổi về data residency cần lưu ý nếu có yêu cầu compliance (vd hóa đơn nhập kho có
@@ -56,7 +56,6 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /chat/stream | Bản streaming (SSE) của /chat |
 | POST | /enrich-book-after-isbn | Tra cứu ISBN rồi đề xuất bổ sung metadata cho sách vừa tạo (`lookup` dùng chung hợp đồng với `/isbn-intelligence`) |
 | POST | /enrich-book-metadata | Bộ công cụ gợi ý metadata (`keywords`, `short_summary`, `normalize_description`, `suggest_categories`, `quality_check`) — chỉ trả đề xuất, không ghi đè |
-| POST | /scan-receipt | OCR hóa đơn/phiếu giao hàng khi nhập kho (OpenRouter vision) |
 | POST | /verify-packing-photo | Xác minh ảnh bằng chứng đóng gói (`MATCH`/`MISMATCH`) |
 | POST | /explain-storage-suggestion | Viết lại giải thích cho gợi ý vị trí lưu kho |
 | POST | /find-book-by-cover | Tìm sách bằng ảnh bìa (CLIP local + OCR OpenRouter) |
@@ -360,7 +359,7 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | OPENROUTER_BASE_URL | https://openrouter.ai/api/v1 | Base URL OpenRouter (OpenAI-compatible) |
 | OPENROUTER_TEXT_MODEL | qwen/qwen3.7-flash | Model cho tóm tắt/chat/NLU qua OpenRouter (xác thực trực tiếp trên JSON thô của `/api/v1/models` ngày 2026-09-15 — hỗ trợ `tools`/`tool_choice`/`response_format`, context 1M; canonical_slug nội bộ của OpenRouter là `qwen/qwen3.7-flash-20260727`) |
 | OPENROUTER_ASSISTANT_MODEL | qwen/qwen3.7-flash | Model cho `/assistant` (tool-calling) qua OpenRouter — cùng model như trên |
-| OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói, quét hóa đơn |
+| OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói |
 | OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt. Phải là model OpenRouter — không có fallback provider khác |
 | ASSISTANT_TOOL_CONTEXT_CHARS | 2000 | Số ký tự tối đa một tool result đóng góp vào prompt `/assistant` |
 | ACTION_STALE_CONFIRMED_SECONDS | 900 | Action ở `CONFIRMED` lâu hơn mức này (service khởi động lại giữa lúc thực thi) được giải phóng: loại an toàn khi thử lại → `FAILED`, loại khác → `RECONCILE_REQUIRED` |
@@ -381,7 +380,6 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | DOC_CONF_TAU_CONFIDENT / DOC_CONF_TAU_EVIDENCE / DOC_CONF_COS_FLOOR / DOC_CONF_COS_CEIL | 0.66 / 0.40 / 0.30 / 0.55 | Như trên, cho corpus `INTERNAL_DOC` |
 | ISBN_FUSION_MODE | evidence | `evidence` (mặc định): chọn giá trị field bằng Evidence Fusion (`isbn_fusion.py`) — chuẩn hoá + gộp nhóm nguồn đồng thuận trước khi chọn. `prior`: thuật toán cũ (nguồn có reliability cao nhất thắng tuyệt đối), giữ lại để so sánh/rollback |
 | PACKING_VISION_MAX_TOKENS / PACKING_VISION_TIMEOUT_SECONDS | 200 / 15 | Cap output/timeout cho `/verify-packing-photo` — timeout thấp hơn `AbortSignal.timeout(20000)` của caller (`packing-evidence-ai.service.js`) |
-| RECEIPT_VISION_MAX_TOKENS / RECEIPT_VISION_TIMEOUT_SECONDS | 1200 / 30 | Cap output/timeout cho `/scan-receipt` |
 | INGEST_MAX_CHUNK_CHARS | 1200 | Độ dài tối đa (ký tự) mỗi chunk khi `ingestion.py` cắt nội dung document trước khi embed |
 | ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền (`ingest_internal_docs` lúc khởi động + vòng lặp `catalog_sync`) — tắt trong môi trường test e2e không cần semantic |
 | CATALOG_SYNC_INTERVAL_SECONDS | 300 | Chu kỳ đồng bộ `BOOK_METADATA` với `/internal/catalog/books`; 0 = chỉ chạy lúc khởi động |

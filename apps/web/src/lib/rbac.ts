@@ -34,6 +34,9 @@ export const ROUTE_ACCESS = {
   inventory: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
   staffTasks: { roles: STAFF_TRACKING_ROLES, permissions: ["inventory.task.read"] },
   staffTaskProgress: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.progress"] },
+  // Menu entry "Giao việc nhân viên": managers only. Staff reach /staff-tasks (route above)
+  // from their task inbox, where their assigned tasks already appear.
+  staffTaskAssign: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.task.progress"] },
   managerStockDecision: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockAdjust: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.adjust"] },

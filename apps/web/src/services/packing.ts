@@ -42,6 +42,9 @@ export interface PackingEvidenceAiResult {
   item_count: number;
   expected_count: number;
   detected_titles: string[];
+  /** Titles read off the photo that match no book in the order (absent on results saved before this check). */
+  unexpected_titles?: string[];
+  count_matches?: boolean;
   checked_at: string;
 }
 

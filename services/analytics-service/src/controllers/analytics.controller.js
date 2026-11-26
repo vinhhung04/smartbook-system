@@ -12,7 +12,7 @@ const { findSeasonalEvent } = require('../config/seasonal-events');
 const { rollingBacktest } = require('../utils/forecast');
 const { resolveLeadTime, DEFAULT_LEAD_TIME_DAYS } = require('../utils/lead-time');
 const { calculateSuggestion, compareReorderCandidates, seasonalIndexFromCounts } = require('../utils/reorder-suggestion');
-const { allocateMarginal, serviceCurve } = require('../utils/budget-allocation');
+const { allocateMarginal, serviceCurve, protectionDemand } = require('../utils/budget-allocation');
 const { loanSurvival, expectedReturns } = require('../utils/expected-returns');
 const { classifyWeedingCandidate } = require('../utils/weeding');
 const { stockStatus, summarizeWarehouses } = require('../utils/warehouse-stock');
@@ -193,15 +193,14 @@ async function getBorrowKpis(wh = null) {
     queryOne(
       borrowPool,
       `
+      -- same rule as /overdue-summary (an unreturned item past due), so the two figures agree;
+      -- lt.status = 'OVERDUE' alone is not trusted: it can outlive a renewed or shifted due date
       SELECT COUNT(DISTINCT lt.id) AS overdue_loans
       FROM loan_transactions lt
-      LEFT JOIN loan_items li ON li.loan_id = lt.id
-      WHERE (lt.status = 'OVERDUE'
-         OR (
-           li.status IN ('BORROWED', 'OVERDUE')
-           AND li.due_date < NOW()
-           AND li.return_date IS NULL
-         ))
+      JOIN loan_items li ON li.loan_id = lt.id
+      WHERE li.status IN ('BORROWED', 'OVERDUE')
+        AND li.due_date < NOW()
+        AND li.return_date IS NULL
         AND ($1::uuid[] IS NULL OR lt.warehouse_id = ANY($1::uuid[]))
       `,
       [wh],
@@ -1092,12 +1091,12 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
   // returned), while the list itself stays in priority order with the same
   // suggested_reorder_qty as without a budget. With a budget, each line is
   // re-sized against its inventory position - available + incoming purchase
-  // orders + copies on loan expected back within the lead time - with the
-  // HIGH/MEDIUM minimums only where that position does not cover the
-  // lead-time demand, and the money is spent copy by copy where it most raises
-  // the chance of serving lead-time demand per VND (allocateMarginal). This is
-  // IP_RETURNS+FLOOR+MARGINAL, selected on held-out seeds of the backtest:
-  // docs/ANALYSIS/REORDER_OPTIMIZATION_EVALUATION.md.
+  // orders + copies on loan expected back within the lead time - without the
+  // HIGH/MEDIUM minimums, and the money is spent copy by copy where it most raises
+  // the chance of serving demand until the next order can arrive (lead time +
+  // review period, protectionDemand) per VND (allocateMarginal). This is
+  // SB_NOFLOOR_PROTECT, selected on held-out seeds against realistic library
+  // funding rules: docs/ANALYSIS/BUDGET_REALISTIC_BASELINES.md.
   let resultItems = candidates;
   let budget = null;
   if (budgetVnd !== null) {
@@ -1120,7 +1119,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         // available_qty; open loans beyond it (borrow_db out of step with inventory_db)
         // are already on the shelf and must not be counted again as returns.
         expectedReturns: Math.min(returns ?? 0, number(row.borrowed_qty)),
-        priorityFloors: 'IF_SHORTFALL',
+        priorityFloors: false,
       });
       // borrow_db (loans) and inventory_db (stock) are each authoritative for their own
       // records; when borrow has more open loans than inventory has copies on loan,
@@ -1137,7 +1136,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         expected_returns: plan.expected_returns,
         inventory_position: plan.inventory_position,
         cap_qty: plan.suggested_reorder_qty,
-        lambda: Math.max(plan.lead_time_demand, plan.avg_daily_demand * plan.lead_time_days),
+        lambda: protectionDemand(plan.avg_daily_demand, plan.lead_time_days),
       };
     });
     // unit_cost is NOT NULL DEFAULT 0 in inventory_db, so 0 means "no price entered",
@@ -1225,7 +1224,7 @@ const getReorderSuggestions = asyncHandler(async (req, res) => {
         loanView.survival
           ? `Khả năng trả sách ước lượng từ ${loanView.returned} lượt trả trong 365 ngày và ${loanView.open} lượt đang mượn (Kaplan-Meier, gộp toàn thư viện).`
           : 'Chưa đủ lịch sử trả sách để ước lượng: không tính bản đang mượn sẽ trả.',
-        'Mỗi bản được duyệt cho dòng có mức tăng xác suất đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng cao nhất (nhu cầu giả định phân phối Poisson); một dòng có thể chỉ được duyệt một phần.',
+        'Mỗi bản được duyệt cho dòng có mức tăng xác suất đáp ứng nhu cầu đến khi đơn nhập kế tiếp có thể về (thời gian chờ hàng + 7 ngày) trên mỗi đồng cao nhất (nhu cầu giả định phân phối Poisson); một dòng có thể chỉ được duyệt một phần.',
         ...(unpriced.length
           ? [`${unpriced.length} dòng cần nhập nhưng danh mục chưa có đơn giá: không được cấp ngân sách và không tính vào chi phí kế hoạch cho đến khi bổ sung giá.`]
           : []),

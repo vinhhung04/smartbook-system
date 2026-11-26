@@ -26,8 +26,8 @@ CATALOG_PATHS = {
     "/enrich-book-metadata", "/enrich-book-after-isbn", "/enrich-book-after-isbn/stream",
     "/metadata-intelligence/extract", "/metadata-intelligence/extract/stream", "/book-metadata/scan-images",
 }
-WAREHOUSE_PATHS = {"/scan-receipt", "/verify-packing-photo", "/explain-storage-suggestion"}
-IMAGE_PATHS = {"/scan-receipt", "/verify-packing-photo", "/find-book-by-cover", "/vision/identify"}
+WAREHOUSE_PATHS = {"/verify-packing-photo", "/explain-storage-suggestion"}
+IMAGE_PATHS = {"/verify-packing-photo", "/find-book-by-cover", "/vision/identify"}
 INTERNAL_PATHS = {"/verify-packing-photo", "/explain-storage-suggestion"}
 BODY_LIMIT = 16 * 1024 * 1024
 MULTIPART_OVERHEAD = 64 * 1024

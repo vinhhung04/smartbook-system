@@ -75,9 +75,8 @@ test('invoice-first PO: proposal, invoice approval, partial delivery, catalog li
   await expect(page.getByText('Chưa có trong danh mục — liên kết khi nhập kho')).toBeVisible();
   await expect(page.getByText('Chờ báo giá').first()).toBeVisible();
 
+  // The manager may approve, so submitting approves the order straight away.
   await page.getByTestId('submit-po-button').click();
-  await confirm(page);
-  await page.getByTestId('approve-po-button').click();
   await confirm(page);
   await page.getByTestId('send-to-supplier-button').click();
   await confirm(page);

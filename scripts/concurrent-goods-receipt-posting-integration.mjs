@@ -78,7 +78,6 @@ async function main() {
   });
   const poId = created.data.id;
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   // invoice-first: priced acceptance approved, then an approved invoice for the whole order
   await acceptAtPrice(M, supplierA.token, poId, unitCost);

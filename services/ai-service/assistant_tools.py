@@ -224,9 +224,23 @@ def _compact_book_with_content(book: dict) -> dict:
         "category": book.get("category") or "",
         "isbn": book.get("isbn") or "",
         "quantity": book.get("quantity", 0),
+        # /api/books already limits locations to the caller's readable warehouses; without this
+        # breakdown "cuốn này còn ở kho nào?" was answered with whole-warehouse totals (2026-11-26)
+        "by_warehouse": _stock_by_warehouse(book),
         "description": _truncate_field(book.get("description")),
         "summary_vi": _truncate_field(book.get("summary_vi")),
     }
+
+
+def _stock_by_warehouse(book: dict) -> list[dict]:
+    out: dict = {}
+    for loc in book.get("locations") or []:
+        if not isinstance(loc, dict) or loc.get("is_receiving"):
+            continue
+        row = out.setdefault(loc.get("warehouse_id"), {"warehouse_id": loc.get("warehouse_id"),
+                                                       "warehouse_name": loc.get("warehouse_name"), "available_quantity": 0})
+        row["available_quantity"] += loc.get("available_quantity") or 0
+    return sorted(out.values(), key=lambda r: -r["available_quantity"])
 
 
 def _isbn_key(value: Any) -> str:
@@ -421,7 +435,9 @@ async def _score_and_rank_books_with_confidence(
     title_hits = [] if isbn_hit is not None else _title_hits(valid_books, normalized_query)
     author_hits = [] if (isbn_hit is not None or title_hits) else _author_hits(valid_books, normalized_query)
 
-    embed_result = await asyncio.to_thread(embeddings.embed_text, query)
+    # An exact isbn / title hit is routed first whatever the vectors say, so the remote
+    # embedding call is skipped: it once took 30 s and timed the whole lookup out (2026-11-26)
+    embed_result = None if (isbn_hit is not None or title_hits) else await asyncio.to_thread(embeddings.embed_text, query)
     semantic = (
         [
             hit for hit in await store.search_semantic(
@@ -632,7 +648,7 @@ ANALYTICS_TOOLS: list[dict] = [
                 "sách còn có estimated_cost (chi phí ước tính = số lượng đề xuất × đơn giá). Nếu truyền "
                 "budget_vnd, mỗi sách có thêm funded_qty (số bản ngân sách duyệt, có thể chỉ một phần số đề xuất), "
                 "funded_cost và within_budget=true khi funded_qty > 0 (từng bản được duyệt cho dòng tăng nhiều nhất "
-                "khả năng đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng; tồn tính cả bản đang về và bản "
+                "khả năng đáp ứng nhu cầu đến khi đơn nhập kế tiếp có thể về (thời gian chờ hàng + 7 ngày) trên mỗi đồng; tồn tính cả bản đang về và bản "
                 "đang mượn dự kiến trả; danh sách vẫn xếp theo mức ưu tiên) và trả thêm tổng chi phí đã duyệt/còn "
                 "lại trong ngân sách. Công "
                 "cụ chính cho câu hỏi nên nhập sách gì, kho nào cần ưu tiên, hoặc nên nhập gì trong một ngân sách cụ thể."

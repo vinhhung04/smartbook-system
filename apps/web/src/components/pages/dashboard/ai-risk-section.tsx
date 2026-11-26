@@ -90,9 +90,10 @@ interface AiRiskSectionProps {
   /** /reorder-suggestions is behind ROUTE_ACCESS.reports. */
   canOpen: boolean;
   onRetry: () => void;
+  className?: string;
 }
 
-export function AiRiskSection({ late, noShow, canOpen, onRetry }: AiRiskSectionProps) {
+export function AiRiskSection({ late, noShow, canOpen, onRetry, className = '@5xl:col-span-8' }: AiRiskSectionProps) {
   const lateRows: Row[] = (late?.items ?? []).map((item) => ({
     key: item.loan_item_id,
     customer: item.customer_name || 'Chưa xác định',
@@ -112,7 +113,7 @@ export function AiRiskSection({ late, noShow, canOpen, onRetry }: AiRiskSectionP
   const generatedAt = late?.generated_at ?? noShow?.generated_at;
 
   return (
-    <Panel titleId="ai-risk-title" className="@5xl:col-span-8">
+    <Panel titleId="ai-risk-title" className={className}>
       <PanelHeader
         id="ai-risk-title"
         title="AI dự báo rủi ro"

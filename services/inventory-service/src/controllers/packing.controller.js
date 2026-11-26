@@ -414,9 +414,13 @@ async function uploadPackingEvidence(req, res) {
  *  never throws, but this still never runs inside the request's try/catch. */
 async function runPackingPhotoVerification(evidenceId, taskId, storageRef, warehouseId, requestId) {
   try {
-    const items = await prisma.packing_task_items.findMany({ where: { packing_task_id: taskId } });
+    const items = await prisma.packing_task_items.findMany({
+      where: { packing_task_id: taskId },
+      include: { book_variants: { select: { books: { select: { title: true } } } } },
+    });
     const expectedCount = items.reduce((sum, item) => sum + item.expected_qty, 0);
-    const { status, result } = await verifyPackingPhoto(storageRef, expectedCount, requestId);
+    const expectedTitles = items.map((item) => item.book_variants?.books?.title).filter(Boolean);
+    const { status, result } = await verifyPackingPhoto(storageRef, expectedCount, requestId, expectedTitles);
 
     await prisma.packing_camera_evidence.update({
       where: { id: evidenceId },

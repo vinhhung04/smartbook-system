@@ -93,7 +93,6 @@ async function createApprovedPo(token, setup, lines) {
   });
   const poId = created.data.id;
   await okRequest('POST', `/api/purchase-orders/${poId}/submit`, token);
-  await okRequest('POST', `/api/purchase-orders/${poId}/approve`, token, { note: 'integration approve' });
   return poId;
 }
 

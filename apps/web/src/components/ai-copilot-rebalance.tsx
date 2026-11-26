@@ -239,8 +239,13 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
                 ['Chi phí mua mới', vnd(cmp.base.purchase_cost_vnd), vnd(cmp.current.purchase_cost_vnd), signed(cmp.diff.purchase_cost_vnd, ' ₫')],
                 ['Bản điều chuyển', num(cmp.base.transfer_qty), num(cmp.current.transfer_qty), signed(cmp.diff.transfer_qty)],
                 ['Ngân sách còn lại', vnd(cmp.base.remaining_budget_vnd), vnd(cmp.current.remaining_budget_vnd), signed(cmp.diff.remaining_budget_vnd, ' ₫')],
-              ] as const).map(([label, a, b, diff]) => (
-                <tr key={label} className="border-b border-border/60 last:border-0">
+                ...(cmp.executable ? [
+                  [`Bạn tự thực hiện (${cmp.executable.label}): mức đáp ứng`, num(cmp.executable.base.shortage_covered_pct, '%'), num(cmp.executable.current.shortage_covered_pct, '%'), signed(cmp.executable.diff.shortage_covered_pct, ' điểm %')],
+                  ['Bạn tự thực hiện: còn thiếu (bản)', num(cmp.executable.base.remaining_shortage_qty), num(cmp.executable.current.remaining_shortage_qty), signed(cmp.executable.diff.remaining_shortage_qty)],
+                  ['Bạn tự thực hiện: chi phí mua mới', vnd(cmp.executable.base.purchase_cost_vnd), vnd(cmp.executable.current.purchase_cost_vnd), signed(cmp.executable.diff.purchase_cost_vnd, ' ₫')],
+                ] as const : []),
+              ] as const).map(([label, a, b, diff], i) => (
+                <tr key={label} data-row={i >= 6 ? 'executable' : 'best'} className={cn('border-b border-border/60 last:border-0', i === 6 && 'border-t-2 border-t-border')}>
                   <th scope="row" className="py-1.5 pr-3 text-left font-normal text-foreground">{label}</th>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{a}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums">{b}</td>
@@ -249,6 +254,10 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
               ))}
             </tbody>
           </table>
+          <p className="mt-2 text-[11.5px] text-muted-foreground">
+            Sáu dòng đầu: phương án tốt nhất về nghiệp vụ ({cmp.current.best_option ?? NONE}).
+            {cmp.executable && ' Các dòng "Bạn tự thực hiện": phương án không cần kho khác phối hợp.'}
+          </p>
         </Card>
       )}
 

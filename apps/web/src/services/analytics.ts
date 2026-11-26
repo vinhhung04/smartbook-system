@@ -18,7 +18,12 @@ export type DashboardKpis = {
   reservation_conversion_rate: number;
 };
 
-export type AnalyticsDateParams = {
+/** Narrows a scoped analytics read to one warehouse the caller may read (empty = all of theirs). */
+export type WarehouseParam = {
+  warehouseId?: string;
+};
+
+export type AnalyticsDateParams = WarehouseParam & {
   from?: string;
   to?: string;
 };
@@ -311,8 +316,8 @@ async function unwrap<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<T>
   return response.data.data;
 }
 
-export function getDashboardKpis() {
-  return unwrap<DashboardKpis>(gatewayAPI.get('/analytics/dashboard/kpis'));
+export function getDashboardKpis(params?: WarehouseParam) {
+  return unwrap<DashboardKpis>(gatewayAPI.get('/analytics/dashboard/kpis', { params }));
 }
 
 export function getBorrowTrends(params?: BorrowTrendParams) {
@@ -323,20 +328,20 @@ export function getTopBooks(params?: TopBooksParams) {
   return unwrap<TopBookItem[]>(gatewayAPI.get('/analytics/top-books', { params }));
 }
 
-export function getOverdueSummary() {
-  return unwrap<OverdueSummary>(gatewayAPI.get('/analytics/overdue-summary'));
+export function getOverdueSummary(params?: WarehouseParam) {
+  return unwrap<OverdueSummary>(gatewayAPI.get('/analytics/overdue-summary', { params }));
 }
 
-export function getFineSummary() {
-  return unwrap<FineSummary>(gatewayAPI.get('/analytics/fine-summary'));
+export function getFineSummary(params?: WarehouseParam) {
+  return unwrap<FineSummary>(gatewayAPI.get('/analytics/fine-summary', { params }));
 }
 
-export function getWarehouseStockRisk() {
-  return unwrap<WarehouseStockRiskItem[]>(gatewayAPI.get('/analytics/warehouse-stock-risk'));
+export function getWarehouseStockRisk(params?: WarehouseParam) {
+  return unwrap<WarehouseStockRiskItem[]>(gatewayAPI.get('/analytics/warehouse-stock-risk', { params }));
 }
 
-export function getReservationFunnel() {
-  return unwrap<ReservationFunnel>(gatewayAPI.get('/analytics/reservation-funnel'));
+export function getReservationFunnel(params?: WarehouseParam) {
+  return unwrap<ReservationFunnel>(gatewayAPI.get('/analytics/reservation-funnel', { params }));
 }
 
 export function getReorderSuggestions(params?: ReorderSuggestionsParams) {
@@ -351,11 +356,11 @@ export function getWeedingSuggestions(params?: { days?: number; limit?: number }
   return unwrap<WeedingSuggestionsData>(gatewayAPI.get('/analytics/weeding-suggestions', { params }));
 }
 
-export function getLateReturnRisk(params?: { limit?: number; dueWithinDays?: number }) {
+export function getLateReturnRisk(params?: WarehouseParam & { limit?: number; dueWithinDays?: number }) {
   return unwrap<RiskModelData<LateReturnRiskItem>>(gatewayAPI.get('/analytics/late-return-risk', { params }));
 }
 
-export function getReservationNoShowRisk(params?: { limit?: number }) {
+export function getReservationNoShowRisk(params?: WarehouseParam & { limit?: number }) {
   return unwrap<RiskModelData<ReservationNoShowRiskItem>>(gatewayAPI.get('/analytics/reservation-no-show-risk', { params }));
 }
 

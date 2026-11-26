@@ -47,7 +47,7 @@ class DecisionObjectTests(unittest.TestCase):
         cheap, safe = d["options"]
         self.assertIn("Chi phí thấp nhất trong các phương án", cheap["pros"])
         self.assertTrue(any("70 đầu sách ưu tiên cao" in c for c in cheap["cons"]))
-        self.assertIn("Đáp ứng nhiều nhu cầu dự kiến nhất trong thời gian chờ hàng", safe["pros"])
+        self.assertIn("Đáp ứng nhiều nhu cầu dự kiến nhất đến lần nhập kế tiếp", safe["pros"])
         self.assertTrue(safe["is_least_risk"])
         rec = d["recommendation"]
         self.assertEqual(rec["option"], "Ngân sách 15.000.000 ₫")

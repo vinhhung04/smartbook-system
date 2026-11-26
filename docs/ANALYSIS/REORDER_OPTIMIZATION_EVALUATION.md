@@ -1,5 +1,8 @@
 # SmartBook — Tối ưu nhập sách có xét chi phí (Phase 4, 2026-10-17/18)
 
+> **Cập nhật 2026-11-26:** thứ tự cấp vốn trong chế độ ngân sách đã được thay bằng `SB_NOFLOOR_PROTECT` sau khi so với các cách chi
+> tiền thực tế của thư viện — xem [BUDGET_REALISTIC_BASELINES.md](BUDGET_REALISTIC_BASELINES.md).
+
 Ký hiệu: **[ĐO]** đã chạy và đo · **[CHƯA ĐO]** chưa có số. Bảng giữa hai dấu `AUTO` do script sinh (không sửa tay); phần
 còn lại viết tay. **Mọi kết quả backtest dùng dữ liệu tổng hợp** (bộ mô phỏng hành vi mượn/trả, không phải thư viện thật).
 

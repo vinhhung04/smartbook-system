@@ -22,7 +22,7 @@ function ListBones({ rows, pitch = 'h-[52px]' }: { rows: number; pitch?: string 
   );
 }
 
-export function DashboardSkeleton({ canViewBorrow }: { canViewBorrow: boolean }) {
+export function DashboardSkeleton({ canViewBorrow, withFeed }: { canViewBorrow: boolean; withFeed: boolean }) {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Đang tải bảng điều khiển">
       <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
@@ -58,14 +58,16 @@ export function DashboardSkeleton({ canViewBorrow }: { canViewBorrow: boolean })
 
       {canViewBorrow ? (
         <div className="grid grid-cols-1 gap-5 @5xl:grid-cols-12">
-          <Panel titleId="ai-risk-title" className="@5xl:col-span-8">
+          <Panel titleId="ai-risk-title" className={withFeed ? '@5xl:col-span-8' : '@5xl:col-span-12'}>
             <PanelHeader id="ai-risk-title" title="AI dự báo rủi ro" description={<Bone className="mt-1 h-4 w-72" />} />
             <PanelBody className="grid grid-cols-1 gap-x-8 gap-y-6 pt-2 @2xl:grid-cols-2"><ListBones rows={5} /><ListBones rows={5} /></PanelBody>
           </Panel>
-          <Panel titleId="activity-title" className="@5xl:col-span-4">
-            <PanelHeader id="activity-title" title="Hoạt động trực tiếp" description={<Bone className="mt-1 h-4 w-48" />} />
-            <PanelBody className="pt-2"><ListBones rows={6} pitch="h-[45px]" /></PanelBody>
-          </Panel>
+          {withFeed ? (
+            <Panel titleId="activity-title" className="@5xl:col-span-4">
+              <PanelHeader id="activity-title" title="Hoạt động trực tiếp" description={<Bone className="mt-1 h-4 w-48" />} />
+              <PanelBody className="pt-2"><ListBones rows={6} pitch="h-[45px]" /></PanelBody>
+            </Panel>
+          ) : null}
         </div>
       ) : null}
 
