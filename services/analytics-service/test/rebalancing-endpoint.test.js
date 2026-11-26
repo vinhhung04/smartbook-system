@@ -124,6 +124,23 @@ test('FULL + READ + FULL: reads three warehouses, transfer from READ HN is colla
   assert.equal(data.data_quality.transfer_cost, 'UNAVAILABLE');
 });
 
+test('bookIds limits the plan to that book; a malformed id is refused', async () => {
+  const B1 = 'b1b1b1b1-0000-4000-8000-000000000001';
+  const B2 = 'b2b2b2b2-0000-4000-8000-000000000002';
+  fixture.variants = [{ variant_id: 'v1', book_id: B1, title: 'Sách A', unit_cost: 80000 },
+    { variant_id: 'v2', book_id: B2, title: 'Sách B', unit_cost: 50000 }];
+  fixture.stock.push({ warehouse_id: HCM, variant_id: 'v2', available_qty: 0, on_hand_qty: 0, reserved_qty: 0,
+    borrowed_qty: 0, reorder_point: 0, safety_stock_qty: 4 });
+  const all = await call('demo', { destinationWarehouseId: HCM });
+  assert.equal(all.data.options.HYBRID.total_shortage_qty, 10); // A 6 + B 4
+  const one = await call('demo', { destinationWarehouseId: HCM, bookIds: B2 });
+  assert.equal(one.status, 200);
+  assert.equal(one.data.options.HYBRID.total_shortage_qty, 4);
+  assert.deepEqual(one.data.parameters.book_ids, [B2]);
+  assert.ok(one.data.shortages.every((s) => s.variant_id === 'v2'));
+  assert.equal((await call('demo', { bookIds: 'not-a-uuid' })).status, 400);
+});
+
 test('single-warehouse manager: only that warehouse, purchases only', async () => {
   const { data } = await call('single', { budgetVnd: '1000000' });
   assert.deepEqual(data.scope.warehouses.map((w) => w.code), ['WH-HCM-01']);

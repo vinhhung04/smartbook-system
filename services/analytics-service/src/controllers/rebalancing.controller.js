@@ -40,6 +40,8 @@ const ASSUMPTIONS = [
   'Ngân sách chỉ áp dụng cho mua mới; dòng chưa có đơn giá không được mua và được liệt kê riêng.',
 ];
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function number(value) {
   return Number(value || 0);
 }
@@ -286,6 +288,10 @@ const getRebalancingPlan = async (req, res, next) => {
       allowed: parseIds(req.query.onlySourceIds),
       closed: parseIds(req.query.closedWarehouseIds),
     };
+    // the plan of ONE book (a cover photo or a named title in the chat); absent = every book
+    const bookIds = parseIds(req.query.bookIds ?? req.query.bookId);
+    if (bookIds.some((id) => !UUID.test(id))) throw createHttpError(400, 'bookIds phải là UUID');
+    const bookFilter = bookIds.length ? new Set(bookIds) : null;
     const priority = req.query.priority ? String(req.query.priority).toUpperCase() : null;
     if (priority && !['HIGH', 'MEDIUM', 'LOW'].includes(priority)) throw createHttpError(400, 'priority phải là HIGH, MEDIUM hoặc LOW');
 
@@ -300,6 +306,7 @@ const getRebalancingPlan = async (req, res, next) => {
       scope: { warehouses: accessible, capabilities },
       parameters: {
         destination_warehouse_ids: requested,
+        book_ids: bookIds,
         budget_vnd: budgetVnd,
         demand_window_days: ranges.days,
         what_if: {
@@ -346,6 +353,7 @@ const getRebalancingPlan = async (req, res, next) => {
       const [warehouseId, variantId] = k.split(':');
       const variant = variants.get(variantId);
       if (!variant) continue; // inactive variant/book
+      if (bookFilter && !bookFilter.has(variant.book_id)) continue;
       const row = stockByKey.get(k) || {};
       const available = number(row.available_qty);
       const incoming = (incomingPo.get(k) || 0) + (transfers.incoming.get(k) || 0);

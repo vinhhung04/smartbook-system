@@ -88,12 +88,15 @@ def build(plan, collected: dict, verification: dict | None = None) -> dict | Non
         if executable and executable != best:
             ex = options.get(executable) or {}
             conclusion += f" Phần bạn tự thực hiện được: {ex.get('label')}, đáp ứng {_pct(ex.get('shortage_covered_pct'))}."
+        if current.get("book"):
+            conclusion = f"Riêng cuốn \"{current['book'].get('title')}\" — {conclusion}"
     base = found[0] if len(found) >= 2 and isinstance(found[0], dict) and not found[0].get("error") else None
     reb = (getattr(plan, "entities", None) or {}).get("rebalance") or {}
     return {
         "kind": "rebalance",
         "focus": reb.get("focus") or [],
         "conclusion": conclusion,
+        "book": current.get("book"),
         "scope": current.get("scope") or [],
         "notice": current.get("notice"),
         "diagnosis": {
@@ -320,8 +323,40 @@ def option_issues(answer: str, collected: dict) -> list[str]:
     return out
 
 
+_COPIES = re.compile(r"(\d+(?:[.,]\d+)?)\s*ban\b")
+
+
+def _demand_and_shortage(collected: dict) -> tuple[set[int], set[int]]:
+    found = results(collected)
+    current = found[-1] if found and isinstance(found[-1], dict) else {}
+    demand = {round(d.get("forecast_demand_qty") or 0) for d in current.get("diagnosis") or []} - {0}
+    shortage = {round(o.get(k) or 0) for o in (current.get("options") or {}).values()
+                for k in ("total_shortage_qty", "covered_qty", "transfer_qty", "purchase_qty", "remaining_shortage_qty")}
+    shortage |= {round(d.get(k) or 0) for d in current.get("diagnosis") or [] for k in ("shortage_qty", "surplus_qty")}
+    return demand, shortage
+
+
+def demand_issues(answer: str, collected: dict) -> list[str]:
+    """Sentences giving the forecast demand as what the plan covers (live 2026-11-26: "đáp ứng
+    100% nhu cầu dự kiến (6 bản)" while the plan covers a shortage of 11 = lead-time demand +
+    safety stock). "Đáp ứng X%" is a share of the shortage, never of the forecast demand."""
+    from copilot_plan import normalize_query
+    demand, shortage = _demand_and_shortage(collected)
+    if not answer or not demand:
+        return []
+    out = []
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", answer):
+        text = normalize_query(sentence)
+        if "dap ung" not in text or "nhu cau" not in text:
+            continue
+        cited = {round(float(m.group(1).replace(",", "."))) for m in _COPIES.finditer(text)}
+        if cited & (demand - shortage):
+            out.append(sentence)
+    return out
+
+
 def answer_issues(answer: str, collected: dict) -> list[str]:
-    return permission_issues(answer, collected) + option_issues(answer, collected)
+    return permission_issues(answer, collected) + option_issues(answer, collected) + demand_issues(answer, collected)
 
 
 def answer_instruction(sentences: list[str], collected: dict) -> str | None:
@@ -339,6 +374,12 @@ def answer_instruction(sentences: list[str], collected: dict) -> str | None:
                      f"tốt nhất về nghiệp vụ là {rec.get('best_business_label') or rec.get('best_business_option')}. "
                      "Không đề xuất phương án có mức đáp ứng thấp hơn hai phương án này. Viết lại: "
                      + " | ".join(x.strip()[:160] for x in sentences))
+    wrong_demand = demand_issues(" ".join(sentences), collected)
+    if wrong_demand:
+        best = (current.get("options") or {}).get(rec.get("best_business_option")) or {}
+        parts.append(f"Sai số: \"đáp ứng X%\" là phần trăm của SỐ THIẾU ({best.get('total_shortage_qty')} bản = nhu cầu trong "
+                     "thời gian chờ hàng + tồn an toàn), không phải của nhu cầu dự kiến; không ghi số nhu cầu dự kiến cạnh "
+                     "mức đáp ứng. Viết lại: " + " | ".join(x.strip()[:160] for x in wrong_demand))
     return " ".join(p for p in parts if p) or None
 
 

@@ -4,7 +4,7 @@ import json
 import re
 
 from intent import normalize_text
-from number_grounding import display_number, numbers_match, parse_number_candidates, parse_numbers
+from number_grounding import display_number, numbers_match, parse_number_candidates, parse_numbers, scaled_amounts
 from retrieval_confidence import UNCERTAIN
 
 # Leads of the FAQ "Data summary" (retrieval.py). The uncertain one is also the
@@ -208,9 +208,11 @@ def unverified_numbers(reply: str, retrieval: dict, question: str | None = None)
     grounded = parse_numbers(str(retrieval.get("summary") or ""))
     grounded += parse_numbers(json.dumps(retrieval.get("raw") or {}, ensure_ascii=False, default=str))
     grounded += parse_numbers(question)
+    # "44 triệu" is grounded by a 44.310.490 it rounds; its bare 44 is then not checked on its own
+    rounded = {number for number, value, allowed in scaled_amounts(reply) if numbers_match(value, grounded, allowed)}
     return [
         group[0] for group in candidate_groups
-        if not any(numbers_match(value, grounded) for value in group)
+        if not any(numbers_match(value, grounded) or value in rounded for value in group)
     ]
 
 

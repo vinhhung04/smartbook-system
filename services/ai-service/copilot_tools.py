@@ -750,7 +750,33 @@ def _rebalance_option(option: dict, names: dict) -> dict:
         "lead_time_days": p.get("lead_time_days"), "permission": p.get("permission"),
     } for p in (option.get("purchases") or [])[:_REBALANCE_LINES]]
     keep["unpriced_lines"] = len(option.get("unpriced_lines") or [])
+    # totals per source over EVERY transfer line, not just the rows sent back (live 2026-11-26: the
+    # model added up the listed rows itself and wrote "71 bản (38 từ Đà Nẵng + 33 từ Hà Nội)")
+    by_source: dict = {}
+    for t in option.get("transfers") or []:
+        row = by_source.setdefault(t.get("from_warehouse_id"), {
+            "warehouse": wh(t.get("from_warehouse_id")), "quantity": 0, "lines": 0, "permission": t.get("permission")})
+        row["quantity"] += t.get("quantity") or 0
+        row["lines"] += 1
+    keep["transfers_by_source"] = sorted(by_source.values(), key=lambda r: -r["quantity"])
+    keep["transfer_lines_total"] = len(option.get("transfers") or [])
+    keep["purchase_lines_total"] = len(option.get("purchases") or [])
     return keep
+
+
+async def _resolve_book(auth_header: str | None, title: str) -> tuple[dict | None, dict | None]:
+    """The one catalog book whose title is exactly `title` (accents and case aside), read
+    through the caller's own /api/books. Two books with that title, or none, is an error:
+    a plan for the wrong book is worse than asking."""
+    books = await _cached_get("/api/books", auth_header)
+    if _error(books):
+        return None, books
+    books = books.get("data") if isinstance(books, dict) else books
+    want = normalize_text(title)
+    exact = [b for b in books or [] if isinstance(b, dict) and normalize_text(b.get("title") or "") == want]
+    if len(exact) != 1:
+        return None, {"error": f"không xác định được một cuốn sách duy nhất tên \"{title}\" trong danh mục ({len(exact)} kết quả)"}
+    return {"id": exact[0]["id"], "title": exact[0].get("title")}, None
 
 
 async def fetch_rebalancing_plan(auth_header: str | None = None, destination_warehouses: list[str] | None = None,
@@ -759,7 +785,8 @@ async def fetch_rebalancing_plan(auth_header: str | None = None, destination_war
                                  only_source_warehouses: list[str] | None = None,
                                  closed_warehouses: list[str] | None = None,
                                  safety_stock_multiplier: float | None = None, priority: str | None = None,
-                                 lead_time_delay_days: int | None = None) -> tuple[dict, list[dict]]:
+                                 lead_time_delay_days: int | None = None,
+                                 book_title: str | None = None) -> tuple[dict, list[dict]]:
     """The full analytics /rebalancing-plan for these arguments (or an error
     dict), plus the resolved destinations. Shared by the read tool (which
     compacts it for the model) and the draft builder (which needs every line).
@@ -801,7 +828,15 @@ async def fetch_rebalancing_plan(auth_header: str | None = None, destination_war
         params["priority"] = priority
     if lead_time_delay_days:
         params["leadTimeDelayDays"] = int(lead_time_delay_days)
+    book = None
+    if book_title:
+        book, err = await _resolve_book(auth_header, book_title)
+        if err:
+            return err, []
+        params["bookIds"] = book["id"]
     data = await _cached_get("/analytics/rebalancing-plan", auth_header, params)
+    if book and isinstance(data, dict) and not _error(data):
+        data = {**data, "book": book}
     if _error(data):
         message = str(data.get("error"))
         if "403" in message:
@@ -819,13 +854,14 @@ async def analyze_inventory_rebalancing(auth_header: str | None = None, destinat
                                         only_source_warehouses: list[str] | None = None,
                                         closed_warehouses: list[str] | None = None,
                                         safety_stock_multiplier: float | None = None, priority: str | None = None,
-                                        lead_time_delay_days: int | None = None) -> dict:
+                                        lead_time_delay_days: int | None = None, book_title: str | None = None) -> dict:
     """Shortage / surplus per warehouse, safe transfers, and the transfer-only /
     procurement-only / hybrid options (fetch_rebalancing_plan), compacted for
     the model, optionally under what-if conditions."""
     data, destinations = await fetch_rebalancing_plan(
         auth_header, destination_warehouses, budget_vnd, demand_change_pct, exclude_source_warehouses,
-        only_source_warehouses, closed_warehouses, safety_stock_multiplier, priority, lead_time_delay_days)
+        only_source_warehouses, closed_warehouses, safety_stock_multiplier, priority, lead_time_delay_days,
+        book_title)
     if _error(data):
         return data
     scope = (data.get("scope") or {}).get("warehouses") or []
@@ -851,6 +887,7 @@ async def analyze_inventory_rebalancing(auth_header: str | None = None, destinat
             "safety_stock_multiplier": safety_stock_multiplier, "priority": priority,
             "lead_time_delay_days": lead_time_delay_days}.items() if v},
         "notice": data.get("notice"),
+        "book": data.get("book"),  # the plan covers this one book only; None = every book
         "diagnosis": diagnosis,
         # sums the answer may quote (live 2026-11-26: the model added every warehouse's surplus, 323 / 449,
         # and called it the surplus of the two surplus warehouses, 246)
@@ -960,7 +997,9 @@ COPILOT_TOOLS = [
              "safety_stock_multiplier": {"type": "number", "description": "Hệ số tồn an toàn, 1 = như hiện tại"},
              "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"],
                           "description": "Chỉ phục vụ dòng thiếu có mức ưu tiên này"},
-             "lead_time_delay_days": {"type": "integer", "description": "Nhà cung cấp giao chậm thêm N ngày"}}),
+             "lead_time_delay_days": {"type": "integer", "description": "Nhà cung cấp giao chậm thêm N ngày"},
+             "book_title": {"type": "string", "description": "Tên đúng của MỘT cuốn sách: chỉ lập phương án cho cuốn đó; "
+                                                             "bỏ trống = mọi đầu sách"}}),
     _schema("rank_priority_tasks",
             "Xếp hạng các việc cần ưu tiên xử lý hôm nay từ số liệu thật (hết hàng có nhu cầu, quá hạn, phạt chưa thu, "
             "đề xuất nhập, kho dưới ngưỡng) theo quy tắc cố định."),

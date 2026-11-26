@@ -519,6 +519,8 @@ export interface AiRebalanceDecision {
   scope_unavailable?: boolean;
   focus?: string[];
   conclusion?: string | null;
+  /** The plan covers this one book only (cover photo / named title); absent = every book. */
+  book?: { id: string; title: string } | null;
   notice?: string | null;
   scope?: Array<{ warehouse_id: string; warehouse: string; access: string }>;
   diagnosis?: {

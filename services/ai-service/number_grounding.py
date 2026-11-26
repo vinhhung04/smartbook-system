@@ -74,6 +74,28 @@ def parse_numbers(text: str | None) -> list[float]:
     return numbers
 
 
+_SCALE_RE = re.compile(r"(\d[\d.,]*\d|\d)\s*(triệu|trieu|tr|tỷ|tỉ|ty|ti|nghìn|ngàn|nghin|ngan|k)\b", re.IGNORECASE)
+_SCALE = {"triệu": 1e6, "trieu": 1e6, "tr": 1e6, "tỷ": 1e9, "tỉ": 1e9, "ty": 1e9, "ti": 1e9,
+          "nghìn": 1e3, "ngàn": 1e3, "nghin": 1e3, "ngan": 1e3, "k": 1e3}
+
+
+def scaled_amounts(text: str | None) -> list[tuple[float, float, float]]:
+    """("44 triệu" -> (44, 44_000_000, 500_000)): a money amount written as a rounded
+    count of millions / billions / thousands, its value, and the rounding it allows -
+    half a unit of the last digit written. Live 2026-11-26: "trên 44 triệu ₫" for a
+    cost of 44.310.490 ₫ was flagged as an unsupported number."""
+    out = []
+    for m in _SCALE_RE.finditer(text or ""):
+        token, scale = m.group(1), _SCALE[m.group(2).lower()]
+        decimals = len(re.split(r"[.,]", token)[-1]) if re.search(r"[.,]\d{1,2}$", token) else 0
+        try:
+            number = float(token.replace(".", "").replace(",", ".")) if decimals else float(re.sub(r"[.,]", "", token))
+        except ValueError:
+            continue
+        out.append((number, number * scale, 0.5 * 10 ** -decimals * scale))
+    return out
+
+
 def numbers_match(value: float, candidates: list[float], tolerance: float = 0.01) -> bool:
     """True if `value` is within `tolerance` of any of `candidates`.
     `tolerance` in (0, 1) is a relative tolerance (fraction of `value`);

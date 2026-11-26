@@ -704,13 +704,19 @@ def _render_rebalancing(r: dict) -> str:
     def n(v):
         return "không có dữ liệu" if v is None else (f"{int(v):,}".replace(",", ".") if float(v).is_integer() else f"{v}")
     lines = [f"Nguồn: {r.get('source')} lúc {r.get('retrieved_at')}. Chỉ dùng các số dưới đây; không tự tính thêm."]
+    if r.get("book"):
+        lines.append(f"PHẠM VI: chỉ cuốn \"{r['book'].get('title')}\" — mọi số dưới đây (thiếu, dư, điều chuyển, mua, chi phí) "
+                     "là của riêng cuốn này, không phải của cả kho.")
+    else:
+        lines.append("PHẠM VI: mọi đầu sách ở các kho — các số là tổng của nhiều đầu sách, không gán cho một cuốn riêng.")
     rec0 = r.get("recommendation") or {}
     best0 = (r.get("options") or {}).get(rec0.get("best_business_option")) or {}
     if best0:
         # live demo 2026-11-26: asked to "tối ưu với ngân sách 15 triệu", the model twice gave the
         # procurement-only figures (the option that spends the most) as the best plan's
         lines.append(f"KẾT LUẬN ĐÃ TÍNH SẴN — phương án tốt nhất về nghiệp vụ là {best0.get('label')} "
-                     f"({rec0.get('best_business_option')}): đáp ứng {best0.get('shortage_covered_pct')}%, còn thiếu "
+                     f"({rec0.get('best_business_option')}): đáp ứng {best0.get('shortage_covered_pct')}% số thiếu "
+                     f"({best0.get('covered_qty')}/{best0.get('total_shortage_qty')} bản), còn thiếu "
                      f"{best0.get('remaining_shortage_qty')} bản, điều chuyển {best0.get('transfer_qty')} bản, mua "
                      f"{best0.get('purchase_qty')} bản ({n(best0.get('purchase_cost_vnd'))} ₫), ngân sách còn "
                      f"{n(best0.get('remaining_budget_vnd'))} ₫. Khi nói về phương án tốt nhất, dùng đúng phương án này "
@@ -732,8 +738,14 @@ def _render_rebalancing(r: dict) -> str:
     for d in r.get("diagnosis") or []:
         lines.append(f"- Kho {d.get('warehouse')} ({_ACCESS_VI.get(d.get('access'), '')}): {d.get('variants_tracked')} đầu sách; "
                      f"thiếu {d.get('shortage_variants')} đầu sách / {d.get('shortage_qty')} bản; dư {d.get('surplus_variants')} "
-                     f"đầu sách / {d.get('surplus_qty')} bản; nhu cầu dự kiến {d.get('forecast_demand_qty')} bản; "
-                     f"đang về {d.get('incoming_qty')}, đã hứa chuyển đi {d.get('outgoing_qty')}")
+                     f"đầu sách / {d.get('surplus_qty')} bản; nhu cầu dự kiến trong thời gian chờ hàng "
+                     f"{d.get('forecast_demand_qty')} bản; đang về {d.get('incoming_qty')}, đã hứa chuyển đi {d.get('outgoing_qty')}")
+    if r.get("diagnosis"):
+        # live 2026-11-26: "đáp ứng 100% nhu cầu dự kiến (6 bản)" for a plan covering a shortage of 11
+        lines.append("Định nghĩa: \"thiếu\" = số bản cần bổ sung để đạt mức tồn cần có (nhu cầu dự kiến trong thời gian chờ "
+                     "hàng + tồn an toàn), nên có thể lớn hơn nhu cầu dự kiến. \"Đáp ứng X%\" là phần trăm của SỐ THIẾU, "
+                     "không phải của nhu cầu dự kiến: viết \"đáp ứng X% số thiếu (a/b bản)\", không ghi số nhu cầu dự kiến "
+                     "cạnh mức đáp ứng.")
     t = r.get("diagnosis_totals") or {}
     if t:
         lines.append(f"Tổng đã tính sẵn (dùng nguyên các số này, không tự cộng): kho đang thiếu là "
@@ -746,7 +758,8 @@ def _render_rebalancing(r: dict) -> str:
         rows = r.get(key) or []
         if rows:
             lines.append(f"{label}: " + "; ".join(f"{x.get('title')} @ {x.get('warehouse')}: {x.get(qty)} bản "
-                                                  f"(tồn {x.get('available_qty')}, nhu cầu {x.get('lead_time_demand')})"
+                                                  f"(tồn {x.get('available_qty')}, nhu cầu trong thời gian chờ hàng "
+                                                  f"{x.get('lead_time_demand')})"
                                                   for x in rows[:5]))
     rec = r.get("recommendation") or {}
     for code, o in (r.get("options") or {}).items():
@@ -756,16 +769,30 @@ def _render_rebalancing(r: dict) -> str:
         lines.append(f"Phương án {code} – {o.get('label')}{f' [{role}]' if role else ''}: thiếu {o.get('total_shortage_qty')} bản; điều chuyển "
                      f"{o.get('transfer_qty')} bản; mua {o.get('purchase_qty')} bản ({n(o.get('purchase_cost_vnd'))} ₫); còn "
                      f"thiếu {o.get('remaining_shortage_qty')} (HIGH {o.get('remaining_high_priority_qty')}); đáp ứng "
-                     f"{o.get('shortage_covered_pct')}%; ngân sách còn {n(o.get('remaining_budget_vnd'))}; chi phí điều "
+                     f"{o.get('shortage_covered_pct')}% số thiếu ({o.get('covered_qty')}/{o.get('total_shortage_qty')} bản); "
+                     f"ngân sách còn {n(o.get('remaining_budget_vnd'))}; chi phí điều "
                      f"chuyển: không có dữ liệu; thời gian đáp ứng {n(o.get('response_days'))} ngày; rủi ro "
                      f"{o.get('risk_level')} {o.get('risks') or ''}; {o.get('collaborative_transfer_lines')} dòng cần phối hợp")
-        for t in (o.get("transfers") or [])[:5]:
+        if o.get("transfers_by_source"):
+            lines.append("  Điều chuyển theo kho nguồn (tổng đã tính sẵn, đủ mọi dòng): " + "; ".join(
+                f"{s.get('warehouse')} {s.get('quantity')} bản / {s.get('lines')} đầu sách "
+                f"({_PERM_VI.get(s.get('permission'), s.get('permission'))})" for s in o["transfers_by_source"]))
+        shown_t = (o.get("transfers") or [])[:5]
+        for t in shown_t:
             lines.append(f"  · chuyển {t.get('quantity')} '{t.get('title')}' {t.get('from_warehouse')} → {t.get('to_warehouse')} "
                          f"(kho nguồn còn {t.get('source_available_after')}, mức cần giữ {t.get('source_protected_qty')}; "
                          f"{_PERM_VI.get(t.get('permission'), t.get('permission'))})")
-        for p in (o.get("purchases") or [])[:5]:
+        if (o.get("transfer_lines_total") or 0) > len(shown_t):
+            lines.append(f"  · … và {o['transfer_lines_total'] - len(shown_t)} dòng điều chuyển khác không liệt kê ở đây")
+        shown_p = (o.get("purchases") or [])[:5]
+        for p in shown_p:
             lines.append(f"  · mua {p.get('quantity')} '{p.get('title')}' cho {p.get('warehouse')} ({n(p.get('cost_vnd'))} ₫; "
                          f"{_PERM_VI.get(p.get('permission'), p.get('permission'))})")
+        if (o.get("purchase_lines_total") or 0) > len(shown_p):
+            lines.append(f"  · … và {o['purchase_lines_total'] - len(shown_p)} dòng mua khác không liệt kê ở đây")
+    lines.append("Tổng điều chuyển của một phương án: dùng dòng \"Điều chuyển theo kho nguồn\" hoặc số \"điều chuyển … bản\" "
+                 "của phương án, không tự cộng các dòng liệt kê (danh sách có thể không đủ). \"Kho nguồn còn\" chỉ có ở "
+                 "từng dòng đã liệt kê.")
     lines.append("Mỗi con số ở trên thuộc đúng phương án của dòng đó; không gán số của phương án này cho phương án khác.")
     ex = (r.get("options") or {}).get(rec.get("executable_option")) or {}
     if ex:

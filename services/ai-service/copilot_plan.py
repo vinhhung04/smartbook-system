@@ -939,6 +939,9 @@ def _wh_near(w: dict, text: str, after: str | None = None, before: str | None = 
     return False
 # "giảm tiếp 20%", "tăng thêm 10% nữa": a change of the CURRENT scenario's budget
 _REB_PCT_AGAIN = _R(r"\b(giam|cat|bot|tang)\s*(tiep|them|nua)\s*(\d{1,3})\s*%")
+# "tất cả / những sách nào / các đầu sách": the talk widens from one book back to every book
+_REB_ALL_BOOKS = _R(r"\b(tat ca|toan bo|cac dau sach|nhung dau sach|nhung sach|sach nao|dau sach nao|moi dau sach)\b"
+                    r"|\b(cac|moi) kho\b")
 _REB_ORIGINAL = _R(r"\b(ban dau|luc dau|dau tien|goc|ngay tu dau)\b")
 _REB_PREVIOUS = _R(r"\b(phuong an|kich ban|ngan sach|lan)\b.{0,12}\b(truoc|truoc do|luc nay|vua roi|cu)\b|\bquay lai\b")
 _REB_CROSS = _R(r"\bso (sanh )?voi\b.{0,20}\b(phuong an|kich ban|ngan sach|lan)\b")
@@ -1152,6 +1155,17 @@ def _plan_rebalance(message: str, text: str, caps: list[str], budgets: list[floa
         plan.assumptions = assumptions
         return plan
 
+    # One book's plan (a cover photo or a quoted title): kept for the follow-ups (budget,
+    # what-if, draft, confirm) until the question widens to every book again.
+    book = _book_title_in(text, message)
+    if book:
+        assumptions.append(f"Chỉ lập phương án cho cuốn \"{book}\"")
+    elif selected and selected.get("book"):
+        book = selected["book"]
+    elif in_topic and prev.get("book") and not _REB_ALL_BOOKS.search(text):
+        book = prev["book"]
+        carried.append("book")
+
     def call(dest_list: list[dict], amount, conditions: dict) -> dict:
         args: dict = {}
         if dest_list:
@@ -1159,6 +1173,8 @@ def _plan_rebalance(message: str, text: str, caps: list[str], budgets: list[floa
         if amount is not None:
             args["budget_vnd"] = amount
         args.update(conditions)
+        if book:
+            args["book_title"] = book
         return {"name": "analyze_inventory_rebalancing", "args": args}
 
     style = detect_style(text)
@@ -1205,7 +1221,7 @@ def _plan_rebalance(message: str, text: str, caps: list[str], budgets: list[floa
         "budget_change_pct": budget_pct,
         "rebalance": {
             "focus": focus, "primary": primary,
-            "destinations": dests, "sources": sources, "budget_vnd": budget, "whatif": merged,
+            "destinations": dests, "sources": sources, "budget_vnd": budget, "whatif": merged, "book": book,
             "scenario_ref": selected.get("id") if selected else None,
             "compare_scenario": compare_with.get("id") if compare_with else None,
         },
@@ -1913,15 +1929,16 @@ def _rebalance_state(plan: QueryPlan, collected_data: dict, previous: dict) -> d
     ids = sorted(d["id"] for d in dests)
     budget = reb.get("budget_vnd")
     whatif = reb.get("whatif") or {}
+    book = reb.get("book")
     same = next((s for s in scenarios if s.get("budget_vnd") == budget and sorted(s.get("destination_ids") or []) == ids
-                 and (s.get("whatif") or {}) == whatif), None)
+                 and (s.get("whatif") or {}) == whatif and s.get("book") == book), None)
     rec = result.get("recommendation") or {}
     if same is None:
         same = {"id": (scenarios[-1]["id"] + 1) if scenarios else 1, "budget_vnd": budget, "destinations": dests,
-                "destination_ids": ids, "whatif": whatif, "best_option": rec.get("best_business_option"),
+                "destination_ids": ids, "whatif": whatif, "book": book, "best_option": rec.get("best_business_option"),
                 "executable_option": rec.get("executable_option")}
         scenarios = (scenarios + [same])[-MAX_SCENARIOS:]
-    return {"destinations": dests, "budget_vnd": budget, "whatif": whatif, "scenarios": scenarios,
+    return {"destinations": dests, "budget_vnd": budget, "whatif": whatif, "book": book, "scenarios": scenarios,
             "selected_scenario_id": same["id"],
             "focus": reb.get("focus")}
 

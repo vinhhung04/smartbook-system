@@ -98,5 +98,29 @@ class DisplayNumberTests(unittest.TestCase):
         self.assertEqual(display_number(27), "27")
 
 
+class RoundedAmountTests(unittest.TestCase):
+    """A cost written as rounded millions is grounded by the exact amount it rounds,
+    within half a unit of its last digit - and only that."""
+    DATA = {"summary": "", "raw": {"tools": {"plan": {"purchase_cost_vnd": 44310490, "budget": 9754000}}},
+            "sources": [{"status": "ok"}]}
+
+    def test_rounded_millions_are_grounded(self):
+        import rag
+        for text in ("Chi phí mua mới (trên 44 triệu ₫).", "Khoảng 44,3 triệu đồng.", "Gần 10 triệu.",
+                     "Chi phí 44.310.490 ₫."):
+            self.assertEqual(rag.unverified_numbers(text, self.DATA), [], text)
+
+    def test_a_rounding_too_far_is_still_flagged(self):
+        import rag
+        self.assertEqual(rag.unverified_numbers("Chi phí khoảng 46 triệu.", self.DATA), [46.0])
+        self.assertEqual(rag.unverified_numbers("Chi phí khoảng 44,8 triệu.", self.DATA), [448.0])
+
+    def test_scaled_amounts_reads_the_unit_and_its_rounding(self):
+        from number_grounding import scaled_amounts
+        self.assertEqual(scaled_amounts("trên 44 triệu"), [(44.0, 44e6, 0.5e6)])
+        self.assertEqual(scaled_amounts("44,3 tr"), [(44.3, 44.3e6, 0.05e6)])
+        self.assertEqual(scaled_amounts("500 nghìn"), [(500.0, 500e3, 500.0)])
+
+
 if __name__ == "__main__":
     unittest.main()

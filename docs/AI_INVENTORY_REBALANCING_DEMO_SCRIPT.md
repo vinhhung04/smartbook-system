@@ -45,6 +45,22 @@ TP.HCM thiếu 367 bản trên 78 đầu sách vì nhu cầu gồm cả lịch s
 - Cần mạng (OCR qua OpenRouter, ~3–4 giây). Thư viện ảnh nạp lười: lần nhận diện đầu tiên sau khi khởi động lại ai-service có thể bị timeout phần so khớp ảnh. Trước buổi demo gửi thử một ảnh (hoặc admin gọi `POST /ai/find-book-by-cover/reindex`; Manager bị 403).
 - Xóa lịch sử hội thoại của tài khoản demo trước khi trình bày (nút "Xóa toàn bộ lịch sử").
 
+### Phương án cho riêng cuốn sách trong ảnh
+
+Sau bước 2, hỏi tiếp về **chính cuốn đó** (để ảnh còn đính kèm trong ô hỏi):
+
+| Câu hỏi | Kết quả (kiểm tra thật 26/11/2026, ảnh bìa *7 Thói Quen Hiệu Quả - Bìa Cứng (Tái Bản 2022)*) |
+|---|---|
+| Đây là sách gì? Sách này còn tồn ở kho nào? | 12 bản, tất cả ở Kho Đà Nẵng |
+| Phương án bổ sung cho sách này về kho TP.HCM là gì? Nên điều chuyển hay mua mới? | Thẻ ghi "Phạm vi: chỉ cuốn …"; kết hợp: chuyển 10 bản Đà Nẵng → HCM (Manager tự làm, Đà Nẵng giữ 2 bản an toàn) + mua 1 bản, 175.000 ₫ |
+| So sánh ba phương án cho riêng cuốn này. | 3 phương án của riêng cuốn này |
+| Tôi đồng ý. Hãy tạo bản nháp … cho những hành động tôi đủ quyền thực hiện. | 1 yêu cầu điều chuyển 10 bản + 1 phiếu nhập 1 bản |
+| Tôi xác nhận. … | Tạo đúng các yêu cầu của cuốn này |
+
+- Câu nên có "điều chuyển hay mua mới" (chỉ "phương án bổ sung" được hiểu là hỏi đề xuất nhập).
+- Cuốn sách được giữ cho các lượt sau (ngân sách, giảm %, bản nháp, xác nhận) đến khi câu hỏi mở rộng ("tất cả các kho", "những sách nào") — lúc đó quay về phương án mọi đầu sách, tức lượt 1 bên dưới.
+- Ngân sách ở quy mô một cuốn rất nhỏ (*7 Thói Quen*: 175.000 ₫ — ngân sách không ràng buộc; *Sứ Mệnh Hail Mary*: mua 15 bản ≈ 2,5 triệu, chỉ mua mới vì không kho nào còn sách — ngân sách 2 triệu → 11/15 bản). Muốn cho thấy phân bổ ngân sách thì làm ở phần mọi đầu sách.
+
 ## Kịch bản
 
 | # | Câu hỏi (nguyên văn) | Mục tiêu | Thẻ | Lời thuyết trình ngắn |

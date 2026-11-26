@@ -149,6 +149,11 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
   const showBudget = decision.budget_vnd !== null && decision.budget_vnd !== undefined;
   return (
     <div className="space-y-3" data-testid="rebalance-decision">
+      {decision.book && (
+        <p data-testid="rebalance-book-scope" className="text-[12px] text-muted-foreground">
+          Phạm vi: chỉ cuốn <span className="font-medium text-foreground">{decision.book.title}</span> — các số dưới đây không phải của cả kho.
+        </p>
+      )}
       {decision.conclusion && <p className="text-[14px] font-medium leading-relaxed text-foreground">{decision.conclusion}</p>}
 
       {d && (

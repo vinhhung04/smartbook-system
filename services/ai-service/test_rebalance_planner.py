@@ -152,3 +152,32 @@ class SafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OneBookPlanTests(unittest.TestCase):
+    """The cover-photo demo: a book named (main.py appends `(sách "…")` to an image
+    turn) scopes the plan to that book; follow-ups keep it; "tất cả / sách nào" drops it;
+    "phương án ngân sách ban đầu" restores the scenario's own book (2026-11-26)."""
+    T = 'Sứ Mệnh Hail Mary - Project Hail Mary'
+
+    def _book_args(self, plan):
+        calls = [c["args"] for c in plan.required_tools if c["name"] == TOOL]
+        return [a.get("book_title") for a in calls]
+
+    def test_book_scope_is_kept_then_dropped_then_restored(self):
+        plans, _ = converse([
+            f'Phương án bổ sung cho sách này về kho TP.HCM là gì? Nên điều chuyển hay mua mới? (sách "{self.T}")',
+            "Tối ưu phương án tốt nhất với ngân sách 2 triệu đồng.",
+            "Nếu ngân sách giảm 20% thì sao?",
+            "Hãy phân tích tồn kho của tất cả các kho tôi được xem. Kho nào thiếu những sách nào?",
+            "Tôi đồng ý với phương án ngân sách ban đầu. Hãy tạo bản nháp cho những việc tôi đủ quyền.",
+        ])
+        self.assertEqual(self._book_args(plans[0]), [self.T])
+        self.assertEqual(self._book_args(plans[1]), [self.T])
+        self.assertTrue(all(b == self.T for b in self._book_args(plans[2])))  # both what-if sides
+        self.assertEqual(self._book_args(plans[3]), [None])
+        self.assertEqual(self._book_args(plans[4]), [self.T])  # the 2 M scenario was this book's
+
+    def test_no_book_named_means_every_book(self):
+        plans, _ = converse(["Tìm cơ hội điều chuyển sách về kho TP.HCM."])
+        self.assertEqual(self._book_args(plans[0]), [None])
