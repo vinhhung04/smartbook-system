@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AlertTriangle, ArrowRight, Check, CircleDashed, ClipboardCheck, Lock, RotateCw, Scale, Truck, Users, Warehouse, X } from 'lucide-react';
 import type { AiExecution, AiRebalanceDecision, AiRebalanceOption, AiTimelineStage } from '@/services/ai';
 import { cn } from '@/components/ui/utils';
@@ -48,7 +49,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-muted/50 px-2.5 py-2">
       <div className="text-[11.5px] text-muted-foreground">{label}</div>
-      <div className="text-[15px] font-semibold tabular-nums text-foreground">{value}</div>
+      <div className={cn('tabular-nums', value === NONE ? 'pt-0.5 text-[13px] text-muted-foreground' : 'text-[15px] font-semibold text-foreground')}>{value}</div>
     </div>
   );
 }
@@ -73,44 +74,93 @@ export function ExecutionTimeline({ stages }: { stages?: AiTimelineStage[] }) {
   );
 }
 
-function OptionsTable({ options }: { options: AiRebalanceOption[] }) {
+const RISK_TONE: Record<string, string> = {
+  LOW: 'border-border text-muted-foreground',
+  MEDIUM: 'border-amber-300 text-amber-800 dark:border-amber-500/40 dark:text-amber-300',
+  HIGH: 'border-rose-300 text-rose-700 dark:border-rose-500/40 dark:text-rose-300',
+};
+
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="-mx-3.5 overflow-x-auto px-3.5 sm:-mx-4 sm:px-4">
-      <table className="w-full min-w-[720px] border-collapse text-[12.5px] [&_td]:whitespace-nowrap [&_thead_th]:whitespace-nowrap" data-testid="rebalance-options">
-        <caption className="sr-only">So sánh phương án điều chuyển và mua mới</caption>
-        <thead>
-          <tr className="border-b border-border text-left text-[11.5px] text-muted-foreground">
-            <th scope="col" className="py-2 pr-3 font-medium">Phương án</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Đáp ứng</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Chuyển / mua (bản)</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Chi phí mua mới</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Còn thiếu</th>
-            <th scope="col" className="py-2 pr-3 text-right font-medium">Thời gian</th>
-            <th scope="col" className="py-2 text-right font-medium">Rủi ro</th>
-          </tr>
-        </thead>
-        <tbody>
-          {options.map((o) => (
-            <tr key={o.code} data-option={o.code} className={cn('border-b border-border/60 align-top last:border-0', o.is_best && 'bg-emerald-50/50 dark:bg-emerald-500/[0.06]')}>
-              <th scope="row" className="py-2 pr-3 text-left font-medium text-foreground">
-                {o.label}
-                <span className="mt-1 flex flex-wrap gap-1">
-                  {o.is_best && <Tag tone="border-emerald-300 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300">tốt nhất về nghiệp vụ</Tag>}
-                  {o.is_executable && <Tag tone="border-sky-300 text-sky-700 dark:border-sky-500/40 dark:text-sky-300">bạn tự thực hiện được</Tag>}
-                  {o.collaborative_transfer_lines > 0 && <Tag tone={PERMISSION.COLLABORATIVE.tone}>{o.collaborative_transfer_lines} dòng cần phối hợp</Tag>}
-                </span>
-              </th>
-              <td className="py-2 pr-3 text-right tabular-nums">{num(o.shortage_covered_pct, '%')}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{num(o.transfer_qty)} / {num(o.purchase_qty)}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{vnd(o.purchase_cost_vnd)}</td>
-              <td className="py-2 pr-3 text-right tabular-nums">{num(o.remaining_shortage_qty)}{o.remaining_high_priority_qty ? ` (HIGH ${o.remaining_high_priority_qty})` : ''}</td>
-              <td className="py-2 pr-3 text-right tabular-nums" title={o.response_days === null ? 'Thiếu dữ liệu thời gian điều chuyển' : undefined}>{o.response_days === null ? NONE : num(o.response_days, ' ngày')}</td>
-              <td className="py-2 text-right">{RISK[o.risk_level] ?? o.risk_level}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="min-w-0">
+      <dt className="text-[11.5px] text-muted-foreground">{label}</dt>
+      <dd className={cn('tabular-nums', value === NONE ? 'pt-0.5 text-[12.5px] text-muted-foreground' : 'whitespace-nowrap text-[14px] font-semibold text-foreground')}>{value}</dd>
+      {sub && <dd className="whitespace-nowrap text-[11.5px] tabular-nums text-muted-foreground">{sub}</dd>}
     </div>
+  );
+}
+
+/** One block per option, so all figures fit the chat column without sideways
+ * scrolling; transfer and purchase are separate figures, never "a / b". */
+function OptionsTable({ options }: { options: AiRebalanceOption[] }) {
+  const anyDays = options.some((o) => o.response_days !== null);
+  return (
+    <>
+    <ul className="-mx-2 divide-y divide-border/70" data-testid="rebalance-options" aria-label="So sánh phương án điều chuyển và mua mới">
+      {options.map((o) => (
+        <li key={o.code} data-option={o.code}
+          className={cn('rounded-lg px-2 py-3', o.is_best && 'border-transparent bg-emerald-50/70 ring-1 ring-emerald-300 dark:bg-emerald-500/[0.07] dark:ring-emerald-500/40')}>
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+            <p className="min-w-0 text-[13px] font-semibold text-foreground">{o.label}</p>
+            <Tag tone={RISK_TONE[o.risk_level] ?? RISK_TONE.LOW}>Rủi ro {(RISK[o.risk_level] ?? o.risk_level).toLowerCase()}</Tag>
+          </div>
+          {(o.is_best || o.is_executable || o.collaborative_transfer_lines > 0) && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {o.is_best && <Tag tone="border-emerald-300 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300"><Check className="h-3 w-3" aria-hidden="true" />tốt nhất về nghiệp vụ</Tag>}
+              {o.is_executable && <Tag tone="border-sky-300 text-sky-700 dark:border-sky-500/40 dark:text-sky-300">bạn tự thực hiện được</Tag>}
+              {o.collaborative_transfer_lines > 0 && <Tag tone={PERMISSION.COLLABORATIVE.tone}>{o.collaborative_transfer_lines} dòng cần phối hợp</Tag>}
+            </div>
+          )}
+          <div className="mt-2.5 flex items-center gap-2" aria-hidden="true">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div className={cn('h-full rounded-full', o.is_best ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-foreground/40')}
+                style={{ width: `${Math.max(0, Math.min(100, o.shortage_covered_pct ?? 0))}%` }} />
+            </div>
+          </div>
+          <dl className={cn('mt-2 grid grid-cols-2 gap-x-4 gap-y-2', anyDays ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
+            <Metric label="Đáp ứng thiếu hụt" value={num(o.shortage_covered_pct, '%')} sub={`${num(o.covered_qty)}/${num(o.total_shortage_qty)} bản`} />
+            <Metric label="Điều chuyển" value={`${num(o.transfer_qty)} bản`} />
+            <Metric label="Mua mới" value={`${num(o.purchase_qty)} bản`} sub={vnd(o.purchase_cost_vnd)} />
+            <Metric label="Còn thiếu" value={`${num(o.remaining_shortage_qty)} bản`}
+              sub={o.remaining_high_priority_qty ? `${o.remaining_high_priority_qty} ưu tiên cao` : undefined} />
+            {anyDays && <Metric label="Thời gian" value={o.response_days === null ? NONE : num(o.response_days, ' ngày')} />}
+          </dl>
+        </li>
+      ))}
+    </ul>
+    {!anyDays && <p className="mt-2 text-[11.5px] text-muted-foreground">Thời gian đáp ứng: {NONE.toLowerCase()} (chưa đủ lịch sử điều chuyển).</p>}
+    </>
+  );
+}
+
+/** Colour of a difference: `better` is the sign that helps (+1: higher is better, -1: lower is better). */
+function tone(v: number | null | undefined, better: 1 | -1): 'good' | 'bad' | null {
+  if (!v) return null;
+  return Math.sign(v) === better ? 'good' : 'bad';
+}
+
+const DIFF_TONE = { good: 'text-emerald-700 dark:text-emerald-400', bad: 'text-rose-700 dark:text-rose-400' } as const;
+
+function SectionRow({ children }: { children: React.ReactNode }) {
+  return (
+    <tr className="border-b border-border/60">
+      <th scope="colgroup" colSpan={4} className="pb-1 pt-2.5 text-left text-[11.5px] font-semibold text-foreground">{children}</th>
+    </tr>
+  );
+}
+
+function DiffRow({ row: [label, a, b, diff, t], kind }: {
+  row: readonly [string, string, string, string | null, 'good' | 'bad' | null]; kind: 'best' | 'executable';
+}) {
+  return (
+    <tr data-row={kind} className="border-b border-border/60 last:border-0">
+      <th scope="row" className="py-1.5 pr-3 text-left font-normal text-foreground">{label}</th>
+      <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{a}</td>
+      <td className="py-1.5 pr-3 text-right font-medium tabular-nums text-foreground">{b}</td>
+      <td className={cn('py-1.5 text-right tabular-nums', t ? `font-medium ${DIFF_TONE[t]}` : 'text-muted-foreground')}>
+        {diff ?? '—'}{t && <span className="sr-only">{t === 'good' ? ' (tốt hơn)' : ' (kém hơn)'}</span>}
+      </td>
+    </tr>
   );
 }
 
@@ -147,6 +197,7 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
   const transfers = decision.transfers ?? [];
   const cmp = decision.comparison;
   const showBudget = decision.budget_vnd !== null && decision.budget_vnd !== undefined;
+  const optionLabel = (code?: string | null) => options.find((o) => o.code === code)?.label ?? code ?? NONE;
   return (
     <div className="space-y-3" data-testid="rebalance-decision">
       {decision.book && (
@@ -189,9 +240,12 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
                   <span className="min-w-0 font-medium text-foreground">{t.title}</span>
                   <Tag tone={(PERMISSION[t.permission] ?? PERMISSION.PROPOSAL_ONLY).tone}>{(PERMISSION[t.permission] ?? { label: t.permission }).label}</Tag>
                 </div>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-1 tabular-nums text-muted-foreground">
-                  {t.from_warehouse} <ArrowRight className="h-3 w-3" aria-hidden="true" /> {t.to_warehouse}: <b className="text-foreground">{t.quantity}</b> bản
-                  · kho nguồn còn {num(t.source_available_after)} (giữ tối thiểu {num(t.source_protected_qty)})
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 tabular-nums text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                    {t.from_warehouse} <ArrowRight className="h-3 w-3" aria-label="sang" /> {t.to_warehouse}:
+                    <b className="text-[13px] text-foreground">{t.quantity} bản</b>
+                  </span>
+                  <span className="whitespace-nowrap">· kho nguồn còn {num(t.source_available_after)} (giữ tối thiểu {num(t.source_protected_qty)})</span>
                 </p>
               </li>
             ))}
@@ -226,43 +280,41 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
 
       {cmp && (
         <Card title="So sánh kịch bản (trước → sau)" icon={<Scale className="h-4 w-4 text-muted-foreground" aria-hidden="true" />} testId="rebalance-whatif">
-          <table className="w-full border-collapse text-[12.5px]">
-            <caption className="sr-only">Kịch bản trước và kịch bản mới</caption>
-            <thead>
-              <tr className="border-b border-border text-left text-[11.5px] text-muted-foreground">
-                <th scope="col" className="py-1.5 pr-3 font-medium">Chỉ số</th>
-                <th scope="col" className="py-1.5 pr-3 text-right font-medium">Trước</th>
-                <th scope="col" className="py-1.5 pr-3 text-right font-medium">Sau</th>
-                <th scope="col" className="py-1.5 text-right font-medium">Chênh lệch</th>
-              </tr>
-            </thead>
-            <tbody>
-              {([
-                ['Ngân sách', vnd(cmp.base.budget_vnd), vnd(cmp.current.budget_vnd), null],
-                ['Mức đáp ứng', num(cmp.base.shortage_covered_pct, '%'), num(cmp.current.shortage_covered_pct, '%'), signed(cmp.diff.shortage_covered_pct, ' điểm %')],
-                ['Còn thiếu (bản)', num(cmp.base.remaining_shortage_qty), num(cmp.current.remaining_shortage_qty), signed(cmp.diff.remaining_shortage_qty)],
-                ['Chi phí mua mới', vnd(cmp.base.purchase_cost_vnd), vnd(cmp.current.purchase_cost_vnd), signed(cmp.diff.purchase_cost_vnd, ' ₫')],
-                ['Bản điều chuyển', num(cmp.base.transfer_qty), num(cmp.current.transfer_qty), signed(cmp.diff.transfer_qty)],
-                ['Ngân sách còn lại', vnd(cmp.base.remaining_budget_vnd), vnd(cmp.current.remaining_budget_vnd), signed(cmp.diff.remaining_budget_vnd, ' ₫')],
-                ...(cmp.executable ? [
-                  [`Bạn tự thực hiện (${cmp.executable.label}): mức đáp ứng`, num(cmp.executable.base.shortage_covered_pct, '%'), num(cmp.executable.current.shortage_covered_pct, '%'), signed(cmp.executable.diff.shortage_covered_pct, ' điểm %')],
-                  ['Bạn tự thực hiện: còn thiếu (bản)', num(cmp.executable.base.remaining_shortage_qty), num(cmp.executable.current.remaining_shortage_qty), signed(cmp.executable.diff.remaining_shortage_qty)],
-                  ['Bạn tự thực hiện: chi phí mua mới', vnd(cmp.executable.base.purchase_cost_vnd), vnd(cmp.executable.current.purchase_cost_vnd), signed(cmp.executable.diff.purchase_cost_vnd, ' ₫')],
-                ] as const : []),
-              ] as const).map(([label, a, b, diff], i) => (
-                <tr key={label} data-row={i >= 6 ? 'executable' : 'best'} className={cn('border-b border-border/60 last:border-0', i === 6 && 'border-t-2 border-t-border')}>
-                  <th scope="row" className="py-1.5 pr-3 text-left font-normal text-foreground">{label}</th>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{a}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums">{b}</td>
-                  <td className="py-1.5 text-right tabular-nums">{diff ?? '—'}</td>
+          <div className="-mx-3.5 overflow-x-auto px-3.5 sm:-mx-4 sm:px-4">
+            <table className="w-full min-w-[340px] border-collapse text-[12.5px] [&_td]:whitespace-nowrap">
+              <caption className="sr-only">Kịch bản trước và kịch bản mới</caption>
+              <thead>
+                <tr className="border-b border-border text-left text-[11.5px] text-muted-foreground">
+                  <th scope="col" className="py-1.5 pr-3 font-medium">Chỉ số</th>
+                  <th scope="col" className="py-1.5 pr-3 text-right font-medium">Trước</th>
+                  <th scope="col" className="py-1.5 pr-3 text-right font-medium">Sau</th>
+                  <th scope="col" className="py-1.5 text-right font-medium">Chênh lệch</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-2 text-[11.5px] text-muted-foreground">
-            Sáu dòng đầu: phương án tốt nhất về nghiệp vụ ({cmp.current.best_option ?? NONE}).
-            {cmp.executable && ' Các dòng "Bạn tự thực hiện": phương án không cần kho khác phối hợp.'}
-          </p>
+              </thead>
+              <tbody>
+                <SectionRow>Phương án tốt nhất về nghiệp vụ: {optionLabel(cmp.current.best_option)}</SectionRow>
+                {([
+                  ['Ngân sách', vnd(cmp.base.budget_vnd), vnd(cmp.current.budget_vnd), null, null],
+                  ['Mức đáp ứng', num(cmp.base.shortage_covered_pct, '%'), num(cmp.current.shortage_covered_pct, '%'), signed(cmp.diff.shortage_covered_pct, ' điểm %'), tone(cmp.diff.shortage_covered_pct, 1)],
+                  ['Còn thiếu (bản)', num(cmp.base.remaining_shortage_qty), num(cmp.current.remaining_shortage_qty), signed(cmp.diff.remaining_shortage_qty), tone(cmp.diff.remaining_shortage_qty, -1)],
+                  ['Chi phí mua mới', vnd(cmp.base.purchase_cost_vnd), vnd(cmp.current.purchase_cost_vnd), signed(cmp.diff.purchase_cost_vnd, ' ₫'), null],
+                  ['Bản điều chuyển', num(cmp.base.transfer_qty), num(cmp.current.transfer_qty), signed(cmp.diff.transfer_qty), null],
+                  ['Ngân sách còn lại', vnd(cmp.base.remaining_budget_vnd), vnd(cmp.current.remaining_budget_vnd), signed(cmp.diff.remaining_budget_vnd, ' ₫'), null],
+                ] as const).map((row) => <DiffRow key={row[0]} row={row} kind="best" />)}
+                {cmp.executable && (
+                  <>
+                    <SectionRow>Phần bạn tự thực hiện được: {cmp.executable.label}</SectionRow>
+                    {([
+                      ['Mức đáp ứng', num(cmp.executable.base.shortage_covered_pct, '%'), num(cmp.executable.current.shortage_covered_pct, '%'), signed(cmp.executable.diff.shortage_covered_pct, ' điểm %'), tone(cmp.executable.diff.shortage_covered_pct, 1)],
+                      ['Còn thiếu (bản)', num(cmp.executable.base.remaining_shortage_qty), num(cmp.executable.current.remaining_shortage_qty), signed(cmp.executable.diff.remaining_shortage_qty), tone(cmp.executable.diff.remaining_shortage_qty, -1)],
+                      ['Chi phí mua mới', vnd(cmp.executable.base.purchase_cost_vnd), vnd(cmp.executable.current.purchase_cost_vnd), signed(cmp.executable.diff.purchase_cost_vnd, ' ₫'), null],
+                    ] as const).map((row) => <DiffRow key={`x-${row[0]}`} row={row} kind="executable" />)}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {cmp.executable && <p className="mt-2 text-[11.5px] text-muted-foreground">"Phần bạn tự thực hiện được": phương án không cần kho khác phối hợp.</p>}
         </Card>
       )}
 
@@ -283,23 +335,39 @@ export function RebalanceDecision({ decision, onRetry }: { decision?: AiRebalanc
 }
 
 /** G. What confirming the draft really did: request codes, statuses, what another manager must do. */
+const SHOWN = 5;
+
 export function ExecutionSummary({ execution }: { execution?: AiExecution | null }) {
+  const [showAll, setShowAll] = useState(false);
   if (!execution || !execution.action_id) return null;
   const r = execution.result ?? {};
+  const transfersMade = r.created_transfers?.length ?? 0;
+  const purchasesMade = r.created_purchase_requests?.length ?? 0;
   const created = [...(r.created_transfers ?? []).map((t) => ({ ...t, kind: 'Yêu cầu điều chuyển' })),
     ...(r.created_purchase_requests ?? []).map((p) => ({ ...p, kind: 'Phiếu yêu cầu nhập' }))];
   return (
     <Card title="Kết quả thực hiện" icon={<ClipboardCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />} testId="rebalance-execution">
       <p className="mb-2 text-[12.5px]">Trạng thái: <b data-testid="execution-status">{execution.status ?? '—'}</b>{execution.error ? ` — ${execution.error}` : ''}</p>
       {created.length > 0 && (
-        <ul className="divide-y divide-border/70 text-[12.5px]">
-          {created.map((c, i) => (
-            <li key={i} className="flex flex-wrap justify-between gap-2 py-1.5">
-              <span>{c.kind} <b data-testid="execution-code">{c.number}</b> · {c.label}</span>
-              <span className="text-muted-foreground">{c.status} · chờ duyệt theo quy trình</span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="mb-1 text-[12.5px] text-foreground">
+            Đã tạo {[transfersMade && `${transfersMade} yêu cầu điều chuyển`, purchasesMade && `${purchasesMade} phiếu yêu cầu nhập`].filter(Boolean).join(' và ')} — tất cả đang chờ duyệt theo quy trình.
+          </p>
+          <ul className="divide-y divide-border/70 text-[12.5px]">
+            {(showAll ? created : created.slice(0, SHOWN)).map((c, i) => (
+              <li key={i} className="flex items-baseline justify-between gap-3 py-1.5">
+                <span className="min-w-0 flex-1">{c.kind} <b data-testid="execution-code" className="whitespace-nowrap">{c.number}</b> · {c.label}</span>
+                <span className="whitespace-nowrap text-muted-foreground">{c.status}</span>
+              </li>
+            ))}
+          </ul>
+          {created.length > SHOWN && (
+            <button type="button" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}
+              className="mt-1 cursor-pointer text-[12px] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-ring">
+              {showAll ? 'Thu gọn' : `Xem tất cả ${created.length} yêu cầu`}
+            </button>
+          )}
+        </>
       )}
       {(r.skipped?.length ?? 0) > 0 && (
         <ul className="mt-2 space-y-0.5 text-[12px] text-amber-800 dark:text-amber-300">
