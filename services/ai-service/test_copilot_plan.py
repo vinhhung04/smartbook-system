@@ -268,6 +268,9 @@ class AnswerModeAndStyleTests(unittest.TestCase):
         self.assertEqual(cp.detect_style(cp.normalize_query("Nói ngắn gọn thôi")), {"brief": True})
         self.assertEqual(cp.detect_style(cp.normalize_query("Giải thích dễ hiểu hơn")), {"plain": True})
         self.assertEqual(cp.detect_style(cp.normalize_query("Vì sao không chọn phương án khác?")), {"why_not": True})
+        self.assertEqual(cp.detect_style(cp.normalize_query("Có giải pháp nào tốt hơn không?")), {"why_not": True})
+        self.assertEqual(cp.detect_style(cp.normalize_query("Có cách nào khác không?")), {"why_not": True})
+        self.assertEqual(cp.detect_style(cp.normalize_query("Kho nào tốt hơn?")), {})
         # "rủi ro hơn" is a comparison, not "rõ hơn".
         self.assertEqual(cp.detect_style(cp.normalize_query("Kho nào rủi ro hơn?")), {})
 

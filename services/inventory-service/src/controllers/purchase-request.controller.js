@@ -1,3 +1,4 @@
+const { snapshotFromVariant } = require('../services/purchase-order-line.service');
 const {
   requireWarehouseReadAccess,
   requireWarehouseWriteAccess,
@@ -151,7 +152,7 @@ async function getAllPurchaseRequests(req, res) {
 async function getPurchaseRequestById(req, res) {
   const userId = req.user?.id || req.user?.sub;
   const userRoles = Array.isArray(req.user?.roles) ? req.user.roles.map((r) => String(r).toUpperCase()) : [];
-  const isManager = userRoles.includes('WAREHOUSE_MANAGER') || userRoles.includes('ADMIN') || req.user?.is_superuser;
+  const isManager = userRoles.includes('MANAGER') || userRoles.includes('ADMIN') || req.user?.is_superuser;
 
   try {
     const request = await prisma.purchase_requests.findUnique({
@@ -351,14 +352,21 @@ async function convertPurchaseRequestToPO(req, res) {
     const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
     const poNumber = `PO-${dateStr}-${suffix}`;
 
+    // The manager converting an approved request has already decided on it: with the PO approval
+    // permission the PO starts APPROVED (ready to send) instead of going through draft/approval again.
+    const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+    const canApprove = Boolean(req.user?.is_superuser) || permissions.includes('inventory.purchase.approve');
+
     const result = await prisma.$transaction(async (tx) => {
       const po = await tx.purchase_orders.create({
         data: {
           po_number: poNumber,
           supplier_id,
           warehouse_id: request.warehouse_id,
-          status: 'DRAFT',
+          status: canApprove ? 'APPROVED' : 'DRAFT',
+          procurement_flow: 'INVOICE_FIRST',
           ordered_by_user_id: userId,
+          ...(canApprove ? { approved_by_user_id: userId } : {}),
           note: request.note || null,
         },
       });
@@ -367,6 +375,8 @@ async function convertPurchaseRequestToPO(req, res) {
         data: {
           purchase_order_id: po.id,
           variant_id: resolvedVariantId,
+          ...(await snapshotFromVariant(tx, resolvedVariantId)),
+          requested_qty: request.quantity_requested,
           ordered_qty: request.quantity_requested,
           unit_cost: 0,
         },
@@ -380,6 +390,37 @@ async function convertPurchaseRequestToPO(req, res) {
           updated_at: new Date(),
         },
       });
+
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: userId,
+          action_name: 'PURCHASE_ORDER_CREATED',
+          entity_type: 'PURCHASE_ORDER',
+          entity_id: po.id,
+          after_data: { po_number: po.po_number, status: po.status, source_purchase_request_id: request.id, total_ordered_qty: request.quantity_requested },
+        },
+      });
+      if (canApprove) {
+        // same trail as the manual "Duyệt đơn" step (audit + outbox event)
+        await tx.inventory_audit_logs.create({
+          data: {
+            actor_user_id: userId,
+            action_name: 'PURCHASE_ORDER_APPROVED',
+            entity_type: 'PURCHASE_ORDER',
+            entity_id: po.id,
+            after_data: { po_number: po.po_number, status_before: 'DRAFT', status_after: 'APPROVED', total_ordered_qty: request.quantity_requested, approved_via: 'PURCHASE_REQUEST_CONVERSION' },
+          },
+        });
+        await tx.integration_outbox.create({
+          data: {
+            aggregate_type: 'PURCHASE_ORDER',
+            aggregate_id: po.id,
+            event_type: 'purchase_order.approved',
+            payload: { purchase_order_id: po.id, po_number: po.po_number, approved_by_user_id: userId, total_ordered_qty: request.quantity_requested },
+            headers: { correlation_id: req.requestId || null },
+          },
+        });
+      }
 
       return { po, updated };
     });
@@ -400,6 +441,7 @@ async function convertPurchaseRequestToPO(req, res) {
       data: {
         purchase_order_id: result.po.id,
         po_number: result.po.po_number,
+        status: result.po.status,
       },
     });
   } catch (error) {

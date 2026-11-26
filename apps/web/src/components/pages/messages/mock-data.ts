@@ -8,7 +8,7 @@ export const CURRENT_USER_ID = 'u-hung';
 
 export const STAFF_DIRECTORY: StaffMember[] = [
   { id: 'u-hung', full_name: 'Nguyễn Việt Hùng', role: 'ADMIN', online: true },
-  { id: 'u-quan', full_name: 'Trần Minh Quân', role: 'WAREHOUSE_MANAGER', online: true },
+  { id: 'u-quan', full_name: 'Trần Minh Quân', role: 'MANAGER', online: true },
   { id: 'u-hoa', full_name: 'Lê Thị Hoa', role: 'WAREHOUSE_STAFF', online: true },
   { id: 'u-duc', full_name: 'Phạm Văn Đức', role: 'WAREHOUSE_STAFF', online: true },
   { id: 'u-tu', full_name: 'Đỗ Anh Tú', role: 'WAREHOUSE_STAFF', online: false },

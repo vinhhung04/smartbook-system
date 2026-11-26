@@ -105,7 +105,7 @@ test('stock line summary counts what the payload actually contains', () => {
 });
 
 test('confirm permission mirrors the backend role-or-permission rule', () => {
-  const action = { allowed_roles: ['WAREHOUSE_MANAGER'], allowed_permissions: ['inventory.purchase.request'] };
+  const action = { allowed_roles: ['MANAGER'], allowed_permissions: ['inventory.purchase.request'] };
   assert.equal(canUserConfirmAction(null, action), false);
   assert.equal(canUserConfirmAction({ is_superuser: true }, action), true);
   assert.equal(canUserConfirmAction({ roles: ['warehouse-manager'] }, action), true);

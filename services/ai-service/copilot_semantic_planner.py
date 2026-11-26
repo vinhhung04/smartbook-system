@@ -377,7 +377,8 @@ def _clarification(rule_plan: cp.QueryPlan, reason: str | None, warehouses: list
     if reason == "warehouse":
         question = "Bạn đang hỏi về kho/chi nhánh nào?"
         if warehouses:
-            question += f" Các kho hiện có: {cp._warehouse_names(warehouses[:8])}."
+            question += (f" Tài khoản của bạn xem được: {cp._warehouse_names(warehouses[:8])}."
+                         " Kho không có trong danh sách này nằm ngoài quyền xem của bạn.")
         options = [f"Tình hình tồn kho {w['name']}" for w in warehouses[:4]]
     elif reason == "book":
         question, options = "Bạn đang hỏi về cuốn sách nào? Hãy cho tôi biết tên sách hoặc ISBN.", []

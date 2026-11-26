@@ -44,15 +44,15 @@ RISK_HIGH = "HIGH"
 #
 # Target guards this mirrors (verified 2026-11-12):
 #   POST /api/purchase-requests   inventory authorizeAnyPermission(['inventory.purchase.request'])
-#   POST /api/stock-alerts        inventory authorizeManagerDecision: WAREHOUSE_MANAGER|ADMIN + inventory.operation.decide
+#   POST /api/stock-alerts        inventory authorizeManagerDecision: MANAGER|ADMIN + inventory.operation.decide
 #   POST /api/staff-tasks         same as stock alerts
 #   POST /borrow/my/reservations  borrow authorizeCustomerSelf: CUSTOMER + customer.self.read|write
 #   POST /borrow/reservations     borrow authorizeBorrowAdminWrite: LIBRARIAN|ADMIN + borrow write permission
-#   POST /api/order-requests/transfer  inventory authorizeManagerDecision: WAREHOUSE_MANAGER|ADMIN +
+#   POST /api/order-requests/transfer  inventory authorizeManagerDecision: MANAGER|ADMIN +
 #                                 inventory.operation.decide, WRITE on the source warehouse
 _BORROW_WRITE = ["borrow.write", "borrow.customers.write", "borrow.loans.write", "borrow.fines.manage",
                  "borrow.fine.write", "borrow.membership.write"]
-_MANAGER_DECISION = [{"roles": ["ADMIN", "WAREHOUSE_MANAGER"], "permissions": ["inventory.operation.decide"]}]
+_MANAGER_DECISION = [{"roles": ["ADMIN", "MANAGER"], "permissions": ["inventory.operation.decide"]}]
 PURCHASE_REQUEST_POLICY = [{"roles": [], "permissions": ["inventory.purchase.request"]}]
 TRANSFER_REQUEST_POLICY = _MANAGER_DECISION
 
@@ -65,7 +65,7 @@ ACTION_CONFIG: dict[str, dict] = {
     },
     CREATE_REPORT_DRAFT: {
         # writes nothing anywhere: staff roles, or anyone who may read reports
-        "policy": [{"roles": ["ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN"], "permissions": []},
+        "policy": [{"roles": ["ADMIN", "MANAGER", "LIBRARIAN"], "permissions": []},
                    {"roles": [], "permissions": ["analytics.read", "borrow.report.read", "inventory.report.read"]}],
         "risk": RISK_LOW,
         "requires_confirmation": True,

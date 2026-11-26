@@ -1,13 +1,14 @@
 const jwt = require('jsonwebtoken');
 const redis = require('../lib/redis');
 const { createRevocationChecker, revocationGuard } = require('@smartbook/shared/token-revocation');
+const { canonicalRoles } = require('@smartbook/shared/roles');
 
 // Redis unreachable = revocation UNKNOWN, not "not revoked": reads continue,
 // writes get 503 (packages/shared/runtime/token-revocation.cjs).
 const revocation = createRevocationChecker({ get: (key) => redis.getStrict(key), warn: (msg) => console.warn(msg) });
 
 const LEGACY_ROLE_MAP = {
-  MANAGER: 'WAREHOUSE_MANAGER',
+  WAREHOUSE_MANAGER: 'MANAGER',
   STAFF: 'WAREHOUSE_STAFF',
   WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF',
   CUSTOMER_SERVICE: 'LIBRARIAN',
@@ -39,6 +40,7 @@ async function authenticateToken(req, res, next) {
 
     req.user = {
       ...payload,
+      roles: canonicalRoles(payload.roles),
       id: payload.id || payload.sub,
     };
     return next();

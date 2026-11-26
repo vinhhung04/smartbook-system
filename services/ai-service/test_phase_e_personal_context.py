@@ -109,7 +109,7 @@ class PersonalContextFormatterTest(unittest.TestCase):
     def test_librarian_overview_uses_the_service_totals_not_a_page_sample(self):
         page = {"data": [{"loan_number": f"L{i}", "status": "RETURNED"} for i in range(20)],
                 "meta": {"total": 22688, "status_counts": {"BORROWED": 24, "OVERDUE": 436, "RETURNED": 22688}}}
-        self.assertIn("460 đang mượn, trong đó 436 quá hạn", upc._fmt_borrow_loans_all(page))
+        self.assertIn("460 phiếu đang mượn, trong đó 436 phiếu quá hạn", upc._fmt_borrow_loans_all(page))
         # audit E-3: these are the caller's scope (a librarian's branches), never "toàn hệ thống"
         self.assertNotIn("toàn hệ thống:", upc._fmt_borrow_loans_all(page))
         self.assertIn("trong phạm vi bạn được xem", upc._fmt_borrow_loans_all(page))
@@ -209,3 +209,35 @@ class PrivacyThroughTheChatTurnTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnTasksQuestionTests(unittest.TestCase):
+    """Audit 2026-11-22: "Tôi có những việc gì cần làm?" was read as a procedure
+    question ("co nhung") and abstained, though staff01 had 8 open tasks."""
+
+    def test_own_work_questions_are_about_own_data(self):
+        import intent
+        for m in ("Tôi có những việc gì cần làm?", "Hôm nay tôi có việc gì cần làm?", "Nhiệm vụ của tôi là gì?"):
+            self.assertTrue(intent.asks_about_own_data(m), m)
+            self.assertIn("tasks", upc.select_personal_topics(m, None), m)
+        self.assertFalse(intent.asks_about_own_data("Tôi cần làm gì để gia hạn thẻ?"))
+
+
+class LibrarianFineTotalsTests(unittest.TestCase):
+    def test_fine_totals_come_from_the_scoped_summary(self):
+        page = {"data": [{"status": "UNPAID", "amount": 10000}],
+                "meta": {"total": 2686, "status_counts": {"UNPAID": 766, "PAID": 1900, "WAIVED": 20},
+                         "summary": {"outstanding": 33649000, "collected": 30222000, "open_count": 766}}}
+        text = upc._fmt_borrow_fines_all(page)
+        self.assertIn("2686 khoản, 766 chưa thanh toán xong", text)
+        self.assertIn("33,649,000 VND", text)
+        self.assertEqual(upc._ENDPOINT_PARAMS["/borrow/fines"], {"summary": "1"})
+
+
+class LibrarianDeskWorkTests(unittest.TestCase):
+    def test_a_librarians_own_work_is_the_desk(self):
+        desk = ["/borrow/loans", "/borrow/reservations", "/borrow/fines"]
+        self.assertEqual(upc.with_desk_work({"tasks"}, desk), {"tasks", "loans", "reservations"})
+        # warehouse staff keep their task list only
+        self.assertEqual(upc.with_desk_work({"tasks"}, ["/api/my-warehouse-tasks"]), {"tasks"})
+        self.assertEqual(upc.with_desk_work({"fines"}, desk), {"fines"})

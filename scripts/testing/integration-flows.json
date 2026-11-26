@@ -10,6 +10,7 @@
   "analytics-integration.mjs",
   "warehouse-scope-integration.mjs",
   "warehouse-assignment-integration.mjs",
+  "unified-manager-integration.mjs",
   "borrow-limit-item-count-integration.mjs",
   "borrow-warehouse-scope-integration.mjs",
   "borrow-renewal-fine-concurrency-integration.mjs",
@@ -31,5 +32,6 @@
   "gateway-consumer-durability-integration.mjs",
   "return-loan-partial-failure-audit.mjs",
   "warehouse-scope-stt123-audit.mjs",
-  "isbn-ean-classification-integration.mjs"
+  "isbn-ean-classification-integration.mjs",
+  "po-invoice-first-flow-integration.mjs"
 ]

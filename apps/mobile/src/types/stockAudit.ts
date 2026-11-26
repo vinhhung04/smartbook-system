@@ -8,7 +8,8 @@ export type StockAuditLine = {
   isbn10: string | null;
   barcode: string | null;
   title: string | null;
-  expected_qty: number;
+  /** null for the person counting (blind count). */
+  expected_qty: number | null;
   counted_qty: number | null;
   variance_qty: number | null;
 };

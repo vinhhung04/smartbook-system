@@ -342,8 +342,10 @@ export function SupplierPortalPage() {
     );
   }
 
-  const canConfirm = order.purchase_order.status === "SENT_TO_SUPPLIER";
-  const canInvoice = ["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(order.purchase_order.status) && summary.remainingQty > 0;
+  // invoice-first orders are read-only here: proposal, invoice and delivery notes need the supplier account
+  const accountOnly = Boolean(order.account_required_message);
+  const canConfirm = !accountOnly && order.purchase_order.status === "SENT_TO_SUPPLIER";
+  const canInvoice = !accountOnly && ["SENT_TO_SUPPLIER", "SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(order.purchase_order.status) && summary.remainingQty > 0;
   const openShortages = order.shortage_reports.filter((report) => ["OPEN", "SENT_TO_SUPPLIER", "ACKNOWLEDGED"].includes(report.status));
 
   return (
@@ -375,6 +377,13 @@ export function SupplierPortalPage() {
             Giao đến {order.purchase_order.warehouse?.code || "-"}{order.purchase_order.warehouse?.name ? `, ${order.purchase_order.warehouse.name}` : ""}. Phiếu gửi <span className="font-mono text-[13px]">{order.dispatch.dispatch_number}</span>, {statusLabel(order.dispatch.status).toLocaleLowerCase("vi")}.
           </p>
         </div>
+
+        {accountOnly ? (
+          <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            <span>{order.account_required_message}</span>
+            <Button size="sm" onClick={() => { window.location.href = "/login"; }}>Đăng nhập tài khoản nhà cung cấp</Button>
+          </div>
+        ) : null}
 
         <SupplierFigures items={[
           { label: "Số dòng sách", value: summary.itemCount },

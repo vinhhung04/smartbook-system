@@ -170,7 +170,9 @@ export function PurchaseRequestsPage() {
       const payload: { supplier_id: string; book_variant_id?: string } = { supplier_id: rowAction.value };
       if (rowAction.variantId) payload.book_variant_id = rowAction.variantId;
       const result = await purchaseRequestService.convertToPO(rowAction.id, payload);
-      toast.success(`Đã chuyển thành PO: ${result.data.po_number}`);
+      toast.success(result.data.status === "APPROVED"
+        ? `Đã chuyển thành PO: ${result.data.po_number} (đã duyệt, sẵn sàng gửi NCC)`
+        : `Đã chuyển thành PO: ${result.data.po_number}`);
       setRowAction(null);
       setVariantQuery("");
       setVariantResults([]);

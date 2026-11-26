@@ -5,6 +5,8 @@ const {
   getSupplierDeliveryById,
   createSupplierDelivery,
   createGoodsReceiptFromInvoice,
+  linkDeliveryItemToCatalog,
+  createCatalogBookAndLink,
 } = require("../controllers/supplier-delivery.controller");
 const { authorizeManagerDecision, authorizeManagerRead } = require("../middlewares/auth.middleware");
 
@@ -22,5 +24,7 @@ router.get("/", canRead, getSupplierDeliveries);
 router.post("/", canWrite, createSupplierDelivery);
 router.get("/:id", canRead, getSupplierDeliveryById);
 router.post("/:id/create-goods-receipt", canWrite, createGoodsReceiptFromInvoice);
+router.post("/:id/link-item", canWrite, linkDeliveryItemToCatalog);
+router.post("/:id/create-catalog-book", canWrite, createCatalogBookAndLink);
 
 module.exports = router;

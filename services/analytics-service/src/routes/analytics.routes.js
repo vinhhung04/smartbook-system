@@ -17,8 +17,9 @@ const readAnalytics = authorizeAnyPermission([
 
 // Separate gate for routes that expose borrow-domain business data (some with direct
 // customer PII: overdue-summary and late-return-risk return customer_name per record).
-// WAREHOUSE_MANAGER intentionally has no borrow.* access (see auth-service/prisma/seed.js)
-// and previously fell through to the broad `readAnalytics` set above for these too.
+// Held by ADMIN, LIBRARIAN and MANAGER (auth-service/prisma/seed.js); every route
+// behind it is limited to the caller's warehouse/branch scope. A manager still has no borrow.*
+// desk access - these are the analytics, read-only.
 const readBorrowAnalytics = authorizeAnyPermission(['analytics.borrow.read']);
 
 // Allows the inventory-service periodic job to call this read-only endpoint
@@ -44,27 +45,27 @@ router.get('/book-turnover', declareDataScope('SYSTEM'), authenticateInternalOrU
 router.get('/catalog-signals', declareDataScope('SYSTEM'), authenticateInternalOrUser(), analyticsController.getCatalogSignals);
 // The borrow-service due-soon reminder job calls this with the internal
 // service key, not a user JWT - same convention as the two routes above.
-router.get('/late-return-risk', declareDataScope('SYSTEM'), authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getLateReturnRisk);
+router.get('/late-return-risk', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(readBorrowAnalytics), attachWarehouseScope(), analyticsController.getLateReturnRisk);
 // ai-service's nightly briefing agent (services/ai-service/nightly_briefing.py) calls
 // these six with the internal service key - same convention as the routes above.
-router.get('/overdue-summary', declareDataScope('SYSTEM'), authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getOverdueSummary);
-router.get('/fine-summary', declareDataScope('SYSTEM'), authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getFineSummary);
+router.get('/overdue-summary', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(readBorrowAnalytics), attachWarehouseScope(), analyticsController.getOverdueSummary);
+router.get('/fine-summary', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(readBorrowAnalytics), attachWarehouseScope(), analyticsController.getFineSummary);
 // Per-warehouse rows: only the warehouses in the caller's scope (attachWarehouseScope).
 router.get('/warehouse-stock-risk', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWarehouseStockRisk);
 router.get('/warehouse-stock-items', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWarehouseStockItems);
-router.get('/reorder-suggestions', declareDataScope('SYSTEM'), authenticateInternalOrUser(), analyticsController.getReorderSuggestions);
+router.get('/reorder-suggestions', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getReorderSuggestions);
 // Per-warehouse rebalancing / procurement decision for the signed-in user only (no service key):
 // the scope and the executable / collaborative status are the caller's own.
 router.get('/rebalancing-plan', declareDataScope('WAREHOUSE_SCOPED'), authenticateToken, readAnalytics, rebalancingController.getRebalancingPlan);
-router.get('/reservation-funnel', declareDataScope('SYSTEM'), authenticateInternalOrUser(readBorrowAnalytics), analyticsController.getReservationFunnel);
+router.get('/reservation-funnel', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(readBorrowAnalytics), attachWarehouseScope(), analyticsController.getReservationFunnel);
 router.get('/weeding-suggestions', declareDataScope('WAREHOUSE_SCOPED'), authenticateInternalOrUser(), attachWarehouseScope(), analyticsController.getWeedingSuggestions);
 
 router.use(authenticateToken, readAnalytics);
 
-router.get('/dashboard/kpis', declareDataScope('SYSTEM'), analyticsController.getDashboardKpis);
-router.get('/borrow-trends', declareDataScope('SYSTEM'), readBorrowAnalytics, analyticsController.getBorrowTrends);
-router.get('/top-books', declareDataScope('SYSTEM'), analyticsController.getTopBooks);
+router.get('/dashboard/kpis', declareDataScope('WAREHOUSE_SCOPED'), attachWarehouseScope(), analyticsController.getDashboardKpis);
+router.get('/borrow-trends', declareDataScope('WAREHOUSE_SCOPED'), readBorrowAnalytics, attachWarehouseScope(), analyticsController.getBorrowTrends);
+router.get('/top-books', declareDataScope('WAREHOUSE_SCOPED'), attachWarehouseScope(), analyticsController.getTopBooks);
 router.get('/forecast-accuracy', declareDataScope('SYSTEM'), analyticsController.getForecastAccuracy);
-router.get('/reservation-no-show-risk', declareDataScope('SYSTEM'), readBorrowAnalytics, analyticsController.getReservationNoShowRisk);
+router.get('/reservation-no-show-risk', declareDataScope('WAREHOUSE_SCOPED'), readBorrowAnalytics, attachWarehouseScope(), analyticsController.getReservationNoShowRisk);
 
 module.exports = router;

@@ -306,6 +306,19 @@ class ExplainableCopilotEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.store.messages[-2].content, "Nói ngắn gọn thôi")  # stored as typed
         self.assertEqual(body.explanation["mode"], "comparison")
 
+    async def test_a_deep_follow_up_that_copies_the_previous_answer_is_rewritten_once(self):
+        first = "Kho HCM Chinh rủi ro thiếu sách cao hơn Kho Ha Noi."
+        deeper = ("Kho HCM Chinh rủi ro thiếu sách cao hơn Kho Ha Noi. Kho này có 3 đầu sách đã hết hàng và 7 đầu sách "
+                  "dưới ngưỡng tồn tối thiểu, nên bạn đọc khó mượn được ngay.")
+        self.provider = SequenceProvider([first, first, deeper])
+        await main.assistant(_request(), AssistantRequest(message="Kho HCM Chinh với Kho Ha Noi kho nào rủi ro hơn?",
+                                                          conversation_id="e8"))
+        body = await main.assistant(_request(), AssistantRequest(message="Giải thích kỹ hơn", conversation_id="e8"))
+        self.assertEqual(len(self.provider.calls), 3)  # first answer, the copy, one rewrite
+        retry_prompt = next(m["content"] for m in reversed(self.provider.calls[2]) if m["role"] == "user")
+        self.assertIn("lặp lại nguyên văn câu trả lời trước", retry_prompt)
+        self.assertEqual(body.answer, deeper)
+
     async def test_permission_denied_data_is_an_unknown_not_a_number(self):
         self.compare_result = {"error": "/analytics/warehouse-stock-risk tra ve HTTP 403"}
         self.provider = FakeProvider("Bạn không có quyền xem dữ liệu so sánh kho.")

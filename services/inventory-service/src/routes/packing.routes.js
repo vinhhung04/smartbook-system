@@ -9,11 +9,13 @@ const {
   uploadPackingEvidence,
   attachTaskNumberForUpload,
   uploadPackingVideoEvidence,
+  listPackingEvidence,
+  streamPackingEvidenceVideo,
   completePackingTask,
   cancelPackingTask,
   getPackingTaskHistory,
 } = require("../controllers/packing.controller");
-const { videoUploadMiddleware } = require("../services/packing-video-storage.service");
+const { handleVideoUpload } = require("../services/packing-video-storage.service");
 const {
   authorizeManagerDecision,
   authorizeTaskRead,
@@ -29,6 +31,7 @@ const canDecideOperation = authorizeManagerDecision(["inventory.operation.decide
 // every packing step acts on the task's stored warehouse (WRITE scope)
 const writesTask = requireRecordWarehouse(packingTaskWarehouse);
 const claimsTask = requireRecordWarehouse(packingTaskWarehouse, { fresh: true });
+const readsTask = requireRecordWarehouse(packingTaskWarehouse, { access: "read" });
 
 router.post("/scan-invoice", canUpdateTaskProgress, scanInvoice);
 router.get("/tasks", canReadTask, listPackingTasks);
@@ -42,9 +45,11 @@ router.post(
   canUpdateTaskProgress,
   writesTask,
   attachTaskNumberForUpload,
-  videoUploadMiddleware.single("video"),
+  handleVideoUpload,
   uploadPackingVideoEvidence,
 );
+router.get("/tasks/:taskId/evidence/videos", canReadTask, readsTask, listPackingEvidence);
+router.get("/tasks/:taskId/evidence/:evidenceId/video", canReadTask, readsTask, streamPackingEvidenceVideo);
 router.post("/tasks/:taskId/complete", canUpdateTaskProgress, claimsTask, completePackingTask);
 router.post("/tasks/:taskId/cancel", canDecideOperation, claimsTask, cancelPackingTask);
 router.get("/tasks/:taskId/history", canReadTask, getPackingTaskHistory);

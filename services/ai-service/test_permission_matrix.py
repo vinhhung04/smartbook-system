@@ -27,7 +27,7 @@ ROLES = {
     "ADMIN": UserContext(user_id="a", roles=["ADMIN"], permissions=[
         "analytics.reports.view", "reports.read", "inventory.operation.decide", "inventory.purchase.request",
         "customer.self.read", "customer.self.write", "borrow.write"]),
-    "WAREHOUSE_MANAGER": UserContext(user_id="m", roles=["WAREHOUSE_MANAGER"], permissions=[
+    "MANAGER": UserContext(user_id="m", roles=["MANAGER"], permissions=[
         "analytics.reports.view", "reports.read", "inventory.operation.decide", "inventory.purchase.request"]),
     "WAREHOUSE_STAFF": UserContext(user_id="s", roles=["WAREHOUSE_STAFF"], permissions=[
         "inventory.purchase.request", "inventory.task.read"]),
@@ -39,15 +39,15 @@ ROLES = {
 
 # who may CONFIRM each action type (= who the target service accepts the write from)
 EXPECTED = {
-    CREATE_REORDER_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"},
-    CREATE_STOCK_ALERT: {"ADMIN", "WAREHOUSE_MANAGER"},
-    CREATE_STAFF_TASK_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER"},
+    CREATE_REORDER_DRAFT: {"ADMIN", "MANAGER", "WAREHOUSE_STAFF"},
+    CREATE_STOCK_ALERT: {"ADMIN", "MANAGER"},
+    CREATE_STAFF_TASK_DRAFT: {"ADMIN", "MANAGER"},
     CREATE_RESERVATION_DRAFT: {"ADMIN", "LIBRARIAN", "CUSTOMER"},
-    CREATE_REPORT_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN"},
+    CREATE_REPORT_DRAFT: {"ADMIN", "MANAGER", "LIBRARIAN"},
     # transfer part: manager decision; purchase part: purchase.request (each re-checked at execution)
-    CREATE_REBALANCE_DRAFT: {"ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"},
+    CREATE_REBALANCE_DRAFT: {"ADMIN", "MANAGER", "WAREHOUSE_STAFF"},
 }
-ASSISTANT = {"ADMIN", "WAREHOUSE_MANAGER"}
+ASSISTANT = {"ADMIN", "MANAGER"}
 
 
 def _action(action_type: str, stored_roles=None) -> PendingAction:
@@ -68,7 +68,7 @@ class PermissionMatrixTest(unittest.TestCase):
                     self.assertEqual(can_confirm_action(user, _action(action_type)), role in allowed)
 
     def test_role_without_the_permission_is_refused(self):
-        bare_manager = UserContext(user_id="m2", roles=["WAREHOUSE_MANAGER"], permissions=[])
+        bare_manager = UserContext(user_id="m2", roles=["MANAGER"], permissions=[])
         for action_type in (CREATE_STOCK_ALERT, CREATE_STAFF_TASK_DRAFT, CREATE_REORDER_DRAFT):
             with self.subTest(action=action_type):
                 self.assertFalse(can_confirm_action(bare_manager, _action(action_type)))
@@ -81,7 +81,7 @@ class PermissionMatrixTest(unittest.TestCase):
 
     def test_the_role_list_stored_on_an_old_action_is_not_trusted(self):
         # drafted before the policy change with WAREHOUSE_STAFF in its stored list
-        stale = _action(CREATE_STOCK_ALERT, stored_roles=["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF"])
+        stale = _action(CREATE_STOCK_ALERT, stored_roles=["ADMIN", "MANAGER", "WAREHOUSE_STAFF"])
         self.assertFalse(can_confirm_action(ROLES["WAREHOUSE_STAFF"], stale))
 
     def test_unknown_action_type_is_never_confirmable(self):
@@ -98,7 +98,7 @@ class PermissionMatrixTest(unittest.TestCase):
             with self.subTest(role=role):
                 self.assertEqual(can_use_assistant(user), role in ASSISTANT)
         # web canAccess(aiAssistant) = manager role AND analytics permission: both halves required
-        self.assertFalse(can_use_assistant(UserContext(user_id="r", roles=["WAREHOUSE_MANAGER"], permissions=[])))
+        self.assertFalse(can_use_assistant(UserContext(user_id="r", roles=["MANAGER"], permissions=[])))
         self.assertFalse(can_use_assistant(UserContext(user_id="r", roles=["LIBRARIAN"], permissions=["analytics.read"])))
         self.assertTrue(can_use_assistant(UserContext(user_id="r", roles=[], permissions=[], is_superuser=True)))
 

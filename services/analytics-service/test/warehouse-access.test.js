@@ -26,7 +26,7 @@ function scope(read = [], write = []) {
   return { all: false, read: new Set([...read, ...write]), write: new Set(write) };
 }
 const ALL = { all: true, read: null, write: null };
-const MANAGER = { roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide', 'inventory.purchase.request'] };
+const MANAGER = { roles: ['MANAGER'], permissions: ['inventory.operation.decide', 'inventory.purchase.request'] };
 
 test('single-warehouse manager sees only that warehouse', () => {
   const list = accessibleWarehouses(ACTIVE, scope([], [HCM]));

@@ -54,6 +54,8 @@ const db = {
   inventory_audit_logs: [],
   warehouse_exception_reports: [{ id: 'ex-hcm', warehouse_id: HCM }],
   purchase_requests: [],
+  goods_receipts: [], // unassigned supplier receipts in the available-tasks feed
+  stock_alerts: [{ id: 'alert-hn', warehouse_id: HN }, { id: 'alert-hcm', warehouse_id: HCM }],
 };
 
 const hooks = {};
@@ -119,7 +121,7 @@ const profiles = {
   'staff-hn': { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
   'staff-hcm': { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
   'reader-hn': { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
-  'manager-hn': { status: 'ACTIVE', roles: ['WAREHOUSE_MANAGER'] },
+  'manager-hn': { status: 'ACTIVE', roles: ['MANAGER'] },
   'librarian-hn': { status: 'ACTIVE', roles: ['LIBRARIAN'] },
   'locked-hn': { status: 'LOCKED', roles: ['WAREHOUSE_STAFF'] },
 };
@@ -159,7 +161,7 @@ const { createInternalWarehousesRouter } = require('../src/routes/internal-wareh
 
 const STAFF_HN = { id: 'staff-hn', roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.task.read', 'inventory.task.progress'] };
 const READER_HN = { id: 'reader-hn', roles: ['WAREHOUSE_STAFF'], permissions: ['inventory.task.read'] };
-const MANAGER_HN = { id: 'manager-hn', roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide'] };
+const MANAGER_HN = { id: 'manager-hn', roles: ['MANAGER'], permissions: ['inventory.operation.decide'] };
 const NOBODY = { id: 'nobody', roles: ['WAREHOUSE_STAFF'] };
 
 function res() {
@@ -377,4 +379,61 @@ test('F1 internal warehouse lookup and cache invalidation need the internal key'
   } finally {
     server.close();
   }
+});
+
+// ── G: every assignment checks the assignee; lists stay in scope ────────────
+// (parseId needs UUID user ids here)
+const MGR_HCM_ID = '20000000-0000-4000-8000-000000000001';
+const STAFF_HN_ID = '20000000-0000-4000-8000-000000000002';
+const STAFF_HCM_ID = '20000000-0000-4000-8000-000000000003';
+Object.assign(scopes, {
+  [MGR_HCM_ID]: { read: [HCM], write: [HCM] },
+  [STAFF_HN_ID]: { read: [HN], write: [HN] },
+  [STAFF_HCM_ID]: { read: [HCM], write: [HCM] },
+});
+Object.assign(profiles, {
+  [MGR_HCM_ID]: { status: 'ACTIVE', roles: ['MANAGER'] },
+  [STAFF_HN_ID]: { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
+  [STAFF_HCM_ID]: { status: 'ACTIVE', roles: ['WAREHOUSE_STAFF'] },
+});
+const MANAGER_HCM = { id: MGR_HCM_ID, roles: ['MANAGER'], permissions: ['inventory.operation.decide'] };
+
+test('G1 a packing task can only be handed to staff with WRITE scope in its warehouse', async () => {
+  const { claimPackingTask } = require('../src/controllers/packing.controller');
+  const claim = async (packer) => {
+    const r = res();
+    await claimPackingTask({ user: MANAGER_HCM, params: { taskId: PACK_HCM }, body: { packer_id: packer }, path: `/tasks/${PACK_HCM}/claim` }, r);
+    return r;
+  };
+  const out = await claim(STAFF_HN_ID);
+  assert.equal(out.statusCode, 400);
+  assert.equal(out.body.code, 'ASSIGNEE_OUT_OF_SCOPE');
+  assert.equal(db.packing_tasks[0].assigned_packer_id, undefined, 'nothing assigned');
+  const ok = await claim(STAFF_HCM_ID);
+  assert.equal(ok.statusCode, 200);
+  assert.equal(db.packing_tasks[0].assigned_packer_id, STAFF_HCM_ID);
+});
+
+test('G2 outbound / transfer requests refuse a picker outside the (source) warehouse', async () => {
+  const orders = require('../src/controllers/order-request.controller');
+  const lines = [{ variant_id: '30000000-0000-4000-8000-000000000001', quantity: 1 }];
+  const outbound = await call(orders.createOutboundRequest, MANAGER_HCM, {
+    method: 'POST', body: { warehouse_id: HCM, outbound_type: 'MANUAL', lines, assigned_picker_user_id: STAFF_HN_ID },
+  });
+  assert.equal(outbound.statusCode, 400);
+  assert.equal(outbound.body.code, 'ASSIGNEE_OUT_OF_SCOPE');
+  const transfer = await call(orders.createTransferRequest, MANAGER_HCM, {
+    method: 'POST', body: { from_warehouse_id: HCM, to_warehouse_id: HN, lines, assigned_picker_user_id: STAFF_HN_ID },
+  });
+  assert.equal(transfer.statusCode, 400);
+  assert.equal(transfer.body.code, 'ASSIGNEE_OUT_OF_SCOPE');
+});
+
+test('G3 stock alerts list only the caller warehouses; naming another lists nothing', async () => {
+  const { listStockAlerts } = require('../src/controllers/stock-alert.controller');
+  const ids = async (user, query = {}) => (await call(listStockAlerts, user, { query })).body.data.map((a) => a.id);
+  assert.deepEqual(await ids(MANAGER_HCM), ['alert-hcm']);
+  assert.deepEqual(await ids(MANAGER_HCM, { warehouse_id: HN }), []);
+  assert.deepEqual((await ids({ id: 'admin', is_superuser: true })).sort(), ['alert-hcm', 'alert-hn']);
+  assert.equal((await call(listStockAlerts, { id: 'auth-down' })).statusCode, 503);
 });

@@ -26,7 +26,7 @@ import httpx
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 VIZ_CASES = ["tr-01", "tr-02", "cp-01", "cp-03", "cp-04", "cp-05", "cp-07", "bd-01", "bd-02", "kp-02", "rk-01", "fu-04"]
-ROLE_USER = {"ADMIN": "hung", "WAREHOUSE_MANAGER": "manager01"}
+ROLE_USER = {"ADMIN": "hung", "MANAGER": "manager01"}
 
 
 def load_turns() -> list[dict]:

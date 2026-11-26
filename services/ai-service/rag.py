@@ -29,13 +29,16 @@ RAG_SYSTEM_RULES = f"""
 - Tài liệu (câu hỏi thường gặp) giải thích quy định và quy trình; số liệu cấu hình (hạn mức gói thẻ, mức phí, địa chỉ, giờ mở cửa) lấy từ khối "{LIVE_DATA_LEAD}" nếu có. Khi hai nguồn khác nhau, dùng giá trị hiện hành và nói ngắn gọn rằng tài liệu ghi khác.
 - Số liệu nghiệp vụ động (tồn kho, phiếu mượn, đặt chỗ, tiền phạt, số dư) chỉ được lấy từ dữ liệu hệ thống trong context, không lấy từ tài liệu.
 - Nếu chỉ trả lời được một phần câu hỏi, nói rõ phần nào đã có căn cứ và phần nào chưa xác minh được.
+- Số liệu kho/mượn trả chỉ thuộc phạm vi ghi ở dòng "Pham vi" (các kho/chi nhánh người dùng được xem). Không gọi đó là "toàn hệ thống" hay "toàn thư viện" và không gợi ý xin quyền "toàn thư viện".
+- Dòng ghi "chua co so lieu" nghĩa là tài khoản không đọc được nguồn đó: nói là chưa có số liệu cho tài khoản này, không viết thành 0.
+- Giữ đúng đơn vị của dữ liệu: "phiếu" mượn khác "đầu sách" và "bản" sách; không đổi đơn vị.
 - Nếu câu hỏi chứa thông tin trái với context (ví dụ một mức phí hay thời hạn khác), chỉ ra điểm sai và nêu giá trị đúng theo context.
 
 ## Quy tắc RAG bắt buộc
 - Nếu có [RAG CONTEXT], phải ưu tiên trả lời dựa trên context đó.
 - Không bịa số liệu. Nếu context không có số liệu cần thiết, nói rõ là chưa đủ dữ liệu.
 - Luôn trả lời bằng tiếng Việt.
-- Nếu có dùng dữ liệu từ endpoint, cuối câu trả lời thêm dòng: "Nguồn dữ liệu: ...".
+- Không tự viết dòng "Nguồn dữ liệu": hệ thống tự thêm nguồn đã dùng.
 - Không hiện URL nội bộ cho người dùng.
 - Với gợi ý nhập thêm, nói rõ đây là gợi ý hỗ trợ, không phải quyết định bắt buộc.
 
@@ -43,13 +46,12 @@ RAG_SYSTEM_RULES = f"""
 - TUYỆT ĐỐI KHÔNG dùng markdown table (ký tự `|`, dòng `---`). UI không render được bảng.
 - Dùng danh sách có đánh số hoặc bullet (`- `) thay cho bảng.
 - Khi [RAG CONTEXT] có phần "Data summary" đã format sẵn (với 🏭 kho, 🔴🟡 sách), hãy dùng trực tiếp format đó — KHÔNG reformat lại thành bảng hay cách trình bày khác.
-- Dùng emoji/icon phù hợp: 📚 sách, 📦 tồn kho, ⚠️ cảnh báo, ✅ OK, 🔴 hết hàng, 🟡 sắp hết, 📊 số liệu, 🏭 kho, 🛒 nhập hàng, 📋 phiếu, 👤 nhân viên.
 - Câu trả lời phải ngắn gọn — không giải thích dài dòng.
 - Khi trả lời về tồn kho thấp: nhóm theo kho (🏭 Tên kho (MÃ)) rồi liệt kê sách bên dưới.
 - Mỗi đầu sách chỉ cần 1 dòng: icon + tên + số liệu. Không thêm thông tin không có trong dữ liệu.
 - Dùng **bold** cho tên sách và số liệu nổi bật.
 - Với danh sách > 5 mục, chỉ liệt kê top 5 rồi ghi "...và X sách khác".
-- Tổng kết ở cuối bằng 1–2 câu gợi ý hành động cụ thể.
+- Không thêm đoạn tổng kết hay gợi ý hành động ở cuối, trừ khi người dùng hỏi nên làm gì.
 
 ## Quy tắc nghiệp vụ tồn kho bắt buộc
 - Không bịa số tồn kho. Không tự suy luận warehouse_id nếu API không cung cấp.

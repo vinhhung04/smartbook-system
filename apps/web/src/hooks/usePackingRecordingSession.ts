@@ -20,9 +20,20 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
   // long before the eventual stopActiveSession() call supplies its own callbacks.
   const pendingStopRef = useRef<{ onStopped?: () => void; onUploadFailed?: () => void } | null>(null);
 
+  // Recordings whose upload failed, kept in memory so staff can retry the SAME footage instead
+  // of re-recording a packing that already happened. Lost on page reload.
+  const failedBlobsRef = useRef(new Map<string, { blob: Blob; startedAt: string }>());
+
   const [isRecording, setIsRecording] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
+  const [failedSessionIds, setFailedSessionIds] = useState<string[]>([]);
+
+  const setFailedBlob = useCallback((sessionId: string, failed: { blob: Blob; startedAt: string } | null) => {
+    if (failed) failedBlobsRef.current.set(sessionId, failed);
+    else failedBlobsRef.current.delete(sessionId);
+    if (mountedRef.current) setFailedSessionIds([...failedBlobsRef.current.keys()]);
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -40,7 +51,7 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
   // recorder.stop() raced ahead of this upload, so a slow network could complete the packing
   // task before its own required evidence was saved (inventory-service now rejects that, but
   // the race existed regardless and only surfaced as a confusing failure).
-  const uploadSessionBlob = useCallback(async (sessionId: string, blob: Blob) => {
+  const uploadSessionBlob = useCallback(async (sessionId: string, blob: Blob, startedAt: string) => {
     const pending = pendingStopRef.current;
     pendingStopRef.current = null;
 
@@ -53,23 +64,37 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
     }
 
     try {
-      await packingService.uploadVideoEvidence(sessionId, blob);
+      await packingService.uploadVideoEvidence(sessionId, blob, startedAt);
+      setFailedBlob(sessionId, null);
       if (mountedRef.current) {
         setSavedCount((count) => count + 1);
         toast.success("Đã lưu video đóng gói");
       }
       pending?.onStopped?.();
     } catch (error) {
+      setFailedBlob(sessionId, { blob, startedAt });
       if (mountedRef.current) {
         toast.error(
-          getApiErrorMessage(error, "Không thể lưu video đóng gói. Đơn chưa được hoàn tất — vui lòng quay lại danh sách và mở lại đơn để quay video lại từ đầu."),
+          getApiErrorMessage(error, "Không thể lưu video đóng gói. Đơn chưa được hoàn tất — video vẫn được giữ, bấm \"Tải lại video và hoàn tất\" để thử lại."),
         );
       }
       // Do NOT call onStopped(): completing without the video actually saved would just hit
       // inventory-service's own evidence check and fail there anyway, less clearly.
       pending?.onUploadFailed?.();
     }
-  }, []);
+  }, [setFailedBlob]);
+
+  /** Re-upload a session's recording that failed earlier. Returns false when there is none. */
+  const retryFailedUpload = useCallback(
+    (sessionId: string, onStopped?: () => void, onUploadFailed?: () => void) => {
+      const failed = failedBlobsRef.current.get(sessionId);
+      if (!failed) return false;
+      pendingStopRef.current = { onStopped, onUploadFailed };
+      void uploadSessionBlob(sessionId, failed.blob, failed.startedAt);
+      return true;
+    },
+    [uploadSessionBlob],
+  );
 
   /** Stop whatever is currently recording. `expectedSessionId`, if given, guards against a
    *  delayed caller (e.g. a 15s grace-period timer) stopping a DIFFERENT session that has since
@@ -118,13 +143,14 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
       if (!stream) return;
 
       const chunks: Blob[] = []; // per-session, never shared — avoids a race with the next session
+      const startedAt = new Date().toISOString();
       try {
         const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
         recorder.ondataavailable = (event) => {
           if (event.data.size > 0) chunks.push(event.data);
         };
         recorder.onstop = () => {
-          void uploadSessionBlob(sessionId, new Blob(chunks, { type: "video/webm" }));
+          void uploadSessionBlob(sessionId, new Blob(chunks, { type: "video/webm" }), startedAt);
         };
         recorder.start();
         recorderRef.current = recorder;
@@ -140,5 +166,5 @@ export function usePackingRecordingSession(getStream: () => MediaStream | null) 
     [getStream, stopActiveSession, uploadSessionBlob],
   );
 
-  return { isRecording, activeSessionId, savedCount, startSession, stopActiveSession };
+  return { isRecording, activeSessionId, savedCount, failedSessionIds, startSession, stopActiveSession, retryFailedUpload };
 }

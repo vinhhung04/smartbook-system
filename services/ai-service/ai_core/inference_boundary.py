@@ -26,8 +26,8 @@ CATALOG_PATHS = {
     "/enrich-book-metadata", "/enrich-book-after-isbn", "/enrich-book-after-isbn/stream",
     "/metadata-intelligence/extract", "/metadata-intelligence/extract/stream", "/book-metadata/scan-images",
 }
-WAREHOUSE_PATHS = {"/scan-receipt", "/verify-packing-photo", "/explain-storage-suggestion"}
-IMAGE_PATHS = {"/scan-receipt", "/verify-packing-photo", "/find-book-by-cover", "/vision/identify"}
+WAREHOUSE_PATHS = {"/verify-packing-photo", "/explain-storage-suggestion"}
+IMAGE_PATHS = {"/verify-packing-photo", "/find-book-by-cover", "/vision/identify"}
 INTERNAL_PATHS = {"/verify-packing-photo", "/explain-storage-suggestion"}
 BODY_LIMIT = 16 * 1024 * 1024
 MULTIPART_OVERHEAD = 64 * 1024
@@ -45,7 +45,7 @@ async def authorize(request: Request, path: str):
     elif path in WAREHOUSE_PATHS:
         roles = {str(role).upper() for role in user.roles}
         permissions = set(user.permissions)
-        if not (policy.is_admin(user) or (roles & {"WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"} and
+        if not (policy.is_admin(user) or (roles & {"MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"} and
                 permissions & {"inventory.stock.write", "inventory.task.progress", "inventory.operation.decide"})):
             raise HTTPException(403, "Không có quyền sử dụng AI kho.")
     elif path in {"/find-book-by-cover", "/vision/identify"}:

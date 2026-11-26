@@ -17,7 +17,7 @@ const router = express.Router();
 
 // WAREHOUSE_STAFF can create and view their own exception reports
 const canStaffReport = authorizeAnyPermission(['inventory.exception.report']);
-// Only WAREHOUSE_MANAGER/ADMIN can see all reports or resolve them
+// Only MANAGER/ADMIN can see all reports or resolve them
 const canManagerResolve = authorizeManagerDecision(['inventory.exception.report']);
 
 router.post('/', canStaffReport, createExceptionReport);

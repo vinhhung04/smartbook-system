@@ -113,7 +113,7 @@ async function run() {
   const customerToken = await login(users.customer);
 
   await assertMe('ADMIN', adminToken, ['ADMIN'], ['auth.users.read']);
-  await assertMe('WAREHOUSE_MANAGER', managerToken, ['WAREHOUSE_MANAGER'], ['inventory.operation.decide', 'inventory.stock.adjust', 'inventory.purchase.write', 'inventory.purchase.approve', 'reports.read', 'inventory.purchase.request', 'inventory.exception.report']);
+  await assertMe('MANAGER', managerToken, ['MANAGER'], ['inventory.operation.decide', 'inventory.stock.adjust', 'inventory.purchase.write', 'inventory.purchase.approve', 'reports.read', 'inventory.purchase.request', 'inventory.exception.report']);
   await assertMe('WAREHOUSE_STAFF', staffToken, ['WAREHOUSE_STAFF'], ['inventory.task.read', 'inventory.task.progress', 'inventory.purchase.request', 'inventory.exception.report'], ['inventory.stock.read', 'inventory.stock.write', 'inventory.stock.adjust', 'inventory.operation.decide', 'inventory.catalog.write', 'inventory.warehouse.read', 'inventory.warehouse.write', 'inventory.receiving.read', 'inventory.receiving.write', 'inventory.putaway.execute', 'inventory.purchase.read', 'inventory.purchase.write', 'inventory.purchase.approve', 'inventory.supplier.read', 'inventory.supplier.write', 'inventory.transfer.write', 'reports.read']);
   await assertMe('LIBRARIAN', librarianToken, ['LIBRARIAN'], ['borrow.write', 'inventory.catalog.read']);
   await assertMe('CUSTOMER', customerToken, ['CUSTOMER'], ['customer.self.read', 'inventory.catalog.read'], ['borrow.read', 'borrow.write']);
@@ -139,7 +139,6 @@ async function run() {
   await expectStatus('WAREHOUSE_STAFF approve PO forbidden', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', staffToken, {}, (status) => status === 403);
   await expectStatus('WAREHOUSE_STAFF create supplier forbidden', 'POST', '/api/suppliers', staffToken, {}, (status) => status === 403);
   await expectStatus('WAREHOUSE_STAFF picking confirm reaches assignment/controller guard', 'POST', '/api/picking/tasks/outbound/00000000-0000-4000-8000-000000000000/lines/00000000-0000-4000-8000-000000000001/confirm', staffToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_STAFF putaway confirm reaches assignment/controller guard', 'POST', '/api/putaway/receipts/00000000-0000-4000-8000-000000000000/confirm', staffToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('WAREHOUSE_STAFF receiving transfer reaches task validation', 'POST', '/api/receiving-putaway/transfer', staffToken, {}, (status) => status === 400);
   await expectStatus('WAREHOUSE_STAFF outbound confirm reaches assignment/controller guard', 'POST', '/api/outbound/orders/outbound/00000000-0000-4000-8000-000000000000/confirm', staffToken, {}, (status) => status !== 401 && status !== 403);
   await expectStatus('WAREHOUSE_STAFF IAM forbidden', 'GET', '/iam/users', staffToken, undefined, (status) => status === 403);
@@ -179,25 +178,25 @@ async function run() {
   await expectStatus('CUSTOMER available tasks forbidden', 'GET', '/api/my-warehouse-tasks/available', customerToken, undefined, (status) => status === 403);
   await expectStatus('LIBRARIAN available tasks forbidden', 'GET', '/api/my-warehouse-tasks/available', librarianToken, undefined, (status) => status === 403);
 
-  await expectStatus('WAREHOUSE_MANAGER inventory read ok', 'GET', '/api/inventory', managerToken, undefined, (status) => status === 200);
-  await expectStatus('WAREHOUSE_MANAGER stock movements ok', 'GET', '/api/stock-movements', managerToken, undefined, (status) => status === 200);
-  await expectStatus('WAREHOUSE_MANAGER analytics ok', 'GET', '/analytics/dashboard/kpis', managerToken, undefined, (status) => status === 200);
-  await expectStatus('WAREHOUSE_MANAGER inbound authorized', 'POST', '/api/inventory/inbound', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER outbound authorized', 'POST', '/api/inventory/outbound', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER outbound request authorized', 'POST', '/api/order-requests/outbound', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER transfer request authorized', 'POST', '/api/order-requests/transfer', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER create warehouse authorized', 'POST', '/api/warehouses', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER create location authorized', 'POST', '/api/locations', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER create supplier authorized', 'POST', '/api/suppliers', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER create PO authorized', 'POST', '/api/purchase-orders', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER approve PO authorized', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER IAM forbidden', 'GET', '/iam/users', managerToken, undefined, (status) => status === 403);
+  await expectStatus('MANAGER inventory read ok', 'GET', '/api/inventory', managerToken, undefined, (status) => status === 200);
+  await expectStatus('MANAGER stock movements ok', 'GET', '/api/stock-movements', managerToken, undefined, (status) => status === 200);
+  await expectStatus('MANAGER analytics ok', 'GET', '/analytics/dashboard/kpis', managerToken, undefined, (status) => status === 200);
+  await expectStatus('MANAGER inbound authorized', 'POST', '/api/inventory/inbound', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER outbound authorized', 'POST', '/api/inventory/outbound', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER outbound request authorized', 'POST', '/api/order-requests/outbound', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER transfer request authorized', 'POST', '/api/order-requests/transfer', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create warehouse authorized', 'POST', '/api/warehouses', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create location authorized', 'POST', '/api/locations', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create supplier authorized', 'POST', '/api/suppliers', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER create PO authorized', 'POST', '/api/purchase-orders', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER approve PO authorized', 'POST', '/api/purchase-orders/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER IAM forbidden', 'GET', '/iam/users', managerToken, undefined, (status) => status === 403);
 
   // Purchase Request + Exception Report: MANAGER can list all and approve/resolve
-  await expectStatus('WAREHOUSE_MANAGER all purchase requests allowed', 'GET', '/api/purchase-requests', managerToken, undefined, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER approve purchase request reaches validation', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER all exception reports allowed', 'GET', '/api/exception-reports', managerToken, undefined, (status) => status !== 401 && status !== 403);
-  await expectStatus('WAREHOUSE_MANAGER resolve exception report reaches validation', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER all purchase requests allowed', 'GET', '/api/purchase-requests', managerToken, undefined, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER approve purchase request reaches validation', 'POST', '/api/purchase-requests/00000000-0000-4000-8000-000000000000/approve', managerToken, {}, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER all exception reports allowed', 'GET', '/api/exception-reports', managerToken, undefined, (status) => status !== 401 && status !== 403);
+  await expectStatus('MANAGER resolve exception report reaches validation', 'POST', '/api/exception-reports/00000000-0000-4000-8000-000000000000/resolve', managerToken, {}, (status) => status !== 401 && status !== 403);
 
   await expectStatus('LIBRARIAN borrow read ok', 'GET', '/borrow/loans', librarianToken, undefined, (status) => status === 200);
   await expectStatus('LIBRARIAN incomplete catalog update reaches controller', 'PATCH', '/api/books/00000000-0000-4000-8000-000000000000', librarianToken, {}, (status) => status !== 401 && status !== 403);

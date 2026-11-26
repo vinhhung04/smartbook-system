@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Plus, Save, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Plus, Save, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { purchaseOrderService, type PurchaseOrderLinePayload, type VariantSearchItem } from "@/services/purchase-order";
 import { supplierService, type Supplier } from "@/services/supplier";
@@ -13,33 +13,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingOverlay } from "@/components/ui/loading-state";
 import { cn } from "@/components/ui/utils";
-import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 
 interface FormLine extends PurchaseOrderLinePayload {
   key: string;
-  title?: string;
-  sku?: string | null;
+  /** catalog title of the linked suggestion, shown on the link chip */
+  linked_title?: string;
 }
 
 const newLine = (): FormLine => ({
   key: crypto.randomUUID(),
   variant_id: "",
-  isbn13: "",
-  ordered_qty: 1,
-  unit_cost: 0,
-  note: "",
   title: "",
-  sku: "",
+  book_code: "",
+  author: "",
+  publish_year: null,
+  ordered_qty: 1,
+  note: "",
 });
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 // Lines handed over by another page (e.g. reorder suggestions) via router state.
 export interface PurchaseOrderPrefill {
   note?: string;
-  lines: Array<{ variant_id: string; title: string; isbn13?: string | null; ordered_qty: number; unit_cost: number }>;
-}
-
-function formatCurrency(value: number) {
-  return `${Number(value || 0).toLocaleString("vi-VN")} VND`;
+  lines: Array<{ variant_id: string; title: string; isbn13?: string | null; ordered_qty: number; unit_cost?: number }>;
 }
 
 export function PurchaseOrderFormPage() {
@@ -85,23 +82,25 @@ export function PurchaseOrderFormPage() {
           setNote(po.note || "");
           setLines(po.items.map((item) => ({
             key: item.id,
-            variant_id: item.variant_id,
-            isbn13: item.isbn13 || "",
-            ordered_qty: item.ordered_qty,
-            unit_cost: item.unit_cost,
-            note: item.note || "",
+            variant_id: item.variant_id || "",
+            linked_title: item.variant_id ? item.title : undefined,
             title: item.title,
-            sku: item.sku,
+            book_code: item.item_code || item.isbn13 || "",
+            author: item.item_author || "",
+            publish_year: item.item_publish_year ?? null,
+            ordered_qty: item.requested_qty ?? item.ordered_qty,
+            note: item.note || "",
           })));
         } else if (prefill?.lines.length) {
           setNote(prefill.note || "");
+          // author / year left blank are filled from the catalog by the server for linked lines
           setLines(prefill.lines.map((line) => ({
             ...newLine(),
             variant_id: line.variant_id,
-            isbn13: line.isbn13 || "",
-            ordered_qty: line.ordered_qty,
-            unit_cost: line.unit_cost,
+            linked_title: line.title,
             title: line.title,
+            book_code: line.isbn13 || "",
+            ordered_qty: line.ordered_qty,
           })));
         }
       } catch (error) {
@@ -114,8 +113,6 @@ export function PurchaseOrderFormPage() {
     // The prefill is read once on mount; later state changes must not reset the form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, navigate]);
-
-  const totalAmount = useMemo(() => lines.reduce((sum, line) => sum + Number(line.ordered_qty || 0) * Number(line.unit_cost || 0), 0), [lines]);
 
   const updateLine = (key: string, patch: Partial<FormLine>) => {
     setLines((current) => current.map((line) => line.key === key ? { ...line, ...patch } : line));
@@ -137,11 +134,12 @@ export function PurchaseOrderFormPage() {
 
   const selectVariant = (variant: VariantSearchItem) => {
     if (!activeLineKey) return;
+    // suggestion only fills the fields; the user can still edit them (SKU is internal, never the book code)
     updateLine(activeLineKey, {
       variant_id: variant.variant_id,
-      isbn13: variant.isbn13 || "",
+      linked_title: variant.title,
       title: variant.title,
-      sku: variant.sku,
+      book_code: variant.isbn13 || variant.barcode || "",
     });
     setResults([]);
     setQuery("");
@@ -152,12 +150,20 @@ export function PurchaseOrderFormPage() {
     if (!warehouseId) return "Vui lòng chọn kho nhận hàng";
     if (lines.length === 0) return "Cần ít nhất một dòng sách";
     const seen = new Set<string>();
-    for (const line of lines) {
-      if (!line.variant_id && !line.isbn13) return "Mỗi dòng cần chọn biến thể sách hoặc nhập ISBN";
-      if (line.variant_id && seen.has(line.variant_id)) return "Có biến thể sách bị trùng trong đơn";
-      if (line.variant_id) seen.add(line.variant_id);
-      if (!Number.isInteger(Number(line.ordered_qty)) || Number(line.ordered_qty) <= 0) return "Số lượng đặt phải lớn hơn 0";
-      if (!Number.isFinite(Number(line.unit_cost)) || Number(line.unit_cost) < 0) return "Đơn giá phải lớn hơn hoặc bằng 0";
+    for (const [index, line] of lines.entries()) {
+      const label = `Dòng ${index + 1}`;
+      if (!line.title.trim()) return `${label}: nhập tên sách`;
+      if (!line.book_code.trim()) return `${label}: nhập mã sách (ISBN, EAN hoặc mã của nhà cung cấp)`;
+      // linked lines may leave author / year blank: the server takes them from the catalog
+      if (!line.variant_id && !line.author.trim()) return `${label}: nhập tác giả`;
+      const year = line.publish_year;
+      if ((!line.variant_id || year !== null) && (year === null || !Number.isInteger(year) || year < 1000 || year > CURRENT_YEAR + 1)) {
+        return `${label}: năm xuất bản/tái bản không hợp lệ`;
+      }
+      if (!Number.isInteger(Number(line.ordered_qty)) || Number(line.ordered_qty) <= 0) return `${label}: số lượng đặt phải là số nguyên lớn hơn 0`;
+      const key = line.book_code.trim().toLowerCase();
+      if (seen.has(key)) return `${label}: mã sách bị trùng với dòng khác`;
+      seen.add(key);
     }
     return null;
   };
@@ -174,10 +180,12 @@ export function PurchaseOrderFormPage() {
       expected_date: expectedDate || null,
       note: note || null,
       items: lines.map((line) => ({
-        variant_id: line.variant_id,
-        isbn13: line.isbn13 || undefined,
+        variant_id: line.variant_id || undefined,
+        title: line.title.trim(),
+        book_code: line.book_code.trim(),
+        author: line.author.trim(),
+        publish_year: line.publish_year,
         ordered_qty: Number(line.ordered_qty),
-        unit_cost: Number(line.unit_cost),
         note: line.note || null,
       })),
     };
@@ -200,7 +208,7 @@ export function PurchaseOrderFormPage() {
   }
 
   const totalQty = lines.reduce((sum, line) => sum + (Number(line.ordered_qty) || 0), 0);
-  const pickedLines = lines.filter((line) => line.variant_id).length;
+  const linkedLines = lines.filter((line) => line.variant_id).length;
   const supplierName = suppliers.find((supplier) => supplier.id === supplierId)?.name;
   const warehouseName = warehouses.find((warehouse) => warehouse.id === warehouseId);
   const fieldLabel = "mb-1.5 block text-[13px] font-medium text-foreground";
@@ -216,7 +224,7 @@ export function PurchaseOrderFormPage() {
           {isEdit ? "Sửa đơn mua hàng" : "Tạo đơn mua hàng"}
         </h1>
         <p className="mt-1 max-w-2xl text-[14px] text-muted-foreground">
-          Chọn nhà cung cấp và kho nhận, thêm sách cần đặt. Lưu xong đơn ở trạng thái Nháp, gửi duyệt ở trang chi tiết.
+          Chọn nhà cung cấp và kho nhận, nhập sách cần đặt và số lượng. Không nhập đơn giá: nhà cung cấp đề xuất giá, SmartBook duyệt. Lưu xong đơn ở trạng thái Nháp, gửi duyệt ở trang chi tiết.
         </p>
       </div>
 
@@ -265,7 +273,7 @@ export function PurchaseOrderFormPage() {
 
             <section aria-labelledby="po-lines-title" className="rounded-2xl border border-border bg-card p-5">
               <h2 id="po-lines-title" className="font-display text-[18px] font-semibold tracking-tight">Sách cần đặt</h2>
-              <p className="mt-0.5 text-[13px] text-muted-foreground">Bấm vào một dòng để chọn nó, rồi tìm sách và bấm vào kết quả để gán sách cho dòng đó.</p>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">Nhập trực tiếp thông tin sách, kể cả sách chưa có trong hệ thống. Muốn điền nhanh, bấm vào một dòng rồi tìm trong danh mục và chọn gợi ý.</p>
 
               <div className="mt-4 rounded-xl border border-border bg-muted/30 p-3">
                 <div className="flex flex-col gap-2 @2xl/page:flex-row">
@@ -274,12 +282,12 @@ export function PurchaseOrderFormPage() {
                     onChange={(e) => setQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") void searchVariants(); }}
                     placeholder="Tìm theo tên sách, SKU hoặc ISBN..."
-                    aria-label="Tìm sách để gán cho dòng đang chọn"
+                    aria-label="Tìm sách trong danh mục để điền cho dòng đang chọn"
                     className="flex-1 bg-card"
                   />
                   <Button type="button" variant="outline" loading={searching} onClick={() => void searchVariants()} className="gap-2">
                     <Search className="h-3.5 w-3.5" />
-                    Tìm sách
+                    Gợi ý từ danh mục
                   </Button>
                 </div>
                 {results.length > 0 && (
@@ -299,7 +307,7 @@ export function PurchaseOrderFormPage() {
                   </div>
                 )}
                 {results.length > 0 && !activeLineKey && (
-                  <p className="mt-2 text-[12px] text-amber-700 dark:text-amber-300">Chọn một dòng sách bên dưới trước khi gán.</p>
+                  <p className="mt-2 text-[12px] text-amber-700 dark:text-amber-300">Bấm vào một dòng bên dưới trước khi chọn gợi ý.</p>
                 )}
               </div>
 
@@ -309,7 +317,8 @@ export function PurchaseOrderFormPage() {
                 <ol className="mt-4 space-y-3">
                   {lines.map((line, index) => {
                     const active = activeLineKey === line.key;
-                    const lineTotal = (Number(line.ordered_qty) || 0) * (Number(line.unit_cost) || 0);
+                    const fieldId = (name: string) => `po-${name}-${line.key}`;
+                    const small = "mb-1 block text-[12px] text-muted-foreground";
                     return (
                       <li key={line.key} className={cn("rounded-xl border p-3 transition-colors", active ? "border-primary/40 bg-primary/[0.04]" : "border-border")}>
                         <div className="flex items-start gap-3">
@@ -321,10 +330,10 @@ export function PurchaseOrderFormPage() {
                             className="min-w-0 flex-1 rounded-lg px-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                           >
                             <span className={cn("block text-[14px] font-medium", line.title ? "text-foreground" : "text-muted-foreground")}>
-                              {line.title || "Chưa chọn sách"}
+                              {line.title || "Sách chưa đặt tên"}
                             </span>
-                            <span className={cn("block text-[12px] text-muted-foreground", (line.isbn13 || line.sku || line.variant_id) && "font-mono")}>
-                              {line.isbn13 || line.sku || line.variant_id || (active ? "Đang chọn dòng này, tìm sách ở trên" : "Bấm để chọn dòng này")}
+                            <span className="block text-[12px] text-muted-foreground">
+                              {active ? "Đang chọn dòng này, có thể chọn gợi ý ở trên" : "Bấm để chọn dòng này khi dùng gợi ý"}
                             </span>
                           </button>
                           <IconButton
@@ -338,21 +347,56 @@ export function PurchaseOrderFormPage() {
                             <Trash2 className="h-4 w-4" />
                           </IconButton>
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-3 pl-8 @2xl/page:grid-cols-[110px_150px_minmax(0,1fr)]">
-                          <div>
-                            <label htmlFor={`po-qty-${line.key}`} className="mb-1 block text-[12px] text-muted-foreground">Số lượng, cuốn</label>
-                            <Input id={`po-qty-${line.key}`} type="number" min={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="tabular-nums" />
-                          </div>
-                          <div>
-                            <label htmlFor={`po-cost-${line.key}`} className="mb-1 block text-[12px] text-muted-foreground">Đơn giá, VND</label>
-                            <Input id={`po-cost-${line.key}`} type="number" min={0} {...zeroFieldProps} value={line.unit_cost} onChange={(e) => updateLine(line.key, { unit_cost: Number(numberInputValue(e)) })} className="tabular-nums" />
+                        {line.variant_id ? (
+                          <p className="mt-1 flex flex-wrap items-center gap-1.5 pl-8 text-[12px] text-muted-foreground">
+                            <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            Liên kết danh mục: <span className="text-foreground">{line.linked_title || "sách có sẵn"}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateLine(line.key, { variant_id: "", linked_title: undefined })}
+                              className="inline-flex items-center gap-0.5 rounded px-1 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                            >
+                              <X className="h-3 w-3" aria-hidden="true" />Bỏ liên kết
+                            </button>
+                          </p>
+                        ) : null}
+                        <div className="mt-2 grid grid-cols-2 gap-3 pl-8 @2xl/page:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                          <div className="col-span-2 @2xl/page:col-span-1">
+                            <label htmlFor={fieldId("title")} className={small}>Tên sách <span aria-hidden="true">*</span></label>
+                            <Input id={fieldId("title")} required value={line.title} onChange={(e) => updateLine(line.key, { title: e.target.value })} maxLength={300} />
                           </div>
                           <div className="col-span-2 @2xl/page:col-span-1">
-                            <label htmlFor={`po-line-note-${line.key}`} className="mb-1 block text-[12px] text-muted-foreground">Ghi chú dòng</label>
-                            <Input id={`po-line-note-${line.key}`} value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} placeholder="Không bắt buộc" />
+                            <label htmlFor={fieldId("code")} className={small}>Mã sách (ISBN, EAN, mã nhà cung cấp) <span aria-hidden="true">*</span></label>
+                            <Input id={fieldId("code")} required value={line.book_code} onChange={(e) => updateLine(line.key, { book_code: e.target.value })} maxLength={80} className="font-mono" />
                           </div>
                         </div>
-                        <p className="mt-2 pl-8 text-[12px] tabular-nums text-muted-foreground">Thành tiền {formatCurrency(lineTotal)}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-3 pl-8 @2xl/page:grid-cols-[minmax(0,2fr)_120px_110px]">
+                          <div className="col-span-2 @2xl/page:col-span-1">
+                            <label htmlFor={fieldId("author")} className={small}>Tác giả {line.variant_id ? "(trống: lấy theo danh mục)" : <span aria-hidden="true">*</span>}</label>
+                            <Input id={fieldId("author")} value={line.author} onChange={(e) => updateLine(line.key, { author: e.target.value })} maxLength={200} />
+                          </div>
+                          <div>
+                            <label htmlFor={fieldId("year")} className={small}>Năm xuất bản / tái bản</label>
+                            <Input
+                              id={fieldId("year")}
+                              type="number"
+                              inputMode="numeric"
+                              min={1000}
+                              max={CURRENT_YEAR + 1}
+                              value={line.publish_year ?? ""}
+                              onChange={(e) => updateLine(line.key, { publish_year: e.target.value === "" ? null : Math.trunc(Number(e.target.value)) })}
+                              className="tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={fieldId("qty")} className={small}>Số lượng, cuốn</label>
+                            <Input id={fieldId("qty")} type="number" min={1} step={1} value={line.ordered_qty} onChange={(e) => updateLine(line.key, { ordered_qty: Number(e.target.value) })} className="tabular-nums" />
+                          </div>
+                          <div className="col-span-2 @2xl/page:col-span-3">
+                            <label htmlFor={fieldId("note")} className={small}>Ghi chú dòng</label>
+                            <Input id={fieldId("note")} value={line.note || ""} onChange={(e) => updateLine(line.key, { note: e.target.value })} placeholder="Không bắt buộc" />
+                          </div>
+                        </div>
                       </li>
                     );
                   })}
@@ -371,13 +415,13 @@ export function PurchaseOrderFormPage() {
             <dl className="mt-3 space-y-2.5 text-[13px]">
               <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Nhà cung cấp</dt><dd className="text-right text-foreground">{supplierName || "Chưa chọn"}</dd></div>
               <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Kho nhận</dt><dd className="text-right text-foreground">{warehouseName ? warehouseName.code : "Chưa chọn"}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Dòng đã chọn sách</dt><dd className="text-right tabular-nums text-foreground">{pickedLines} / {lines.length}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Số đầu sách</dt><dd className="text-right tabular-nums text-foreground">{lines.length}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Đã có trong danh mục</dt><dd className="text-right tabular-nums text-foreground">{linkedLines} / {lines.length}</dd></div>
               <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Tổng số cuốn</dt><dd className="text-right tabular-nums text-foreground">{totalQty.toLocaleString("vi-VN")}</dd></div>
             </dl>
-            <div className="mt-4 border-t border-border pt-4">
-              <p className="text-[13px] text-muted-foreground">Tạm tính, VND</p>
-              <p className="font-display text-[28px] font-semibold leading-tight tabular-nums text-foreground">{Number(totalAmount || 0).toLocaleString("vi-VN")}</p>
-            </div>
+            <p className="mt-4 border-t border-border pt-4 text-[13px] text-muted-foreground">
+              Chưa có giá: nhà cung cấp đề xuất đơn giá cho từng sách, SmartBook duyệt trước khi lập hóa đơn.
+            </p>
             <Button onClick={() => void save()} loading={saving} className="mt-4 w-full gap-2">
               <Save className="h-3.5 w-3.5" />
               {saving ? "Đang lưu..." : isEdit ? "Lưu thay đổi" : "Lưu đơn mua hàng"}

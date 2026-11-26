@@ -1,6 +1,8 @@
 const crypto = require("node:crypto");
 
 const { prisma } = require("../lib/prisma");
+const { snapshotFromVariant, poItemTitle, poItemCode, isInvoiceFirst } = require("../services/purchase-order-line.service");
+const { FulfillmentError, loadInvoiceFulfillment, normalizeDeliveryAgainstInvoice } = require("../services/invoice-fulfillment.service");
 
 const { parseId, toInt, normalizeText, normalizeIsbn13 } = require("../utils/validation");
 const { claimApprovedOrderForDispatch } = require("../services/purchase-order-dispatch.service");
@@ -116,6 +118,8 @@ function mapPurchaseOrderSummary(po) {
     warehouse_code: po.warehouses?.code || null,
     warehouse_name: po.warehouses?.name || null,
     status: po.status,
+    procurement_flow: po.procurement_flow || "LEGACY",
+    supplier_response_status: po.supplier_response_status || null,
     ordered_by_user_id: po.ordered_by_user_id,
     approved_by_user_id: po.approved_by_user_id,
     order_date: po.order_date,
@@ -142,9 +146,17 @@ function mapPurchaseOrderItem(item, poStatus) {
     id: item.id,
     variant_id: item.variant_id,
     book_id: item.book_variants?.books?.id || null,
-    title: item.book_variants?.books?.title || "Chua co ten sach",
+    title: poItemTitle(item) || "Chưa có tên sách",
     sku: item.book_variants?.sku || null,
     isbn13: item.book_variants?.isbn13 || null,
+    // ordered snapshot (invoice-first lines); null on legacy lines
+    item_code: poItemCode(item),
+    item_author: item.item_author || null,
+    item_publish_year: item.item_publish_year ?? null,
+    linked_to_catalog: Boolean(item.variant_id),
+    // requested_qty = what SmartBook asked; ordered_qty = what the supplier accepted (after approval)
+    requested_qty: item.requested_qty ?? orderedQty,
+    not_accepted_qty: Math.max(0, Number(item.requested_qty ?? orderedQty) - orderedQty),
     ordered_qty: orderedQty,
     received_qty: receivedQty,
     remaining_qty: Math.max(0, orderedQty - receivedQty),
@@ -239,6 +251,7 @@ function mapPurchaseOrderDetail(po) {
     warehouse: po.warehouses || null,
     status: po.status,
     supplier_response_status: po.supplier_response_status || null,
+    procurement_flow: po.procurement_flow || "LEGACY",
     ordered_by_user_id: po.ordered_by_user_id,
     approved_by_user_id: po.approved_by_user_id,
     order_date: po.order_date,
@@ -332,43 +345,70 @@ async function normalizePurchaseOrderPayload(tx, body) {
     return { invalid: true, message: "Không tìm thấy kho hoặc kho đã ngừng hoạt động" };
   }
 
+  // Invoice-first lines: a typed snapshot (title, market code, author, publish year, qty). The
+  // book need not be in the catalog; variant_id is only an optional link picked from a suggestion.
+  // No price here: the supplier proposes it and SmartBook approves it before invoicing.
   const normalizedItems = [];
   const seenVariants = new Set();
+  const seenCodes = new Set();
+  const linkedVariantIds = [];
   for (const rawLine of lines) {
-    const orderedQty = toInt(rawLine?.ordered_qty);
-    const unitCost = Number(rawLine?.unit_cost);
+    const orderedQty = toInt(rawLine?.ordered_qty ?? rawLine?.quantity);
     if (!orderedQty || orderedQty <= 0) {
-      return { invalid: true, message: "Mỗi dòng hàng phải có ordered_qty > 0" };
+      return { invalid: true, message: "Số lượng đặt của mỗi sách phải là số nguyên dương" };
     }
-    if (!Number.isFinite(unitCost) || unitCost < 0) {
-      return { invalid: true, message: "Mỗi dòng hàng phải có unit_cost >= 0" };
+    const variantId = rawLine?.variant_id || rawLine?.isbn13 ? await resolveVariantIdByIdentifier(tx, rawLine) : null;
+    if ((rawLine?.variant_id || rawLine?.isbn13) && !variantId) {
+      return { invalid: true, message: "Sách được chọn từ gợi ý không còn trong danh mục" };
     }
-
-    const variantId = await resolveVariantIdByIdentifier(tx, rawLine);
-    if (!variantId) {
-      return { invalid: true, message: "Mỗi dòng hàng phải có variant_id hoặc isbn13 hợp lệ" };
+    let snapshot = {
+      item_title: normalizeText(rawLine?.title),
+      item_code: normalizeText(rawLine?.book_code),
+      item_author: normalizeText(rawLine?.author),
+      // blank (undefined / null / "") stays null so a catalog-linked line can take the catalog's year
+      item_publish_year: rawLine?.publish_year == null || rawLine?.publish_year === "" ? null : toInt(rawLine.publish_year),
+    };
+    if (variantId) {
+      // a line picked from the catalog: what the user typed wins, blanks come from the catalog
+      const catalog = await snapshotFromVariant(tx, variantId);
+      snapshot = Object.fromEntries(Object.entries(snapshot).map(([key, value]) => [key, value ?? catalog[key]]));
     }
-    if (seenVariants.has(variantId)) {
-      return { invalid: true, message: "Đơn đặt hàng có ấn bản bị lặp" };
+    if (!snapshot.item_title) return { invalid: true, message: "Nhập tên sách cho mỗi dòng" };
+    if (!snapshot.item_code) return { invalid: true, message: `Nhập mã sách cho "${snapshot.item_title}"` };
+    if (!snapshot.item_author) return { invalid: true, message: `Nhập tác giả cho "${snapshot.item_title}"` };
+    const year = snapshot.item_publish_year;
+    if (!Number.isInteger(year) || year < 1000 || year > new Date().getFullYear() + 1) {
+      return { invalid: true, message: `Năm xuất bản/tái bản của "${snapshot.item_title}" không hợp lệ` };
     }
-    seenVariants.add(variantId);
+    if (snapshot.item_title.length > 300 || snapshot.item_code.length > 80 || snapshot.item_author.length > 200) {
+      return { invalid: true, message: "Tên sách, mã sách hoặc tác giả quá dài" };
+    }
+    const codeKey = snapshot.item_code.toLowerCase();
+    if (seenCodes.has(codeKey) || (variantId && seenVariants.has(variantId))) {
+      return { invalid: true, message: `Sách "${snapshot.item_title}" bị lặp trong đơn` };
+    }
+    seenCodes.add(codeKey);
+    if (variantId) {
+      seenVariants.add(variantId);
+      linkedVariantIds.push(variantId);
+    }
     normalizedItems.push({
       variant_id: variantId,
+      ...snapshot,
+      requested_qty: orderedQty,
       ordered_qty: orderedQty,
-      unit_cost: unitCost,
+      unit_cost: 0,
       note: normalizeText(rawLine?.note),
     });
   }
 
-  const variantCount = await tx.book_variants.count({
-    where: {
-      id: { in: normalizedItems.map((item) => item.variant_id) },
-      is_active: true,
-      books: { is_active: true },
-    },
-  });
-  if (variantCount !== normalizedItems.length) {
-    return { invalid: true, message: "Có ấn bản không hợp lệ hoặc đã ngừng hoạt động" };
+  if (linkedVariantIds.length > 0) {
+    const variantCount = await tx.book_variants.count({
+      where: { id: { in: linkedVariantIds }, is_active: true, books: { is_active: true } },
+    });
+    if (variantCount !== linkedVariantIds.length) {
+      return { invalid: true, message: "Có ấn bản không hợp lệ hoặc đã ngừng hoạt động" };
+    }
   }
 
   return {
@@ -445,7 +485,7 @@ function mapSupplierInvoice(invoice) {
       id: item.id,
       purchase_order_item_id: item.purchase_order_item_id,
       variant_id: item.variant_id,
-      title: item.book_variants?.books?.title || null,
+      title: item.purchase_order_items?.item_title || item.book_variants?.books?.title || null,
       sku: item.book_variants?.sku || null,
       isbn13: item.book_variants?.isbn13 || null,
       invoiced_qty: Number(item.invoiced_qty || 0),
@@ -685,6 +725,7 @@ async function createPurchaseOrder(req, res) {
           supplier_id: payload.supplier_id,
           warehouse_id: payload.warehouse_id,
           status: PO_STATUSES.DRAFT,
+          procurement_flow: "INVOICE_FIRST",
           ordered_by_user_id: userId,
           expected_date: payload.expected_date,
           note: payload.note,
@@ -801,7 +842,25 @@ async function updatePurchaseOrder(req, res) {
   }
 }
 
+// A submitter who may approve purchase orders would only approve their own
+// order next, so the order is approved on submit (still audited as an approval).
+function canApprovePurchaseOrders(user) {
+  if (user?.is_superuser) return true;
+  return Array.isArray(user?.permissions) && user.permissions.includes("inventory.purchase.approve");
+}
+
 async function submitPurchaseOrder(req, res) {
+  if (canApprovePurchaseOrders(req.user)) {
+    return transitionPurchaseOrder(req, res, {
+      allowedFrom: [PO_STATUSES.DRAFT, PO_STATUSES.REJECTED],
+      nextStatus: PO_STATUSES.APPROVED,
+      actionName: "PURCHASE_ORDER_APPROVED",
+      message: "Purchase order submitted and auto-approved",
+      approvedBy: true,
+      notePrefix: "APPROVED_NOTE",
+      auditExtra: { auto_approved_on_submit: true },
+    });
+  }
   return transitionPurchaseOrder(req, res, {
     allowedFrom: [PO_STATUSES.DRAFT, PO_STATUSES.REJECTED],
     nextStatus: PO_STATUSES.PENDING_APPROVAL,
@@ -882,6 +941,7 @@ async function transitionPurchaseOrder(req, res, options) {
         status_before: po.status,
         status_after: options.nextStatus,
         total_ordered_qty: totalOrderedQty,
+        ...(options.auditExtra || {}),
       });
 
       if (options.actionName === "PURCHASE_ORDER_APPROVED") {
@@ -1112,6 +1172,9 @@ async function supplierConfirm(req, res) {
       if (po.status !== PO_STATUSES.SENT_TO_SUPPLIER) {
         return { invalid: true, message: "Chỉ đơn đặt hàng ở trạng thái SENT_TO_SUPPLIER mới được nhà cung cấp xác nhận" };
       }
+      if (isInvoiceFirst(po)) {
+        return { invalid: true, statusCode: 409, message: "Đơn theo quy trình mới cần nhà cung cấp đề xuất số lượng và đơn giá trên cổng nhà cung cấp" };
+      }
 
       await tx.supplier_order_dispatches.updateMany({
         where: { purchase_order_id: po.id, status: "SENT" },
@@ -1180,6 +1243,7 @@ async function getSupplierDocuments(req, res) {
           supplier_delivery_invoice_items: {
             include: {
               book_variants: { select: { sku: true, isbn13: true, books: { select: { title: true } } } },
+              purchase_order_items: { select: { item_title: true, item_code: true } },
             },
             orderBy: { id: "asc" },
           },
@@ -1206,6 +1270,22 @@ async function getSupplierDocuments(req, res) {
     });
   } catch (error) {
     console.error("Error while fetching supplier documents:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+/** Invoice-first: per approved invoice, how much was shipped, is in transit, received, still owed. */
+async function getInvoiceFulfillment(req, res) {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ message: "Mã đơn đặt hàng không hợp lệ" });
+  try {
+    const po = await prisma.purchase_orders.findUnique({ where: { id }, select: { id: true, warehouse_id: true } });
+    if (!po) return res.status(404).json({ message: "Không tìm thấy đơn đặt hàng" });
+    const canRead = await requireWarehouseReadAccess(req, res, po.warehouse_id);
+    if (!canRead) return;
+    return res.json({ data: await loadInvoiceFulfillment(prisma, id) });
+  } catch (error) {
+    console.error("Error while loading invoice fulfillment:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -1388,6 +1468,7 @@ async function createGoodsReceiptFromPurchaseOrder(req, res) {
 }
 
 module.exports = {
+  getInvoiceFulfillment,
   getPurchaseOrders,
   getPurchaseOrderById,
   createPurchaseOrder,

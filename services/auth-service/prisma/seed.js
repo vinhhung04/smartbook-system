@@ -109,7 +109,7 @@ async function main() {
     { code: 'analytics.forecast.view', module_name: 'analytics', action_name: 'read', description: 'View demand forecasts' },
     { code: 'reports.read', module_name: 'analytics', action_name: 'read', description: 'View management reports' },
     // Gates borrow-domain analytics routes specifically (fine/overdue/reservation reports) —
-    // separate from the inventory-side analytics codes above so WAREHOUSE_MANAGER's "no borrow
+    // separate from the inventory-side analytics codes above so MANAGER's "no borrow
     // access" stays true for analytics too, not just for the borrow-service API itself.
     { code: 'analytics.borrow.read', module_name: 'analytics', action_name: 'read', description: 'View borrow-domain analytics (fines, overdue, reservations)' },
 
@@ -150,13 +150,13 @@ async function main() {
     },
   });
 
-  const warehouseManagerRole = await prisma.role.upsert({
-    where: { code: 'WAREHOUSE_MANAGER' },
+  const managerRole = await prisma.role.upsert({
+    where: { code: 'MANAGER' },
     update: {},
     create: {
-      code: 'WAREHOUSE_MANAGER',
-      name: 'Warehouse Manager',
-      description: 'Monitor warehouse operations, approve POs, manage inventory and staff, view analytics',
+      code: 'MANAGER',
+      name: 'Manager',
+      description: 'Manage warehouse operations (POs, inventory, staff) and read library analytics',
       is_system: true,
     },
   });
@@ -233,8 +233,10 @@ async function main() {
   await setRolePermissions(adminRole, allPerms.map((perm) => perm.code));
   console.log('✅ Assigned all permissions to ADMIN');
 
-  // WAREHOUSE_MANAGER: full inventory/warehouse/purchasing/analytics access. No borrow access.
-  const warehouseManagerPermCodes = [
+  // MANAGER: full inventory/warehouse/purchasing/analytics access, and
+  // read-only borrow analytics (overdue, fines, reservations, borrow trends) of
+  // the warehouses/branches in scope. No circulation desk access (borrow.*).
+  const managerPermCodes = [
     'inventory.catalog.read',
     'inventory.catalog.write',
     'inventory.stock.read',
@@ -263,6 +265,7 @@ async function main() {
     'analytics.reports.view',
     'analytics.reports.export',
     'analytics.forecast.view',
+    'analytics.borrow.read',
     'reports.read',
     'observability.logs.read',
     'audit.read',
@@ -271,8 +274,8 @@ async function main() {
     'inventory.purchase.request',
     'inventory.exception.report',
   ];
-  await setRolePermissions(warehouseManagerRole, warehouseManagerPermCodes);
-  console.log(`✅ Assigned ${warehouseManagerPermCodes.length} permissions to WAREHOUSE_MANAGER`);
+  await setRolePermissions(managerRole, managerPermCodes);
+  console.log(`✅ Assigned ${managerPermCodes.length} permissions to MANAGER`);
 
   const warehousePermCodes = [
     'inventory.catalog.read',
@@ -298,6 +301,10 @@ async function main() {
     'borrow.fine.write',
     'borrow.membership.write',
     'borrow.payments.process',
+    // Borrow-domain analytics of the librarian's own branches (every route is
+    // branch-scoped). A manager holding MANAGER + LIBRARIAN gets
+    // warehouse and library analytics - and the AI assistant reads both.
+    'analytics.borrow.read',
   ];
   await setRolePermissions(librarianRole, librarianPermCodes);
   console.log(`✅ Assigned ${librarianPermCodes.length} permissions to LIBRARIAN`);
@@ -338,7 +345,7 @@ async function main() {
   // ═══════════════════════════════════════════════════════════════════════════════
 
   const legacyToCanonicalMap = [
-    { fromCode: 'MANAGER',            canonicalRole: warehouseManagerRole },
+    { fromCode: 'WAREHOUSE_MANAGER',  canonicalRole: managerRole          },
     { fromCode: 'STAFF',              canonicalRole: warehouseStaffRole   },
     { fromCode: 'WAREHOUSE_OPERATOR', canonicalRole: warehouseStaffRole   },
     { fromCode: 'CUSTOMER_SERVICE',   canonicalRole: librarianRole        },
@@ -593,7 +600,7 @@ async function main() {
   }
 
   await assignUserRoles('hung', [adminRole]);
-  await assignUserRoles('manager01', [warehouseManagerRole]);
+  await assignUserRoles('manager01', [managerRole]);
   await assignUserRoles('staff01', [warehouseStaffRole]);
   await assignUserRoles('staff02', [warehouseStaffRole]);
   await assignUserRoles('staff03', [warehouseStaffRole]);
@@ -601,7 +608,7 @@ async function main() {
   await assignUserRoles('cs01', [librarianRole]);
   await assignUserRoles('librarian01', [librarianRole]);
   await assignUserRoles('customer01', [customerRole]);
-  await assignUserRoles('curator01', [warehouseManagerRole]);
+  await assignUserRoles('curator01', [managerRole]);
 
   console.log('✅ Assigned roles to all users');
 
@@ -646,7 +653,7 @@ async function main() {
   for (const scope of warehouseScopes) {
     await prisma.userWarehouseScope.upsert({
       where: { user_id_warehouse_id: { user_id: scope.user_id, warehouse_id: scope.warehouse_id } },
-      // WAREHOUSE_MANAGER approves POs and receipts in its warehouses (a write):
+      // MANAGER approves POs and receipts in its warehouses (a write):
       // re-seeding brings an older READ row in line.
       update: { access_level: scope.access_level },
       create: scope,
@@ -723,7 +730,7 @@ async function main() {
   console.log(`   • ${permissions.length} Permissions (organized by module)`);
   console.log(`   • 6 System Roles (canonical actors):`);
   console.log(`     - ADMIN: Full platform access`);
-  console.log(`     - WAREHOUSE_MANAGER: Inventory, PO approvals, analytics`);
+  console.log(`     - MANAGER: Inventory, PO approvals, analytics`);
   console.log(`     - WAREHOUSE_STAFF: Warehouse task execution`);
   console.log(`     - LIBRARIAN: Circulation desk workflows`);
   console.log(`     - CUSTOMER: Customer portal self-service`);

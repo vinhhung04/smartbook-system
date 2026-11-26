@@ -5,10 +5,11 @@ import { test, expect } from '@playwright/test';
 import { loginAs, logout } from './helpers/auth';
 
 // Golden flow #2: warehouse staff requests stock -> manager approves the
-// request, converts it to a PO, submits/approves/sends the PO -> supplier
-// (anonymous portal, no login) confirms and submits an invoice -> manager
-// assigns the delivery for counting -> staff counts it -> manager approves
-// the goods receipt (stock increases) -> staff puts the stock away on a shelf.
+// request, converts it to a PO, submits/approves/sends the PO -> supplier (account
+// portal) accepts with a price -> manager approves the proposal -> supplier invoices ->
+// manager approves the invoice -> supplier ships against it -> manager assigns the
+// delivery for counting -> staff counts it -> manager approves the goods receipt
+// (stock increases) -> staff puts the stock away on a shelf.
 test('purchase request through approval, supplier confirmation, receiving, and putaway', async ({ page, browser }) => {
   // The PR -> PO conversion needs a title that exists in the catalog (variant search), so reuse a seeded book.
   const bookTitle = 'Dế Mèn Phiêu Lưu Ký';
@@ -42,18 +43,23 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   await requestRow.getByTestId('convert-request-to-po-button').click();
   await page.getByTestId('convert-po-variant-search').fill(bookTitle);
   await page.getByRole('button', { name: new RegExp(bookTitle) }).first().click();
-  await page.getByTestId('convert-po-supplier-select').selectOption({ index: 1 });
+  // the supplier behind the supplier-sv account answers in step 3
+  const supplierSelect = page.getByTestId('convert-po-supplier-select');
+  const supplierValue = await supplierSelect.locator('option', { hasText: /Sach Viet|Sách Việt/i }).first().getAttribute('value');
+  await supplierSelect.selectOption(supplierValue!);
   await page.getByTestId('create-po-from-request-button').click();
 
   // The PR page only toasts the new PO number (it no longer links to it), so open it from the PO list.
-  const poNumber = (await page.getByText(/Đã chuyển thành PO: PO-\S+/).innerText()).match(/PO-\S+/)![0];
+  const poToast = await page.getByText(/Đã chuyển thành PO: PO-\S+/).innerText();
+  // the manager already approved the request: the converted PO starts approved, ready to send
+  expect(poToast).toContain('đã duyệt, sẵn sàng gửi NCC');
+  const poNumber = poToast.match(/PO-\S+/)![0];
   await page.goto('/purchase-orders');
   await page.getByRole('link', { name: poNumber }).first().click();
 
-  await page.getByTestId('submit-po-button').click();
-  await page.getByTestId('confirm-dialog-action').click();
-  await page.getByTestId('approve-po-button').click();
-  await page.getByTestId('confirm-dialog-action').click();
+  await expect(page.getByText('Đã duyệt').first()).toBeVisible();
+  await expect(page.getByTestId('submit-po-button')).toHaveCount(0);
+  await expect(page.getByTestId('approve-po-button')).toHaveCount(0);
   await page.getByTestId('send-to-supplier-button').click();
   await page.getByTestId('confirm-dialog-action').click();
 
@@ -69,37 +75,75 @@ test('purchase request through approval, supplier confirmation, receiving, and p
   const available = () => Number(sql(`SELECT COALESCE(SUM(available_qty),0) FROM stock_balances WHERE variant_id='${variant}'`));
   const stockBeforeReceipt = onHand();
 
-  // 3. Supplier confirms and submits an invoice, in a browser context with
-  // no session at all -- the portal is reached only via the token in the URL.
+  // 3. Invoice-first: the supplier quotes a price and SmartBook approves it, the supplier
+  // invoices at that price and SmartBook approves the invoice, then the supplier ships.
+  const poPath = new URL(page.url()).pathname;
   const supplierContext = await browser.newContext();
   const supplierPage = await supplierContext.newPage();
+  // the emailed link is read-only for these orders
   await supplierPage.goto(portalHref!);
-  await supplierPage.getByTestId('supplier-confirm-order-button').click();
-  await supplierPage.getByTestId('confirm-dialog-action').click();
-  await supplierPage.getByRole('button', { name: 'Hóa đơn giao hàng' }).click();
-  await supplierPage.getByTestId('supplier-portal-autofill').click();
-  await supplierPage.getByTestId('supplier-portal-submit').click();
-  await supplierPage.getByTestId('confirm-dialog-action').click();
-  await expect(supplierPage.getByText(/INV-/)).toBeVisible();
+  await expect(supplierPage.getByRole('button', { name: 'Đăng nhập tài khoản nhà cung cấp' })).toBeVisible();
+  await expect(supplierPage.getByTestId('supplier-confirm-order-button')).toHaveCount(0);
+
+  await loginAs(supplierPage, { identifier: 'supplier-sv', password: DEMO_PASSWORD });
+  const openOrder = async (tab: string) => {
+    await supplierPage.goto('/supplier');
+    await supplierPage.getByRole('button', { name: new RegExp(poNumber) }).first().click();
+    await supplierPage.getByRole('navigation', { name: 'Mục của đơn' }).getByRole('button', { name: tab, exact: true }).click();
+  };
+  await openOrder('Phản hồi đơn');
+  await supplierPage.getByRole('button', { name: 'Chấp nhận tất cả' }).click();
+  await supplierPage.getByLabel(`Đơn giá — ${bookTitle}`).fill('45000');
+  await supplierPage.getByRole('button', { name: 'Gửi đề xuất cho SmartBook duyệt' }).click();
+  await expect(supplierPage.getByText('Đã gửi đề xuất — chờ SmartBook duyệt')).toBeVisible();
+
+  await page.goto(poPath);
+  await page.getByRole('button', { name: 'Duyệt đề xuất' }).click();
+  await page.getByTestId('confirm-dialog-action').click();
+  await expect(page.getByText('Đã duyệt thay đổi của nhà cung cấp')).toBeVisible();
+
+  await openOrder('Chứng từ');
+  await supplierPage.getByRole('button', { name: 'Lập hóa đơn' }).click();
+  await supplierPage.getByLabel('Số hóa đơn').fill(`HD-${poNumber}`);
+  await supplierPage.getByRole('button', { name: 'Gửi hóa đơn cho SmartBook' }).click();
+  await expect(supplierPage.getByText('Đã gửi hóa đơn — chờ SmartBook duyệt')).toBeVisible();
+
+  await page.goto(poPath);
+  await page.getByRole('button', { name: 'Duyệt hóa đơn' }).click();
+  await expect(page.getByText('Đã duyệt hóa đơn — nhà cung cấp có thể lập phiếu giao')).toBeVisible();
+
+  await openOrder('Lập phiếu giao');
+  await supplierPage.getByRole('button', { name: 'Gửi phiếu giao hàng' }).click();
+  await expect(supplierPage.getByText('Đã gửi phiếu giao hàng — SmartBook sẽ xác nhận khi nhận hàng')).toBeVisible();
   await supplierContext.close();
 
-  // 4. Manager assigns the submitted delivery to a warehouse staff member for counting.
+  // 4. Manager creates the receipt without a counter ("Chưa giao"); staff claim it in step 5.
   await page.goto('/supplier-deliveries');
-  await page.getByRole('link', { name: /^INV-/ }).first().click();
+  await page.getByRole('link', { name: new RegExp(`^PG-${poNumber}`) }).first().click();
   await page.getByTestId('goods-receipt-assign-staff-select').click();
-  // Assign to staff01 (Le Van Minh) -- step 5 logs in as that user, so the first option won't do.
-  await page.getByRole('option', { name: /Le Van Minh/ }).click();
+  await page.getByRole('option', { name: /^Chưa giao/ }).click();
+  await expect(page.getByTestId('goods-receipt-submit')).toContainText('chưa giao việc');
   await page.getByTestId('goods-receipt-submit').click();
   await expect(page.getByText(/Đã tạo phiếu/)).toBeVisible();
   // The toast fires before the app navigates to the new receipt (a lazy route), so wait
   // for its /orders/<id> page -- that is the link the staff task queue shows in step 5.
   await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/);
   const receiptUrl = page.url();
+  const managerToken = await page.evaluate(() => localStorage.getItem('token'));
+  const receiptId = receiptUrl.split('/').at(-1)!;
+  const receipt = await (await page.request.get(`${process.env.GATEWAY_URL || 'http://localhost:3000'}/api/goods-receipts/${receiptId}`, { headers: { Authorization: `Bearer ${managerToken}` } })).json();
+  const receiptNumber = (receipt.data?.receipt_number || receipt.receipt_number) as string;
+  expect(receiptNumber).toBeTruthy();
 
   await logout(page);
 
   // 5. Staff counts the received stock.
   await loginAs(page, { identifier: 'staff01', password: DEMO_PASSWORD });
+  await page.goto('/my-warehouse-tasks');
+  // the unassigned receipt is offered to warehouse staff; staff01 takes it
+  await page.getByRole('tab', { name: /Có thể nhận/ }).click();
+  await page.getByRole('button', { name: `Nhận task ${receiptNumber}` }).click();
+  await expect(page.getByText(`Đã nhận ${receiptNumber}`)).toBeVisible();
   await page.goto('/my-warehouse-tasks');
   // The queue is paged (10, oldest first) and may hold older receipts on a
   // database that is not fresh: narrow to receiving tasks, then open this receipt's task.

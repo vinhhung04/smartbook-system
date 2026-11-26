@@ -122,7 +122,7 @@ test('checkAssignee: active staff with WRITE scope passes; READ, inactive, wrong
     return profiles[id] ? json(200, { data: { user_id: id, ...profiles[id] } }) : json(404, {});
   });
   const r = resolver(auth.fetchImpl);
-  const roles = ['WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER'];
+  const roles = ['WAREHOUSE_STAFF', 'MANAGER'];
   assert.deepEqual(await r.checkAssignee('staff', HN, { roles }), { ok: true });
   assert.deepEqual(await r.checkAssignee('staff', HCM, { roles }), { ok: false, reason: 'NO_WRITE_SCOPE' });
   assert.deepEqual(await r.checkAssignee('locked', HN, { roles }), { ok: false, reason: 'INACTIVE' });

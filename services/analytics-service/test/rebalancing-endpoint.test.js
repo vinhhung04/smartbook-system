@@ -84,7 +84,7 @@ setWarehouseScopeResolver({
   },
 });
 
-const MANAGER_PERMS = { roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide', 'inventory.purchase.request', 'analytics.read'] };
+const MANAGER_PERMS = { roles: ['MANAGER'], permissions: ['inventory.operation.decide', 'inventory.purchase.request', 'analytics.read'] };
 
 function call(userId, query = {}) {
   return new Promise((resolve) => {

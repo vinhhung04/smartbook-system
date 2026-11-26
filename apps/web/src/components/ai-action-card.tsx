@@ -26,7 +26,7 @@ import { AIDecisionCard, DecisionSection, EvidenceList, DecisionWarnings } from 
 // Nothing runs until the person presses the action-specific create button.
 
 const RISK_LABEL: Record<string, string> = { LOW: 'Rủi ro thấp', MEDIUM: 'Rủi ro vừa', HIGH: 'Rủi ro cao' };
-const ROLE_LABEL: Record<string, string> = { WAREHOUSE_MANAGER: 'Quản lý kho', WAREHOUSE_STAFF: 'Nhân viên kho', ADMIN: 'Quản trị viên', LIBRARIAN: 'Thủ thư' };
+const ROLE_LABEL: Record<string, string> = { MANAGER: 'Quản lý', WAREHOUSE_STAFF: 'Nhân viên kho', ADMIN: 'Quản trị viên', LIBRARIAN: 'Thủ thư' };
 const TASK_TYPE_LABEL: Record<string, string> = {
   GENERAL: 'Tổng quát', CHECK_SHELF: 'Kiểm tra kệ', STOCK_CHECK: 'Kiểm kê', LOW_STOCK_REVIEW: 'Xử lý tồn kho thấp',
   EXCEPTION_FOLLOW_UP: 'Xử lý ngoại lệ', REORDER_REVIEW: 'Xem xét nhập sách', RESERVATION_FOLLOW_UP: 'Theo dõi đặt trước',

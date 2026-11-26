@@ -224,6 +224,18 @@ services:
       start_period: 30s
     logging: *default-logging
 
+  # One-shot: inventory-service runs as `node` (uid 1000), but evidence volumes created by
+  # older root-run images stay root-owned and every video/document upload fails with EACCES.
+  # Same job as compose.prod.yml's prepare-volumes, run automatically for local stacks.
+  evidence-volume-init:
+    image: node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
+    user: "0:0"
+    network_mode: none
+    entrypoint: ["chown", "--no-dereference", "-R", "-P", "--", "1000:1000", "/evidence/packing", "/evidence/procurement"]
+    volumes:
+      - packing_evidence_data:/evidence/packing
+      - procurement_document_data:/evidence/procurement
+
   inventory-service:
     build:
       context: .
@@ -252,6 +264,8 @@ services:
       - packing_evidence_data:/app/evidence/packing
       - procurement_document_data:/app/evidence/procurement
     depends_on:
+      evidence-volume-init:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -479,7 +493,7 @@ services:
       - OPENROUTER_VISION_MODEL=${OPENROUTER_VISION_MODEL:-qwen/qwen3.7-flash}
       - OPENROUTER_FALLBACK_MODEL=${OPENROUTER_FALLBACK_MODEL:-}
       - ASSISTANT_TOOL_CONTEXT_CHARS=${ASSISTANT_TOOL_CONTEXT_CHARS:-2000}
-      # Copilot Phase 1 hybrid semantic planner (copilot_semantic_planner.py) - off by default,
+      # Copilot Phase 1 hybrid semantic planner (copilot_semantic_planner.py) - on by default (set to off to disable),
       # see docs/ANALYSIS/AI_COPILOT_SEMANTIC_UNDERSTANDING.md for the acceptance results.
       - COPILOT_SEMANTIC_PLANNER=${COPILOT_SEMANTIC_PLANNER:-on}
       - COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS=${COPILOT_SEMANTIC_PLANNER_TIMEOUT_SECONDS:-5}
@@ -550,9 +564,6 @@ services:
       # Packing-photo verification (OpenRouter vision) - see packing-evidence-ai.service.js
       - PACKING_VISION_MAX_TOKENS=${PACKING_VISION_MAX_TOKENS:-200}
       - PACKING_VISION_TIMEOUT_SECONDS=${PACKING_VISION_TIMEOUT_SECONDS:-15}
-      # Receipt/invoice OCR (OpenRouter vision) - /scan-receipt
-      - RECEIPT_VISION_MAX_TOKENS=${RECEIPT_VISION_MAX_TOKENS:-1200}
-      - RECEIPT_VISION_TIMEOUT_SECONDS=${RECEIPT_VISION_TIMEOUT_SECONDS:-30}
       # Multi-image book OCR for AI Import (/book-metadata/scan-images, book_ocr/config.py).
       # The fallback model is opt-in: empty means only OPENROUTER_BOOK_OCR_MODEL is ever called.
       - BOOK_OCR_ENABLED=${BOOK_OCR_ENABLED:-true}

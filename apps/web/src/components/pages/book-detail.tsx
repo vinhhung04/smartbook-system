@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { NavLink, useParams } from 'react-router';
 import { ArrowLeft, Edit, ScanBarcode, Sparkles, MapPin, BookOpen, Loader2, Info } from 'lucide-react';
 import { toast } from 'sonner';
-import { aiService } from '@/services/ai';
 import { bookService } from '@/services/book';
 import { getApiErrorMessage } from '@/services/api.ts';
 import { authService } from '@/services/auth';
+import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
 import { useDialogA11y } from '@/hooks/useDialogA11y';
 import { AskAiPanel } from '@/components/ai-experience/ask-ai-panel';
 import { classifyCode } from './ai-import/utils';
@@ -116,8 +116,6 @@ export function BookDetailPage() {
   const { id } = useParams();
   const [loading, setLoading] = useState(true);
   const [book, setBook] = useState<BookDetailData | null>(null);
-  const [isApplyingAiMetadata, setIsApplyingAiMetadata] = useState(false);
-  const [summaryLoading, setSummaryLoading] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const editModalRef = useRef<HTMLDivElement>(null);
@@ -131,10 +129,12 @@ export function BookDetailPage() {
   });
   const currentUser = authService.getCurrentUser();
   const currentUserRoles = (currentUser?.roles || []).map((role) => role.toUpperCase());
-  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("WAREHOUSE_MANAGER");
+  const canManageCatalog = Boolean(currentUser?.is_superuser) || currentUserRoles.includes("ADMIN") || currentUserRoles.includes("MANAGER");
   const canCompleteIncompleteBook = currentUserRoles.includes("LIBRARIAN");
-  const canCreateReceivingDraft = currentUserRoles.some((role) => ["WAREHOUSE_STAFF", "WAREHOUSE_MANAGER", "ADMIN"].includes(role));
+  const canCreateReceivingDraft = currentUserRoles.some((role) => ["WAREHOUSE_STAFF", "MANAGER", "ADMIN"].includes(role));
   const canEditBook = Boolean(book && (canManageCatalog || (canCompleteIncompleteBook && book.is_incomplete)));
+  // AI import (managers) completes this very book: its duplicate check matches the code
+  const canUseAiImport = canAccess(currentUser, ROUTE_ACCESS.managerStockDecision);
 
   const loadBook = useCallback(async () => {
     if (!id) return;
@@ -157,74 +157,6 @@ export function BookDetailPage() {
   const totalStock = useMemo(() => {
     return (book?.locations || []).reduce((sum, location) => sum + Number(location.quantity || 0), 0);
   }, [book]);
-
-  const normalizeIsbnOrBarcode = (value: string): string => {
-    return String(value || "").trim().replace(/[^0-9Xx]/g, "").toUpperCase();
-  };
-
-  const extractPublishYear = (publishedDate?: string | null): string => {
-    const matched = String(publishedDate || "").match(/\b(\d{4})\b/);
-    if (!matched) return "";
-    const year = Number(matched[1]);
-    if (!Number.isInteger(year) || year < 1000 || year > 2100) return "";
-    return String(year);
-  };
-
-  const handleApplyAiMetadata = async () => {
-    const isbnOrBarcode = normalizeIsbnOrBarcode(editForm.isbn_or_barcode);
-    if (!isbnOrBarcode) {
-      toast.error("Vui lòng nhập ISBN trước khi dùng AI");
-      return;
-    }
-    try {
-      setIsApplyingAiMetadata(true);
-      const lookup = await aiService.lookupBookByIsbn({ isbn: isbnOrBarcode, generateVietnameseSummary: false });
-      if (!lookup?.found) {
-        toast.info("Không tìm thấy thông tin sách theo ISBN này.");
-        return;
-      }
-      setEditForm((prev) => ({
-        ...prev,
-        title: lookup.title || prev.title,
-        subtitle: lookup.subtitle || prev.subtitle,
-        author_name: lookup.authors?.[0] || prev.author_name,
-        publisher_name: lookup.publisher || prev.publisher_name,
-        category_name: lookup.categories?.[0] || prev.category_name,
-        isbn_or_barcode: lookup.isbn || prev.isbn_or_barcode,
-        language: lookup.language || prev.language,
-        publish_year: extractPublishYear(lookup.publishedDate) || prev.publish_year,
-        description: lookup.description?.trim() || prev.description,
-        cover_image_url: lookup.thumbnail || prev.cover_image_url,
-      }));
-      toast.success("Đã điền thông tin từ ISBN");
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, "Không lấy được thông tin từ AI"));
-    } finally {
-      setIsApplyingAiMetadata(false);
-    }
-  };
-
-  const handleGenerateSummaryVi = async () => {
-    if (!editForm.title.trim()) {
-      toast.error("Cần có tên sách trước khi tạo tóm tắt AI");
-      return;
-    }
-    setSummaryLoading(true);
-    try {
-      const result = await aiService.generateSummaryVi({
-        title: editForm.title.trim(),
-        author: editForm.author_name.trim(),
-        description: editForm.description,
-        categories: editForm.category_name ? [editForm.category_name] : [],
-      });
-      setEditForm((prev) => ({ ...prev, summary_vi: result.summaryVi || prev.summary_vi }));
-      toast.success(`Đã tạo tóm tắt AI (${result.ai_provider === "openrouter" ? "OpenRouter" : result.ai_provider})`);
-    } catch {
-      toast.error("Không tạo được tóm tắt. Vui lòng thử lại.");
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
 
   const handleSaveBook = async () => {
     if (!id || !book) return;
@@ -396,6 +328,9 @@ export function BookDetailPage() {
               Sách này chưa hoàn chỉnh{missingFields.length > 0 ? <>: còn thiếu <span className="font-semibold">{missingFields.join(', ')}</span></> : null}.
               {canEditBook ? ' Bổ sung thông tin để sách hiển thị đầy đủ trong danh mục.' : ''}
             </p>
+            {canUseAiImport && /^\d{13}$/.test(String(book.isbn || "")) ? (
+              <NavLink to={`/ai-import?isbn=${book.isbn}`} className="shrink-0 font-semibold underline underline-offset-4 hover:opacity-80">Hoàn thiện bằng AI</NavLink>
+            ) : null}
             {canEditBook ? (
               <button onClick={() => setShowEditModal(true)} className="shrink-0 font-semibold underline underline-offset-4 hover:opacity-80">Bổ sung</button>
             ) : null}
@@ -590,14 +525,7 @@ export function BookDetailPage() {
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-[12px] font-semibold text-muted-foreground">ISBN / Barcode</label>
-                    <button type="button" onClick={() => void handleApplyAiMetadata()} disabled={isApplyingAiMetadata}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary/[0.08] px-2.5 py-1 text-[12px] font-semibold text-primary hover:bg-primary/[0.14] transition-colors disabled:opacity-50">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      {isApplyingAiMetadata ? "Đang tải..." : "AI điền giúp"}
-                    </button>
-                  </div>
+                  <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">ISBN / Barcode</label>
                   <input value={editForm.isbn_or_barcode} onChange={(e) => setEditForm((p) => ({ ...p, isbn_or_barcode: e.target.value }))}
                     className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] font-mono outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all" />
                 </div>
@@ -641,14 +569,7 @@ export function BookDetailPage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[12px] font-semibold text-muted-foreground">Tóm tắt AI (tiếng Việt)</label>
-                  <button type="button" onClick={() => void handleGenerateSummaryVi()} disabled={summaryLoading || !editForm.title.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary/[0.08] px-2.5 py-1 text-[12px] font-semibold text-primary hover:bg-primary/[0.14] transition-colors disabled:opacity-40">
-                    {summaryLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    {summaryLoading ? "Đang tạo..." : "Tạo bằng AI"}
-                  </button>
-                </div>
+                <label className="block text-[12px] font-semibold text-muted-foreground mb-1.5">Tóm tắt (tiếng Việt)</label>
                 <textarea value={editForm.summary_vi} onChange={(e) => setEditForm((p) => ({ ...p, summary_vi: e.target.value }))}
                   rows={5}
                   className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary/40 transition-all resize-none" />
@@ -660,7 +581,7 @@ export function BookDetailPage() {
                 className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-[13px] font-semibold text-muted-foreground hover:bg-muted transition-colors">
                 Hủy
               </button>
-              <button type="button" onClick={() => void handleSaveBook()} disabled={isSaving || isApplyingAiMetadata}
+              <button type="button" onClick={() => void handleSaveBook()} disabled={isSaving}
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-[13px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isSaving ? "Đang lưu..." : "Lưu thay đổi"}

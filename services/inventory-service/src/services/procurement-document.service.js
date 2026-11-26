@@ -8,6 +8,25 @@
 
 const crypto = require("crypto");
 const { inspectUpload, writeVersionFile, removeOrphanFile } = require("./procurement-document-storage.service");
+const { FulfillmentError, normalizeInvoiceFirstLines } = require("./invoice-fulfillment.service");
+
+// Invoice-first POs: the supplier invoices only after SmartBook approved its quantity/price
+// proposal, at that approved price; SmartBook then approves the invoice before any delivery.
+const INVOICE_FIRST_INVOICE_PO_STATUSES = ["SUPPLIER_CONFIRMED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"];
+
+function isInvoiceFirstInvoice(po, type) {
+  return po?.procurement_flow === "INVOICE_FIRST" && isInvoiceType(type);
+}
+
+/** Runs a FulfillmentError-throwing check and rethrows it as a DocumentError. */
+async function asDocumentError(run) {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof FulfillmentError) throw new DocumentError(error.message, error.statusCode);
+    throw error;
+  }
+}
 
 const DOCUMENT_TYPES = {
   VAT_INVOICE: { prefix: "INV", issuer: "SUPPLIER", invoice: true, label: "Hóa đơn giá trị gia tăng điện tử" },
@@ -124,7 +143,8 @@ function canActorSeeDocument(actor, doc) {
 }
 
 function lineTitle(line) {
-  return line.book_variants?.books?.title || null;
+  // the title as ordered stays the record; the catalog title is only for legacy lines without one
+  return line.purchase_order_items?.item_title || line.book_variants?.books?.title || null;
 }
 
 /** Shape for the API. Supplier view never gets internal notes, staff ids or storage paths. */
@@ -171,6 +191,9 @@ function mapDocument(doc, actor) {
     metadata,
     internal_note: forSupplier ? undefined : doc.internal_note,
     cancel_reason: doc.cancel_reason,
+    approval_status: doc.approval_status || null,
+    approval_note: doc.approval_note || null,
+    approval_at: doc.approval_at || null,
     created_by_party: doc.issuer_party,
     issued_at: doc.issued_at,
     cancelled_at: doc.cancelled_at,
@@ -182,6 +205,7 @@ function mapDocument(doc, actor) {
       variant_id: line.variant_id,
       title: lineTitle(line),
       isbn13: line.book_variants?.isbn13 || null,
+      item_code: line.purchase_order_items?.item_code || line.book_variants?.isbn13 || null,
       quantity: Number(line.quantity),
       unit_price: Number(line.unit_price),
       line_amount: Number(line.line_amount),
@@ -229,7 +253,10 @@ function documentInclude() {
     goods_receipts: { select: { receipt_number: true } },
     superseded_by: { select: { id: true, document_number: true, status: true } },
     procurement_document_lines: {
-      include: { book_variants: { select: { isbn13: true, books: { select: { title: true } } } } },
+      include: {
+        book_variants: { select: { isbn13: true, books: { select: { title: true } } } },
+        purchase_order_items: { select: { item_title: true, item_code: true } },
+      },
       orderBy: { id: "asc" },
     },
     procurement_document_files: true,
@@ -314,13 +341,23 @@ async function createDocument(prisma, { actor, po, body = {}, file = null }) {
   const metadata = parseJsonField(body.metadata, {});
   if (typeof metadata !== "object" || Array.isArray(metadata)) throw new DocumentError("metadata phải là object");
   let lines = [];
+  const invoiceFirst = isInvoiceFirstInvoice(po, type);
 
   if (isInvoiceType(type)) {
     if (!data.external_number) throw new DocumentError("Thiếu số hóa đơn");
     if (!data.issue_date) throw new DocumentError("Thiếu ngày lập hóa đơn");
     if (type === "VAT_INVOICE" && !data.invoice_series) throw new DocumentError("Hóa đơn giá trị gia tăng phải có ký hiệu hóa đơn");
-    lines = normalizeInvoiceLines(parseJsonField(body.lines, []), po.purchase_order_items || []);
-    Object.assign(data, computeInvoiceAmounts({ ...body, lines }));
+    if (invoiceFirst) {
+      if (type === "PROFORMA_INVOICE") throw new DocumentError("Đơn theo quy trình mới chỉ nhận hóa đơn giá trị gia tăng hoặc hóa đơn bán hàng");
+      if (!INVOICE_FIRST_INVOICE_PO_STATUSES.includes(po.status)) {
+        throw new DocumentError("SmartBook chưa duyệt đề xuất số lượng và đơn giá nên chưa lập được hóa đơn", 409);
+      }
+      if (body.supersedes_document_id) throw new DocumentError("Hóa đơn bị từ chối không cần thay thế — hãy lập hóa đơn mới");
+      // lines (approved price, accepted-quantity cap) are checked under row locks in the transaction below
+    } else {
+      lines = normalizeInvoiceLines(parseJsonField(body.lines, []), po.purchase_order_items || []);
+      Object.assign(data, computeInvoiceAmounts({ ...body, lines }));
+    }
     data.metadata = {
       lookup_code: text(metadata.lookup_code, 120),
       lookup_url: text(metadata.lookup_url, 300),
@@ -395,11 +432,17 @@ async function createDocument(prisma, { actor, po, body = {}, file = null }) {
   }
 
   const wantsIssue = String(body.issue ?? "").toLowerCase() === "true" || body.issue === true;
-  if (wantsIssue && isInvoiceType(type) && !fileInfo) throw new DocumentError("Cần đính kèm file hóa đơn (PDF/XML) trước khi phát hành");
+  // the file is optional for invoice-first invoices (user decision 2026-11-25)
+  if (wantsIssue && isInvoiceType(type) && !fileInfo && !invoiceFirst) throw new DocumentError("Cần đính kèm file hóa đơn (PDF/XML) trước khi phát hành");
 
   let storageRef = null;
   try {
     const created = await prisma.$transaction(async (tx) => {
+      if (invoiceFirst) {
+        lines = await asDocumentError(() => normalizeInvoiceFirstLines(tx, po, parseJsonField(body.lines, [])));
+        lines = lines.map((line) => ({ ...line, note: null }));
+        Object.assign(data, computeInvoiceAmounts({ tax_rate: body.tax_rate, lines }));
+      }
       const doc = await tx.procurement_documents.create({ data });
       if (lines.length > 0) {
         await tx.procurement_document_lines.createMany({ data: lines.map((line) => ({ ...line, document_id: doc.id })) });
@@ -447,6 +490,12 @@ async function issueInTransaction(tx, actor, doc) {
     data: { status: "ISSUED", issued_at: now, updated_at: now },
   });
   if (claimed.count !== 1) throw new DocumentError("Chứng từ không còn ở trạng thái nháp", 409);
+  if (isInvoiceType(doc.document_type)) {
+    const po = await tx.purchase_orders.findUnique({ where: { id: doc.purchase_order_id }, select: { procurement_flow: true } });
+    if (po?.procurement_flow === "INVOICE_FIRST") {
+      await tx.procurement_documents.update({ where: { id: doc.id }, data: { approval_status: "PENDING_APPROVAL" } });
+    }
+  }
   if (doc.supersedes_document_id) {
     await tx.procurement_documents.updateMany({
       where: { id: doc.supersedes_document_id, status: "ISSUED" },
@@ -483,7 +532,10 @@ async function issueDocument(prisma, { actor, doc }) {
   if (doc.status !== "DRAFT") throw new DocumentError("Chỉ phát hành được chứng từ nháp", 409);
   if (actor.role === "STAFF") throw new DocumentError("Nhân viên kho không phát hành chứng từ", 403);
   const fileCount = await prisma.procurement_document_files.count({ where: { document_id: doc.id } });
-  if (isInvoiceType(doc.document_type) && fileCount === 0) throw new DocumentError("Cần đính kèm file hóa đơn (PDF/XML) trước khi phát hành");
+  const po = await prisma.purchase_orders.findUnique({ where: { id: doc.purchase_order_id }, select: { procurement_flow: true } });
+  if (isInvoiceType(doc.document_type) && fileCount === 0 && po?.procurement_flow !== "INVOICE_FIRST") {
+    throw new DocumentError("Cần đính kèm file hóa đơn (PDF/XML) trước khi phát hành");
+  }
   await prisma.$transaction((tx) => issueInTransaction(tx, actor, doc));
 }
 
@@ -546,6 +598,10 @@ async function cancelDocument(prisma, { actor, doc, reason }) {
   if (!LIVE_STATUSES.includes(doc.status)) throw new DocumentError("Chứng từ đã hủy hoặc đã bị thay thế", 409);
   if (doc.document_type === "DELIVERY_NOTE") {
     throw new DocumentError("Phiếu giao hàng đã gửi kho không hủy được — sai lệch được xử lý bằng biên bản chênh lệch", 409);
+  }
+  if (doc.approval_status === "APPROVED") {
+    const notes = await prisma.supplier_delivery_invoices.count({ where: { invoice_document_id: doc.id } });
+    if (notes > 0) throw new DocumentError("Hóa đơn đã có phiếu giao hàng nên không hủy được", 409);
   }
   const now = new Date();
   await prisma.$transaction(async (tx) => {
@@ -713,7 +769,75 @@ async function registerDeliveryNote(tx, { delivery, items, actorUserId, recorded
   return doc;
 }
 
+/** Supplier edits its own invoice draft (invoice-first): number, date, tax, note and lines. */
+async function updateInvoiceDraft(prisma, { actor, doc, po, body = {} }) {
+  assertIssuer(actor, doc);
+  if (doc.status !== "DRAFT") throw new DocumentError("Chỉ sửa được hóa đơn nháp — hóa đơn đã gửi không được sửa", 409);
+  if (!isInvoiceFirstInvoice(po, doc.document_type)) throw new DocumentError("Chỉ sửa được hóa đơn nháp của đơn theo quy trình mới", 409);
+  const externalNumber = text(body.external_number, 80) || doc.external_number;
+  const series = body.invoice_series === undefined ? doc.invoice_series : text(body.invoice_series, 30);
+  const issueDate = body.issue_date === undefined ? doc.issue_date : dateOrNull(body.issue_date, "Ngày lập hóa đơn");
+  if (!externalNumber) throw new DocumentError("Thiếu số hóa đơn");
+  if (!issueDate) throw new DocumentError("Thiếu ngày lập hóa đơn");
+  if (doc.document_type === "VAT_INVOICE" && !series) throw new DocumentError("Hóa đơn giá trị gia tăng phải có ký hiệu hóa đơn");
+  const duplicate = await findDuplicateInvoice(prisma, { supplierId: doc.supplier_id, series, number: externalNumber, excludeId: doc.id });
+  if (duplicate) throw new DocumentError(`Số hóa đơn ${series ? `${series}/` : ""}${externalNumber} đã tồn tại (${duplicate.document_number})`, 409);
+  const metadata = parseJsonField(body.metadata, {});
+  await prisma.$transaction(async (tx) => {
+    const lines = await asDocumentError(() => normalizeInvoiceFirstLines(tx, po, parseJsonField(body.lines, []), { excludeDocumentId: doc.id }));
+    const amounts = computeInvoiceAmounts({ tax_rate: body.tax_rate ?? doc.tax_rate, lines });
+    const claimed = await tx.procurement_documents.updateMany({
+      where: { id: doc.id, status: "DRAFT" },
+      data: {
+        external_number: externalNumber,
+        invoice_series: series,
+        issue_date: issueDate,
+        ...amounts,
+        metadata: { ...(doc.metadata || {}), note: text(metadata.note, 2000) },
+        updated_at: new Date(),
+      },
+    });
+    if (claimed.count !== 1) throw new DocumentError("Hóa đơn không còn ở trạng thái nháp", 409);
+    await tx.procurement_document_lines.deleteMany({ where: { document_id: doc.id } });
+    await tx.procurement_document_lines.createMany({ data: lines.map((line) => ({ ...line, document_id: doc.id })) });
+    await audit(tx, actor, "PROCUREMENT_DOCUMENT_DRAFT_UPDATED", doc.id, { external_number: externalNumber, lines, ...amounts });
+  });
+}
+
+/** SmartBook approves or rejects an invoice-first supplier invoice (only once, from PENDING_APPROVAL). */
+async function reviewInvoice(prisma, { actor, doc, decision, note }) {
+  if (actor.party !== "SMARTBOOK" || actor.role === "STAFF") throw new DocumentError("Chỉ quản lý mua hàng được duyệt hóa đơn", 403);
+  const verdict = String(decision || "").toUpperCase();
+  if (!["APPROVE", "REJECT"].includes(verdict)) throw new DocumentError("decision phải là APPROVE hoặc REJECT");
+  const why = text(note, 2000);
+  if (verdict === "REJECT" && !why) throw new DocumentError("Cần ghi lý do từ chối / yêu cầu điều chỉnh hóa đơn");
+  if (!isInvoiceType(doc.document_type) || doc.approval_status !== "PENDING_APPROVAL") {
+    throw new DocumentError("Hóa đơn này không ở trạng thái chờ duyệt", 409);
+  }
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    const claimed = await tx.procurement_documents.updateMany({
+      where: { id: doc.id, approval_status: "PENDING_APPROVAL", status: { in: ["ISSUED", "SCAN_UPLOADED"] } },
+      data: {
+        approval_status: verdict === "APPROVE" ? "APPROVED" : "REJECTED",
+        approval_note: why,
+        approval_by_user_id: actor.userId || null,
+        approval_at: now,
+        updated_at: now,
+      },
+    });
+    if (claimed.count !== 1) throw new DocumentError("Hóa đơn vừa được xử lý hoặc đã bị hủy, hãy tải lại", 409);
+    await audit(tx, actor, verdict === "APPROVE" ? "SUPPLIER_INVOICE_APPROVED" : "SUPPLIER_INVOICE_REJECTED", doc.id, {
+      approval_status: verdict === "APPROVE" ? "APPROVED" : "REJECTED",
+      note: why,
+      total_amount: doc.total_amount == null ? null : Number(doc.total_amount),
+    }, { approval_status: doc.approval_status });
+  });
+}
+
 module.exports = {
+  updateInvoiceDraft,
+  reviewInvoice,
   DOCUMENT_TYPES,
   registerDeliveryNote,
   DocumentError,

@@ -31,7 +31,11 @@ import { bookService } from '@/services/book';
 import { stockMovementService } from '@/services/stock-movement';
 import { getApiErrorMessage } from '@/services/api';
 import { authService } from '@/services/auth';
-import { canAccess, ROUTE_ACCESS } from '@/lib/rbac';
+import { canAccess, hasAnyPermission, ROUTE_ACCESS } from '@/lib/rbac';
+import { getBorrowTrends, getFineSummary, getOverdueSummary, getTopBooks } from '@/services/analytics';
+import { fineRowsFromSummary, periodParams, trendTotals, type BorrowAnalytics } from './reports-analytics';
+import { WarehouseFilter } from '@/components/analytics/warehouse-filter';
+import { useWarehouseFilter } from '@/hooks/useWarehouseFilter';
 import { exportToCsv, exportToPdf, exportSummaryReport, type ExportColumn } from '@/lib/export-utils';
 import { toast } from 'sonner';
 
@@ -264,6 +268,8 @@ function ChartTooltip({ active, payload, label, unit }: {
 }
 
 const axisTick = { fontSize: 11, fill: '#94a3b8' };
+const INFLOW_TYPES = new Set(['INBOUND', 'RETURN']);
+const OUTFLOW_TYPES = new Set(['OUTBOUND', 'BORROW']);
 
 export function ReportsPage() {
   const [range, setRange] = useState<DateRange>('30d');
@@ -280,20 +286,30 @@ export function ReportsPage() {
   const [loanQuery, setLoanQuery] = useState('');
   const [fineQuery, setFineQuery] = useState('');
   const [variantTitles, setVariantTitles] = useState<Record<string, string>>({});
+  // A manager reads the library's analytics but not the desk lists: borrow figures come from /analytics/*.
+  const [analyticsOnly, setAnalyticsOnly] = useState(false);
+  const [borrowAnalytics, setBorrowAnalytics] = useState<BorrowAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+  const { warehouses, warehouseId, setWarehouseId, selected: selectedWarehouse } = useWarehouseFilter();
 
   const loadData = async () => {
     try {
       setLoading(true);
+      setReloadTick((tick) => tick + 1);
       // Same gate as the Borrow section of the sidebar: roles without it (e.g. warehouse manager) would
       // only get 403s from these two endpoints, so don't send the requests at all.
-      const noBorrowAccess = !canAccess(authService.getCurrentUser(), ROUTE_ACCESS.borrowRead);
-      if (noBorrowAccess) setBorrowDenied(true);
+      const user = authService.getCurrentUser();
+      const noBorrowAccess = !canAccess(user, ROUTE_ACCESS.borrowRead);
+      const readsBorrowAnalytics = noBorrowAccess && hasAnyPermission(user, ['analytics.borrow.read']);
+      setAnalyticsOnly(readsBorrowAnalytics);
+      setBorrowDenied(noBorrowAccess && !readsBorrowAnalytics);
       const emptyPage = <T,>() => Promise.resolve({ rows: [] as T[], truncated: false });
       const [loanResp, fineResp, bookResp, movResp] = await Promise.allSettled([
         noBorrowAccess ? emptyPage<Loan>() : fetchAllPages<Loan>((p) => borrowService.getLoans(p)),
         noBorrowAccess ? emptyPage<Fine>() : fetchAllPages<Fine>((p) => borrowService.getFines(p)),
         bookService.getAll(),
-        stockMovementService.getAll({ pageSize: 500 }),
+        stockMovementService.getAll({ pageSize: 500, warehouse_id: warehouseId || undefined }),
       ]);
 
       if (loanResp.status === 'fulfilled') {
@@ -327,7 +343,9 @@ export function ReportsPage() {
     }
   };
 
-  useEffect(() => { void loadData(); }, []);
+  // loadData reads warehouseId itself; the picked warehouse is the only thing that should refetch here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void loadData(); }, [warehouseId]);
   useEffect(() => { setLoansPage(1); setFinesPage(1); }, [range]);
   useEffect(() => { setLoansPage(1); }, [loanQuery]);
   useEffect(() => { setFinesPage(1); }, [fineQuery]);
@@ -344,8 +362,47 @@ export function ReportsPage() {
     return `${period.start.toLocaleDateString('vi-VN')} – ${new Date().toLocaleDateString('vi-VN')}`;
   }, [period]);
 
-  const filteredLoans = useMemo(() => loans.filter((l) => inPeriod(period, l.created_at)), [loans, period]);
-  const filteredFines = useMemo(() => fines.filter((f) => inPeriod(period, f.issued_at)), [fines, period]);
+  // Analytics mode: the period is applied server-side, so this reloads when the range changes.
+  useEffect(() => {
+    if (!analyticsOnly) return;
+    let cancelled = false;
+    setAnalyticsLoading(true);
+    const current = periodParams(period?.start ?? null);
+    const previous = period ? periodParams(period.prevStart, new Date(period.start.getTime() - DAY_MS)) : null;
+    const wh = warehouseId ? { warehouseId } : {};
+    void Promise.allSettled([
+      getBorrowTrends({ ...current, granularity: 'day', ...wh }),
+      previous ? getBorrowTrends({ ...previous, granularity: 'day', ...wh }) : Promise.resolve(null),
+      getTopBooks({ ...current, limit: 8, ...wh }),
+      getOverdueSummary(wh),
+      getFineSummary(wh),
+    ]).then(([trend, previousTrend, top, overdue, fines]) => {
+      if (cancelled) return;
+      const value = <T,>(r: PromiseSettledResult<T>, fallback: T) => (r.status === 'fulfilled' ? r.value : fallback);
+      if (trend.status === 'rejected') {
+        toast.error('Không tải được số liệu mượn/trả: ' + getApiErrorMessage(trend.reason, 'Lỗi không xác định'));
+      }
+      setBorrowAnalytics({
+        trend: value(trend, []),
+        previousTrend: value(previousTrend, null),
+        top: value(top, []),
+        overdue: value(overdue, null),
+        fines: value(fines, null),
+      });
+    }).finally(() => { if (!cancelled) setAnalyticsLoading(false); });
+    return () => { cancelled = true; };
+  }, [analyticsOnly, period, reloadTick, warehouseId]);
+
+  // Desk mode loads every loan/fine the caller may read; a picked warehouse keeps the loans it lent
+  // and the fines of those loans (a fine carries no warehouse of its own).
+  const whLoans = useMemo(() => (warehouseId ? loans.filter((l) => l.warehouse_id === warehouseId) : loans), [loans, warehouseId]);
+  const whFines = useMemo(() => {
+    if (!warehouseId) return fines;
+    const loanIds = new Set(whLoans.map((l) => l.id));
+    return fines.filter((f) => Boolean(f.loan_items?.loan_id && loanIds.has(f.loan_items.loan_id)));
+  }, [fines, whLoans, warehouseId]);
+  const filteredLoans = useMemo(() => whLoans.filter((l) => inPeriod(period, l.created_at)), [whLoans, period]);
+  const filteredFines = useMemo(() => whFines.filter((f) => inPeriod(period, f.issued_at)), [whFines, period]);
   const filteredMovements = useMemo(() => movements.filter((m: any) => inPeriod(period, m.created_at)), [movements, period]);
 
   // A truncated fetch keeps only the newest records, which undercounts the previous period — so no comparison then.
@@ -363,29 +420,41 @@ export function ReportsPage() {
     };
     const current = summarize(filteredLoans, filteredFines);
     const previous = summarize(
-      loans.filter((l) => inPrevPeriod(period, l.created_at)),
-      fines.filter((f) => inPrevPeriod(period, f.issued_at)),
+      whLoans.filter((l) => inPrevPeriod(period, l.created_at)),
+      whFines.filter((f) => inPrevPeriod(period, f.issued_at)),
     );
     return { current, previous };
-  }, [filteredLoans, filteredFines, loans, fines, period]);
+  }, [filteredLoans, filteredFines, whLoans, whFines, period]);
+
+  // One row per day with loans: the desk's loan rows, or the analytics borrow trend.
+  const loanDays = useMemo<{ day: string; count: number }[]>(() => (analyticsOnly
+    ? (borrowAnalytics?.trend || []).filter((row) => row.loans > 0).map((row) => ({ day: isoDay(row.date), count: row.loans }))
+    : filteredLoans.map((l) => ({ day: isoDay(l.created_at), count: 1 }))), [analyticsOnly, borrowAnalytics, filteredLoans]);
 
   const buckets = useMemo(() => {
     if (period) return buildBuckets(period.start);
-    const dates = [...filteredLoans.map((l) => l.created_at), ...filteredMovements.map((m: any) => m.created_at)].filter(Boolean).sort();
+    const dates = [...loanDays.map((d) => d.day), ...filteredMovements.map((m: any) => m.created_at)].filter(Boolean).sort();
     return buildBuckets(dates.length ? new Date(dates[0]) : new Date());
-  }, [period, filteredLoans, filteredMovements]);
+  }, [period, loanDays, filteredMovements]);
 
   const borrowTrend = useMemo(() => {
     const counts = new Map(buckets.keys.map((k) => [k, 0]));
-    for (const loan of filteredLoans) {
-      const key = buckets.bucketOf(isoDay(loan.created_at));
-      if (counts.has(key)) counts.set(key, (counts.get(key) || 0) + 1);
+    let total = 0;
+    for (const { day, count } of loanDays) {
+      const key = buckets.bucketOf(day);
+      if (counts.has(key)) { counts.set(key, (counts.get(key) || 0) + count); total += count; }
     }
     const data = buckets.keys.map((date) => ({ date, count: counts.get(date) || 0 }));
     const peak = data.reduce((best, row) => (row.count > best.count ? row : best), { date: '', count: 0 });
-    const average = data.length ? filteredLoans.length / data.length : 0;
-    return { data, peak, average };
-  }, [buckets, filteredLoans]);
+    const average = data.length ? total / data.length : 0;
+    return { data, peak, average, total };
+  }, [buckets, loanDays]);
+
+  const analyticsKpi = useMemo(() => {
+    const current = trendTotals(borrowAnalytics?.trend);
+    const previous = borrowAnalytics?.previousTrend ? trendTotals(borrowAnalytics.previousTrend) : null;
+    return { current, previous, overdue: borrowAnalytics?.overdue ?? null, fines: borrowAnalytics?.fines ?? null };
+  }, [borrowAnalytics]);
 
   const movementTrend = useMemo(() => {
     const inMap = new Map(buckets.keys.map((k) => [k, 0]));
@@ -396,8 +465,10 @@ export function ReportsPage() {
       if (!m.created_at) continue;
       const key = buckets.bucketOf(isoDay(m.created_at));
       const qty = Number(m.quantity || 0);
-      if (m.movement_type === 'INBOUND' && inMap.has(key)) { inMap.set(key, (inMap.get(key) || 0) + qty); totalIn += qty; }
-      if (m.movement_type === 'OUTBOUND' && outMap.has(key)) { outMap.set(key, (outMap.get(key) || 0) + qty); totalOut += qty; }
+      // Copies leave the stock as OUTBOUND or BORROW and come back as INBOUND or RETURN; transfers,
+      // holds (RESERVE/RELEASE) and adjustments are not flow in or out of the warehouse here.
+      if (INFLOW_TYPES.has(m.movement_type) && inMap.has(key)) { inMap.set(key, (inMap.get(key) || 0) + qty); totalIn += qty; }
+      if (OUTFLOW_TYPES.has(m.movement_type) && outMap.has(key)) { outMap.set(key, (outMap.get(key) || 0) + qty); totalOut += qty; }
     }
     const data = buckets.keys.map((date) => ({ date, inbound: inMap.get(date) || 0, outbound: -(outMap.get(date) || 0) }));
     return { data, totalIn, totalOut, hasAny: totalIn + totalOut > 0 };
@@ -438,18 +509,21 @@ export function ReportsPage() {
   }, [topBooksCounts, variantTitles]);
 
   const topBooks = useMemo(
-    () => topBooksCounts.map((b) => ({ key: b.key, title: b.isVariant ? variantTitles[b.key] : b.label, count: b.count })),
-    [topBooksCounts, variantTitles],
+    () => (analyticsOnly
+      ? (borrowAnalytics?.top || []).map((b) => ({ key: b.variant_id, title: b.title, count: Number(b.borrow_count || 0) }))
+      : topBooksCounts.map((b) => ({ key: b.key, title: b.isVariant ? variantTitles[b.key] : b.label, count: b.count }))),
+    [analyticsOnly, borrowAnalytics, topBooksCounts, variantTitles],
   );
 
-  const fineBreakdown = useMemo(() => {
+  const fineBreakdown = useMemo<{ rows: { status: string; count: number | null; amount: number }[]; total: number }>(() => {
+    if (analyticsOnly) return fineRowsFromSummary(borrowAnalytics?.fines);
     const rows = FINE_STATUS_ORDER.map((status) => {
       const items = filteredFines.filter((f) => f.status === status);
       return { status, count: items.length, amount: items.reduce((s, f) => s + Number(f.amount || 0), 0) };
     }).filter((row) => row.count > 0);
     const total = rows.reduce((s, row) => s + row.amount, 0);
     return { rows, total };
-  }, [filteredFines]);
+  }, [analyticsOnly, borrowAnalytics, filteredFines]);
 
   const searchedLoans = useMemo(() => {
     const q = loanQuery.trim().toLowerCase();
@@ -529,10 +603,28 @@ export function ReportsPage() {
   };
 
   const handleExportSummaryReport = () => {
+    if (analyticsOnly) {
+      const { current: a, overdue, fines: f } = analyticsKpi;
+      exportSummaryReport({
+        title: 'Báo cáo Tổng hợp Thư viện SmartBook',
+        dateRange: `Khoảng thời gian: ${periodLabel} (${selectedWarehouse ? `kho ${selectedWarehouse.name}` : 'số liệu trong phạm vi kho/chi nhánh của bạn'})`,
+        kpis: [
+          { label: 'Tổng đầu sách', value: books.length },
+          { label: 'Lượt mượn', value: a.loans },
+          { label: 'Lượt trả', value: a.returns },
+          { label: 'Phiếu quá hạn (hiện tại)', value: overdue?.total_overdue_loans ?? '—' },
+          { label: 'Tiền phạt chưa thu (hiện tại)', value: f ? `${Number(f.total_unpaid).toLocaleString('vi-VN')}đ` : '—' },
+          { label: 'Biến động kho', value: filteredMovements.length },
+        ],
+        sections: [],
+      });
+      toast.success('Đã xuất báo cáo tổng hợp PDF');
+      return;
+    }
     const paidFines = filteredFines.filter((f) => f.status === 'PAID').length;
     exportSummaryReport({
       title: 'Báo cáo Tổng hợp Thư viện SmartBook',
-      dateRange: `Khoảng thời gian: ${periodLabel}`,
+      dateRange: `Khoảng thời gian: ${periodLabel}${selectedWarehouse ? ` · kho ${selectedWarehouse.name}` : ''}`,
       kpis: [
         { label: 'Tổng đầu sách', value: books.length },
         { label: 'Phiếu mượn', value: kpi.current.total },
@@ -597,18 +689,21 @@ export function ReportsPage() {
     ? `Chỉ tải được ${(FETCH_PAGE_SIZE * FETCH_MAX_PAGES).toLocaleString('vi-VN')} ${truncated.loans ? 'phiếu mượn' : 'khoản phạt'} mới nhất, nên số liệu có thể thấp hơn thực tế và không so sánh được với kỳ trước.`
     : null;
 
-  const lede = loading
+  const borrowLoading = loading || analyticsLoading;
+  const scopeNote = selectedWarehouse ? ` Đang xem riêng ${selectedWarehouse.name}.` : '';
+  const lede = borrowLoading
     ? 'Đang tổng hợp số liệu mượn trả, tiền phạt và luồng kho.'
     : borrowDenied
       ? `${periodLabel}. Vai trò của bạn xem được luồng kho và danh mục sách.`
-      : `${periodLabel}: ${current.total.toLocaleString('vi-VN')} lượt mượn, ${Math.round(current.returnRate)}% đã trả, ${current.overdue.toLocaleString('vi-VN')} phiếu quá hạn, ${formatCurrency(current.fineAmount)} tiền phạt phát sinh.`;
+      : analyticsOnly
+        ? `${periodLabel}: ${analyticsKpi.current.loans.toLocaleString('vi-VN')} lượt mượn, ${analyticsKpi.current.returns.toLocaleString('vi-VN')} lượt trả.${selectedWarehouse ? '' : ' Số liệu phân tích trong phạm vi kho và chi nhánh bạn được xem.'}`
+        : `${periodLabel}: ${current.total.toLocaleString('vi-VN')} lượt mượn, ${Math.round(current.returnRate)}% đã trả, ${current.overdue.toLocaleString('vi-VN')} phiếu quá hạn, ${formatCurrency(current.fineAmount)} tiền phạt phát sinh.`;
+  const ledeWithScope = borrowLoading ? lede : `${lede}${scopeNote}`;
   const sections = [
     { id: 'summary-heading', label: 'Tóm tắt kỳ' },
     { id: 'activity-heading', label: `Hoạt động theo ${unitLabel}` },
-    ...(borrowDenied ? [] : [
-      { id: 'books-fines-heading', label: 'Sách và tiền phạt' },
-      { id: 'detail-heading', label: 'Chi tiết và xuất file' },
-    ]),
+    ...(borrowDenied ? [] : [{ id: 'books-fines-heading', label: 'Sách và tiền phạt' }]),
+    ...(borrowDenied || analyticsOnly ? [] : [{ id: 'detail-heading', label: 'Chi tiết và xuất file' }]),
   ];
   const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -618,9 +713,10 @@ export function ReportsPage() {
         <PageHeader
           icon={BarChart3}
           title="Báo cáo và thống kê"
-          description={lede}
+          description={ledeWithScope}
           actions={
             <>
+              <WarehouseFilter warehouses={warehouses} value={warehouseId} onChange={setWarehouseId} className="h-8 w-full sm:w-72" />
               <Button size="sm" onClick={handleExportSummaryReport} disabled={loading} className="gap-2">
                 <FileText className="h-3.5 w-3.5" />
                 Báo cáo tổng hợp
@@ -697,11 +793,42 @@ export function ReportsPage() {
               <section aria-labelledby="summary-heading" className="scroll-mt-4 space-y-3">
                 <h2 id="summary-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Tóm tắt kỳ</h2>
                 <div className="overflow-hidden rounded-2xl border border-border bg-card">
-                  {loading ? (
+                  {borrowLoading ? (
                     <div className="p-5"><Skeleton className="h-[76px] w-full" /></div>
                   ) : borrowDenied ? (
                     <dl className="grid grid-cols-1">
                       <Metric label="Đầu sách trong catalog" value={books.length.toLocaleString('vi-VN')} detail="Số liệu mượn/trả và phạt không khả dụng với vai trò của bạn." />
+                    </dl>
+                  ) : analyticsOnly ? (
+                    <dl className="grid grid-cols-1 divide-y divide-border @xl:grid-cols-2 @xl:divide-y-0 @4xl:grid-cols-4 [&>*]:border-border @xl:[&>*:nth-child(even)]:border-l @xl:[&>*:nth-child(n+3)]:border-t @4xl:[&>*:nth-child(3)]:border-l @4xl:[&>*:nth-child(n+3)]:border-t-0">
+                      <Metric
+                        label="Lượt mượn"
+                        value={analyticsKpi.current.loans.toLocaleString('vi-VN')}
+                        delta={analyticsKpi.previous ? percentDelta(analyticsKpi.current.loans, analyticsKpi.previous.loans, true) : null}
+                        compareLabel={compareLabel}
+                        detail={`Trung bình ${borrowTrend.average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} lượt mỗi ${unitLabel}`}
+                      />
+                      <Metric
+                        label="Lượt trả"
+                        value={analyticsKpi.current.returns.toLocaleString('vi-VN')}
+                        delta={analyticsKpi.previous ? percentDelta(analyticsKpi.current.returns, analyticsKpi.previous.returns, true) : null}
+                        compareLabel={compareLabel}
+                        detail="Số phiếu có sách được trả trong kỳ"
+                      />
+                      <Metric
+                        label="Phiếu quá hạn hiện tại"
+                        value={analyticsKpi.overdue ? analyticsKpi.overdue.total_overdue_loans.toLocaleString('vi-VN') : '—'}
+                        detail={analyticsKpi.overdue && analyticsKpi.overdue.total_overdue_loans > 0
+                          ? `Trung bình trễ ${analyticsKpi.overdue.average_overdue_days.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} ngày. Số hiện tại, không theo kỳ`
+                          : 'Số hiện tại, không theo kỳ'}
+                      />
+                      <Metric
+                        label="Tiền phạt chưa thu"
+                        value={analyticsKpi.fines ? formatCompactCurrency(Number(analyticsKpi.fines.total_unpaid)) : '—'}
+                        detail={analyticsKpi.fines
+                          ? `${Number(analyticsKpi.fines.unpaid_count).toLocaleString('vi-VN')} khoản. Số hiện tại, không theo kỳ`
+                          : 'Số hiện tại, không theo kỳ'}
+                      />
                     </dl>
                   ) : (
                     <dl className="grid grid-cols-1 divide-y divide-border @xl:grid-cols-2 @xl:divide-y-0 @4xl:grid-cols-4 [&>*]:border-border @xl:[&>*:nth-child(even)]:border-l @xl:[&>*:nth-child(n+3)]:border-t @4xl:[&>*:nth-child(3)]:border-l @4xl:[&>*:nth-child(n+3)]:border-t-0">
@@ -744,13 +871,13 @@ export function ReportsPage() {
                   {!borrowDenied && (
                     <Panel
                       title="Lượt mượn"
-                      summary={loading ? undefined : borrowTrend.peak.count > 0
+                      summary={borrowLoading ? undefined : borrowTrend.peak.count > 0
                         ? <>Cao nhất <span className="font-semibold text-foreground">{borrowTrend.peak.count.toLocaleString('vi-VN')}</span> lượt {buckets.unit === 'week' ? 'tuần từ' : 'ngày'} {formatAxisDate(borrowTrend.peak.date)}, trung bình {borrowTrend.average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} mỗi {unitLabel}</>
                         : 'Chưa có lượt mượn trong kỳ'}
                     >
-                      {loading ? (
+                      {borrowLoading ? (
                         <Skeleton className="h-[240px] w-full" />
-                      ) : filteredLoans.length === 0 ? (
+                      ) : borrowTrend.total === 0 ? (
                         <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có lượt mượn trong khoảng thời gian này." />
                       ) : (
                         <ResponsiveContainer width="100%" height={240}>
@@ -771,7 +898,7 @@ export function ReportsPage() {
                     summary={loading ? undefined : movementTrend.hasAny
                       ? <>Nhập <span className="font-semibold text-foreground">{movementTrend.totalIn.toLocaleString('vi-VN')}</span>, xuất <span className="font-semibold text-foreground">{movementTrend.totalOut.toLocaleString('vi-VN')}</span>, chênh lệch <span className="font-semibold text-foreground">{(movementTrend.totalIn - movementTrend.totalOut).toLocaleString('vi-VN', { signDisplay: 'exceptZero' })}</span> cuốn</>
                       : `${books.length.toLocaleString('vi-VN')} đầu sách trong catalog`}
-                    legend={<div className="flex items-center gap-4"><LegendItem color={INBOUND_COLOR} label="Nhập" /><LegendItem color={OUTBOUND_COLOR} label="Xuất" /></div>}
+                    legend={<div className="flex flex-wrap items-center gap-x-4 gap-y-1"><LegendItem color={INBOUND_COLOR} label="Nhập kho, trả sách" /><LegendItem color={OUTBOUND_COLOR} label="Xuất kho, cho mượn" /></div>}
                   >
                     {loading ? (
                       <Skeleton className="h-[240px] w-full" />
@@ -799,7 +926,7 @@ export function ReportsPage() {
                   <h2 id="books-fines-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Sách và tiền phạt</h2>
                   <div className="grid grid-cols-1 gap-5 @4xl:grid-cols-5">
                     <Panel title="Sách được mượn nhiều nhất" summary="Xếp hạng theo lượt mượn trong kỳ" className="@4xl:col-span-3">
-                      {loading ? (
+                      {borrowLoading ? (
                         <Skeleton className="h-[260px] w-full" />
                       ) : topBooks.length === 0 ? (
                         <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Chưa có lượt mượn để thống kê." />
@@ -823,10 +950,10 @@ export function ReportsPage() {
 
                     <Panel
                       title="Tiền phạt theo trạng thái"
-                      summary={loading || fineBreakdown.total === 0 ? undefined : <>Còn phải thu <span className="font-semibold text-foreground">{formatCurrency(outstanding)}</span></>}
+                      summary={borrowLoading || fineBreakdown.total === 0 ? undefined : <>Còn phải thu <span className="font-semibold text-foreground">{formatCurrency(outstanding)}</span>{analyticsOnly ? ' (số hiện tại, không theo kỳ)' : ''}</>}
                       className="@4xl:col-span-2"
                     >
-                      {loading ? (
+                      {borrowLoading ? (
                         <Skeleton className="h-[260px] w-full" />
                       ) : fineBreakdown.rows.length === 0 ? (
                         <EmptyState variant="no-data" title="Chưa có dữ liệu" description="Không có khoản phạt trong khoảng thời gian này." />
@@ -855,7 +982,7 @@ export function ReportsPage() {
                                       {FINE_STATUS_LABELS[row.status] || row.status}
                                     </span>
                                   </td>
-                                  <td className="py-2.5 text-right tabular-nums text-muted-foreground">{row.count.toLocaleString('vi-VN')} khoản</td>
+                                  <td className="py-2.5 text-right tabular-nums text-muted-foreground">{row.count === null ? '—' : `${row.count.toLocaleString('vi-VN')} khoản`}</td>
                                   <td className="py-2.5 pl-4 text-right font-semibold tabular-nums text-foreground">{formatCompactCurrency(row.amount)}</td>
                                   <td className="w-12 py-2.5 text-right tabular-nums text-muted-foreground">{formatShare(row.amount, fineBreakdown.total)}</td>
                                 </tr>
@@ -869,7 +996,7 @@ export function ReportsPage() {
                 </section>
               )}
 
-              {!borrowDenied && (
+              {!borrowDenied && !analyticsOnly && (
                 <section aria-labelledby="detail-heading" className="scroll-mt-4 space-y-3">
                   <h2 id="detail-heading" className="font-display text-[20px] font-semibold tracking-tight text-foreground">Chi tiết và xuất file</h2>
                   <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as 'loans' | 'fines')} className="@container gap-0 overflow-hidden rounded-2xl border border-border bg-card">

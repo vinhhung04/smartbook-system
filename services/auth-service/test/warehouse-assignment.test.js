@@ -22,7 +22,7 @@ const MANAGER_ID = '22222222-2222-4222-8222-222222222222';
 const ADMIN_ID = '33333333-3333-4333-8333-333333333333';
 
 const admin = describeActor({ sub: ADMIN_ID, roles: ['ADMIN'], permissions: ['auth.users.read', 'auth.users.write'] });
-const manager = describeActor({ sub: MANAGER_ID, roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide'] });
+const manager = describeActor({ sub: MANAGER_ID, roles: ['MANAGER'], permissions: ['inventory.operation.decide'] });
 const staffTarget = (extra = {}) => ({ id: STAFF_ID, is_superuser: false, deleted: false, roles: ['WAREHOUSE_STAFF'], primary_warehouse_id: null, ...extra });
 const warehouses = new Map([
   [HCM, { is_active: true }], [HN, { is_active: true }], [BR, { is_active: true }], [CLOSED, { is_active: false }],
@@ -129,7 +129,7 @@ test('B3 a manager cannot grant (or strip) a level above their own', () => {
 
 test('B4 a manager only manages WAREHOUSE_STAFF accounts', () => {
   const actorScopes = [{ warehouse_id: HCM, access_level: 'FULL' }];
-  for (const roles of [['WAREHOUSE_MANAGER'], ['ADMIN'], ['WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER'], ['LIBRARIAN'], []]) {
+  for (const roles of [['MANAGER'], ['ADMIN'], ['WAREHOUSE_STAFF', 'MANAGER'], ['LIBRARIAN'], []]) {
     rejects(() => plan({ actor: manager, actorScopes, target: staffTarget({ roles }), requested: [] }), 403, 'TARGET_NOT_STAFF');
   }
 });
@@ -156,7 +156,7 @@ test('B7 only a superuser changes a superuser; customers are never given a wareh
   assert.deepEqual(plan({ target: staffTarget({ roles: ['CUSTOMER'] }), current: [{ warehouse_id: HCM, access_level: 'READ' }] }).removed.length, 1);
 });
 
-test('B8 roles without user write or WAREHOUSE_MANAGER cannot assign at all (route guard 403)', () => {
+test('B8 roles without user write or MANAGER cannot assign at all (route guard 403)', () => {
   const { authorizeAssignmentManager } = createWarehouseAssignmentController({ prisma: {}, directory: {} });
   const run = (auth, method = 'PUT') => {
     let status = null;
@@ -168,7 +168,7 @@ test('B8 roles without user write or WAREHOUSE_MANAGER cannot assign at all (rou
   assert.equal(run({ sub: STAFF_ID, roles: ['LIBRARIAN'], permissions: [] }), 403);
   assert.equal(run({ sub: ADMIN_ID, roles: ['AUDITOR'], permissions: ['auth.users.read'] }), 403, 'read permission does not write');
   assert.equal(run({ sub: ADMIN_ID, roles: ['AUDITOR'], permissions: ['auth.users.read'] }, 'GET'), 'next');
-  assert.equal(run({ sub: MANAGER_ID, roles: ['WAREHOUSE_MANAGER'], permissions: [] }), 'next');
+  assert.equal(run({ sub: MANAGER_ID, roles: ['MANAGER'], permissions: [] }), 'next');
 });
 
 test('B9 a manager reading someone\'s scope only sees rows of their own warehouses', () => {

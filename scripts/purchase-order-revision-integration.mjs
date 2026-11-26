@@ -10,6 +10,8 @@
 // scripts/concurrent-invoice-over-po-integration.mjs.
 //
 // Usage: node scripts/purchase-order-revision-integration.mjs
+import { acceptAtPrice, approvedInvoice, shipAgainstInvoice, supplierIdOf } from './lib/invoice-first-po.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const managerName = process.env.PURCHASE_TEST_USERNAME || 'hung';
@@ -45,9 +47,9 @@ function check(name, condition, detail = '') {
   console.log(`${condition ? 'PASS' : 'FAIL'} ${name}${condition || !detail ? '' : ` -- ${detail}`}`);
 }
 
-async function getSetup(token) {
-  const suppliers = await ok('GET', '/api/suppliers', token);
-  const supplier = suppliers.find((row) => row.status === 'ACTIVE') || suppliers[0];
+async function getSetup(token, supplierToken) {
+  // invoice-first POs are answered on the supplier account, so order from that account's supplier
+  const supplier = { id: await supplierIdOf(supplierToken) };
   const warehouses = await ok('GET', '/api/warehouses', token);
   const warehouse = warehouses.find((row) => row.is_active !== false);
   const books = (await ok('GET', '/api/books', token)).filter((row) => row.variant_id);
@@ -70,31 +72,31 @@ async function createPo(M, setup, orderedQty, note) {
   return created.data.id;
 }
 
-/** DRAFT -> PENDING_APPROVAL -> APPROVED. */
+/** DRAFT -> APPROVED: a manager who may approve has the order approved on submit. */
 async function approvePo(M, poId) {
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
 }
 
-/** APPROVED -> SENT_TO_SUPPLIER -> SUPPLIER_CONFIRMED, one-click accept-all with NO invoice, so
- * invoiced_qty stays 0 and a later revision is free to change ordered_qty either way. */
-async function sendAndConfirm(M, poId) {
+/** APPROVED -> SENT_TO_SUPPLIER -> SUPPLIER_CONFIRMED: the supplier's priced acceptance approved,
+ * with NO delivery note, so a later revision is free to change ordered_qty either way. */
+async function sendAndConfirm(M, S, setup, poId) {
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/supplier-confirm`, M, {});
-  return (await ok('GET', `/api/purchase-orders/${poId}`, M)).items[0];
+  return (await acceptAtPrice(M, S, poId, setup.unitCost)).items[0];
 }
 
-async function setupSupplierConfirmedPo(M, setup, orderedQty, note) {
+async function setupSupplierConfirmedPo(M, S, setup, orderedQty, note) {
   const poId = await createPo(M, setup, orderedQty, note);
   await approvePo(M, poId);
-  const item = await sendAndConfirm(M, poId);
+  const item = await sendAndConfirm(M, S, setup, poId);
   return { poId, item };
 }
 
 async function main() {
   const manager = await login(managerName);
   const M = manager.token;
-  const setup = await getSetup(M);
+  const supplierAccount = await login(supplierName);
+  const S = supplierAccount.token;
+  const setup = await getSetup(M, S);
 
   // ── A: a DRAFT PO cannot be revised (revision is for already-dispatched POs) ──
   const draftPoId = await createPo(M, setup, 10, 'E2E revision - draft gate');
@@ -102,7 +104,7 @@ async function main() {
   check('revision request on a DRAFT PO is rejected', draftAttempt.response.status === 400, `status=${draftAttempt.response.status}`);
 
   // ── B: immediate-apply path (requires_supplier_reconfirmation: false) ──
-  const poB = await setupSupplierConfirmedPo(M, setup, 10, 'E2E revision - immediate apply');
+  const poB = await setupSupplierConfirmedPo(M, S, setup, 10, 'E2E revision - immediate apply');
   const revB = await ok('POST', `/api/purchase-orders/${poB.poId}/revisions`, M, {
     reason: 'Khách hàng thỏa thuận giảm số lượng, không cần NCC xác nhận lại',
     requires_supplier_reconfirmation: false,
@@ -115,7 +117,7 @@ async function main() {
   check('live ordered_qty updated to the approved value', poBAfter.items[0].ordered_qty === 8, `got ${poBAfter.items[0].ordered_qty}`);
 
   // ── C: pending-reconfirmation path — live PO stays untouched until the supplier confirms ──
-  const poC = await setupSupplierConfirmedPo(M, setup, 10, 'E2E revision - pending reconfirmation');
+  const poC = await setupSupplierConfirmedPo(M, S, setup, 10, 'E2E revision - pending reconfirmation');
   const revC = await ok('POST', `/api/purchase-orders/${poC.poId}/revisions`, M, {
     reason: 'Thương lượng giảm số lượng, cần NCC xác nhận lại',
     lines: [{ purchase_order_item_id: poC.item.id, ordered_qty: 6 }],
@@ -135,14 +137,14 @@ async function main() {
   check('live ordered_qty updated only after supplier reconfirmation', poCAfter.items[0].ordered_qty === 6, `got ${poCAfter.items[0].ordered_qty}`);
 
   // ── D: reject and cancel ──
-  const poD = await setupSupplierConfirmedPo(M, setup, 10, 'E2E revision - reject');
+  const poD = await setupSupplierConfirmedPo(M, S, setup, 10, 'E2E revision - reject');
   const revD = await ok('POST', `/api/purchase-orders/${poD.poId}/revisions`, M, { reason: 'x', lines: [{ purchase_order_item_id: poD.item.id, ordered_qty: 4 }] });
   const rejectedD = await ok('POST', `/api/purchase-orders/${poD.poId}/revisions/${revD.data.id}/reject`, M, { reason: 'Không đồng ý thay đổi' });
   check('reject sets status REJECTED', rejectedD.data.status === 'REJECTED');
   const poDAfter = await ok('GET', `/api/purchase-orders/${poD.poId}`, M);
   check('rejected revision never touches live ordered_qty', poDAfter.items[0].ordered_qty === 10);
 
-  const poE = await setupSupplierConfirmedPo(M, setup, 10, 'E2E revision - cancel + conflict');
+  const poE = await setupSupplierConfirmedPo(M, S, setup, 10, 'E2E revision - cancel + conflict');
   const revE1 = await ok('POST', `/api/purchase-orders/${poE.poId}/revisions`, M, { reason: 'x', lines: [{ purchase_order_item_id: poE.item.id, ordered_qty: 4 }] });
   const conflictAttempt = await request('POST', `/api/purchase-orders/${poE.poId}/revisions`, M, { reason: 'y', lines: [{ purchase_order_item_id: poE.item.id, ordered_qty: 3 }] });
   check('a second revision cannot be requested while one is already pending', conflictAttempt.response.status === 409, `status=${conflictAttempt.response.status}`);
@@ -164,22 +166,19 @@ async function main() {
   // delivery note for 9 units, and SmartBook records the supplier's reconfirmation (applying the
   // revision to 8). Exactly one must win — never both, which would leave invoiced_qty (9) above
   // ordered_qty (8).
-  const supplierAccount = await login(supplierName);
-  const suppliersForF = await ok('GET', '/api/suppliers', M);
-  const supplierF = suppliersForF.find((row) => String(row.email || '').toLowerCase() === String(supplierAccount.user.email || '').toLowerCase());
-  const poFId = await createPo(M, { ...setup, supplier: supplierF }, 10, 'E2E revision - concurrency race');
+  const poFId = await createPo(M, setup, 10, 'E2E revision - concurrency race');
   await approvePo(M, poFId);
-  const itemF = await sendAndConfirm(M, poFId);
+  const itemF = await sendAndConfirm(M, S, setup, poFId);
+  // invoice-first: the note ships against an approved invoice for the full 10, issued before the revision
+  const invoiceF = await approvedInvoice(M, S, poFId);
 
   const revF = await ok('POST', `/api/purchase-orders/${poFId}/revisions`, M, { reason: 'Giảm vì tồn kho dư', lines: [{ purchase_order_item_id: itemF.id, ordered_qty: 8 }] });
   const approvedF = await ok('POST', `/api/purchase-orders/${poFId}/revisions/${revF.data.id}/approve`, M, {});
   check('F setup: revision pending supplier reconfirmation before the race', approvedF.data.status === 'PENDING_SUPPLIER_RECONFIRMATION');
 
   const [invoiceResult, confirmResult] = await Promise.all([
-    request('POST', `/api/supplier-account/orders/${poFId}/invoices`, supplierAccount.token, {
-      delivery_number: `DN-REV-RACE-${Date.now()}`,
-      items: [{ purchase_order_item_id: itemF.id, invoiced_qty: 9, unit_cost: setup.unitCost }],
-    }),
+    shipAgainstInvoice(S, poFId, invoiceF.id, [{ purchase_order_item_id: itemF.id, invoiced_qty: 9 }])
+      .then((r) => ({ response: { ok: r.status < 300, status: r.status }, data: r.data })),
     request('POST', `/api/purchase-orders/${poFId}/revisions/${revF.data.id}/supplier-confirm`, M, {}),
   ]);
   const succeeded = [invoiceResult, confirmResult].filter((r) => r.response.ok);

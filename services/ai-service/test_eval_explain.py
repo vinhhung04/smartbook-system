@@ -59,6 +59,15 @@ class WordingTests(unittest.TestCase):
         self.assertEqual(ee.card_duplication("Nên nhập Norwegian Wood trước.", recs), 0.0)
         self.assertIsNone(ee.card_duplication("x", []))
 
+    def test_strict_card_duplication_counts_only_the_suggested_quantity_and_cost(self):
+        recs = [{"metrics": [{"label": "Lượt mượn trong kỳ", "value": 40, "unit": "lượt"},
+                             {"label": "Đề xuất nhập", "value": 29, "unit": "bản"},
+                             {"label": "Chi phí ước tính", "value": 5_220_000, "unit": "đ"}]}]
+        evidence = "Sách A có 40 lượt mượn trong kỳ nhưng đã hết hàng."
+        self.assertEqual(ee.card_duplication(evidence, recs, ee.CARD_RULE_LABELS), 0.0)  # citing evidence is allowed
+        self.assertGreater(ee.card_duplication(evidence, recs), 0.0)  # the broad rate counts it
+        self.assertEqual(ee.card_duplication("Nhập 29 bản, khoảng 5.220.000 ₫.", recs, ee.CARD_RULE_LABELS), 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

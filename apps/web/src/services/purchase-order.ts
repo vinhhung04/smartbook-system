@@ -13,13 +13,18 @@ export type PurchaseOrderStatus =
   | 'RECEIVED'
   | 'CANCELLED';
 
+/** A PO line is the book as typed when ordering; variant_id only links a catalog suggestion. */
 export interface PurchaseOrderLinePayload {
   variant_id?: string;
-  isbn13?: string;
+  title: string;
+  book_code: string;
+  author: string;
+  publish_year: number | null;
   ordered_qty: number;
-  unit_cost: number;
   note?: string | null;
 }
+
+export type ProcurementFlow = 'LEGACY' | 'INVOICE_FIRST';
 
 export interface PurchaseOrderPayload {
   supplier_id: string;
@@ -38,6 +43,8 @@ export interface PurchaseOrderSummary {
   warehouse_code?: string | null;
   warehouse_name?: string | null;
   status: PurchaseOrderStatus;
+  procurement_flow?: ProcurementFlow;
+  supplier_response_status?: string | null;
   ordered_by_user_id: string;
   approved_by_user_id?: string | null;
   order_date: string;
@@ -54,11 +61,19 @@ export interface PurchaseOrderSummary {
 
 export interface PurchaseOrderItem {
   id: string;
-  variant_id: string;
+  variant_id: string | null;
   book_id?: string | null;
   title: string;
   sku?: string | null;
   isbn13?: string | null;
+  /** ordered snapshot: market code (ISBN / EAN / supplier code), author, publish year */
+  item_code?: string | null;
+  item_author?: string | null;
+  item_publish_year?: number | null;
+  linked_to_catalog?: boolean;
+  /** what SmartBook asked for; ordered_qty is what the supplier accepted once approved */
+  requested_qty?: number;
+  not_accepted_qty?: number;
   ordered_qty: number;
   received_qty: number;
   remaining_qty: number;
@@ -101,7 +116,7 @@ export interface SupplierDispatch {
 export interface SupplierInvoiceItem {
   id: string;
   purchase_order_item_id?: string | null;
-  variant_id: string;
+  variant_id: string | null;
   title?: string | null;
   sku?: string | null;
   isbn13?: string | null;

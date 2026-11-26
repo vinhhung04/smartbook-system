@@ -190,9 +190,14 @@ test.describe('AI copilot visualizations', () => {
 
     // The follow-up answer carries the same budget chart again: use the newest one.
     const slider = page.getByRole('slider', { name: 'Ngân sách nhập sách' }).last();
+    const resimulate = page.getByRole('button', { name: 'Mô phỏng lại' }).last();
+    // The simulator stays disabled while the follow-up answer streams; a key pressed then is
+    // dropped (CI 2026-11-26 sent "10 triệu"), so wait for it, then for the moved value.
+    await expect(resimulate).toBeEnabled();
     await slider.focus();
     await page.keyboard.press('ArrowRight');
-    await page.getByRole('button', { name: 'Mô phỏng lại' }).last().click();
+    await expect(slider).toHaveAttribute('aria-valuenow', '11000000');
+    await resimulate.click();
     await expect.poll(() => asked.at(-1)).toBe('Nếu ngân sách nhập sách là 11 triệu thì sao? Hiển thị biểu đồ.');
   });
 

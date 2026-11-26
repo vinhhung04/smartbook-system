@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Camera as CameraIcon, ClipboardList, PackageCheck, QrCode, ScanLine } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Camera as CameraIcon, ClipboardList, PackageCheck, QrCode, ScanLine, Video } from "lucide-react";
 import { toast } from "sonner";
 import { Button, EmptyState, LoadingSpinner, StatusBadge, WorkflowStepper, type WorkflowStep } from "@/components/ui";
 import { PageHeader } from "@/components/ui/page-header";
@@ -12,11 +12,55 @@ import { packingService, type PackingEvidence, type PackingTask } from "@/servic
 import { usePackingCamera } from "@/hooks/usePackingCamera";
 import { usePackingRecordingSession } from "@/hooks/usePackingRecordingSession";
 import { useHardwareScanner } from "@/hooks/useHardwareScanner";
+import { PackingEvidenceDialog } from "@/components/packing-evidence-dialog";
+import { formatDateTime } from "@/components/ops/ops-utils";
+import { authService } from "@/services/auth";
+import { userService } from "@/services/user";
+import { canManageReceiving } from "@/lib/rbac";
 
 type ActivePackingTask = PackingTask & { id: string; task_number: string; packing_camera_evidence?: PackingEvidence[] };
 
 // Configurable, not hardcoded — override per deployment via VITE_PACKING_RECORD_DELAY_SECONDS.
 const RECORD_DELAY_SECONDS = Number(import.meta.env.VITE_PACKING_RECORD_DELAY_SECONDS) || 15;
+
+/**
+ * Always-visible scan field: a keyboard-wedge scanner types into it and ends with Enter, and
+ * the field is emptied the moment a code is sent, so no previous code is ever prefixed to the
+ * next scan. Focus stays here between scans; the camera panel keeps scanning on its own too.
+ */
+function ScanField({ id, label, placeholder, disabled, onScan }: { id: string; label: string; placeholder: string; disabled?: boolean; onScan: (code: string) => void }) {
+  const [value, setValue] = useState("");
+  const submit = () => {
+    const code = value.trim();
+    setValue("");
+    if (code) onScan(code);
+  };
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-[12px] font-medium text-muted-foreground">{label}</label>
+      <div className="flex gap-2">
+        <input
+          id={id}
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={placeholder}
+          className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-card px-3 font-mono text-[14px] text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        />
+        <Button type="button" variant="outline" disabled={disabled || !value.trim()} onClick={submit}>Xác nhận</Button>
+      </div>
+    </div>
+  );
+}
 
 function normalizeTitleForCompare(value: string): string {
   return String(value || "")
@@ -42,11 +86,16 @@ export function PackingPage() {
   // never mount/unmount per order. Recording is a separate, per-order "Packing Session".
   const camera = usePackingCamera();
   const getCameraStream = useCallback(() => camera.streamRef.current, [camera.streamRef]);
-  const { isRecording, activeSessionId, savedCount, startSession, stopActiveSession } =
+  const { isRecording, activeSessionId, savedCount, failedSessionIds, startSession, stopActiveSession, retryFailedUpload } =
     usePackingRecordingSession(getCameraStream);
 
   const [task, setTask] = useState<ActivePackingTask | null>(null);
   const [pendingTasks, setPendingTasks] = useState<PackingTask[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<PackingTask[]>([]);
+  const [evidenceTaskId, setEvidenceTaskId] = useState<string | null>(null);
+  const [staffNames, setStaffNames] = useState<Record<string, string>>({});
+  const currentUser = authService.getCurrentUser();
+  const isManager = canManageReceiving(currentUser);
   const [loadingQueue, setLoadingQueue] = useState(true);
   const [loadingInvoice, setLoadingInvoice] = useState(false);
   // Tracks which single order (if any) is between "grace-period countdown" and "finalize API
@@ -128,16 +177,34 @@ export function PackingPage() {
     try {
       const { tasks } = await packingService.getTasks();
       setPendingTasks(tasks.filter((item) => item.status !== "COMPLETED" && item.status !== "CANCELLED"));
+      // newest first (server order); staff only see the orders they packed themselves
+      setCompletedTasks(
+        tasks
+          .filter((item) => item.status === "COMPLETED" && (isManager || item.assigned_packer_id === currentUser?.id))
+          .slice(0, 20),
+      );
     } catch (error) {
       toast.error(getApiErrorMessage(error, "Không tải được danh sách chờ đóng gói"));
     } finally {
       setLoadingQueue(false);
     }
-  }, []);
+  }, [isManager, currentUser?.id]);
 
   useEffect(() => {
     void loadQueue();
   }, [loadQueue]);
+
+  useEffect(() => {
+    if (!isManager) return;
+    void userService
+      .getWarehouseStaff()
+      .then((res) => setStaffNames(Object.fromEntries((Array.isArray(res.data) ? res.data : []).map((s) => [s.id, s.full_name]))))
+      .catch(() => {});
+  }, [isManager]);
+  const staffName = useCallback(
+    (id: string | null | undefined) => (!id ? "Chưa rõ" : id === currentUser?.id ? "Bạn" : staffNames[id] || "Nhân viên không rõ"),
+    [staffNames, currentUser?.id],
+  );
 
   const clearRecordCountdown = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -177,7 +244,8 @@ export function PackingPage() {
           }
           result = await packingService.completeTask(taskId, reason);
         }
-        setTask((current) => (current && current.id === taskId ? (result.task as ActivePackingTask) : current));
+        // back to the queue — unless staff already opened another order meanwhile
+        setTask((current) => (current && current.id === taskId ? null : current));
         toast.success(`Đã hoàn tất đóng gói đơn ${result.task.outbound_orders?.outbound_number || ""}.`);
         void loadQueue();
       } catch (error) {
@@ -192,9 +260,8 @@ export function PackingPage() {
 
   // The packing video failed to upload (see usePackingRecordingSession) — finalizeComplete was
   // never called for this session, so nothing will otherwise clear the "finalizing" state.
-  // Recording has already stopped by this point, so simply retrying "Hoàn tất đóng gói ngay"
-  // would just hit the same "no video" rejection from the server — staff needs to go back to
-  // the queue and reopen this task first, which starts a fresh recording (see refreshTask).
+  // The recording is kept in memory; pressing the complete button again re-uploads it
+  // (see handleCompletePackingNow / retryFailedUpload).
   const handleVideoUploadFailed = useCallback((taskId: string) => {
     setFinalizingTaskId((current) => (current === taskId ? null : current));
   }, []);
@@ -399,16 +466,23 @@ export function PackingPage() {
   useHardwareScanner(handleAnyScannedCode);
 
   // Manual override: skip whatever is left of the grace-period countdown and finish right away.
+  // Also the recovery path: re-uploads a recording whose upload failed, then completes.
   const handleCompletePackingNow = useCallback(() => {
     if (!task || !allVerified) return;
+    const taskId = task.id;
     clearRecordCountdown();
-    setFinalizingTaskId(task.id);
-    stopActiveSession(
-      task.id,
-      () => void finalizeComplete(task.id),
-      () => handleVideoUploadFailed(task.id),
-    );
-  }, [task, allVerified, clearRecordCountdown, stopActiveSession, finalizeComplete, handleVideoUploadFailed]);
+    setFinalizingTaskId(taskId);
+    const onStopped = () => void finalizeComplete(taskId);
+    const onFailed = () => handleVideoUploadFailed(taskId);
+    if (retryFailedUpload(taskId, onStopped, onFailed)) return;
+    if (activeSessionId === taskId) {
+      stopActiveSession(taskId, onStopped, onFailed);
+    } else {
+      // nothing recording for this order (e.g. no camera): the server decides whether video is required
+      onStopped();
+    }
+  }, [task, allVerified, activeSessionId, clearRecordCountdown, stopActiveSession, retryFailedUpload, finalizeComplete, handleVideoUploadFailed]);
+  const uploadFailedForTask = Boolean(task && failedSessionIds.includes(task.id));
 
   const steps: WorkflowStep[] = useMemo(
     () => [
@@ -469,10 +543,19 @@ export function PackingPage() {
                         <p className="text-[12px] text-muted-foreground">Quét hoá đơn hoặc mã đơn xuất kho để mở phiếu.</p>
                       </div>
                     </div>
-                    <Button size="lg" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)} className="shrink-0">
+                    <Button variant="outline" loading={loadingInvoice} onClick={() => setIsManualScanOpen(true)} className="shrink-0" title="Mở camera trong hộp thoại để quét mã hoá đơn">
                       <ScanLine className="h-4 w-4" />
-                      Quét hoá đơn
+                      Quét bằng camera
                     </Button>
+                  </div>
+                  <div className="border-b border-border px-5 py-4">
+                    <ScanField
+                      id="packing-invoice-scan"
+                      label="Quét hoặc nhập mã hoá đơn / mã đơn xuất kho"
+                      placeholder="Quét bằng máy scan rồi tự mở đơn"
+                      disabled={loadingInvoice}
+                      onScan={handleAnyScannedCode}
+                    />
                   </div>
 
                   <div className="flex items-center justify-between px-5 py-3">
@@ -528,6 +611,37 @@ export function PackingPage() {
                         );
                       })}
                     </div>
+                  )}
+                </div>
+              </FadeItem>
+
+              <FadeItem>
+                <div className="rounded-xl border border-border bg-card shadow-[0_1px_4px_rgba(0,0,0,0.03)] dark:shadow-none">
+                  <div className="px-5 py-3">
+                    <p className="text-[14px] font-semibold text-foreground">Đơn đã đóng gói</p>
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
+                      {isManager ? "20 đơn hoàn tất gần nhất trong các kho bạn quản lý" : "Các đơn bạn đã đóng gói gần đây"}
+                    </p>
+                  </div>
+                  {loadingQueue ? null : completedTasks.length === 0 ? (
+                    <p className="border-t border-border px-5 py-6 text-center text-[13px] text-muted-foreground">Chưa có đơn nào hoàn tất đóng gói.</p>
+                  ) : (
+                    <ul className="divide-y divide-border border-t border-border">
+                      {completedTasks.map((entry) => (
+                        <li key={entry.id} className="flex items-center gap-3 py-3 pl-5 pr-4">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-mono text-[13px] font-semibold text-foreground">#{entry.outbound_orders?.outbound_number || entry.root_order_id}</p>
+                            <p className="truncate text-[11px] text-muted-foreground">
+                              {entry.warehouses?.name}{entry.completed_at ? ` · ${formatDateTime(entry.completed_at)}` : ""} · {staffName(entry.assigned_packer_id)}
+                            </p>
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => entry.id && setEvidenceTaskId(entry.id)}>
+                            <Video className="h-3.5 w-3.5" />
+                            Xem bằng chứng đóng gói
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </FadeItem>
@@ -592,10 +706,21 @@ export function PackingPage() {
                           size="sm"
                           disabled={allVerified || completingCurrentTask || task.status === "COMPLETED"}
                           onClick={() => setIsManualScanOpen(true)}
-                          title="Nhập/paste barcode thủ công khi máy quét hoặc camera không đọc được"
+                          title="Mở camera trong hộp thoại để quét mã sách"
                         >
-                          Scan sách
+                          Quét bằng camera
                         </Button>
+                    </div>
+
+                    <div className="mb-4">
+                      <ScanField
+                        key={task.id}
+                        id="packing-book-scan"
+                        label="Quét hoặc nhập mã sách"
+                        placeholder={allVerified ? "Đã scan đủ sách" : "Quét bằng máy scan, mỗi lần một cuốn"}
+                        disabled={allVerified || completingCurrentTask || task.status === "COMPLETED"}
+                        onScan={handleAnyScannedCode}
+                      />
                     </div>
 
                     {photoEvidence.length > 0 ? (
@@ -625,7 +750,9 @@ export function PackingPage() {
                                 {evidence.ai_verification_status === "MATCH"
                                   ? "AI: Khớp"
                                   : evidence.ai_verification_status === "MISMATCH"
-                                    ? "AI: Lệch số lượng"
+                                    ? evidence.ai_verification_result?.count_matches === true
+                                      ? "AI: Lệch tên sách"
+                                      : "AI: Lệch số lượng"
                                     : "AI: Chưa xác minh"}
                               </span>
                               {unexpectedTitles.length > 0 && (
@@ -719,7 +846,9 @@ export function PackingPage() {
                         ? `Hoàn tất ngay (bỏ qua ${recordCountdown}s)`
                         : completingCurrentTask
                           ? "Đang xử lý..."
-                          : "Hoàn tất đóng gói"}
+                          : uploadFailedForTask
+                            ? "Tải lại video và hoàn tất"
+                            : "Hoàn tất đóng gói"}
                   </button>
                 </div>
               </FadeItem>
@@ -727,6 +856,8 @@ export function PackingPage() {
           )}
         </div>
       </div>
+
+      <PackingEvidenceDialog key={evidenceTaskId || "none"} taskId={evidenceTaskId} staffName={staffName} onClose={() => setEvidenceTaskId(null)} />
 
       <BarcodeScanModal
         isOpen={isManualScanOpen}

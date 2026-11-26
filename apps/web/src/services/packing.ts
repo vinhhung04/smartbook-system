@@ -42,6 +42,9 @@ export interface PackingEvidenceAiResult {
   item_count: number;
   expected_count: number;
   detected_titles: string[];
+  /** Titles read off the photo that match no book in the order (absent on results saved before this check). */
+  unexpected_titles?: string[];
+  count_matches?: boolean;
   checked_at: string;
 }
 
@@ -52,6 +55,29 @@ export interface PackingEvidence {
   captured_by_user_id: string;
   ai_verification_status?: PackingEvidenceAiStatus | null;
   ai_verification_result?: PackingEvidenceAiResult | null;
+}
+
+export interface PackingEvidenceSession {
+  id: string;
+  captured_by_user_id: string;
+  started_at: string | null;
+  ended_at: string;
+  size: number | null;
+  mimetype: string | null;
+  storage_status: 'AVAILABLE' | 'MISSING';
+}
+
+export interface PackingEvidenceReview {
+  task: {
+    id: string;
+    task_number: string;
+    status: PackingTaskStatus;
+    assigned_packer_id: string | null;
+    completed_at: string | null;
+    outbound_order: { id: string; outbound_number: string; status: string } | null;
+    warehouse: { id: string; code: string; name: string } | null;
+  };
+  sessions: PackingEvidenceSession[];
 }
 
 export const packingService = {
@@ -98,13 +124,26 @@ export const packingService = {
 
   /** Multipart upload for the continuous packing-session recording — real file on disk,
    *  not base64-in-JSON (a full recording can easily exceed the JSON body size limit). */
-  uploadVideoEvidence: async (taskId: string, blob: Blob) => {
+  uploadVideoEvidence: async (taskId: string, blob: Blob, startedAt?: string) => {
     const formData = new FormData();
+    if (startedAt) formData.append('started_at', startedAt);
     formData.append('video', blob, 'packing-recording.webm');
     const response = await inventoryAPI.post(`/api/packing/tasks/${taskId}/evidence/video`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data as { evidence: PackingEvidence };
+  },
+
+  /** Recorded sessions of one packing task, for review (managers, or the staff who packed it). */
+  getEvidenceVideos: async (taskId: string) => {
+    const response = await inventoryAPI.get(`/api/packing/tasks/${taskId}/evidence/videos`);
+    return response.data as PackingEvidenceReview;
+  },
+
+  /** Downloads one recording with the user's token (no public URL exists for it). */
+  getEvidenceVideoBlob: async (taskId: string, evidenceId: string) => {
+    const response = await inventoryAPI.get(`/api/packing/tasks/${taskId}/evidence/${evidenceId}/video`, { responseType: 'blob' });
+    return response.data as Blob;
   },
 
   /** `overrideReason` is only honored server-side for a manager/admin — required there when

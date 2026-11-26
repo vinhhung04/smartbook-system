@@ -26,14 +26,14 @@ def U(roles, perms, uid="u", superuser=False):
 
 ADMIN = U(["ADMIN"], ["analytics.reports.view", "inventory.operation.decide", "inventory.purchase.request",
                       "borrow.write", "borrow.read", "inventory.catalog.read", "inventory.task.read"], "admin")
-MANAGER = U(["WAREHOUSE_MANAGER"], ["analytics.reports.view", "reports.read", "inventory.operation.decide",
+MANAGER = U(["MANAGER"], ["analytics.reports.view", "reports.read", "inventory.operation.decide",
                                     "inventory.purchase.request", "inventory.catalog.read", "inventory.task.read"], "mgr")
 STAFF = U(["WAREHOUSE_STAFF"], ["inventory.catalog.read", "inventory.task.read", "inventory.task.progress",
                                 "inventory.purchase.request", "inventory.exception.report"], "staff")
 LIBRARIAN = U(["LIBRARIAN"], ["inventory.catalog.read", "borrow.read", "borrow.write", "borrow.loans.read"], "lib")
 CUSTOMER = U(["CUSTOMER"], ["inventory.catalog.read", "customer.self.read", "customer.self.write"], "cust")
 SUPPLIER = U(["SUPPLIER"], ["supplier.portal.read", "supplier.portal.write"], "sup")
-ALL_SIX = {"ADMIN": ADMIN, "WAREHOUSE_MANAGER": MANAGER, "WAREHOUSE_STAFF": STAFF, "LIBRARIAN": LIBRARIAN,
+ALL_SIX = {"ADMIN": ADMIN, "MANAGER": MANAGER, "WAREHOUSE_STAFF": STAFF, "LIBRARIAN": LIBRARIAN,
            "CUSTOMER": CUSTOMER, "SUPPLIER": SUPPLIER}
 
 
@@ -43,7 +43,7 @@ def ids(user):
 
 class CapabilityMatrixTest(unittest.TestCase):
     def test_each_role_gets_its_experience(self):
-        expected = {"ADMIN": "decision_assistant", "WAREHOUSE_MANAGER": "decision_assistant",
+        expected = {"ADMIN": "decision_assistant", "MANAGER": "decision_assistant",
                     "WAREHOUSE_STAFF": "warehouse_work", "LIBRARIAN": "library_operations",
                     "CUSTOMER": "reader", "SUPPLIER": "supplier"}
         for role, user in ALL_SIX.items():
@@ -67,7 +67,7 @@ class CapabilityMatrixTest(unittest.TestCase):
     def test_role_without_permission_and_permission_without_role(self):
         self.assertNotIn("reader.loans", ids(U(["CUSTOMER"], [])))
         self.assertNotIn("reader.loans", ids(U(["LIBRARIAN"], ["customer.self.read"])))
-        self.assertNotIn("decision.assistant", ids(U(["WAREHOUSE_MANAGER"], ["inventory.catalog.read"])))
+        self.assertNotIn("decision.assistant", ids(U(["MANAGER"], ["inventory.catalog.read"])))
         self.assertNotIn("decision.assistant", ids(U(["LIBRARIAN"], ["analytics.reports.view"])))
         self.assertNotIn("supplier.orders", ids(U(["CUSTOMER"], ["supplier.portal.read"])))
         self.assertNotIn("supplier.orders", ids(U(["SUPPLIER"], [])))
@@ -92,7 +92,7 @@ class CapabilityMatrixTest(unittest.TestCase):
 
     def test_assistant_capability_is_exactly_the_assistant_gate(self):
         users = list(ALL_SIX.values()) + [
-            U(["WAREHOUSE_MANAGER"], []), U(["LIBRARIAN"], ["analytics.reports.view"]), U([], [], superuser=True),
+            U(["MANAGER"], []), U(["LIBRARIAN"], ["analytics.reports.view"]), U([], [], superuser=True),
             U(["ADMIN", "CUSTOMER"], ["reports.read"]), U(["MANAGER"], ["analytics.read"])]
         for user in users:
             with self.subTest(roles=user.roles, perms=user.permissions):

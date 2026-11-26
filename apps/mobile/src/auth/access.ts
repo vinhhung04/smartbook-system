@@ -3,14 +3,14 @@ import type { User } from '../types/auth';
 /**
  * Client-side mirror of the inventory-service guards (middlewares/auth.middleware.js):
  * authorizeTaskRead/Progress = a warehouse role AND the permission, superusers bypass
- * both; authorizeManagerDecision = WAREHOUSE_MANAGER/ADMIN AND the permission. The
+ * both; authorizeManagerDecision = MANAGER/ADMIN AND the permission. The
  * server still enforces every call — this only decides what the app offers, so a
  * staff member is never sent into a screen whose first request would be a 403.
  */
 export type StaffFeature = 'picking' | 'putaway' | 'outbound' | 'audit' | 'exceptions' | 'lookup' | 'tasks' | 'transferReceiving';
 
-const WAREHOUSE_ROLES = ['WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER', 'ADMIN'];
-const MANAGER_ROLES = ['WAREHOUSE_MANAGER', 'ADMIN'];
+const WAREHOUSE_ROLES = ['WAREHOUSE_STAFF', 'MANAGER', 'ADMIN'];
+const MANAGER_ROLES = ['MANAGER', 'ADMIN'];
 
 const FEATURE_PERMISSIONS: Record<StaffFeature, string[]> = {
   tasks: ['inventory.task.read'],
@@ -25,8 +25,16 @@ const FEATURE_PERMISSIONS: Record<StaffFeature, string[]> = {
 
 export type AppArea = 'customer' | 'staff' | 'unsupported';
 
+// A session saved before the 2026-11-25 rename still lists WAREHOUSE_MANAGER.
+const RENAMED_ROLES: Record<string, string> = { WAREHOUSE_MANAGER: 'MANAGER' };
+
+export function canonicalRole(role: string): string {
+  const code = String(role).toUpperCase();
+  return RENAMED_ROLES[code] ?? code;
+}
+
 function hasAnyRole(user: User, roles: string[]): boolean {
-  return user.roles.some((role) => roles.includes(String(role).toUpperCase()));
+  return user.roles.some((role) => roles.includes(canonicalRole(role)));
 }
 
 function hasAnyPermission(user: User, permissions: string[]): boolean {

@@ -77,7 +77,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((response.status_code, suggestions.await_count), (401, 0))
 
     async def test_anonymous_warehouse_vision_never_reaches_billable_provider(self):
-        for path in ("/scan-receipt", "/verify-packing-photo"):
+        for path in ("/verify-packing-photo",):
             with self.subTest(path=path):
                 self.provider.analyze_image.reset_mock()
                 response = await self.client.post(path, files={"file": ("image.png", picture(), "image/png")})
@@ -91,7 +91,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_image_mime_label_cannot_send_non_image_bytes_to_provider(self):
         headers = self.authenticate_admin()
-        for path in ("/scan-receipt", "/verify-packing-photo"):
+        for path in ("/verify-packing-photo",):
             with self.subTest(path=path):
                 self.provider.analyze_image.reset_mock()
                 response = await self.client.post(path, headers=headers,
@@ -102,7 +102,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_oversized_legacy_images_are_refused_before_provider(self):
         headers = self.authenticate_admin()
         payload = picture() + b"x" * image_input.MAX_IMAGE_BYTES
-        for path in ("/scan-receipt", "/verify-packing-photo"):
+        for path in ("/verify-packing-photo",):
             with self.subTest(path=path):
                 self.provider.analyze_image.reset_mock()
                 response = await self.client.post(path, headers=headers, files={"file": ("large.png", payload, "image/png")})
@@ -123,7 +123,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 yield block
             yield b"\r\n--resource-boundary--\r\n"
 
-        response = await self.client.post("/scan-receipt", headers=headers, content=chunks())
+        response = await self.client.post("/verify-packing-photo", headers=headers, content=chunks())
         self.assertEqual((response.status_code, self.provider.analyze_image.await_count), (413, 0))
         self.assertLessEqual(consumed, image_input.MAX_IMAGE_BYTES + 2 * len(block), "reject while receiving, before spooling the full oversized body")
 
@@ -143,7 +143,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {'INTERNAL_SERVICE_KEY': 'test-inventory-ai-secret'}):
             allowed = await self.client.post('/verify-packing-photo', headers={'x-internal-service-key': 'test-inventory-ai-secret'},
                 files={'file': ('image.png', picture(), 'image/png')})
-            denied = await self.client.post('/scan-receipt', headers={'x-internal-service-key': 'test-inventory-ai-secret'},
+            denied = await self.client.post('/vision/identify', headers={'x-internal-service-key': 'test-inventory-ai-secret'},
                 files={'file': ('image.png', picture(), 'image/png')})
         self.assertEqual(allowed.status_code, 200)
         self.assertEqual(denied.status_code, 401)
@@ -188,7 +188,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_provider_only_receives_normalized_image_and_pixel_limit_is_enforced(self):
         headers = self.authenticate_admin()
-        response = await self.client.post('/scan-receipt', headers=headers,
+        response = await self.client.post('/verify-packing-photo', headers=headers,
             files={'file': ('image.png', picture() + b'private trailing bytes', 'image/png')})
         self.assertEqual(response.status_code, 200)
         actual = self.provider.analyze_image.await_args.args[0]
@@ -196,7 +196,7 @@ class PaidInferenceBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(b'private trailing bytes', actual)
         self.provider.analyze_image.reset_mock()
         with patch.object(image_input, 'MAX_IMAGE_PIXELS', 100):
-            response = await self.client.post('/scan-receipt', headers=headers, files={'file': ('image.png', picture(), 'image/png')})
+            response = await self.client.post('/verify-packing-photo', headers=headers, files={'file': ('image.png', picture(), 'image/png')})
         self.assertEqual(response.status_code, 413)
         self.provider.analyze_image.assert_not_awaited()
 

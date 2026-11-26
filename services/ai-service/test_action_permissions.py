@@ -1,6 +1,6 @@
 """Phase 4: an AI action card is offered only to someone its downstream write
 would accept. inventory-service guards POST /api/stock-alerts and
-POST /api/staff-tasks with authorizeManagerDecision (WAREHOUSE_MANAGER/ADMIN +
+POST /api/staff-tasks with authorizeManagerDecision (MANAGER/ADMIN +
 inventory.operation.decide), so a warehouse staff member - who used to get
 these cards and then a 403 on confirm - must not be able to confirm them."""
 from __future__ import annotations
@@ -18,7 +18,7 @@ from agent_schemas import PendingAction, UserContext
 
 STAFF = UserContext(user_id="s", roles=["WAREHOUSE_STAFF"], permissions=[
     "inventory.task.read", "inventory.stock.read", "inventory.exception.report", "inventory.purchase.request"])
-MANAGER = UserContext(user_id="m", roles=["WAREHOUSE_MANAGER"], permissions=["inventory.operation.decide"])
+MANAGER = UserContext(user_id="m", roles=["MANAGER"], permissions=["inventory.operation.decide"])
 
 
 def _action(action_type: str) -> PendingAction:

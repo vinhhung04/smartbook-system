@@ -7,10 +7,13 @@ function setWarehouseScopeResolver(next) {
   resolver = next;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * req.warehouseScope for endpoints with per-warehouse rows:
  * null = no filter (internal service call with the service key, or superuser),
  * otherwise the Set of warehouse IDs the user may read - possibly empty.
+ * `?warehouseId=` narrows a user's scope to that one warehouse (403 when it is not theirs).
  * Fail-closed: scope unreadable -> 503, never "all warehouses".
  */
 function attachWarehouseScope() {
@@ -22,6 +25,14 @@ function attachWarehouseScope() {
     try {
       const scope = await resolver.resolve(req.user);
       req.warehouseScope = scope.all ? null : scope.read;
+      const picked = String(req.query?.warehouseId || '').trim();
+      if (picked) {
+        if (!UUID_RE.test(picked)) return res.status(400).json({ message: 'Mã kho không hợp lệ', code: 'INVALID_WAREHOUSE_ID' });
+        if (!inScope(req.warehouseScope, picked)) {
+          return res.status(403).json({ message: 'Bạn không có quyền xem kho này', code: 'WAREHOUSE_OUT_OF_SCOPE' });
+        }
+        req.warehouseScope = new Set([picked]);
+      }
       return next();
     } catch (error) {
       if (error instanceof WarehouseScopeUnavailableError) {

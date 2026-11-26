@@ -108,13 +108,15 @@ function buildSteps(status: PurchaseOrderStatus): WorkflowStep[] {
   }));
 }
 
-function getActionDialogConfig(pendingAction: PendingAction | null, poNumber: string | undefined) {
+function getActionDialogConfig(pendingAction: PendingAction | null, poNumber: string | undefined, selfApproves = false) {
   const label = poNumber || "đơn đặt hàng này";
   if (!pendingAction) return null;
 
   switch (pendingAction.type) {
     case "submit":
-      return { title: "Gửi duyệt đơn đặt hàng", description: `Gửi ${label} cho quản lý duyệt?`, confirmLabel: "Gửi duyệt", variant: "default" as const };
+      return selfApproves
+        ? { title: "Gửi và duyệt đơn đặt hàng", description: `Bạn có quyền duyệt nên ${label} sẽ được duyệt ngay khi gửi. Tiếp tục?`, confirmLabel: "Gửi và duyệt", variant: "default" as const }
+        : { title: "Gửi duyệt đơn đặt hàng", description: `Gửi ${label} cho quản lý duyệt?`, confirmLabel: "Gửi duyệt", variant: "default" as const };
     case "approve":
       return { title: "Duyệt đơn đặt hàng", description: `Duyệt ${label}? Sau khi duyệt, đơn có thể được gửi cho nhà cung cấp.`, confirmLabel: "Duyệt đơn", variant: "default" as const };
     case "send":
@@ -281,7 +283,7 @@ export function PurchaseOrderDetailPage() {
 
     let ok = false;
     if (pendingAction.type === "submit") {
-      ok = await runAction("Đã gửi duyệt đơn đặt hàng", () => purchaseOrderService.submit(id));
+      ok = await runAction(canApprovePurchaseOrder ? "Đã gửi và duyệt đơn đặt hàng" : "Đã gửi duyệt đơn đặt hàng", () => purchaseOrderService.submit(id));
     } else if (pendingAction.type === "approve") {
       ok = await runAction("Đã duyệt đơn đặt hàng", () => purchaseOrderService.approve(id, "Approved from UI"));
     } else if (pendingAction.type === "send") {
@@ -345,7 +347,7 @@ export function PurchaseOrderDetailPage() {
   const latestOpenInvoice = invoices.find((invoice) => ["SUBMITTED", "PARTIALLY_RECEIVED", "SHORTAGE_REPORTED"].includes(invoice.status));
   const latestPortalToken = dispatches.find((dispatch) => dispatch.portal_token)?.portal_token;
   const openShortages = shortageReports.filter((report) => report.status !== "RESOLVED");
-  const dialogConfig = getActionDialogConfig(pendingAction, po.po_number);
+  const dialogConfig = getActionDialogConfig(pendingAction, po.po_number, canApprovePurchaseOrder);
 
   const supplierName = po.supplier?.name || po.supplier_name || "-";
   const warehouseCode = po.warehouse?.code || po.warehouse_code || "-";
@@ -373,14 +375,14 @@ export function PurchaseOrderDetailPage() {
             title={rejected ? "Đơn bị từ chối — chỉnh sửa và gửi duyệt lại" : canSubmit ? "Kiểm tra lại rồi gửi duyệt" : "Đơn đang ở dạng nháp"}
             description={rejected
               ? (rejectReasonNote ? `Lý do: ${rejectReasonNote}` : "Xem lại số lượng, đơn giá và nhà cung cấp trước khi gửi lại.")
-              : canSubmit ? "Quản lý sẽ nhận được yêu cầu duyệt ngay khi bạn gửi." : "Người tạo đơn cần gửi duyệt trước khi quản lý có thể duyệt."}
+              : canSubmit ? (canApprovePurchaseOrder ? "Bạn có quyền duyệt nên đơn được duyệt ngay khi gửi." : "Quản lý sẽ nhận được yêu cầu duyệt ngay khi bạn gửi.") : "Người tạo đơn cần gửi duyệt trước khi quản lý có thể duyệt."}
           >
             {canEdit && (
               <Button asChild variant="outline" size="sm">
                 <NavLink to={`/purchase-orders/${po.id}/edit`}><Edit className="h-3.5 w-3.5" />Chỉnh sửa</NavLink>
               </Button>
             )}
-            {canSubmit && <Button size="sm" onClick={submit} disabled={working} data-testid="submit-po-button"><Send className="h-3.5 w-3.5" />Gửi duyệt</Button>}
+            {canSubmit && <Button size="sm" onClick={submit} disabled={working} data-testid="submit-po-button"><Send className="h-3.5 w-3.5" />{canApprovePurchaseOrder ? "Gửi và duyệt" : "Gửi duyệt"}</Button>}
           </NextStep>
         );
       }
@@ -462,12 +464,21 @@ export function PurchaseOrderDetailPage() {
             )}
           </NextStep>
         ) : (
-          <NextStep
-            tone="info"
-            icon={Clock}
-            title="Chờ NCC gửi hóa đơn hoặc phiếu giao hàng"
-            description={`Còn ${remainingQty} cuốn chưa nhận. Hóa đơn mới sẽ xuất hiện ở mục Chứng từ.`}
-          />
+          po.procurement_flow === "INVOICE_FIRST" ? (
+            <NextStep
+              tone="info"
+              icon={Clock}
+              title="Chờ NCC lập hóa đơn theo giá đã duyệt"
+              description={`Hóa đơn NCC gửi cần bạn duyệt ở mục "Hóa đơn và tiến độ giao hàng" bên dưới; NCC chỉ lập phiếu giao sau khi hóa đơn được duyệt. Còn ${remainingQty} cuốn chưa nhận.`}
+            />
+          ) : (
+            <NextStep
+              tone="info"
+              icon={Clock}
+              title="Chờ NCC gửi hóa đơn hoặc phiếu giao hàng"
+              description={`Còn ${remainingQty} cuốn chưa nhận. Hóa đơn mới sẽ xuất hiện ở mục Chứng từ.`}
+            />
+          )
         );
       case "SHORTAGE_REPORTED":
         return (
@@ -605,7 +616,18 @@ export function PurchaseOrderDetailPage() {
                         <TableRow key={item.id}>
                           <TableCell className="whitespace-normal">
                             <p className="text-[13px] font-medium text-foreground">{item.title}</p>
-                            <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{item.isbn13 || item.sku || "-"}</p>
+                            <p className="mt-0.5 font-mono text-[12px] text-muted-foreground">{item.item_code || item.isbn13 || item.sku || "-"}</p>
+                            {item.item_author || item.item_publish_year ? (
+                              <p className="mt-0.5 text-[12px] text-muted-foreground">{[item.item_author, item.item_publish_year ? `năm ${item.item_publish_year}` : null].filter(Boolean).join(" · ")}</p>
+                            ) : null}
+                            {po.procurement_flow === "INVOICE_FIRST" && !item.linked_to_catalog ? (
+                              <p className="mt-1 text-[12px] text-amber-700 dark:text-amber-400">Chưa có trong danh mục — liên kết khi nhập kho</p>
+                            ) : null}
+                            {po.procurement_flow === "INVOICE_FIRST" && item.requested_qty !== undefined && item.requested_qty !== item.ordered_qty ? (
+                              <p className="mt-1 text-[12px] text-muted-foreground">
+                                Yêu cầu {item.requested_qty} · nhà cung cấp chấp nhận {item.ordered_qty} · <span className="font-medium text-amber-700 dark:text-amber-400">không chấp nhận {item.not_accepted_qty}</span>
+                              </p>
+                            ) : null}
                             {item.note ? <p className="mt-1 text-[12px] text-muted-foreground">{item.note}</p> : null}
                           </TableCell>
                           <TableCell>
@@ -615,7 +637,9 @@ export function PurchaseOrderDetailPage() {
                             </div>
                             <div className="mt-1.5"><ProgressBar value={item.received_qty} max={item.ordered_qty} tone={over ? "danger" : item.received_qty < item.ordered_qty && item.received_qty > 0 ? "warning" : "success"} /></div>
                           </TableCell>
-                          <TableCell className={cn("text-right font-mono text-[12px] tabular-nums", Number(item.unit_cost) === 0 && "text-muted-foreground")}>{formatCurrency(item.unit_cost)}</TableCell>
+                          <TableCell className={cn("text-right font-mono text-[12px] tabular-nums", Number(item.unit_cost) === 0 && "text-muted-foreground")}>
+                            {po.procurement_flow === "INVOICE_FIRST" && Number(item.unit_cost) === 0 ? "Chờ báo giá" : formatCurrency(item.unit_cost)}
+                          </TableCell>
                           <TableCell className="text-right font-mono text-[12px] tabular-nums">{formatCurrency(item.line_total)}</TableCell>
                           <TableCell><StatusBadge label={statusLabel(item.reconciliation_status)} variant={statusVariant(item.reconciliation_status)} /></TableCell>
                         </TableRow>
@@ -805,7 +829,11 @@ export function PurchaseOrderDetailPage() {
               <dl className="-my-2.5 divide-y divide-border">
                 <InfoRow label="Tổng tiền">
                   <span className="font-mono text-[15px] font-semibold tabular-nums">{formatCurrency(po.total_amount)}</span>
-                  {missingPrices ? <span className="mt-0.5 block text-[12px] text-amber-700 dark:text-amber-400">Có dòng chưa nhập đơn giá</span> : null}
+                  {missingPrices ? (
+                    <span className="mt-0.5 block text-[12px] text-amber-700 dark:text-amber-400">
+                      {po.procurement_flow === "INVOICE_FIRST" ? "Chờ nhà cung cấp báo giá, SmartBook duyệt" : "Có dòng chưa nhập đơn giá"}
+                    </span>
+                  ) : null}
                 </InfoRow>
                 <InfoRow label="Nhà cung cấp">
                   {supplierName}

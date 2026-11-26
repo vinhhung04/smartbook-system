@@ -239,7 +239,8 @@ export const router = createBrowserRouter([
       { path: "putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway")).PutawayPage } },
       { path: "putaway/:id", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/putaway-detail")).PutawayDetailPage } },
       { path: "receiving-putaway", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.warehousePutawayExecute), lazy: { Component: async () => (await import("@/components/pages/receiving-putaway")).ReceivingPutawayPage } },
-      { path: "receiving-smart", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.managerStockDecision), lazy: { Component: async () => (await import("@/components/pages/receiving-smart")).SmartReceivingPage } },
+      // "Nhập kho thông minh" was removed (2026-11-25): supplier receiving starts from the delivery notes
+      { path: "receiving-smart", loader: () => redirect("/supplier-deliveries") },
       { path: "picking", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/picking")).PickingPage } },
       { path: "packing", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.staffTaskProgress), lazy: { Component: async () => (await import("@/components/pages/packing")).PackingPage } },
       { path: "order-requests", loader: requireRoleOrPermissionLoader(ROUTE_ACCESS.orderRequests), lazy: { Component: async () => (await import("@/components/pages/order-requests")).OrderRequestsPage } },

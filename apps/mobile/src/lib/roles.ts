@@ -1,6 +1,8 @@
+import { canonicalRole } from '../auth/access';
+
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Quản trị viên',
-  WAREHOUSE_MANAGER: 'Quản lý kho',
+  MANAGER: 'Quản lý',
   WAREHOUSE_STAFF: 'Nhân viên kho',
   LIBRARIAN: 'Thủ thư',
   CUSTOMER: 'Bạn đọc',
@@ -8,7 +10,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export function describeRoles(roles: string[]): string {
-  const labels = roles.map((role) => ROLE_LABEL[String(role).toUpperCase()] ?? role);
+  const labels = roles.map((role) => ROLE_LABEL[canonicalRole(role)] ?? role);
   return labels.length > 0 ? labels.join(', ') : 'Chưa có vai trò';
 }
 

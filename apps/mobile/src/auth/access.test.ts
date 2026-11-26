@@ -38,9 +38,17 @@ describe('canUseStaffFeature', () => {
 
 describe('isWarehouseManager', () => {
   it('matches the backend canManageAssignment rule', () => {
-    expect(isWarehouseManager({ ...base, roles: ['WAREHOUSE_MANAGER'] })).toBe(true);
+    expect(isWarehouseManager({ ...base, roles: ['MANAGER'] })).toBe(true);
     expect(isWarehouseManager({ ...base, roles: ['ADMIN'] })).toBe(true);
     expect(isWarehouseManager({ ...base, is_superuser: true })).toBe(true);
+    expect(isWarehouseManager({ ...base, roles: ['WAREHOUSE_STAFF'] })).toBe(false);
+  });
+});
+
+describe('renamed manager role (2026-11-25)', () => {
+  it('a session saved before the rename still counts as manager', () => {
+    expect(isWarehouseManager({ ...base, roles: ['WAREHOUSE_MANAGER'] })).toBe(true);
+    expect(isWarehouseManager({ ...base, roles: ['MANAGER'] })).toBe(true);
     expect(isWarehouseManager({ ...base, roles: ['WAREHOUSE_STAFF'] })).toBe(false);
   });
 });

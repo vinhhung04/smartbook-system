@@ -3,10 +3,11 @@ const { prisma } = require("../lib/prisma");
 
 async function nextTaskNumber(tx, type) {
   const client = tx || prisma;
+  // The squashed init migration creates the table without its rows: start each sequence on first use.
   const rows = await client.$queryRawUnsafe(
-    `UPDATE picking_task_sequences
-     SET last_number = last_number + 1, updated_at = now()
-     WHERE sequence_type = $1
+    `INSERT INTO picking_task_sequences (sequence_type, last_number) VALUES ($1, 1)
+     ON CONFLICT (sequence_type)
+     DO UPDATE SET last_number = picking_task_sequences.last_number + 1, updated_at = now()
      RETURNING last_number`,
     type,
   );

@@ -2,7 +2,7 @@
 //
 // Accounts used (from services/auth-service/prisma/seed.js, password from DEMO_PASSWORD):
 //   hung       - full access to WH-HCM-01 / WH-HN-01 / BR-HCM-01 (fixture setup only)
-//   curator01  - WAREHOUSE_MANAGER role, but only READ at WH-HCM-01, no scope at all at WH-HN-01
+//   curator01  - MANAGER role, but only READ at WH-HCM-01, no scope at all at WH-HN-01
 //   staff01    - WAREHOUSE_STAFF-level, OPERATOR (write) only at WH-HCM-01, no scope at WH-HN-01
 //
 // Usage: node scripts/warehouse-scope-stt123-audit.mjs
@@ -71,7 +71,7 @@ async function main() {
   console.log(`  body: ${JSON.stringify(sttLines.data).slice(0, 300)}`);
   console.log(`  => ${sttLines.status === 403 ? 'BLOCKED (protected)' : 'NOT BLOCKED (data returned despite no scope) — CONFIRMED if 200'}\n`);
 
-  // ---- STT3: POST /transfer-receiving/:id/confirm as curator01 (WAREHOUSE_MANAGER role,
+  // ---- STT3: POST /transfer-receiving/:id/confirm as curator01 (MANAGER role,
   // so canManageAssignment=true bypasses the assignment check, but zero WRITE scope anywhere
   // including WH-HN-01) ----
   const sttConfirm = await request('POST', `/api/transfer-receiving/${orderId}/confirm`, curator.token, {});

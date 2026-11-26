@@ -271,7 +271,7 @@ function canViewAllReceivingTasks(user = {}) {
   const roles = Array.isArray(user.roles)
     ? user.roles.map((role) => String(role).toUpperCase())
     : [];
-  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
 }
 
 function canManageReceiving(user = {}) {
@@ -1490,6 +1490,42 @@ async function assignGoodsReceipt(req, res) {
   }
 }
 
+/** Warehouse staff take an unassigned supplier receipt for counting (first one wins). */
+async function claimSelfGoodsReceipt(req, res) {
+  const id = parseId(req.params.id);
+  const userId = parseId(req.user?.id || req.user?.sub);
+  if (!id) return res.status(400).json({ message: "Mã phiếu nhập kho không hợp lệ" });
+  if (!userId) return res.status(401).json({ message: "Invalid current user context" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe("SELECT id FROM goods_receipts WHERE id = $1::uuid FOR UPDATE", id);
+      const receipt = await tx.goods_receipts.findUnique({ where: { id }, select: { id: true, status: true, warehouse_id: true, received_by_user_id: true, receipt_number: true } });
+      if (!receipt) return { invalid: true, statusCode: 404, message: "Không tìm thấy phiếu nhập kho" };
+      if (!(await canWriteWarehouse(req.user, receipt.warehouse_id))) return { invalid: true, statusCode: 403, message: "Bạn không có quyền thao tác trên kho này" };
+      if (receipt.received_by_user_id === userId) return { data: receipt };
+      if (receipt.received_by_user_id) return { invalid: true, statusCode: 409, message: "Phiếu nhập đã được nhân viên khác nhận" };
+      if (receipt.status !== "DRAFT") return { invalid: true, statusCode: 409, message: "Chỉ nhận được phiếu nhập đang chờ kiểm đếm" };
+      const updated = await tx.goods_receipts.update({ where: { id }, data: { received_by_user_id: userId, updated_at: new Date() } });
+      await tx.inventory_audit_logs.create({
+        data: {
+          actor_user_id: userId,
+          action_name: "GOODS_RECEIPT_SELF_CLAIMED",
+          entity_type: "GOODS_RECEIPT",
+          entity_id: id,
+          after_data: { receipt_number: receipt.receipt_number, received_by_user_id: userId },
+        },
+      });
+      return { data: updated };
+    });
+    if (result.invalid) return res.status(result.statusCode).json({ message: result.message });
+    return res.json({ message: "Đã nhận phiếu nhập để kiểm đếm", data: result.data });
+  } catch (error) {
+    console.error("Error while self-claiming goods receipt:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 async function getMyDraftReceiptsForVerification(req, res) {
   const userId = req.user?.id || req.user?.sub;
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -1534,6 +1570,7 @@ async function getMyDraftReceiptsForVerification(req, res) {
 }
 
 module.exports = {
+  claimSelfGoodsReceipt,
   getGoodsReceipts,
   getGoodsReceiptById,
   createGoodsReceipt,

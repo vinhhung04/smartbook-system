@@ -1,6 +1,8 @@
 # Ma trận quyền AI, phạm vi kho và giới hạn tốc độ
 
 > Cập nhật 2026-11-12. Quyền của từng role lấy từ `auth_db` đang chạy (bảng `role_permissions`). Code: `agent_actions.py` (`policy`), `agent_permissions.py`, `routes_conversations.can_use_assistant`, `action_guard.py`, `warehouse_scope.py`, `ai_core/policy.py`, `apps/web/src/lib/rbac.ts`. Test: `test_permission_matrix.py`.
+>
+> 2026-11-25: mã role `WAREHOUSE_MANAGER` đổi thành `MANAGER` (migration `20261125160000_rename_warehouse_manager_to_manager`, hiển thị "Quản lý"). Token phát hành trước đó vẫn mang mã cũ; mọi service đổi sang `MANAGER` khi đọc token (`@smartbook/shared/roles`), web và mobile cũng vậy. Các báo cáo cũ hơn vẫn dùng tên cũ.
 
 ## Nguyên tắc
 
@@ -15,18 +17,20 @@
 | Role | Quyền liên quan |
 |---|---|
 | ADMIN (superuser trong seed) | analytics.reports.view, reports.read, inventory.operation.decide, inventory.purchase.request, borrow.write + các quyền borrow ghi, customer.self.* |
-| WAREHOUSE_MANAGER | analytics.reports.view, reports.read, inventory.operation.decide, inventory.purchase.request |
+| MANAGER | analytics.reports.view, reports.read, analytics.borrow.read (từ 2026-11-25, chỉ đọc), inventory.operation.decide, inventory.purchase.request |
 | WAREHOUSE_STAFF | inventory.purchase.request, inventory.task.read |
-| LIBRARIAN | borrow.write, borrow.customers.write, borrow.loans.write, borrow.fine.write, borrow.membership.write, … |
+| LIBRARIAN | borrow.write, borrow.customers.write, borrow.loans.write, borrow.fine.write, borrow.membership.write, analytics.borrow.read (từ 2026-11-25), … |
+
+**Manager xem phân tích thư viện** (2026-11-25): một role Manager duy nhất (MANAGER), không tách role. Manager có `analytics.borrow.read`, nên dashboard, trang Báo cáo và trợ lý AI hiện số liệu mượn trả (quá hạn, tiền phạt, đặt trước, xu hướng mượn, rủi ro trả trễ), chỉ đọc và chỉ trong phạm vi kho/chi nhánh của `user_warehouse_scopes`. Manager **không** có quyền ở quầy (`borrow.*`): không đọc danh sách phiếu mượn hay khoản phạt từng người, không tạo phiếu, không đặt chỗ hộ bạn đọc. Trang Báo cáo của Manager lấy số liệu từ `/analytics/*` (`reports-analytics.ts`), không tải danh sách phiếu. LIBRARIAN cũng giữ `analytics.borrow.read`. Muốn một người vừa quản lý vừa thao tác ở quầy thì gán thêm role LIBRARIAN. Mọi route analytics có tên bạn đọc (`/late-return-risk`, `/reservation-no-show-risk`, `/overdue-summary`) lọc theo phạm vi. Test: `test_unified_manager.py`, `services/analytics-service/test/risk-scope.test.js`, `scripts/unified-manager-integration.mjs`, `scripts/analytics-integration.mjs`, `apps/web/tests/reports-analytics.test.mjs`.
 | CUSTOMER | customer.self.read, customer.self.write |
 | SUPPLIER | supplier.portal.read, supplier.portal.write |
 
 ## Ma trận
 
-| Khả năng | ADMIN | WAREHOUSE_MANAGER | WAREHOUSE_STAFF | LIBRARIAN | CUSTOMER | SUPPLIER |
+| Khả năng | ADMIN | MANAGER | WAREHOUSE_STAFF | LIBRARIAN | CUSTOMER | SUPPLIER |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Chatbot nổi (`/chat`) | – (dùng trang trợ lý) | – (dùng trang trợ lý) | ✓ | ✓ | ✓ | – (cổng riêng) |
-| Trang Decision Assistant (`/assistant`, lịch sử hội thoại) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| Trang Decision Assistant (`/assistant`, lịch sử hội thoại) | ✓ | ✓ | ✗ | ✗ (✓ khi kiêm MANAGER) | ✗ | ✗ |
 | Xem dữ liệu analytics toàn hệ thống qua AI | ✓ | ✓ (theo phạm vi kho) | theo quyền service đích | theo quyền service đích | ✗ (chỉ dữ liệu của mình) | ✗ |
 | Xác nhận `CREATE_REORDER_DRAFT` | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | Xác nhận `CREATE_STOCK_ALERT` | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
@@ -42,10 +46,10 @@ Chatbot nổi bị ẩn với người có quyền vào trang trợ lý (`layout
 | Loại action | Chính sách trong ai-service | Guard của service đích (đã đối chiếu code) |
 |---|---|---|
 | `CREATE_REORDER_DRAFT` | permission `inventory.purchase.request` | inventory `authorizeAnyPermission(['inventory.purchase.request'])` |
-| `CREATE_STOCK_ALERT`, `CREATE_STAFF_TASK_DRAFT` | role WAREHOUSE_MANAGER/ADMIN **và** `inventory.operation.decide` | inventory `authorizeManagerDecision` |
+| `CREATE_STOCK_ALERT`, `CREATE_STAFF_TASK_DRAFT` | role MANAGER/ADMIN **và** `inventory.operation.decide` | inventory `authorizeManagerDecision` |
 | `CREATE_RESERVATION_DRAFT` (bạn đọc) | role CUSTOMER **và** `customer.self.read/write` | borrow `authorizeCustomerSelf` trên `/borrow/my` |
 | `CREATE_RESERVATION_DRAFT` (quầy) | role LIBRARIAN/ADMIN **và** một quyền borrow ghi | borrow `authorizeBorrowAdminWrite` trên `/borrow/reservations` |
-| `CREATE_REPORT_DRAFT` | role ADMIN/WAREHOUSE_MANAGER/LIBRARIAN, hoặc quyền đọc báo cáo | không ghi vào service nào |
+| `CREATE_REPORT_DRAFT` | role ADMIN/MANAGER/LIBRARIAN, hoặc quyền đọc báo cáo | không ghi vào service nào |
 
 ## Đặt chỗ sách của bạn đọc
 

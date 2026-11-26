@@ -295,7 +295,7 @@ class ChatWithPhotoTest(unittest.IsolatedAsyncioTestCase):
 class AssistantWithPhotoTest(unittest.IsolatedAsyncioTestCase):
     async def test_the_recognised_title_reaches_the_planner_and_skips_the_cache(self):
         vc._STORE.clear()
-        manager = UserContext(user_id="m", roles=["WAREHOUSE_MANAGER"],
+        manager = UserContext(user_id="m", roles=["MANAGER"],
                               permissions=["analytics.reports.view", "inventory.catalog.read"])
         aid = vc.save(manager, "IDENTIFIED", [{"book_id": "b1", "title": "Nhà Giả Kim"}], {})
         planned = AsyncMock(side_effect=RuntimeError("stop after planning"))

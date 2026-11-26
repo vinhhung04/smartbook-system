@@ -273,3 +273,45 @@ class BookSearchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnreadableSourceTests(unittest.TestCase):
+    """Audit 2026-11-22: a source the caller may not read (403) was summarised as
+    0 - a librarian was told "dang muon 0, qua han 0" for a branch with 161 loans."""
+
+    def _context(self, intent, readable: dict, message="x"):
+        async def fetch(_client, endpoint, auth, params=None):
+            name = retrieval._source_name(endpoint)
+            if endpoint in readable:
+                return {"name": name, "endpoint": endpoint, "status": "ok"}, readable[endpoint], None
+            return {"name": name, "endpoint": endpoint, "status": "error:403"}, None, f"{name}: khong co quyen xem"
+
+        with mock.patch.object(retrieval, "_fetch", new=fetch):
+            return asyncio.run(retrieval.retrieve_context({"intent": intent, "query": message}, auth_header="Bearer t"))
+
+    def test_denied_sources_are_unknown_never_zero(self):
+        import intent as it
+        for name in ("DASHBOARD_SUMMARY_QUERY", "OVERDUE_LOAN_QUERY", "TOP_BORROWED_BOOKS_QUERY", "BORROW_TREND_QUERY",
+                     "FINE_SUMMARY_QUERY", "RESERVATION_QUERY", "REORDER_SUGGESTION_QUERY", "AGING_INVENTORY_QUERY",
+                     "LOW_STOCK_QUERY"):
+            summary = self._context(getattr(it, name), {})["summary"]
+            self.assertIn(retrieval.NO_DATA, summary, name)
+            self.assertNotRegex(summary, r"(Dang muon|qua han|Tong loan qua han|tong muon): 0\b", name)
+
+    def test_readable_kpis_are_quoted_with_their_scope(self):
+        import intent as it
+        kpis = {"total_titles": 32, "total_copies": 558, "active_loans": 343, "overdue_loans": 335,
+                "pending_reservations": 0, "confirmed_reservations": 0, "ready_for_pickup_reservations": 0,
+                "pickup_codes_expiring_soon": 0, "unpaid_fine_amount": 69192000}
+        summary = self._context(it.DASHBOARD_SUMMARY_QUERY, {"/analytics/dashboard/kpis": {"data": kpis}})["summary"]
+        self.assertIn("Dang muon: 343; qua han: 335.", summary)
+        self.assertIn(retrieval.SCOPE_LINE, summary)
+        self.assertIn(f"Rui ro ton kho theo kho: {retrieval.NO_DATA}", summary)  # that source was denied
+
+    def test_titles_never_stocked_in_the_callers_warehouses_are_not_out_of_stock(self):
+        import intent as it
+        books = [{"id": "a", "title": "Co o kho", "quantity": 0, "location_count": 1},
+                 {"id": "b", "title": "Khong co o kho", "quantity": 0, "location_count": 0}]
+        result = self._context(it.LOW_STOCK_QUERY, {"/api/books": {"data": books}})
+        self.assertIn("Co o kho", result["summary"])
+        self.assertNotIn("Khong co o kho", result["summary"])

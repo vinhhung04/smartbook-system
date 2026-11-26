@@ -6,6 +6,8 @@
 // race (P0.9).
 //
 // Usage: node scripts/concurrent-invoice-over-po-integration.mjs
+import { acceptAtPrice, approvedInvoice, supplierIdOf } from './lib/invoice-first-po.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const managerName = process.env.PURCHASE_TEST_USERNAME || 'hung';
@@ -51,7 +53,6 @@ async function setupPo(M, supplier, warehouse, book, orderedQty, unitCost, note)
   });
   const poId = created.data.id;
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   const po = await ok('GET', `/api/purchase-orders/${poId}`, M);
   return { poId, item: po.items[0] };
@@ -62,8 +63,7 @@ async function main() {
   const supplierA = await login(supplierAName);
   const M = manager.token;
 
-  const suppliers = await ok('GET', '/api/suppliers', M);
-  const supplier = suppliers.find((row) => String(row.email || '').toLowerCase() === String(supplierA.user.email || '').toLowerCase());
+  const supplier = { id: await supplierIdOf(supplierA.token) };
   const warehouses = await ok('GET', '/api/warehouses', M);
   const warehouse = warehouses.find((row) => row.is_active !== false);
   const books = (await ok('GET', '/api/books', M)).filter((row) => row.variant_id);
@@ -73,42 +73,49 @@ async function main() {
 
   // ── Part 1: sequential — Invoice A (80) then Invoice B (80) on a 100-unit PO, no GRN posted ──
   const po1 = await setupPo(M, supplier, warehouse, book, orderedQty, unitCost, 'E2E invoice-over-PO sequential');
-  await ok('POST', `/api/supplier-account/orders/${po1.poId}/respond`, supplierA.token, { decision: 'ACCEPTED' });
+  await acceptAtPrice(M, supplierA.token, po1.poId, unitCost);
+  const po1Invoice = await approvedInvoice(M, supplierA.token, po1.poId);
 
   const invA = await ok('POST', `/api/supplier-account/orders/${po1.poId}/invoices`, supplierA.token, {
     delivery_number: `DN-A-${Date.now()}`,
-    items: [{ purchase_order_item_id: po1.item.id, invoiced_qty: 80, unit_cost: unitCost }],
+    invoice_document_id: po1Invoice.id,
+    items: [{ purchase_order_item_id: po1.item.id, invoiced_qty: 80 }],
   });
   check('Invoice A (80 of 100) accepted', Boolean(invA.data?.id));
 
   const invB = await request('POST', `/api/supplier-account/orders/${po1.poId}/invoices`, supplierA.token, {
     delivery_number: `DN-B-${Date.now()}`,
-    items: [{ purchase_order_item_id: po1.item.id, invoiced_qty: 80, unit_cost: unitCost }],
+    invoice_document_id: po1Invoice.id,
+    items: [{ purchase_order_item_id: po1.item.id, invoiced_qty: 80 }],
   });
   check(
     'Invoice B (another 80, combined 160 > 100) is rejected, not silently accepted',
-    invB.response.status === 400 && /vượt số lượng/i.test(invB.data?.message || ''),
+    invB.response.status === 409 && /vượt số lượng/i.test(invB.data?.message || ''),
     `status=${invB.response.status} message=${invB.data?.message}`,
   );
 
   const invB20 = await ok('POST', `/api/supplier-account/orders/${po1.poId}/invoices`, supplierA.token, {
     delivery_number: `DN-B20-${Date.now()}`,
-    items: [{ purchase_order_item_id: po1.item.id, invoiced_qty: 20, unit_cost: unitCost }],
+    invoice_document_id: po1Invoice.id,
+    items: [{ purchase_order_item_id: po1.item.id, invoiced_qty: 20 }],
   });
   check('A second note for exactly the remaining 20 (80+20=100) is accepted', Boolean(invB20.data?.id));
 
   // ── Part 2: concurrency — two fresh 60-unit notes on a fresh 100-unit PO, fired at once ──
   const po2 = await setupPo(M, supplier, warehouse, book, orderedQty, unitCost, 'E2E invoice-over-PO concurrency');
-  await ok('POST', `/api/supplier-account/orders/${po2.poId}/respond`, supplierA.token, { decision: 'ACCEPTED' });
+  await acceptAtPrice(M, supplierA.token, po2.poId, unitCost);
+  const po2Invoice = await approvedInvoice(M, supplierA.token, po2.poId);
 
   const [resA, resB] = await Promise.all([
     request('POST', `/api/supplier-account/orders/${po2.poId}/invoices`, supplierA.token, {
       delivery_number: `DN-RACE-A-${Date.now()}`,
-      items: [{ purchase_order_item_id: po2.item.id, invoiced_qty: 60, unit_cost: unitCost }],
+      invoice_document_id: po2Invoice.id,
+    items: [{ purchase_order_item_id: po2.item.id, invoiced_qty: 60 }],
     }),
     request('POST', `/api/supplier-account/orders/${po2.poId}/invoices`, supplierA.token, {
       delivery_number: `DN-RACE-B-${Date.now()}`,
-      items: [{ purchase_order_item_id: po2.item.id, invoiced_qty: 60, unit_cost: unitCost }],
+      invoice_document_id: po2Invoice.id,
+    items: [{ purchase_order_item_id: po2.item.id, invoiced_qty: 60 }],
     }),
   ]);
   const succeeded = [resA, resB].filter((r) => r.response.ok);

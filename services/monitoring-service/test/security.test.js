@@ -129,7 +129,7 @@ test('authorization: ADMIN and superuser may do everything; permissions grant ex
   assert.equal(can(user({ permissions: ['monitoring.incidents.read'] }), 'read'), true);
   assert.equal(can(user({ permissions: ['monitoring.incidents.read'] }), 'manage'), false);
   assert.equal(can(user({ permissions: ['monitoring.incidents.manage'] }), 'settings'), false);
-  assert.equal(can(user({ roles: ['WAREHOUSE_MANAGER'], permissions: ['audit.read'] }), 'read'), false, 'audit.read no longer opens monitoring');
+  assert.equal(can(user({ roles: ['MANAGER'], permissions: ['audit.read'] }), 'read'), false, 'audit.read no longer opens monitoring');
   assert.equal(can(user({ roles: ['CUSTOMER'] }), 'read'), false);
   assert.equal(can(null, 'read'), false);
 });

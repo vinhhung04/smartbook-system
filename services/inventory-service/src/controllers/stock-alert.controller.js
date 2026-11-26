@@ -1,6 +1,7 @@
 const { pushToRooms } = require('../lib/socket-emitter');
 
 const { prisma } = require('../lib/prisma');
+const { scopedWarehouseWhere, scopeErrorStatus } = require('../utils/warehouse-scope.utils');
 
 const VALID_ALERT_TYPES = ['LOW_STOCK', 'OUT_OF_STOCK', 'STOCK_RISK', 'AGING_STOCK'];
 const VALID_ALERT_LEVELS = ['LOW', 'MEDIUM', 'HIGH'];
@@ -147,9 +148,10 @@ async function listStockAlerts(req, res) {
   const where = {};
   if (status) where.status = String(status).toUpperCase();
   if (alert_type) where.alert_type = String(alert_type).toUpperCase();
-  if (warehouse_id) where.warehouse_id = warehouse_id;
 
   try {
+    // only the caller's readable warehouses (warehouse_id, when given, narrows)
+    Object.assign(where, await scopedWarehouseWhere(req.user, 'warehouse_id', warehouse_id ? String(warehouse_id) : null));
     const [alerts, total] = await Promise.all([
       prisma.stock_alerts.findMany({
         where,
@@ -173,6 +175,7 @@ async function listStockAlerts(req, res) {
 
     return res.json({ data: alerts, total, page: Number(page), limit: Number(limit) });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message, code: error.code });
     console.error('[stock-alert] listStockAlerts error:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }

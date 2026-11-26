@@ -30,7 +30,7 @@ import {
 import { getPaginationRange } from "@/lib/pagination";
 import { cn } from "@/components/ui/utils";
 
-const MANAGER_ROLES = ["ADMIN", "WAREHOUSE_MANAGER"];
+const MANAGER_ROLES = ["ADMIN", "MANAGER"];
 const PAGE_SIZE = 10;
 
 function statusMeta(status: string) {
@@ -446,7 +446,7 @@ function StockAuditDetailView({ id }: { id: string }) {
   const isAssignedToMe = audit?.assigned_to_user_id && currentUser?.id === audit.assigned_to_user_id;
   const canCount = audit?.status === "IN_PROGRESS" && (isManager || isAssignedToMe);
   const allCounted = audit ? audit.items.every((item) => item.counted_qty !== null) : false;
-  const requiresRecount = Boolean(audit?.items.some(item => item.baseline_on_hand_qty == null));
+  const requiresRecount = Boolean(audit?.items.some(item => item.needs_recount ?? item.baseline_on_hand_qty == null));
   const handleRecount = async () => {
     if (!audit) return;
     setSaving(true);
@@ -533,7 +533,7 @@ function StockAuditDetailView({ id }: { id: string }) {
     if (!target) {
       target = matches.length === 1
         ? matches[0]
-        : matches.find((m) => (m.counted_qty ?? 0) < m.expected_qty) ?? matches[0];
+        : matches.find((m) => m.expected_qty !== null && (m.counted_qty ?? 0) < m.expected_qty) ?? matches[0];
       if (matches.length > 1) {
         toast.info(`"${target.title || target.sku}" trùng ở ${matches.length} vị trí — đã cộng vào ${target.location_code || "vị trí đầu"}. Bấm chọn dòng khác nếu cần.`);
       }
@@ -824,14 +824,14 @@ function StockAuditDetailView({ id }: { id: string }) {
                         <span className="font-mono text-[12px]">{item.sku || item.isbn13 || "-"}</span>, vị trí <span className="font-mono text-[12px] text-foreground/80">{item.location_code || "-"}</span>
                       </p>
                       <p className="mt-1 text-[13px] tabular-nums text-muted-foreground @xl:hidden">
-                        Hệ thống <span className="text-foreground">{item.expected_qty}</span>
+                        {item.expected_qty === null ? "Kiểm kê mù" : <>Hệ thống <span className="text-foreground">{item.expected_qty}</span></>}
                         {!canCount && <>, đếm được <span className="text-foreground">{item.counted_qty ?? "-"}</span></>}
-                        , chênh lệch <span className={variance.className}>{variance.text}</span>
+                        {item.expected_qty !== null && <>, chênh lệch <span className={variance.className}>{variance.text}</span></>}
                       </p>
                       {canCount && <div className="mt-2 @xl:hidden">{stepper}</div>}
                       {item.adjustment_posted && item.variance_qty ? <p className="mt-1 text-[12px] text-emerald-700 dark:text-emerald-400">Đã điều chỉnh tồn kho</p> : null}
                     </TableCell>
-                    <TableCell className="hidden py-3.5 text-right align-top text-[15px] tabular-nums text-foreground @xl:table-cell">{item.expected_qty}</TableCell>
+                    <TableCell className="hidden py-3.5 text-right align-top text-[15px] tabular-nums text-foreground @xl:table-cell">{item.expected_qty ?? <span className="text-muted-foreground" title="Kiểm kê mù: người đếm không thấy số hệ thống">ẩn</span>}</TableCell>
                     <TableCell className={cn("hidden text-right align-top @xl:table-cell", canCount ? "py-3" : "py-3.5")}>
                       {canCount ? stepper : <span className="text-[15px] tabular-nums text-foreground">{item.counted_qty ?? <span className="text-muted-foreground">-</span>}</span>}
                     </TableCell>

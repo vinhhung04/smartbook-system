@@ -8,7 +8,7 @@ export interface RouteAccessMeta {
 // Maps legacy role codes to canonical codes for JWT backward compatibility.
 // Applied in hasAnyRole and getPrimaryRole so old tokens still work.
 export const LEGACY_ROLE_MAP: Record<string, string> = {
-  MANAGER: "WAREHOUSE_MANAGER",
+  WAREHOUSE_MANAGER: "MANAGER", // renamed 2026-11-25
   STAFF: "WAREHOUSE_STAFF",
   WAREHOUSE_OPERATOR: "WAREHOUSE_STAFF",
   CUSTOMER_SERVICE: "LIBRARIAN",
@@ -19,8 +19,8 @@ function normalizeRole(role: string): string {
 }
 
 // CUSTOMER and SUPPLIER are portal users, not internal staff.
-const INTERNAL_ROLES = ["ADMIN", "WAREHOUSE_MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"];
-const MANAGER_OPERATION_ROLES = ["ADMIN", "WAREHOUSE_MANAGER"];
+const INTERNAL_ROLES = ["ADMIN", "MANAGER", "WAREHOUSE_STAFF", "LIBRARIAN"];
+const MANAGER_OPERATION_ROLES = ["ADMIN", "MANAGER"];
 const STAFF_TRACKING_ROLES = ["WAREHOUSE_STAFF"];
 const LIBRARY_ROLES = ["ADMIN", "LIBRARIAN"];
 const ADMIN_ROLES = ["ADMIN"];
@@ -34,6 +34,9 @@ export const ROUTE_ACCESS = {
   inventory: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.read"] },
   staffTasks: { roles: STAFF_TRACKING_ROLES, permissions: ["inventory.task.read"] },
   staffTaskProgress: { roles: [...STAFF_TRACKING_ROLES, ...MANAGER_OPERATION_ROLES], permissions: ["inventory.task.progress"] },
+  // Menu entry "Giao việc nhân viên": managers only. Staff reach /staff-tasks (route above)
+  // from their task inbox, where their assigned tasks already appear.
+  staffTaskAssign: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.task.progress"] },
   managerStockDecision: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockWrite: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.operation.decide"] },
   stockAdjust: { roles: MANAGER_OPERATION_ROLES, permissions: ["inventory.stock.adjust"] },
@@ -105,7 +108,7 @@ export function canViewLocationCode(user: AuthUser | null | undefined) {
 
 export function getPrimaryRole(user: AuthUser | null | undefined) {
   const roles = (user?.roles || []).map(normalizeRole);
-  const order = ["ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER"];
+  const order = ["ADMIN", "MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER"];
   return order.find((role) => roles.includes(role)) || roles[0] || "UNKNOWN";
 }
 
@@ -114,7 +117,7 @@ export function getHomePathForUser(user: AuthUser | null | undefined) {
   if (role === "CUSTOMER") return "/customer";
   if (role === "SUPPLIER") return "/supplier";
   if (role === "ADMIN") return "/users";
-  if (role === "WAREHOUSE_MANAGER") return "/reports";
+  if (role === "MANAGER") return "/reports";
   if (role === "LIBRARIAN") return "/borrow";
   if (role === "WAREHOUSE_STAFF") return "/my-warehouse-tasks";
   return "/";

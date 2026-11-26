@@ -31,8 +31,8 @@ Auth Service chịu trách nhiệm định danh, xác thực và phân quyền c
 | PATCH | /auth/me | Cập nhật thông tin cá nhân |
 | GET | /auth/warehouse-staff | Danh sách nhân viên kho (để giao việc) |
 | POST | /auth/change-password | Đổi mật khẩu |
-| POST | /auth/password-reset/request | Gửi email đặt lại mật khẩu |
-| POST | /auth/password-reset/confirm | Đặt lại mật khẩu bằng token |
+| POST | /auth/password-reset/request | Gửi mã OTP 6 số đặt lại mật khẩu qua email (trả lời giống nhau dù tài khoản có tồn tại hay không) |
+| POST | /auth/password-reset/confirm | Đặt lại mật khẩu bằng `identifier` + `code` + `new_password`; thu hồi các phiên cũ |
 | POST | /auth/resend-verification | (đã đăng nhập) gửi mã xác thực email cho tài khoản chưa xác thực |
 | GET | /iam/users | Danh sách người dùng |
 | POST | /iam/users | Tạo người dùng nội bộ |

@@ -148,7 +148,7 @@ _STYLE_PATTERNS: dict[str, re.Pattern] = {
                        r"phan tich sau|noi them|(noi|giai thich|trinh bay) ro hon)\b"),
     "plain": re.compile(r"\b(de hieu|don gian hon|noi don gian|khong chuyen|nghia la gi|thuat ngu|binh dan)\b"),
     "why_not": re.compile(r"\b(sao|tai sao|vi sao) (lai )?khong (chon|nhap|uu tien|lay|dung|de xuat)\b|"
-                          r"\b(phuong an|lua chon) (khac|thay the)\b|\bthay vi\b"),
+                          r"\b(phuong an|lua chon|giai phap|cach)( nao)? (khac|thay the|tot hon)\b|\bthay vi\b"),
 }
 
 
@@ -1230,6 +1230,9 @@ class SemanticHint:
     references_previous: bool = False
 
 
+_RISK_WORDS = re.compile(r"\b(rui ro|het hang|duoi nguong|thieu sach)\b")
+
+
 def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, now: datetime | None = None,
                hint: SemanticHint | None = None) -> QueryPlan:
     """The deterministic plan for one turn. `state` is the previous turn's
@@ -1289,6 +1292,11 @@ def build_plan(message: str, state: dict | None, warehouses: list[dict] | None, 
             named_warehouses = list(hint.warehouses)
         if not periods and hint.periods:
             periods = list(hint.periods)
+    if book_title and WAREHOUSE_RISK in caps and not _RISK_WORDS.search(text):
+        # "Cuốn "Số đỏ" còn ở kho nào?" is about ONE book's copies per warehouse, not the warehouses'
+        # stock risk (live demo 2026-11-26: whole-warehouse totals were given as the book's stock).
+        # After the semantic hint, which once added the risk capability back.
+        caps = [c for c in caps if c != WAREHOUSE_RISK] + ([] if BOOK_SEARCH in caps else [BOOK_SEARCH])
     rebalance = _plan_rebalance(message, text, caps, budgets, budget_pct, budget_delta, named_warehouses, wh, state,
                                 warehouses, assumptions, sensitive)
     if rebalance is not None:
@@ -1850,7 +1858,7 @@ def decompose(caps: list[str], tools: list[dict], warehouses: list[dict], curren
             part["period"] = current.label + (f" so với {comparison.label}" if comparison else "")
         if cap == BORROW_TREND and warehouses:
             part["status"] = "partial"
-            part["note"] = "Số liệu mượn là toàn hệ thống, chưa tách theo kho/chi nhánh."
+            part["note"] = "Số liệu mượn tính gộp trên các kho bạn được xem, chưa tách riêng từng kho/chi nhánh."
         part["depends_on"] = [p["id"] for p in parts if (cap, p["capability"]) in _BUILDS_ON]
         parts.append(part)
     return parts

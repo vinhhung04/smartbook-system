@@ -7,7 +7,7 @@ const { sendMail } = require("../lib/email-sender");
 const { openReadStream } = require("../services/procurement-document-storage.service");
 const docs = require("../services/procurement-document.service");
 
-const MANAGER_ROLES = new Set(["ADMIN", "WAREHOUSE_MANAGER", "MANAGER"]);
+const MANAGER_ROLES = new Set(["ADMIN", "MANAGER", "MANAGER"]);
 
 function httpError(message, statusCode) {
   const error = new Error(message);
@@ -44,7 +44,9 @@ async function supplierActor(req) {
 
 const PO_INCLUDE = {
   suppliers: { select: { id: true, name: true, email: true } },
-  purchase_order_items: { select: { id: true, variant_id: true, ordered_qty: true, received_qty: true, unit_cost: true } },
+  purchase_order_items: {
+    select: { id: true, variant_id: true, ordered_qty: true, received_qty: true, unit_cost: true, closure_status: true, item_title: true },
+  },
 };
 
 /** Load a PO the actor may access, or throw 404/403 (a supplier never learns another supplier's PO exists). */
@@ -205,6 +207,32 @@ function handlers(resolveActor, poParam) {
 
 const internal = handlers(async (req) => internalActor(req), "poId");
 const supplier = handlers(supplierActor, "poId");
+
+/** Supplier edits its invoice draft (invoice-first POs). */
+supplier.updateDraft = async function updateDraft(req, res) {
+  try {
+    const actor = await supplierActor(req);
+    const { doc, po } = await loadAccessibleDocument(actor, parseId(req.params.docId), { write: true });
+    await docs.updateInvoiceDraft(prisma, { actor, doc, po, body: req.body || {} });
+    return res.json({ message: "Đã cập nhật hóa đơn nháp", data: await reloadMapped(actor, doc.id) });
+  } catch (error) {
+    return sendError(res, error, "Error while updating invoice draft:");
+  }
+};
+
+/** SmartBook approves / rejects a supplier invoice; only then may the supplier ship against it. */
+async function reviewInternalInvoice(req, res) {
+  try {
+    const actor = internalActor(req);
+    if (!actor.canApprove) throw httpError("Cần quyền duyệt mua hàng để duyệt hóa đơn", 403);
+    const { doc } = await loadAccessibleDocument(actor, parseId(req.params.docId), { write: true });
+    await docs.reviewInvoice(prisma, { actor, doc, decision: req.body?.decision, note: req.body?.note });
+    const approved = String(req.body?.decision || "").toUpperCase() === "APPROVE";
+    return res.json({ message: approved ? "Đã duyệt hóa đơn" : "Đã từ chối hóa đơn", data: await reloadMapped(actor, doc.id) });
+  } catch (error) {
+    return sendError(res, error, "Error while reviewing supplier invoice:");
+  }
+}
 
 // ── SmartBook-only handlers ──────────────────────────────────────────────────────
 
@@ -399,6 +427,7 @@ module.exports = {
   internal,
   supplier,
   shareInternalDocument,
+  reviewInternalInvoice,
   issueGoodsReceiptConfirmation,
   getGoodsReceiptDocuments,
   getPurchaseOrderActivity,

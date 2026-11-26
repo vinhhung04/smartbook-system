@@ -117,6 +117,32 @@ async def _fetch_catalog(auth_header: str | None) -> list[dict]:
         return []
 
 
+async def _attach_public_availability(candidates: list[dict]) -> None:
+    """/api/books only counts stock in the caller's own warehouse scope, so a
+    reader (no scope) saw 0 copies of every book and the card said "Hết sách".
+    What a reader can borrow is the public catalog's figure (public pickup
+    branches only), so that replaces the availability fields. variant_id stays
+    the matched edition (stock audit relies on it); the edition a reservation
+    should name is sent as reserve_variant_id. A failed lookup keeps the
+    /api/books figures."""
+    if not candidates:
+        return
+    async with httpx.AsyncClient(timeout=CATALOG_FETCH_TIMEOUT_SECONDS) as client:
+        responses = await asyncio.gather(
+            *(client.get(f"{GATEWAY_URL}/public/catalog/books/{candidate['id']}") for candidate in candidates),
+            return_exceptions=True,
+        )
+    for candidate, response in zip(candidates, responses):
+        if isinstance(response, Exception) or response.status_code >= 400:
+            logger.warning("cover_search: public availability lookup failed for %s", candidate.get("id"))
+            continue
+        public = response.json()
+        candidate["available_quantity"] = int(public.get("available_quantity") or 0)
+        candidate["reservable"] = bool(public.get("reservable"))
+        candidate["pickup_branches"] = public.get("pickup_branches") or []
+        candidate["reserve_variant_id"] = public.get("variant_id")
+
+
 async def _match_visual(image_bytes: bytes) -> list[dict]:
     """Cosine similarity of the query photo against every gallery cover.
     Returns [] (not raising) on any failure — the OCR-text signal alone still
@@ -224,6 +250,7 @@ async def find_book_by_cover(request: Request, file: UploadFile = File(...)):
 
     candidates = _merge_candidates(books, ocr_matches, visual_matches)
     candidates = [c for c in candidates if c["confidence"] >= COVER_SEARCH_MIN_CONFIDENCE][:COVER_SEARCH_RESULT_LIMIT]
+    await _attach_public_availability(candidates)
 
     return {
         "match_found": bool(candidates),

@@ -27,7 +27,7 @@ interface OtpCodeInputProps {
  * One real <input> (numeric keyboard, paste, one-time-code autofill, a single field
  * for screen readers) laid over six boxes that only draw what it holds.
  */
-function OtpCodeInput({ id, value, length, onChange, invalid, disabled, describedBy, inputRef }: OtpCodeInputProps) {
+export function OtpCodeInput({ id, value, length, onChange, invalid, disabled, describedBy, inputRef }: OtpCodeInputProps) {
   const tone = useAuthTone();
   const [focused, setFocused] = useState(false);
   const active = Math.min(value.length, length - 1);

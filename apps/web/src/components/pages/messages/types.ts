@@ -1,4 +1,4 @@
-export type StaffRole = 'ADMIN' | 'WAREHOUSE_MANAGER' | 'WAREHOUSE_STAFF' | 'LIBRARIAN';
+export type StaffRole = 'ADMIN' | 'MANAGER' | 'WAREHOUSE_STAFF' | 'LIBRARIAN';
 
 export interface StaffMember {
   id: string;

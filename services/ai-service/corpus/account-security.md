@@ -8,7 +8,7 @@ Mã OTP gồm 6 chữ số, có hiệu lực 5 phút và mỗi mã chỉ đượ
 
 ## Quên mật khẩu thì làm sao?
 
-Chọn Quên mật khẩu ở màn hình đăng nhập (trang /forgot-password) và nhập email hoặc tên đăng nhập của tài khoản. SmartBook gửi đường dẫn đặt lại mật khẩu qua email; đường dẫn có hiệu lực 60 phút. Mật khẩu mới phải có ít nhất 6 ký tự. Khi đang đăng nhập, bạn cũng có thể đổi mật khẩu trong trang hồ sơ.
+Chọn Quên mật khẩu ở màn hình đăng nhập (trang /forgot-password) và nhập email hoặc tên đăng nhập của tài khoản. SmartBook gửi mã xác thực 6 chữ số qua email; nhập mã cùng mật khẩu mới ở trang đặt lại mật khẩu. Mã có hiệu lực 5 phút, chỉ dùng một lần, và có thể gửi lại sau 1 phút. Sau khi đặt lại, các phiên đăng nhập cũ bị đăng xuất. Mật khẩu mới phải có ít nhất 6 ký tự. Khi đang đăng nhập, bạn cũng có thể đổi mật khẩu trong trang hồ sơ.
 
 ## Vì sao tài khoản bị khóa sau khi đăng nhập?
 

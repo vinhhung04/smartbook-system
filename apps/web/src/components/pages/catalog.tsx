@@ -3,6 +3,8 @@ import { Plus, BookOpen, Download, X, ScanBarcode, Camera, Sparkles, ChevronDown
 import { CatalogBookThumbnail } from "./catalog-book-thumbnail";
 import { motion, AnimatePresence } from "motion/react";
 import { NavLink } from "react-router";
+import { authService } from "@/services/auth";
+import { canAccess, ROUTE_ACCESS } from "@/lib/rbac";
 import { toast } from "sonner";
 import { BarcodeScanModal } from "../barcode-scan-modal";
 import { CoverSearchModal } from "../cover-search-modal";
@@ -86,6 +88,8 @@ export function CatalogPage() {
   const barcodeInputRef = useRef<HTMLInputElement | null>(null);
 
   const [newBook, setNewBook] = useState({ barcode: "", title: "", author: "", category: "", isbn: "" });
+  // incomplete books (e.g. created at receiving) are completed through the AI import, not re-added
+  const canUseAiImport = canAccess(authService.getCurrentUser(), ROUTE_ACCESS.managerStockDecision);
 
   const loadBooks = async () => {
     try {
@@ -543,8 +547,13 @@ export function CatalogPage() {
                                 </p>
                                 <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground @4xl:hidden">Cập nhật {toDisplayDate(book.updated_at)}</p>
                                 {book.is_incomplete ? (
-                                  <p className="mt-1.5 inline-flex items-center gap-1 text-[12px] font-medium text-amber-800 dark:text-amber-300">
-                                    <AlertTriangle className="h-3 w-3" aria-hidden="true" />Chưa hoàn chỉnh
+                                  <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-medium text-amber-800 dark:text-amber-300">
+                                    <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" aria-hidden="true" />Chưa hoàn chỉnh</span>
+                                    {canUseAiImport && /^\d{13}$/.test(String(book.barcode || "")) ? (
+                                      <NavLink to={`/ai-import?isbn=${book.barcode}`} className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline">
+                                        <Sparkles className="h-3 w-3" aria-hidden="true" />Hoàn thiện bằng AI
+                                      </NavLink>
+                                    ) : null}
                                   </p>
                                 ) : null}
                               </div>

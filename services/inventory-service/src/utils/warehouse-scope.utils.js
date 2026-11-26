@@ -97,7 +97,7 @@ async function requireWarehouseWriteAccess(req, res, warehouseId, options) {
 
 // Who may be handed warehouse work. LIBRARIAN / CUSTOMER / SUPPLIER accounts
 // never are, even with a scope row.
-const ASSIGNEE_ROLES = ['WAREHOUSE_STAFF', 'WAREHOUSE_MANAGER', 'ADMIN'];
+const ASSIGNEE_ROLES = ['WAREHOUSE_STAFF', 'MANAGER', 'ADMIN'];
 const ASSIGNEE_REJECTIONS = {
   NOT_FOUND: { code: 'ASSIGNEE_NOT_FOUND', message: 'Không tìm thấy người được giao' },
   INACTIVE: { code: 'ASSIGNEE_INACTIVE', message: 'Tài khoản người được giao không còn hoạt động' },

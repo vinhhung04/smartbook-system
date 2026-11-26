@@ -12,7 +12,8 @@ import { purchaseOrderStatusLabel } from "@/lib/purchase-order-status";
 import type { SupplierPortalOrder, SupplierPortalShortageReport } from "@/services/supplier-portal";
 import { numberInputValue, zeroFieldProps } from "@/lib/number-input";
 import { AIChatbot } from "@/components/ai-chatbot";
-import { SupplierOrderDocuments, SupplierOrderResponsePanel } from "@/components/procurement/supplier-order-documents";
+import { InvoiceFirstSteps, SupplierInvoiceDeliveryForm, SupplierOrderDocuments, SupplierOrderResponsePanel } from "@/components/procurement/supplier-order-documents";
+import { invoiceFirstStage } from "@/lib/invoice-first-stage";
 import { DISCREPANCY_TYPE_LABEL, SUPPLIER_PROPOSAL_LABEL, supplierResponseMeta } from "@/lib/procurement-document-status";
 import { SupplierFigures, SupplierSection, SupplierShell, SupplierTabs } from "./supplier-shell";
 import { SUPPLIER_INPUT } from "./supplier-status";
@@ -246,13 +247,21 @@ export function SupplierAccountPage() {
     return acc;
   }, {});
   const visibleOrders = groupFilter === "all" ? orders : orders.filter((order) => groupOf(order) === groupFilter);
+  // invoice-first orders open on whatever the next step needs (e.g. the invoice before any delivery)
+  const nextStepTab = selectedOrder && selectedOrder.purchase_order.procurement_flow === "INVOICE_FIRST" ? invoiceFirstStage(selectedOrder)?.tab : null;
   const defaultTab: AccountTab = selectedOrder
-    ? ({ waiting: "response", shortage: "shortages", delivering: "delivery", done: "deliveries" } as const)[groupOf(selectedOrder)]
+    ? nextStepTab || ({ waiting: "response", shortage: "shortages", delivering: "delivery", done: "deliveries" } as const)[groupOf(selectedOrder)]
     : "response";
   const activeTab = tab ?? defaultTab;
+  const [openInvoiceForm, setOpenInvoiceForm] = useState(false);
   const chooseOrder = (poId: string) => {
     setSelectedPoId(poId);
     setTab(null);
+    setOpenInvoiceForm(false);
+  };
+  const goToStep = (next: AccountTab) => {
+    setOpenInvoiceForm(next === "documents");
+    setTab(next);
   };
 
   return (
@@ -363,6 +372,10 @@ export function SupplierAccountPage() {
               { label: "Thiếu chưa xử lý, cuốn", value: totals.shortage },
             ]} />
 
+            {selectedOrder.purchase_order.procurement_flow === "INVOICE_FIRST" ? (
+              <InvoiceFirstSteps order={selectedOrder} onGo={goToStep} />
+            ) : null}
+
             <SupplierTabs<AccountTab>
               label="Mục của đơn"
               value={activeTab}
@@ -381,10 +394,20 @@ export function SupplierAccountPage() {
             ) : null}
 
             {activeTab === "documents" ? (
-              <SupplierOrderDocuments key={`docs-${selectedOrder.purchase_order.id}-${selectedOrder.invoices.length}-${selectedOrder.purchase_order.status}`} order={selectedOrder} />
+              <SupplierOrderDocuments
+                key={`docs-${selectedOrder.purchase_order.id}-${selectedOrder.invoices.length}-${selectedOrder.purchase_order.status}-${openInvoiceForm}`}
+                order={selectedOrder}
+                autoOpenInvoice={openInvoiceForm || nextStepTab === "documents"}
+              />
             ) : null}
 
-            {activeTab === "delivery" ? (
+            {activeTab === "delivery" && selectedOrder.purchase_order.procurement_flow === "INVOICE_FIRST" ? (
+              <SupplierSection title="Lập phiếu giao hàng theo hóa đơn" icon={FileText} description="Chọn hóa đơn SmartBook đã duyệt và số lượng giao đợt này. Giao nhiều đợt cho đến khi đủ số lượng trên hóa đơn.">
+                <SupplierInvoiceDeliveryForm key={`dn-${selectedOrder.purchase_order.id}`} order={selectedOrder} onSaved={load} onCreateInvoice={() => goToStep("documents")} />
+              </SupplierSection>
+            ) : null}
+
+            {activeTab === "delivery" && selectedOrder.purchase_order.procurement_flow !== "INVOICE_FIRST" ? (
               <SupplierSection title="Lập phiếu giao hàng" icon={FileText} description="Mỗi đợt giao một phiếu. Một đơn có thể giao nhiều đợt, hóa đơn chính thức phát hành riêng ở mục Chứng từ.">
                 <div className="space-y-4 p-5">
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -426,7 +449,7 @@ export function SupplierAccountPage() {
                         {selectedOrder.purchase_order.items.map((item) => (
                           <tr key={item.id} className="border-b border-border last:border-0">
                             <td className="px-3 py-2 font-medium">{item.title || item.variant_id}</td>
-                            <td className="px-3 py-2 font-mono text-[12px] text-muted-foreground">{item.sku || item.isbn13 || "-"}</td>
+                            <td className="px-3 py-2 font-mono text-[12px] text-muted-foreground">{item.item_code || item.sku || item.isbn13 || "-"}</td>
                             <td className="px-3 py-2 text-right tabular-nums">{item.ordered_qty}</td>
                             <td className="px-3 py-2 text-right tabular-nums">{item.received_qty}</td>
                             <td className="px-3 py-2 text-right tabular-nums">{item.remaining_qty}</td>

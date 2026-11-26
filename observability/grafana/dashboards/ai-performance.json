@@ -17,12 +17,12 @@
     },
     {
       "id": 2,
-      "title": "OCR scan-receipt p95 latency",
+      "title": "Book OCR scans by outcome",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "prometheus-ds" },
       "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(ocr_request_duration_seconds_bucket[5m])) by (le))", "refId": "A" }
+        { "expr": "sum(rate(ai_book_ocr_scans_total[5m])) by (outcome)", "refId": "A" }
       ]
     },
     {

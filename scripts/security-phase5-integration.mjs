@@ -6,8 +6,8 @@
 //   node scripts/security-phase5-integration.mjs --redis    also stops Redis for ~70 s (docker) to check
 //                                                          the revocation fallback, then starts it again
 //
-// Users (demo seed): hung = superuser; manager01 = WAREHOUSE_MANAGER with FULL scope on
-// WH-HCM-01, BR-HCM-01, WH-HN-01 but NOT BR-HCM-02; curator01 = WAREHOUSE_MANAGER with READ
+// Users (demo seed): hung = superuser; manager01 = MANAGER with FULL scope on
+// WH-HCM-01, BR-HCM-01, WH-HN-01 but NOT BR-HCM-02; curator01 = MANAGER with READ
 // on WH-HCM-01 only. Fixtures are created by hung in BR-HCM-02, tagged PHASE5-TEST, and
 // closed again at the end. Every refused write is shaped so that, had the guard failed, it
 // would hit a validation error instead of changing data.
@@ -174,34 +174,10 @@ await check('6. putaway: manager01 sees no BR-HCM-02 receipt and cannot open or 
   assert.equal(list.filter((r) => (r.warehouse_id || r.warehouse?.id) === D3).length, 0, 'BR-HCM-02 receipts listed');
   assert.equal((await call(tokens.manager01, `/api/putaway/receipts/${d3Receipts[0].id}`)).status, 403);
   assert.equal((await call(tokens.manager01, `/api/putaway/receipts/${d3Receipts[0].id}/locations`)).status, 403);
-  const r = await call(tokens.manager01, `/api/putaway/receipts/${d3Receipts[0].id}/confirm`, {
-    method: 'POST', body: JSON.stringify({ allocations: [{ item_id: randomUUID(), putaway_quantity: 0 }] }),
+  const r = await call(tokens.manager01, '/api/receiving-putaway/transfer', {
+    method: 'POST', body: JSON.stringify({ warehouse_id: D3, goods_receipt_id: d3Receipts[0].id, source_receiving_location_id: randomUUID(), variant_id: randomUUID(), allocations: [] }),
   });
-  assert.equal(r.status, 403, `confirm -> ${r.status}`);
-});
-
-// ── 6. smart receiving (fixture) ────────────────────────────────────────────
-const draft = await call(tokens.hung, '/api/receiving-smart/drafts', {
-  method: 'POST',
-  body: JSON.stringify({ warehouse_id: D3, supplier_name: TAG, user_id: me.manager01, items: [{ title: `${TAG} item`, quantity: 1 }] }),
-});
-const draftId = draft.body?.draft_id || null;
-if (draftId) cleanup.push(() => call(tokens.hung, `/api/receiving-smart/drafts/${draftId}`, { method: 'DELETE' }));
-
-await check('7. smart receiving: the creator is the caller (a body user_id is ignored)', async () => {
-  assert.ok(draftId, 'fixture: draft created');
-  assert.equal(draft.body.draft.created_by_user_id, me.hung);
-});
-
-await check('8. smart receiving: manager01 cannot list, open, edit, convert or cancel a BR-HCM-02 draft', async () => {
-  const list = (await call(tokens.manager01, '/api/receiving-smart/drafts?limit=100')).body?.drafts || [];
-  assert.equal(list.filter((d) => d.id === draftId).length, 0, 'draft listed');
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}`)).status, 403);
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}`, { method: 'PUT', body: JSON.stringify({ items: [] }) })).status, 403);
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}/convert`, { method: 'POST', body: JSON.stringify({}) })).status, 403);
-  assert.equal((await call(tokens.manager01, `/api/receiving-smart/drafts/${draftId}`, { method: 'DELETE' })).status, 403);
-  const after = await call(tokens.hung, `/api/receiving-smart/drafts/${draftId}`);
-  assert.equal(after.body.draft.status, 'DRAFT', 'draft changed');
+  assert.equal(r.status, 403, `putaway transfer -> ${r.status}`);
 });
 
 // ── 7. order requests (fixture) ─────────────────────────────────────────────
@@ -242,7 +218,8 @@ await check('9b. legacy /ai/chat: a logged-out token is 401 (not answered as ano
 
 await check('9c. analytics answers declare whether they are library-wide or warehouse-scoped', async () => {
   const t = tokens.curator01;
-  const sys = await call(t, '/analytics/reorder-suggestions?limit=1');
+  // reorder suggestions follow the warehouse scope since 2424dc8; book turnover stays library-wide
+  const sys = await call(t, '/analytics/book-turnover?limit=1');
   assert.equal(sys.body?.meta?.data_scope, 'SYSTEM');
   const scoped = await call(t, '/analytics/warehouse-stock-risk');
   assert.equal(scoped.body?.meta?.data_scope, 'WAREHOUSE_SCOPED');

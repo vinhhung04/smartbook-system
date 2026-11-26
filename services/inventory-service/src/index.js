@@ -37,7 +37,6 @@ const packingRoutes = require('./routes/packing.routes');
 const orderRequestRoutes = require('./routes/order-request.routes');
 const outboundRoutes = require('./routes/outbound.routes');
 const supplierRoutes = require('./routes/supplier.routes');
-const receivingSmartRoutes = require('./routes/receiving-smart.routes');
 const storageSuggestionRoutes = require('./routes/storage-suggestion.routes');
 const reslottingSuggestionRoutes = require('./routes/reslotting-suggestion.routes');
 const purchaseOrderRoutes = require('./routes/purchase-order.routes');
@@ -123,6 +122,12 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
   }
 
   try {
+    // Only work in warehouses the user can read NOW: someone moved to another
+    // warehouse (or handed work outside their scope) no longer sees the old one.
+    const [inScope, transferInScope] = await Promise.all([
+      scopedWarehouseWhere(req.user),
+      scopedWarehouseWhere(req.user, ['from_warehouse_id', 'to_warehouse_id']),
+    ]);
     const [goodsReceipts, outboundOrders, transferOrders, transferReceivingOrders, purchaseRequests, exceptionReports, staffTasks] = await Promise.all([
       prisma.goods_receipts.findMany({
         // Receipts this user received, plus receipts they claimed for putaway (claimPutawayTask).
@@ -131,6 +136,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
             { received_by_user_id: userId },
             { putaway_assignee_user_id: userId },
           ],
+          ...inScope,
         },
         select: {
           id: true,
@@ -153,6 +159,19 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           // Exclude terminal statuses — completed/cancelled orders are history, not active tasks.
           // Picking page only shows APPROVED/PICKING; outbound page shows up to READY_TO_SHIP.
           status: { notIn: ['COMPLETED', 'CANCELLED'] },
+          // Outbound phase mirrors the /outbound queue: a REPICK order is confirmed through its root,
+          // and an unpacked order is still Packing work (/confirm answers 409 for both).
+          // `not: null` keeps the condition NULL-safe so root orders (no external_reference) stay.
+          NOT: {
+            AND: [
+              { status: { in: ['READY_FOR_OUTBOUND', 'READY_TO_SHIP'] } },
+              { OR: [
+                { external_reference: { not: null, startsWith: 'REPICK:' } },
+                { packing_tasks: { none: { status: 'COMPLETED' } } },
+              ] },
+            ],
+          },
+          ...inScope,
         },
         select: {
           id: true,
@@ -176,6 +195,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
           // Exclude terminal statuses — IN_TRANSIT/RECEIVED/CANCELLED are past the active phase.
           // Picking page: APPROVED/PICKING. Outbound page: READY_FOR_OUTBOUND/REPICKING.
           status: { notIn: ['IN_TRANSIT', 'RECEIVED', 'CANCELLED'] },
+          AND: [transferInScope],
         },
         select: {
           id: true,
@@ -196,6 +216,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         where: {
           status: 'IN_TRANSIT',
           received_by_user_id: userId,
+          AND: [transferInScope],
         },
         select: {
           id: true,
@@ -213,7 +234,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         take: 20,
       }),
       prisma.purchase_requests.findMany({
-        where: { created_by_user_id: userId },
+        where: { created_by_user_id: userId, ...inScope },
         select: {
           id: true,
           request_number: true,
@@ -235,6 +256,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
             { assigned_to_user_id: userId },
             { created_by_user_id: userId },
           ],
+          ...inScope,
         },
         select: {
           id: true,
@@ -252,7 +274,8 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
         take: 20,
       }),
       prisma.staff_tasks.findMany({
-        where: { assignee_user_id: userId },
+        // legacy tasks without a warehouse stay visible to their assignee
+        where: { assignee_user_id: userId, OR: [{ warehouse_id: null }, inScope] },
         select: {
           id: true,
           title: true,
@@ -385,6 +408,7 @@ app.get('/api/my-warehouse-tasks', authorizeTaskRead(['inventory.task.read']), a
 
     return res.json({ data: tasks, summary });
   } catch (error) {
+    if (scopeErrorStatus(error) === 503) return res.status(503).json({ message: error.message });
     console.error(error);
     return res.status(500).json({ error: 'Internal server error' });
   }
@@ -427,7 +451,6 @@ app.use('/api/packing', rejectInvalidUuidParams(packingRoutes));
 app.use('/api/order-requests', rejectInvalidUuidParams(orderRequestRoutes));
 app.use('/api/outbound', rejectInvalidUuidParams(outboundRoutes));
 app.use('/api/suppliers', rejectInvalidUuidParams(supplierRoutes));
-app.use('/api/receiving-smart', rejectInvalidUuidParams(receivingSmartRoutes));
 app.use('/api/storage-suggestions', rejectInvalidUuidParams(storageSuggestionRoutes));
 app.use('/api/reslotting-suggestions', rejectInvalidUuidParams(reslottingSuggestionRoutes));
 app.use('/api/purchase-orders', rejectInvalidUuidParams(purchaseOrderRoutes));

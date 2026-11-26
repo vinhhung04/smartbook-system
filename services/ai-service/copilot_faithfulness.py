@@ -83,6 +83,7 @@ class Context:
     borrow_data: bool = False           # some borrowing / demand figure was used (always library-wide)
     explanation: dict | None = None
     visualizations: list = field(default_factory=list)
+    ranked_best: list[str] = field(default_factory=list)  # names of the option a ranking engine put first
 
 
 # ── context ──────────────────────────────────────────────────────────────────
@@ -130,6 +131,12 @@ def build_context(collected: dict | None, explanation: dict | None = None, visua
             ctx.borrow_data = True
         if isinstance(result, dict) and result.get("warehouse_name") and result["warehouse_name"] not in ctx.warehouses:
             ctx.warehouses.append(result["warehouse_name"])
+        # the rebalancing engine ranks its options itself, so "tốt nhất" about its first one is a fact
+        if key.split("#")[0] == "analyze_inventory_rebalancing" and isinstance(result, dict):
+            rec = result.get("recommendation") or {}
+            ctx.ranked_best = [normalize_text(x) for x in (rec.get("best_business_option"), rec.get("best_business_label"),
+                                                          rec.get("executable_option"), rec.get("executable_label"))
+                               if x] + ["ve nghiep vu"] + (["ket hop"] if str(rec.get("best_business_option")).startswith("HYBRID") else [])
     return ctx
 
 
@@ -261,7 +268,7 @@ def _scope_confusion(sentences: list[str], ctx: Context) -> list[Issue]:
     for s in sentences:
         n = normalize_text(s)
         stat = _BORROW_STAT.search(n)
-        if not stat or re.search(r"\b(toan he thong|toan thu vien|tat ca cac kho|chua tach|khong tach)\b", n):
+        if not stat or re.search(r"\b(toan he thong|toan thu vien|tat ca cac kho|cac kho ban duoc xem|tinh gop|chua tach|khong tach)\b", n):
             continue
         tail = n[stat.end():stat.end() + 40]
         attrib = _WH_ATTRIB.search(tail)
@@ -270,12 +277,12 @@ def _scope_confusion(sentences: list[str], ctx: Context) -> list[Issue]:
         named_before = _mentions(n[:stat.start()], ctx.warehouses)
         subject_figure = bool(named_before) and re.search(r"\b(co|ghi nhan|dat)\s+[\d.,]+\s*$", n[:stat.start()].strip() + " ")
         if (attrib and named_after) or (attrib and re.search(r"\b(kho|chi nhanh) \w+", tail)) or subject_figure:
-            out.append(Issue(SCOPE_CONFUSION, s[:160], "Lượt mượn/nhu cầu trong hệ thống được tính trên toàn thư viện, "
-                                                       "chưa tách theo kho.", True))
+            out.append(Issue(SCOPE_CONFUSION, s[:160], "Lượt mượn/nhu cầu ở đây tính gộp trên các kho bạn được xem, "
+                                                       "chưa tách riêng từng kho.", True))
     return out
 
 
-_CAUSAL = re.compile(r"\b(nguyen nhan (chinh |chu yeu )?(la|do|nam o)|la do|chu yeu do|chinh la do|bat nguon tu|gay ra|"
+_CAUSAL = re.compile(r"\b(nguyen nhan (chinh |chu yeu )?(la|do|nam o)|la do|chu yeu do|chu yeu (den )?tu|chinh la do|bat nguon tu|gay ra|"
                      r"dan den viec|dan toi viec|khien cho|do nhu cau|vi nhu cau|do luot muon|vi luot muon)\b")
 
 
@@ -303,6 +310,8 @@ def _unsupported_recommendation(sentences: list[str], ctx: Context) -> list[Issu
         m = _OPTIMAL.search(n)
         if not m or _negated(n, m.start()) or re.search(r"\b(khong co (phuong an|kich ban|lua chon) nao)\b", n):
             continue
+        if ctx.ranked_best and any(name in n for name in ctx.ranked_best):
+            continue  # live demo 2026-11-26: flagging "HYBRID tốt nhất" made the retry drop the hybrid's figures
         out.append(Issue(UNSUPPORTED_RECOMMENDATION, s[:160], "Hệ thống chỉ áp dụng quy tắc xếp hạng/phân bổ, không xác "
                                                               "định phương án tối ưu."))
     return out

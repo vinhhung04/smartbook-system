@@ -46,6 +46,27 @@ class PolicyDetectorTest(unittest.TestCase):
             with self.subTest(question=question):
                 self.assertTrue(is_policy_question(question))
 
+    def test_fee_amount_questions_are_policy(self):
+        # Asked by staff, these were filed under FINE_SUMMARY_QUERY and answered with the
+        # unpaid-fines total instead of the fee schedule (2026-11-25); readers were only
+        # spared because their analytics block reroutes every question to the documents.
+        for question in (
+            "Phí phạt trả sách muộn là bao nhiêu?",
+            "Phí phạt trễ hạn mỗi ngày bao nhiêu?",
+            "Phí làm thẻ thành viên là bao nhiêu?",
+            "Trả muộn 1 ngày mất bao nhiêu tiền?",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(is_policy_question(question))
+        for question in (
+            "Phí phạt chưa thu là bao nhiêu?",
+            "Tiền phạt đã thu được bao nhiêu?",
+            "Khách nào còn nợ phạt?",
+            "Số khoản phạt chưa thanh toán là bao nhiêu?",
+        ):
+            with self.subTest(question=question):
+                self.assertFalse(is_policy_question(question))
+
     def test_questions_about_current_data_stay_data(self):
         for question in (
             "Có loan nào quá hạn?",

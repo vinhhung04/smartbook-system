@@ -28,7 +28,12 @@ test('untrusted values are escaped', () => {
   assert.ok(!otp.html.includes('<img src=x'));
   assert.ok(otp.html.includes('&lt;img src=x onerror=alert(1)&gt;'));
 
-  const reset = EMAIL_TEMPLATES.PASSWORD_RESET_REQUESTED({ full_name: 'A', reset_url: 'https://smartbook.io.vn/r?t="><script>' });
-  assert.ok(!reset.html.includes('"><script>'));
-  assert.match(reset.text, /https:\/\/smartbook\.io\.vn\/r\?t=/);
+});
+
+test('password reset is a code, never a link', () => {
+  const mail = EMAIL_TEMPLATES.EMAIL_OTP({ code: '424242', purpose: 'PASSWORD_RESET', full_name: 'A' });
+  assert.match(mail.html, /Đặt lại mật khẩu/);
+  assert.match(mail.text, /424242/);
+  assert.ok(!/reset-password\?token=|https?:\/\/[^\s]*token=/.test(mail.text));
+  assert.equal(EMAIL_TEMPLATES.PASSWORD_RESET_REQUESTED, undefined);
 });

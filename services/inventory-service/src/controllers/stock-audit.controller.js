@@ -28,7 +28,7 @@ function createMovementNumber(baseTimestamp, index) {
 
 function isManager(req) {
   const roles = Array.isArray(req.user?.roles) ? req.user.roles.map((r) => String(r).toUpperCase()) : [];
-  return Boolean(req.user?.is_superuser) || roles.includes('ADMIN') || roles.includes('WAREHOUSE_MANAGER');
+  return Boolean(req.user?.is_superuser) || roles.includes('ADMIN') || roles.includes('MANAGER');
 }
 
 function canEditLines(req, audit) {
@@ -36,7 +36,9 @@ function canEditLines(req, audit) {
   return isManager(req) || audit.assigned_to_user_id === userId;
 }
 
-function lineSummary(line) {
+// Blind count: whoever counts (not a manager) never sees the system quantity,
+// so the count cannot be anchored to it; managers see everything to review.
+function lineSummary(line, blind = false) {
   return {
     id: line.id,
     variant_id: line.variant_id,
@@ -47,18 +49,19 @@ function lineSummary(line) {
     isbn10: line.book_variants?.isbn10 || null,
     barcode: line.book_variants?.internal_barcode || null,
     title: line.book_variants?.books?.title || null,
-    expected_qty: line.expected_qty,
+    expected_qty: blind ? null : line.expected_qty,
     counted_qty: line.counted_qty,
-    variance_qty: line.variance_qty,
+    variance_qty: blind ? null : line.variance_qty,
     adjustment_posted: line.adjustment_posted,
     counted_at: line.counted_at || null,
-    baseline_on_hand_qty: line.baseline_on_hand_qty,
-    baseline_borrowed_qty: line.baseline_borrowed_qty,
+    baseline_on_hand_qty: blind ? null : line.baseline_on_hand_qty,
+    baseline_borrowed_qty: blind ? null : line.baseline_borrowed_qty,
+    needs_recount: line.baseline_on_hand_qty == null,
     note: line.note,
   };
 }
 
-function auditSummary(audit, includeLines = false) {
+function auditSummary(audit, includeLines = false, blind = false) {
   const base = {
     id: audit.id,
     audit_number: audit.audit_number,
@@ -76,10 +79,11 @@ function auditSummary(audit, includeLines = false) {
     created_at: audit.created_at,
     updated_at: audit.updated_at,
     line_count: audit.stock_audit_lines?.length ?? undefined,
-    variance_count: audit.stock_audit_lines?.filter((l) => l.variance_qty).length ?? undefined,
+    variance_count: blind ? undefined : audit.stock_audit_lines?.filter((l) => l.variance_qty).length ?? undefined,
+    blind_count: blind,
   };
   if (includeLines) {
-    base.items = (audit.stock_audit_lines || []).map(lineSummary);
+    base.items = (audit.stock_audit_lines || []).map((line) => lineSummary(line, blind));
   }
   return base;
 }
@@ -107,7 +111,7 @@ async function getStockAudits(req, res) {
       take: 100,
     });
 
-    return res.json({ data: audits.map((a) => auditSummary(a)) });
+    return res.json({ data: audits.map((a) => auditSummary(a, false, !manager)) });
   } catch (error) {
     console.error('getStockAudits error:', error);
     return res.status(scopeErrorStatus(error)).json({ message: scopeErrorStatus(error) === 503 ? error.message : 'Internal server error' });
@@ -141,7 +145,7 @@ async function getStockAuditById(req, res) {
       return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
     }
 
-    return res.json({ data: auditSummary(audit, true) });
+    return res.json({ data: auditSummary(audit, true, !manager) });
   } catch (error) {
     console.error('getStockAuditById error:', error);
     return res.status(500).json({ message: 'Internal server error' });
@@ -280,7 +284,7 @@ async function submitLineCount(req, res) {
       });
     });
 
-    return res.json({ data: lineSummary(updated) });
+    return res.json({ data: lineSummary(updated, !isManager(req)) });
   } catch (error) {
     console.error('submitLineCount error:', error);
     if (error instanceof StockAuditCountError) return res.status(error.statusCode).json({ message: error.message, code: error.code });

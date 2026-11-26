@@ -26,7 +26,7 @@ logger = logging.getLogger("uvicorn.error")
 GATEWAY_URL = os.getenv("SMARTBOOK_GATEWAY_URL", "http://api-gateway:3000").rstrip("/")
 EXECUTOR_TIMEOUT = float(os.getenv("EXECUTOR_TIMEOUT_SECONDS", "10"))
 
-_STAFF_ROLES = {"ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF"}
+_STAFF_ROLES = {"ADMIN", "MANAGER", "LIBRARIAN", "WAREHOUSE_STAFF"}
 
 
 class ActionOutcomeUnknown(Exception):

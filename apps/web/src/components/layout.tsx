@@ -21,7 +21,7 @@ export function AppLayout() {
   const [navOpenFor, setNavOpenFor] = useState<string | null>(null);
   const mobileNavOpen = !isDesktop && navOpenFor === location.pathname;
   const setMobileNavOpen = (open: boolean) => setNavOpenFor(open ? location.pathname : null);
-  // ADMIN/WAREHOUSE_MANAGER have the dedicated /ai-assistant page instead of the floating widget.
+  // ADMIN/MANAGER have the dedicated /ai-assistant page instead of the floating widget.
   const hasDedicatedAssistant = canAccess(currentUser, ROUTE_ACCESS.aiAssistant);
   // A toast for an answer finished while away from /ai-assistant opens it in place.
   const navigate = useNavigate();

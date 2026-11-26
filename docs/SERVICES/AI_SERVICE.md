@@ -17,7 +17,7 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 - `OPENROUTER_API_KEY` chỉ nằm server-side (biến môi trường của `ai-service`) — không gửi xuống
   frontend, không log, không commit vào repo. Đã quét toàn bộ repo + git history, không có key
   thật nào bị commit.
-- **Ảnh gửi ra bên thứ ba**: `/verify-packing-photo`, `/scan-receipt`, và OCR bìa sách
+- **Ảnh gửi ra bên thứ ba**: `/verify-packing-photo` và OCR bìa sách
   (`/find-book-by-cover`) gửi ảnh (đóng gói, hóa đơn nhập kho, bìa sách) tới OpenRouter qua
   HTTPS để chạy vision/OCR — khác với trước đây khi Ollama chạy local, ảnh không rời máy. Đây
   là thay đổi về data residency cần lưu ý nếu có yêu cầu compliance (vd hóa đơn nhập kho có
@@ -56,7 +56,6 @@ AI Service cung cấp năng lực tự động hóa nhập liệu sách bằng A
 | POST | /chat/stream | Bản streaming (SSE) của /chat |
 | POST | /enrich-book-after-isbn | Tra cứu ISBN rồi đề xuất bổ sung metadata cho sách vừa tạo (`lookup` dùng chung hợp đồng với `/isbn-intelligence`) |
 | POST | /enrich-book-metadata | Bộ công cụ gợi ý metadata (`keywords`, `short_summary`, `normalize_description`, `suggest_categories`, `quality_check`) — chỉ trả đề xuất, không ghi đè |
-| POST | /scan-receipt | OCR hóa đơn/phiếu giao hàng khi nhập kho (OpenRouter vision) |
 | POST | /verify-packing-photo | Xác minh ảnh bằng chứng đóng gói (`MATCH`/`MISMATCH`) |
 | POST | /explain-storage-suggestion | Viết lại giải thích cho gợi ý vị trí lưu kho |
 | POST | /find-book-by-cover | Tìm sách bằng ảnh bìa (CLIP local + OCR OpenRouter) |
@@ -86,7 +85,7 @@ Ghi chú quan trọng:
   - `fieldEvidence[field]` có thêm (additive) `confidence`, `reasonCodes`, `candidates` (mọi nhóm giá trị, kèm support), `evidence` (từng nguồn kèm `method`/`reliability`/`sourceUrl`) — phục vụ Provenance API (giải thích "giá trị này từ đâu, vì sao được chọn, có mâu thuẫn không"). Các field top-level cũ (`title`, `authors`, `publisher`...) và `fieldStatus`/`conflicts` giữ nguyên hợp đồng cũ.
 - Khi ENABLE_MARKETPLACE_LOOKUP=true, /lookup-book-by-isbn tra cứu thêm Fahasa, Tiki, Vinabook song song với Google Books và Open Library.
 - Với mã quét EAN-13 không phải ISBN chuẩn, hệ thống thử marketplace lookup trước thay vì bỏ ngay; response có trường `reason` để frontend phân biệt.
-- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/WAREHOUSE_MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (OpenRouter/`OPENROUTER_ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [], "plan", "suggested_followups", "caveats", "recommendations", "data_as_of", "explanation" }` — sáu trường cuối là bổ sung của Management Copilot (tùy chọn, client cũ bỏ qua được; xem mục "Management Copilot" bên dưới). `/assistant/stream` gửi đúng body này trong sự kiện `done`. `OPENROUTER_FALLBACK_MODEL` (nếu set) thử lại một lần trên cùng OpenRouter key nếu model chính lỗi — không có fallback sang provider khác.
+- `/assistant` là chatbot hỗ trợ ra quyết định dành riêng cho ADMIN/MANAGER (hoặc superuser) — role/permission khác (kể cả CUSTOMER) bị chặn 403. Request: `{ "message": "string", "conversation_id": "string (optional)" }`. Model dùng tool-calling thật qua `llm_provider.py` (OpenRouter/`OPENROUTER_ASSISTANT_MODEL`) để tự chọn gọi các endpoint `/analytics/*` (định nghĩa trong `assistant_tools.py`) thay vì hard-code theo intent như `/chat`. Response: `{ "answer", "tools_used": [{ "name", "arguments" }], "data": { "<tool_name>": <raw tool result> }, "conversation_id", "grounding_warning", "pending_action", "evidence": [{ "label", "tool_name", "metric", "value", "unit", "description" }], "retrieval_warnings": [], "plan", "suggested_followups", "caveats", "recommendations", "data_as_of", "explanation" }` — sáu trường cuối là bổ sung của Management Copilot (tùy chọn, client cũ bỏ qua được; xem mục "Management Copilot" bên dưới). `/assistant/stream` gửi đúng body này trong sự kiện `done`. `OPENROUTER_FALLBACK_MODEL` (nếu set) thử lại một lần trên cùng OpenRouter key nếu model chính lỗi — không có fallback sang provider khác.
 - **Trí nhớ hội thoại**: `conversation_id` không còn chỉ được echo lại — nếu thiếu hoặc không tồn tại, service tạo một hội thoại mới (bảng `ai_conversations`) và trả về `conversation_id` thật; nếu đã tồn tại, service nạp tối đa 10 message gần nhất (bảng `ai_messages`) làm ngữ cảnh cho lượt hỏi tiếp theo. Mỗi lượt hỏi/trả lời được lưu lại (kèm tool_calls, tool_results, pending_action_id, grounding_warning) để có thể tải lại toàn bộ hội thoại sau khi refresh trang qua `GET /assistant/conversations/{id}`.
 - **Quyền sở hữu hội thoại**: `conversation_id` của người khác bị từ chối 403 ở cả `/assistant` và `/assistant/stream` (`conversation_store.get_or_create_conversation` ném `ConversationAccessDenied`, kể cả với superuser vì đường này ghi dữ liệu). Trước 2026-10-13, một tài khoản khác có thể nạp lịch sử của hội thoại đó vào prompt của mình — regression test: `test_assistant_conversation_access.py`, `test_conversation_store.py`.
 - **Hybrid FAQ retrieval cho `/chat`**: khi câu hỏi không khớp intent nào trong 11 intent cố định (`intent.py`), nó rơi vào `GENERAL_QUERY`. `retrieval.py` gọi `faq_retrieval.find_relevant()`, đọc từ corpus `INTERNAL_DOC` trong pgvector (xem mục "Vector store / RAG" bên dưới — không còn `faq_data.py`/file cache JSON) theo hai nhánh như `search_books`: semantic (cosine, phải vượt `FAQ_MATCH_THRESHOLD` mới được tính) và keyword (Postgres full-text bỏ dấu — bắt được câu hỏi gần trùng từng chữ với heading của FAQ mà vector một mình bỏ lỡ), hợp nhất bằng RRF (`fusion.py`), rồi trả về đúng envelope `{summary, raw, sources, warnings, retrieved_at}` như mọi intent khác — nên `verify_numeric_grounding()` và `ensure_source_line()` hoạt động không đổi. OpenRouter embedding lỗi hoặc không match nào vượt ngưỡng → giữ nguyên hành vi fallback cũ (degrade xuống keyword-only), không bao giờ trả 500. `GENERAL_QUERY` nằm trong `intent.ANALYTICS_BLOCK_EXEMPT_INTENTS` nên CUSTOMER/SUPPLIER cũng dùng được — đây chính là nhóm hay hỏi về chính sách mượn/trả và phí phạt nhất.
@@ -360,7 +359,7 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | OPENROUTER_BASE_URL | https://openrouter.ai/api/v1 | Base URL OpenRouter (OpenAI-compatible) |
 | OPENROUTER_TEXT_MODEL | qwen/qwen3.7-flash | Model cho tóm tắt/chat/NLU qua OpenRouter (xác thực trực tiếp trên JSON thô của `/api/v1/models` ngày 2026-09-15 — hỗ trợ `tools`/`tool_choice`/`response_format`, context 1M; canonical_slug nội bộ của OpenRouter là `qwen/qwen3.7-flash-20260727`) |
 | OPENROUTER_ASSISTANT_MODEL | qwen/qwen3.7-flash | Model cho `/assistant` (tool-calling) qua OpenRouter — cùng model như trên |
-| OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói, quét hóa đơn |
+| OPENROUTER_VISION_MODEL | qwen/qwen3.7-flash | Model vision/OCR cho cover search, xác minh ảnh đóng gói |
 | OPENROUTER_FALLBACK_MODEL | rỗng | Model dự phòng (cùng OpenRouter key), thử lại 1 lần nếu model chính lỗi. Rỗng = tắt. Phải là model OpenRouter — không có fallback provider khác |
 | ASSISTANT_TOOL_CONTEXT_CHARS | 2000 | Số ký tự tối đa một tool result đóng góp vào prompt `/assistant` |
 | ACTION_STALE_CONFIRMED_SECONDS | 900 | Action ở `CONFIRMED` lâu hơn mức này (service khởi động lại giữa lúc thực thi) được giải phóng: loại an toàn khi thử lại → `FAILED`, loại khác → `RECONCILE_REQUIRED` |
@@ -381,7 +380,6 @@ khác cách viết, không khác giá trị thật) — normalize trước khi s
 | DOC_CONF_TAU_CONFIDENT / DOC_CONF_TAU_EVIDENCE / DOC_CONF_COS_FLOOR / DOC_CONF_COS_CEIL | 0.66 / 0.40 / 0.30 / 0.55 | Như trên, cho corpus `INTERNAL_DOC` |
 | ISBN_FUSION_MODE | evidence | `evidence` (mặc định): chọn giá trị field bằng Evidence Fusion (`isbn_fusion.py`) — chuẩn hoá + gộp nhóm nguồn đồng thuận trước khi chọn. `prior`: thuật toán cũ (nguồn có reliability cao nhất thắng tuyệt đối), giữ lại để so sánh/rollback |
 | PACKING_VISION_MAX_TOKENS / PACKING_VISION_TIMEOUT_SECONDS | 200 / 15 | Cap output/timeout cho `/verify-packing-photo` — timeout thấp hơn `AbortSignal.timeout(20000)` của caller (`packing-evidence-ai.service.js`) |
-| RECEIPT_VISION_MAX_TOKENS / RECEIPT_VISION_TIMEOUT_SECONDS | 1200 / 30 | Cap output/timeout cho `/scan-receipt` |
 | INGEST_MAX_CHUNK_CHARS | 1200 | Độ dài tối đa (ký tự) mỗi chunk khi `ingestion.py` cắt nội dung document trước khi embed |
 | ENABLE_CORPUS_INGEST | true | Bật/tắt đồng bộ vector store nền (`ingest_internal_docs` lúc khởi động + vòng lặp `catalog_sync`) — tắt trong môi trường test e2e không cần semantic |
 | CATALOG_SYNC_INTERVAL_SECONDS | 300 | Chu kỳ đồng bộ `BOOK_METADATA` với `/internal/catalog/books`; 0 = chỉ chạy lúc khởi động |
@@ -436,7 +434,7 @@ Docker image chạy `uvicorn main:app --host 0.0.0.0 --port 8000` (không còn a
 
 ## Demo: Action Center + trí nhớ hội thoại + Evidence-first
 
-1. Chạy Docker Compose đầy đủ (xem `RUN_WITH_DOCKER.md`), đăng nhập với tài khoản ADMIN hoặc WAREHOUSE_MANAGER, mở trang **Trợ lý AI**.
+1. Chạy Docker Compose đầy đủ (xem `RUN_WITH_DOCKER.md`), đăng nhập với tài khoản ADMIN hoặc MANAGER, mở trang **Trợ lý AI**.
 2. Tab "Hội thoại": hỏi "Sách nào cần nhập thêm gấp trong 30 ngày tới?" — câu trả lời hiển thị kèm 3 khối có thể mở/đóng: "Bằng chứng AI đã dùng", "Công cụ đã gọi", "Dữ liệu gốc"; nếu có `grounding_warning`/`retrieval_warnings` sẽ thấy banner cảnh báo màu vàng.
 3. Hỏi tiếp "Tạo đề xuất nhập hàng cho các sách đó" — action card xuất hiện với trạng thái "Chờ xác nhận". Bấm **Xác nhận**.
 4. Chuyển sang tab "Trung tâm hành động AI" — action vừa xác nhận xuất hiện với badge trạng thái/risk; bấm vào dòng để xem payload, kết quả, và lịch sử audit log (CREATED → CONFIRMED → EXECUTED).

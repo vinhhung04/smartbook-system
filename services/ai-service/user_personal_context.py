@@ -13,14 +13,14 @@ _TIMEOUT = float(os.getenv("RAG_RETRIEVAL_TIMEOUT_SECONDS", "8"))
 
 # Legacy role codes mapped to their canonical replacements (backward compat).
 _LEGACY_ROLE_MAP: dict[str, str] = {
-    "MANAGER": "WAREHOUSE_MANAGER",
+    "MANAGER": "MANAGER",
     "STAFF": "WAREHOUSE_STAFF",
     "WAREHOUSE_OPERATOR": "WAREHOUSE_STAFF",
     "CUSTOMER_SERVICE": "LIBRARIAN",
 }
 
 _ROLE_PRIORITY = [
-    "ADMIN", "WAREHOUSE_MANAGER", "LIBRARIAN",
+    "ADMIN", "MANAGER", "LIBRARIAN",
     "WAREHOUSE_STAFF", "SUPPLIER", "CUSTOMER",
 ]
 
@@ -38,7 +38,7 @@ _ROLE_PERSONAS: dict[str, str] = {
         "Bạn đang hỗ trợ nhân viên kho {name}. "
         "Ưu tiên các task picking/putaway/receiving được giao cho họ."
     ),
-    "WAREHOUSE_MANAGER": (
+    "MANAGER": (
         "Bạn đang hỗ trợ quản lý kho {name}. "
         "Có thể xem tổng quan vận hành, tồn kho, task nhân viên và báo cáo."
     ),
@@ -95,7 +95,8 @@ _TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
     "membership": ("the thu vien", "the hoi vien", "the cua toi", "hoi vien", "hang the", "hang thanh vien",
                    "goi thanh vien", "het han the", "membership"),
     "wallet": ("vi cua toi", "vi dien tu", "so du", "nap tien", "tien trong vi", "vi con"),
-    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "picking", "lay hang", "cat hang",
+    "tasks": ("nhiem vu", "task", "cong viec", "viec cua toi", "viec can lam", "viec gi can lam", "nhung viec gi",
+              "viec can xu ly", "picking", "lay hang", "cat hang",
               "putaway", "nhan hang", "kiem ke", "ngoai le", "duoc giao"),
     "analytics": ("tong quan", "kpi", "chi so", "bao cao"),
     "stock": ("ton kho", "het hang", "sap het", "nhap them"),
@@ -105,6 +106,14 @@ _TOPIC_KEYWORDS: dict[str, tuple[str, ...]] = {
 # An explicit request for one's whole account loads every topic of the role.
 _WHOLE_ACCOUNT = ("tai khoan cua toi", "thong tin cua toi", "ho so cua toi", "tinh hinh cua toi",
                   "tong quan tai khoan", "tat ca thong tin")
+
+
+def with_desk_work(topics: set[str], endpoints: list[str]) -> set[str]:
+    """A librarian has no task list: their own work is the desk - overdue loans to
+    chase and reservations waiting. "Tôi có việc gì cần làm?" used to find nothing."""
+    if "tasks" in topics and not any(_ENDPOINT_TOPIC.get(ep) == "tasks" for ep in endpoints):
+        return topics | {"loans", "reservations"}
+    return topics
 
 
 def select_personal_topics(message: str | None, intent: str | None) -> set[str]:
@@ -143,6 +152,11 @@ def get_primary_role(user_ctx: Any) -> str:
     return roles[0] if roles else "CUSTOMER"
 
 
+# /borrow/fines?summary=1 adds the money totals of every fine in the caller's scope,
+# not just the page: "tiền phạt chưa thu là bao nhiêu" has a real answer.
+_ENDPOINT_PARAMS = {"/borrow/fines": {"summary": "1"}}
+
+
 async def _fetch_one(
     client: httpx.AsyncClient,
     endpoint: str,
@@ -153,6 +167,7 @@ async def _fetch_one(
     try:
         resp = await client.get(
             f"{GATEWAY_URL}{endpoint}",
+            params=_ENDPOINT_PARAMS.get(endpoint),
             headers=headers,
             timeout=_TIMEOUT,
         )
@@ -399,7 +414,9 @@ def _fmt_borrow_loans_all(data: Any) -> str:
         n_overdue = int(counts.get("OVERDUE") or 0)
         n_active = int(counts.get("BORROWED") or 0) + n_overdue
         # borrow-service counts within the CALLER's scope (a librarian: their branches), never "toàn hệ thống"
-        lines = [f"📚 Phiếu mượn trong phạm vi bạn được xem: {n_active} đang mượn, trong đó {n_overdue} quá hạn."]
+        # unit stated explicitly: the model reported "161 đầu sách" for 161 loans (audit 2026-11-22)
+        lines = [f"📚 Phiếu mượn trong phạm vi bạn được xem: {n_active} phiếu đang mượn, trong đó {n_overdue} phiếu quá hạn "
+                 "(đơn vị là phiếu mượn, không phải số cuốn hay số đầu sách)."]
     else:
         n_overdue = sum(1 for l in items if str(l.get("status", "")).upper() == "OVERDUE")
         n_active = sum(1 for l in items if str(l.get("status", "")).upper() in ("BORROWED", "OVERDUE"))
@@ -429,6 +446,10 @@ def _fmt_borrow_fines_all(data: Any) -> str:
     if isinstance(counts, dict) and (meta or {}).get("total") is not None:
         # the list is one page: the service's totals are the counts; amounts exist for the page only
         open_count = int(counts.get("UNPAID") or 0) + int(counts.get("PARTIALLY_PAID") or 0)
+        money = (meta or {}).get("summary")
+        if isinstance(money, dict) and money.get("outstanding") is not None:
+            return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong; "
+                    f"tổng còn phải thu {_n(money['outstanding']):,.0f} VND, đã thu {_n(money.get('collected')):,.0f} VND.")
         return (f"💸 Phạt trong phạm vi bạn được xem: {int(meta['total'])} khoản, {open_count} chưa thanh toán xong. "
                 f"Số tiền chỉ có cho {len(items)} khoản gần nhất ({total:,.0f} VND chưa thu trong các khoản đó), "
                 "không phải tổng tiền.")
@@ -536,7 +557,9 @@ async def build_user_personal_context(
 
     topics = select_personal_topics(message if message is not None else intent_info.get("query"),
                                     intent_info.get("intent"))
-    endpoints = [ep for ep in capabilities.personal_endpoints(user_ctx) if _ENDPOINT_TOPIC.get(ep) in topics]
+    allowed_endpoints = capabilities.personal_endpoints(user_ctx)
+    topics = with_desk_work(topics, allowed_endpoints)
+    endpoints = [ep for ep in allowed_endpoints if _ENDPOINT_TOPIC.get(ep) in topics]
     if not topics:
         # Nothing personal was asked: no personal data is fetched or prompted.
         return {"role": role, "persona": persona, "summary": "", "sources": [], "warnings": [], "topics": []}

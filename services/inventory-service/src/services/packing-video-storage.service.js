@@ -39,6 +39,16 @@ function toStorageRef(filename) {
   return `packing/${filename}`;
 }
 
+/** storage_ref -> absolute file path inside the evidence root; null for anything else
+ *  (basename only, so a crafted ref can never escape the directory). */
+function resolveVideoPath(storageRef) {
+  const ref = String(storageRef || "");
+  if (!ref.startsWith("packing/")) return null;
+  const name = path.basename(ref);
+  if (!name || name !== ref.slice("packing/".length)) return null;
+  return path.join(EVIDENCE_ROOT, name);
+}
+
 const videoUploadMiddleware = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
@@ -64,9 +74,31 @@ const videoUploadMiddleware = multer({
   },
 });
 
+/** Runs the multer upload and turns its failures into JSON the packing UI can show, instead of
+ *  Express's default HTML 500 page (which also leaked the container path). */
+function handleVideoUpload(req, res, next) {
+  return videoUploadMiddleware.single("video")(req, res, (error) => {
+    if (!error) return next();
+    if (error.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ message: "Video vượt quá dung lượng cho phép (300 MB)", code: "PACKING_VIDEO_TOO_LARGE" });
+    }
+    if (error instanceof multer.MulterError || error.message === "Only video uploads are accepted") {
+      return res.status(400).json({ message: "Tệp tải lên không phải video hợp lệ", code: "PACKING_VIDEO_INVALID" });
+    }
+    // EACCES/ENOSPC/EROFS...: the evidence volume is not writable — a server problem, the client may retry
+    console.error("Packing video storage failed:", error);
+    return res.status(503).json({
+      message: "Máy chủ chưa lưu được video (kho lưu trữ bằng chứng không ghi được). Video vẫn được giữ trên máy, hãy thử tải lại; nếu vẫn lỗi, báo quản trị hệ thống.",
+      code: "PACKING_VIDEO_STORAGE_UNAVAILABLE",
+    });
+  });
+}
+
 module.exports = {
   ensureEvidenceRoot,
   buildVideoFilename,
   toStorageRef,
+  resolveVideoPath,
   videoUploadMiddleware,
+  handleVideoUpload,
 };

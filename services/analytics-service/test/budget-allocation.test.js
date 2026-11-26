@@ -169,3 +169,24 @@ test('trace + serviceCurve: cumulative cost vs share of modelled demand served (
   assert.ok(curve.cost_for_service_pct[90] <= curve.cost_for_service_pct[99]);
   assert.deepEqual(curve.curve.map((c) => c.service_pct), [25, 50, 75, 100]);
 });
+
+test('protectionDemand covers lead time plus the weekly review period', () => {
+  const { protectionDemand, REVIEW_PERIOD_DAYS } = require('../src/utils/budget-allocation');
+  assert.equal(REVIEW_PERIOD_DAYS, 7);
+  assert.equal(protectionDemand(0.5, 14), 10.5);
+  assert.equal(protectionDemand(null, 14), 0);
+  assert.equal(protectionDemand(1, undefined), 7);
+});
+
+test('the backtest candidate funds with production\'s protection demand', () => {
+  const { protectedMarginal } = require('../eval/budget-improvement');
+  const { protectionDemand } = require('../src/utils/budget-allocation');
+  const decisions = [
+    { qty: 3, unitCost: 100000, candidate: { avg_daily_demand: 0.8, lead_time_days: 14, inventory_position: 11 } },
+    { qty: 3, unitCost: 100000, candidate: { avg_daily_demand: 0.1, lead_time_days: 14, inventory_position: 0 } },
+  ];
+  const viaEval = protectedMarginal(decisions, 300000);
+  const direct = allocateMarginal(decisions.map((d) => ({ cap: d.qty, unitCost: d.unitCost,
+    lambda: protectionDemand(d.candidate.avg_daily_demand, d.candidate.lead_time_days), position: d.candidate.inventory_position })), 300000);
+  assert.deepEqual(decisions.map((d) => viaEval.funded.find((f) => f === d || (f.candidate.inventory_position === d.candidate.inventory_position))?.qty || 0), direct.qty);
+});

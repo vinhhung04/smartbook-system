@@ -17,7 +17,7 @@
 const ACCESS_LEVELS = ['READ', 'READ_ONLY', 'WRITE', 'OPERATOR', 'FULL'];
 const LEVEL_RANK = { READ: 1, READ_ONLY: 1, WRITE: 2, OPERATOR: 2, FULL: 3 };
 const MANAGE_RANK = 2; // WRITE-level scope is needed to manage a warehouse's staff
-const INTERNAL_ROLES = ['ADMIN', 'WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF', 'LIBRARIAN'];
+const INTERNAL_ROLES = ['ADMIN', 'MANAGER', 'WAREHOUSE_STAFF', 'LIBRARIAN'];
 const MANAGER_ASSIGNABLE_ROLES = ['WAREHOUSE_STAFF'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -31,7 +31,7 @@ class AssignmentError extends Error {
   }
 }
 
-const LEGACY_ROLE_MAP = { MANAGER: 'WAREHOUSE_MANAGER', STAFF: 'WAREHOUSE_STAFF', WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF', CUSTOMER_SERVICE: 'LIBRARIAN' };
+const LEGACY_ROLE_MAP = { MANAGER: 'MANAGER', STAFF: 'WAREHOUSE_STAFF', WAREHOUSE_OPERATOR: 'WAREHOUSE_STAFF', CUSTOMER_SERVICE: 'LIBRARIAN' };
 
 function normalizeRoleCodes(roles) {
   return (Array.isArray(roles) ? roles : []).map((r) => {
@@ -46,7 +46,7 @@ function describeActor(auth = {}) {
   const permissions = Array.isArray(auth.permissions) ? auth.permissions : [];
   const isSuperuser = auth.is_superuser === true;
   const isAdmin = isSuperuser || permissions.includes('auth.users.write');
-  return { id: String(auth.sub || auth.id || ''), isSuperuser, isAdmin, isManager: !isAdmin && roles.includes('WAREHOUSE_MANAGER') };
+  return { id: String(auth.sub || auth.id || ''), isSuperuser, isAdmin, isManager: !isAdmin && roles.includes('MANAGER') };
 }
 
 function isUuid(value) {

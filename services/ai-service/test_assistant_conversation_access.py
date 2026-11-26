@@ -20,7 +20,7 @@ def _fake_request() -> SimpleNamespace:
 
 
 MANAGER = UserContext(
-    user_id="intruder", username="b", email=None, roles=["WAREHOUSE_MANAGER"], permissions=[], is_superuser=False,
+    user_id="intruder", username="b", email=None, roles=["MANAGER"], permissions=[], is_superuser=False,
 )
 
 

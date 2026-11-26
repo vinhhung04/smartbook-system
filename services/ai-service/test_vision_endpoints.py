@@ -1,4 +1,4 @@
-"""Tests for /verify-packing-photo and /scan-receipt: both call OpenRouter's
+"""Tests for /verify-packing-photo: it calls OpenRouter's
 vision model via llm_provider.analyze_image(). No real network calls - the
 provider is mocked at main.get_openrouter_provider(), matching the pattern
 in test_storage_suggestion_explanation.py.
@@ -95,51 +95,6 @@ class VerifyPackingPhotoTests(unittest.TestCase):
         with patch("main.get_openrouter_provider", return_value=provider):
             result = _run(main.verify_packing_photo(file))
         self.assertEqual(result, {"item_count": 2, "detected_titles": ["A", "B"]})
-
-
-class ScanReceiptTests(unittest.TestCase):
-    def test_normalizes_line_items(self):
-        provider = _mock_provider({
-            "supplier_name": "NXB Tre", "invoice_number": "INV-1", "invoice_date": "2026-09-01",
-            "line_items": [{"title": "Doraemon", "isbn": "9786041234567", "quantity": "5", "unit_price": "45000"}],
-        })
-        file = _FakeUploadFile()
-        with patch("main.get_openrouter_provider", return_value=provider):
-            result = _run(main.scan_receipt(file))
-        self.assertTrue(result["success"])
-        self.assertEqual(result["line_items"], [
-            {"title": "Doraemon", "isbn": "9786041234567", "quantity": 5, "unit_price": 45000.0},
-        ])
-        self.assertEqual(result["total_items"], 1)
-
-    def test_model_reported_error_returns_success_false_not_an_http_error(self):
-        provider = _mock_provider({"error": "Không thể đọc nội dung hóa đơn"})
-        file = _FakeUploadFile()
-        with patch("main.get_openrouter_provider", return_value=provider):
-            result = _run(main.scan_receipt(file))
-        self.assertEqual(result, {"success": False, "error": "Không thể đọc nội dung hóa đơn"})
-
-    def test_ai_timeout_returns_502(self):
-        provider = _mock_provider(side_effect=TimeoutError("upstream timed out"))
-        file = _FakeUploadFile()
-        with patch("main.get_openrouter_provider", return_value=provider):
-            with self.assertRaises(HTTPException) as ctx:
-                _run(main.scan_receipt(file))
-        self.assertEqual(ctx.exception.status_code, 502)
-
-    def test_invalid_vision_response_returns_502(self):
-        provider = _mock_provider(side_effect=llm_provider.VisionResponseError("not json"))
-        file = _FakeUploadFile()
-        with patch("main.get_openrouter_provider", return_value=provider):
-            with self.assertRaises(HTTPException) as ctx:
-                _run(main.scan_receipt(file))
-        self.assertEqual(ctx.exception.status_code, 502)
-
-    def test_rejects_non_receipt_content_type(self):
-        file = _FakeUploadFile(content_type="text/plain")
-        with self.assertRaises(HTTPException) as ctx:
-            _run(main.scan_receipt(file))
-        self.assertEqual(ctx.exception.status_code, 400)
 
 
 if __name__ == "__main__":

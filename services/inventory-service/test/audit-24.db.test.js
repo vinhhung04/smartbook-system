@@ -166,7 +166,7 @@ test('SmartBook audit: migrated PostgreSQL business invariants', { skip: !url },
     }
     async function control(fn, params, body = {}) {
       const res = { statusCode: 200, status(c) { this.statusCode = c; return this; }, json(b) { this.body = b; return this; } };
-      await fn({ params, body, user: { id: actor.userId, roles: ['WAREHOUSE_MANAGER'] } }, res); return res;
+      await fn({ params, body, user: { id: actor.userId, roles: ['MANAGER'] } }, res); return res;
     }
     await t.test('SB-10: outbound duplicate-variant root lines add the repick quantity once', async () => {
       const { root, loc, v } = await transferFixture('READY_FOR_OUTBOUND');

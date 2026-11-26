@@ -39,7 +39,7 @@ require('../src/utils/warehouse-scope.utils').setWarehouseScopeResolver({
 
 const { createGoodsReceiptFromInvoice } = require('../src/controllers/supplier-delivery.controller');
 
-const manager = { id: MANAGER, roles: ['WAREHOUSE_MANAGER'], permissions: ['inventory.operation.decide'] };
+const manager = { id: MANAGER, roles: ['MANAGER'], permissions: ['inventory.operation.decide'] };
 
 async function create(deliveryId, items, { key } = {}) {
   const res = createFakeRes();

@@ -20,7 +20,7 @@ def plan(message, state=None):
 
 
 def user(permissions=(), superuser=False):
-    return UserContext(user_id="u", username="u", email=None, roles=["WAREHOUSE_MANAGER"],
+    return UserContext(user_id="u", username="u", email=None, roles=["MANAGER"],
                        permissions=list(permissions), is_superuser=superuser)
 
 
@@ -88,6 +88,24 @@ class RenderTests(unittest.TestCase):
                                 "Tồn khả dụng còn 215 bản.")
         self.assertEqual(cr.enforce_brief(long, plan("Kho nào rủi ro nhất?")), long)  # no brief asked
 
+    def test_a_restyle_answered_with_the_previous_text_is_flagged(self):
+        previous = "Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng, 4 đầu sách đã hết hàng."
+        deep = plan("Giải thích kỹ hơn", {"capabilities": ["warehouse_risk"]})
+        self.assertIn("lặp lại nguyên văn", cr.copied_previous(previous, previous, deep))
+        self.assertIsNone(cr.copied_previous("Một câu trả lời khác hẳn, giải thích từng căn cứ và mức chắc chắn.",
+                                             previous, deep))
+        self.assertIsNone(cr.copied_previous(previous, previous, plan("Nói ngắn gọn thôi")))  # brief: trimmed instead
+        self.assertIsNone(cr.copied_previous(previous, previous, plan("Kho nào thiếu nhất?")))  # no restyle asked
+
+    def test_a_brief_answer_keeps_its_caveat_and_its_bullets(self):
+        answer = ("Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng.\n- 4 đầu sách đã hết hàng.\n"
+                  "- 6 bản đang giữ cho đặt chỗ.\n- Tồn khả dụng 40 bản.\n"
+                  "Lưu ý: thời gian chờ hàng là giá trị mặc định, chưa kiểm chứng.")
+        brief = cr.enforce_brief(answer, plan("Nói ngắn gọn thôi", {"capabilities": ["warehouse_risk"]}))
+        self.assertEqual(brief, "Kho Đà Nẵng thiếu nhiều nhất: 9 đầu sách dưới ngưỡng.\n- 4 đầu sách đã hết hàng.\n"
+                                "- 6 bản đang giữ cho đặt chỗ.\n"
+                                "Lưu ý: thời gian chờ hàng là giá trị mặc định, chưa kiểm chứng.")
+
     def test_snapshot_figures_are_not_given_the_question_period(self):
         # audit E-13: "Tuần này có 446 phiếu quá hạn" - 446 is today's count, not the week's
         note = cr.plan_note(plan("Cho tôi số phiếu quá hạn và 3 sách mượn nhiều nhất tuần này"), NOW)
@@ -135,13 +153,13 @@ class ExtrasTests(unittest.TestCase):
         extras = cr.build_extras(plan("Kho HCM Chinh nên nhập thêm sách gì?"), {"get_reorder_suggestions": scoped},
                                  user(superuser=True), WAREHOUSES, NOW)
         metrics = {m["label"]: m["value"] for m in extras["recommendations"][0]["metrics"]}
-        self.assertEqual((metrics["Tồn tại Kho HCM Chinh"], metrics["Tồn toàn thư viện"]), (2, 5))
+        self.assertEqual((metrics["Tồn tại Kho HCM Chinh"], metrics["Tồn các kho bạn được xem"]), (2, 5))
         self.assertNotIn("Tồn khả dụng", metrics)  # one ambiguous label for two different numbers
         text = cr.render("get_reorder_suggestions", {**scoped, "warehouse_scope": {
             "warehouse_name": "Kho HCM Chinh", "with_suggestion": 1, "low_stock_titles": 2, "note": "…toàn thư viện…",
             "without_suggestion": ["One Hundred Years of Solitude"]}})
         self.assertTrue(text.startswith("Phạm vi: Kho HCM Chinh - 1/2 đầu sách"))
-        self.assertIn("Norwegian Wood — ưu tiên HIGH; tồn tại kho 2 (ngưỡng tại kho 5); tồn toàn thư viện 5", text)
+        self.assertIn("Norwegian Wood — ưu tiên HIGH; tồn tại kho 2 (ngưỡng tại kho 5); tồn các kho bạn được xem 5", text)
         self.assertIn("chưa đề xuất nhập: One Hundred Years of Solitude", text)
 
     def test_permission_errors_become_caveats(self):

@@ -294,7 +294,7 @@ async function createUser(req, res) {
           ? await tx.$queryRawUnsafe(`SELECT code FROM roles WHERE id = ANY($1::uuid[])`, roleIds)
           : [];
         const internal = normalizeRoleCodes(roleRows.map((r) => r.code))
-          .some((code) => ['ADMIN', 'WAREHOUSE_MANAGER', 'WAREHOUSE_STAFF', 'LIBRARIAN'].includes(code));
+          .some((code) => ['ADMIN', 'MANAGER', 'WAREHOUSE_STAFF', 'LIBRARIAN'].includes(code));
         if (!internal) throw new AssignmentError(400, 'TARGET_NOT_INTERNAL', 'Chỉ tài khoản nội bộ mới được phân công kho');
       }
       const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);

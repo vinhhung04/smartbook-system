@@ -5,6 +5,35 @@ const { parseId, normalizeText } = require("../utils/validation");
 const { toInt } = require("../utils/validation");
 const { normalizeIsbn13 } = require("../utils/validation");
 const { normalizeTaskType } = require("../utils/validation");
+const { findOutboundShortages } = require("../services/outbound-availability.service");
+const { createPickingTask } = require("../services/picking-task.service");
+
+function requiredQtyByVariant(lines, qtyOf) {
+  const map = new Map();
+  for (const line of lines) {
+    const key = String(line.variant_id);
+    map.set(key, (map.get(key) || 0) + qtyOf(line));
+  }
+  return map;
+}
+
+function insufficientOutboundStock(shortages, metaByVariant, warehouseId) {
+  const detailed = shortages.map((item) => ({
+    ...item,
+    isbn13: metaByVariant.get(item.variant_id)?.isbn13 || null,
+    sku: metaByVariant.get(item.variant_id)?.sku || null,
+  }));
+  const preview = detailed
+    .slice(0, 3)
+    .map((item) => `${item.isbn13 || item.sku || item.variant_id}: thiếu ${item.shortage_qty}`)
+    .join("; ");
+  return {
+    invalid: true,
+    statusCode: 409,
+    message: `Không đủ tồn kho khả dụng (đã trừ phần giữ cho các phiếu đã duyệt). ${preview}`,
+    details: { error_code: "INSUFFICIENT_STOCK", warehouse_id: warehouseId, shortages: detailed },
+  };
+}
 
 function canApproveRequests(user) {
   if (user?.is_superuser) return true;
@@ -19,7 +48,7 @@ function canApproveRequests(user) {
   const roles = Array.isArray(user?.roles)
     ? user.roles.map((r) => String(r || "").toUpperCase())
     : [];
-  return roles.includes("ADMIN") || roles.includes("WAREHOUSE_MANAGER");
+  return roles.includes("ADMIN") || roles.includes("MANAGER");
 }
 
 function createOutboundNumber() {
@@ -65,6 +94,7 @@ function normalizeOutboundReferenceType(value) {
 
 const {
   requireWarehouseWriteAccess,
+  requireAssignableUser,
   scopedWarehouseWhere,
   scopeErrorStatus,
 } = require("../utils/warehouse-scope.utils");
@@ -468,6 +498,8 @@ async function createOutboundRequest(req, res) {
     return res.status(400).json({ message: "Thiếu lines" });
   }
 
+  if (assignedPickerUserId && !(await requireAssignableUser(res, assignedPickerUserId, warehouseId))) return undefined;
+
   const normalizedLines = [];
   for (const line of lines) {
     const sourceLocationId = parseId(line?.source_location_id);
@@ -579,6 +611,19 @@ async function createOutboundRequest(req, res) {
         }
       }
 
+      const shortages = await findOutboundShortages(
+        tx,
+        warehouseId,
+        requiredQtyByVariant(resolvedLines, (line) => line.quantity),
+      );
+      if (shortages.length > 0) {
+        return insufficientOutboundStock(
+          shortages,
+          new Map(variants.map((variant) => [String(variant.id), variant])),
+          warehouseId,
+        );
+      }
+
       const externalReference = referenceValidation.should_generate
         ? await allocateOutboundReferenceCode(tx, referenceValidation.reference_type)
         : referenceValidation.external_reference;
@@ -681,6 +726,9 @@ async function createTransferRequest(req, res) {
   if (lines.length === 0) {
     return res.status(400).json({ message: "Thiếu lines" });
   }
+
+  // the picker works in the source warehouse
+  if (assignedPickerUserId && !(await requireAssignableUser(res, assignedPickerUserId, fromWarehouseId))) return undefined;
 
   const normalizedLines = [];
   for (const line of lines) {
@@ -1003,6 +1051,17 @@ async function approveRequest(req, res) {
             id: true,
             status: true,
             note: true,
+            warehouse_id: true,
+            outbound_order_items: {
+              select: {
+                id: true,
+                variant_id: true,
+                source_location_id: true,
+                quantity: true,
+                processed_qty: true,
+                book_variants: { select: { isbn13: true, sku: true } },
+              },
+            },
           },
         });
 
@@ -1024,6 +1083,21 @@ async function approveRequest(req, res) {
           ? [order.note, `[APPROVED_NOTE] ${note}`].filter(Boolean).join("\n")
           : order.note;
 
+        // Approval is what holds the stock: re-check against every order already approved.
+        const shortages = await findOutboundShortages(
+          tx,
+          order.warehouse_id,
+          requiredQtyByVariant(order.outbound_order_items, (item) => Math.max(0, item.quantity - (item.processed_qty || 0))),
+          { excludeOrderId: order.id },
+        );
+        if (shortages.length > 0) {
+          return insufficientOutboundStock(
+            shortages,
+            new Map(order.outbound_order_items.map((item) => [String(item.variant_id), item.book_variants || {}])),
+            order.warehouse_id,
+          );
+        }
+
         const row = await tx.outbound_orders.update({
           where: { id: taskId },
           data: {
@@ -1032,6 +1106,8 @@ async function approveRequest(req, res) {
             note: nextNote,
           },
         });
+
+        await createPickingTask(tx, { outboundOrder: order, actorUserId: currentUserId });
 
         await tx.inventory_audit_logs.create({
           data: {
@@ -1052,7 +1128,7 @@ async function approveRequest(req, res) {
       if (updated.invalid) {
         return res
           .status(updated.statusCode || 400)
-          .json({ message: updated.message });
+          .json({ message: updated.message, ...(updated.details ? { details: updated.details } : {}) });
       }
 
       return res.json({

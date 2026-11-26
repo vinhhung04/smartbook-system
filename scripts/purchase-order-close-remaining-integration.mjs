@@ -8,6 +8,8 @@
 // receiving.
 //
 // Usage: node scripts/purchase-order-close-remaining-integration.mjs
+import { acceptAtPrice, approvedInvoice, shipAgainstInvoice, supplierIdOf } from './lib/invoice-first-po.mjs';
+
 const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const password = process.env.PURCHASE_TEST_PASSWORD || '123456';
 const managerName = process.env.PURCHASE_TEST_USERNAME || 'hung';
@@ -44,9 +46,7 @@ function check(name, condition, detail = '') {
 }
 
 async function getSetup(token, supplierAccount) {
-  const suppliers = await ok('GET', '/api/suppliers', token);
-  const supplier = suppliers.find((row) => String(row.email || '').toLowerCase() === String(supplierAccount.user.email || '').toLowerCase())
-    || suppliers.find((row) => row.status === 'ACTIVE') || suppliers[0];
+  const supplier = { id: await supplierIdOf(supplierAccount.token) };
   const warehouses = await ok('GET', '/api/warehouses', token);
   const warehouse = warehouses.find((row) => row.is_active !== false);
   const books = (await ok('GET', '/api/books', token)).filter((row) => row.variant_id);
@@ -70,25 +70,22 @@ async function createPo(M, setup, orderedQty, note) {
 
 async function approvePo(M, poId) {
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
 }
 
-/** Invoice exactly invoicedQty (not the full remaining), send+confirm, then deliver and post a
- * GRN for all of it, leaving ordered_qty - invoicedQty genuinely never invoiced or received. */
-async function setupPartiallyReceivedPo(M, setup, orderedQty, invoicedQty, note) {
+/** Invoice-first: the supplier accepts and invoices the full order, ships exactly invoicedQty,
+ * and a GRN posts all of it, leaving ordered_qty - invoicedQty genuinely never received. */
+async function setupPartiallyReceivedPo(M, S, setup, orderedQty, invoicedQty, note) {
   const poId = await createPo(M, setup, orderedQty, note);
   await approvePo(M, poId);
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   const poSent = await ok('GET', `/api/purchase-orders/${poId}`, M);
   const item = poSent.items[0];
 
-  const confirmed = await ok('POST', `/api/purchase-orders/${poId}/supplier-confirm`, M, {
-    invoice_number: `CLOSE-INV-${poId.slice(0, 8)}-${Date.now()}`,
-    invoice_date: new Date().toISOString().slice(0, 10),
-    expected_delivery_date: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-    items: [{ purchase_order_item_id: item.id, variant_id: item.variant_id, invoiced_qty: invoicedQty, unit_cost: setup.unitCost }],
-  });
-  const invoiceId = confirmed.data.invoice_id;
+  await acceptAtPrice(M, S, poId, setup.unitCost);
+  const invoice = await approvedInvoice(M, S, poId);
+  const shipped = await shipAgainstInvoice(S, poId, invoice.id, [{ purchase_order_item_id: item.id, invoiced_qty: invoicedQty }]);
+  if (shipped.status !== 201) throw new Error(`delivery note failed (${shipped.status}): ${JSON.stringify(shipped.data)}`);
+  const invoiceId = shipped.data.data.id;
   const invoiceDetail = (await ok('GET', `/api/supplier-deliveries/${invoiceId}`, M)).data;
   const draftReceipt = await ok('POST', `/api/supplier-deliveries/${invoiceId}/create-goods-receipt`, M, {
     warehouse_id: setup.warehouse.id,
@@ -105,7 +102,7 @@ async function setupPartiallyReceivedPo(M, setup, orderedQty, invoicedQty, note)
   await ok('PATCH', `/api/goods-receipts/${draftReceipt.data.id}`, M, { status: 'POSTED' });
 
   const poAfter = await ok('GET', `/api/purchase-orders/${poId}`, M);
-  return { poId, item: poAfter.items[0], invoiceId };
+  return { poId, item: poAfter.items[0], invoiceId, invoiceDocumentId: invoice.id };
 }
 
 async function main() {
@@ -116,7 +113,7 @@ async function main() {
   const setup = await getSetup(M, supplierAccount);
 
   // ── A: close a genuine remainder without touching ordered_qty/received_qty ──
-  const poA = await setupPartiallyReceivedPo(M, setup, 10, 6, 'E2E close-remaining - basic');
+  const poA = await setupPartiallyReceivedPo(M, S, setup, 10, 6, 'E2E close-remaining - basic');
   check('setup: received 6 of 10, nothing closed yet', poA.item.received_qty === 6 && poA.item.ordered_qty === 10 && poA.item.closure_status === 'OPEN');
   check('setup: fulfillment_status is PARTIALLY_RECEIVED, not a generic RECEIVED', poA.item.fulfillment_status === 'PARTIALLY_RECEIVED');
 
@@ -139,7 +136,8 @@ async function main() {
 
   const newNoteAttempt = await request('POST', `/api/supplier-account/orders/${poA.poId}/invoices`, S, {
     delivery_number: `DN-CLOSED-${Date.now()}`,
-    items: [{ purchase_order_item_id: poA.item.id, invoiced_qty: 2, unit_cost: setup.unitCost }],
+    invoice_document_id: poA.invoiceDocumentId,
+    items: [{ purchase_order_item_id: poA.item.id, invoiced_qty: 2 }],
   });
   check(
     'the supplier cannot submit a new delivery note against a closed line',
@@ -148,7 +146,7 @@ async function main() {
   );
 
   // ── C: cannot close a line with nothing left, and cannot close on a non-dispatched PO ──
-  const poC = await setupPartiallyReceivedPo(M, setup, 5, 5, 'E2E close-remaining - fully received');
+  const poC = await setupPartiallyReceivedPo(M, S, setup, 5, 5, 'E2E close-remaining - fully received');
   const closeFullAttempt = await request('POST', `/api/purchase-orders/${poC.poId}/items/${poC.item.id}/close-remaining`, M, { reason: 'x' });
   check('closing a fully-received line is rejected (nothing left to close)', closeFullAttempt.response.status === 400, `status=${closeFullAttempt.response.status}`);
   const poCAfter = await ok('GET', `/api/purchase-orders/${poC.poId}`, M);
@@ -170,9 +168,11 @@ async function main() {
   check('reopening a line that is not closed is rejected', reopenAgainAttempt.response.status === 409, `status=${reopenAgainAttempt.response.status}`);
 
   // Receiving now works again on the reopened line: top up the remaining 4 of 10 end-to-end.
+  // the approved invoice still holds the 4 never shipped
   const topUpNote = await ok('POST', `/api/supplier-account/orders/${poA.poId}/invoices`, S, {
     delivery_number: `DN-TOPUP-${Date.now()}`,
-    items: [{ purchase_order_item_id: poA.item.id, invoiced_qty: 4, unit_cost: setup.unitCost }],
+    invoice_document_id: poA.invoiceDocumentId,
+    items: [{ purchase_order_item_id: poA.item.id, invoiced_qty: 4 }],
   });
   check('after reopen, a new delivery note for the remaining 4 is accepted', Boolean(topUpNote.data?.id));
   const topUpInvoiceDetail = (await ok('GET', `/api/supplier-deliveries/${topUpNote.data.id}`, M)).data;

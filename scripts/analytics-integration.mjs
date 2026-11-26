@@ -4,7 +4,8 @@ const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
 const username = process.env.ANALYTICS_TEST_USERNAME || 'manager01';
 const password = process.env.ANALYTICS_TEST_PASSWORD || '123456';
 // Borrow-domain analytics (fines, overdue loans, reservations - some with customer PII) need
-// analytics.borrow.read, which only ADMIN holds; WAREHOUSE_MANAGER is denied on purpose.
+// analytics.borrow.read: ADMIN, LIBRARIAN and MANAGER hold it (read-only, limited to
+// the caller's warehouse/branch scope); a reader never does.
 const adminUsername = process.env.ANALYTICS_TEST_ADMIN_USERNAME || 'hung';
 const jwtSecret = process.env.JWT_SECRET || 'smartbook_shared_jwt_secret';
 
@@ -76,24 +77,26 @@ function assertObject(value, field) {
   }
 }
 
+const KPI_BORROW_FIELDS = [
+  'active_loans',
+  'overdue_loans',
+  'pending_reservations',
+  'confirmed_reservations',
+  'ready_for_pickup_reservations',
+  'pickup_codes_expiring_soon',
+  'unpaid_fine_amount',
+  'reservation_conversion_rate',
+];
+
 const endpointChecks = [
   {
     name: 'analytics/dashboard/kpis',
     path: '/analytics/dashboard/kpis',
-    validate(data) {
-      [
-        'total_titles',
-        'total_copies',
-        'active_loans',
-        'overdue_loans',
-        'pending_reservations',
-        'confirmed_reservations',
-        'ready_for_pickup_reservations',
-        'pickup_codes_expiring_soon',
-        'unpaid_fine_amount',
-        'low_stock_variants',
-        'reservation_conversion_rate',
-      ].forEach((field) => assertNumber(data[field], field));
+    // manager01 holds analytics.borrow.read: the borrow figures are there, within its scope
+    validate(data, body) {
+      ['total_titles', 'total_copies', 'low_stock_variants'].forEach((field) => assertNumber(data[field], field));
+      KPI_BORROW_FIELDS.forEach((field) => assertNumber(data[field], field));
+      if (body?.meta?.borrow_figures === 'NOT_PERMITTED') throw new Error('meta.borrow_figures must not be NOT_PERMITTED');
     },
   },
   {
@@ -176,24 +179,29 @@ async function run() {
   let passed = 0;
 
   for (const check of endpointChecks) {
-    const { response, body } = await request(check.path, check.borrowDomain ? adminToken : staffToken);
+    const { response, body } = await request(check.path, staffToken);
     if (!response.ok) {
       throw new Error(`${check.name} failed (${response.status}): ${JSON.stringify(body)}`);
     }
     if (!Object.prototype.hasOwnProperty.call(body, 'data')) {
       throw new Error(`${check.name} response must include data`);
     }
-    check.validate(body.data);
+    check.validate(body.data, body);
     passed += 1;
     console.log(`PASS ${check.name}`);
   }
 
+  const adminKpis = await request('/analytics/dashboard/kpis', adminToken);
+  if (!adminKpis.response.ok) throw new Error(`analytics/dashboard/kpis failed for ${adminUsername} (${adminKpis.response.status})`);
+  KPI_BORROW_FIELDS.forEach((field) => assertNumber(adminKpis.body.data?.[field], `admin ${field}`));
+  console.log(`PASS analytics/dashboard/kpis (borrow figures for ${adminUsername})`);
+
   for (const check of endpointChecks.filter((item) => item.borrowDomain)) {
-    const denied = await request(check.path, staffToken);
-    if (denied.response.status !== 403) {
-      throw new Error(`${check.name} must be 403 for ${username} (no analytics.borrow.read), got ${denied.response.status}`);
+    const scoped = await request(check.path, staffToken);
+    if (scoped.body?.meta?.data_scope !== 'WAREHOUSE_SCOPED') {
+      throw new Error(`${check.name} must be warehouse-scoped for ${username}, got ${JSON.stringify(scoped.body?.meta)}`);
     }
-    console.log(`PASS ${check.name} (denied to ${username})`);
+    console.log(`PASS ${check.name} (read by ${username}, warehouse-scoped)`);
   }
 
   const customerToken = signJwt({

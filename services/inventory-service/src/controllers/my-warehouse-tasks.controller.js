@@ -32,6 +32,7 @@ async function getAvailableTasks(req, res) {
       outboundConfirmOutbound,
       outboundConfirmTransfer,
       transferReceiving,
+      supplierReceiving,
     ] = await Promise.all([
       // 1. Outbound picking: APPROVED, chưa có picker
       prisma.outbound_orders.findMany({
@@ -139,6 +140,18 @@ async function getAvailableTasks(req, res) {
         orderBy: { requested_at: 'asc' },
         take: 50,
       }),
+      // 6. Supplier receipt counting: DRAFT receipt created without an assignee
+      prisma.goods_receipts.findMany({
+        where: {
+          status: 'DRAFT',
+          received_by_user_id: null,
+          source_type: 'SUPPLIER_INVOICE',
+          ...inScope('warehouse_id'),
+        },
+        select: { id: true, receipt_number: true, status: true, warehouse_id: true, created_at: true, warehouses: { select: { code: true, name: true } } },
+        orderBy: { created_at: 'asc' },
+        take: 50,
+      }),
     ]);
 
     function transferWarehouseLabel(order) {
@@ -241,6 +254,20 @@ async function getAvailableTasks(req, res) {
         claimable: canClaim(o.to_warehouse_id),
         claim_endpoint: `/api/transfer-receiving/${o.id}/claim-self`,
         ...transferDirectionFields(o),
+      })),
+      ...supplierReceiving.map((r) => ({
+        id: r.id,
+        type: 'RECEIVING',
+        task_type: 'supplier',
+        title: r.receipt_number,
+        status: r.status,
+        warehouse: r.warehouses ? `${r.warehouses.code} - ${r.warehouses.name}` : null,
+        warehouse_id: r.warehouse_id,
+        created_at: r.created_at,
+        completed_at: null,
+        action_path: `/orders/${r.id}`,
+        claimable: canClaim(r.warehouse_id),
+        claim_endpoint: `/api/goods-receipts/${r.id}/claim-self`,
       })),
     ];
 

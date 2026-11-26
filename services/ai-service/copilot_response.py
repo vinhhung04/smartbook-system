@@ -30,7 +30,7 @@ from copilot_visualization import build_visualizations, consistency_issues
 
 COPILOT_SYSTEM_PROMPT = (
     "Bạn là trợ lý phân tích và hỗ trợ ra quyết định cho quản lý thư viện/kho của SmartBook "
-    "(người dùng là ADMIN hoặc WAREHOUSE_MANAGER).\n\n"
+    "(người dùng là quản lý kho - có thể kiêm quản lý thư viện - hoặc quản trị viên).\n\n"
 
     "## Nguyên tắc dữ liệu\n"
     "- Mọi số liệu, tên sách, tên kho trong câu trả lời phải lấy từ kết quả tool trong hội thoại. Không ước lượng, "
@@ -39,6 +39,8 @@ COPILOT_SYSTEM_PROMPT = (
     "- Khi câu hỏi cần dữ liệu mà chưa có, gọi tool phù hợp (có thể gọi nhiều tool trong một lượt). Chỉ dùng các tool "
     "được cung cấp.\n"
     "- Tool báo lỗi hoặc không có quyền: nói rõ phần dữ liệu nào chưa lấy được, không đoán thay.\n"
+    "- Số liệu kho, mượn trả và đề xuất nhập chỉ thuộc các kho người dùng được xem (quản trị viên: mọi kho). Không gọi "
+    "đó là \"toàn hệ thống\" hay \"toàn thư viện\", không so sánh với kho ngoài danh sách đó.\n"
     "- Bằng chứng yếu (ít mẫu, thời gian chờ hàng mặc định, kết quả tìm kiếm chưa chắc chắn): dùng từ ngữ thận trọng "
     "(\"dữ liệu cho thấy\", \"có thể\"); không dùng \"chắc chắn\", \"rõ ràng là\".\n"
     "- Câu hỏi \"tại sao\": trình bày các yếu tố góp phần quan sát được trong dữ liệu; không khẳng định quan hệ nhân quả.\n"
@@ -153,7 +155,7 @@ _FEW_SHOTS: list[tuple[str, set, str]] = [
      "- **Nhu cầu vẫn còn ở các đầu sách đang thiếu**: 5/9 đầu sách dưới ngưỡng vẫn có lượt mượn, ví dụ Sách A 40 lượt.\n"
      "- **Thời gian chờ hàng dài**: 3 đầu sách cần 30 ngày để hàng về, nên thiếu hụt kéo dài nếu không đặt sớm.\n"
      "- **Hàng đang giữ cho đặt chỗ**: 6 bản đang giữ, nên số bản cho mượn ngay ít hơn tồn thực tế.\n"
-     "Giới hạn: lượt mượn đang tính trên toàn hệ thống, chưa tách riêng cho Kho B."),
+     "Giới hạn: lượt mượn tính gộp trên các kho bạn được xem, chưa tách riêng cho Kho B."),
     (DECISION, {REORDER, TOP_BORROWED},
      "Hỏi: Nên nhập sách nào trước?\n"
      "Đáp: Nên xem xét nhập **Sách A** trước: đầu sách này đã hết hàng trong khi vẫn có 40 lượt mượn trong kỳ.\n"
@@ -191,15 +193,29 @@ def few_shot(plan: QueryPlan) -> str:
 
 
 BRIEF_MAX_SENTENCES = 3
+# A limit or caveat sentence: shortening must not drop the one warning the answer carries.
+_CAVEAT_SENTENCE = re.compile(r"^\W*(lưu ý|giới hạn|rủi ro|cảnh báo|giả định)\b|chưa (có|đủ) (dữ liệu|số liệu)|"
+                              r"chưa (được )?kiểm chứng|giá trị mặc định", re.IGNORECASE)
 
 
 def enforce_brief(answer: str, plan: QueryPlan) -> str:
     """"Nói ngắn gọn": at most three sentences (the conclusion comes first by the
-    prompt's rule). The model answered as long as before (audit E-15)."""
+    prompt's rule). The model answered as long as before (audit E-15). The first
+    caveat sentence past the cut is kept too, and line breaks (bullets) stay."""
     if not (getattr(plan, "style", None) or {}).get("brief") or not answer:
         return answer
-    sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", answer.strip()) if s.strip()]
-    return " ".join(s.strip() for s in sentences[:BRIEF_MAX_SENTENCES]) if len(sentences) > BRIEF_MAX_SENTENCES else answer
+    units = [(n, s.strip()) for n, line in enumerate(answer.strip().split("\n"))
+             for s in re.split(r"(?<=[.!?])\s+", line) if s.strip()]
+    if len(units) <= BRIEF_MAX_SENTENCES:
+        return answer
+    kept = units[:BRIEF_MAX_SENTENCES]
+    caveat = next((u for u in units[BRIEF_MAX_SENTENCES:] if _CAVEAT_SENTENCE.search(u[1])), None)
+    if caveat and not any(_CAVEAT_SENTENCE.search(s) for _n, s in kept):
+        kept.append(caveat)
+    lines: dict[int, list[str]] = {}
+    for n, s in kept:
+        lines.setdefault(n, []).append(s)
+    return "\n".join(" ".join(parts) for _n, parts in sorted(lines.items()))
 
 
 def strip_example_copies(answer: str, plan: QueryPlan, grounded: str) -> tuple[str, list[str]]:
@@ -233,6 +249,26 @@ def strip_example_copies(answer: str, plan: QueryPlan, grounded: str) -> tuple[s
         if kept or not line.strip():
             lines.append(" ".join(kept))
     return ("\n".join(lines).strip(), removed) if removed else (answer, [])
+
+
+RESTYLE_COPY_RATIO = 0.85
+
+
+def copied_previous(answer: str, previous: str, plan: QueryPlan) -> str | None:
+    """The retry instruction when a restyle follow-up ("kỹ hơn", "dễ hiểu hơn",
+    "vì sao không...") came back as the previous answer again: the model
+    copied the earlier assistant message from the history verbatim in about
+    half of the eval runs (2026-11-25), despite style_request(). "Ngắn gọn" is
+    left out: enforce_brief() shortens a copy, and an already short answer may
+    rightly stay the same."""
+    asked = [s for s in ("deep", "plain", "why_not") if (getattr(plan, "style", None) or {}).get(s)]
+    if not asked or not answer or not previous:
+        return None
+    import difflib
+    if difflib.SequenceMatcher(None, normalize_query(answer), normalize_query(previous)).ratio() < RESTYLE_COPY_RATIO:
+        return None
+    return ("Câu trả lời vừa viết gần như lặp lại nguyên văn câu trả lời trước. Viết lại theo đúng yêu cầu trình bày: "
+            + " ".join(_STYLE_GUIDE[s] for s in asked))
 
 
 def style_request(plan: QueryPlan) -> str:
@@ -313,7 +349,8 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
         lines.append("- Dữ liệu cần thiết đã được truy xuất sẵn ở các kết quả tool bên dưới; chỉ gọi thêm tool nếu thật sự thiếu.")
     reb = (plan.entities or {}).get("rebalance")
     if reb:
-        lines.append("- Lượt này về cân bằng tồn kho giữa các kho (ý chính: " + ", ".join(reb.get("focus") or []) + "). "
+        # focus codes stay out of the prompt: the model once named the hybrid option "HYBRID_DECISION" (2026-11-26)
+        lines.append("- Lượt này về cân bằng tồn kho giữa các kho. "
                      "Trả lời từ kết quả analyze_inventory_rebalancing; mọi con số lấy nguyên văn từ đó. Tách rõ: phương án "
                      "tốt nhất về nghiệp vụ, phần bạn tự thực hiện được, và phần cần Manager kho khác phối hợp. Chi phí "
                      "điều chuyển không có dữ liệu - nói rõ, không ước đoán. Không nói đã tạo, đã duyệt hay đã chuyển hàng. "
@@ -332,7 +369,9 @@ def plan_note(plan: QueryPlan, now: datetime | None = None) -> str:
                          "nhất và của phương án bạn tự thực hiện được.")
         if len([c for c in plan.required_tools if c.get("name") == "analyze_inventory_rebalancing"]) >= 2:
             lines.append("- Có hai kết quả: kết quả đầu là kịch bản trước, kết quả sau là kịch bản mới. So sánh hai kịch bản "
-                         "(mức đáp ứng, thiếu còn lại, chi phí mua, ngân sách còn) và giải thích tác động của điều kiện thay đổi.")
+                         "(mức đáp ứng, thiếu còn lại, chi phí mua, ngân sách còn) và giải thích tác động của điều kiện thay đổi. "
+                         "Nêu riêng tác động lên phương án tốt nhất và lên phương án bạn tự thực hiện được, theo đúng "
+                         "bảng chênh lệch đã tính sẵn.")
         if (plan.style or {}).get("rebalance_draft"):
             lines.append("- Người dùng yêu cầu tạo bản nháp. Hệ thống chuẩn bị bản nháp sau câu trả lời này, chỉ gồm việc "
                          "họ đủ quyền làm; việc cần Manager khác vẫn là đề xuất. Tóm tắt phương án sẽ được lập bản nháp; không "
@@ -385,7 +424,7 @@ def _reorder_line(i: int, x: dict) -> str:
     parts = [f"{i}. {x.get('title')} — ưu tiên {x.get('priority')}"]
     if x.get("warehouse_available_qty") is not None:  # a warehouse-scoped list: that warehouse's stock first
         parts.append(f"tồn tại kho {_f(x['warehouse_available_qty'])} (ngưỡng tại kho {_f(x.get('warehouse_reorder_point'))}); "
-                     f"tồn toàn thư viện {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
+                     f"tồn các kho bạn được xem {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
     elif x.get("available_qty") is not None:
         parts.append(f"tồn khả dụng {_f(x.get('available_qty'))} (ngưỡng {_f(x.get('reorder_point'))})")
     if x.get("borrow_count") is not None:
@@ -616,6 +655,11 @@ def _render_simulation(r: dict) -> str:
             lines.append(f"  {_f(s['lines_covered_by_position'])} dòng không cần nhập thêm vì bản đang về/dự kiến trả đã đủ.")
         if s.get("unfunded_high_examples"):
             lines.append("  Ưu tiên cao bị bỏ lại: " + ", ".join(x["title"] for x in s["unfunded_high_examples"][:5]))
+        if s.get("held_for_data_issue_lines"):
+            lines.append(f"  {_f(s['held_for_data_issue_lines'])} dòng KHÔNG được cấp ngân sách vì số phiếu mượn đang mở lệch "
+                         "với số bản kho ghi nhận đang cho mượn - cần đối soát dữ liệu, KHÔNG phải do thiếu ngân sách"
+                         + (" (ưu tiên cao: " + ", ".join(s["held_high_examples"]) + ")" if s.get("held_high_examples") else "")
+                         + ".")
     least = r.get("least_risk_scenario")
     if least:
         lines.append(f"Phương án ít rủi ro hết sách nhất (do hệ thống xếp, không phải mô hình): {least['label']} — "
@@ -660,6 +704,18 @@ def _render_rebalancing(r: dict) -> str:
     def n(v):
         return "không có dữ liệu" if v is None else (f"{int(v):,}".replace(",", ".") if float(v).is_integer() else f"{v}")
     lines = [f"Nguồn: {r.get('source')} lúc {r.get('retrieved_at')}. Chỉ dùng các số dưới đây; không tự tính thêm."]
+    rec0 = r.get("recommendation") or {}
+    best0 = (r.get("options") or {}).get(rec0.get("best_business_option")) or {}
+    if best0:
+        # live demo 2026-11-26: asked to "tối ưu với ngân sách 15 triệu", the model twice gave the
+        # procurement-only figures (the option that spends the most) as the best plan's
+        lines.append(f"KẾT LUẬN ĐÃ TÍNH SẴN — phương án tốt nhất về nghiệp vụ là {best0.get('label')} "
+                     f"({rec0.get('best_business_option')}): đáp ứng {best0.get('shortage_covered_pct')}%, còn thiếu "
+                     f"{best0.get('remaining_shortage_qty')} bản, điều chuyển {best0.get('transfer_qty')} bản, mua "
+                     f"{best0.get('purchase_qty')} bản ({n(best0.get('purchase_cost_vnd'))} ₫), ngân sách còn "
+                     f"{n(best0.get('remaining_budget_vnd'))} ₫. Khi nói về phương án tốt nhất, dùng đúng phương án này "
+                     "và các số này; \"tối ưu ngân sách\" không có nghĩa là tiêu hết ngân sách. Trả lời đúng ý câu hỏi "
+                     "của lượt này, không mở đầu bằng kết luận này nếu câu hỏi không hỏi về phương án.")
     if r.get("notice"):
         lines.append(f"Thông báo: {r['notice']}")
     lines.append("Phạm vi kho: " + "; ".join(f"{w.get('warehouse')} ({_ACCESS_VI.get(w.get('access'), w.get('access'))})"
@@ -678,14 +734,26 @@ def _render_rebalancing(r: dict) -> str:
                      f"thiếu {d.get('shortage_variants')} đầu sách / {d.get('shortage_qty')} bản; dư {d.get('surplus_variants')} "
                      f"đầu sách / {d.get('surplus_qty')} bản; nhu cầu dự kiến {d.get('forecast_demand_qty')} bản; "
                      f"đang về {d.get('incoming_qty')}, đã hứa chuyển đi {d.get('outgoing_qty')}")
+    t = r.get("diagnosis_totals") or {}
+    if t:
+        lines.append(f"Tổng đã tính sẵn (dùng nguyên các số này, không tự cộng): kho đang thiếu là "
+                     f"{', '.join(t.get('short_warehouses') or []) or 'không có'}; kho đang dư là "
+                     f"{', '.join(t.get('surplus_warehouses') or []) or 'không có'} (tổng dư ở các kho này "
+                     f"{t.get('surplus_qty_surplus_warehouses')} bản); tổng thiếu mọi kho {t.get('shortage_qty_all')} bản. "
+                     "Một kho đang thiếu vẫn có thể dư một số đầu sách khác: số dư và ví dụ sách dư của kho đó chỉ nêu "
+                     "trong mục của chính kho đó, không gộp vào số dư hay mục của các kho đang dư.")
     for label, key, qty in (("Thiếu nhiều nhất", "top_shortages", "shortage_qty"), ("Dư nhiều nhất", "top_surpluses", "surplus_qty")):
         rows = r.get(key) or []
         if rows:
             lines.append(f"{label}: " + "; ".join(f"{x.get('title')} @ {x.get('warehouse')}: {x.get(qty)} bản "
                                                   f"(tồn {x.get('available_qty')}, nhu cầu {x.get('lead_time_demand')})"
                                                   for x in rows[:5]))
+    rec = r.get("recommendation") or {}
     for code, o in (r.get("options") or {}).items():
-        lines.append(f"Phương án {code} – {o.get('label')}: thiếu {o.get('total_shortage_qty')} bản; điều chuyển "
+        # the role tag sits on the line itself, so no figure drifts to another option (live 2026-11-26)
+        role = " / ".join(x for x, ok in (("TỐT NHẤT VỀ NGHIỆP VỤ", code == rec.get("best_business_option")),
+                                          ("BẠN TỰ THỰC HIỆN ĐƯỢC", code == rec.get("executable_option"))) if ok)
+        lines.append(f"Phương án {code} – {o.get('label')}{f' [{role}]' if role else ''}: thiếu {o.get('total_shortage_qty')} bản; điều chuyển "
                      f"{o.get('transfer_qty')} bản; mua {o.get('purchase_qty')} bản ({n(o.get('purchase_cost_vnd'))} ₫); còn "
                      f"thiếu {o.get('remaining_shortage_qty')} (HIGH {o.get('remaining_high_priority_qty')}); đáp ứng "
                      f"{o.get('shortage_covered_pct')}%; ngân sách còn {n(o.get('remaining_budget_vnd'))}; chi phí điều "
@@ -698,7 +766,7 @@ def _render_rebalancing(r: dict) -> str:
         for p in (o.get("purchases") or [])[:5]:
             lines.append(f"  · mua {p.get('quantity')} '{p.get('title')}' cho {p.get('warehouse')} ({n(p.get('cost_vnd'))} ₫; "
                          f"{_PERM_VI.get(p.get('permission'), p.get('permission'))})")
-    rec = r.get("recommendation") or {}
+    lines.append("Mỗi con số ở trên thuộc đúng phương án của dòng đó; không gán số của phương án này cho phương án khác.")
     ex = (r.get("options") or {}).get(rec.get("executable_option")) or {}
     if ex:
         lines.append(f"Nếu người dùng muốn tự làm, không chờ ai phối hợp: dùng phương án {ex.get('label')} "
@@ -714,7 +782,31 @@ def _render_rebalancing(r: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_search_books(r: dict) -> str:
+    """Books found, with each one's copies per warehouse the user may read, spelled out
+    (live demo 2026-11-26: given the raw JSON the model split 15 copies into 8 + 7)."""
+    if r.get("error"):
+        return f"Lỗi tìm sách: {r['error']}"
+    lines = [f"Kết quả tìm sách cho \"{r.get('query')}\" (độ tin cậy: {r.get('retrievalStatus')})."]
+    if not r.get("results"):
+        lines.append("Không tìm thấy sách phù hợp trong catalog.")
+    for b in (r.get("results") or [])[:5]:
+        lines.append(f"- {b.get('title')} — {b.get('author') or 'chưa rõ tác giả'} — ISBN {b.get('isbn') or 'không có'}; "
+                     f"tổng {b.get('quantity')} bản trong các kho bạn được xem.")
+        wh = b.get("by_warehouse")
+        if wh:
+            lines.append("  Theo kho (đầy đủ, ngoài các kho này thì không có bản nào trong phạm vi bạn được xem): "
+                         + "; ".join(f"{w.get('warehouse_name')}: {w.get('available_quantity')} bản sẵn sàng" for w in wh))
+        elif wh is not None:
+            lines.append("  Không có bản nào sẵn sàng ở các kho bạn được xem.")
+        if b.get("description"):
+            lines.append(f"  Mô tả: {b['description']}")
+    lines.append("Số bản theo kho lấy nguyên văn từ dòng \"Theo kho\"; không tự chia hay cộng.")
+    return "\n".join(lines)
+
+
 RENDERERS = {
+    "search_books": (_render_search_books, dict),
     "analyze_inventory_rebalancing": (_render_rebalancing, dict),
     "get_reorder_suggestions": (_render_reorder, dict),
     "get_top_books": (_render_top_books, list),
@@ -749,7 +841,7 @@ def _reorder_recommendation(x: dict, source: str, retrieved_at: str, warehouse_n
     # A warehouse-scoped line carries two stocks: that warehouse's (what its table shows)
     # and the library's (what analytics computed the suggestion from).
     stock = ([{"label": f"Tồn tại {warehouse_name or 'kho'}", "value": x["warehouse_available_qty"], "unit": "bản"},
-              {"label": "Tồn toàn thư viện", "value": x.get("available_qty"), "unit": "bản"}]
+              {"label": "Tồn các kho bạn được xem", "value": x.get("available_qty"), "unit": "bản"}]
              if x.get("warehouse_available_qty") is not None
              else [{"label": "Tồn khả dụng", "value": x.get("available_qty"), "unit": "bản"}])
     metrics = [
@@ -817,12 +909,12 @@ def _recommendations(collected: dict, now_iso: str) -> list[dict]:
         urgent = [x for x in r.get("items") or [] if x.get("status") == "HẾT HÀNG" and (x.get("borrow_count") or 0) > 0]
         for x in urgent[:3]:
             recs.append({"title": x["title"], "action": f"Bổ sung cho {r.get('warehouse_name')}"
-                         + (f" (đề xuất {x['suggested_reorder_qty']} bản toàn hệ thống)" if x.get("suggested_reorder_qty") else ""),
+                         + (f" (đề xuất {x['suggested_reorder_qty']} bản cho các kho bạn được xem)" if x.get("suggested_reorder_qty") else ""),
                          "priority": x.get("reorder_priority"),
                          "metrics": [{"label": "Tồn khả dụng tại kho", "value": x.get("available_qty"), "unit": "bản"},
-                                     {"label": "Lượt mượn (toàn hệ thống)", "value": x.get("borrow_count"), "unit": "lượt"}],
+                                     {"label": "Lượt mượn (các kho bạn được xem)", "value": x.get("borrow_count"), "unit": "lượt"}],
                          "reason": "Đã hết hàng tại kho trong khi vẫn có nhu cầu mượn.",
-                         "risks": ["Nhu cầu tính trên toàn hệ thống, chưa tách theo kho."],
+                         "risks": ["Nhu cầu tính gộp trên các kho bạn được xem, chưa tách riêng kho này."],
                          "confidence": {"level": "TRUNG BÌNH" if (x.get("borrow_count") or 0) >= 3 else "THẤP",
                                         "basis": f"{x.get('borrow_count')} lượt mượn trong kỳ"},
                          "source": "analytics/warehouse-stock-items + analytics/reorder-suggestions (nối theo variant_id)",

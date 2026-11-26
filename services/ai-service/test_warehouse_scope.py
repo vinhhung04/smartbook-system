@@ -20,7 +20,7 @@ from test_copilot_endpoints import FakeProvider, _request
 
 HN = "w-hn"
 HCM = "w-hcm"
-MANAGER = UserContext(user_id="11111111-1111-4111-8111-111111111111", username="m", roles=["WAREHOUSE_MANAGER"],
+MANAGER = UserContext(user_id="11111111-1111-4111-8111-111111111111", username="m", roles=["MANAGER"],
                       permissions=["analytics.read"], is_superuser=False)
 COMPARE_IDS = {**COMPARE, "ranking": [{**COMPARE["ranking"][0], "warehouse_id": HCM},
                                       {**COMPARE["ranking"][1], "warehouse_id": HN}]}

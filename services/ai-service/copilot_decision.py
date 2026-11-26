@@ -53,7 +53,7 @@ def _option(s: dict, ok: list[dict], least: str | None) -> dict:
     if len(ok) >= 2 and cost == min(costs):
         pros.append("Chi phí thấp nhất trong các phương án")
     if len(ok) >= 2 and services and svc is not None and svc == max(services):
-        pros.append("Đáp ứng nhiều nhu cầu dự kiến nhất trong thời gian chờ hàng")
+        pros.append("Đáp ứng nhiều nhu cầu dự kiến nhất đến lần nhập kế tiếp")
     if s.get("unfunded_high_priority") == 0:
         pros.append("Không bỏ lại đầu sách ưu tiên cao nào cần nhập")
     if s.get("covers_need_with_position"):
@@ -64,7 +64,7 @@ def _option(s: dict, ok: list[dict], least: str | None) -> dict:
     if s.get("unfunded_high_priority"):
         cons.append(f"Còn {_n(s['unfunded_high_priority'])} đầu sách ưu tiên cao chưa được nhập")
     if svc is not None and svc < 90:
-        cons.append(f"Chỉ đáp ứng khoảng {_pct(svc)} nhu cầu dự kiến trong thời gian chờ hàng")
+        cons.append(f"Chỉ đáp ứng khoảng {_pct(svc)} nhu cầu dự kiến đến lần nhập kế tiếp")
     if len(ok) >= 2 and cost == max(costs) and cost > min(costs):
         cons.append("Chi phí cao nhất trong các phương án")
     if s.get("lead_time_delay_days"):
@@ -134,7 +134,7 @@ def build(plan, collected: dict, verification: dict | None = None) -> dict | Non
     need = sim.get("full_need") or {}
     conclusion = (f"{first.get('label')}: duyệt {_vnd(first.get('funded_cost'))} cho {_n(first.get('funded_lines'))} đầu "
                   f"sách / {_n(first.get('funded_qty'))} bản"
-                  + (f", đáp ứng khoảng {_pct(first.get('expected_service_pct'))} nhu cầu dự kiến trong thời gian chờ hàng"
+                  + (f", đáp ứng khoảng {_pct(first.get('expected_service_pct'))} nhu cầu dự kiến đến lần nhập kế tiếp"
                      if first.get("expected_service_pct") is not None else "")
                   + f"; {_n(first.get('unfunded_high_priority'))} đầu sách ưu tiên cao chưa được nhập.")
     data_points = [
@@ -162,7 +162,7 @@ def build(plan, collected: dict, verification: dict | None = None) -> dict | Non
     assumptions = list(sim.get("budget_assumptions") or [])
     if sim.get("scenarios_are_assumed"):
         assumptions.insert(0, "Chưa nêu ngân sách: các mức là giả định theo % nhu cầu.")
-    assumptions.append("Mức đáp ứng là ước lượng theo mô hình Poisson của nhu cầu trong thời gian chờ hàng, không phải cam kết.")
+    assumptions.append("Mức đáp ứng là ước lượng theo mô hình Poisson của nhu cầu đến khi đơn nhập kế tiếp có thể về (thời gian chờ hàng + 7 ngày), không phải cam kết.")
     assumptions += list(sim.get("limitations") or [])
     verification = verification or {}
     safe = bool(verification.get("safe_to_act", True)) and not sim.get("scenarios_are_assumed")

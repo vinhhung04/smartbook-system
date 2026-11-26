@@ -104,7 +104,6 @@ async function main() {
   });
   const poId = created.data.id;
   await ok('POST', `/api/purchase-orders/${poId}/submit`, M);
-  await ok('POST', `/api/purchase-orders/${poId}/approve`, M, { note: 'e2e' });
   await ok('POST', `/api/purchase-orders/${poId}/send-to-supplier`, M);
   let po = await ok('GET', `/api/purchase-orders/${poId}`, M);
   check('PO sent: waiting for the supplier (PENDING_SUPPLIER)', po.status === 'SENT_TO_SUPPLIER' && po.supplier_response_status === 'PENDING_SUPPLIER', `${po.status}/${po.supplier_response_status}`);
@@ -122,7 +121,11 @@ async function main() {
   const partial = await ok('POST', `/api/supplier-account/orders/${poId}/respond`, supplierA.token, {
     decision: 'PARTIALLY_ACCEPTED',
     reason: 'Chỉ còn 8 cuốn sách B',
-    lines: [{ purchase_order_item_id: itemB.id, confirmed_qty: 8 }],
+    // invoice-first: the proposal prices every line; the invoice is then billed at these prices
+    lines: [
+      { purchase_order_item_id: itemA.id, confirmed_qty: 100, confirmed_unit_cost: priceA },
+      { purchase_order_item_id: itemB.id, confirmed_qty: 8, confirmed_unit_cost: priceB },
+    ],
   });
   check('partial acceptance waits for SmartBook review', partial.data.review_status === 'PENDING_REVIEW');
   po = await ok('GET', `/api/purchase-orders/${poId}`, M);
@@ -166,6 +169,11 @@ async function main() {
   check('SmartBook cannot replace the supplier invoice file (403)', smartbookCannotEdit.response.status === 403, String(smartbookCannotEdit.response.status));
   const supplierCannotReplace = await request('POST', `/api/supplier-account/documents/${invoice.id}/files`, supplierA.token, null, { form: formOf({}, PDF) });
   check('issued invoice file cannot be replaced even by its issuer (409)', supplierCannotReplace.response.status === 409, String(supplierCannotReplace.response.status));
+  const unapprovedDelivery = await request('POST', `/api/supplier-account/orders/${poId}/invoices`, supplierA.token, {
+    delivery_number: `DN-WAIT-${Date.now()}`, invoice_document_id: invoice.id, items: [{ purchase_order_item_id: itemA.id, invoiced_qty: 1 }],
+  });
+  check('no delivery note before SmartBook approves the invoice (409)', unapprovedDelivery.response.status === 409, String(unapprovedDelivery.response.status));
+  await ok('POST', `/api/procurement-documents/${invoice.id}/approval`, M, { decision: 'APPROVE' });
 
   // ── Phase 3b: delivery notes (batch 1: 100 of A) ─────────────────────────────
   const dn1Number = `DN1-${Date.now()}`;
@@ -174,7 +182,8 @@ async function main() {
     carrier_name: 'Viettel Post',
     deliverer_name: 'Nguyễn Văn Giao',
     expected_delivery_date: new Date().toISOString().slice(0, 10),
-    items: [{ purchase_order_item_id: itemA.id, invoiced_qty: 100, unit_cost: priceA }],
+    invoice_document_id: invoice.id,
+    items: [{ purchase_order_item_id: itemA.id, invoiced_qty: 100 }],
   })).data;
   const docsAfterDn = await ok('GET', `/api/procurement-documents/purchase-orders/${poId}`, M);
   check('delivery note registered in the shared document center', docsAfterDn.data.documents.some((doc) => doc.document_type === 'DELIVERY_NOTE' && doc.supplier_delivery_invoice_id === dn1.id && doc.external_number === dn1Number));
@@ -284,7 +293,8 @@ async function main() {
   })).data;
   const dn3 = (await ok('POST', `/api/supplier-account/orders/${poId}/invoices`, supplierA.token, {
     delivery_number: `DN3-${Date.now()}`,
-    items: [{ purchase_order_item_id: itemB.id, invoiced_qty: 8, unit_cost: priceB }],
+    invoice_document_id: invoice.id,
+    items: [{ purchase_order_item_id: itemB.id, invoiced_qty: 8 }],
   })).data;
   for (const dn of [dn2, dn3]) {
     const detail = (await ok('GET', `/api/supplier-deliveries/${dn.id}`, M)).data;

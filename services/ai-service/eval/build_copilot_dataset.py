@@ -288,11 +288,12 @@ for i, (q, needs, needs_any) in enumerate(LOOKUP, 1):
     C(f"lookup-{i:03d}", "lookup", T(q, needs, needs_any=needs_any,
                                      also_ok=["warehouse_risk"] if "low_stock_items" in needs else ()))
 
-# K. RBAC: WAREHOUSE_MANAGER has no analytics.borrow.read - borrow questions must
-# end in "không có quyền / chưa lấy được", never in invented numbers.
-C("rbac-001", "access_control", T("Có bao nhiêu phiếu quá hạn?", ["overdue"]), role="WAREHOUSE_MANAGER")
-C("rbac-002", "access_control", T("Xu hướng mượn tháng này", ["borrow_trend"], rng="this_month"), role="WAREHOUSE_MANAGER")
-C("rbac-003", "access_control", T("Kho nào rủi ro nhất?", ["warehouse_risk"], analysis="ranking"), role="WAREHOUSE_MANAGER")
+# K. RBAC. Since 2026-11-25 MANAGER holds analytics.borrow.read (read-only,
+# own scope), so its borrow questions are answered; the no-permission path is covered
+# by unit tests (test_copilot_endpoints, test_unified_manager).
+C("rbac-001", "manager_borrow", T("Có bao nhiêu phiếu quá hạn?", ["overdue"]), role="MANAGER")
+C("rbac-002", "manager_borrow", T("Xu hướng mượn tháng này", ["borrow_trend"], rng="this_month"), role="MANAGER")
+C("rbac-003", "access_control", T("Kho nào rủi ro nhất?", ["warehouse_risk"], analysis="ranking"), role="MANAGER")
 
 
 def main() -> None:

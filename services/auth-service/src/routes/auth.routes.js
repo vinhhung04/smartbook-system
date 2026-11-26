@@ -50,7 +50,9 @@ router.get('/warehouse-staff', authenticateToken, listWarehouseStaff);
 router.patch('/me', authenticateToken, updateMe);
 router.post('/change-password', authenticateToken, changePassword);
 router.post('/password-reset/request', resetRateLimit, requestPasswordReset);
-router.post('/password-reset/confirm', resetRateLimit, confirmPasswordReset);
+// Entering the emailed code is an OTP guess: its budget is the OTP one (plus 5 guesses
+// per code), so a resend and a typo do not use up the request budget above.
+router.post('/password-reset/confirm', otpVerifyRateLimit, confirmPasswordReset);
 router.post('/email-otp/verify', otpVerifyRateLimit, verifyEmailOtp);
 router.post('/email-otp/resend', otpResendRateLimit, resendEmailOtp);
 router.post('/login/verify-otp', otpVerifyRateLimit, verifyLoginOtp);

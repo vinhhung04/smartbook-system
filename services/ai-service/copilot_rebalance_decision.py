@@ -34,6 +34,19 @@ def _best(result: dict) -> dict:
     return (result.get("options") or {}).get(rec.get("best_business_option")) or {}
 
 
+def _executable(result: dict) -> dict:
+    rec = result.get("recommendation") or {}
+    return (result.get("options") or {}).get(rec.get("executable_option")) or {}
+
+
+def _diff(b: dict, c: dict) -> dict:
+    out = {}
+    for k in _DIFF:
+        x, y = b.get(k), c.get(k)
+        out[k] = round(y - x, 2) if isinstance(x, (int, float)) and isinstance(y, (int, float)) else None
+    return out
+
+
 def _comparison(base: dict, current: dict) -> dict:
     b, c = _best(base), _best(current)
 
@@ -42,11 +55,15 @@ def _comparison(base: dict, current: dict) -> dict:
                 "best_option": (result.get("recommendation") or {}).get("best_business_option"),
                 **{k: opt.get(k) for k in _DIFF}}
 
-    diff = {}
-    for k in _DIFF:
-        x, y = b.get(k), c.get(k)
-        diff[k] = round(y - x, 2) if isinstance(x, (int, float)) and isinstance(y, (int, float)) else None
-    return {"base": side(base, b), "current": side(current, c), "diff": diff}
+    out = {"base": side(base, b), "current": side(current, c), "diff": _diff(b, c)}
+    # the plan the user can carry out alone often moves when the best one does not
+    # (live 2026-11-26: budget 15 M -> 12 M left the hybrid at 100 %, the executable one fell to 88 %)
+    eb, ec = _executable(base), _executable(current)
+    if eb and ec and (eb is not b or ec is not c):
+        out["executable"] = {"label": ec.get("label"), "code": ec.get("code"),
+                             "base": {k: eb.get(k) for k in _DIFF}, "current": {k: ec.get(k) for k in _DIFF},
+                             "diff": _diff(eb, ec)}
+    return out
 
 
 def build(plan, collected: dict, verification: dict | None = None) -> dict | None:
@@ -143,6 +160,19 @@ def _direction(value, unit: str = "") -> str:
     return f"{'tăng' if value > 0 else 'giảm'} {text}{unit}"
 
 
+def numbers_in(collected: dict) -> list[float]:
+    """The what-if differences comparison_brief shows the model (e.g. "giảm 15,3 điểm %"),
+    so quoting them is grounded (live 2026-11-26: 15,3 was flagged)."""
+    found = results(collected)
+    if len(found) < 2 or not all(isinstance(r, dict) and not r.get("error") for r in (found[0], found[-1])):
+        return []
+    cmp = _comparison(found[0], found[-1])
+    diffs = [cmp["diff"], (cmp.get("executable") or {}).get("diff") or {}]
+    for code, option in (found[-1].get("options") or {}).items():
+        diffs.append(_diff((found[0].get("options") or {}).get(code) or {}, option))
+    return [abs(v) for d in diffs for v in d.values() if isinstance(v, (int, float))]
+
+
 def comparison_brief(collected: dict) -> str | None:
     """The old -> new difference of a what-if turn, with its direction already
     worded, so the answer copies "tăng / giảm" instead of inferring it."""
@@ -158,11 +188,25 @@ def comparison_brief(collected: dict) -> str | None:
              f"- Chi phí mua mới: {_direction(d['purchase_cost_vnd'], ' ₫')}",
              f"- Ngân sách còn lại: {_direction(d['remaining_budget_vnd'], ' ₫')}",
              f"- Số bản điều chuyển: {_direction(d['transfer_qty'], ' bản')}"]
+    best, budget = _best(found[-1]), found[-1].get("budget_vnd")
+    cost = best.get("purchase_cost_vnd")
+    if d["shortage_covered_pct"] == 0 and isinstance(cost, (int, float)) and isinstance(budget, (int, float)) and cost <= budget:
+        lines.append(f"- Phương án tốt nhất không bị ngân sách mới giới hạn (chi phí mua {_vnd(cost)} ≤ ngân sách {_vnd(budget)}), "
+                     "nên mức đáp ứng của nó không đổi; nói rõ điều này.")
+    ex = cmp.get("executable")
+    if ex:
+        e = ex["diff"]
+        lines.append(f"- Phương án bạn tự thực hiện được ({ex['label']}): mức đáp ứng {ex['base']['shortage_covered_pct']}% → "
+                     f"{ex['current']['shortage_covered_pct']}% ({_direction(e['shortage_covered_pct'], ' điểm %')}); còn thiếu "
+                     f"{ex['base']['remaining_shortage_qty']} → {ex['current']['remaining_shortage_qty']} bản; chi phí mua "
+                     f"{_vnd(ex['base']['purchase_cost_vnd'])} → {_vnd(ex['current']['purchase_cost_vnd'])}")
     for code, option in (found[-1].get("options") or {}).items():
         base = (found[0].get("options") or {}).get(code) or {}
         new, old = option.get("shortage_covered_pct"), base.get("shortage_covered_pct")
         if isinstance(new, (int, float)) and isinstance(old, (int, float)):
-            lines.append(f"- {option.get('label')}: mức đáp ứng {old}% → {new}% ({_direction(new - old, ' điểm %')})")
+            lines.append(f"- {option.get('label')} ({code}): mức đáp ứng {old}% → {new}% ({_direction(new - old, ' điểm %')}); "
+                         f"chi phí mua {_vnd(base.get('purchase_cost_vnd'))} → {_vnd(option.get('purchase_cost_vnd'))}")
+    lines.append("- Mỗi con số trên thuộc đúng phương án ghi cạnh nó; không gán số của phương án này cho phương án khác.")
     return "\n".join(lines)
 
 

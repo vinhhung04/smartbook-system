@@ -11,7 +11,7 @@ XS6 = [92, 220, 348, 484, 596, 708]
 # ---- participants
 KH = ("U", "Khách hàng", "CUSTOMER", "input")
 TT = ("U", "Thủ thư", "LIBRARIAN", "input")
-QL = ("Q", "Quản lý kho", "WAREHOUSE_MANAGER", "input")
+QL = ("Q", "Quản lý kho", "MANAGER", "input")
 NV = ("N", "Nhân viên kho", "WAREHOUSE_STAFF", "input")
 NCC = ("S", "Nhà cung cấp", "SUPPLIER", "input")
 W = ("W", "Web UI", "apps/web")
@@ -271,7 +271,7 @@ make("ai-action-confirm-dd", [QL, W, AI, ADB, G, SV], [
      "Sơ đồ tuần tự xác nhận hành động do AI đề xuất", note("Hình 4.20", "1–13"), box_w=104, xs=XS6)
 
 # ================================================================ 4.21 Bản tin tổng hợp hằng đêm
-make("ai-nightly-briefing-dd", [("SCH", "Bộ lập lịch", "nightly briefing"), G, AN, OR_Q, ADB, ("Q", "Quản lý kho", "WAREHOUSE_MANAGER", "input")], [
+make("ai-nightly-briefing-dd", [("SCH", "Bộ lập lịch", "nightly briefing"), G, AN, OR_Q, ADB, ("Q", "Quản lý kho", "MANAGER", "input")], [
     ("msg", "SCH", "G", "1. 6 lời gọi /analytics/*\n(khóa nội bộ)", "link"),
     ("msg", "G", "AN", "2. quá hạn, phí phạt, rủi ro tồn kho, đề xuất nhập hàng, phễu đặt giữ, gợi ý thanh lý", "link"),
     ("msg", "AN", "SCH", "3. số liệu", "return"),

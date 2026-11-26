@@ -621,7 +621,15 @@ model metadata_reconciliation_field_decisions {
 model purchase_order_items {
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   purchase_order_id String          @db.Uuid
-  variant_id        String          @db.Uuid
+  /// NULL while an INVOICE_FIRST line is a typed book not linked to the catalog yet (linked at receiving).
+  variant_id        String?         @db.Uuid
+  /// INVOICE_FIRST: quantity SmartBook asked for; ordered_qty becomes the supplier-accepted quantity.
+  requested_qty     Int?
+  /// Snapshot typed at PO creation (title, market code such as ISBN/EAN, author, publish year).
+  item_title        String?         @db.VarChar(300)
+  item_code         String?         @db.VarChar(80)
+  item_author       String?         @db.VarChar(200)
+  item_publish_year Int?
   ordered_qty       Int
   received_qty      Int             @default(0)
   unit_cost         Decimal         @default(0) @db.Decimal(12, 2)
@@ -637,7 +645,7 @@ model purchase_order_items {
   reopened_by_user_id String?       @db.Uuid
   reopened_at       DateTime?       @db.Timestamptz(6)
   purchase_orders   purchase_orders @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  book_variants     book_variants   @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  book_variants     book_variants?  @relation(fields: [variant_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   supplier_delivery_invoice_items supplier_delivery_invoice_items[]
   supplier_shortage_report_items supplier_shortage_report_items[]
   procurement_document_lines procurement_document_lines[]
@@ -656,6 +664,8 @@ model purchase_orders {
   /// Supplier answer to the dispatched PO: PENDING_SUPPLIER | ACCEPTED | PARTIALLY_ACCEPTED | REJECTED | CHANGES_REJECTED.
   /// NULL for orders dispatched before this column existed.
   supplier_response_status String?            @db.VarChar(30)
+  /// LEGACY (before 2026-11-25) | INVOICE_FIRST: proposal -> approved invoice -> delivery notes against it.
+  procurement_flow     String                 @default("LEGACY") @db.VarChar(20)
   ordered_by_user_id   String                 @db.Uuid
   approved_by_user_id  String?                @db.Uuid
   order_date           DateTime               @default(dbgenerated("CURRENT_DATE")) @db.Date
@@ -915,6 +925,9 @@ model supplier_delivery_invoices {
   /// supplier document number for legacy rows, formal invoices live in procurement_documents).
   carrier_name          String?                           @db.VarChar(150)
   deliverer_name        String?                           @db.VarChar(150)
+  tracking_number       String?                           @db.VarChar(80)
+  /// INVOICE_FIRST: the approved supplier invoice this delivery ships against.
+  invoice_document_id   String?                           @db.Uuid
   status                String                            @default("SUBMITTED") @db.VarChar(30)
   supplier_note         String?
   uploaded_file_name    String?
@@ -925,6 +938,7 @@ model supplier_delivery_invoices {
   updated_at            DateTime                          @default(now()) @db.Timestamptz(6)
   purchase_orders       purchase_orders                   @relation(fields: [purchase_order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   suppliers             suppliers                         @relation(fields: [supplier_id], references: [id], onUpdate: NoAction)
+  invoice_document      procurement_documents?            @relation("delivery_invoice_document", fields: [invoice_document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   supplier_delivery_invoice_items supplier_delivery_invoice_items[]
   goods_receipts        goods_receipts[]
   supplier_shortage_reports supplier_shortage_reports[]
@@ -932,13 +946,14 @@ model supplier_delivery_invoices {
 
   @@unique([supplier_id, invoice_number])
   @@index([purchase_order_id, status], map: "idx_supplier_invoices_po_status")
+  @@index([invoice_document_id], map: "idx_supplier_delivery_invoices_invoice_document")
 }
 
 model supplier_delivery_invoice_items {
   id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   invoice_id               String                     @db.Uuid
   purchase_order_item_id   String?                    @db.Uuid
-  variant_id               String                     @db.Uuid
+  variant_id               String?                    @db.Uuid
   invoiced_qty             Int
   delivered_qty            Int?
   accepted_qty             Int                        @default(0)
@@ -948,7 +963,7 @@ model supplier_delivery_invoice_items {
   updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
   supplier_delivery_invoices supplier_delivery_invoices @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   purchase_order_items     purchase_order_items?      @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
-  book_variants            book_variants              @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  book_variants            book_variants?             @relation(fields: [variant_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@index([invoice_id], map: "idx_supplier_invoice_items_invoice")
 }
@@ -1395,6 +1410,11 @@ model procurement_documents {
   /// SmartBook-only note, never returned to the supplier.
   internal_note                String?
   cancel_reason                String?
+  /// SmartBook approval of an INVOICE_FIRST supplier invoice: PENDING_APPROVAL | APPROVED | REJECTED.
+  approval_status              String?                       @db.VarChar(20)
+  approval_note                String?
+  approval_by_user_id          String?                       @db.Uuid
+  approval_at                  DateTime?                     @db.Timestamptz(6)
   created_by_user_id           String?                       @db.Uuid
   issued_at                    DateTime?                     @db.Timestamptz(6)
   cancelled_at                 DateTime?                     @db.Timestamptz(6)
@@ -1411,8 +1431,10 @@ model procurement_documents {
   procurement_document_lines   procurement_document_lines[]
   procurement_document_files   procurement_document_files[]
   procurement_document_shares  procurement_document_shares[]
+  delivery_notes               supplier_delivery_invoices[]  @relation("delivery_invoice_document")
 
   @@index([purchase_order_id, document_type], map: "idx_procurement_documents_po_type")
+  @@index([purchase_order_id, approval_status], map: "idx_procurement_documents_approval")
   @@index([supplier_id, document_type, external_number], map: "idx_procurement_documents_supplier_number")
 }
 
@@ -1420,14 +1442,14 @@ model procurement_document_lines {
   id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   document_id            String                @db.Uuid
   purchase_order_item_id String?               @db.Uuid
-  variant_id             String                @db.Uuid
+  variant_id             String?               @db.Uuid
   quantity               Int
   unit_price             Decimal               @default(0) @db.Decimal(12, 2)
   line_amount            Decimal               @default(0) @db.Decimal(14, 2)
   note                   String?
   procurement_documents  procurement_documents @relation(fields: [document_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   purchase_order_items   purchase_order_items? @relation(fields: [purchase_order_item_id], references: [id], onUpdate: NoAction)
-  book_variants          book_variants         @relation(fields: [variant_id], references: [id], onUpdate: NoAction)
+  book_variants          book_variants?        @relation(fields: [variant_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@index([document_id], map: "idx_procurement_document_lines_doc")
 }
