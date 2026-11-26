@@ -189,7 +189,7 @@ lần chạy → giả thuyết **ĐƯỢC XÁC NHẬN**.
 
 1. **Production hiện tại (`IP_RETURNS+FLOOR+MARGINAL`) không thắng cách chi tiền thực tế tốt nhất.** Trên 8 seed 20261301–08,
    ngân sách × 1, quy tắc min/max + "mỗi đầu sách thêm 1 bản mỗi vòng" (`REORDER_POINT/ONE_EACH`) cao hơn ở 24/24 lần chạy
-   (−0,6 đến −2,0 điểm %), dù tiêu ít tiền hơn. Production vẫn thắng 7/8 mốc còn lại.
+   (−0,6 đến −2,0 điểm %), dù tiêu ít tiền hơn. Production vẫn thắng 7/8 mốc ở kịch bản bình thường và tồn đầu một nửa; ở kịch bản giao chậm còn thua thêm `REORDER_POINT/CATEGORY_SHARE` (95,27%).
 2. **Nguyên nhân chính:** `MARGINAL` định giá bản sách tiếp theo theo nhu cầu trong **thời gian giao** (14 ngày), nhưng một bản
    mua hôm nay phải phục vụ đến khi đơn **kế tiếp** có thể về: thời gian giao + chu kỳ xem xét (7 ngày). Định giá thiếu 1/3
    khoảng bảo vệ làm sách mượn nhiều bị mua thiếu. Bỏ số lượng tối thiểu theo ưu tiên gần như không đổi kết quả (≤ 0,01 điểm %).
