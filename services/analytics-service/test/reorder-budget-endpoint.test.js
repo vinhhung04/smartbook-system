@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const path = require('node:path');
 
-const fixture = { inventory: [], incoming: [], loans: [] };
+const fixture = { inventory: [], incoming: [], loans: [], priorityStock: [] };
 const sqlSeen = [];
 
 const dbPath = path.join(__dirname, '..', 'src', 'lib', 'db.js');
@@ -22,6 +22,7 @@ require.cache[dbPath] = {
       if (text.includes('FROM book_variants bv') && text.includes('bv.unit_cost') && text.includes('GROUP BY')) return fixture.inventory;
       if (text.includes('FROM purchase_order_items poi')) return fixture.incoming;
       if (text.includes('FROM loan_items li') && text.includes('age_days')) return fixture.loans;
+      if (text.includes('FROM warehouses w') && text.includes('LEFT JOIN stock_balances sb')) return fixture.priorityStock;
       return [];
     },
     async queryOne() { return {}; },
@@ -53,6 +54,7 @@ test.beforeEach(() => {
   ];
   fixture.incoming = [];
   fixture.loans = [];
+  fixture.priorityStock = [];
   sqlSeen.length = 0;
 });
 
@@ -173,4 +175,23 @@ test('a line whose loans disagree between borrow and inventory is reported, not 
 test('an invalid budget is rejected', async () => {
   await assert.rejects(call({ budgetVnd: '-1' }), /budgetVnd phải là số không âm/);
   await assert.rejects(call({ budgetVnd: 'abc' }), /budgetVnd phải là số không âm/);
+});
+
+test('a priority warehouse funds the lines short there before any other line', async () => {
+  const W = '00000000-0000-4000-8000-000000000001';
+  const plain = await call({ budgetVnd: '100000' });
+  const plainById = Object.fromEntries(plain.items.map((i) => [i.variant_id, i.funded_qty]));
+  assert.ok(plainById.b > 0, 'without a priority warehouse the cheap line is funded');
+
+  // only "a" is out of stock at the priority warehouse; "b" is fine there
+  fixture.priorityStock = [
+    { warehouse_id: W, variant_id: 'a', available_qty: 0, reorder_point: 0 },
+    { warehouse_id: W, variant_id: 'b', available_qty: 50, reorder_point: 0 },
+  ];
+  const data = await call({ budgetVnd: '100000', priorityWarehouseId: W });
+  const byId = Object.fromEntries(data.items.map((i) => [i.variant_id, i.funded_qty]));
+  assert.equal(data.budget.funding_order, 'PRIORITY_WAREHOUSE_THEN_MARGINAL');
+  assert.equal(byId.a, 1, 'the whole budget goes to the line short at the priority warehouse');
+  assert.equal(byId.b || 0, 0);
+  assert.ok(data.budget.funded_cost <= 100000);
 });

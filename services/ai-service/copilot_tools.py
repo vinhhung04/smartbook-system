@@ -596,7 +596,7 @@ async def simulate_reorder_budget(
         best = max(ok, key=lambda s: (s["expected_service_pct"], -s["unfunded_high_priority"]))
         least_risk = {"label": best["label"], "expected_service_pct": best["expected_service_pct"],
                       "unfunded_high_priority": best["unfunded_high_priority"],
-                      "rule": "Phương án đáp ứng được nhiều nhất nhu cầu dự kiến trong thời gian chờ hàng (mô hình Poisson của "
+                      "rule": "Phương án đáp ứng được nhiều nhất nhu cầu dự kiến đến khi đơn nhập kế tiếp có thể về (thời gian chờ hàng + 7 ngày) (mô hình Poisson của "
                               "analytics); hòa thì ít đầu sách ưu tiên cao bị bỏ lại hơn."}
     shown = len(base.get("items") or [])
     meta = next(((res.get("budget") or {}) for res in results if not _error(res) and res.get("budget")), {})
@@ -613,7 +613,7 @@ async def simulate_reorder_budget(
         "service_curve": ({"cost_for_service_pct": curve.get("cost_for_service_pct"),
                            "full_plan_cost": curve.get("full_plan_cost")} if curve else None),
         "funding_rule": ("Phân bổ của dịch vụ analytics: duyệt từng bản cho dòng tăng nhiều nhất khả năng đáp ứng nhu cầu "
-                         "trong thời gian chờ hàng trên mỗi đồng; tồn tính cả bản đang về và bản đang mượn dự kiến trả; "
+                         "đến khi đơn nhập kế tiếp có thể về (thời gian chờ hàng + 7 ngày) trên mỗi đồng; tồn tính cả bản đang về và bản đang mượn dự kiến trả; "
                          "một dòng có thể chỉ được duyệt một phần." if marginal else
                          "Phân bổ của dịch vụ analytics: ưu tiên dòng giảm được nhiều thiếu hụt dự kiến nhất trên mỗi đồng."),
         "budget_assumptions": meta.get("assumptions") or [],

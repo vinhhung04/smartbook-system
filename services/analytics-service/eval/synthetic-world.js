@@ -126,6 +126,7 @@ function buildDemandWorld(overrides = {}) {
     variantId: v.id,
     bookId: book.id,
     title: book.title,
+    category: book.categories[0] || null,
     unitCost: costs.get(v.id),
     calibratedCopies: copies.get(v.id),
     requests: (requestsByVariant.get(v.id) || []).sort((a, b) => a.at - b.at),

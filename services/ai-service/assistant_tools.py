@@ -648,7 +648,7 @@ ANALYTICS_TOOLS: list[dict] = [
                 "sách còn có estimated_cost (chi phí ước tính = số lượng đề xuất × đơn giá). Nếu truyền "
                 "budget_vnd, mỗi sách có thêm funded_qty (số bản ngân sách duyệt, có thể chỉ một phần số đề xuất), "
                 "funded_cost và within_budget=true khi funded_qty > 0 (từng bản được duyệt cho dòng tăng nhiều nhất "
-                "khả năng đáp ứng nhu cầu trong thời gian chờ hàng trên mỗi đồng; tồn tính cả bản đang về và bản "
+                "khả năng đáp ứng nhu cầu đến khi đơn nhập kế tiếp có thể về (thời gian chờ hàng + 7 ngày) trên mỗi đồng; tồn tính cả bản đang về và bản "
                 "đang mượn dự kiến trả; danh sách vẫn xếp theo mức ưu tiên) và trả thêm tổng chi phí đã duyệt/còn "
                 "lại trong ngân sách. Công "
                 "cụ chính cho câu hỏi nên nhập sách gì, kho nào cần ưu tiên, hoặc nên nhập gì trong một ngân sách cụ thể."
