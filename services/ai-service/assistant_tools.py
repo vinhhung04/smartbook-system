@@ -309,7 +309,8 @@ def _title_query_keys(normalized_query: str) -> set[str]:
 
 
 def _title_hits(books: list[dict], normalized_query: str) -> list[dict]:
-    keys = _title_query_keys(normalized_query)
+    # the edition in brackets is dropped on both sides, so a full catalog title matches itself
+    keys = _title_query_keys(normalized_query) | _title_query_keys(re.sub(r"\([^)]*\)", " ", normalized_query))
     return [book for book in books if (key := _title_key(book.get("title"))) and key in keys]
 
 
@@ -474,9 +475,12 @@ async def _score_and_rank_books_with_confidence(
         results = [result for result in results if result["id"] != isbn_id]
         # 1.0 la ngoai thang diem RRF thong thuong (luon < 1/RRF_K), de ro rang day la
         # thang do identity chu khong phai xep hang.
-        results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}, *results]
+        results = [{**_compact_book_with_content(isbn_hit), "score": 1.0}]  # an ISBN names one book
     elif title_hits:
-        results = _route_first(results, title_hits)
+        # an exact title answers with that book only: semantic neighbours ("Tư Duy Nhanh Và Chậm,
+        # 0 bản" for a "7 Thói Quen" cover) showed up as the turn's evidence (2026-11-26)
+        exact = {str(book["id"]) for book in title_hits}
+        results = [r for r in _route_first(results, title_hits) if r["id"] in exact]
     elif author_hits:
         # The author's books first - those the hybrid ranking also found keep its order.
         results = _route_first(results, author_hits)

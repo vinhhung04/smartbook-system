@@ -46,8 +46,11 @@ function Candidate({ c, choosable, chosen, onChoose }: {
         </p>
         {avail ? (
           <p className="text-[11px] text-foreground">
-            {avail.available_quantity ? `${avail.available_quantity} bản sẵn sàng` : 'Hiện chưa có bản sẵn sàng'}
-            {avail.branches.length > 0 && ` — ${avail.branches.map((b) => `${b.name}: ${b.available_quantity}`).join('; ')}`}
+            {/* public pickup branches, as readers see them - not the warehouses a staff member manages */}
+            {avail.available_quantity
+              ? `Độc giả mượn được ${avail.available_quantity} bản tại chi nhánh`
+              : 'Chưa có bản nào cho độc giả mượn tại chi nhánh'}
+            {avail.branches.length > 0 && `: ${avail.branches.map((b) => `${b.name}: ${b.available_quantity}`).join('; ')}`}
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2 pt-0.5">

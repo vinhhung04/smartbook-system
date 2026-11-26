@@ -47,12 +47,16 @@ class BookStockByWarehouseTests(unittest.TestCase):
     def test_an_exact_title_does_not_wait_on_the_embedding_call(self):
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
-        store = MagicMock(search_keyword=AsyncMock(return_value=[]), search_semantic=AsyncMock(return_value=[]))
-        books = [{"id": "x", "title": "Số đỏ", "author": "Vũ Trọng Phụng"}]
+        neighbour = assistant_tools.vector_store.Hit(chunk_id="c", document_id="d", source_id="y", corpus="book",
+                                                     content="", score=0.9)
+        store = MagicMock(search_keyword=AsyncMock(return_value=[neighbour]),
+                          search_semantic=AsyncMock(return_value=[]))
+        books = [{"id": "x", "title": "Số đỏ (Tái Bản 2022)", "author": "Vũ Trọng Phụng"},
+                 {"id": "y", "title": "Số đỏ và những truyện ngắn khác", "author": "Vũ Trọng Phụng"}]
         with patch.object(assistant_tools.vector_store, "get_store", return_value=store), \
                 patch.object(assistant_tools.embeddings, "embed_text", side_effect=AssertionError("embedding called")):
-            results, _ = asyncio.run(assistant_tools._score_and_rank_books_with_confidence(books, "Số đỏ", 5))
-        self.assertEqual(results[0]["title"], "Số đỏ")
+            results, _ = asyncio.run(assistant_tools._score_and_rank_books_with_confidence(books, "Số đỏ (Tái Bản 2022)", 5))
+        self.assertEqual([r["id"] for r in results], ["x"])  # neighbours are not the turn's evidence
 
 
     def test_the_plan_book_is_one_exact_catalog_title(self):
