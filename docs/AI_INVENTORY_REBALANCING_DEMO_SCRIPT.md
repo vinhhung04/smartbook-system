@@ -26,12 +26,12 @@ $env:E2E_LIVE_AI='1'; $env:BASE_URL='http://localhost:5174'; $env:PLAYWRIGHT_CHA
 
 Lượt 3 dùng ngân sách **X triệu** nói tại chỗ (ví dụ "8 triệu", "8,5 triệu", "12.000.000 đồng"). Planner đọc số đó; lượt 4 tự tính X × 80%; lượt 5 ("phương án ngân sách ban đầu") lấy lại kịch bản X. Hai trường hợp đều trình bày được:
 
-| X so với chi phí mua của phương án kết hợp (≈ 9,75 triệu trên dữ liệu ngày 26/11/2026) | Điều hội đồng thấy ở lượt 3–4 |
+| X so với chi phí mua của phương án kết hợp (≈ 43,2 triệu trên dữ liệu ngày 26/11/2026, sau khi lịch sử mượn mô phỏng được dời đến 26/11) | Điều hội đồng thấy ở lượt 3–4 |
 |---|---|
-| **X nhỏ hơn** (ví dụ 8 triệu) | Ngân sách ràng buộc: kết hợp chỉ đáp ứng ~91%, hệ thống phân bổ ưu tiên; giảm 20% (6,4 triệu) → ~82%, còn thiếu tăng 8 → 17 bản. |
-| **X lớn hơn** (ví dụ 15–17,5 triệu) | Kết hợp đủ 100% và còn dư ngân sách; giảm 20% không ảnh hưởng phương án kết hợp, nhưng phương án tự thực hiện và "chỉ mua mới" giảm — đó là giá trị của điều chuyển. |
+| **X nhỏ hơn** (ví dụ 8 triệu, hoặc 30 triệu) | Ngân sách ràng buộc, hệ thống phân bổ ưu tiên. 8 triệu: kết hợp đáp ứng ~35%; giảm 20% (6,4 triệu) → ~31%, còn thiếu tăng 238 → 253 bản. 30 triệu: ~79%; giảm 20% (24 triệu) → ~68%, còn thiếu tăng 77 → 117 bản. |
+| **X đủ lớn** (từ ~54 triệu, ví dụ 55 triệu) | Kết hợp đủ 100% và còn dư; giảm 20% (44 triệu) vẫn đủ cho phương án kết hợp, nhưng phương án tự thực hiện và "chỉ mua mới" giảm — đó là giá trị của điều chuyển. |
 
-Muốn cho thấy phân bổ ngân sách rõ nhất thì chọn X khoảng 6–9 triệu. Số liệu phụ thuộc dữ liệu dev lúc chạy; chạy `validate` hoặc e2e với đúng X trước buổi demo.
+TP.HCM thiếu 367 bản trên 78 đầu sách vì nhu cầu gồm cả lịch sử mượn mô phỏng 30 ngày gần nhất, không chỉ fixture; điều chuyển che được 43 bản (11,7%). Muốn cho thấy phân bổ ngân sách rõ nhất thì chọn X khoảng 20–35 triệu. Số liệu phụ thuộc dữ liệu dev lúc chạy; chạy `validate` hoặc e2e với đúng X trước buổi demo.
 
 ## Mở đầu tùy chọn (≈ 1 phút): nhận diện sách từ ảnh bìa
 
