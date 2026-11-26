@@ -780,8 +780,8 @@ def _render_rebalancing(r: dict) -> str:
         shown_t = (o.get("transfers") or [])[:5]
         for t in shown_t:
             lines.append(f"  · chuyển {t.get('quantity')} '{t.get('title')}' {t.get('from_warehouse')} → {t.get('to_warehouse')} "
-                         f"(kho nguồn còn {t.get('source_available_after')}, mức cần giữ {t.get('source_protected_qty')}; "
-                         f"{_PERM_VI.get(t.get('permission'), t.get('permission'))})")
+                         f"(sau khi chuyển kho nguồn còn {t.get('source_available_after')} bản, mức cần giữ "
+                         f"{t.get('source_protected_qty')} bản; {_PERM_VI.get(t.get('permission'), t.get('permission'))})")
         if (o.get("transfer_lines_total") or 0) > len(shown_t):
             lines.append(f"  · … và {o['transfer_lines_total'] - len(shown_t)} dòng điều chuyển khác không liệt kê ở đây")
         shown_p = (o.get("purchases") or [])[:5]
@@ -793,7 +793,27 @@ def _render_rebalancing(r: dict) -> str:
     lines.append("Tổng điều chuyển của một phương án: dùng dòng \"Điều chuyển theo kho nguồn\" hoặc số \"điều chuyển … bản\" "
                  "của phương án, không tự cộng các dòng liệt kê (danh sách có thể không đủ). \"Kho nguồn còn\" chỉ có ở "
                  "từng dòng đã liệt kê.")
+    # live audit 2026-11-26: the shortage list given as transfers with invented sources, a supplying
+    # warehouse called unable to supply, and titles said to be left out by the budget with no basis
+    lines.append("Dòng điều chuyển chỉ là các dòng \"· chuyển …\" ở trên (đúng sách, kho nguồn, số bản). Danh sách "
+                 "\"Thiếu nhiều nhất\" là sách đang thiếu, KHÔNG phải dòng điều chuyển và không có kho nguồn. Kho nào có "
+                 "trong \"Điều chuyển theo kho nguồn\" thì kho đó CÓ điều chuyển. Số DƯ của một kho không phải số chuyển "
+                 "được: số chuyển được về kho đích chỉ là số ở \"Điều chuyển theo kho nguồn\". Không nói đầu sách nào bị bỏ lại hay "
+                 "không được mua vì ngân sách: dữ liệu không liệt kê điều đó.")
     lines.append("Mỗi con số ở trên thuộc đúng phương án của dòng đó; không gán số của phương án này cho phương án khác.")
+    tr_only = (r.get("options") or {}).get("TRANSFER_ONLY") or {}
+    dest_names = {d.get("warehouse_name") for d in r.get("destinations") or []}
+    dest_titles = sum(d.get("shortage_variants") or 0 for d in r.get("diagnosis") or [] if d.get("warehouse") in dest_names)
+    if tr_only and (tr_only.get("shortage_covered_pct") or 0) < 100:
+        # live audit 2026-11-26: "chỉ điều chuyển không khả thi vì dư 120 bản so với nhu cầu hệ thống 548 bản" -
+        # the surplus of other titles and every warehouse's shortage, neither of which is the reason
+        lines.append(f"VÌ SAO CHỈ ĐIỀU CHUYỂN KHÔNG ĐỦ (đã tính sẵn): chỉ chuyển được {tr_only.get('transfer_qty')} bản thuộc "
+                     f"{tr_only.get('transfer_titles')} đầu sách, vì chỉ đầu sách vừa thiếu ở kho đích vừa dư ở kho nguồn "
+                     "mới chuyển được, và kho nguồn phải giữ mức cần giữ; số dư còn lại ở kho nguồn là các đầu sách kho "
+                     "đích không thiếu."
+                     + (f" Kho đích thiếu {dest_titles} đầu sách." if dest_titles else "")
+                     + " Dùng đúng lý do này; \"tổng thiếu mọi kho\" gồm cả kho nguồn, không dùng khi nói về nhu cầu "
+                     "của kho đích.")
     ex = (r.get("options") or {}).get(rec.get("executable_option")) or {}
     if ex:
         lines.append(f"Nếu người dùng muốn tự làm, không chờ ai phối hợp: dùng phương án {ex.get('label')} "

@@ -80,10 +80,11 @@ _SCALE = {"triệu": 1e6, "trieu": 1e6, "tr": 1e6, "tỷ": 1e9, "tỉ": 1e9, "ty
 
 
 def scaled_amounts(text: str | None) -> list[tuple[float, float, float]]:
-    """("44 triệu" -> (44, 44_000_000, 500_000)): a money amount written as a rounded
+    """("44 triệu" -> (44, 44_000_000, 1_000_000)): a money amount written as a rounded
     count of millions / billions / thousands, its value, and the rounding it allows -
-    half a unit of the last digit written. Live 2026-11-26: "trên 44 triệu ₫" for a
-    cost of 44.310.490 ₫ was flagged as an unsupported number."""
+    one unit of the last digit written (the model truncates as often as it rounds:
+    23.965.150 ₫ -> "~23,96 triệu"). Live 2026-11-26: "trên 44 triệu ₫" for a cost of
+    44.310.490 ₫ was flagged as an unsupported number."""
     out = []
     for m in _SCALE_RE.finditer(text or ""):
         token, scale = m.group(1), _SCALE[m.group(2).lower()]
@@ -92,7 +93,7 @@ def scaled_amounts(text: str | None) -> list[tuple[float, float, float]]:
             number = float(token.replace(".", "").replace(",", ".")) if decimals else float(re.sub(r"[.,]", "", token))
         except ValueError:
             continue
-        out.append((number, number * scale, 0.5 * 10 ** -decimals * scale))
+        out.append((number, number * scale, 10 ** -decimals * scale))
     return out
 
 

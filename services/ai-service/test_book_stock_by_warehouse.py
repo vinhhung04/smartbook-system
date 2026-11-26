@@ -114,5 +114,115 @@ class BookStockByWarehouseTests(unittest.TestCase):
         self.assertIn("và 11 dòng điều chuyển khác", text)
 
 
+def _whole_plan():
+    """The live 2026-11-26 whole-warehouse plan, reduced to what the checks read."""
+    t = lambda title, src, q, perm: {"title": title, "from_warehouse": src, "to_warehouse": "Kho HCM Chinh",
+                                     "quantity": q, "permission": perm}
+    hybrid_tr = [t("Project Hail Mary", "Kho Ha Noi", 1, "COLLABORATIVE"),
+                 t("Chiến Lược Mua Bán Và Sáp Nhập Doanh Nghiệp", "Kho Ha Noi", 18, "COLLABORATIVE"),
+                 t("Chiến Lược Mua Bán Và Sáp Nhập Doanh Nghiệp", "Kho Đà Nẵng", 3, "EXECUTABLE"),
+                 t("Beartown 2 - Chúng Tôi Đấu Với Các Bạn", "Kho Ha Noi", 13, "COLLABORATIVE"),
+                 t("7 Thói Quen Hiệu Quả - Bìa Cứng (Tái Bản 2022)", "Kho Đà Nẵng", 10, "EXECUTABLE")]
+    src = [{"warehouse": "Kho Ha Noi", "quantity": 32}, {"warehouse": "Kho Đà Nẵng", "quantity": 15}]
+    return {"analyze_inventory_rebalancing": {
+        "scope": [{"warehouse": "Kho HCM Chinh"}, {"warehouse": "Kho Ha Noi"}, {"warehouse": "Kho Đà Nẵng"}],
+        "destinations": [{"warehouse_name": "Kho HCM Chinh"}],
+        "top_shortages": [{"title": "One Hundred Years of Solitude"}, {"title": "Babel Hay Sự Cần Thiết Của Bạo Lực"}],
+        "options": {
+            "HYBRID": {"label": "Kết hợp", "shortage_covered_pct": 100, "purchase_cost_vnd": 44464490,
+                       "transfers": hybrid_tr, "transfers_by_source": src, "purchases": []},
+            "TRANSFER_ONLY": {"label": "Chỉ điều chuyển", "shortage_covered_pct": 12.4, "purchase_cost_vnd": 0,
+                              "transfers": hybrid_tr, "transfers_by_source": src, "purchases": []},
+            "PROCUREMENT_ONLY": {"label": "Chỉ mua mới", "shortage_covered_pct": 100, "purchase_cost_vnd": 54194990,
+                                 "covered_qty": 379, "total_shortage_qty": 379, "transfer_qty": 0, "purchase_qty": 379,
+                                 "transfers": [], "purchases": []}},
+        "recommendation": {"best_business_option": "HYBRID"}}}
+
+
+class WholePlanAnswerChecks(unittest.TestCase):
+    def test_invented_or_wrong_transfer_lines_are_caught(self):
+        import copilot_rebalance_decision as rd
+        c = _whole_plan()
+        for wrong in ("- **Chiến Lược Mua Bán Và Sáp Nhập Doanh Nghiệp**: từ **Kho Đà Nẵng** → **Kho HCM Chinh**, số bản an toàn **10**.",
+                      "- **One Hundred Years of Solitude**: từ **Kho Đà Nẵng** → **Kho HCM Chinh**, số bản an toàn **9**.",
+                      "Kho Đà Nẵng dư 120 bản nhưng chưa có cơ sở nghiệp vụ để điều chuyển ngay các sách này về HCM Chinh."):
+            self.assertEqual(rd.transfer_issues(wrong, c), [wrong], wrong)
+        for fine in ("* **Chiến Lược Mua Bán Và Sáp Nhập Doanh Nghiệp:** Điều chuyển **18 bản** từ Kho Ha Noi về Kho HCM Chinh.",
+                     "Chuyển 3 bản Chiến Lược Mua Bán từ Kho Đà Nẵng sang Kho HCM Chinh.",
+                     "Bạn tự tạo phiếu điều chuyển cho các dòng từ Kho Đà Nẵng."):
+            self.assertEqual(rd.transfer_issues(fine, c), [], fine)
+        # a wrong bullet goes whole, even when its quantity sits in a later sentence
+        bullet = ("* **Babel Hay Sự Cần Thiết Của Bạo Lực**: Điều chuyển từ **Kho Đà Nẵng** về **Kho HCM Chinh**. "
+                  "Số bản an toàn: 7 (Kho Đà Nẵng còn 2).")
+        self.assertEqual(rd.transfer_issues("Mở đầu.\n" + bullet, c), [bullet])
+        ok_bullet = ("* **Beartown 2 - Chúng Tôi Đấu Với Các Bạn**: Điều chuyển từ **Kho Ha Noi** về **Kho HCM Chinh**. "
+                     "Số bản an toàn: 13.")
+        self.assertEqual(rd.transfer_issues(ok_bullet, c), [])
+        # the surplus is not what can be moved
+        self.assertEqual(rd.transfer_issues("* **Kho Ha Noi:** Có thể điều chuyển 126 bản dư thừa.", c),
+                         ["* **Kho Ha Noi:** Có thể điều chuyển 126 bản dư thừa."])
+        self.assertEqual(rd.transfer_issues("* **Kho Ha Noi:** có thể điều chuyển 32 bản về HCM.", c), [])
+        # the plan's total given as one source's
+        self.assertEqual(rd.transfer_issues("Tạo lệnh điều chuyển 47 bản từ Kho Đà Nẵng về Kho HCM Chinh.", c),
+                         ["Tạo lệnh điều chuyển 47 bản từ Kho Đà Nẵng về Kho HCM Chinh."])
+        self.assertEqual(rd.transfer_issues("Chuyển 15 bản từ Kho Đà Nẵng về Kho HCM Chinh.", c), [])
+        self.assertEqual(rd.transfer_issues("Kho Đà Nẵng dư 120 bản, là nguồn cho việc điều chuyển.", c), [])
+        self.assertIn("Chiến Lược Mua Bán Và Sáp Nhập Doanh Nghiệp — Kho Ha Noi — 18 bản",
+                      rd.answer_instruction(["- **One Hundred Years of Solitude**: từ **Kho Đà Nẵng** → **Kho HCM Chinh**, 9 bản."], c))
+
+    def test_one_options_figures_are_not_given_to_another(self):
+        import copilot_rebalance_decision as rd
+        c = _whole_plan()
+        answer = ("* **Phương án 2: Chỉ mua mới**\n* **Hiệu quả:** Đáp ứng **100%** số thiếu.\n"
+                  "* **Chi phí:** Ước tính khoảng **44.464.490 ₫**.\n\n"
+                  "- **Chỉ điều chuyển**: chỉ tận dụng 120 bản, đáp ứng khoảng **31,66%** số thiếu.\n"
+                  "- **Chỉ mua mới**: phải nhập toàn bộ 379 bản (chi phí ~54,2 triệu ₫).\n"
+                  "* **Phương án 3: Kết hợp** — chi phí **44.464.490 ₫**, đáp ứng 100%.")
+        self.assertEqual(rd.option_figure_issues(answer, c), [
+            "* **Chi phí:** Ước tính khoảng **44.464.490 ₫**.",
+            "- **Chỉ điều chuyển**: chỉ tận dụng 120 bản, đáp ứng khoảng **31,66%** số thiếu."])
+        table = ("| Tiêu chí | Chỉ điều chuyển (TRANSFER_ONLY) | Kết hợp (HYBRID) | Chỉ mua mới |\n| :--- | :--- | :--- | :--- |\n"
+                 "| **Mức đáp ứng** | **12.4%** | **100%** | **100%** |\n"
+                 "| **Chi phí** | **0 ₫** | **44.464.490 ₫** | **44.464.490 ₫** |")
+        self.assertEqual(rd.option_figure_issues(table, c), ["| **Chi phí** | **0 ₫** | **44.464.490 ₫** | **44.464.490 ₫** |"])
+        # a wrong line is replaced by its own option's figures, so its section is not left empty
+        fixes = rd.option_figure_replacements(answer, c)
+        self.assertEqual(fixes["* **Chi phí:** Ước tính khoảng **44.464.490 ₫**."],
+                         "* **Chỉ mua mới:** đáp ứng 100% số thiếu (379/379 bản), điều chuyển 0 bản, mua mới 379 bản, "
+                         "chi phí mua mới 54.194.990 ₫.")
+        self.assertNotIn(table.split("\n")[-1], rd.option_figure_replacements(table, c))  # table rows are dropped, not rewritten
+
+    def test_a_wrong_transfer_only_reason_is_replaced(self):
+        import copilot_rebalance_decision as rd
+        c = _whole_plan()
+        r = c["analyze_inventory_rebalancing"]
+        r["diagnosis"] = [{"warehouse": "Kho HCM Chinh", "surplus_qty": 203}, {"warehouse": "Kho Ha Noi", "surplus_qty": 126},
+                          {"warehouse": "Kho Đà Nẵng", "surplus_qty": 120}]
+        r["diagnosis_totals"] = {"surplus_qty_surplus_warehouses": 120, "shortage_qty_all": 548}
+        r["options"]["TRANSFER_ONLY"].update(transfer_qty=47, transfer_titles=5)
+        answer = ("**2. Phương án Chỉ điều chuyển**\n* **Hiệu quả:** Chỉ đáp ứng 12% số thiếu (47/379 bản).\n"
+                  "* **Lý do:** Tổng lượng sách dư tại các kho khác (chủ yếu là Kho Đà Nẵng với 120 bản) là hạn chế.\n"
+                  "* **Kết quả:** Vẫn còn thiếu 332 bản.")
+        wrong = "* **Lý do:** Tổng lượng sách dư tại các kho khác (chủ yếu là Kho Đà Nẵng với 120 bản) là hạn chế."
+        self.assertEqual(rd.reason_issues(answer, c), [wrong])
+        self.assertIn("chỉ chuyển được 47 bản thuộc 5 đầu sách", rd.reason_replacements(answer, c)[wrong])
+        # the same wrong reason in other words (live audit, third run)
+        other = ("* **Hiệu quả:** Không đáp ứng đủ nhu cầu. Tổng dư thừa tại các kho khác (chủ yếu là Kho Đà Nẵng "
+                 "với 120 bản) thấp hơn nhiều so với mức thiếu của Kho HCM Chinh (380 bản).")
+        self.assertEqual(rd.reason_issues("**2. Phương án Chỉ điều chuyển**\n" + other, c), [other])
+        # the reason sentence the system writes itself passes
+        self.assertEqual(rd.reason_issues(rd.reason_replacements(answer, c)[wrong], c), [])
+
+    def test_the_transfer_only_reason_is_given(self):
+        import copilot_response
+        o = {"code": "TRANSFER_ONLY", "label": "Chỉ điều chuyển", "shortage_covered_pct": 12.4, "transfer_qty": 47,
+             "transfer_titles": 5, "covered_qty": 47, "total_shortage_qty": 379}
+        text = copilot_response._render_rebalancing({
+            "options": {"TRANSFER_ONLY": o}, "recommendation": {}, "destinations": [{"warehouse_name": "Kho HCM Chinh"}],
+            "diagnosis": [{"warehouse": "Kho HCM Chinh", "shortage_variants": 77, "shortage_qty": 379}]})
+        self.assertIn("chỉ chuyển được 47 bản thuộc 5 đầu sách", text)
+        self.assertIn("Kho đích thiếu 77 đầu sách", text)
+
+
 if __name__ == "__main__":
     unittest.main()

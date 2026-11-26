@@ -117,9 +117,9 @@ class RoundedAmountTests(unittest.TestCase):
 
     def test_scaled_amounts_reads_the_unit_and_its_rounding(self):
         from number_grounding import scaled_amounts
-        self.assertEqual(scaled_amounts("trên 44 triệu"), [(44.0, 44e6, 0.5e6)])
-        self.assertEqual(scaled_amounts("44,3 tr"), [(44.3, 44.3e6, 0.05e6)])
-        self.assertEqual(scaled_amounts("500 nghìn"), [(500.0, 500e3, 500.0)])
+        self.assertEqual(scaled_amounts("trên 44 triệu"), [(44.0, 44e6, 1e6)])
+        self.assertEqual(scaled_amounts("44,3 tr")[0][2], 0.1e6)
+        self.assertEqual(scaled_amounts("500 nghìn"), [(500.0, 500e3, 1000.0)])
 
 
 if __name__ == "__main__":

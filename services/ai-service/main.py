@@ -4918,10 +4918,16 @@ async def _finalize_assistant_turn(
             retry_discarded = True
     permission_wrong = copilot_rebalance_decision.answer_issues(answer, collected_data)
     if permission_wrong:
-        # still wrong after the one retry: the sentence goes, the rest stays; a
-        # removed recommendation is replaced by the plan's own
+        # still wrong after the one retry: a wrong option figure is replaced by that option's
+        # own figures; any other sentence goes, the rest stays; a removed recommendation is
+        # replaced by the plan's own
         lead = (copilot_rebalance_decision.recommendation_sentence(collected_data)
                 if copilot_rebalance_decision.option_issues(" ".join(permission_wrong), collected_data) else None)
+        fixes = {**copilot_rebalance_decision.option_figure_replacements(answer, collected_data),
+                 **copilot_rebalance_decision.reason_replacements(answer, collected_data)}
+        for wrong_line, right_line in fixes.items():
+            answer = answer.replace(wrong_line, right_line)
+        permission_wrong = [s for s in permission_wrong if s not in fixes]
         answer = copilot_rebalance_decision.strip_sentences(answer, permission_wrong)
         if lead:
             answer = f"{lead}\n\n{answer}"
@@ -4989,6 +4995,10 @@ async def _finalize_assistant_turn(
                              if re.search(_DRAFT_CONTRADICTIONS, s, re.IGNORECASE)])
         if note:  # the reply was written before the draft existed (see agent_planner.draft_note)
             answer = f"{answer.rstrip()}\n\n{note}"
+    if grounding_warning:
+        # the warning was computed on an earlier text (a draft reply is replaced by the draft
+        # itself, wrong lines are rewritten or dropped): it must describe the text shown
+        grounding_warning = _grounding_check(answer, collected_data, message_text, grounded_context, grounded_values)
 
     extras = copilot_response.build_extras(plan, collected_data, user_ctx, warehouses, now=viz_now, question=message_text,
                                            answer=answer, explanation=explanation, visualizations=visualizations)

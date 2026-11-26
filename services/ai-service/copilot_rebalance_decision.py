@@ -355,8 +355,303 @@ def demand_issues(answer: str, collected: dict) -> list[str]:
     return out
 
 
+def _current(collected: dict) -> dict:
+    found = results(collected)
+    return found[-1] if found and isinstance(found[-1], dict) else {}
+
+
+def _wh_key(name: str) -> str:
+    from copilot_plan import normalize_query
+    return re.sub(r"^(kho|chi nhanh) ", "", normalize_query(name or "")).strip()
+
+
+def _title_key(title: str) -> str:
+    """The first words of a title, as the model shortens it ("Chiến Lược Mua Bán...")."""
+    from copilot_plan import normalize_query
+    return " ".join(normalize_query(title or "").split()[:3])
+
+
+_DENY_TRANSFER = re.compile(r"\b(khong|chua) (co )?(co so|nguon|the|du)\b[^.]{0,30}\b(dieu chuyen|chuyen)\b")
+
+
+def transfer_issues(answer: str, collected: dict) -> list[str]:
+    """Sentences naming a transfer the plan does not hold (live 2026-11-26: the "thiếu nhiều
+    nhất" list given as transfers with invented sources, "Chiến Lược … 10 bản từ Đà Nẵng"
+    while the plan moves 3 from Đà Nẵng and 18 from Hà Nội), or saying a warehouse cannot
+    supply while the plan moves stock from it. Checked against every option's lines."""
+    from copilot_plan import normalize_query
+    current = _current(collected)
+    options = current.get("options") or {}
+    lines = [t for o in options.values() for t in o.get("transfers") or []]
+    if not answer or not current.get("scope"):
+        return []
+    pairs: dict[tuple[str, str], set[int]] = {}
+    for t in lines:
+        pairs.setdefault((_title_key(t.get("title")), _wh_key(t.get("from_warehouse"))), set()).add(round(t.get("quantity") or 0))
+    known_titles = {_title_key(x.get("title")) for x in [*lines, *(current.get("top_shortages") or []),
+                                                          *(current.get("top_surpluses") or [])]} - {""}
+    dests = {_wh_key(w.get("warehouse_name") or w.get("name")) for w in current.get("destinations") or []}
+    whs = {_wh_key(w.get("warehouse")) for w in current.get("scope") or []} - {""}
+    supplying = {_wh_key(s.get("warehouse")) for o in options.values() for s in o.get("transfers_by_source") or []
+                 if (s.get("quantity") or 0) > 0}
+    movable: dict[str, set[int]] = {}
+    for o in options.values():
+        for s in o.get("transfers_by_source") or []:
+            movable.setdefault(_wh_key(s.get("warehouse")), set()).add(round(s.get("quantity") or 0))
+    out = []
+    # a wrong line goes whole: removing only its first sentence left "Số bản an toàn: 2 (…)" behind
+    for line in answer.split("\n"):
+        if _line_transfer_wrong(line, normalize_query, whs, dests, supplying, movable, known_titles, pairs):
+            out.append(line)
+    return out
+
+
+_MOVED_QTY = re.compile(r"\b(chuyen|lay|tan dung)\b\D{0,25}?(\d+(?:[.,]\d+)?)\s*ban\b")
+_CAN_MOVE = re.compile(r"\b(co the|duoc phep) (dieu )?chuyen\b|\b(dieu )?chuyen (di )?duoc\b")
+
+
+def _line_transfer_wrong(line, normalize_query, whs, dests, supplying, movable, known_titles, pairs) -> bool:
+    for sentence in re.split(r"(?<=[.!?])\s+", line):
+        text = normalize_query(sentence)
+        if "chuyen" not in text and "→" not in sentence and "->" not in sentence:
+            continue
+        named = {w for w in whs if re.search(rf"\b{re.escape(w)}\b", text)}
+        if _DENY_TRANSFER.search(text) and named & supplying:
+            return True
+        if len(named - dests) == 1 and not any(k in text for k in known_titles):
+            # a warehouse-level amount: "Kho Hà Nội có thể điều chuyển 126 bản dư" (its surplus), "chuyển 47
+            # bản từ Kho Đà Nẵng" (the plan's total, of which Đà Nẵng gives 15) - what one source gives
+            # is its "Điều chuyển theo kho nguồn" figure
+            source = next(iter(named - dests))
+            # only an amount said to move ("chuyển 47 bản", "lấy 47 bản"), not "với 120 bản dư thừa"
+            qtys = {round(float(m.group(2).replace(",", "."))) for m in _MOVED_QTY.finditer(text)}
+            if qtys and source in movable and not qtys & movable[source] \
+                    and (_CAN_MOVE.search(text) or re.search(rf"\btu (kho )?{re.escape(source)}\b", text)):
+                return True
+    # one bullet = one transfer line: the title, its source and its quantity may sit in
+    # different sentences of it ("**X**: Điều chuyển từ Hà Nội về HCM. Số bản an toàn: 18 (…)")
+    text = normalize_query(line)
+    if "chuyen" not in text and "→" not in line and "->" not in line:
+        return False
+    named = {w for w in whs if re.search(rf"\b{re.escape(w)}\b", text)}
+    titles = [k for k in known_titles if k and k in text]
+    sources = named - dests
+    if len(titles) != 1 or not sources:
+        return False  # several books, or only the destination named ("… về kho HCM là chỉ mua mới"): not one line
+    qtys = {round(float(m.group(1).replace(",", "."))) for m in _COPIES.finditer(text)}
+    if not qtys:  # "số bản an toàn **10**": the bare numbers, once the title's own ("7 Thói Quen") is gone
+        qtys = {int(n) for n in re.findall(r"\b\d+\b", text.replace(titles[0], " "))}
+    held = [pairs[(titles[0], s)] for s in sources if (titles[0], s) in pairs]
+    return not held or bool(qtys and not any(qtys & q for q in held))
+
+
+_OPTION_HINT = (("HYBRID_EXECUTABLE", re.compile(r"hybrid_executable|(ket hop|phuong an)\b.{0,40}\btu (thuc hien|thao tac)")),
+                ("TRANSFER_ONLY", re.compile(r"transfer_only|transfer only|\bchi dieu chuyen\b")),
+                ("PROCUREMENT_ONLY", re.compile(r"procurement_only|procurement only|\bchi mua moi\b")),
+                ("HYBRID", re.compile(r"\bhybrid\b|\bket hop\b")))
+_PCT = re.compile(r"(\d+(?:[.,](\d+))?)\s*%")
+_VND = re.compile(r"(\d{1,3}(?:[.,]\d{3})+|\d{4,})\s*(?:₫|đ\b|đồng|vnđ|vnd)", re.IGNORECASE)
+_DIFF_BEFORE = re.compile(r"\b(giam|tang|cat|them|chenh|tiet kiem|bot)\b")
+
+
+def _mentions(text: str) -> list[tuple[int, str]]:
+    """(position, option code) of every option the normalized line names, in order;
+    the executable hybrid wins over the plain hybrid at the same place."""
+    found = []
+    for code, pattern in _OPTION_HINT:
+        for m in pattern.finditer(text):
+            if code == "HYBRID" and any(c == "HYBRID_EXECUTABLE" and abs(p - m.start()) < 45 for p, c in found):
+                continue
+            found.append((m.start(), code))
+    return sorted(found)
+
+
+def _option_figure_scan(answer: str, collected: dict) -> list[tuple[str, str | None]]:
+    """(line, option it was about) for lines giving one option another option's coverage or
+    cost (live 2026-11-26: "Chỉ mua mới … 44.464.490 ₫" - the hybrid's cost; "chỉ điều chuyển …
+    31,66%"). The option is the one the line names, or the one named by the line opening its
+    bullet group. Every scenario of the turn counts (a what-if quotes the old and the new figure)."""
+    from copilot_plan import normalize_query
+    from number_grounding import scaled_amounts
+    found = [r for r in results(collected) if isinstance(r, dict) and not r.get("error")]
+    if not answer or not found:
+        return []
+    allowed_pct: dict[str, list[float]] = {}
+    allowed_vnd: dict[str, list[float]] = {}
+    for r in found:
+        for code, o in (r.get("options") or {}).items():
+            allowed_pct.setdefault(code, []).append(float(o.get("shortage_covered_pct") or 0))
+            allowed_vnd.setdefault(code, []).extend(float(v) for v in (
+                o.get("purchase_cost_vnd"), o.get("remaining_budget_vnd"), r.get("budget_vnd"),
+                *[p.get("cost_vnd") for p in o.get("purchases") or []]) if isinstance(v, (int, float)))
+    allowed_pct["ANY"] = [v for vs in list(allowed_pct.values()) for v in vs]
+    allowed_vnd["ANY"] = [v for vs in list(allowed_vnd.values()) for v in vs]
+    out, context, columns = [], None, None
+    for line in answer.split("\n"):
+        if line.lstrip().startswith("|"):
+            # a comparison table: each column belongs to the option its header names (live 2026-11-26:
+            # the "Chỉ mua mới" column carried the hybrid's 44.554.270 ₫)
+            cells = [c for c in line.strip().strip("|").split("|")]
+            if columns is None:
+                heads = [_mentions(_fold(c)) for c in cells]
+                if sum(1 for h in heads if len({x for _p, x in h}) == 1) >= 2:
+                    columns = [h[0][1] if len({x for _p, x in h}) == 1 else None for h in heads]
+                continue
+            if len(cells) == len(columns) and any(_table_cell_wrong(c, col, allowed_pct, allowed_vnd, scaled_amounts)
+                                                  for c, col in zip(cells, columns) if col):
+                out.append((line, None))
+            continue
+        columns = None
+        if not line.strip() or line.lstrip().startswith("#"):
+            context = None
+            continue
+        mentions = _mentions(_fold(line))
+        stops = [m.end() for m in re.finditer(r"[.;!?](?=\s)", line)]
+        # a line that opens with one option ("* **Phương án 2: Chỉ mua mới**", "* **Kết hợp:** …")
+        # owns its later sentences and sets the bullet group below it
+        head = [c for p, c in mentions if p <= 40]
+        if len({c for _p, c in mentions}) == 1 and head:
+            context = head[0]
+
+        def owner(pos: int) -> str | None:
+            """The option named closest before `pos` in the same sentence; a line with no option
+            named takes its bullet group's; a later sentence of a line that names one may be about
+            any option ("… (TRANSFER_ONLY) 12,2%. Để lấp phần còn lại cần 44.199.490 ₫")."""
+            start = max([s for s in stops if s <= pos], default=0)
+            before = [c for p, c in mentions if start <= p <= pos]
+            if before:
+                return before[-1]
+            return context if (not mentions or start == 0) else "ANY"
+
+        checks = []  # (option, value, allowed difference, kind)
+        for m in _PCT.finditer(line):
+            decimals = len(m.group(2) or "")
+            checks.append((m.start(), float(m.group(1).replace(",", ".")), 0.5 * 10 ** -decimals + 0.05, "pct"))
+        for m in _VND.finditer(line):
+            value = float(re.sub(r"[.,]", "", m.group(1)))
+            checks.append((m.start(), value, _EXACT_VND_TOL, "vnd"))
+        for m in _SCALED.finditer(line):
+            for _n, value, tol in scaled_amounts(m.group(0)):
+                if value >= 100_000:
+                    checks.append((m.start(), value, tol, "vnd"))
+        bad = None
+        for pos, value, tol, kind in checks:
+            if _DIFF_BEFORE.search(normalize_query(line[max(0, pos - 18):pos])):
+                continue  # "giảm 20%", "giảm 1.622.470 ₫": a change, not an option's own figure
+            option = owner(pos)
+            pool = (allowed_pct if kind == "pct" else allowed_vnd).get(option)
+            if pool is not None and not any(abs(value - a) <= tol for a in pool):
+                bad = bad or option
+        if bad:
+            out.append((line, bad))
+    return out
+
+
+def option_figure_issues(answer: str, collected: dict) -> list[str]:
+    """Lines giving one option another option's coverage or cost (see _option_figure_scan)."""
+    return [line for line, _option in _option_figure_scan(answer, collected)]
+
+
+def option_figure_replacements(answer: str, collected: dict) -> dict[str, str]:
+    """A wrong option line replaced by that option's own figures instead of being dropped (live
+    audit 2026-11-26: dropping "* **Chi phí:** 44.464.490 ₫" left "Chỉ mua mới" with no figure).
+    Table rows and lines whose option is unclear are not replaced."""
+    options = _current(collected).get("options") or {}
+    out = {}
+    for line, option in _option_figure_scan(answer, collected):
+        o = options.get(option)
+        if line.lstrip().startswith("|") or not o:
+            continue
+        bullet = re.match(r"\s*(?:[*\-]|\d+\.)?\s*", line).group(0)
+        out[line] = (f"{bullet}**{o.get('label')}:** đáp ứng {_pct(o.get('shortage_covered_pct'))} số thiếu "
+                     f"({_n(o.get('covered_qty'))}/{_n(o.get('total_shortage_qty'))} bản), điều chuyển "
+                     f"{_n(o.get('transfer_qty'))} bản, mua mới {_n(o.get('purchase_qty'))} bản, chi phí mua mới "
+                     f"{_vnd(o.get('purchase_cost_vnd'))}.")
+    return out
+
+
+_SCALED = re.compile(r"\d[\d.,]*\s*(?:triệu|trieu|tr|tỷ|tỉ)\b", re.IGNORECASE)
+# an amount written to the đồng ("44.554.270 ₫") is a copied figure, so it must be that figure; a
+# rounded one ("~44,5 triệu") gets its own rounding through scaled_amounts
+_EXACT_VND_TOL = 1000
+
+
+def _table_cell_wrong(cell: str, option: str, allowed_pct: dict, allowed_vnd: dict, scaled_amounts) -> bool:
+    for m in _PCT.finditer(cell):
+        value, tol = float(m.group(1).replace(",", ".")), 0.5 * 10 ** -len(m.group(2) or "") + 0.05
+        if not any(abs(value - a) <= tol for a in allowed_pct.get(option, [])):
+            return True
+    amounts = [(float(re.sub(r"[.,]", "", m.group(1))), None) for m in _VND.finditer(cell)]
+    amounts += [(v, tol) for m in _SCALED.finditer(cell) for _n, v, tol in scaled_amounts(m.group(0)) if v >= 100_000]
+    return any(not any(abs(v - a) <= (tol if tol is not None else _EXACT_VND_TOL) for a in allowed_vnd.get(option, []))
+               for v, tol in amounts)
+
+
+def _fold(line: str) -> str:
+    """Lower-case, accents off, ONE character per character, so a match position is the same
+    position in the raw line (normalize_query also drops punctuation and shifts them)."""
+    import unicodedata
+    return "".join((unicodedata.normalize("NFD", ch)[0] if ch not in "đĐ" else "d").lower() for ch in line)
+
+
+_REASON = re.compile(r"\b(ly do|vi|do|han che|khong kha thi|khong du|khong dap ung du|thap hon|it hon|so voi|chi co)\b")
+
+
+def transfer_only_reason(collected: dict) -> str | None:
+    """Why moving stock alone falls short, from the plan's own figures."""
+    o = (_current(collected).get("options") or {}).get("TRANSFER_ONLY") or {}
+    if not o or (o.get("shortage_covered_pct") or 0) >= 100:
+        return None
+    return (f"chỉ chuyển được {_n(o.get('transfer_qty'))} bản thuộc {_n(o.get('transfer_titles'))} đầu sách, vì chỉ đầu "
+            "sách vừa thiếu ở kho đích vừa dư ở kho nguồn mới chuyển được và kho nguồn phải giữ mức cần giữ; phần dư "
+            "còn lại ở kho nguồn là các đầu sách kho đích không thiếu.")
+
+
+def reason_issues(answer: str, collected: dict) -> list[str]:
+    """Lines explaining the transfer-only shortfall with a warehouse's surplus or every warehouse's
+    shortage (live audit 2026-11-26: "Lý do: tổng lượng sách dư (chủ yếu Đà Nẵng 120 bản) là hạn
+    chế", "dư 120 bản so với nhu cầu hệ thống 548 bản"): the reason is which titles match."""
+    from copilot_plan import normalize_query
+    current = _current(collected)
+    if not answer or not transfer_only_reason(collected):
+        return []
+    t = current.get("diagnosis_totals") or {}
+    wrong_figures = {round(d.get("surplus_qty") or 0) for d in current.get("diagnosis") or []} - {0}
+    wrong_figures |= {round(t.get(k) or 0) for k in ("surplus_qty_surplus_warehouses", "shortage_qty_all")} - {0}
+    # a surplus that IS what moves (one book: "Đà Nẵng chỉ dư 10 bản" and 10 are moved) is the right reason
+    tr = (current.get("options") or {}).get("TRANSFER_ONLY") or {}
+    wrong_figures -= {round(tr.get(k) or 0) for k in ("transfer_qty", "covered_qty")}
+    wrong_figures -= {round(s.get("quantity") or 0) for s in tr.get("transfers_by_source") or []}
+    out, context = [], None
+    for line in answer.split("\n"):
+        if not line.strip() or line.lstrip().startswith("#"):
+            context = None
+            continue
+        mentions = _mentions(_fold(line))
+        head = [c for p, c in mentions if p <= 40]
+        if len({c for _p, c in mentions}) == 1 and head:
+            context = head[0]
+        about = context == "TRANSFER_ONLY" or any(c == "TRANSFER_ONLY" for _p, c in mentions)
+        text = normalize_query(line)
+        cited = {round(float(m.group(1).replace(",", "."))) for m in _COPIES.finditer(text)}
+        if about and _REASON.search(text) and cited & wrong_figures:
+            out.append(line)
+    return out
+
+
+def reason_replacements(answer: str, collected: dict) -> dict[str, str]:
+    reason = transfer_only_reason(collected)
+    out = {}
+    for line in reason_issues(answer, collected):
+        bullet = re.match(r"\s*(?:[*\-]|\d+\.)?\s*", line).group(0)
+        out[line] = f"{bullet}**Lý do chỉ điều chuyển không đủ:** {reason}"
+    return out
+
+
 def answer_issues(answer: str, collected: dict) -> list[str]:
-    return permission_issues(answer, collected) + option_issues(answer, collected) + demand_issues(answer, collected)
+    return (permission_issues(answer, collected) + option_issues(answer, collected) + demand_issues(answer, collected)
+            + transfer_issues(answer, collected) + option_figure_issues(answer, collected)
+            + reason_issues(answer, collected))
 
 
 def answer_instruction(sentences: list[str], collected: dict) -> str | None:
@@ -374,6 +669,23 @@ def answer_instruction(sentences: list[str], collected: dict) -> str | None:
                      f"tốt nhất về nghiệp vụ là {rec.get('best_business_label') or rec.get('best_business_option')}. "
                      "Không đề xuất phương án có mức đáp ứng thấp hơn hai phương án này. Viết lại: "
                      + " | ".join(x.strip()[:160] for x in sentences))
+    joined = "\n".join(sentences)
+    if transfer_issues(joined, collected):
+        lines = [t for t in ((current.get("options") or {}).get(rec.get("best_business_option")) or {}).get("transfers") or []]
+        parts.append("Sai dòng điều chuyển: chỉ nêu đúng các dòng có trong dữ liệu (sách — kho nguồn — số bản): "
+                     + "; ".join(f"{t.get('title')} — {t.get('from_warehouse')} — {t.get('quantity')} bản" for t in lines[:10])
+                     + ". Danh sách \"thiếu nhiều nhất\" không phải dòng điều chuyển; kho nào có trong các dòng trên thì "
+                     "kho đó có điều chuyển. Viết lại: " + " | ".join(x.strip()[:160] for x in transfer_issues(joined, collected)))
+    if option_figure_issues(joined, collected):
+        opts = current.get("options") or {}
+        parts.append("Sai số của phương án: mỗi phương án chỉ dùng số của chính nó — "
+                     + "; ".join(f"{o.get('label')}: đáp ứng {o.get('shortage_covered_pct')}% số thiếu, chi phí mua "
+                                 f"{_vnd(o.get('purchase_cost_vnd'))}" for o in opts.values())
+                     + ". Viết lại: " + " | ".join(x.strip()[:160] for x in option_figure_issues(joined, collected)))
+    if reason_issues(joined, collected):
+        parts.append("Sai lý do: chỉ điều chuyển không đủ vì " + (transfer_only_reason(collected) or "")
+                     + " Không giải thích bằng tổng số dư của kho hay tổng thiếu mọi kho. Viết lại: "
+                     + " | ".join(x.strip()[:160] for x in reason_issues(joined, collected)))
     wrong_demand = demand_issues(" ".join(sentences), collected)
     if wrong_demand:
         best = (current.get("options") or {}).get(rec.get("best_business_option")) or {}

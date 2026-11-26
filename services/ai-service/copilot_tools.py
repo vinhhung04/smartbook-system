@@ -760,6 +760,7 @@ def _rebalance_option(option: dict, names: dict) -> dict:
         row["lines"] += 1
     keep["transfers_by_source"] = sorted(by_source.values(), key=lambda r: -r["quantity"])
     keep["transfer_lines_total"] = len(option.get("transfers") or [])
+    keep["transfer_titles"] = len({t.get("variant_id") for t in option.get("transfers") or []})
     keep["purchase_lines_total"] = len(option.get("purchases") or [])
     return keep
 
