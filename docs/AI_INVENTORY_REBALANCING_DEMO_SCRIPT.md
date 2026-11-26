@@ -83,5 +83,6 @@ Nếu còn thời gian: mở trang Yêu cầu xuất/chuyển kho để thấy m
 
 ## Giới hạn cần biết
 
-- Câu chữ do LLM (`OPENROUTER_ASSISTANT_MODEL`) viết và khác nhau giữa các lần; số liệu trên thẻ do analytics tính và không đổi theo LLM.
+- Lượt chẩn đoán / điều chuyển (lượt 1) và so sánh phương án (lượt 2, và lượt "phương án cho sách này") do **hệ thống viết từ dữ liệu**, không qua LLM — trùng khớp với các thẻ. Lượt bản nháp, xác nhận và từ chối phê duyệt cũng do hệ thống viết.
+- Lượt ngân sách và what-if do LLM (`OPENROUTER_ASSISTANT_MODEL`) viết nên câu chữ khác nhau giữa các lần; câu sai dòng điều chuyển, gán số của phương án khác hoặc sai lý do bị bắt, yêu cầu viết lại, rồi được thay bằng số đúng hoặc bỏ. Số liệu trên thẻ do analytics tính và không đổi theo LLM.
 - Chi phí và thời gian điều chuyển chưa có dữ liệu lịch sử, nên không được đưa vào xếp hạng.

@@ -4969,6 +4969,11 @@ async def _finalize_assistant_turn(
     copilot_verification.log_outcome(verification)
     if explanation is not None:
         explanation["language_flags"] = language_flags
+    written = copilot_rebalance_decision.system_answer(plan, collected_data) if answered_normally else None
+    if written:
+        # a rebalancing diagnosis / comparison is a list of the plan's own figures: the system
+        # writes it, so it can never disagree with the cards (see system_answer)
+        answer, withdrawn = written, []
 
     pending_action_data = None
     if answered_normally and verification["safe_to_act"]:

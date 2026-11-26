@@ -998,9 +998,10 @@ COPILOT_TOOLS = [
              "safety_stock_multiplier": {"type": "number", "description": "Hệ số tồn an toàn, 1 = như hiện tại"},
              "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"],
                           "description": "Chỉ phục vụ dòng thiếu có mức ưu tiên này"},
-             "lead_time_delay_days": {"type": "integer", "description": "Nhà cung cấp giao chậm thêm N ngày"},
-             "book_title": {"type": "string", "description": "Tên đúng của MỘT cuốn sách: chỉ lập phương án cho cuốn đó; "
-                                                             "bỏ trống = mọi đầu sách"}}),
+             "lead_time_delay_days": {"type": "integer", "description": "Nhà cung cấp giao chậm thêm N ngày"}}),
+    # book_title is not offered to the model: only the planner scopes a plan to one book (a cover
+    # photo / quoted title). Offered, the model re-ran the plan once per short title on a
+    # whole-warehouse turn and the cards showed the last book's plan (live run 2026-11-26).
     _schema("rank_priority_tasks",
             "Xếp hạng các việc cần ưu tiên xử lý hôm nay từ số liệu thật (hết hàng có nhu cầu, quá hạn, phạt chưa thu, "
             "đề xuất nhập, kho dưới ngưỡng) theo quy tắc cố định."),

@@ -594,6 +594,120 @@ def _fold(line: str) -> str:
     return "".join((unicodedata.normalize("NFD", ch)[0] if ch not in "đĐ" else "d").lower() for ch in line)
 
 
+# ── answers written by the system (no LLM) ────────────────────────────────────
+# Live audits 2026-11-26: on the diagnosis / transfer turn and the option comparison the
+# model kept inventing transfer lines, moving one option's figures to another and giving
+# wrong reasons, in a new way each run. These two turns are lists of figures, so the
+# system writes them from the plan itself - like the draft reply - and the text can never
+# disagree with the cards.
+
+_ACCESS = {"WRITE": "toàn quyền", "READ": "chỉ xem"}
+_PERMISSION = {"EXECUTABLE": "bạn tự tạo được", "COLLABORATIVE": "cần Manager kho nguồn phối hợp",
+               "PROPOSAL_ONLY": "chỉ đề xuất"}
+_RISK = {"LOW": "thấp", "MEDIUM": "vừa", "HIGH": "cao"}
+_WRITTEN_FOCUS = {"INVENTORY_DIAGNOSIS", "SHORTAGE_DETECTION", "SURPLUS_DETECTION", "DEMAND_ANALYSIS",
+                  "TRANSFER_OPPORTUNITY", "TRANSFER_QUANTITY", "DECISION_COMPARISON", "HYBRID_DECISION"}
+# (PROCUREMENT_OPTIMIZATION comes with every "chỉ mua mới / kết hợp" comparison, so it does not mark a budget turn)
+_LLM_FOCUS = {"WHAT_IF", "BUDGET_OPTIMIZATION", "CREATE_DRAFT", "CONFIRM_ACTION", "DECISION_EXPLANATION"}
+_COMPARE_FOCUS = {"DECISION_COMPARISON", "HYBRID_DECISION"}
+
+
+def _option_line(o: dict, tags: list[str]) -> str:
+    tag = f" ({', '.join(tags)})" if tags else ""
+    left = f"còn thiếu {_n(o.get('remaining_shortage_qty'))} bản"
+    if o.get("remaining_high_priority_qty"):
+        left += f", trong đó {_n(o.get('remaining_high_priority_qty'))} bản ưu tiên cao"
+    return (f"- **{o.get('label')}**{tag}: đáp ứng {_pct(o.get('shortage_covered_pct'))} số thiếu "
+            f"({_n(o.get('covered_qty'))}/{_n(o.get('total_shortage_qty'))} bản); điều chuyển {_n(o.get('transfer_qty'))} "
+            f"bản, mua mới {_n(o.get('purchase_qty'))} bản, chi phí mua mới {_vnd(o.get('purchase_cost_vnd'))}; "
+            f"{left}; rủi ro {_RISK.get(o.get('risk_level'), o.get('risk_level') or 'không rõ')}.")
+
+
+def _transfer_lines(best: dict, dest: str) -> list[str]:
+    lines = [f"**Điều chuyển an toàn về {dest}:**"]
+    shown = best.get("transfers") or []
+    if not shown:
+        return [f"**Điều chuyển về {dest}:** không có đầu sách nào vừa thiếu ở kho đích vừa dư ở kho nguồn, "
+                "nên phần thiếu phải bù bằng mua mới."]
+    for t in shown:
+        lines.append(f"- {t.get('title')}: {_n(t.get('quantity'))} bản từ {t.get('from_warehouse')} (sau khi chuyển "
+                     f"kho nguồn còn {_n(t.get('source_available_after'))} bản, mức cần giữ "
+                     f"{_n(t.get('source_protected_qty'))}) — {_PERMISSION.get(t.get('permission'), t.get('permission'))}.")
+    more = (best.get("transfer_lines_total") or 0) - len(shown)
+    if more > 0:
+        lines.append(f"- … và {more} dòng khác (xem thẻ Cơ hội điều chuyển).")
+    by_source = best.get("transfers_by_source") or []
+    if by_source:
+        lines.append("Tổng theo kho nguồn: " + "; ".join(
+            f"{s.get('warehouse')} {_n(s.get('quantity'))} bản ({_PERMISSION.get(s.get('permission'), s.get('permission'))})"
+            for s in by_source) + ".")
+    return lines
+
+
+def system_answer(plan, collected: dict) -> str | None:
+    """The reply to a diagnosis / transfer question or an option comparison, written from
+    the plan; None for any other turn (budget, what-if, draft, confirm, explanation: the
+    model's text, which the checks above still guard)."""
+    reb = (getattr(plan, "entities", None) or {}).get("rebalance") or {}
+    focus = set(reb.get("focus") or [])
+    found = results(collected)
+    current = found[-1] if found and isinstance(found[-1], dict) else {}
+    # (a comparison may also re-run the previous scenario first: the plan's own call is the last one)
+    if current.get("error") or not current.get("scope") or not (focus & _WRITTEN_FOCUS) or focus & _LLM_FOCUS:
+        return None
+    options = current.get("options") or {}
+    rec = current.get("recommendation") or {}
+    best_code, ex_code = rec.get("best_business_option"), rec.get("executable_option")
+    best = options.get(best_code) or {}
+    if not best:
+        return None
+    dest = ", ".join(d.get("warehouse_name") for d in current.get("destinations") or [] if d.get("warehouse_name")) \
+        or "kho đang thiếu"
+    book = (current.get("book") or {}).get("title")
+    out = [f"*Phạm vi: chỉ cuốn \"{book}\" — các số dưới đây không phải của cả kho.*", ""] if book else []
+    compare = bool(focus & _COMPARE_FOCUS)
+
+    if not compare:
+        out.append("**Tồn kho theo kho bạn được xem:**")
+        for d in current.get("diagnosis") or []:
+            out.append(f"- **{d.get('warehouse')}** ({_ACCESS.get(d.get('access'), d.get('access') or '')}): thiếu "
+                       f"{_n(d.get('shortage_variants'))} đầu sách / {_n(d.get('shortage_qty'))} bản; dư "
+                       f"{_n(d.get('surplus_variants'))} đầu sách / {_n(d.get('surplus_qty'))} bản.")
+        t = current.get("diagnosis_totals") or {}
+        if t:
+            out.append(f"Kho đang thiếu: {', '.join(t.get('short_warehouses') or []) or 'không có'}. Kho đang dư: "
+                       f"{', '.join(t.get('surplus_warehouses') or []) or 'không có'}"
+                       + (f" (tổng dư {_n(t.get('surplus_qty_surplus_warehouses'))} bản)" if t.get("surplus_warehouses") else "")
+                       + ". Số dư của một kho không phải số chuyển được: chỉ đầu sách kho đích đang thiếu mới chuyển.")
+        out += ["", *_transfer_lines(best, dest), ""]
+        out.append(f"**Phương án tốt nhất về nghiệp vụ:** {best.get('label')} — đáp ứng "
+                   f"{_pct(best.get('shortage_covered_pct'))} số thiếu ({_n(best.get('covered_qty'))}/"
+                   f"{_n(best.get('total_shortage_qty'))} bản), điều chuyển {_n(best.get('transfer_qty'))} bản và mua mới "
+                   f"{_n(best.get('purchase_qty'))} bản, chi phí mua mới {_vnd(best.get('purchase_cost_vnd'))}. "
+                   "Hỏi \"so sánh ba phương án\" để xem chi tiết từng phương án.")
+    else:
+        out.append(f"**Phương án tốt nhất về nghiệp vụ: {best.get('label')}.** So sánh theo dữ liệu của hệ thống:")
+        for code in rec.get("ranking") or list(options):
+            o = options.get(code)
+            if not o:
+                continue
+            tags = (["tốt nhất về nghiệp vụ"] if code == best_code else []) + \
+                   (["bạn tự thực hiện được"] if code == ex_code else [])
+            out.append(_option_line(o, tags))
+        reason = transfer_only_reason(collected)
+        if reason:
+            out.append(f"Chỉ điều chuyển không đủ: {reason}")
+        if rec.get("rule"):
+            out.append(f"Quy tắc xếp hạng: {rec['rule']}")
+    collab = [s for s in best.get("transfers_by_source") or [] if s.get("permission") != "EXECUTABLE"]
+    if collab:
+        out.append(f"Dòng điều chuyển từ {', '.join(s.get('warehouse') for s in collab)} cần Manager kho đó phối hợp "
+                   "(bạn chỉ có quyền xem kho nguồn); dòng từ kho bạn toàn quyền thì bạn tự tạo được.")
+    if not any("Chi phí điều chuyển" in line for line in out):
+        out.append("Chi phí điều chuyển chưa có dữ liệu nên không được tính.")
+    return "\n".join(out)
+
+
 _REASON = re.compile(r"\b(ly do|vi|do|han che|khong kha thi|khong du|khong dap ung du|thap hon|it hon|so voi|chi co)\b")
 
 
@@ -602,6 +716,9 @@ def transfer_only_reason(collected: dict) -> str | None:
     o = (_current(collected).get("options") or {}).get("TRANSFER_ONLY") or {}
     if not o or (o.get("shortage_covered_pct") or 0) >= 100:
         return None
+    if not o.get("transfer_qty"):
+        return ("không kho nguồn nào dư đầu sách mà kho đích đang thiếu (sau khi giữ mức cần giữ), nên không có gì "
+                "để chuyển.")
     return (f"chỉ chuyển được {_n(o.get('transfer_qty'))} bản thuộc {_n(o.get('transfer_titles'))} đầu sách, vì chỉ đầu "
             "sách vừa thiếu ở kho đích vừa dư ở kho nguồn mới chuyển được và kho nguồn phải giữ mức cần giữ; phần dư "
             "còn lại ở kho nguồn là các đầu sách kho đích không thiếu.")

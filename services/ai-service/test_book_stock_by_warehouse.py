@@ -213,6 +213,43 @@ class WholePlanAnswerChecks(unittest.TestCase):
         # the reason sentence the system writes itself passes
         self.assertEqual(rd.reason_issues(rd.reason_replacements(answer, c)[wrong], c), [])
 
+    def test_the_system_writes_the_diagnosis_and_comparison_turns(self):
+        from types import SimpleNamespace
+        import copilot_rebalance_decision as rd
+        c = _whole_plan()
+        r = c["analyze_inventory_rebalancing"]
+        r["recommendation"].update(ranking=["HYBRID", "PROCUREMENT_ONLY", "TRANSFER_ONLY"], executable_option="HYBRID")
+        r["options"]["HYBRID"].update(covered_qty=379, total_shortage_qty=379, transfer_qty=47, purchase_qty=332)
+        r["options"]["TRANSFER_ONLY"].update(covered_qty=47, total_shortage_qty=379, transfer_qty=47, purchase_qty=0,
+                                             transfer_titles=5)
+        r["options"]["HYBRID"]["transfers_by_source"] = [
+            {"warehouse": "Kho Ha Noi", "quantity": 32, "permission": "COLLABORATIVE"},
+            {"warehouse": "Kho Đà Nẵng", "quantity": 15, "permission": "EXECUTABLE"}]
+        plan = lambda *focus: SimpleNamespace(entities={"rebalance": {"focus": list(focus)}})
+        text = rd.system_answer(plan("INVENTORY_DIAGNOSIS", "TRANSFER_OPPORTUNITY"), c)
+        self.assertIn("- Chiến Lược Mua Bán Và Sáp Nhập Doanh Nghiệp: 3 bản từ Kho Đà Nẵng", text)
+        self.assertIn("Tổng theo kho nguồn: Kho Ha Noi 32 bản", text)
+        self.assertEqual(rd.answer_issues(text, c), [])  # what the system writes passes its own checks
+        text = rd.system_answer(plan("DECISION_COMPARISON"), c)
+        self.assertIn("**Chỉ mua mới**: đáp ứng 100% số thiếu (379/379 bản)", text)
+        self.assertIn("chi phí mua mới 54.194.990 ₫", text)
+        self.assertEqual(text.count("Chi phí điều chuyển"), 1)
+        self.assertEqual(rd.answer_issues(text, c), [])
+        # budget, what-if, draft and explanation turns stay with the model
+        for focus in ("BUDGET_OPTIMIZATION", "WHAT_IF", "CREATE_DRAFT", "DECISION_EXPLANATION"):
+            self.assertIsNone(rd.system_answer(plan("DECISION_COMPARISON", focus), c), focus)
+
+    def test_only_the_planner_scopes_a_plan_to_one_book(self):
+        """The model never sees book_title (it re-ran the plan per short title once it did),
+        yet the planner's own call still passes it through."""
+        import copilot_tools
+        from ai_core import tools as ai_tools
+        schema = next(s for s in copilot_tools.COPILOT_TOOLS if s["function"]["name"] == "analyze_inventory_rebalancing")
+        self.assertNotIn("book_title", schema["function"]["parameters"]["properties"])
+        kept, dropped = ai_tools._valid_arguments("analyze_inventory_rebalancing", copilot_tools.analyze_inventory_rebalancing,
+                                                  {"book_title": "Số đỏ", "destination_warehouses": ["Kho HCM Chinh"]})
+        self.assertEqual((kept.get("book_title"), dropped), ("Số đỏ", []))
+
     def test_the_transfer_only_reason_is_given(self):
         import copilot_response
         o = {"code": "TRANSFER_ONLY", "label": "Chỉ điều chuyển", "shortage_covered_pct": 12.4, "transfer_qty": 47,
