@@ -680,6 +680,20 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(parsed, {"observations": {}})
         self.assertEqual((used.prompt_tokens, used.cost_usd, used.feature), (9, 0.0001, "book_ocr"))
 
+    def test_analyze_images_with_a_schema_asks_for_strict_structured_output(self):
+        provider = llm_provider.OpenRouterProvider(api_key="k", base_url="https://example.test", model="m")
+        captured = {}
+
+        async def fake_request(payload, timeout):
+            captured.update(payload)
+            return {"choices": [{"message": {"content": '{"images": []}'}}], "usage": {}}, "m"
+        schema = {"type": "object"}
+        with patch.object(provider, "_request_completion", side_effect=fake_request):
+            asyncio.run(provider.analyze_images([llm_provider.VisionImage("x", b"a", "image/jpeg")], "P",
+                                                max_tokens=10, timeout=5, json_schema=schema))
+        self.assertEqual(captured["response_format"], {
+            "type": "json_schema", "json_schema": {"name": "book_ocr", "strict": True, "schema": schema}})
+
     def test_analyze_image_payload_is_unchanged(self):
         provider = llm_provider.OpenRouterProvider(api_key="k", base_url="https://example.test", model="m")
         captured = {}

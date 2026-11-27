@@ -548,24 +548,27 @@ class OpenRouterProvider:
 
     async def analyze_images(
         self, images: list[VisionImage], prompt: str, *, max_tokens: int, timeout: float,
-        feature: str = "book_ocr", temperature: float = 0.0,
+        feature: str = "book_ocr", temperature: float = 0.0, json_schema: dict | None = None,
     ) -> tuple[dict, ChatUsage]:
         """Several labelled images + one text prompt in ONE request (one
         round trip, one prompt overhead), JSON-object response. Each image is
         preceded by a text part `Image label: <label>` so the model can tell
         which picture a value came from. Same return/raise contract as
-        analyze_image()."""
+        analyze_image(). json_schema asks for strict structured output - only
+        for models that advertise it; without it the response is json_object."""
         if not images:
             raise ValueError("analyze_images needs at least one image")
         content: list[dict] = [{"type": "text", "text": prompt}]
         for image in images:
             content.append({"type": "text", "text": f"Image label: {image.label}"})
             content.append(_image_part(image.data, image.mime))
+        response_format = {"type": "json_schema", "json_schema": {"name": feature, "strict": True, "schema": json_schema}}             if json_schema else None
         return await self._vision_json(content, max_tokens=max_tokens, timeout=timeout,
-                                       feature=feature, temperature=temperature)
+                                       feature=feature, temperature=temperature, response_format=response_format)
 
     async def _vision_json(
         self, content: list[dict], *, max_tokens: int, timeout: float, feature: str, temperature: float,
+        response_format: dict | None = None,
     ) -> tuple[dict, ChatUsage]:
         import json
 
@@ -574,7 +577,7 @@ class OpenRouterProvider:
             "max_tokens": max_tokens,
             "temperature": temperature,
             "reasoning": {"enabled": False},
-            "response_format": {"type": "json_object"},
+            "response_format": response_format or {"type": "json_object"},
         }
 
         started = time.perf_counter()

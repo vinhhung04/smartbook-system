@@ -581,7 +581,7 @@ services:
       # Independent re-read by a second model of another family (empty = off).
       - BOOK_OCR_VISUAL_VERIFICATION_ENABLED=${BOOK_OCR_VISUAL_VERIFICATION_ENABLED:-true}
       - OPENROUTER_BOOK_OCR_VERIFY_MODEL=${OPENROUTER_BOOK_OCR_VERIFY_MODEL-google/gemini-3.1-flash-lite}
-      - BOOK_OCR_VERIFY_MAX_TOKENS=${BOOK_OCR_VERIFY_MAX_TOKENS:-4000}
+      - BOOK_OCR_VERIFY_MAX_TOKENS=${BOOK_OCR_VERIFY_MAX_TOKENS:-6000}
       - BOOK_OCR_VERIFY_DAILY_BUDGET_USD=${BOOK_OCR_VERIFY_DAILY_BUDGET_USD:-0.5}
       # "Thu thu AI truc dem" — autonomous nightly briefing agent (nightly_briefing.py)
       - ENABLE_NIGHTLY_BRIEFING=${ENABLE_NIGHTLY_BRIEFING:-true}

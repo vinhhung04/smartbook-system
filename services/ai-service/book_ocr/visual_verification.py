@@ -49,6 +49,18 @@ verification_cache = SummaryCache(max_size=100, ttl_seconds=24 * 3600)
 verify_budget = FallbackBudget()
 
 
+def _object(**properties) -> dict:
+    return {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
+
+
+# Shape asked of the verifier. With json_object alone it often returned broken
+# JSON (missing delimiters, repeated keys), which drops all evidence of a scan.
+VERIFY_SCHEMA = _object(images={"type": "array", "items": _object(
+    source={"type": "string"}, legible={"type": "boolean"},
+    lines={"type": "array", "items": _object(text={"type": "string"},
+                                             box_2d={"type": "array", "items": {"type": "integer"}})})})
+
+
 def build_verify_prompt(labels: list[str]) -> str:
     return (
         "You are a careful transcriber. For EACH image below (its label is given before it), "
@@ -121,7 +133,7 @@ async def read_images(prepared, settings, provider_factory) -> tuple[dict[str, d
         parsed, usage = await asyncio.wait_for(
             provider.analyze_images([VisionImage(label=p.kind, data=p.data, mime=p.mime) for p in prepared],
                                     build_verify_prompt(labels), max_tokens=settings.verify_max_tokens,
-                                    timeout=settings.timeout_seconds, feature="book_ocr_verify"),
+                                    timeout=settings.timeout_seconds, feature="book_ocr_verify", json_schema=VERIFY_SCHEMA),
             timeout=settings.timeout_seconds + 10,
         )
     except Exception as exc:  # noqa: BLE001 - advisory step: any failure only drops the evidence

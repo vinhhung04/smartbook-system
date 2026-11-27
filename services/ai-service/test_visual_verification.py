@@ -8,7 +8,7 @@ import asyncio
 import dataclasses
 import io
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from PIL import Image
 
@@ -61,6 +61,18 @@ class FakeVerifier:
             self.analyze_images.side_effect = error
         else:
             self.analyze_images.return_value = (answer, usage())
+
+
+class VerifierRequestTests(unittest.TestCase):
+    def test_verifier_requests_its_response_schema(self):
+        vv.verification_cache.clear()
+        fake = FakeVerifier(answer={"images": []})
+        asyncio.run(read_images(prepared("front_cover"), settings(), lambda m: fake))
+        self.assertEqual(fake.analyze_images.call_args.kwargs["json_schema"], vv.VERIFY_SCHEMA)
+
+    def test_default_token_ceiling_is_6000(self):
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(load_settings().verify_max_tokens, 6000)
 
 
 class VerifyValueTests(unittest.TestCase):
